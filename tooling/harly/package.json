@@ -50,7 +50,7 @@
     "pack:check": "pnpm build && npm pack --dry-run"
   },
   "devDependencies": {
-    "@types/node": "^20",
+    "@types/node": "^22",
     "esbuild": "^0.28.2",
     "typescript": "^6.0.3"
   },

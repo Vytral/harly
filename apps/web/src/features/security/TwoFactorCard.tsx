@@ -19,10 +19,9 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { duration, easing, useMotionSafe } from "@/lib/motion";
 
 type Step = "idle" | "password" | "configure" | "done" | "disable";
-
-const EASE_OUT = [0.16, 1, 0.3, 1] as const;
 
 /** Single-tenant deployments serve the app from the workspace's own domain, so
  *  the browser hostname doubles as a stable authenticator issuer label. */
@@ -33,6 +32,7 @@ function currentIssuer(): string | undefined {
 
 export function TwoFactorCard({ enabled }: { enabled: boolean }) {
   const router = useRouter();
+  const motionSafe = useMotionSafe();
   const [step, setStep] = useState<Step>("idle");
   const [totpUri, setTotpUri] = useState("");
   const [backupCodes, setBackupCodes] = useState<string[]>([]);
@@ -151,7 +151,7 @@ export function TwoFactorCard({ enabled }: { enabled: boolean }) {
             initial={{ opacity: 0, y: 8, height: 0 }}
             animate={{ opacity: 1, y: 0, height: "auto" }}
             exit={{ opacity: 0, y: -8, height: 0 }}
-            transition={{ duration: 0.24, ease: EASE_OUT }}
+            transition={motionSafe.transition({ duration: duration.base, ease: easing.easeOut })}
             className="overflow-hidden"
           >
             <div className="space-y-4 rounded-xl border bg-muted/30 p-4">
@@ -192,7 +192,7 @@ export function TwoFactorCard({ enabled }: { enabled: boolean }) {
             initial={{ opacity: 0, y: 8, height: 0 }}
             animate={{ opacity: 1, y: 0, height: "auto" }}
             exit={{ opacity: 0, y: -8, height: 0 }}
-            transition={{ duration: 0.24, ease: EASE_OUT }}
+            transition={motionSafe.transition({ duration: duration.base, ease: easing.easeOut })}
             className="overflow-hidden"
           >
             <div className="space-y-5 rounded-xl border bg-muted/30 p-4">
@@ -287,7 +287,7 @@ export function TwoFactorCard({ enabled }: { enabled: boolean }) {
             key="done"
             initial={{ opacity: 0, y: 8 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.24, ease: EASE_OUT }}
+            transition={motionSafe.transition({ duration: duration.base, ease: easing.easeOut })}
             className="flex items-start gap-3 rounded-xl border border-pine/20 bg-sage/10 p-4"
           >
             <span className="mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-full bg-pine/15">
@@ -309,7 +309,7 @@ export function TwoFactorCard({ enabled }: { enabled: boolean }) {
             initial={{ opacity: 0, y: 8, height: 0 }}
             animate={{ opacity: 1, y: 0, height: "auto" }}
             exit={{ opacity: 0, y: -8, height: 0 }}
-            transition={{ duration: 0.24, ease: EASE_OUT }}
+            transition={motionSafe.transition({ duration: duration.base, ease: easing.easeOut })}
             className="overflow-hidden"
           >
             <div className="space-y-4 rounded-xl border border-destructive/20 bg-destructive/5 p-4">

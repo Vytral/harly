@@ -11,9 +11,15 @@ import { encryptSecret, isEncryptionConfigured } from "@/lib/crypto";
 import { createLogger } from "@/lib/logger";
 import {
   getWorkspaceOutlookConfig,
-  getWorkspaceOutlookCredentials,
+  recordOutlookCallFailure,
 } from "@/lib/outlook/config";
-import { listCalendars, refreshOutlookToken, sendMail } from "@/lib/outlook/client";
+import { listCalendars, sendMail } from "@/lib/outlook/client";
+import {
+  clearIntegrationHealth,
+  getIntegrationHealth,
+  recordIntegrationSuccess,
+} from "@/features/integrations/health/repository";
+import { sanitizeIntegrationError } from "@/features/integrations/health/model";
 import { isWebhookEvent } from "@/server/webhooks/events";
 
 const log = createLogger("workspace-outlook-settings");
@@ -25,49 +31,16 @@ const SETTINGS_PATH = "/settings/integrations";
 const RECONNECT_MESSAGE =
   "Microsoft revoked this connection. Disconnect and reconnect Outlook.";
 
-/** True when Microsoft rejected the stored refresh token (revoked/expired). */
-function isInvalidGrant(err: unknown): boolean {
-  const msg = err instanceof Error ? err.message : String(err);
-  return msg.includes("invalid_grant");
-}
-
-/** Wipe the dead tokens so status flips back to "not connected". */
-async function clearOutlookToken(organizationId: string): Promise<void> {
-  await db
-    .update(workspaceSettings)
-    .set({
-      outlookEnabled: false,
-      outlookAccessTokenCiphertext: null,
-      outlookAccessTokenIv: null,
-      outlookAccessTokenTag: null,
-      outlookRefreshTokenCiphertext: null,
-      outlookRefreshTokenIv: null,
-      outlookRefreshTokenTag: null,
-      updatedAt: new Date(),
-    })
-    .where(eq(workspaceSettings.organizationId, organizationId));
-  revalidatePath(SETTINGS_PATH);
-}
-
 /**
- * Microsoft access tokens live ~1h. Exchange the stored refresh token for a
- * fresh access token (refreshOutlookToken persists the rotated pair). Throws
- * on a dead refresh token so callers can clear + prompt a reconnect.
+ * Message for a workspace whose Outlook config is unusable. A connection that
+ * Microsoft revoked was cleared by the config read, so the stored health
+ * decides between "reconnect" and "not connected".
  */
-async function freshOutlookAccessToken(
-  workspaceId: string,
-): Promise<string | null> {
-  const config = await getWorkspaceOutlookConfig(workspaceId);
-  if (!config) return null;
-  const credentials = await getWorkspaceOutlookCredentials(workspaceId);
-  if (!credentials) return null;
-
-  return refreshOutlookToken({
-    workspaceId,
-    clientId: credentials.clientId,
-    clientSecret: credentials.clientSecret,
-    refreshToken: config.refreshToken,
-  });
+async function unusableOutlookMessage(workspaceId: string): Promise<string> {
+  const health = await getIntegrationHealth(workspaceId);
+  return health.outlook?.state === "needs_reconnect"
+    ? RECONNECT_MESSAGE
+    : "Outlook not connected.";
 }
 
 export type OutlookCalendarItem = { id: string; name: string };
@@ -120,20 +93,22 @@ export async function listOutlookCalendarsAction(): Promise<
   assertNotDemo();
   const context = await requirePermission("integrations:manage");
   const config = await getWorkspaceOutlookConfig(context.organization.id);
-  if (!config) return { ok: false, error: "Outlook not connected." };
+  if (!config) {
+    return { ok: false, error: await unusableOutlookMessage(context.organization.id) };
+  }
 
   try {
-    const accessToken = await freshOutlookAccessToken(context.organization.id);
-    if (!accessToken) return { ok: false, error: "Outlook not connected." };
-    const calendars = await listCalendars(accessToken);
+    const calendars = await listCalendars(config.accessToken);
+    await recordIntegrationSuccess(context.organization.id, "outlook");
+    revalidatePath(SETTINGS_PATH);
     return {
       ok: true,
       calendars: calendars.map((c) => ({ id: c.id, name: c.name })),
     };
   } catch (error) {
     log.error(error, "listOutlookCalendarsAction failed");
-    if (isInvalidGrant(error)) {
-      await clearOutlookToken(context.organization.id);
+    if (await recordOutlookCallFailure(context.organization.id, error)) {
+      revalidatePath(SETTINGS_PATH);
       return { ok: false, error: RECONNECT_MESSAGE };
     }
     return { ok: false, error: "Failed to fetch calendars from Outlook." };
@@ -187,6 +162,7 @@ export async function disconnectOutlookAction(): Promise<OutlookActionResult> {
     })
     .where(eq(workspaceSettings.organizationId, context.organization.id));
 
+  await clearIntegrationHealth(context.organization.id, "outlook");
   revalidatePath(SETTINGS_PATH);
   return { ok: true };
 }
@@ -196,24 +172,23 @@ export async function testOutlookAction(): Promise<OutlookActionResult> {
   assertNotDemo();
   const context = await requirePermission("integrations:manage");
   const config = await getWorkspaceOutlookConfig(context.organization.id);
-  if (!config) return { ok: false, error: "Outlook not connected." };
+  if (!config) {
+    return { ok: false, error: await unusableOutlookMessage(context.organization.id) };
+  }
 
   try {
-    const accessToken = await freshOutlookAccessToken(context.organization.id);
-    if (!accessToken) return { ok: false, error: "Outlook not connected." };
-    await sendMail(accessToken, {
+    await sendMail(config.accessToken, {
       to: [context.user.email ?? ""],
       subject: "Test from Harly",
       body: "<p>Your Microsoft Outlook integration is working!</p>",
     });
+    await recordIntegrationSuccess(context.organization.id, "outlook");
     return { ok: true };
   } catch (err) {
     log.error(err, "testOutlookAction failed");
-    if (isInvalidGrant(err)) {
-      await clearOutlookToken(context.organization.id);
+    if (await recordOutlookCallFailure(context.organization.id, err)) {
       return { ok: false, error: RECONNECT_MESSAGE };
     }
-    const msg = err instanceof Error ? err.message : "Send failed";
-    return { ok: false, error: msg };
+    return { ok: false, error: sanitizeIntegrationError(err) };
   }
 }

@@ -4,6 +4,14 @@ import { eq } from "drizzle-orm";
 
 import { db, workspaceSettings } from "@harly/db";
 
+import {
+  CREDENTIALS_UNREADABLE_MESSAGE,
+  buildIntegrationHealthView,
+} from "@/features/integrations/health/model";
+import {
+  getIntegrationHealth,
+  recordIntegrationFailure,
+} from "@/features/integrations/health/repository";
 import { decryptSecret, isEncryptionConfigured } from "@/lib/crypto";
 
 export type ZoomConfig = {
@@ -95,13 +103,17 @@ export async function getZoomCredentials(
   return null;
 }
 
-/**
- * Resolve a usable Zoom config (with decrypted token) for a workspace,
- * or null when disabled / unconfigured.
- */
-export async function getZoomToken(workspaceId: string): Promise<string | null> {
-  if (!isEncryptionConfigured()) return null;
+export type ZoomAccessTokenState =
+  | { status: "ready"; token: string }
+  | { status: "not_connected" }
+  | { status: "unreadable" };
 
+/**
+ * The stored access token, or why there is none. A stored token that cannot be
+ * decrypted is recorded as an error with the encryption reason, never as a
+ * dead login or a plain "not installed".
+ */
+export async function getZoomTokenState(workspaceId: string): Promise<ZoomAccessTokenState> {
   const [row] = await db
     .select({
       zoomTokenCiphertext: workspaceSettings.zoomTokenCiphertext,
@@ -112,21 +124,39 @@ export async function getZoomToken(workspaceId: string): Promise<string | null> 
     .where(eq(workspaceSettings.organizationId, workspaceId))
     .limit(1);
 
-  if (
-    !row?.zoomTokenCiphertext ||
-    !row?.zoomTokenIv ||
-    !row?.zoomTokenTag
-  ) {
-    return null;
+  if (!row?.zoomTokenCiphertext) return { status: "not_connected" };
+
+  if (row.zoomTokenIv && row.zoomTokenTag && isEncryptionConfigured()) {
+    try {
+      return {
+        status: "ready",
+        token: decryptSecret({
+          ciphertext: row.zoomTokenCiphertext,
+          iv: row.zoomTokenIv,
+          tag: row.zoomTokenTag,
+        }),
+      };
+    } catch {
+      // Falls through to the unreadable result below.
+    }
   }
 
-  try {
-    return decryptSecret({
-      ciphertext: row.zoomTokenCiphertext,
-      iv: row.zoomTokenIv,
-      tag: row.zoomTokenTag,
-    });
-  } catch {
-    return null;
-  }
+  await recordIntegrationFailure(workspaceId, "zoom", CREDENTIALS_UNREADABLE_MESSAGE, {
+    kind: "other",
+    forceState: "error",
+  });
+  return { status: "unreadable" };
+}
+
+/**
+ * A Zoom access token that may be used to pick a meeting provider. Null when
+ * Zoom is not connected, the token cannot be read, or Zoom needs reconnecting
+ * (the stored token is still there, but Zoom has rejected its refresh token).
+ * Use `getZoomTokenState` to tell those apart.
+ */
+export async function getZoomToken(workspaceId: string): Promise<string | null> {
+  const state = await getZoomTokenState(workspaceId);
+  if (state.status !== "ready") return null;
+  const stored = (await getIntegrationHealth(workspaceId)).zoom ?? null;
+  return buildIntegrationHealthView("zoom", true, stored).connected ? state.token : null;
 }

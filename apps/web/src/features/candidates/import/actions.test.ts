@@ -20,7 +20,7 @@ const mocks = vi.hoisted(() => {
   };
 });
 
-vi.mock("@harly/db", () => {
+vi.mock("@harly/db", async () => {
   // A query builder whose `then` resolves to the next queued result, mirroring
   // drizzle's awaitable builder. Both `db.select` and `tx.select` share the
   // same queue so the order in importCandidatesAction is preserved.
@@ -35,6 +35,10 @@ vi.mock("@harly/db", () => {
     return q;
   };
   return {
+    // Pure stage-kind helpers are real: they pick the entry stage by kind.
+    ...(await vi.importActual<typeof import("@harly/db/stage-kind")>(
+      "@harly/db/stage-kind",
+    )),
     db: {
       select: vi.fn(makeQuery),
       insert: vi.fn(() => ({
@@ -48,7 +52,15 @@ vi.mock("@harly/db", () => {
     },
     candidates: {},
     jobs: {},
-    jobStages: {},
+    jobStages: {
+      id: "jobStages.id",
+      name: "jobStages.name",
+      kind: "jobStages.kind",
+      archivedAt: "jobStages.archivedAt",
+      workspaceId: "jobStages.workspaceId",
+      jobId: "jobStages.jobId",
+      order: "jobStages.order",
+    },
     applications: {},
     applicationStageHistory: {},
     activityEvents: {},
@@ -122,7 +134,7 @@ describe("importCandidatesAction", () => {
     //   5. tx.select(dup application) -> [] (not already in pipeline)
     mocks.selectQueue.push(
       [{ id: JOB_ID, title: "Frontend Engineer" }],
-      [{ id: STAGE_ID }],
+      [{ id: STAGE_ID, name: "Applied", kind: "applied", order: 0, archivedAt: null }],
       [{ value: 0 }],
     );
 
@@ -274,7 +286,7 @@ describe("importCandidatesAction", () => {
     });
 
     expect(result.success).toBe(false);
-    if (!result.success) expect(result.error).toMatch(/pipeline stages/i);
+    if (!result.success) expect(result.error).toMatch(/open pipeline stage/i);
   });
 
   it("rejects when the caller lacks candidates:edit permission", async () => {

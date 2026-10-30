@@ -14,7 +14,6 @@ import {
   candidateFiles,
   db,
   jobs,
-  jobStages,
   offers,
   signatureRecipients,
   workspaceSettings,
@@ -24,6 +23,7 @@ import {
   organization,
   user as authUsers,
 } from "@harly/db";
+import { resolveEntryStage } from "@/features/pipeline/stage-resolver";
 import {
   PortalMagicLinkEmail,
   portalMagicLinkSubject,
@@ -286,17 +286,10 @@ export async function applyToJobAction(
       return { ok: false, error: "You have already applied to this job." };
     }
 
-    const [firstStage] = await db
-      .select({ id: jobStages.id })
-      .from(jobStages)
-      .where(
-        and(
-          eq(jobStages.workspaceId, session.workspaceId),
-          eq(jobStages.jobId, input.jobId),
-        ),
-      )
-      .orderBy(asc(jobStages.order))
-      .limit(1);
+    const firstStage = await resolveEntryStage(db, {
+      workspaceId: session.workspaceId,
+      jobId: input.jobId,
+    });
 
     if (!firstStage) {
       return { ok: false, error: "Job pipeline not configured." };

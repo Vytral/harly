@@ -99,7 +99,22 @@ Permissions follow the pattern `resource:action`. The available permissions are:
 | `security:manage` | MFA enforcement, SSO, and security settings |
 | `documents:read` `documents:manage` `documents:share` | Candidate documents |
 | `automations:manage` | Workflow automation rules |
-| `dsar:manage` | Data subject access requests |
+| `dsar:manage` | Review data subject requests, export consent records and the audit log |
+
+### Who can export sensitive records
+
+Exporting the consent report and the audit log requires `dsar:manage`, not
+`settings:edit` or a role name. Owners and admins hold `dsar:manage` by
+default. Recruiters also hold it by default, so they can review candidate
+requests and export these records. To keep exports away from a custom role,
+remove `dsar:manage` from it in **Settings → Members & roles → Roles**. To let
+a custom role export, add **Review privacy requests** to it there. A custom role
+keeps exactly the permissions stored on it, so one that could not export before
+still cannot until you grant `dsar:manage`.
+
+A role limited to certain jobs only exports consent records for candidates
+inside those jobs. The audit log is workspace-wide and is not filtered by job
+scope.
 
 ## Job scopes
 

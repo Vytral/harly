@@ -43,7 +43,7 @@ export function PublicJobShell({
   children: React.ReactNode;
 }) {
   return (
-    <div className="min-h-screen bg-zinc-50" style={accentThemeStyle(brand.accentColor)}>
+    <div className="min-h-screen bg-background" style={accentThemeStyle(brand.accentColor)}>
       {children}
       <PublicJobFooter brand={brand} />
     </div>
@@ -65,10 +65,10 @@ export function PublicJobPageHeader({
 
   const activeLinkStyle = { borderColor: accent, color: accent };
   const inactiveLinkClass =
-    "border-transparent text-zinc-500 transition hover:text-zinc-800";
+    "border-transparent text-muted-foreground transition hover:text-foreground";
 
   return (
-    <header className="bg-white shadow-[0_1px_0_0_#e4e4e7]">
+    <header className="bg-card shadow-[0_1px_0_0_var(--border)]">
       <div className="mx-auto max-w-3xl px-4 py-10 text-center sm:px-6">
         {brand.logoUrl ? (
           // eslint-disable-next-line @next/next/no-img-element
@@ -80,11 +80,11 @@ export function PublicJobPageHeader({
         ) : null}
         <Link
           href={brand.boardHref as Route}
-          className="text-sm font-semibold text-zinc-500 transition hover:text-zinc-900"
+          className="text-sm font-semibold text-muted-foreground transition hover:text-foreground"
         >
           {brand.name}
         </Link>
-        <h1 className="mt-2 text-2xl font-bold tracking-tight text-zinc-900 sm:text-3xl">
+        <h1 className="mt-2 text-2xl font-bold tracking-tight text-foreground sm:text-3xl">
           {job.title}
         </h1>
         <div className="mt-4 flex flex-wrap justify-center gap-2">
@@ -95,7 +95,7 @@ export function PublicJobPageHeader({
         </div>
       </div>
 
-      <nav className="border-t border-zinc-100">
+      <nav className="border-t border-border">
         <div className="mx-auto flex max-w-3xl justify-center gap-10 px-4 text-xs font-bold uppercase tracking-[0.1em]">
           <Link
             href={overviewHref as Route}
@@ -119,7 +119,7 @@ export function PublicJobPageHeader({
 
 function MetaBadge({ children }: { children: React.ReactNode }) {
   return (
-    <span className="inline-flex items-center rounded-full bg-zinc-100 px-3 py-1 text-xs font-medium text-zinc-700">
+    <span className="inline-flex items-center rounded-full bg-muted px-3 py-1 text-xs font-medium text-foreground">
       {children}
     </span>
   );
@@ -127,35 +127,35 @@ function MetaBadge({ children }: { children: React.ReactNode }) {
 
 export function PublicJobFooter({ brand }: { brand: PublicJobBrand }) {
   return (
-    <footer className="border-t border-zinc-200 bg-white">
+    <footer className="border-t border-border bg-card">
       <div className="mx-auto flex max-w-3xl flex-col items-center gap-4 px-6 py-8 sm:flex-row sm:justify-center sm:gap-8">
         {brand.websiteUrl ? (
           <a
             href={brand.websiteUrl}
             target="_blank"
             rel="noreferrer"
-            className="text-xs text-zinc-500 transition hover:text-zinc-900"
+            className="text-xs text-muted-foreground transition hover:text-foreground"
           >
             View website
           </a>
         ) : null}
         <Link
           href={brand.boardHref as Route}
-          className="text-xs text-zinc-500 transition hover:text-zinc-900"
+          className="text-xs text-muted-foreground transition hover:text-foreground"
         >
           View all jobs
         </Link>
         <a
           href="mailto:help@harly.io"
-          className="text-xs text-zinc-500 transition hover:text-zinc-900"
+          className="text-xs text-muted-foreground transition hover:text-foreground"
         >
           Help
         </a>
-        <span className="text-xs text-zinc-400">
+        <span className="text-xs text-muted-foreground">
           Powered by{" "}
           <Link
             href={"/" as Route}
-            className="font-semibold text-zinc-600 transition hover:text-zinc-900"
+            className="font-semibold text-foreground transition hover:text-foreground"
           >
             Harly
           </Link>

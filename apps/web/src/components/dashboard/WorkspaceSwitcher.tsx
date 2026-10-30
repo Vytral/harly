@@ -106,7 +106,7 @@ export function WorkspacePill({
 
   if (!switchable) {
     return (
-      <div className="flex h-8 items-center gap-2 rounded-full border border-mist-border bg-pure-snow px-3">
+      <div className="flex h-8 min-w-0 max-w-full items-center gap-2 rounded-full border border-mist-border bg-pure-snow px-3">
         {label}
       </div>
     );
@@ -116,7 +116,7 @@ export function WorkspacePill({
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger
         aria-label="Switch workspace"
-        className="flex h-8 items-center gap-2 rounded-full border border-mist-border bg-pure-snow px-3 transition-colors hover:bg-row-wash focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-near-ink"
+        className="flex h-8 min-w-0 max-w-full items-center gap-2 rounded-full border border-mist-border bg-pure-snow px-3 transition-colors hover:bg-row-wash focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-near-ink"
       >
         {label}
         <ChevronDown

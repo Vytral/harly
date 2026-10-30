@@ -305,9 +305,12 @@ export function CandidatesTable({
         status: next,
       });
       if (result.success) {
-        toast.success(
-          `Updated ${applicationIds.length} candidate${applicationIds.length === 1 ? "" : "s"}.`,
-        );
+        const count = `Updated ${applicationIds.length} candidate${applicationIds.length === 1 ? "" : "s"}.`;
+        if (result.emailWarning) {
+          toast.warning(`${count} ${result.emailWarning}`);
+        } else {
+          toast.success(count);
+        }
         setSelected(new Set());
         router.refresh();
       } else {
@@ -330,7 +333,11 @@ export function CandidatesTable({
         status: next,
       });
       if (result.success) {
-        toast.success(`${row.fullName} updated.`);
+        if (result.emailWarning) {
+          toast.warning(`${row.fullName} updated. ${result.emailWarning}`);
+        } else {
+          toast.success(`${row.fullName} updated.`);
+        }
         router.refresh();
       } else {
         toast.error(result.error ?? "Could not update candidate.");
@@ -463,8 +470,8 @@ export function CandidatesTable({
   return (
     <div className="space-y-4">
       {/* Search */}
-      <div className="flex items-center gap-2">
-        <div className="relative flex-1">
+      <div className="flex flex-wrap items-center gap-2">
+        <div className="relative min-w-0 basis-full sm:flex-1 sm:basis-0">
           <Search aria-hidden className="absolute left-4 top-1/2 size-4.5 -translate-y-1/2 text-muted-foreground" />
           <Input
             value={query}
@@ -479,7 +486,7 @@ export function CandidatesTable({
         </div>
         <Button
           variant="outline"
-          className="h-11 rounded-lg"
+          className="h-11 shrink-0 rounded-lg"
           onClick={exportCsv}
         >
           <Download className="size-4" />
@@ -740,7 +747,7 @@ export function CandidatesTable({
                           </span>
                         ) : null}
                         {row.inPool ? (
-                          <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-1.5 py-0.5 text-[11px] font-semibold text-amber-700">
+                          <span className="inline-flex items-center gap-1 rounded-full bg-warning-clay/10 px-1.5 py-0.5 text-[11px] font-semibold text-warning-clay">
                             <BookmarkSimpleIcon className="size-3 fill-current" />
                             In Pool
                           </span>
@@ -843,7 +850,7 @@ export function CandidatesTable({
                   variant="filtered"
                   icon={Search}
                   title="Nobody matches these filters"
-                  hint="Widen the search, or clear the filters to see everyone again."
+                  description="Widen the search, or clear the filters to see everyone again."
                   action={
                     <Button variant="outline" size="sm" onClick={clearFilters}>
                       Clear filters
@@ -854,7 +861,7 @@ export function CandidatesTable({
                 <EmptyState
                   icon={Users}
                   title="No candidates yet"
-                  hint="They arrive when someone applies through your career page, or you add one by hand."
+                  description="They arrive when someone applies through your career page, or you add one by hand."
                 />
               )
             ) : null}

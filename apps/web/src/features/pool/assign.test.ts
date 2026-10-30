@@ -15,7 +15,7 @@ const mocks = vi.hoisted(() => {
   };
 });
 
-vi.mock("@harly/db", () => {
+vi.mock("@harly/db", async () => {
   const makeQuery = () => {
     const q: Record<string, unknown> = {};
     // Awaiting the builder (with or without a trailing .limit()) resolves to the
@@ -31,6 +31,10 @@ vi.mock("@harly/db", () => {
     return q;
   };
   return {
+    // Pure stage-kind helpers are real: they pick the entry stage by kind.
+    ...(await vi.importActual<typeof import("@harly/db/stage-kind")>(
+      "@harly/db/stage-kind",
+    )),
     db: {
       select: vi.fn(makeQuery),
       insert: vi.fn(() => ({
@@ -47,7 +51,15 @@ vi.mock("@harly/db", () => {
     poolEntries: {},
     candidates: {},
     jobs: {},
-    jobStages: {},
+    jobStages: {
+      id: "jobStages.id",
+      name: "jobStages.name",
+      kind: "jobStages.kind",
+      archivedAt: "jobStages.archivedAt",
+      workspaceId: "jobStages.workspaceId",
+      jobId: "jobStages.jobId",
+      order: "jobStages.order",
+    },
     applications: {},
     applicationStageHistory: {},
   };
@@ -76,7 +88,8 @@ describe("F1-09 talent pool assignment", () => {
       [{ id: "11111111-1111-4111-8111-111111111111" }], // candidate
       [{ id: "22222222-2222-4222-8222-222222222222", status: "open" }], // job
       [], // duplicate application
-      [{ id: "stage-1" }], // first stage
+      // active job stages; the entry stage is the first non-terminal one
+      [{ id: "stage-1", name: "Applied", kind: "applied", order: 0, archivedAt: null }],
       [{ value: 1 }], // next order
     );
     mocks.transactionImpl.mockImplementation(async (fn: (tx: unknown) => Promise<unknown>) => {

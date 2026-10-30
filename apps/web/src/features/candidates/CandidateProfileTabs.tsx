@@ -182,7 +182,7 @@ export function CandidateProfileTabs({
           <EmptySection
             icon={CalendarClock}
             title="No interviews yet"
-            hint="Schedule one with the button above. The join link, the interviewer and the notes all stay on the card."
+            description="Schedule one with the button above. The join link, the interviewer and the notes all stay on the card."
           />
         ) : (
           <div className="space-y-3 duration-300 animate-in fade-in slide-in-from-bottom-1">
@@ -224,7 +224,7 @@ export function CandidateProfileTabs({
           <EmptySection
             icon={Mail}
             title={`You haven't emailed ${candidateName.split(" ")[0]} yet`}
-            hint="Write the first message above. Their replies arrive in the Inbox and thread back here automatically."
+            description="Write the first message above. Their replies arrive in the Inbox and thread back here automatically."
           />
         ) : (
           <div className="space-y-4 duration-300 animate-in fade-in slide-in-from-bottom-1">
@@ -317,7 +317,7 @@ export function CandidateProfileTabs({
           <EmptySection
             icon={MessageSquare}
             title="Nothing has happened yet"
-            hint="Stage moves, notes, emails and interviews all land here in order, so you can see how this candidate got to where they are."
+            description="Stage moves, notes, emails and interviews all land here in order, so you can see how this candidate got to where they are."
           />
         ) : null}
       </TabsContent>

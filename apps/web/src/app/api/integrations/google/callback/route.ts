@@ -9,6 +9,7 @@ import { createOAuth2Client } from "@/lib/gcal/config";
 import { createLogger } from "@/lib/logger";
 import { getHarlyPublicOrigin } from "@/lib/public-origin";
 import { requirePermission } from "@/features/workspaces/permissions-server";
+import { recordIntegrationSuccess } from "@/features/integrations/health/repository";
 import {
   verifyAndConsumeOauthStateNonce,
 } from "@/server/oauth-state";
@@ -118,6 +119,7 @@ export async function GET(req: NextRequest) {
     .insert(workspaceSettings)
     .values({ organizationId: wsId, ...set })
     .onConflictDoUpdate({ target: workspaceSettings.organizationId, set });
+  await recordIntegrationSuccess(wsId, "gcal");
 
   const appUrl = getAppUrl();
   return NextResponse.redirect(

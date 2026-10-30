@@ -1,6 +1,6 @@
 import "server-only";
 
-import { and, count, desc, eq, inArray, isNull, SQL } from "drizzle-orm";
+import { and, count, desc, eq, inArray, isNull, or, sql, SQL } from "drizzle-orm";
 import { db, type PoolEntry } from "@harly/db";
 import {
   candidates,
@@ -9,8 +9,30 @@ import {
   candidateTags,
   jobs,
 } from "@harly/db";
-import { getWorkspaceContext } from "@/features/workspaces/context";
 import { candidateAvatarFallbackSrcs } from "@/lib/candidate-avatar";
+import { getWorkspaceGravatarEnabled } from "@/lib/gravatar";
+import {
+  candidateScopeSql,
+  jobScopeSql,
+  isUnrestrictedScope,
+  type WorkspaceSearchActor,
+} from "@/features/search/scope";
+import { resolveSearchActor } from "@/features/search/workspace-search";
+
+/**
+ * A pool entry is visible to a restricted actor when its pool job is inside
+ * their scope, or when the candidate has an application on an in-scope job.
+ * An entry with neither (no job, or only out-of-scope applications) is hidden.
+ * Unrestricted actors get no extra predicate.
+ */
+function poolEntryScopeSql(actor: WorkspaceSearchActor): SQL | undefined {
+  if (isUnrestrictedScope(actor.scope)) return undefined;
+  const scopedJob = jobScopeSql(actor);
+  return or(
+    sql`exists (select 1 from ${jobs} where ${jobs.id} = ${poolEntries.jobId} and ${jobs.workspaceId} = ${actor.workspaceId} and ${jobs.deletedAt} is null and ${scopedJob})`,
+    candidateScopeSql(actor, poolEntries.candidateId),
+  );
+}
 
 export type PoolCandidate = {
   poolEntryId: string;
@@ -40,13 +62,17 @@ export async function listPoolCandidates(filters?: {
   maxExperience?: number;
   skills?: string[];
 }): Promise<PoolCandidate[]> {
-  const { organization: workspace } = await getWorkspaceContext();
+  const actor = await resolveSearchActor();
+  const workspace = { id: actor.workspaceId };
+  const gravatarEnabled = await getWorkspaceGravatarEnabled(workspace.id);
 
   const conditions: SQL[] = [
     eq(poolEntries.workspaceId, workspace.id),
     isNull(poolEntries.removedAt),
     isNull(candidates.deletedAt),
   ];
+  const visibleEntry = poolEntryScopeSql(actor);
+  if (visibleEntry) conditions.push(visibleEntry);
 
   if (filters?.source) {
     conditions.push(eq(poolEntries.source, filters.source as PoolEntry["source"]));
@@ -155,7 +181,7 @@ export async function listPoolCandidates(filters?: {
     lastName: row.lastName,
     email: row.email,
     avatarUrl: row.avatarUrl,
-    avatarFallbackSrcs: candidateAvatarFallbackSrcs(row.email, row.githubUrl),
+    avatarFallbackSrcs: candidateAvatarFallbackSrcs(row.email, row.githubUrl, { gravatarEnabled }),
     headline: row.headline,
     location: row.location,
     skills: (row.skills as string[]) ?? [],
@@ -216,7 +242,9 @@ export async function listPoolCandidates(filters?: {
 export async function isCandidateInPool(
   candidateId: string,
 ): Promise<{ inPool: boolean; poolEntryId?: string }> {
-  const { organization: workspace } = await getWorkspaceContext();
+  const actor = await resolveSearchActor();
+  const workspace = { id: actor.workspaceId };
+  const visibleEntry = poolEntryScopeSql(actor);
 
   const [entry] = await db
     .select({ id: poolEntries.id })
@@ -235,6 +263,7 @@ export async function isCandidateInPool(
         eq(poolEntries.candidateId, candidateId),
         isNull(poolEntries.removedAt),
         isNull(candidates.deletedAt),
+        visibleEntry,
       ),
     )
     .limit(1);
@@ -246,7 +275,9 @@ export async function getPoolStats(): Promise<{
   total: number;
   bySource: Record<string, number>;
 }> {
-  const { organization: workspace } = await getWorkspaceContext();
+  const actor = await resolveSearchActor();
+  const workspace = { id: actor.workspaceId };
+  const visibleEntry = poolEntryScopeSql(actor);
 
   const rows = await db
     .select({
@@ -258,6 +289,7 @@ export async function getPoolStats(): Promise<{
       and(
         eq(poolEntries.workspaceId, workspace.id),
         isNull(poolEntries.removedAt),
+        visibleEntry,
       ),
     )
     .groupBy(poolEntries.source);
@@ -280,7 +312,8 @@ export type OpenJob = {
 };
 
 export async function listOpenJobs(): Promise<OpenJob[]> {
-  const { organization: workspace } = await getWorkspaceContext();
+  const actor = await resolveSearchActor();
+  const workspace = { id: actor.workspaceId };
 
   const rows = await db
     .select({
@@ -295,6 +328,7 @@ export async function listOpenJobs(): Promise<OpenJob[]> {
         eq(jobs.workspaceId, workspace.id),
         eq(jobs.status, "open"),
         isNull(jobs.deletedAt),
+        jobScopeSql(actor),
       ),
     )
     .orderBy(desc(jobs.createdAt));

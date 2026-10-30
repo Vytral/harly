@@ -25,6 +25,7 @@ import {
   E2E_SMTP_PORT,
   FIXTURE,
   STAGE_IDS,
+  STAGE_KINDS,
   STAGE_NAMES,
 } from "./constants";
 
@@ -365,6 +366,7 @@ export async function provisionE2EFixture() {
         workspaceId: FIXTURE.workspaceId,
         jobId: FIXTURE.jobId,
         name: STAGE_NAMES[order],
+        kind: STAGE_KINDS[order],
         order,
         color: order === 4 ? "#4ade80" : "#c8f560",
         createdAt: now,

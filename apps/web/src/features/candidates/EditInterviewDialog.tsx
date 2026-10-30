@@ -6,6 +6,8 @@ import { AlertTriangle } from "lucide-react";
 import { toast } from "@/lib/notification-island/toast";
 
 import { updateInterview } from "@/features/interviews/actions";
+import { unshownEmailWarning } from "@/lib/email/delivery-warning";
+
 import { checkAvailability } from "@/lib/gcal/availability";
 import { InterviewerSelect, type InterviewerOption } from "./InterviewerSelect";
 import { DurationInput } from "./DurationInput";
@@ -21,11 +23,12 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
+import { SegmentedControl } from "@/components/ui/segmented-control";
 import { Textarea } from "@/components/ui/textarea";
-import { cn } from "@/lib/utils";
 import type { CandidateInterviewItem } from "@/features/interviews/shared";
 import {
   getBrowserTimeZone,
+  NonexistentLocalTimeError,
   parseScheduledAt,
 } from "@/features/interviews/shared";
 
@@ -38,9 +41,9 @@ const TYPES = [
 ] as const;
 
 const MODES = [
-  { key: "video", label: "Video", icon: () => <span className="inline-block size-4 rounded bg-current/20" /> },
-  { key: "phone", label: "Phone", icon: () => <span className="inline-block size-4 rounded bg-current/20" /> },
-  { key: "onsite", label: "Onsite", icon: () => <span className="inline-block size-4 rounded bg-current/20" /> },
+  { key: "video", label: "Video" },
+  { key: "phone", label: "Phone" },
+  { key: "onsite", label: "Onsite" },
 ] as const;
 
 type TypeKey = (typeof TYPES)[number]["key"];
@@ -102,6 +105,7 @@ export function EditInterviewDialog({
         excludeInterviewId: interview.id,
       });
       const warnings: string[] = [];
+      const calendarUnchecked = result.gcalAvailability === "unknown";
       if (result.gcalBusy.length > 0) {
         warnings.push(
           `${result.gcalBusy.length} existing calendar event${result.gcalBusy.length > 1 ? "s" : ""}`,
@@ -114,10 +118,16 @@ export function EditInterviewDialog({
       }
       setAvailabilityWarning(
         warnings.length > 0
-          ? `This time conflicts with ${warnings.join(" and ")}.`
-          : null,
+          ? `This time conflicts with ${warnings.join(" and ")}.${calendarUnchecked ? " Google Calendar could not be checked." : ""}`
+          : calendarUnchecked
+            ? "Google Calendar availability could not be checked for this time."
+            : null,
       );
-    } catch {
+    } catch (error) {
+      if (error instanceof NonexistentLocalTimeError) {
+        setAvailabilityWarning(error.message);
+        return;
+      }
       // Silently fail
     } finally {
       setCheckingAvailability(false);
@@ -148,6 +158,8 @@ export function EditInterviewDialog({
         return;
       }
       if (result.warning) toast.warning(result.warning);
+      const emailNote = unshownEmailWarning(result);
+      if (emailNote) toast.warning(emailNote);
       toast.success("Interview updated");
       setOpen(false);
       router.refresh();
@@ -179,31 +191,21 @@ export function EditInterviewDialog({
             {/* Left column */}
             <div className="space-y-5">
               <Field label="Type">
-                <div className="grid grid-cols-3 gap-2">
-                  {TYPES.map((t) => (
-                    <SegButton
-                      key={t.key}
-                      active={type === t.key}
-                      onClick={() => setType(t.key)}
-                    >
-                      {t.label}
-                    </SegButton>
-                  ))}
-                </div>
+                <SegmentedControl
+                  aria-label="Interview type"
+                  options={TYPES.map((t) => ({ value: t.key, label: t.label }))}
+                  value={type}
+                  onValueChange={setType}
+                />
               </Field>
 
               <Field label="Mode">
-                <div className="grid grid-cols-3 gap-2">
-                  {MODES.map((m) => (
-                    <SegButton
-                      key={m.key}
-                      active={mode === m.key}
-                      onClick={() => setMode(m.key)}
-                    >
-                      {m.label}
-                    </SegButton>
-                  ))}
-                </div>
+                <SegmentedControl
+                  aria-label="Interview mode"
+                  options={MODES.map((m) => ({ value: m.key, label: m.label }))}
+                  value={mode}
+                  onValueChange={setMode}
+                />
               </Field>
 
               <div className="grid grid-cols-2 gap-3">
@@ -327,27 +329,3 @@ function Field({
   );
 }
 
-function SegButton({
-  active,
-  onClick,
-  children,
-}: {
-  active: boolean;
-  onClick: () => void;
-  children: ReactNode;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={cn(
-        "flex items-center justify-center gap-1.5 rounded-xl border px-2 py-2.5 text-[13px] font-medium transition-colors",
-        active
-          ? "border-primary/40 bg-accent text-accent-foreground"
-          : "text-muted-foreground hover:bg-muted",
-      )}
-    >
-      {children}
-    </button>
-  );
-}

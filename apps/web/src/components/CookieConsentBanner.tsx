@@ -16,8 +16,12 @@ type Prefs = {
   embeds: boolean;
 };
 
+// Colours are semantic tokens. The banner sets `careerMode` (a `light` or
+// `dark` class) on its own root, and globals.css redefines the same tokens
+// under those classes, so a light career page keeps light tokens even inside
+// the admin shell's `.dark` tree.
 const primaryButtonClass =
-  "inline-flex items-center justify-center rounded-xl bg-zinc-900 px-3.5 py-2.5 text-[13px] font-semibold text-white shadow-sm transition-all hover:opacity-90 active:scale-[0.98] dark:bg-zinc-100 dark:text-zinc-900";
+  "inline-flex items-center justify-center rounded-xl bg-primary px-3.5 py-2.5 text-[13px] font-semibold text-primary-foreground shadow-sm transition-all hover:opacity-90 active:scale-[0.98]";
 
 interface CookiePanelProps {
   title?: string;
@@ -51,15 +55,15 @@ function Switch({
       disabled={locked}
       onClick={onToggle}
       className={cn(
-        "relative inline-flex h-[22px] w-9 shrink-0 items-center rounded-full transition-colors duration-200",
+        "relative inline-flex h-[22px] w-9 shrink-0 items-center rounded-full transition-colors duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
         locked ? "cursor-not-allowed opacity-60" : "cursor-pointer",
-        checked ? "bg-zinc-900 dark:bg-zinc-100" : "bg-zinc-200 dark:bg-zinc-700",
+        checked ? "bg-primary" : "bg-muted-foreground/30",
       )}
     >
       <span
         className={cn(
-          "inline-block size-[16px] transform rounded-full bg-white shadow-sm transition-transform duration-200",
-          checked ? "translate-x-[19px] dark:bg-zinc-900" : "translate-x-[3px]",
+          "inline-block size-[16px] transform rounded-full bg-card shadow-sm transition-transform duration-200",
+          checked ? "translate-x-[19px]" : "translate-x-[3px]",
         )}
       />
     </button>
@@ -80,17 +84,17 @@ function PrefRow({
   onToggle: () => void;
 }) {
   return (
-    <div className="flex items-start justify-between gap-4 py-3.5 text-zinc-500 dark:text-zinc-400">
+    <div className="flex items-start justify-between gap-4 py-3.5 text-muted-foreground">
       <div className="min-w-0">
-        <div className="flex items-center gap-1.5 text-[13.5px] font-medium text-zinc-900 dark:text-zinc-100">
+        <div className="flex items-center gap-1.5 text-[13.5px] font-medium text-foreground">
           {label}
           {locked && (
-            <span className="rounded-full bg-zinc-100 px-1.5 py-[1px] text-[10px] font-medium tracking-wide text-zinc-400 dark:bg-zinc-800 dark:text-zinc-500">
+            <span className="rounded-full bg-muted px-1.5 py-[1px] text-[10px] font-medium tracking-wide text-muted-foreground">
               REQUIRED
             </span>
           )}
         </div>
-        <p className="mt-0.5 text-[12.5px] leading-snug text-zinc-500 dark:text-zinc-400">
+        <p className="mt-0.5 text-[12.5px] leading-snug text-muted-foreground">
           {desc}
         </p>
       </div>
@@ -193,14 +197,12 @@ const CookiePanel = (props: CookiePanelProps) => {
       className={cn(
         "fixed inset-x-4 bottom-4 sm:inset-x-auto sm:right-6 sm:bottom-6",
         "z-50 sm:w-[380px]",
-        // Ancestor for the `dark:` variant. A light career page must win over
-        // the admin shell's `.dark` class, which this banner otherwise inherits.
         careerMode,
       )}
     >
       <div
         className={cn(
-          "relative overflow-hidden rounded-[20px] border border-zinc-200 bg-white p-6 shadow-[0_24px_70px_-20px_rgba(15,23,20,0.25)] dark:border-zinc-800 dark:bg-zinc-900 dark:shadow-[0_24px_70px_-20px_rgba(0,0,0,0.6)]",
+          "relative overflow-hidden rounded-[20px] border border-border bg-card p-6 shadow-[0_24px_70px_-20px_rgba(15,23,20,0.25)] dark:shadow-[0_24px_70px_-20px_rgba(0,0,0,0.6)]",
           "flex flex-col",
           visible
             ? "animate-in fade-in slide-in-from-bottom-3 duration-300 ease-out"
@@ -211,34 +213,34 @@ const CookiePanel = (props: CookiePanelProps) => {
         <button
           type="button"
           onClick={hide}
-          className="absolute right-4 top-4 inline-flex size-7 items-center justify-center rounded-full text-zinc-400 transition-colors hover:bg-zinc-100 hover:text-zinc-600 dark:hover:bg-zinc-800 dark:hover:text-zinc-300"
+          className="absolute right-4 top-4 inline-flex size-7 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           aria-label="Close"
         >
-          <X className="size-4" strokeWidth={2} />
+          <X className="size-4" strokeWidth={2} aria-hidden="true" />
         </button>
 
         <div className="flex flex-col items-start gap-3 pr-6">
-          <span className="inline-flex size-10 shrink-0 items-center justify-center rounded-xl bg-zinc-100 text-zinc-900 dark:bg-zinc-800 dark:text-zinc-100">
+          <span className="inline-flex size-10 shrink-0 items-center justify-center rounded-xl bg-muted text-foreground">
             <IconEl className="size-[18px]" strokeWidth={2} aria-hidden="true" />
           </span>
 
-          <h2 className="text-[16px] font-semibold leading-tight text-zinc-900 dark:text-zinc-100">
+          <h2 className="text-[16px] font-semibold leading-tight text-foreground">
             {title}
           </h2>
         </div>
 
-        <p className="mt-2 text-[13.5px] leading-relaxed text-zinc-500 dark:text-zinc-400">
+        <p className="mt-2 text-[13.5px] leading-relaxed text-muted-foreground">
           {message}{" "}
           <a
             href={cookieHref}
-            className="font-medium text-zinc-700 underline decoration-zinc-300 underline-offset-2 transition-colors hover:text-zinc-900 dark:text-zinc-300 dark:decoration-zinc-600 dark:hover:text-zinc-100"
+            className="font-medium text-foreground underline decoration-border underline-offset-2 transition-colors hover:text-foreground/80"
           >
             Cookie Policy
           </a>{" "}
           and{" "}
           <a
             href={privacyHref}
-            className="font-medium text-zinc-700 underline decoration-zinc-300 underline-offset-2 transition-colors hover:text-zinc-900 dark:text-zinc-300 dark:decoration-zinc-600 dark:hover:text-zinc-100"
+            className="font-medium text-foreground underline decoration-border underline-offset-2 transition-colors hover:text-foreground/80"
           >
             Privacy Policy
           </a>
@@ -252,7 +254,7 @@ const CookiePanel = (props: CookiePanelProps) => {
         >
           <div
             id="cookie-preferences-inline"
-            className="mt-1 flex flex-col divide-y divide-zinc-100 border-t border-zinc-100 dark:divide-zinc-800 dark:border-zinc-800"
+            className="mt-1 flex flex-col divide-y divide-border border-t border-border"
           >
             <PrefRow
               label="Strictly necessary"
@@ -274,7 +276,7 @@ const CookiePanel = (props: CookiePanelProps) => {
           <button
             type="button"
             onClick={() => save(false)}
-            className="inline-flex flex-1 items-center justify-center rounded-xl border border-zinc-200 bg-white px-3.5 py-2.5 text-[13px] font-medium text-zinc-600 transition-all hover:border-zinc-300 hover:bg-zinc-50 active:scale-[0.98] dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:border-zinc-600 dark:hover:bg-zinc-700"
+            className="inline-flex flex-1 items-center justify-center rounded-xl border border-border bg-card px-3.5 py-2.5 text-[13px] font-medium text-muted-foreground transition-all hover:bg-muted hover:text-foreground active:scale-[0.98]"
           >
             {necessaryText}
           </button>
@@ -291,15 +293,15 @@ const CookiePanel = (props: CookiePanelProps) => {
         <button
           type="button"
           onClick={() => setShowPrefs((open) => !open)}
-          className="mt-2 inline-flex w-full items-center justify-center gap-1.5 rounded-xl px-3.5 py-2 text-[13px] font-medium text-zinc-500 transition-colors hover:text-zinc-800 dark:text-zinc-400 dark:hover:text-zinc-100"
+          className="mt-2 inline-flex w-full items-center justify-center gap-1.5 rounded-xl px-3.5 py-2 text-[13px] font-medium text-muted-foreground transition-colors hover:text-foreground"
           aria-expanded={showPrefs}
           aria-controls="cookie-preferences-inline"
         >
           {customizeText}
           {showPrefs ? (
-            <ChevronUp className="size-3.5" strokeWidth={2.5} />
+            <ChevronUp className="size-3.5" strokeWidth={2.5} aria-hidden="true" />
           ) : (
-            <ChevronDown className="size-3.5" strokeWidth={2.5} />
+            <ChevronDown className="size-3.5" strokeWidth={2.5} aria-hidden="true" />
           )}
         </button>
 

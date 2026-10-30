@@ -54,7 +54,11 @@ export function MoveStageButton({
           }),
       );
       if (result.success) {
-        toast.success(`Moved to ${nextStage.name}.`);
+        if (result.emailWarning) {
+          toast.warning(`Stage updated. ${result.emailWarning}`);
+        } else {
+          toast.success(`Moved to ${nextStage.name}.`);
+        }
         (router as { refresh?: () => void }).refresh?.();
       } else {
         toast.error(result.error ?? "Could not move candidate.");

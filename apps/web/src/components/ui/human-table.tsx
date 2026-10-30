@@ -149,44 +149,6 @@ export function PersonCell({
   );
 }
 
-/* ── Status pill ─────────────────────────────────────────────────────────── */
-
-export type StatusTone = "quiet" | "success" | "danger" | "warning";
-
-const statusTones: Record<StatusTone, string> = {
-  quiet: "bg-status-quiet text-status-quiet-ink",
-  success: "bg-sage-wash text-success-olive",
-  danger: "bg-danger-rust/10 text-danger-rust",
-  warning: "bg-warning-clay/10 text-warning-clay",
-};
-
-/**
- * State without drama. Quiet by default , the frame's `Pending` pill is a cool
- * grey-blue, not a colour-coded rainbow. Semantic tones exist for hired and
- * rejected only. Never chartreuse: that is reserved for live signals.
- */
-export function StatusPill({
-  children,
-  tone = "quiet",
-  className,
-}: {
-  children: React.ReactNode;
-  tone?: StatusTone;
-  className?: string;
-}) {
-  return (
-    <span
-      className={cn(
-        "font-chrome inline-flex items-center rounded-full px-2.5 py-1 text-[12px] leading-none",
-        statusTones[tone],
-        className,
-      )}
-    >
-      {children}
-    </span>
-  );
-}
-
 /* ── Category chip ───────────────────────────────────────────────────────── */
 
 /**

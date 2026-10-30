@@ -15,7 +15,6 @@ import {
   emailOutbox,
   jobs,
   jobHiringTeam,
-  jobStages,
   notifications,
   offers,
   signatureFields,
@@ -26,7 +25,7 @@ import {
   requireApplicationPermission,
   requireOfferPermission,
 } from "@/features/workspaces/permissions-server";
-import { getDocumentAccessForUser } from "@/features/documents/access";
+import { resolveDocumentAccessInScope } from "@/features/documents/scope-access";
 import { createLogger } from "@/lib/logger";
 import { emitWebhookEvent } from "@/server/webhooks/emit";
 import {
@@ -37,6 +36,8 @@ import {
   enqueueEmailOutbox,
   processEmailOutbox,
 } from "@/lib/email/outbox-processor";
+import { offerSendOutcomeMessage } from "@/lib/email/delivery-warning";
+import { offerEmailDedupeKey, offerExtendedEmailDedupeKey } from "@/lib/email/dedupe-keys";
 import {
   archiveDocusealOffer,
   createOfferEnvelope,
@@ -47,7 +48,12 @@ import {
 } from "@/lib/esign/native/offer-signing";
 import { isSignableNativeFieldsSnapshot } from "@/lib/esign/native/fields";
 import { getWorkspaceEsignStatus } from "@/lib/esign/config";
-import { withdrawSiblingApplicationsForHire } from "./withdraw-siblings";
+import { ensureStageOfKind } from "@/features/pipeline/stage-resolver";
+import {
+  publishSiblingWithdrawals,
+  withdrawSiblingApplicationsForHire,
+  type SiblingWithdrawal,
+} from "./withdraw-siblings";
 import {
   assertOfferTerms,
   getOfferRecipient,
@@ -269,7 +275,7 @@ export async function createOffer(input: {
   if (parsed.data.documentIds.length > 0) {
     const accessible = await Promise.all(
       parsed.data.documentIds.map((documentId) =>
-        getDocumentAccessForUser({
+        resolveDocumentAccessInScope({
           documentId,
           workspaceId,
           userId: context.user.id,
@@ -593,18 +599,22 @@ export async function sendOffer(input: {
   // A durable outbox row is the single source of truth: the worker sends the
   // email and only then flips the offer to `sent`, so a crash mid-flight can
   // never leave the offer as `sent` without a delivered email (or resend it).
-  // enqueueEmailOutbox dedupes by a hash of (kind, payload), so a double send
-  // (double-click, retry, AI agent) reuses the same row instead of creating
-  // duplicates and double-counting deliveries / offer.sent events.
+  // The key is the offer and its terms, so a double send (double-click, retry,
+  // AI agent) reuses the same row instead of creating duplicates and
+  // double-counting deliveries / offer.sent events. An explicit send after a
+  // terminal failure starts a fresh attempt on that same row.
+  const terms = serializeOfferTermsSnapshot(snapshotOfferTerms(offer));
   const outboxId = await enqueueEmailOutbox(
     workspaceId,
     "offer.extended",
     {
       offerId: offer.id,
-      terms: serializeOfferTermsSnapshot(snapshotOfferTerms(offer)),
+      terms,
     },
-    undefined,
+    offerExtendedEmailDedupeKey({ offerId: offer.id, terms }),
     context.user.id,
+    db,
+    { resetTerminal: true },
   );
 
   await processEmailOutbox({ ids: [outboxId] });
@@ -618,7 +628,7 @@ export async function sendOffer(input: {
   if (updated?.status !== "sent") {
     return {
       success: false,
-      error: "Offer delivery failed. It has been queued for retry.",
+      error: offerSendOutcomeMessage(updated?.status ?? "missing"),
     };
   }
 
@@ -854,6 +864,7 @@ export async function decideOffer(input: {
   const hiredEvent: { current: Awaited<ReturnType<typeof persistDomainEvent>> | null } = {
     current: null,
   };
+  const siblingWithdrawals: { current: SiblingWithdrawal[] } = { current: [] };
   await db.transaction(async (tx) => {
     const [updatedOffer] = await tx
       .update(offers)
@@ -896,23 +907,20 @@ export async function decideOffer(input: {
             "Application changed by another recruiter. Refresh and try again.",
           );
         }
-        const [hiredStage] = await tx
-          .select({ id: jobStages.id })
-          .from(jobStages)
-          .where(
-            and(
-              eq(jobStages.workspaceId, workspaceId),
-              eq(jobStages.jobId, offer.jobId),
-              sql`lower(${jobStages.name}) = 'hired'`,
-            ),
-          )
-          .limit(1);
+        // A hire is always recorded as a stage move. The hired stage is found
+        // by kind (not by name) and created when the job has none, so the
+        // application never ends up `hired` without a history row.
+        const hiredStage = await ensureStageOfKind(tx, {
+          workspaceId,
+          jobId: offer.jobId,
+          kind: "hired",
+        });
 
         const [hired] = await tx
           .update(applications)
           .set({
             status: "hired",
-            ...(hiredStage ? { currentStageId: hiredStage.id } : {}),
+            currentStageId: hiredStage.id,
             updatedAt: new Date(),
           })
           .where(
@@ -929,7 +937,7 @@ export async function decideOffer(input: {
           );
         }
 
-        if (hiredStage && hiredStage.id !== application.currentStageId) {
+        if (hiredStage.id !== application.currentStageId) {
           await tx.insert(applicationStageHistory).values({
             workspaceId,
             applicationId: application.id,
@@ -939,7 +947,7 @@ export async function decideOffer(input: {
           });
         }
 
-        await withdrawSiblingApplicationsForHire(tx, {
+        siblingWithdrawals.current = await withdrawSiblingApplicationsForHire(tx, {
           workspaceId,
           candidateId: offer.candidateId,
           hiredApplicationId: application.id,
@@ -982,6 +990,11 @@ export async function decideOffer(input: {
     });
   });
 
+  await publishSiblingWithdrawals({
+    workspaceId,
+    actorUserId: context.user.id,
+    withdrawals: siblingWithdrawals.current,
+  });
   if (hiredEvent.current) {
     await publishPersistedDomainEvents([hiredEvent.current]);
     await emitWebhookEvent(workspaceId, "application.hired", {
@@ -1128,7 +1141,7 @@ export async function withdrawOffer(input: {
           companyName: recipient.companyName,
           jobTitle: offer.title,
         },
-        undefined,
+        offerEmailDedupeKey({ offerId: offer.id, kind: "withdrawn" }),
         context.user.id,
       );
       await processEmailOutbox({ ids: [outboxId], workspaceId });

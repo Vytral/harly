@@ -18,6 +18,12 @@ describe("workspace permissions", () => {
     expect(BUILTIN_ROLE_PERMISSIONS.admin).toEqual(PERMISSIONS);
   });
 
+  it("grants dsar:manage by default to owner and admin, the roles that export consent and audit records", () => {
+    expect(BUILTIN_ROLE_PERMISSIONS.owner).toContain("dsar:manage");
+    expect(BUILTIN_ROLE_PERMISSIONS.admin).toContain("dsar:manage");
+    expect(BUILTIN_ROLE_PERMISSIONS.hiring_manager).not.toContain("dsar:manage");
+  });
+
   it("gives recruiters DSAR review access but not member mutation permissions", () => {
     expect(BUILTIN_ROLE_PERMISSIONS.recruiter).toContain("members:read");
     expect(BUILTIN_ROLE_PERMISSIONS.recruiter).not.toContain("members:invite");
@@ -153,6 +159,64 @@ describe("workspace roles", () => {
       departments: [],
       regions: [],
     });
+    expect(normalizeRoleScope(undefined)).toEqual({
+      jobAccess: "all",
+      departments: [],
+      regions: [],
+    });
+    expect(normalizeRoleScope({})).toEqual({
+      jobAccess: "all",
+      departments: [],
+      regions: [],
+    });
+  });
+
+  it("round-trips every valid saved scope unchanged", () => {
+    const saved = [
+      { jobAccess: "all", departments: [], regions: [] },
+      { jobAccess: "assigned", departments: [], regions: [] },
+      { jobAccess: "all", departments: ["Engineering", "Sales"], regions: [] },
+      { jobAccess: "all", departments: [], regions: ["EMEA"] },
+      { jobAccess: "assigned", departments: ["Engineering"], regions: ["EMEA", "APAC"] },
+    ];
+    for (const scope of saved) {
+      const stored = JSON.parse(JSON.stringify(scope)) as unknown;
+      expect(normalizeRoleScope(stored)).toEqual(scope);
+    }
+  });
+
+  it("fails closed when a present scope has a malformed shape", () => {
+    // Most restrictive existing scope: assigned jobs only, no department or region.
+    const closed = { jobAccess: "assigned", departments: [], regions: [] };
+    const malformed: unknown[] = [
+      { departments: "Engineering" },
+      { departments: [null] },
+      { departments: ["Engineering", 42] },
+      { departments: [" "] },
+      { jobAccess: "ASSIGNED" },
+      { jobAccess: null },
+      { jobAccess: "all", regions: "EMEA" },
+      { regions: { 0: "EMEA" } },
+      "Engineering",
+      42,
+      true,
+      [],
+      ["assigned"],
+    ];
+    for (const raw of malformed) {
+      expect(normalizeRoleScope(raw), JSON.stringify(raw)).toEqual(closed);
+    }
+  });
+
+  it("keeps unknown extra keys from widening or narrowing a valid scope", () => {
+    expect(
+      normalizeRoleScope({
+        jobAccess: "assigned",
+        departments: ["Engineering"],
+        regions: [],
+        futureField: true,
+      }),
+    ).toEqual({ jobAccess: "assigned", departments: ["Engineering"], regions: [] });
   });
 
   it("prevents a scoped actor from granting all jobs or broader filters", () => {

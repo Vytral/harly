@@ -34,7 +34,7 @@ export function PipelineJobSelect({
       <DropdownMenuTrigger asChild>
         <Button
           variant="outline"
-          className="h-auto w-full max-w-sm justify-between gap-2 py-2"
+          className="h-auto w-full min-w-0 max-w-sm justify-between gap-2 py-2"
         >
           <span className="flex min-w-0 items-center gap-2">
             <span className="flex size-7 shrink-0 items-center justify-center rounded-md bg-muted text-muted-foreground">

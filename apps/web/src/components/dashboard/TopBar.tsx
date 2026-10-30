@@ -7,7 +7,10 @@ import { useTheme } from "@/components/ThemeProvider";
 
 import Image from "next/image";
 
-import { CommandMenu } from "@/components/dashboard/CommandMenu";
+import {
+  COMMAND_MENU_TRIGGER_ID,
+  CommandMenu,
+} from "@/components/dashboard/CommandMenu";
 import { MobileNav } from "@/components/dashboard/IconRail";
 import { allNavItems, isNavActive } from "@/components/dashboard/nav-items";
 import { NotificationsBell } from "@/components/dashboard/NotificationsBell";
@@ -115,9 +118,11 @@ export function TopBar({
           </div>
         ) : null}
 
-        {/* Centered regardless of how wide the two side clusters are. */}
-        <div className="pointer-events-none absolute inset-x-0 flex h-[var(--spacing-topbar)] items-center justify-center">
-          <div className="pointer-events-auto">
+        {/* Desktop: centered on the bar regardless of how wide the side clusters are.
+            Narrow screens: a flexible slot between the clusters, so the pill
+            truncates instead of sliding under the account and action buttons. */}
+        <div className="pointer-events-none flex min-w-0 flex-1 items-center justify-center md:absolute md:inset-x-0 md:h-[var(--spacing-topbar)]">
+          <div className="pointer-events-auto min-w-0 max-w-full">
             <NotificationIsland
               workspace={workspace}
               workspaceOptions={workspaceOptions}
@@ -126,15 +131,17 @@ export function TopBar({
           </div>
         </div>
 
-        <div className="z-10 ml-auto flex items-center gap-1">
+        <div className="z-10 ml-auto flex shrink-0 items-center gap-1">
           <AiSignalButton />
           <UserMenu
             user={user}
             role={role}
             workspace={workspace}
             workspaceOptions={workspaceOptions}
+            demoMode={demoMode}
           />
           <IconButton
+            id={COMMAND_MENU_TRIGGER_ID}
             label="Search"
             onClick={() => setCommandOpen(true)}
             hint="⌘K"
@@ -152,6 +159,7 @@ export function TopBar({
           open={commandOpen}
           onOpenChange={setCommandOpen}
           userPermissions={userPermissions}
+          workspaceId={workspace.id}
         />
       </header>
 
@@ -168,11 +176,13 @@ export function TopBar({
 }
 
 function IconButton({
+  id,
   label,
   hint,
   onClick,
   children,
 }: {
+  id?: string;
   label: string;
   hint?: string;
   onClick: () => void;
@@ -182,6 +192,7 @@ function IconButton({
     <Tooltip>
       <TooltipTrigger asChild>
         <button
+          id={id}
           type="button"
           onClick={onClick}
           aria-label={label}

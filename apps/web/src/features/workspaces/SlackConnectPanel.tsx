@@ -1,5 +1,11 @@
 "use client";
 
+import { IntegrationHealthNotice } from "@/features/integrations/health/ui/IntegrationHealthNotice";
+import {
+  sanitizeIntegrationError,
+  type IntegrationHealthView,
+} from "@/features/integrations/health/model";
+import { providerStatusLabel, providerStatusTone } from "@/features/integrations/health/connection-label";
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "@/lib/notification-island/toast";
@@ -45,7 +51,9 @@ export function SlackConnectPanel({
   workspaceId,
   tileClassName,
   description,
+  health,
 }: {
+  health?: IntegrationHealthView;
   status: WorkspaceSlackStatus;
   events: EventOption[];
   canEdit: boolean;
@@ -59,12 +67,12 @@ export function SlackConnectPanel({
   const [togglePending, startToggle] = useTransition();
   const [disconnecting, startDisconnect] = useTransition();
 
-  const statusTone = isConnected ? (status.enabled ? "on" : "off") : "neutral";
-  const statusLabel = isConnected
+  const statusTone = providerStatusTone(health, isConnected ? (status.enabled ? "on" : "off") : "neutral");
+  const statusLabel = providerStatusLabel(health, isConnected
     ? status.enabled
       ? "Connected"
       : "Disabled"
-    : "Not connected";
+    : "Not connected");
 
   const installUrl = `/api/integrations/slack/install?ws=${workspaceId}`;
 
@@ -155,6 +163,7 @@ export function SlackConnectPanel({
           ) : null
         }
       />
+      {health ? <IntegrationHealthNotice health={health} reconnectHref={installUrl} /> : null}
 
       {!status.encryptionReady && !isConnected ? (
         <div className="flex items-start gap-2 rounded-xl border border-clay/30 bg-clay/5 px-3 py-2 text-sm text-clay">
@@ -203,7 +212,7 @@ export function SlackConnectPanel({
             {status.pendingDeliveries > 0
               ? `${status.pendingDeliveries} notification${status.pendingDeliveries === 1 ? "" : "s"} pending.`
               : `Last delivery attempt: ${status.lastDelivery.attempts}.`}
-            {status.lastDelivery.error ? ` ${status.lastDelivery.error}` : ""}
+            {status.lastDelivery.error ? ` ${sanitizeIntegrationError(status.lastDelivery.error)}` : ""}
           </p>
         </Card>
       ) : null}
@@ -588,7 +597,7 @@ function SlackConfigForm({
                   <p className="truncate font-medium">{delivery.event}</p>
                   <p className="text-muted-foreground">
                     {delivery.status} · {delivery.attempts} attempt{delivery.attempts === 1 ? "" : "s"}
-                    {delivery.lastError ? ` · ${delivery.lastError}` : ""}
+                    {delivery.lastError ? ` · ${sanitizeIntegrationError(delivery.lastError)}` : ""}
                   </p>
                 </div>
                 {delivery.status === "dead_letter" || delivery.status === "failed" ? (

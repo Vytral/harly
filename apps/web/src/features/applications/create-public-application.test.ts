@@ -11,7 +11,11 @@ const mocks = vi.hoisted(() => {
   return { transactionImpl, selectImpl, storageRead };
 });
 
-vi.mock("@harly/db", () => ({
+vi.mock("@harly/db", async () => ({
+  // Pure stage-kind helpers are real: they pick the entry stage by kind.
+  ...(await vi.importActual<typeof import("@harly/db/stage-kind")>(
+    "@harly/db/stage-kind",
+  )),
   db: {
     transaction: (fn: (tx: unknown) => Promise<unknown>) =>
       mocks.transactionImpl(fn),
@@ -23,7 +27,15 @@ vi.mock("@harly/db", () => ({
   applications: {},
   candidates: {},
   jobs: {},
-  jobStages: {},
+  jobStages: {
+    id: "jobStages.id",
+    name: "jobStages.name",
+    kind: "jobStages.kind",
+    archivedAt: "jobStages.archivedAt",
+    workspaceId: "jobStages.workspaceId",
+    jobId: "jobStages.jobId",
+    order: "jobStages.order",
+  },
   organization: {},
   applicationQuestions: {},
   applicationAnswers: {},
@@ -241,7 +253,8 @@ describe("F1-07 re-application duplicate detection order", () => {
       [{ ...ORG, legalConfigured: true, consentText: "Canonical privacy terms" }],
       [canonicalCandidate],
       [],
-      [{ id: "stage-1" }],
+      // Active stages of the job; the entry stage is the first non-terminal one.
+      [{ id: "stage-1", name: "Applied", kind: "applied", order: 0, archivedAt: null }],
       [{ value: 1 }],
       [{ id: "application-2" }],
       [],

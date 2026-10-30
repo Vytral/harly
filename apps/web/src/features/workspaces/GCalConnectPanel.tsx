@@ -1,5 +1,8 @@
 "use client";
 
+import { IntegrationHealthNotice } from "@/features/integrations/health/ui/IntegrationHealthNotice";
+import type { IntegrationHealthView } from "@/features/integrations/health/model";
+import { providerStatusLabel, providerStatusTone } from "@/features/integrations/health/connection-label";
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "@/lib/notification-island/toast";
@@ -34,7 +37,9 @@ export function GCalConnectPanel({
   workspaceId,
   tileClassName,
   description,
+  health,
 }: {
+  health?: IntegrationHealthView;
   status: WorkspaceGCalStatus;
   canEdit: boolean;
   workspaceId: string;
@@ -47,12 +52,12 @@ export function GCalConnectPanel({
   const [disconnecting, startDisconnect] = useTransition();
   const [testing, startTest] = useTransition();
 
-  const statusTone = isConnected ? (status.enabled ? "on" : "off") : "neutral";
-  const statusLabel = isConnected
+  const statusTone = providerStatusTone(health, isConnected ? (status.enabled ? "on" : "off") : "neutral");
+  const statusLabel = providerStatusLabel(health, isConnected
     ? status.enabled
       ? "Connected"
       : "Disabled"
-    : "Not connected";
+    : "Not connected");
 
   const installUrl = `/api/integrations/google/install?ws=${workspaceId}`;
 
@@ -119,6 +124,7 @@ export function GCalConnectPanel({
           ) : null
         }
       />
+      {health ? <IntegrationHealthNotice health={health} reconnectHref={installUrl} /> : null}
 
       {!status.hasCredentials && !isConnected ? (
         <div className="flex items-start gap-2 rounded-xl border border-clay/30 bg-clay/5 px-3 py-2 text-sm text-clay">

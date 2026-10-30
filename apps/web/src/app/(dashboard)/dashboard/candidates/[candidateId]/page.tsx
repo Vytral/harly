@@ -52,6 +52,7 @@ import { getWorkspaceAiStatus } from "@/lib/ai/config";
 import { getWorkspaceCalStatus } from "@/lib/cal/config";
 import { getWorkspaceEsignStatus } from "@/lib/esign/config";
 import { candidateAvatarFallbackSrcs } from "@/lib/candidate-avatar";
+import { getWorkspaceGravatarEnabled } from "@/lib/gravatar";
 
 export const dynamic = "force-dynamic";
 
@@ -197,7 +198,10 @@ export default async function CandidateDetailPage({
   const fullName = `${candidate.firstName} ${candidate.lastName}`;
   const latestResume = files[0] ?? null;
   const latestApplication = applications[0] ?? null;
-  const avatarFallbackSrcs = candidateAvatarFallbackSrcs(candidate.email, candidate.githubUrl);
+  const gravatarEnabled = await getWorkspaceGravatarEnabled(workspaceId);
+  const avatarFallbackSrcs = candidateAvatarFallbackSrcs(candidate.email, candidate.githubUrl, {
+    gravatarEnabled,
+  });
 
   const [suspectCandidates, moveTargets] = await Promise.all([
     // Fuzzy duplicate check (heuristic only, no AI at load time)

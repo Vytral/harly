@@ -8,8 +8,10 @@ import { encryptSecret } from "@/lib/crypto";
 import { createLogger } from "@/lib/logger";
 import { getWorkspaceOutlookCredentials } from "@/lib/outlook/config";
 import { getMe } from "@/lib/outlook/client";
+import { sealOutlookAccessToken } from "@/lib/outlook/token-envelope";
 import { getHarlyPublicOrigin } from "@/lib/public-origin";
 import { requirePermission } from "@/features/workspaces/permissions-server";
+import { recordIntegrationSuccess } from "@/features/integrations/health/repository";
 import { verifyAndConsumeOauthStateNonce } from "@/server/oauth-state";
 
 const log = createLogger("api-outlook-callback");
@@ -98,6 +100,7 @@ export async function GET(req: NextRequest) {
   const tokenData = (await tokenRes.json()) as {
     access_token?: string;
     refresh_token?: string;
+    expires_in?: number;
     error?: string;
     error_description?: string;
   };
@@ -118,7 +121,13 @@ export async function GET(req: NextRequest) {
   }
 
   // Encrypt and store tokens
-  const encryptedAccess = encryptSecret(tokenData.access_token);
+  const accessExpiresAt =
+    typeof tokenData.expires_in === "number"
+      ? new Date(Date.now() + tokenData.expires_in * 1000)
+      : null;
+  const encryptedAccess = encryptSecret(
+    sealOutlookAccessToken(tokenData.access_token, accessExpiresAt),
+  );
   const encryptedRefresh = encryptSecret(tokenData.refresh_token);
 
   const set: Partial<typeof workspaceSettings.$inferInsert> = {
@@ -142,6 +151,7 @@ export async function GET(req: NextRequest) {
     .insert(workspaceSettings)
     .values({ organizationId: wsId, ...set })
     .onConflictDoUpdate({ target: workspaceSettings.organizationId, set });
+  await recordIntegrationSuccess(wsId, "outlook");
 
   return NextResponse.redirect(
     `${appUrl}/settings/integrations?outlook=connected`,

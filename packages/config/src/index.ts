@@ -81,8 +81,9 @@ const envSchema = z
       .transform((value) => value === "true"),
     // The shared login account visitors are signed in as (one-click, no typing).
     DEMO_LOGIN_EMAIL: optionalEmail,
-    // Optional pin for the demo workspace id. When set, cron/CLI refuse to
-    // wipe any other organization id (defense-in-depth on a dedicated VPS).
+    // Pin for the demo workspace id. Required when DEMO_MODE=true: the scheduled
+    // demo reset refuses to run without it, and otherwise wipes only this id.
+    // The CLI refuses any other organization id too.
     DEMO_WORKSPACE_ID: optionalString,
     // Turnstile keys used for the demo entry gate. The site key is public
     // (NEXT_PUBLIC_*) and rendered client-side; the secret is verified

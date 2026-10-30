@@ -95,11 +95,12 @@ export async function getPortalApplicationRow(applicationId: string) {
   return row;
 }
 
+/** The job's current pipeline for the candidate progress view (archived excluded). */
 export async function getPortalJobStages(jobId: string) {
   return db
     .select({ id: jobStages.id, name: jobStages.name, order: jobStages.order })
     .from(jobStages)
-    .where(eq(jobStages.jobId, jobId))
+    .where(and(eq(jobStages.jobId, jobId), isNull(jobStages.archivedAt)))
     .orderBy(asc(jobStages.order));
 }
 

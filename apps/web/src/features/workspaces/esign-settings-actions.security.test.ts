@@ -15,6 +15,11 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock("next/cache", () => ({ revalidatePath: mocks.revalidatePath }));
 vi.mock("drizzle-orm", () => ({ eq: vi.fn(() => "where") }));
+vi.mock("@/features/integrations/health/repository", () => ({
+  recordIntegrationSuccess: vi.fn(async () => undefined),
+  recordIntegrationFailure: vi.fn(async () => undefined),
+  clearIntegrationHealth: vi.fn(async () => undefined),
+}));
 vi.mock("@harly/db", () => ({
   db: { insert: mocks.dbInsert, update: mocks.dbUpdate },
   workspaceSettings: { organizationId: "organizationId" },

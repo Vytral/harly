@@ -14,7 +14,11 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { SparkleFillIcon, PaperPlaneDuotoneIcon } from "@/components/ui/icons/phosphor";
+import { resolveUnknownMailDeliveryAction } from "@/features/mailbox/actions";
 import { cn } from "@/lib/utils";
+
+const defaultResolveUnknown = (idempotencyKey: string) =>
+  resolveUnknownMailDeliveryAction({ idempotencyKey });
 
 /** Mirrors the server cap in compose-shared.ts so we fail fast client-side. */
 const MAX_TOTAL_BYTES = 20 * 1024 * 1024;
@@ -89,6 +93,7 @@ export function MailComposer({
   aiDraftLabel = "Draft with AI",
   onDraftAI,
   onSend,
+  onResolveUnknown,
   sendLabel = "Send",
   disabled = false,
   footerNote,
@@ -104,7 +109,15 @@ export function MailComposer({
   aiConfigured?: boolean;
   aiDraftLabel?: string;
   onDraftAI?: () => Promise<{ subject?: string; body: string } | null>;
-  onSend: (payload: ComposerPayload) => Promise<{ ok: boolean; error?: string; note?: string }>;
+  onSend: (payload: ComposerPayload) => Promise<{
+    ok: boolean;
+    error?: string;
+    note?: string;
+    /** `delivery_unknown`: the provider outcome is unconfirmed; the key is kept. */
+    code?: "delivery_unknown" | "delivery_in_progress";
+  }>;
+  /** Confirms an unknown delivery as sent (never sends). */
+  onResolveUnknown?: (idempotencyKey: string) => Promise<{ ok: boolean; error?: string }>;
   sendLabel?: string;
   disabled?: boolean;
   footerNote?: string;
@@ -121,6 +134,10 @@ export function MailComposer({
   const [note, setNote] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const idempotencyKeyRef = useRef(crypto.randomUUID());
+  // Set when the provider outcome of `unknownKey` could not be confirmed. The
+  // same key is never re-sent silently; the user chooses the next step.
+  const [unknownKey, setUnknownKey] = useState<string | null>(null);
+  const [confirmResend, setConfirmResend] = useState(false);
 
   function loadBody(next: string) {
     setEditorInitial(next);
@@ -186,27 +203,64 @@ export function MailComposer({
   }
 
   const text = htmlToPlainText(html);
-  const canSend = (!showSubject || subject.trim().length > 0) && text.length > 0 && !sending && !disabled;
+  const canSend = (!showSubject || subject.trim().length > 0) && text.length > 0 && !sending && !disabled && !unknownKey;
 
-  async function handleSend() {
-    if (!canSend) return;
+  async function submit(idempotencyKey: string) {
     setError(null);
     setNote(null);
     setSending(true);
     try {
-      const result = await onSend({ subject: subject.trim(), html, text, attachments, idempotencyKey: idempotencyKeyRef.current });
+      const result = await onSend({ subject: subject.trim(), html, text, attachments, idempotencyKey });
       if (result.ok) {
         setHtml("");
         loadBody("");
         setAttachments([]);
+        setUnknownKey(null);
+        setConfirmResend(false);
         idempotencyKeyRef.current = crypto.randomUUID();
         setNote(result.note ?? null);
+      } else if (result.code === "delivery_unknown") {
+        setUnknownKey(idempotencyKey);
+        setConfirmResend(false);
       } else {
         setError(result.error ?? "Could not send.");
       }
     } finally {
       setSending(false);
     }
+  }
+
+  async function handleSend() {
+    if (!canSend) return;
+    await submit(idempotencyKeyRef.current);
+  }
+
+  async function markUnknownAsSent() {
+    if (!unknownKey) return;
+    setError(null);
+    setSending(true);
+    try {
+      const result = await (onResolveUnknown ?? defaultResolveUnknown)(unknownKey);
+      if (result.ok) {
+        setUnknownKey(null);
+        setConfirmResend(false);
+        setHtml("");
+        loadBody("");
+        setAttachments([]);
+        idempotencyKeyRef.current = crypto.randomUUID();
+        setNote("Marked as sent.");
+      } else {
+        setError(result.error ?? "Could not update this message.");
+      }
+    } finally {
+      setSending(false);
+    }
+  }
+
+  async function sendAnotherCopy() {
+    // The user explicitly chose a new send, so it gets a new key.
+    idempotencyKeyRef.current = crypto.randomUUID();
+    await submit(idempotencyKeyRef.current);
   }
 
   return (
@@ -260,6 +314,30 @@ export function MailComposer({
         </ul>
       ) : null}
 
+      {unknownKey ? (
+        <div role="alert" className="flex flex-col gap-2 rounded-lg border border-border bg-card p-3 text-sm">
+          <p className="font-medium">We couldn&apos;t confirm this was sent.</p>
+          {confirmResend ? (
+            <p className="text-muted-foreground">
+              Sending again may deliver a second copy if the first one went through.
+            </p>
+          ) : null}
+          <div className="flex flex-wrap gap-2">
+            <Button type="button" variant="outline" size="sm" onClick={markUnknownAsSent} disabled={sending}>
+              Check sent folder / mark as sent
+            </Button>
+            {confirmResend ? (
+              <Button type="button" size="sm" onClick={sendAnotherCopy} disabled={sending}>
+                Send another copy
+              </Button>
+            ) : (
+              <Button type="button" variant="ghost" size="sm" onClick={() => setConfirmResend(true)} disabled={sending}>
+                Send again
+              </Button>
+            )}
+          </div>
+        </div>
+      ) : null}
       {error ? <p role="alert" className="text-sm text-destructive">{error}</p> : null}
       {note ? <p role="status" className="text-sm text-muted-foreground">{note}</p> : null}
 

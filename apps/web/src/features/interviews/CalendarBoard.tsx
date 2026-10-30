@@ -31,9 +31,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { UserAvatar } from "@/components/ui/UserAvatar";
+import { duration, easing, resolveTransition } from "@/lib/motion";
 import { cn } from "@/lib/utils";
-
-const EASE_OUT = [0.16, 1, 0.3, 1] as const;
 
 const MODE_ICON: Record<
   InterviewMode,
@@ -315,7 +314,7 @@ export function CalendarBoard({
           initial={shouldReduceMotion ? false : { opacity: 0, x: 8 }}
           animate={{ opacity: 1, x: 0 }}
           exit={shouldReduceMotion ? undefined : { opacity: 0, x: -8 }}
-          transition={{ duration: 0.18, ease: EASE_OUT }}
+          transition={resolveTransition({ duration: duration.fast, ease: easing.easeOut }, Boolean(shouldReduceMotion))}
           className="hidden overflow-hidden rounded-xl border border-border sm:block"
         >
           <div
@@ -424,7 +423,7 @@ export function CalendarBoard({
             initial={shouldReduceMotion ? false : { opacity: 0, y: -4 }}
             animate={{ opacity: 1, y: 0 }}
             exit={shouldReduceMotion ? undefined : { opacity: 0, y: -4 }}
-            transition={{ duration: 0.16, ease: EASE_OUT }}
+            transition={resolveTransition({ duration: duration.fast, ease: easing.easeOut }, Boolean(shouldReduceMotion))}
           >
             <Card>
               <CardContent className="space-y-2 py-4">
@@ -526,7 +525,7 @@ export function CalendarBoard({
                                   ? undefined
                                   : { height: 0, opacity: 0 }
                               }
-                              transition={{ duration: 0.15, ease: EASE_OUT }}
+                              transition={resolveTransition({ duration: duration.fast, ease: easing.easeOut }, Boolean(shouldReduceMotion))}
                               className="overflow-hidden"
                             >
                               <div className="space-y-1.5 border-t border-border/60 px-2 py-2.5 pl-[4.75rem] text-xs text-muted-foreground">

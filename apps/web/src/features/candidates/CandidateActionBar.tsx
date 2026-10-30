@@ -135,7 +135,7 @@ function DecisionApplicationSelector({
   const selected = decisionApplication(applications, selectedApplicationId);
 
   return (
-    <label className="flex min-w-0 items-center gap-2 rounded-xl border border-border/70 bg-background px-2.5 py-1.5">
+    <label className="flex min-w-0 items-center gap-2 rounded-xl border border-border/70 bg-background px-2.5 py-1.5 focus-within:ring-2 focus-within:ring-ring">
       <span className="shrink-0 text-xs font-medium text-muted-foreground">
         Decide for
       </span>
@@ -189,7 +189,11 @@ function RejectButton({
         status,
       });
       if (result.success) {
-        toast.success(`${name} ${pastTense}.`);
+        if (result.emailWarning) {
+          toast.warning(`${name} ${pastTense}. ${result.emailWarning}`);
+        } else {
+          toast.success(`${name} ${pastTense}.`);
+        }
         (router as { refresh?: () => void }).refresh?.();
       } else {
         toast.error(result.error ?? "Could not update candidate.");
@@ -276,7 +280,11 @@ function CandidateStatusMenu({
         status,
       });
       if (result.success) {
-        toast.success(`${name} ${label.toLowerCase()}.`);
+        if (result.emailWarning) {
+          toast.warning(`${name} ${label.toLowerCase()}. ${result.emailWarning}`);
+        } else {
+          toast.success(`${name} ${label.toLowerCase()}.`);
+        }
         (router as { refresh?: () => void }).refresh?.();
       } else {
         toast.error(result.error ?? "Could not update candidate status.");
@@ -582,7 +590,7 @@ export function CandidateActionBar({
       {reject}
 
       {/* Everything rare , status, pool, edit, resume, delete , lives here. */}
-      <div className="ml-auto flex items-center gap-1">
+      <div className="ml-auto flex min-w-0 max-w-full flex-wrap items-center gap-1">
         {applicationSelector}
         <CandidateStatusMenu
           name={name}

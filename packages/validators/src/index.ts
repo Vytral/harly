@@ -266,15 +266,38 @@ export const taskCreateSchema = z.object({
 });
 export const taskUpdateSchema = taskCreateSchema.partial();
 
+/**
+ * Mirrors `STAGE_KINDS` in `@harly/db` (packages/db/src/stage-kind.ts). The
+ * validators package does not depend on the database package, so the list is
+ * repeated here; a test in apps/web asserts the two stay identical.
+ */
+export const jobStageKindSchema = z.enum([
+  "applied",
+  "screening",
+  "interview",
+  "offer",
+  "hired",
+  "rejected",
+  "withdrawn",
+  "custom",
+]);
 export const jobStageCreateSchema = z.object({
   name: z.string().trim().min(1).max(120),
   color: z.string().trim().max(32).nullish(),
-  order: z.number().int().nonnegative().optional(),
+  kind: jobStageKindSchema.optional(),
+  /** Index among the job's active stages. Defaults to before the first terminal stage. */
+  position: z.number().int().nonnegative().optional(),
   emailConfig: z.record(z.string(), z.unknown()).optional(),
 });
-export const jobStageUpdateSchema = jobStageCreateSchema.partial();
+/** Position is not patchable: moving a stage goes through the reorder endpoint. */
+export const jobStageUpdateSchema = jobStageCreateSchema
+  .omit({ position: true })
+  .partial();
 export const jobStageReorderSchema = z.object({
   stageIds: z.array(z.uuid()).min(1).max(100),
+});
+export const jobStageArchiveSchema = z.object({
+  mergeIntoStageId: z.uuid().nullish(),
 });
 
 export const poolEntryCreateSchema = z.object({

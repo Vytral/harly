@@ -34,6 +34,8 @@ export type WorkspaceEsignStatus = {
 
 /** Resolved config with the decrypted token, for server-to-server REST calls. */
 export type EsignConfig = {
+  /** Workspace the config belongs to; health for DocuSeal calls is recorded against it. */
+  workspaceId: string;
   /** Normalized base URL WITHOUT a trailing slash and WITHOUT /api. */
   baseUrl: string;
   /** REST API base, i.e. `${baseUrl}/api`. */
@@ -149,6 +151,7 @@ export async function getWorkspaceEsignConfig(
   const channel = resolveOfferSignatureChannel(row.offerSignatureChannel);
 
   return {
+    workspaceId,
     baseUrl,
     apiUrl: `${baseUrl}/api`,
     apiToken,

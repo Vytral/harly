@@ -20,6 +20,7 @@ import { AssignToJobModal } from "@/features/pool/AssignToJobModal";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
+import { EmptyState } from "@/components/ui/empty-state";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -28,26 +29,27 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
+import { StatusPill, type StatusPillTone } from "@/components/ui/status-pill";
 import { UserAvatar } from "@/components/ui/UserAvatar";
 import { cn } from "@/lib/utils";
 
-const SOURCE_META: Record<string, { label: string; className: string }> = {
-  applied: { label: "Applied", className: "bg-blue-500/10 text-blue-600" },
-  imported: { label: "Imported", className: "bg-purple-500/10 text-purple-600" },
-  sourced: { label: "Sourced", className: "bg-emerald-500/10 text-emerald-600" },
-  referred: { label: "Referred", className: "bg-amber-500/10 text-amber-600" },
+const SOURCE_META: Record<string, { label: string; tone: StatusPillTone }> = {
+  applied: { label: "Applied", tone: "info" },
+  imported: { label: "Imported", tone: "neutral" },
+  sourced: { label: "Sourced", tone: "success" },
+  referred: { label: "Referred", tone: "warning" },
 };
 
 const RECOMMENDATION_META: Record<string, { label: string; className: string }> = {
   strong_yes: { label: "Strong yes", className: "bg-primary/10 text-primary" },
   yes: { label: "Yes", className: "bg-primary/10 text-primary" },
-  maybe: { label: "Maybe", className: "bg-clay/15 text-clay" },
+  maybe: { label: "Maybe", className: "bg-warning/15 text-warning" },
   no: { label: "No", className: "bg-destructive/10 text-destructive" },
 };
 
 function scoreTone(score: number) {
   if (score >= 60) return "text-primary";
-  if (score >= 40) return "text-clay";
+  if (score >= 40) return "text-warning";
   return "text-destructive";
 }
 
@@ -149,28 +151,126 @@ export function PoolView({ candidates, openJobs = [] }: PoolViewProps) {
     });
   }
 
+  function openAssignModal(candidate: PoolCandidate) {
+    setAssignModal({
+      open: true,
+      candidateId: candidate.candidateId,
+      candidateName: `${candidate.firstName} ${candidate.lastName}`,
+      candidateEmail: candidate.email,
+    });
+  }
+
   if (candidates.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center py-24 text-center">
-        <div className="rounded-full bg-muted p-4 mb-4">
-          <Bookmark className="h-8 w-8 text-muted-foreground" />
-        </div>
-        <h3 className="text-lg font-semibold mb-1">No candidates in pool</h3>
-        <p className="text-sm text-muted-foreground max-w-sm">
-          Add candidates to the pool from their profile or the candidates list to
-          keep them available for future roles.
-        </p>
+      <EmptyState
+        icon={Bookmark}
+        title="No candidates in pool"
+        description="Add candidates to the pool from their profile or the candidates list to keep them available for future roles."
+      />
+    );
+  }
+
+  function renderSource(candidate: PoolCandidate) {
+    const meta = SOURCE_META[candidate.source];
+    return (
+      <StatusPill tone={meta?.tone ?? "neutral"} size="sm">
+        {meta?.label ?? candidate.source}
+      </StatusPill>
+    );
+  }
+
+  function renderScore(candidate: PoolCandidate) {
+    if (candidate.bestScore == null) {
+      return <span className="text-muted-foreground">Not scored</span>;
+    }
+    return (
+      <div className="flex items-center gap-1.5">
+        <span className={cn("font-medium", scoreTone(candidate.bestScore))}>
+          {candidate.bestScore}
+        </span>
+        {candidate.bestRecommendation ? (
+          <Badge
+            className={cn(
+              "text-xs",
+              RECOMMENDATION_META[candidate.bestRecommendation]?.className,
+            )}
+          >
+            {RECOMMENDATION_META[candidate.bestRecommendation]?.label}
+          </Badge>
+        ) : null}
       </div>
+    );
+  }
+
+  function renderSkills(candidate: PoolCandidate) {
+    return (
+      <div className="flex flex-wrap gap-1">
+        {candidate.skills.slice(0, 3).map((skill) => (
+          <Badge key={skill} variant="secondary" className="text-xs">
+            {skill}
+          </Badge>
+        ))}
+        {candidate.skills.length > 3 && (
+          <Badge variant="outline" className="text-xs">
+            +{candidate.skills.length - 3}
+          </Badge>
+        )}
+      </div>
+    );
+  }
+
+  function renderRowActions(candidate: PoolCandidate) {
+    const name = `${candidate.firstName} ${candidate.lastName}`;
+    return (
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button
+            variant="outline"
+            size="icon"
+            aria-label={`Actions for ${name}`}
+            className="h-8 w-8 border-border/60 text-muted-foreground hover:text-foreground"
+          >
+            <MoreHorizontal className="h-4 w-4" aria-hidden="true" />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end">
+          <DropdownMenuItem asChild>
+            <Link href={`/dashboard/candidates/${candidate.candidateId}`}>
+              View profile
+            </Link>
+          </DropdownMenuItem>
+          {openJobs.length > 0 && (
+            <>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={() => openAssignModal(candidate)}>
+                <Briefcase className="h-4 w-4 mr-2" aria-hidden="true" />
+                Assign to Job
+              </DropdownMenuItem>
+            </>
+          )}
+          <DropdownMenuSeparator />
+          <DropdownMenuItem
+            className="text-destructive"
+            onClick={() => removeCandidate(candidate.candidateId)}
+            disabled={isPending}
+          >
+            <Trash2 className="h-4 w-4 mr-2" aria-hidden="true" />
+            Remove from pool
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
     );
   }
 
   return (
     <div className="space-y-4">
       {/* Toolbar */}
-      <div className="flex items-center gap-3">
-        <div className="relative flex-1 max-w-sm">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+      <div className="flex flex-wrap items-center gap-3">
+        <div className="relative w-full flex-1 sm:max-w-sm">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" aria-hidden="true" />
           <Input
+            type="search"
+            aria-label="Search the pool"
             placeholder="Search by name, email, or skill..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
@@ -180,7 +280,13 @@ export function PoolView({ candidates, openJobs = [] }: PoolViewProps) {
         {/* Source filter dropdown */}
         <div className="relative">
           <button
+            type="button"
+            aria-expanded={sourceOpen}
+            aria-haspopup="menu"
             onClick={() => setSourceOpen(!sourceOpen)}
+            onKeyDown={(event) => {
+              if (event.key === "Escape") setSourceOpen(false);
+            }}
             className={cn(
               "flex items-center gap-2 rounded-full border px-3.5 py-2 text-sm font-medium transition-colors",
               sourceFilter !== "all"
@@ -189,13 +295,14 @@ export function PoolView({ candidates, openJobs = [] }: PoolViewProps) {
             )}
           >
             Source
-            <ChevronDown className={cn("h-4 w-4 transition-transform", sourceOpen && "rotate-180")} />
+            <ChevronDown className={cn("h-4 w-4 transition-transform motion-reduce:transition-none", sourceOpen && "rotate-180")} aria-hidden="true" />
           </button>
           {sourceOpen && (
             <>
-              <div className="fixed inset-0 z-40" onClick={() => setSourceOpen(false)} />
+              <div className="fixed inset-0 z-40" aria-hidden="true" onClick={() => setSourceOpen(false)} />
               <div className="absolute left-0 top-full z-50 mt-1 w-48 rounded-xl border bg-popover p-1.5 shadow-md">
                 <button
+                  type="button"
                   onClick={() => { setSourceFilter("all"); setSourceOpen(false); }}
                   className={cn(
                     "flex w-full items-center rounded-lg px-3 py-2 text-sm transition-colors",
@@ -208,6 +315,7 @@ export function PoolView({ candidates, openJobs = [] }: PoolViewProps) {
                 </button>
                 {allSources.map((src) => (
                   <button
+                    type="button"
                     key={src}
                     onClick={() => { setSourceFilter(src); setSourceOpen(false); }}
                     className={cn(
@@ -236,7 +344,7 @@ export function PoolView({ candidates, openJobs = [] }: PoolViewProps) {
                 onClick={() => setBulkAssignModal(true)}
                 disabled={isPending}
               >
-                <Briefcase className="h-4 w-4 mr-1.5" />
+                <Briefcase className="h-4 w-4 mr-1.5" aria-hidden="true" />
                 Assign to Job
               </Button>
             )}
@@ -246,12 +354,12 @@ export function PoolView({ candidates, openJobs = [] }: PoolViewProps) {
               onClick={bulkRemove}
               disabled={isPending}
             >
-              <Trash2 className="h-4 w-4 mr-1.5" />
+              <Trash2 className="h-4 w-4 mr-1.5" aria-hidden="true" />
               Remove
             </Button>
           </div>
         )}
-        <div className="ml-auto text-sm text-muted-foreground">
+        <div className="text-sm text-muted-foreground sm:ml-auto">
           {filtered.length} candidate{filtered.length === 1 ? "" : "s"}
         </div>
         {(search || sourceFilter !== "all") && (
@@ -263,163 +371,164 @@ export function PoolView({ candidates, openJobs = [] }: PoolViewProps) {
               setSourceFilter("all");
             }}
           >
-            <X className="h-4 w-4 mr-1" />
+            <X className="h-4 w-4 mr-1" aria-hidden="true" />
             Clear
           </Button>
         )}
       </div>
 
-      {/* Table */}
-      <div className="border rounded-lg">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="border-b bg-muted/50">
-              <th className="w-10 px-3 py-2.5">
-                <Checkbox
-                  checked={selectedIds.size === filtered.length && filtered.length > 0}
-                  onCheckedChange={toggleSelectAll}
-                />
-              </th>
-              <th className="text-left px-3 py-2.5 font-medium">Candidate</th>
-              <th className="text-left px-3 py-2.5 font-medium">Skills</th>
-              <th className="text-left px-3 py-2.5 font-medium">Score</th>
-              <th className="text-left px-3 py-2.5 font-medium">Source</th>
-              <th className="text-left px-3 py-2.5 font-medium">Added</th>
-              <th className="w-10 px-3 py-2.5" />
-            </tr>
-          </thead>
-          <tbody>
-            {filtered.map((candidate) => (
-              <tr
-                key={candidate.candidateId}
-                className={cn(
-                  "border-b last:border-b-0 hover:bg-muted/30 transition-colors",
-                  selectedIds.has(candidate.candidateId) && "bg-muted/50",
-                )}
-              >
-                <td className="px-3 py-3">
+      {filtered.length === 0 ? (
+        <EmptyState
+          variant="filtered"
+          icon={Search}
+          title="No candidates match these filters"
+          description="Try a different name, email, skill, or source."
+          action={
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                setSearch("");
+                setSourceFilter("all");
+              }}
+            >
+              Clear filters
+            </Button>
+          }
+        />
+      ) : null}
+
+      {/* Wide screens: a table inside an overflow container, so it scrolls
+          sideways instead of breaking the page. */}
+      {filtered.length > 0 ? (
+        <div className="hidden overflow-x-auto rounded-xl border bg-card md:block">
+          <table className="w-full min-w-[720px] text-sm">
+            <thead>
+              <tr className="border-b bg-muted/50 text-muted-foreground">
+                <th scope="col" className="w-10 px-3 py-2.5">
                   <Checkbox
-                    checked={selectedIds.has(candidate.candidateId)}
-                    onCheckedChange={() => toggleSelect(candidate.candidateId)}
+                    aria-label="Select all candidates"
+                    checked={selectedIds.size === filtered.length && filtered.length > 0}
+                    onCheckedChange={toggleSelectAll}
                   />
-                </td>
-                <td className="px-3 py-3">
-                  <Link
-                    href={`/dashboard/candidates/${candidate.candidateId}`}
-                    className="flex items-center gap-3 hover:underline"
-                  >
-                    <UserAvatar
-                      name={`${candidate.firstName} ${candidate.lastName}`}
-                      src={candidate.avatarUrl}
-                      fallbackSrcs={candidate.avatarFallbackSrcs}
-                      size="sm"
-                    />
-                    <div className="min-w-0">
-                      <div className="font-medium truncate">
-                        {candidate.firstName} {candidate.lastName}
-                      </div>
-                      <div className="text-xs text-muted-foreground truncate">
-                        {candidate.email}
-                      </div>
-                      {candidate.headline && (
-                        <div className="text-xs text-muted-foreground truncate mt-0.5">
-                          {candidate.headline}
-                        </div>
-                      )}
-                    </div>
-                  </Link>
-                </td>
-                <td className="px-3 py-3">
-                  <div className="flex flex-wrap gap-1 max-w-[240px]">
-                    {candidate.skills.slice(0, 3).map((skill) => (
-                      <Badge key={skill} variant="secondary" className="text-xs">
-                        {skill}
-                      </Badge>
-                    ))}
-                    {candidate.skills.length > 3 && (
-                      <Badge variant="outline" className="text-xs">
-                        +{candidate.skills.length - 3}
-                      </Badge>
-                    )}
-                  </div>
-                </td>
-                <td className="px-3 py-3">
-                  {candidate.bestScore != null ? (
-                    <div className="flex items-center gap-1.5">
-                      <span className={cn("font-medium", scoreTone(candidate.bestScore))}>
-                        {candidate.bestScore}
-                      </span>
-                      {candidate.bestRecommendation && (
-                        <Badge
-                          className={cn(
-                            "text-xs",
-                            RECOMMENDATION_META[candidate.bestRecommendation]?.className,
-                          )}
-                        >
-                          {RECOMMENDATION_META[candidate.bestRecommendation]?.label}
-                        </Badge>
-                      )}
-                    </div>
-                  ) : (
-                    <span className="text-muted-foreground">Not scored</span>
-                  )}
-                </td>
-                <td className="px-3 py-3">
-                  <Badge className={cn("text-xs", SOURCE_META[candidate.source]?.className)}>
-                    {SOURCE_META[candidate.source]?.label ?? candidate.source}
-                  </Badge>
-                </td>
-                <td className="px-3 py-3 text-muted-foreground whitespace-nowrap" suppressHydrationWarning>
-                  {new Date(candidate.addedAt).toLocaleDateString()}
-                </td>
-                <td className="px-3 py-3">
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button variant="outline" size="icon" className="h-8 w-8 border-border/60 text-muted-foreground hover:text-foreground">
-                        <MoreHorizontal className="h-4 w-4" />
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end">
-                      <DropdownMenuItem asChild>
-                        <Link href={`/dashboard/candidates/${candidate.candidateId}`}>
-                          View profile
-                        </Link>
-                      </DropdownMenuItem>
-                      {openJobs.length > 0 && (
-                        <>
-                          <DropdownMenuSeparator />
-                          <DropdownMenuItem
-                            onClick={() =>
-                              setAssignModal({
-                                open: true,
-                                candidateId: candidate.candidateId,
-                                candidateName: `${candidate.firstName} ${candidate.lastName}`,
-                                candidateEmail: candidate.email,
-                              })
-                            }
-                          >
-                            <Briefcase className="h-4 w-4 mr-2" />
-                            Assign to Job
-                          </DropdownMenuItem>
-                        </>
-                      )}
-                      <DropdownMenuSeparator />
-                      <DropdownMenuItem
-                        className="text-destructive"
-                        onClick={() => removeCandidate(candidate.candidateId)}
-                        disabled={isPending}
-                      >
-                        <Trash2 className="h-4 w-4 mr-2" />
-                        Remove from pool
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                </td>
+                </th>
+                <th scope="col" className="text-left px-3 py-2.5 font-medium">Candidate</th>
+                <th scope="col" className="text-left px-3 py-2.5 font-medium">Skills</th>
+                <th scope="col" className="text-left px-3 py-2.5 font-medium">Score</th>
+                <th scope="col" className="text-left px-3 py-2.5 font-medium">Source</th>
+                <th scope="col" className="text-left px-3 py-2.5 font-medium">Added</th>
+                <th scope="col" className="w-10 px-3 py-2.5">
+                  <span className="sr-only">Actions</span>
+                </th>
               </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+            </thead>
+            <tbody>
+              {filtered.map((candidate) => (
+                <tr
+                  key={candidate.candidateId}
+                  className={cn(
+                    "border-b last:border-b-0 hover:bg-muted/30 transition-colors",
+                    selectedIds.has(candidate.candidateId) && "bg-muted/50",
+                  )}
+                >
+                  <td className="px-3 py-3">
+                    <Checkbox
+                      aria-label={`Select ${candidate.firstName} ${candidate.lastName}`}
+                      checked={selectedIds.has(candidate.candidateId)}
+                      onCheckedChange={() => toggleSelect(candidate.candidateId)}
+                    />
+                  </td>
+                  <td className="px-3 py-3">
+                    <Link
+                      href={`/dashboard/candidates/${candidate.candidateId}`}
+                      className="flex items-center gap-3 hover:underline"
+                    >
+                      <UserAvatar
+                        name={`${candidate.firstName} ${candidate.lastName}`}
+                        src={candidate.avatarUrl}
+                        fallbackSrcs={candidate.avatarFallbackSrcs}
+                        size="sm"
+                      />
+                      <div className="min-w-0">
+                        <div className="font-medium truncate">
+                          {candidate.firstName} {candidate.lastName}
+                        </div>
+                        <div className="text-xs text-muted-foreground truncate">
+                          {candidate.email}
+                        </div>
+                        {candidate.headline && (
+                          <div className="text-xs text-muted-foreground truncate mt-0.5">
+                            {candidate.headline}
+                          </div>
+                        )}
+                      </div>
+                    </Link>
+                  </td>
+                  <td className="px-3 py-3 max-w-[240px]">{renderSkills(candidate)}</td>
+                  <td className="px-3 py-3">{renderScore(candidate)}</td>
+                  <td className="px-3 py-3">{renderSource(candidate)}</td>
+                  <td className="px-3 py-3 text-muted-foreground whitespace-nowrap" suppressHydrationWarning>
+                    {new Date(candidate.addedAt).toLocaleDateString()}
+                  </td>
+                  <td className="px-3 py-3">{renderRowActions(candidate)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ) : null}
+
+      {/* Narrow screens: one stacked card per candidate. */}
+      {filtered.length > 0 ? (
+        <ul className="divide-y rounded-xl border bg-card md:hidden">
+          {filtered.map((candidate) => (
+            <li
+              key={candidate.candidateId}
+              className={cn(
+                "flex items-start gap-3 p-4",
+                selectedIds.has(candidate.candidateId) && "bg-muted/50",
+              )}
+            >
+              <Checkbox
+                className="mt-1"
+                aria-label={`Select ${candidate.firstName} ${candidate.lastName}`}
+                checked={selectedIds.has(candidate.candidateId)}
+                onCheckedChange={() => toggleSelect(candidate.candidateId)}
+              />
+              <div className="min-w-0 flex-1 space-y-2">
+                <Link
+                  href={`/dashboard/candidates/${candidate.candidateId}`}
+                  className="flex min-w-0 items-center gap-3"
+                >
+                  <UserAvatar
+                    name={`${candidate.firstName} ${candidate.lastName}`}
+                    src={candidate.avatarUrl}
+                    fallbackSrcs={candidate.avatarFallbackSrcs}
+                    size="sm"
+                  />
+                  <div className="min-w-0">
+                    <div className="truncate font-medium">
+                      {candidate.firstName} {candidate.lastName}
+                    </div>
+                    <div className="truncate text-xs text-muted-foreground">
+                      {candidate.email}
+                    </div>
+                  </div>
+                </Link>
+                <div className="flex flex-wrap items-center gap-2 text-sm">
+                  {renderScore(candidate)}
+                  {renderSource(candidate)}
+                </div>
+                {candidate.skills.length > 0 ? renderSkills(candidate) : null}
+                <p className="text-xs text-muted-foreground" suppressHydrationWarning>
+                  Added {new Date(candidate.addedAt).toLocaleDateString()}
+                </p>
+              </div>
+              {renderRowActions(candidate)}
+            </li>
+          ))}
+        </ul>
+      ) : null}
 
       <AssignToJobModal
         open={assignModal.open}

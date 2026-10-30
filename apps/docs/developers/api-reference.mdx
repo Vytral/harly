@@ -27,7 +27,9 @@ API keys have the format `harly_{type}_{env}_{secret}`:
 Example secret key: `harly_sk_live_AbCdEf123...`
 
 Publishable keys (`pk`) are limited to `jobs:read` and `applications:write` —
-the subset safe to expose in a browser. Use secret keys for all server-side
+the subset safe to expose in a browser. Even with `applications:write`, a
+publishable key can only create applications; moving, rejecting, hiring, and
+bulk-creating require a secret key. Use secret keys for all server-side
 integrations.
 
 ## Resources
@@ -43,7 +45,7 @@ integrations.
 | Tasks | List, create, update | `tasks:read`, `tasks:write` |
 | Talent pool | List, create, assign | `pool:read`, `pool:write` |
 | Activity events | Read timeline | `activity:read` |
-| Stages | Read, update pipeline stages | `stages:read`, `stages:write` |
+| Stages | List, create, update, reorder, archive, delete pipeline stages | `stages:read`, `stages:write` |
 | Webhooks | CRUD endpoints, view deliveries, replay | `webhooks:read`, `webhooks:write` |
 | API keys | List, create, rotate, delete | `api_keys:read`, `api_keys:write` |
 | Automations | Withdrawn (HTTP 410) | Dashboard only until automations v2 |
@@ -127,6 +129,52 @@ curl --fail-with-body -X POST \
 
 A rotation issues a new raw key value and invalidates the previous one. The
 response includes `key` — the new raw value, shown once.
+
+## Pipeline stages
+
+Stages belong to one job. Each stage has a `kind` (`applied`, `screening`,
+`interview`, `offer`, `hired`, `rejected`, `withdrawn`, or `custom`) that
+decides what happens to an application that enters it. The `name` is display
+text only: renaming a stage never changes its outcome.
+
+| Operation | Endpoint | Notes |
+| --- | --- | --- |
+| List | `GET /api/v1/jobs/{id}/stages` | Active stages in order. Add `?includeArchived=true` to include archived ones. |
+| Create | `POST /api/v1/jobs/{id}/stages` | `position` is the index among active stages. Default: before the first `hired`, `rejected` or `withdrawn` stage. |
+| Update | `PATCH /api/v1/jobs/{id}/stages/{stageId}` | Rename, recolor, change `emailConfig` or `kind`. |
+| Reorder | `POST /api/v1/jobs/{id}/stages/reorder` | `stageIds` must list every active stage exactly once. |
+| Archive | `POST /api/v1/jobs/{id}/stages/{stageId}/archive` | Moves its applications to `mergeIntoStageId` and keeps history. |
+| Delete | `DELETE /api/v1/jobs/{id}/stages/{stageId}` | Only for a stage that has never held an application. |
+
+Rules that keep pipelines consistent:
+
+- A job always keeps at least one active stage that is not `hired`,
+  `rejected` or `withdrawn`, and active stage names are unique (ignoring case).
+- Changing `kind` is refused when the stage holds applications and the change
+  crosses an outcome (to or from `hired`, `rejected` or `withdrawn`). Archive
+  the stage with a merge target of the right kind instead.
+- Archiving a stage that holds applications requires `mergeIntoStageId`. An
+  active stage merges into an active stage. An outcome stage merges only into
+  a stage of the same outcome, so no application's status changes.
+- Deleting is refused when the stage has applications, appears in stage
+  history, scorecards, document requirements or an automation. Archive it
+  instead.
+
+A merge does not send candidate emails and does not emit `application.stage_changed`
+webhooks, because the application's status does not change.
+
+Example: archive a screening stage and move its applications into interview.
+
+```bash
+curl --fail-with-body -X POST \
+  'https://hiring.example.com/api/v1/jobs/job_01j1abc/stages/stage_screening/archive' \
+  -H 'Authorization: Bearer harly_sk_live_YOUR_KEY' \
+  -H 'Content-Type: application/json' \
+  -H 'Idempotency-Key: archive-stage_screening-2026-07-27T12:00:00Z' \
+  --data '{"mergeIntoStageId":"stage_interview"}'
+```
+
+Stage endpoints use the `stages:read` and `stages:write` scopes.
 
 ## All scopes
 

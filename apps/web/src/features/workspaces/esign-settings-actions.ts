@@ -9,6 +9,11 @@ import { db, workspaceSettings } from "@harly/db";
 
 import { requirePermission } from "@/features/workspaces/permissions-server";
 import { assertNotDemo } from "@/features/demo/assert-not-demo";
+import {
+  clearIntegrationHealth,
+  recordIntegrationFailure,
+  recordIntegrationSuccess,
+} from "@/features/integrations/health/repository";
 import { encryptSecret, isEncryptionConfigured } from "@/lib/crypto";
 import { getWorkspaceEsignConfig, getWorkspaceEsignStatus } from "@/lib/esign/config";
 import { resolveSafeAddress, safeFetchHttp } from "@/lib/ssrf";
@@ -190,6 +195,7 @@ export async function disconnectEsignAction(): Promise<EsignSettingsActionResult
     })
     .where(eq(workspaceSettings.organizationId, context.organization.id));
 
+  await clearIntegrationHealth(context.organization.id, "docuseal");
   revalidatePath(SETTINGS_PATH);
   return { ok: true };
 }
@@ -209,10 +215,14 @@ export async function testEsignAction(): Promise<EsignSettingsActionResult> {
     });
     if (!res.ok) {
       const body = await res.text();
+      const failure = new Error(`DocuSeal API ${res.status}: ${body.slice(0, 200)}`);
+      await recordIntegrationFailure(context.organization.id, "docuseal", failure);
       return { ok: false, error: `DocuSeal returned ${res.status}: ${body.slice(0, 200)}` };
     }
+    await recordIntegrationSuccess(context.organization.id, "docuseal");
     return { ok: true };
   } catch (error) {
+    await recordIntegrationFailure(context.organization.id, "docuseal", error);
     const msg = error instanceof Error ? error.message : "Connection test failed.";
     return { ok: false, error: msg };
   }

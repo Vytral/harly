@@ -48,7 +48,7 @@ export function DocumentRequestsList({
       <EmptySection
         icon={FileText}
         title="Nothing requested yet"
-        hint="Request an ID, signed NDA, or any file — the candidate uploads it from their portal."
+        description="Request an ID, signed NDA, or any file — the candidate uploads it from their portal."
       />
     );
   }
@@ -152,6 +152,8 @@ function RequestRow({ request, canManage }: { request: DocumentRequestItem; canM
                 size="sm"
                 variant="ghost"
                 className="text-destructive hover:text-destructive"
+                aria-label="Cancel request"
+                title="Cancel request"
                 disabled={isPending}
                 onClick={() => run(() => cancelDocumentRequest({ requestId: request.id }), "Request removed")}
               >
@@ -260,9 +262,10 @@ export function RequestDialog({
                       type="button"
                       size="icon"
                       variant="ghost"
+                      aria-label={`Remove document ${index + 1}`}
                       onClick={() => setItems((current) => current.filter((_, i) => i !== index))}
                     >
-                      <X className="size-4" />
+                      <X className="size-4" aria-hidden="true" />
                     </Button>
                   ) : null}
                 </div>

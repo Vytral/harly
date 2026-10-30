@@ -17,11 +17,45 @@ import { logAuditEvent } from "@/lib/audit-log";
 import { getWorkspaceEmailSender } from "@/lib/email";
 import { getInboundReplyTo } from "@/lib/email/inbound-token";
 import { insertCanonicalMessage } from "@/lib/mail/canonical";
-import { sendCanonicalEmail } from "@/lib/mail/send-canonical-email";
+import {
+  sendCanonicalEmail,
+  type SendCanonicalEmailInput,
+  type SendCanonicalEmailResult,
+} from "@/lib/mail/send-canonical-email";
 import { isMailUnificationEnabled } from "@/lib/mail/feature-flag";
-import { completeLegacyMailDelivery, failLegacyMailDelivery, reserveLegacyMailDelivery } from "@/lib/mail/legacy-delivery";
+import {
+  completeLegacyMailDelivery,
+  failLegacyMailDelivery,
+  reserveLegacyMailDelivery,
+  resolveUnknownMailDelivery,
+} from "@/lib/mail/legacy-delivery";
+import {
+  canonicalSendFailureMessage,
+  conflictResult,
+  isMailDeliveryConflictError,
+  type MailDeliveryConflictCode,
+} from "@/lib/mail/delivery-state";
 
 const log = createLogger("mailbox");
+
+type CanonicalSendOutcome =
+  | { ok: true; result: SendCanonicalEmailResult }
+  | { ok: false; code?: MailDeliveryConflictCode; error: string };
+
+/**
+ * Canonical sends never throw into the composer: reservation conflicts become a
+ * typed `delivery_unknown` / `delivery_in_progress` result and any other
+ * failure becomes a plain error the user can retry.
+ */
+async function sendCanonicalForMailbox(input: SendCanonicalEmailInput): Promise<CanonicalSendOutcome> {
+  try {
+    return { ok: true, result: await sendCanonicalEmail(input) };
+  } catch (error) {
+    if (isMailDeliveryConflictError(error)) return conflictResult(error.code);
+    log.error(error, "canonical mailbox send failed");
+    return { ok: false, error: canonicalSendFailureMessage(error) };
+  }
+}
 
 const threadId = z.string().uuid();
 const inboxThread = z.object({
@@ -292,7 +326,7 @@ export async function replyMailboxThreadAction(input: {
   const attachments = decodeComposerAttachments(parsed.data.attachments);
 
   if (await isMailUnificationEnabled(organization.id)) {
-    const canonical = await sendCanonicalEmail({
+    const outcome = await sendCanonicalForMailbox({
       workspaceId: organization.id,
       idempotencyKey: parsed.data.idempotencyKey,
       threadId: thread.id,
@@ -308,8 +342,9 @@ export async function replyMailboxThreadAction(input: {
       sourceHint: "smtp",
       authorId: user.id,
     });
+    if (!outcome.ok) return outcome;
     revalidatePath("/dashboard/inbox");
-    return { ok: true, threadId: canonical.threadId, idempotentReplay: canonical.idempotentReplay, legacyWriteWarning: canonical.legacyWriteWarning };
+    return { ok: true, threadId: outcome.result.threadId, idempotentReplay: outcome.result.idempotentReplay, legacyWriteWarning: outcome.result.legacyWriteWarning, note: outcome.result.persisted === false ? outcome.result.legacyWriteWarning : undefined };
   }
 
   const mailboxConfig = await getMailboxConfig(organization.id);
@@ -324,6 +359,8 @@ export async function replyMailboxThreadAction(input: {
       threadId: thread.id,
     });
     if (delivery.kind === "replay") return { ok: true, threadId: delivery.threadId ?? thread.id, idempotentReplay: true };
+    if (delivery.kind === "unknown") return conflictResult("delivery_unknown");
+    if (delivery.kind === "in_progress") return conflictResult("delivery_in_progress");
     try {
       const { default: nodemailer } = await import("nodemailer");
       const transport = nodemailer.createTransport({ host: mailboxConfig.smtp.host, port: mailboxConfig.smtp.port, secure: mailboxConfig.smtp.tls, auth: { user: mailboxConfig.smtp.user, pass: mailboxConfig.smtp.password } });
@@ -377,6 +414,8 @@ export async function replyMailboxThreadAction(input: {
     threadId: thread.id,
   });
   if (delivery.kind === "replay") return { ok: true, threadId: delivery.threadId ?? thread.id, idempotentReplay: true };
+  if (delivery.kind === "unknown") return conflictResult("delivery_unknown");
+  if (delivery.kind === "in_progress") return conflictResult("delivery_in_progress");
 
   const replyTo = applicationId
     ? await getInboundReplyTo(organization.id, applicationId)
@@ -482,7 +521,7 @@ export async function createMailboxThreadAction(input: {
   const attachments = decodeComposerAttachments(parsed.data.attachments);
 
   if (await isMailUnificationEnabled(organization.id)) {
-    const canonical = await sendCanonicalEmail({
+    const outcome = await sendCanonicalForMailbox({
       workspaceId: organization.id,
       idempotencyKey: parsed.data.idempotencyKey,
       candidateId: candidate?.id ?? null,
@@ -494,8 +533,9 @@ export async function createMailboxThreadAction(input: {
       attachments: (attachments ?? []).map((attachment) => ({ filename: attachment.filename, contentType: attachment.contentType ?? "application/octet-stream", content: attachment.content! })),
       authorId: user.id,
     });
+    if (!outcome.ok) return outcome;
     revalidatePath("/dashboard/inbox");
-    return { ok: true, threadId: canonical.threadId, delivered: canonical.delivered, legacyWriteWarning: canonical.legacyWriteWarning };
+    return { ok: true, threadId: outcome.result.threadId, delivered: outcome.result.delivered, legacyWriteWarning: outcome.result.legacyWriteWarning, note: outcome.result.persisted === false ? outcome.result.legacyWriteWarning : undefined };
   }
 
   const sender = await getWorkspaceEmailSender(organization.id, user.id);
@@ -511,6 +551,8 @@ export async function createMailboxThreadAction(input: {
     applicationId: application?.id ?? null,
   });
   if (delivery.kind === "replay") return { ok: true, threadId: delivery.threadId ?? "", delivered: true, idempotentReplay: true };
+  if (delivery.kind === "unknown") return conflictResult("delivery_unknown");
+  if (delivery.kind === "in_progress") return conflictResult("delivery_in_progress");
 
   try {
     const result = await sender.send({
@@ -545,6 +587,32 @@ export async function createMailboxThreadAction(input: {
     await failLegacyMailDelivery(delivery.id, error);
     return { ok: false, error: "Unable to send the email. Please try again." };
   }
+}
+
+/**
+ * Resolves a reply whose delivery could not be confirmed to `sent`, after the
+ * user has checked the sent folder. Never sends anything.
+ */
+export async function resolveUnknownMailDeliveryAction(input: { idempotencyKey: string }) {
+  const parsed = z.object({ idempotencyKey: z.string().trim().min(1).max(200) }).safeParse(input);
+  if (!parsed.success) return { ok: false as const, error: "This message cannot be confirmed." };
+  await requirePermission("collab:write");
+  const { organization, user } = await getWorkspaceContext();
+  const resolved = await resolveUnknownMailDelivery({
+    workspaceId: organization.id,
+    idempotencyKey: parsed.data.idempotencyKey,
+  });
+  if (!resolved) return { ok: false as const, error: "There is no unconfirmed message to mark as sent." };
+  await logAuditEvent({
+    workspaceId: organization.id,
+    actorId: user.id,
+    actorEmail: user.email,
+    action: "mailbox.delivery.marked_sent",
+    resourceType: "mail_delivery",
+    metadata: { source: "composer" },
+  });
+  revalidatePath("/dashboard/inbox");
+  return { ok: true as const };
 }
 
 export async function retryMailboxSyncAction() {

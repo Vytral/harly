@@ -65,6 +65,24 @@ export async function getWorkspaceAiStatus(
 }
 
 /**
+ * A resolved workspace AI config. `resumeAnonymization` is the workspace's
+ * candidate anonymization setting; every AI surface reads it from here so that
+ * candidate data is redacted before it reaches the provider.
+ */
+export type WorkspaceAiConfig = AiModelConfig & {
+  resumeAnonymization: boolean;
+};
+
+async function loadResumeAnonymization(workspaceId: string): Promise<boolean> {
+  const [row] = await db
+    .select({ aiResumeAnonymization: workspaceSettings.aiResumeAnonymization })
+    .from(workspaceSettings)
+    .where(eq(workspaceSettings.organizationId, workspaceId))
+    .limit(1);
+  return Boolean(row?.aiResumeAnonymization);
+}
+
+/**
  * Resolve a usable AI config (with decrypted key) for a workspace, or null when
  * AI is disabled / unconfigured / the master key is missing. Server-only.
  */
@@ -78,14 +96,17 @@ export async function getWorkspaceAiConfig(
      */
     consumeDemoBudget?: boolean;
   } = {},
-): Promise<AiModelConfig | null> {
+): Promise<WorkspaceAiConfig | null> {
   // Public demo: the reseed wipes the stored key, so AI comes from env. Each
   // AI operation spends one slot of the instance-wide daily budget; once it
   // runs out every surface falls back to its non-AI path until the window resets.
   const demoConfig = getDemoAiModelConfig(workspaceId);
   if (demoConfig) {
-    if (options.consumeDemoBudget === false) return demoConfig;
-    return (await consumeDemoAiDailyBudget()) ? demoConfig : null;
+    if (options.consumeDemoBudget === false) {
+      return { ...demoConfig, resumeAnonymization: await loadResumeAnonymization(workspaceId) };
+    }
+    if (!(await consumeDemoAiDailyBudget())) return null;
+    return { ...demoConfig, resumeAnonymization: await loadResumeAnonymization(workspaceId) };
   }
 
   if (!isEncryptionConfigured()) {
@@ -101,6 +122,7 @@ export async function getWorkspaceAiConfig(
       aiApiKeyCiphertext: workspaceSettings.aiApiKeyCiphertext,
       aiApiKeyIv: workspaceSettings.aiApiKeyIv,
       aiApiKeyTag: workspaceSettings.aiApiKeyTag,
+      aiResumeAnonymization: workspaceSettings.aiResumeAnonymization,
     })
     .from(workspaceSettings)
     .where(eq(workspaceSettings.organizationId, workspaceId))
@@ -126,7 +148,13 @@ export async function getWorkspaceAiConfig(
       tag: row.aiApiKeyTag,
     });
 
-    return { provider: row.aiProvider, modelId: row.aiModelId, apiKey, baseUrl: row.aiBaseUrl ?? undefined };
+    return {
+      provider: row.aiProvider,
+      modelId: row.aiModelId,
+      apiKey,
+      baseUrl: row.aiBaseUrl ?? undefined,
+      resumeAnonymization: Boolean(row.aiResumeAnonymization),
+    };
   } catch {
     return null;
   }

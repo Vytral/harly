@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { and, asc, eq, inArray, sql } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import { z } from "zod";
 
 import {
@@ -11,8 +11,8 @@ import {
   candidates,
   db,
   jobs,
-  jobStages,
 } from "@harly/db";
+import { resolveEntryStage } from "@/features/pipeline/stage-resolver";
 import { isDemoMode } from "@harly/config";
 
 import { requireJobPermission } from "@/features/workspaces/permissions-server";
@@ -473,17 +473,16 @@ export async function importCandidatesAction(input: {
     return { success: false, error: "Job not found." };
   }
 
-  const [firstStage] = await db
-    .select({ id: jobStages.id })
-    .from(jobStages)
-    .where(
-      and(eq(jobStages.workspaceId, workspaceId), eq(jobStages.jobId, job.id)),
-    )
-    .orderBy(asc(jobStages.order))
-    .limit(1);
+  const firstStage = await resolveEntryStage(db, {
+    workspaceId,
+    jobId: job.id,
+  });
 
   if (!firstStage) {
-    return { success: false, error: "This job has no pipeline stages yet." };
+    return {
+      success: false,
+      error: "This job has no open pipeline stage to receive applications.",
+    };
   }
 
   const [pipelineCount] = await db

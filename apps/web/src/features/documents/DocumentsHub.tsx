@@ -709,7 +709,7 @@ export function DocumentsHub({
                 <button
                   type="button"
                   onClick={() => router.push(`/dashboard/documents/${document.id}` as Route)}
-                  className="flex flex-1 flex-col text-left focus-visible:outline-none"
+                  className="flex flex-1 flex-col text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 >
                   <span className="flex size-10 items-center justify-center rounded-lg bg-accent text-primary">
                     <Icon className="size-5" />

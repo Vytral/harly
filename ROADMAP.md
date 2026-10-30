@@ -5,15 +5,15 @@ want to run recruiting on infrastructure they control. This document describes
 product direction and sequencing; it is not a promise that every item will ship
 on a fixed date.
 
-Last reviewed: 2026-08-05
+Last reviewed: 2026-10-28
 
 ## How to read this roadmap
 
 | Status | Meaning |
 | --- | --- |
 | Shipped | Available in the current codebase and documented. A provider may still require its own account, approval, or credentials. |
-| Now | The next work needed to make the public beta dependable for real teams. |
-| Next | The next product investments after the beta foundation is stable. |
+| Now | Work in the current release cycle (v0.3.0). Items are listed in priority order. |
+| Next | The next product investments after v0.3.0, expected for v0.4 or later. |
 | Later | Valuable work that should follow the next product cycle. |
 | Exploring | A valid direction, but not a committed initiative. |
 | Not planned | Deliberately outside Harly's near-term product boundary. |
@@ -23,24 +23,27 @@ come before breadth.
 
 ## What Harly can do today
 
-The historical wishlist has become a substantial product. These capabilities are
-implemented today, although some integrations require separate provider access
-and some areas still need operational hardening.
+These capabilities exist in the codebase. Some integrations require separate
+provider access, and some areas still need operational hardening. Where a
+capability is only partly complete, the Now section says so.
 
 ### Recruiting workspace
 
-- Create workspaces, invite members, configure roles, and manage member access.
+- Create workspaces, invite members, configure roles, and manage member access
+  with built-in and custom roles and contextual permission scopes.
 - Create jobs with structured details, compensation, location, employment type,
-  custom application questions, rich descriptions, and publishing controls.
-- Review applications in a kanban pipeline, move candidates individually or in
-  bulk, preserve stage history, and maintain candidate notes, tags, files, and
-  activity.
+  custom application questions, rich descriptions, publishing controls, and an
+  approval request step before publish.
+- Give each job its own pipeline stages. Applications move through a kanban
+  pipeline individually or in bulk, and stage history is kept for each
+  application.
 - Schedule interviews, record feedback, complete or cancel interviews, and use
   tasks, scorecards, talent pools, search, and candidate matching to support the
   hiring team.
-- Import candidates from CSV and expose a versioned REST API for jobs,
-  candidates, applications, interviews, offers, tasks, scorecards, pool entries,
-  automations, and webhooks.
+- Import candidates from CSV and through maintained adapters for Greenhouse,
+  Lever, Ashby, Workable, and Join.
+- Use the dashboard search and quick navigation (search v1). Extending it is a
+  v0.3.0 theme.
 
 See [Jobs](apps/docs/product/jobs.mdx),
 [Candidates and pipeline](apps/docs/product/candidates-and-pipeline.mdx), and
@@ -48,8 +51,9 @@ See [Jobs](apps/docs/product/jobs.mdx),
 
 ### Candidate experience
 
-- Publish branded career pages and public job pages with application forms,
-  custom questions, file uploads, legal notices, and structured job metadata.
+- Publish career pages and public job pages with application forms, custom
+  questions, file uploads, legal notices, canonical URLs, a sitemap, and
+  `JobPosting` structured data.
 - Provide an authenticated candidate portal for profile, application, interview,
   offer, and document interactions.
 - Generate and manage offer documents, native signing flows, evidence, expiry,
@@ -61,17 +65,20 @@ See [Career pages](apps/docs/product/career-page.mdx),
 
 ### Communication and integrations
 
-- Send transactional and candidate emails, manage templates, receive inbound
-  mail, and work from the inbox/replies surfaces.
-- Connect Google Calendar/Meet, Microsoft/Outlook/Teams, Zoom, Jitsi, Slack,
-  storage providers, and supported ATS import adapters.
+- Send transactional and candidate email through Resend or any SMTP server, manage
+  templates, and receive inbound mail through Resend or Postmark webhooks.
+  Harly has no native Amazon SES API integration; see the Now section for why.
+- Connect Google Calendar and Google Meet, Microsoft (Outlook and Teams), video
+  providers, Slack, and storage providers. Each requires its own provider
+  account and credentials.
 - Deliver signed webhooks with retry, replay, delivery history, and test
-  endpoints; consume realtime events and run versioned automations with dry
-  runs, approval, retries, and rollback.
+  endpoints. Consume realtime events.
+- Run automations from the dashboard, with dry runs, human approval checkpoints,
+  retries, and run history. The public REST API for automations is withdrawn
+  (`410 Gone`); see [Automations](apps/docs/developers/automations.mdx).
 
-See [Integrations](apps/docs/integrations/overview.mdx),
-[API and webhooks](apps/docs/developers/api-overview.mdx), and
-[Automations](apps/docs/developers/automations.mdx).
+See [Integrations](apps/docs/integrations/overview.mdx) and
+[API and webhooks](apps/docs/developers/api-overview.mdx).
 
 ### AI assistance
 
@@ -90,51 +97,52 @@ See [AI features](apps/docs/product/ai-features.mdx) and the focused
 - Enforce workspace-scoped access with built-in and custom roles, permission
   scopes, MFA, passkeys, SSO, SCIM, API-key scopes, and device-session controls.
 - Provide audit logs, consent evidence, retention enforcement, candidate export,
-  deletion/anonymization workflows, and workspace legal pages.
-- Run the application with PostgreSQL and local or S3-compatible storage; use
+  deletion and anonymization workflows, and workspace legal pages.
+- Run the application with PostgreSQL and local or S3-compatible storage. Use
   the Harly CLI for installation, checks, health diagnostics, backup, restore,
-  upgrade, rollback support, and managed-cloud preparation.
+  upgrade, and rollback support.
 
 See [Access control](apps/docs/security/access-control.mdx),
 [Privacy](apps/docs/security/privacy.mdx), and
 [Self-hosting operations](apps/docs/self-hosting/operations.mdx).
 
-## Now — make the beta dependable
+## Now — v0.3.0 release cycle
 
-These initiatives are the current focus. They close the gap between “the
-feature exists” and “a small recruiting team can depend on it.”
+v0.3.0 makes the existing product dependable for a small recruiting team. Its
+themes, in priority order, are trustworthy pipeline semantics and metrics,
+reliable email and integration health, global search, a first-hour onboarding
+path with sample data, and UI system polish.
 
-### NOW-1 — Release, upgrade, and recovery confidence
+Every v0.3.0 change must also meet these release gates:
 
-Make every release reproducible and recoverable for a self-hosted operator.
+- A clean checkout passes the application, database, CLI, and documentation
+  checks. The required checks are listed in [CONTRIBUTING.md](CONTRIBUTING.md).
+- Every dashboard action and API route that handles candidate data or
+  credentials has an explicit permission and workspace-isolation test.
+- Migrations are additive and backward compatible for self-hosters who upgrade
+  in place. Custom data backfills are documented with the migration.
+- Install, upgrade, backup, restore, and doctor have been exercised on a
+  disposable installation before the release is tagged.
+
+### NOW-1 — Trustworthy pipeline semantics and metrics
+
+Stage meaning must come from stored data, not from a stage name. Stage names are
+display text that a team can change.
 
 Done when:
 
-- A clean checkout passes application, database, CLI, and documentation checks.
-- The published image, release manifest, CLI, migrations, and changelog refer
-  to the same release and image digest.
-- Install, first-owner setup, upgrade, rollback, backup, restore, and doctor
-  have been exercised on a disposable installation.
-- The operator has a tested path for migrations, scheduler failures, stale
-  locks, provider failures, and a failed upgrade.
+- Every job stage has an explicit kind (applied, screening, interview, offer,
+  hired, rejected, withdrawn, or custom). Outcome changes use the kind, and
+  archived stages keep their history but leave the active pipeline.
+- Application status follows stage kind consistently across the board, the
+  API, the candidate portal, reports, emails, AI tools, and automations.
+- Funnel, source, time-to-hire, dashboard, and Harly AI calculations use the same
+  canonical events and remain correct for closed, trashed, and sparse jobs.
+- Reports expose freshness, empty, loading, error, and retry states.
+- Focused tests cover date ranges, timezone boundaries, missing data, and
+  permission-restricted report access.
 
-### NOW-2 — Security and privacy proof
-
-Turn the existing controls into a repeatable verification matrix rather than a
-collection of settings.
-
-Done when:
-
-- Every dashboard action and API route has an explicit permission and workspace
-  isolation test where it handles candidate data or credentials.
-- Custom roles, privilege ceilings, SSO/SCIM lifecycle, MFA/passkeys, API-key
-  rotation, webhook secrets, and device revocation are covered by an operator
-  runbook.
-- Candidate export, deletion/anonymization, retention, consent, audit export,
-  and private resume access have documented evidence and failure recovery.
-- The launch report contains no unresolved critical or high-severity finding.
-
-### NOW-3 — Integration recovery and email operations
+### NOW-2 — Reliable email and integration health
 
 Make communication trustworthy when providers are slow, revoked, unavailable,
 or partially configured.
@@ -142,28 +150,31 @@ or partially configured.
 Done when:
 
 - Outbound email, inbound email, calendar events, video links, signatures, and
-  ATS imports expose a clear connected/degraded/reconnect state.
+  ATS imports expose a clear connected, degraded, or reconnect state.
 - Retries are idempotent, provider callbacks are signature-verified, and failed
   work is visible with a safe retry path.
-- Sender/domain setup, mailbox sync, attachment handling, and reply threading
-  are verified with documented provider-specific troubleshooting.
-- SMTP and AWS SES support have either shipped with tests and documentation or
-  been explicitly deferred; “email supported” never implies every provider.
+- Sender and domain setup, mailbox sync, attachment handling, and reply threading
+  are documented with provider-specific troubleshooting.
+- Email providers are documented accurately: Resend and SMTP ship in Harly today.
+  Native Amazon SES API support is explicitly deferred. The reason is that SES
+  exposes an SMTP interface, which the SMTP provider already covers, and a
+  separate SES API integration would add maintenance cost without a clear
+  gain for v0.3.0. It is reconsidered only if SMTP cannot meet a real need.
 
-### NOW-4 — Reporting users can trust
+### NOW-3 — Global search
 
-Finish the reporting foundation before adding more charts.
+Turn `Cmd/Ctrl + K` from quick navigation into workspace search across jobs,
+candidates, applications, tasks, and integrations, with permission-aware
+results, keyboard navigation, recents, and deep links.
 
 Done when:
 
-- Funnel, source, time-to-hire, dashboard, and Harly AI calculations use the
-  same canonical events and remain correct for closed, trashed, and sparse jobs.
-- Custom stage semantics do not depend on a visible stage name.
-- Reports expose freshness, empty, loading, error, and retry states.
-- Focused tests cover date ranges, timezone boundaries, missing data, and
-  permission-restricted report access.
+- A recruiter can find a candidate by name, email, skill, or application context
+  and reach the correct record.
+- Results respect the caller's workspace and role permissions, and never include
+  another workspace's records.
 
-### NOW-5 — Onboarding and daily-workflow polish
+### NOW-4 — First-hour onboarding and sample data
 
 Make the first hour understandable without exposing implementation details.
 
@@ -172,113 +183,64 @@ Done when:
 - A new owner can create a workspace, invite a teammate, create a job, publish
   it, submit a test application, and understand the next action without a
   maintainer explaining the flow.
-- Empty states, loading states, errors, keyboard navigation, mobile layouts,
-  contrast, and destructive confirmations are consistent across core routes.
-- Demo data can be loaded and removed safely for evaluation without ever being
-  confused with production candidate data.
+- Sample data can be loaded and removed safely for evaluation, and it is clearly
+  marked so it is never confused with production candidate data.
 - The public beta label, repository link, version, support route, and known
   limitations are visible and consistent.
 
-## Next — expand the recruiting product
+### NOW-5 — UI system polish
 
-These are the next coherent product initiatives once the beta foundation is
-stable. Each item has a concrete outcome and an observable completion gate.
+Make the core routes consistent with the design system.
 
-### NEXT-1 — Per-job pipelines and workflow semantics
+Done when:
 
-Allow each job to define its own stages without breaking applications, portal
-progress, permissions, notifications, reports, API clients, or automations.
+- Empty states, loading states, errors, keyboard navigation, mobile layouts,
+  contrast, and destructive confirmations are consistent across core routes.
+- Colors and surfaces come from semantic tokens, and motion respects
+  `prefers-reduced-motion`.
 
-Completion gate: create, reorder, rename, merge, and retire stages on one job;
-existing applications retain history; semantic outcomes such as `interview`,
-`offer`, `hired`, and `rejected` remain stable; API, portal, reports, emails,
-AI tools, and automations all pass end-to-end tests.
+## Next — v0.4 and later
 
-### NEXT-2 — Career pages and job distribution
+These items are deliberately deferred from v0.3.0. Each has a concrete outcome
+and an observable completion gate.
 
-Turn the career-page builder into a growth surface with reusable templates,
-preview/publish workflows, custom domains, canonical SEO metadata, sitemaps,
-`JobPosting` structured data, richer content blocks, and measurable application
-conversion.
-
-Completion gate: a workspace can publish a branded careers site, share a job
-with a canonical URL, pass structured-data validation, and receive an
-application without breaking legal notices or the embedded widget.
-
-Direct LinkedIn or other job-board publishing is conditional on an official,
-authorized provider API and acceptable terms. Harly will not use scraping or
-credentials that bypass provider controls.
-
-### NEXT-3 — Real global search
-
-Turn `Cmd/Ctrl + K` from quick navigation into workspace search across jobs,
-candidates, people, applications, tasks, and integrations, with permission-
-aware results, keyboard navigation, recents, and deep links.
-
-Completion gate: a recruiter can find a candidate by name, email, skill, or
-application context and reach the correct record without leaking another
-workspace's result.
-
-### NEXT-4 — Sourcing and import ecosystem
-
-Make candidate intake portable: robust CSV mapping, duplicate resolution,
-import previews, resumable jobs, progress/error reports, and maintained adapters
-for supported ATS providers.
-
-Completion gate: an import can be previewed, resumed, safely retried, audited,
-and rolled back or reconciled without duplicate candidates or cross-workspace
-records.
-
-### NEXT-5 — Reusable recruiting templates
-
-Add reusable job, email, interview-kit, scorecard, offer, pipeline, and
-automation templates with workspace ownership and versioning.
-
-Completion gate: a team can create a template, apply it to a new job, update a
-new version without mutating historical records, and restrict who can publish or
-edit templates.
-
-### NEXT-6 — Personalizable team workspace
-
-Let each recruiter and workspace configure dashboard widgets, saved report
-views, task queues, notification preferences, and team directory metadata
-without turning Harly into a general HRIS.
-
-Completion gate: layout and saved views persist per user/workspace, respect
-permissions, work on mobile, and have a reset path that never deletes recruiting
-data.
-
-### NEXT-7 — Deeper governed hiring workflows
-
-Support custom candidate/job fields, requisitions, offer approvals, hiring-team
-decision policies, richer audit exports, and retention policies for teams with
-more formal controls.
-
-Completion gate: a workspace can define a governed approval path, enforce it in
-the UI and API, and export an auditable record of who approved what and when.
-
-### NEXT-8 — Harly AI copilot expansion
-
-Continue the focused AI roadmap with proactive hiring briefs, missing-feedback
-and stalled-candidate detection, follow-up queues, integration recovery, more
-reversible actions, and admin-controlled workspace memory.
-
-Completion gate: every recommendation is grounded in workspace evidence, every
-consequential write is confirmed, candidate content is treated as data rather
-than instructions, and evaluation metrics are tracked in live smoke tests.
-
-### NEXT-9 — Evaluation, identity, and anti-abuse polish
-
-Close the smaller gaps that matter during evaluation and public use: a safe
-load/remove demo workspace, optional Turnstile protection for public forms,
-avatar upload and fallback behavior, referral capture in onboarding, an optional
-managed-cloud work-email policy, a signed-in root redirect to the app, and a
-consistent beta/OSS/version/repository surface.
-
-Completion gate: a prospective team can evaluate Harly with disposable data,
-remove that data cleanly, enable anti-bot protection without breaking legitimate
-applications, and understand which product/version they are running before
-inviting colleagues.
+- **Native interview scheduling and reminders.** Interviews can be scheduled and
+  tracked today. A native scheduler would add availability-aware slot proposals
+  and reminders for candidates and interviewers.
+  Completion gate: a recruiter can propose slots, a candidate can book one, and
+  reminders are delivered and retried through the reliable email path.
+- **Career-page custom domains and draft/publish.** Add preview and publish
+  workflows for career pages and support custom domains with verified DNS and TLS.
+  Completion gate: a workspace can preview a draft, publish it, and serve its
+  careers site from a verified custom domain without breaking legal notices or
+  the embedded widget.
+- **Rubric editor UI.** Let teams author and version scorecard rubrics in the
+  dashboard. Completion gate: a rubric can be created, versioned, and applied to
+  a job without changing feedback already recorded against an earlier version.
+- **Proactive AI briefs.** Add hiring briefs, missing-feedback and stalled-candidate
+  detection, and follow-up queues. Completion gate: every recommendation is
+  grounded in workspace evidence, every consequential write is confirmed, and
+  candidate content is treated as data rather than instructions.
+- **Saved views and personalization.** Let each recruiter save report views,
+  dashboard widgets, and task queues per user and workspace. Completion gate:
+  layouts persist per user and workspace, respect permissions, and have a reset
+  path that never deletes recruiting data.
+- **Requisitions and custom candidate fields.** Add requisitions, custom candidate
+  and job fields, and offer approval paths. Completion gate: a workspace can
+  define a governed approval path, enforce it in the UI and API, and export an
+  auditable record of who approved what and when.
+- **Import preview, resume, and merge.** Show a preview before a CSV or adapter
+  import, resume interrupted jobs, and resolve duplicates with a merge step.
+  Completion gate: an import can be previewed, resumed, safely retried, and
+  reconciled without duplicate candidates or cross-workspace records.
+- **Reusable recruiting templates.** Add reusable job, email, interview-kit,
+  scorecard, offer, pipeline, and automation templates with workspace ownership
+  and versioning. Completion gate: a team can create a template, apply it to a
+  new job, and publish a new version without mutating historical records.
+- **Harly AI copilot expansion.** Add more reversible actions and admin-controlled
+  workspace memory on top of the proactive briefs. Completion gate: memory is
+  visible and removable by an admin, and every write remains reversible or
+  confirmed.
 
 ## Later — platform and ecosystem scale
 
@@ -304,8 +266,14 @@ not a promise of multi-region SaaS availability.
 ### LATER-4 — Advanced AI personalization
 
 Workspace recruiting guidelines, role-specific criteria, user preferences,
-reviewable memory, export/delete controls, and more provider recovery can follow
-once the copilot's safety and evaluation baseline is proven.
+reviewable memory, export and delete controls, and more provider recovery can
+follow once the copilot's safety and evaluation baseline is proven.
+
+### LATER-5 — Direct job-board distribution
+
+Publish to job boards through official, authorized provider APIs only. This is
+conditional on provider terms that permit it. Harly will not use scraping or
+credentials that bypass provider controls.
 
 ## Exploring, but not committed
 
@@ -325,6 +293,9 @@ once the copilot's safety and evaluation baseline is proven.
 - Unauthorized scraping of LinkedIn, job boards, social networks, or external
   candidate databases.
 - Automatic hiring decisions without meaningful human review.
+- A public REST API for automations. Automations are managed in the dashboard
+  until a versioned replacement contract is designed.
+- A native Amazon SES API integration. SMTP covers SES through its SMTP interface.
 - Feature parity with every enterprise ATS before Harly is dependable for its
   primary audience: small, technical, privacy-conscious teams.
 

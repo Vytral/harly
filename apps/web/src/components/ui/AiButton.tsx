@@ -29,7 +29,7 @@ export function AiButton({
       {...props}
       disabled={isDisabled}
       className={cn(
-        "relative inline-flex items-center gap-1.5 rounded-lg font-medium transition-all",
+        "relative inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-lg font-medium transition-all",
         "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1",
         "active:scale-[0.97]",
         "disabled:pointer-events-none disabled:opacity-60",

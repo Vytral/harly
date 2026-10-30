@@ -10,6 +10,11 @@ import {
   type DuplicateCandidateResult,
 } from "@/lib/ai/schemas";
 import type { AiModelConfig } from "@/lib/ai/providers";
+import {
+  ANONYMIZATION_BLOCKED_MESSAGES,
+  assertAnonymizationAllows,
+  type AnonymizationSettings,
+} from "@/lib/ai/candidate-context";
 
 export type DuplicateCheckInput = {
   target: {
@@ -37,9 +42,12 @@ const SYSTEM_PROMPT =
   "Never guess , only return matches with real evidence." + "\n\n" + UNTRUSTED_DATA_GUARDRAIL;
 
 export async function detectDuplicatesWithAI(
-  config: AiModelConfig,
+  config: AiModelConfig & AnonymizationSettings,
   input: DuplicateCheckInput,
 ): Promise<DuplicateCandidateResult> {
+  // Duplicate matching compares names and emails by design, so it cannot run
+  // without identity. Refuse rather than send it.
+  assertAnonymizationAllows(config, ANONYMIZATION_BLOCKED_MESSAGES.duplicateDetection);
   const targetBlock =
     `ID: ${input.target.candidateId}\n` +
     `Name: ${input.target.fullName}\n` +

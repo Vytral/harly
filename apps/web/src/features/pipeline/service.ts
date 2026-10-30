@@ -1,34 +1,61 @@
 import "server-only";
 
-import { and, asc, eq } from "drizzle-orm";
-
 import { ApiError } from "@harly/api";
-import { db, jobStages, type JobStage } from "@harly/db";
+import { effectiveStageKind, type JobStage, type StageKind } from "@harly/db";
 
-export type StageEmailConfig = {
-  candidateUpdatesEnabled: boolean;
-};
+import { resolveWorkspaceActorUserId } from "@/server/api/actor";
+
+import {
+  archiveStage,
+  createStage,
+  deleteStage,
+  listJobStages,
+  parseStageEmailConfig,
+  reorderStages,
+  updateStage,
+  type ArchiveStageResult,
+  type JobStageSummary,
+  type StageEmailConfig,
+  type StagePatch,
+} from "./stage-lifecycle";
 
 export type JobStageApiInput = {
   name?: string;
   color?: string | null;
+  kind?: StageKind;
+  /** Already validated by the caller (see parseStageEmailConfig). */
   emailConfig?: StageEmailConfig;
 };
 
-function normalizeEmailConfig(value: unknown): StageEmailConfig {
-  if (
-    typeof value === "object" &&
-    value !== null &&
-    "candidateUpdatesEnabled" in value &&
-    typeof value.candidateUpdatesEnabled === "boolean"
-  ) {
-    return { candidateUpdatesEnabled: value.candidateUpdatesEnabled };
-  }
+type ApiActorScope = { workspaceId: string; jobId: string; actorUserId: string };
 
-  return { candidateUpdatesEnabled: true };
+/**
+ * API-key writes are attributed to the key's creator while they are still a
+ * member of the workspace, otherwise to an owner (same rule as job writes).
+ */
+export async function resolveStageActorUserId(auth: {
+  workspaceId: string;
+  createdById: string | null;
+}): Promise<string> {
+  const actorUserId = await resolveWorkspaceActorUserId(
+    auth.workspaceId,
+    auth.createdById,
+  );
+  if (!actorUserId) {
+    throw ApiError.unprocessable("Workspace has no owner to attribute this to.");
+  }
+  return actorUserId;
 }
 
-/** Public API shape. Keep workspace IDs and DB-only fields private. */
+function normalizeEmailConfig(value: unknown): StageEmailConfig {
+  return parseStageEmailConfig(value) ?? { candidateUpdatesEnabled: true };
+}
+
+/**
+ * Public API shape. Keep workspace IDs and DB-only fields private. `kind` is
+ * the effective kind (NULL-kind legacy rows are classified by name) so API
+ * consumers never see an unclassified stage.
+ */
 export function serializeJobStage(stage: JobStage) {
   return {
     id: stage.id,
@@ -36,63 +63,67 @@ export function serializeJobStage(stage: JobStage) {
     name: stage.name,
     color: stage.color,
     order: stage.order,
+    kind: effectiveStageKind(stage),
+    archivedAt: stage.archivedAt ? stage.archivedAt.toISOString() : null,
     emailConfig: normalizeEmailConfig(stage.emailConfig),
     createdAt: stage.createdAt.toISOString(),
     updatedAt: stage.updatedAt.toISOString(),
   };
 }
 
-/** List one job's pipeline stages, ordered for API consumers. */
+/** Stages for API consumers. Archived stages are included only on request. */
 export async function listJobStagesForApi(input: {
   workspaceId: string;
   jobId: string;
-}): Promise<JobStage[]> {
-  return db
-    .select()
-    .from(jobStages)
-    .where(
-      and(
-        eq(jobStages.workspaceId, input.workspaceId),
-        eq(jobStages.jobId, input.jobId),
-      ),
-    )
-    .orderBy(asc(jobStages.order));
+  includeArchived?: boolean;
+}): Promise<JobStageSummary[]> {
+  return listJobStages(input);
+}
+
+export async function createJobStageForApi(
+  input: ApiActorScope & {
+    name: string;
+    color?: string | null;
+    kind?: StageKind;
+    position?: number;
+  },
+): Promise<JobStageSummary> {
+  return createStage(input);
 }
 
 /** Update one stage only when it belongs to both workspace and job. */
-export async function updateJobStageForApi(input: {
-  workspaceId: string;
-  jobId: string;
-  stageId: string;
-  patch: JobStageApiInput;
-}): Promise<JobStage> {
-  if (
-    input.patch.name === undefined &&
-    input.patch.color === undefined &&
-    input.patch.emailConfig === undefined
-  ) {
-    throw ApiError.badRequest("Provide at least one stage field to update.");
-  }
+export async function updateJobStageForApi(
+  input: ApiActorScope & { stageId: string; patch: JobStageApiInput },
+): Promise<JobStageSummary> {
+  const patch: StagePatch = {
+    name: input.patch.name,
+    color: input.patch.color,
+    kind: input.patch.kind,
+    emailConfig: input.patch.emailConfig,
+  };
+  return updateStage({
+    workspaceId: input.workspaceId,
+    jobId: input.jobId,
+    actorUserId: input.actorUserId,
+    stageId: input.stageId,
+    patch,
+  });
+}
 
-  const [stage] = await db
-    .update(jobStages)
-    .set({
-      ...(input.patch.name !== undefined ? { name: input.patch.name } : {}),
-      ...(input.patch.color !== undefined ? { color: input.patch.color } : {}),
-      ...(input.patch.emailConfig !== undefined
-        ? { emailConfig: input.patch.emailConfig }
-        : {}),
-      updatedAt: new Date(),
-    })
-    .where(
-      and(
-        eq(jobStages.id, input.stageId),
-        eq(jobStages.workspaceId, input.workspaceId),
-        eq(jobStages.jobId, input.jobId),
-      ),
-    )
-    .returning();
+export async function reorderJobStagesForApi(
+  input: ApiActorScope & { stageIds: readonly string[] },
+): Promise<JobStageSummary[]> {
+  return reorderStages({ ...input, orderedStageIds: input.stageIds });
+}
 
-  if (!stage) throw ApiError.notFound("Job stage not found.");
-  return stage;
+export async function archiveJobStageForApi(
+  input: ApiActorScope & { stageId: string; mergeIntoStageId?: string | null },
+): Promise<ArchiveStageResult> {
+  return archiveStage(input);
+}
+
+export async function deleteJobStageForApi(
+  input: ApiActorScope & { stageId: string },
+): Promise<void> {
+  return deleteStage(input);
 }

@@ -158,7 +158,7 @@ export function SignupForm({ googleEnabled = false }: { googleEnabled?: boolean 
           </div>
         </div>
 
-        {error ? <p className="text-center text-sm text-danger-rust">{error}</p> : null}
+        {error ? <p role="alert" className="text-center text-sm text-danger-rust">{error}</p> : null}
 
         <button
           type="submit"

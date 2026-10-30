@@ -1,5 +1,8 @@
 "use client";
 
+import { IntegrationHealthNotice } from "@/features/integrations/health/ui/IntegrationHealthNotice";
+import type { IntegrationHealthView } from "@/features/integrations/health/model";
+import { providerStatusLabel, providerStatusTone } from "@/features/integrations/health/connection-label";
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "@/lib/notification-island/toast";
@@ -40,7 +43,9 @@ export function EsignConnectPanel({
   webhookSecret,
   tileClassName,
   description,
+  health,
 }: {
+  health?: IntegrationHealthView;
   status: WorkspaceEsignStatus;
   canEdit: boolean;
   /** Inbound webhook URL with workspace selector only (`?ws=`), or null. */
@@ -73,8 +78,8 @@ export function EsignConnectPanel({
         tileClassName={tileClassName}
         name="DocuSeal"
         description={description}
-        statusLabel={connected ? "Connected" : "Not connected"}
-        statusTone={connected ? "on" : "neutral"}
+        statusLabel={providerStatusLabel(health, connected ? "Connected" : "Not connected")}
+        statusTone={providerStatusTone(health, connected ? "on" : "neutral")}
         action={
           canEdit ? (
             <Button
@@ -89,6 +94,7 @@ export function EsignConnectPanel({
           ) : null
         }
       />
+      {health ? <IntegrationHealthNotice health={health} onReconnect={() => setOpen(true)} /> : null}
 
       {!status.encryptionReady && !connected ? (
         <div className="flex items-start gap-2 rounded-xl border border-clay/30 bg-clay/5 px-3 py-2 text-sm text-clay">

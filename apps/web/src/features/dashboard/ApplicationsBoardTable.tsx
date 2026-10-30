@@ -14,7 +14,6 @@ import {
   HumanTableHead,
   PersonCell,
   RowCheckbox,
-  StatusPill,
   Td,
   Th,
   Tr,
@@ -25,8 +24,10 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { EmptyState } from "@/components/ui/EmptyState";
+import { EmptyState } from "@/components/ui/empty-state";
+import { StatusPill, type StatusPillTone } from "@/components/ui/status-pill";
 import type { ApplicationsBoard } from "@/features/dashboard/applications-board";
+import { stageTone, type StageTone } from "@/lib/stage-visuals";
 
 /**
  * Home's hero surface. One table of people who need a decision, replacing the
@@ -60,6 +61,12 @@ export function ApplicationsBoardTable({
     for (const option of board.jobOptions) map[option.value] = option.label;
     return map;
   }, [board.jobOptions]);
+
+  const stageLabels = useMemo(() => {
+    const map: Record<string, string> = {};
+    for (const option of board.stageOptions) map[option.value] = option.label;
+    return map;
+  }, [board.stageOptions]);
 
   function setFilter(key: "job" | "stage", value: string) {
     const next = new URLSearchParams();
@@ -109,6 +116,7 @@ export function ApplicationsBoardTable({
           value={stageValue}
           onChange={(value) => setFilter("stage", value)}
           options={board.stageOptions.map((option) => option.value)}
+          labelMap={stageLabels}
         />
       </div>
 
@@ -187,7 +195,9 @@ export function ApplicationsBoardTable({
                       </span>
                     </Td>
                     <Td>
-                      <StatusPill>{row.stageName ?? "Applied"}</StatusPill>
+                      <StatusPill tone={stagePillTone(row.stageKind)}>
+                        {row.stageName ?? "No stage"}
+                      </StatusPill>
                     </Td>
                     <Td>
                       <WaitingCell days={row.daysWaiting} />
@@ -210,6 +220,19 @@ export function ApplicationsBoardTable({
       )}
     </section>
   );
+}
+
+const stageToneToPill: Record<StageTone, StatusPillTone> = {
+  neutral: "neutral",
+  progress: "info",
+  success: "success",
+  danger: "danger",
+  quiet: "neutral",
+};
+
+/** The pill tone follows what the stage means, never its name. */
+function stagePillTone(kind: ApplicationsBoard["applications"][number]["stageKind"]) {
+  return kind ? stageToneToPill[stageTone(kind)] : "neutral";
 }
 
 /**

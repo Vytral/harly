@@ -33,6 +33,108 @@ Before tagging, write the version section below. Use these headings when they
 apply: `Added`, `Changed`, `Fixed`, `Removed`, `Security`. Note migrations and
 anything an operator must do before upgrading.
 
+## [0.3.0-beta.1]
+
+The first beta of 0.3.0; the stable release will carry these notes under `[0.3.0]`.
+A feature release that makes the hiring pipeline, reports, search, email and
+role-based access trustworthy. **It contains database migrations
+(`0153`–`0158`) and a few deliberate behavior changes.** Read
+[the upgrade notes](docs/release-0.3.0-upgrade-notes.md) before upgrading an
+existing installation.
+
+### Added
+
+- **Stage kinds and a complete stage lifecycle.** Every pipeline stage now has
+  an explicit kind (applied, screening, interview, offer, hired, rejected,
+  withdrawn or custom) instead of being recognised by its name. Stages can be
+  renamed freely, and added, reordered, reclassified, merged into another
+  stage and archived from a new stage editor on the board and the job page.
+  Archiving keeps history and never loses an application. The same operations
+  are available over REST (`/api/v1/jobs/{id}/stages`).
+- **Canonical hiring metrics.** Reports, the dashboard and the API now share
+  one definition of hires, time to hire, offer acceptance and the funnel, dated
+  by the transition into the hired stage and bucketed in the workspace time
+  zone. Diversity figures are suppressed below five people.
+- **Search v2.** The command palette searches candidates, jobs, applications,
+  tasks and interviews with partial and multi-word matching, respects each
+  user's permissions and role scope, remembers recent results on the device and
+  explains empty and loading states.
+- **Reliable email.** An accepted message is never sent twice; unknown SMTP
+  outcomes are surfaced instead of retried blindly; every outbound email has a
+  durable event key so legitimate repeats are delivered and retries are not;
+  the delivery log explains failures and supports retry; interview emails keep
+  the correct time zone, including across daylight-saving changes.
+- **Integration health.** Google Calendar, Outlook, Zoom, Slack, Telegram,
+  DocuSeal and other connections report connected, degraded or needs-reconnect
+  from real provider responses, with credentials and personal data kept out of
+  stored errors and logs. The panels and meeting-provider choice follow that
+  state.
+- **A guided first hour.** A setup checklist, removable sample data that never
+  deletes real records, and a seed guard that refuses to wipe a populated
+  workspace.
+- **Dark mode that follows the system** without a flash of the wrong theme,
+  with readable portal, upload and public job surfaces; a keyboard-operable
+  account menu; restored focus indicators; announced form errors; shared empty
+  states, status pills and motion tokens that respect reduced motion.
+- **AI anonymization covers chat.** With anonymization on, Harly AI chat tool
+  results are redacted before they reach the model (names, contact details and
+  identifying free text), in addition to scoring and evaluation prompts.
+- Workspace setting to show Gravatar pictures (off by default).
+- `dsar:manage` now controls consent and audit-log exports.
+- API authorization documentation (`Developers → API authorization`).
+
+### Changed
+
+- **Gravatar is opt-in.** New and existing workspaces no longer request
+  Gravatar pictures until an administrator turns the setting on in Settings.
+- **Consent report and audit-log exports require `dsar:manage`** (audit-log
+  export also requires `security:manage`) instead of the owner/admin role.
+  Owners and admins keep access; the default recruiter role also holds
+  `dsar:manage`; custom roles gain it only when granted.
+- Roles limited to specific jobs, departments or regions now see only in-scope
+  data everywhere (board, jobs, interviews, talent pool, inbox, tasks, candidate
+  profiles, AI tools). Reports are not available to such roles yet; scheduled
+  reports run only while their creator still has unrestricted reports access.
+- Search recents are stored per user and workspace (id, name and link only),
+  expire after 30 days and are cleared on sign-out.
+- Publishable (browser) API keys can only create applications; moving,
+  rejecting or hiring requires a secret key. Creating an API key now requires
+  the creator to hold the permissions behind each requested scope.
+- A hire withdraws the candidate's other applications through the normal
+  withdrawal path (stage history, events and webhooks), including hires from
+  native e-signature.
+- Migrations take a bounded lock wait (`HARLY_MIGRATION_LOCK_TIMEOUT_MS`,
+  default 30000 ms; `0` disables).
+
+### Fixed
+
+- The integration health API no longer returns the DocuSeal webhook secret.
+- Hires created through offer acceptance now carry stage history, so they are
+  counted in reports.
+- Daylight-saving day boundaries, monthly report schedules and diversity
+  thresholds in reports.
+- Race conditions between archiving, moving and re-classifying stages.
+- Existing members are no longer sent through onboarding from the root page.
+- Many smaller defects found by independent review; see the upgrade notes.
+
+### Security
+
+- Closed several cases where role-scoped users could read or modify data
+  outside their scope (including documents and their attachments, notes, tags,
+  bulk email, tasks, offers, trash and automation steps), and the publishable-key hire/reject/move path above.
+- Search no longer logs query text, and AI tool results are redacted when
+  anonymization is on.
+
+### Migrations
+
+`0153`–`0158` add stage kind and archive columns with a guarded backfill,
+integration health, sample data tracking, checklist state, workspace time zone,
+guarded `pg_trgm` search indexes (skipped with a notice where the extension is
+not available), a database guard that refuses placing an application in an
+archived stage, and `workspace_settings.gravatar_enabled`. They are additive and
+safe to run on a live installation of 0.2.x; rolling back to a 0.2.x image
+after archiving stages is not supported.
+
 ## [0.2.3]
 
 A compatible release focused on the public demo. No database migration is

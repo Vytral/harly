@@ -101,11 +101,17 @@ in the settings screen.
 
 | Symptom | Likely cause | Fix |
 | --- | --- | --- |
-| No outbound delivery | Invalid sender domain or credentials | Check email outbox status in operations |
+| No outbound delivery | Invalid sender domain or credentials | Open **Settings → Email → Delivery log**. Failed rows show the provider's reason in *Last error*; fix the sender, then *Retry* the row |
+| Email shows "Queued" for a long time | The worker is not running or the provider is slow | Check the scheduler with the doctor (see [operations](/self-hosting/operations#candidate-email-retries-and-attempts)); queued emails are retried automatically |
+| Email shows "Failed" in the Delivery log | Five attempts did not succeed | Fix the cause in *Last error*, then *Retry* it, or *Cancel* it if it is no longer wanted. Cancelled and failed emails are never sent automatically |
+| Stage change saved but email warning appeared | The candidate email was not sent right now | The warning says whether a retry is scheduled. If it says it will not be retried, review it in the Delivery log. A warning that says delivery is taking longer than usual means the email is still queued and will finish in the background |
+| Email says "Delivery outcome unknown" | The mail server stopped responding after it received the message | Check the sent folder. Harly does not resend it automatically; *Retry* it from the Delivery log only if the recipient did not get it |
+| Interview time looks wrong to the candidate | The interview zone was not recorded | Emails show the zone in brackets, for example `(Europe/Madrid)`. Reschedule and cancel emails keep the zone of the original invite. Older queued emails without a zone show `(UTC)` |
+| Interview time is rejected: "That time does not exist" | The local time was skipped by a daylight-saving change | Pick a time that exists in the zone. Harly does not move the time silently |
 | Reply not threaded | Receiving domain set as URL instead of hostname | Set only `replies.example.com`, not `https://…` |
 | Webhook returns 404 | Wrong workspace ID in query param | Copy exact workspace ID from Settings → Email → Inbound |
 | Webhook returns 401 | Secret mismatch | Verify the provider has the current secret from Harly settings |
-| Duplicate delivery | At-least-once delivery is expected | Use provider message IDs to deduplicate at the processor level |
+| Duplicate delivery | A crash can happen between the provider accepting an email and Harly recording it | Harly never resends an email the provider accepted. Use the provider message ID (also the `Message-ID` header) to deduplicate at the recipient side if you need a hard guarantee |
 
 ## Next steps
 

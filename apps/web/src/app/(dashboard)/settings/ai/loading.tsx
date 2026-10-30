@@ -1,7 +1,6 @@
+import { FormSkeleton } from "@/components/skeletons";
+
+/** The AI settings page is a stack of form cards, so the placeholder is a form. */
 export default function AiSettingsLoading() {
-  return (
-    <div className="space-y-6">
-      <div className="h-64 w-full animate-pulse rounded-xl bg-muted" />
-    </div>
-  );
+  return <FormSkeleton fields={4} />;
 }

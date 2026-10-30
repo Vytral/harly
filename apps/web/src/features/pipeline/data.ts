@@ -18,14 +18,19 @@ import {
   aiEvaluations,
   applications,
   applicationStageHistory,
+  applicationStatusForStage,
   candidateReferrals,
   candidates,
+  effectiveStageKind,
   jobs,
   jobStages,
+  type StageKind,
 } from "@harly/db";
 import { getWorkspaceContext } from "@/features/workspaces/context";
+import { jobScopeSql, type WorkspaceSearchActor } from "@/features/search/scope";
+import { resolveSearchActor } from "@/features/search/workspace-search";
 import { candidateAvatarFallbackSrcs } from "@/lib/candidate-avatar";
-import { statusForStageName } from "@/features/pipeline/state";
+import { getWorkspaceGravatarEnabled } from "@/lib/gravatar";
 
 export type PipelineJobOption = {
   id: string;
@@ -36,6 +41,8 @@ export type PipelineJobOption = {
 export type PipelineStage = {
   id: string;
   name: string;
+  /** What the stage means to the product; the display name is cosmetic. */
+  kind: StageKind;
   color: string | null;
   order: number;
   emailConfig: {
@@ -84,22 +91,46 @@ export type PipelineData =
       applications: PipelineApplication[];
     };
 
-async function getDefaultPipelineJobId(workspaceId: string) {
+/**
+ * Whether a job is inside the actor's role scope. Unrestricted actors always
+ * pass without a query; a restricted actor passes only for an in-scope, live job.
+ */
+async function jobInActorScope(actor: WorkspaceSearchActor, jobId: string) {
+  const scope = jobScopeSql(actor);
+  if (!scope) return true;
+  const [row] = await db
+    .select({ id: jobs.id })
+    .from(jobs)
+    .where(
+      and(
+        eq(jobs.workspaceId, actor.workspaceId),
+        eq(jobs.id, jobId),
+        isNull(jobs.deletedAt),
+        scope,
+      ),
+    )
+    .limit(1);
+  return Boolean(row);
+}
+
+async function getDefaultPipelineJobId(actor: WorkspaceSearchActor) {
+  const scope = jobScopeSql(actor);
   const [openJobWithApplications] = await db
     .select({ id: jobs.id })
     .from(jobs)
     .innerJoin(
       applications,
       and(
-        eq(applications.workspaceId, workspaceId),
+        eq(applications.workspaceId, actor.workspaceId),
         eq(applications.jobId, jobs.id),
       ),
     )
     .where(
       and(
-        eq(jobs.workspaceId, workspaceId),
+        eq(jobs.workspaceId, actor.workspaceId),
         eq(jobs.status, "open"),
         isNull(jobs.deletedAt),
+        scope,
       ),
     )
     .orderBy(desc(jobs.createdAt))
@@ -113,7 +144,11 @@ async function getDefaultPipelineJobId(workspaceId: string) {
     .select({ id: jobs.id })
     .from(jobs)
     .where(
-      and(eq(jobs.workspaceId, workspaceId), isNull(jobs.deletedAt)),
+      and(
+        eq(jobs.workspaceId, actor.workspaceId),
+        isNull(jobs.deletedAt),
+        scope,
+      ),
     )
     .orderBy(desc(jobs.createdAt))
     .limit(1);
@@ -136,7 +171,12 @@ export function normalizeStageEmailConfig(value: unknown) {
   return { candidateUpdatesEnabled: true };
 }
 
-export type NextStage = { id: string; name: string; order: number };
+export type NextStage = {
+  id: string;
+  name: string;
+  kind: StageKind;
+  order: number;
+};
 
 /**
  * The stage immediately after `currentStageId` in a job's ordered pipeline.
@@ -148,11 +188,14 @@ export async function getNextStage(
   currentStageId: string | null,
 ): Promise<NextStage | null> {
   const { organization: workspace } = await getWorkspaceContext();
+  const actor = await resolveSearchActor();
+  if (!(await jobInActorScope(actor, jobId))) return null;
 
-  const stages = await db
+  const rows = await db
     .select({
       id: jobStages.id,
       name: jobStages.name,
+      kind: jobStages.kind,
       order: jobStages.order,
     })
     .from(jobStages)
@@ -160,21 +203,27 @@ export async function getNextStage(
       and(
         eq(jobStages.workspaceId, workspace.id),
         eq(jobStages.jobId, jobId),
+        isNull(jobStages.archivedAt),
       ),
     )
     .orderBy(asc(jobStages.order));
 
+  const stages = rows.map(({ kind, ...stage }) => ({
+    ...stage,
+    kind: effectiveStageKind({ kind, name: stage.name }),
+  }));
   if (stages.length === 0) return null;
 
-  const currentIndex = currentStageId
-    ? stages.findIndex((stage) => stage.id === currentStageId)
-    : -1;
+  // A current stage that is archived is no longer part of the pipeline, so
+  // there is no meaningful "next" step to offer for it.
+  if (currentStageId === null) return stages[0] ?? null;
+  const currentIndex = stages.findIndex((stage) => stage.id === currentStageId);
+  if (currentIndex < 0) return null;
 
   // Terminal stages are not followed by another actionable stage. A pipeline
   // may order the default `Rejected` stage after `Hired`, but advancing a hired
   // candidate into rejected would be semantically wrong.
-  const currentStage = currentIndex >= 0 ? stages[currentIndex] : null;
-  if (currentStage && statusForStageName(currentStage.name) !== "active") {
+  if (applicationStatusForStage(stages[currentIndex]) !== "active") {
     return null;
   }
 
@@ -185,6 +234,10 @@ export async function getPipelineData(
   requestedJobId: string | undefined,
 ): Promise<PipelineData> {
   const { organization: workspace } = await getWorkspaceContext();
+  // Restricted roles only see the jobs inside their scope, so the picker, the
+  // default job and the applications below all stay inside it.
+  const actor = await resolveSearchActor();
+  const jobScope = jobScopeSql(actor);
   const latestStageMove = db
     .select({
       applicationId: applicationStageHistory.applicationId,
@@ -205,7 +258,7 @@ export async function getPipelineData(
     })
     .from(jobs)
     .where(
-      and(eq(jobs.workspaceId, workspace.id), isNull(jobs.deletedAt)),
+      and(eq(jobs.workspaceId, workspace.id), isNull(jobs.deletedAt), jobScope),
     )
     .orderBy(desc(jobs.createdAt));
 
@@ -217,7 +270,7 @@ export async function getPipelineData(
     ? jobOptions.find((job) => job.id === requestedJobId)
     : undefined;
   const defaultJobId =
-    requestedJob?.id ?? (await getDefaultPipelineJobId(workspace.id));
+    requestedJob?.id ?? (await getDefaultPipelineJobId(actor));
   const selectedJob =
     jobOptions.find((job) => job.id === defaultJobId) ?? jobOptions[0];
 
@@ -226,6 +279,7 @@ export async function getPipelineData(
       .select({
         id: jobStages.id,
         name: jobStages.name,
+        kind: jobStages.kind,
         color: jobStages.color,
         order: jobStages.order,
         emailConfig: jobStages.emailConfig,
@@ -235,6 +289,7 @@ export async function getPipelineData(
         and(
           eq(jobStages.workspaceId, workspace.id),
           eq(jobStages.jobId, selectedJob.id),
+          isNull(jobStages.archivedAt),
         ),
       )
       .orderBy(asc(jobStages.order)),
@@ -315,6 +370,7 @@ export async function getPipelineData(
   const featuredReferralCandidateIds = new Set(
     featuredReferralRows.map((row) => row.candidateId),
   );
+  const gravatarEnabled = await getWorkspaceGravatarEnabled(workspace.id);
 
   return {
     kind: "ready",
@@ -332,6 +388,7 @@ export async function getPipelineData(
       candidateAvatarFallbackSrcs: candidateAvatarFallbackSrcs(
         application.candidateEmail,
         candidateGithubUrl,
+        { gravatarEnabled },
       ),
       appliedAt: application.appliedAt.toISOString(),
       createdAt: application.createdAt.toISOString(),
@@ -339,8 +396,9 @@ export async function getPipelineData(
         ? new Date(application.lastStageMovedAt).toISOString()
         : null,
     })),
-    stages: stages.map((stage) => ({
+    stages: stages.map(({ kind, ...stage }) => ({
       ...stage,
+      kind: effectiveStageKind({ kind, name: stage.name }),
       emailConfig: normalizeStageEmailConfig(stage.emailConfig),
     })),
   };
@@ -368,6 +426,8 @@ export type PipelineSummary = {
  */
 export async function getPipelineSummary(jobId: string): Promise<PipelineSummary | null> {
   const { organization: workspace } = await getWorkspaceContext();
+  const actor = await resolveSearchActor();
+  if (!(await jobInActorScope(actor, jobId))) return null;
 
   const STALLED_DAYS = 14;
 

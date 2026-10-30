@@ -23,7 +23,7 @@ export function Tile({
   children: React.ReactNode;
 }) {
   return (
-    <div className={cn(tileClass, "flex h-full flex-col", className)}>
+    <div className={cn(tileClass, "flex h-full min-w-0 max-w-full flex-col", className)}>
       {children}
     </div>
   );
@@ -46,8 +46,8 @@ export function TileHeader({
   action?: React.ReactNode;
 }) {
   return (
-    <div className="flex items-center justify-between gap-2 px-5 pt-4">
-      <h2 className="flex items-center gap-2 text-[15px] font-medium text-near-ink">
+    <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1 px-5 pt-4">
+      <h2 className="flex min-w-0 items-center gap-2 text-[15px] font-medium text-near-ink">
         <Icon className="size-4 text-soft-ink" strokeWidth={1.8} />
         {title}
         {typeof count === "number" && count > 0 ? (
@@ -72,7 +72,7 @@ export function TileLink({
   return (
     <Link
       href={href}
-      className="inline-flex items-center gap-1 rounded-md text-[13px] font-medium text-soft-ink transition-colors hover:text-near-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-near-ink"
+      className="inline-flex shrink-0 items-center gap-1 rounded-md text-[13px] font-medium text-soft-ink transition-colors hover:text-near-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-near-ink"
     >
       {children}
       <ArrowRight className="size-3.5" />

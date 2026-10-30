@@ -1824,7 +1824,7 @@ export function ApplyForm({
       />
 
       {state.status === "error" && state.message ? (
-        <div className="rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-700">
+        <div role="alert" className="rounded-md border border-danger-rust/30 bg-danger-rust/10 px-4 py-3 text-sm font-medium text-danger-rust">
           {state.message}
         </div>
       ) : null}
@@ -2077,12 +2077,12 @@ export function ApplyForm({
                 </FieldLabel>
                 <label
                   htmlFor="photoFile"
-                  className="mt-1.5 flex cursor-pointer items-center justify-between rounded-lg border border-dashed border-zinc-300 px-4 py-3 text-sm text-zinc-700 transition hover:border-zinc-400 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:border-zinc-600 dark:hover:bg-zinc-800/50"
+                  className="mt-1.5 flex cursor-pointer items-center justify-between rounded-lg border border-dashed border-input px-4 py-3 text-sm text-foreground transition hover:border-ring hover:bg-muted"
                 >
                   <span>
                     {photoFile ? photoFile.name : "Upload a profile photo"}
                   </span>
-                  <span className="text-xs text-zinc-500">PNG, JPG, WEBP</span>
+                  <span className="text-xs text-muted-foreground">PNG, JPG, WEBP</span>
                 </label>
                 {photoStatus}
               </div>
@@ -2658,7 +2658,7 @@ export function ApplyForm({
                 )}
               </div>
               {resumeFile ? (
-                <p className="mt-3 flex items-center gap-2 text-sm font-medium text-zinc-700">
+                <p className="mt-3 flex items-center gap-2 text-sm font-medium text-foreground">
                   <span
                     className="inline-flex size-5 items-center justify-center rounded-full text-[var(--board-primary-contrast)]"
                     style={{ backgroundColor: "var(--board-primary)" }}
@@ -2786,12 +2786,12 @@ export function ApplyForm({
                 </FieldLabel>
                 <label
                   htmlFor="photoFile"
-                  className="mt-1.5 flex cursor-pointer items-center justify-between rounded-lg border border-dashed border-zinc-300 px-4 py-3 text-sm text-zinc-700 transition hover:border-zinc-400 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:border-zinc-600 dark:hover:bg-zinc-800/50"
+                  className="mt-1.5 flex cursor-pointer items-center justify-between rounded-lg border border-dashed border-input px-4 py-3 text-sm text-foreground transition hover:border-ring hover:bg-muted"
                 >
                   <span>
                     {photoFile ? photoFile.name : "Upload a profile photo"}
                   </span>
-                  <span className="text-xs text-zinc-500">PNG, JPG, WEBP</span>
+                  <span className="text-xs text-muted-foreground">PNG, JPG, WEBP</span>
                 </label>
                 {photoStatus}
               </div>

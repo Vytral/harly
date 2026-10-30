@@ -29,7 +29,11 @@ vi.mock("drizzle-orm", () => ({
   isNull: vi.fn(),
   sql: vi.fn(),
 }));
-vi.mock("@harly/db", () => ({
+vi.mock("@harly/db", async () => ({
+  // Pure stage-kind helpers are real: they pick the entry stage by kind.
+  ...(await vi.importActual<typeof import("@harly/db/stage-kind")>(
+    "@harly/db/stage-kind",
+  )),
   db: { select: mocks.dbSelect, transaction: mocks.transaction },
   applications: {},
   applicationStageHistory: {},
@@ -38,7 +42,15 @@ vi.mock("@harly/db", () => ({
   applicationQuestions: {},
   candidateFiles: {},
   jobs: {},
-  jobStages: {},
+  jobStages: {
+    id: "jobStages.id",
+    name: "jobStages.name",
+    kind: "jobStages.kind",
+    archivedAt: "jobStages.archivedAt",
+    workspaceId: "jobStages.workspaceId",
+    jobId: "jobStages.jobId",
+    order: "jobStages.order",
+  },
   offers: {},
   signatureRecipients: {},
   workspaceSettings: {},
@@ -64,6 +76,14 @@ vi.mock("@/features/portal/application-validation", () => ({
 vi.mock("@/features/applications/resume-upload", () => ({
   verifyResumeUpload: mocks.verifyResumeUpload,
 }));
+const ENTRY_STAGE = {
+  id: "stage-1",
+  name: "Applied",
+  kind: "applied",
+  order: 0,
+  archivedAt: null,
+};
+
 vi.mock("@/features/applications/pipeline-order", () => ({
   lockApplicationPipelineOrder: mocks.lockApplicationPipelineOrder,
 }));
@@ -159,7 +179,7 @@ describe("applyToJobAction", () => {
       .mockReturnValueOnce(query([]))
       .mockReturnValueOnce(query([{ legalConfigured: false, consentCheckboxText: null }]))
       .mockReturnValueOnce(query([]))
-      .mockReturnValueOnce(query([{ id: "stage-1" }]))
+      .mockReturnValueOnce(query([ENTRY_STAGE]))
       .mockReturnValueOnce(query([{ name: "Acme", slug: "acme" }]))
       .mockReturnValueOnce(query([]));
   }
@@ -272,7 +292,7 @@ describe("applyToJobAction", () => {
       .mockReturnValueOnce(query([]))
       .mockReturnValueOnce(query([{ legalConfigured: false }]))
       .mockReturnValueOnce(query([]))
-      .mockReturnValueOnce(query([{ id: "stage-1" }]));
+      .mockReturnValueOnce(query([ENTRY_STAGE]));
     mocks.validatePortalApplication.mockReturnValue({ ok: true, answers: {} });
 
     await expect(

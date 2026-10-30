@@ -1,18 +1,31 @@
 import "server-only";
 
 import { randomUUID } from "node:crypto";
-import { and, asc, eq, gte, isNull, lte, or } from "drizzle-orm";
+import { and, asc, desc, eq, isNull, lte, or } from "drizzle-orm";
 
 import {
-  applications,
   db,
-  jobs,
+  member,
   scheduledReportRuns,
   scheduledReports,
 } from "@harly/db";
 import { enqueueEmailOutbox } from "@/lib/email/outbox-processor";
-import { getHiringEvents } from "@/features/reports/data";
-import { getAdvancedHiringAnalytics } from "@/features/reports/advanced";
+import { scheduledReportEmailDedupeKey } from "@/lib/email/dedupe-keys";
+import { getServerLogger } from "@/lib/logger";
+
+import { nextRun } from "./cadence";
+import { getAdvancedHiringAnalytics, type AdvancedHiringAnalytics } from "@/features/reports/advanced";
+import { getWorkspaceTimeZone } from "@/features/reports/canonical";
+import { loadReportsData, type ReportsData } from "@/features/reports/data";
+import { type ReportsActor } from "@/features/reports/scope";
+import { resolveWindow, type ReportWindow } from "@/features/reports/window";
+import { isUnrestrictedScope } from "@/features/search/scope";
+import { getRolePolicy } from "@/features/workspaces/permissions-server";
+
+const log = getServerLogger();
+
+/** Scheduled reports always cover the last 30 days, the Reports page default. */
+export const SCHEDULED_REPORT_DAYS = 30;
 
 function escapeHtml(value: unknown): string {
   return String(value ?? "")
@@ -20,14 +33,6 @@ function escapeHtml(value: unknown): string {
     .replaceAll("<", "&lt;")
     .replaceAll(">", "&gt;")
     .replaceAll('"', "&quot;");
-}
-
-function nextRun(frequency: string, from = new Date()): Date {
-  const result = new Date(from);
-  if (frequency === "daily") result.setUTCDate(result.getUTCDate() + 1);
-  else if (frequency === "weekly") result.setUTCDate(result.getUTCDate() + 7);
-  else result.setUTCMonth(result.getUTCMonth() + 1);
-  return result;
 }
 
 export async function createScheduledReport(input: {
@@ -52,40 +57,136 @@ export async function createScheduledReport(input: {
   return row;
 }
 
+/**
+ * Schedules in a workspace, each with the most recent run's status and reason.
+ * A skipped run carries the reason a schedule did not send, so owners can see it.
+ */
 export async function listScheduledReports(workspaceId: string) {
-  return db.select().from(scheduledReports).where(eq(scheduledReports.workspaceId, workspaceId)).orderBy(asc(scheduledReports.nextRunAt));
+  const rows = await db.select().from(scheduledReports).where(eq(scheduledReports.workspaceId, workspaceId)).orderBy(asc(scheduledReports.nextRunAt));
+  if (rows.length === 0) return [];
+  const latest = await db
+    .selectDistinctOn([scheduledReportRuns.scheduledReportId], {
+      scheduledReportId: scheduledReportRuns.scheduledReportId,
+      status: scheduledReportRuns.status,
+      error: scheduledReportRuns.error,
+      createdAt: scheduledReportRuns.createdAt,
+    })
+    .from(scheduledReportRuns)
+    .where(eq(scheduledReportRuns.workspaceId, workspaceId))
+    .orderBy(scheduledReportRuns.scheduledReportId, desc(scheduledReportRuns.createdAt));
+  const lastRunBySchedule = new Map(
+    latest.map((run) => [run.scheduledReportId, { status: run.status, error: run.error, createdAt: run.createdAt }]),
+  );
+  return rows.map((row) => ({ ...row, lastRun: lastRunBySchedule.get(row.id) ?? null }));
 }
 
-export async function runDueScheduledReports(limit = 25) {
+export type ScheduleActorResolution =
+  | { ok: true; actor: ReportsActor }
+  | { ok: false; reason: string };
+
+/**
+ * The actor a schedule runs under: its creator, resolved now. A schedule only
+ * sends for a creator who is still a member, still holds reports:read, and has
+ * an unrestricted role scope. Anything else is skipped with the reason returned.
+ */
+export async function resolveScheduleActor(
+  workspaceId: string,
+  createdById: string | null,
+): Promise<ScheduleActorResolution> {
+  if (!createdById) {
+    return { ok: false, reason: "The schedule has no creator on record. Recreate it as a workspace owner or admin." };
+  }
+  const [membership] = await db
+    .select({ role: member.role })
+    .from(member)
+    .where(and(eq(member.organizationId, workspaceId), eq(member.userId, createdById)))
+    .limit(1);
+  if (!membership) {
+    return { ok: false, reason: "The schedule's creator is no longer a member of this workspace." };
+  }
+  const policy = await getRolePolicy(workspaceId, membership.role);
+  if (!policy.permissions.includes("reports:read")) {
+    return { ok: false, reason: "The schedule's creator no longer has report access." };
+  }
+  if (!isUnrestrictedScope(policy.scope)) {
+    return {
+      ok: false,
+      reason: "The schedule's creator is limited to specific jobs. Reports are only sent for unrestricted roles.",
+    };
+  }
+  return { ok: true, actor: { scope: policy.scope } };
+}
+
+async function recordSkippedRun(
+  report: typeof scheduledReports.$inferSelect,
+  workerId: string,
+  now: Date,
+  reason: string,
+) {
+  log.warn({ scheduledReportId: report.id, workspaceId: report.workspaceId, reason }, "scheduled report skipped");
+  await db.insert(scheduledReportRuns).values({
+    workspaceId: report.workspaceId,
+    scheduledReportId: report.id,
+    periodStart: now,
+    periodEnd: now,
+    status: "skipped",
+    recipientCount: Array.isArray(report.recipients) ? report.recipients.length : 0,
+    error: reason.slice(0, 500),
+  });
+  await db.update(scheduledReports).set({ nextRunAt: nextRun(report.frequency, now), lockedAt: null, lockedBy: null, updatedAt: now }).where(and(eq(scheduledReports.id, report.id), eq(scheduledReports.lockedBy, workerId)));
+}
+
+/**
+ * Sends every due schedule. Each one runs under its creator's current access;
+ * a schedule that the creator may no longer read is skipped and recorded, never
+ * built. `options.workspaceId` limits the sweep to one workspace.
+ */
+export async function runDueScheduledReports(limit = 25, options: { workspaceId?: string } = {}) {
   const now = new Date();
-  const due = await db.select().from(scheduledReports).where(and(eq(scheduledReports.enabled, true), lte(scheduledReports.nextRunAt, now), or(isNull(scheduledReports.lockedAt), lte(scheduledReports.lockedAt, new Date(now.getTime() - 10 * 60_000))))).orderBy(asc(scheduledReports.nextRunAt)).limit(limit);
+  const due = await db.select().from(scheduledReports).where(and(eq(scheduledReports.enabled, true), options.workspaceId ? eq(scheduledReports.workspaceId, options.workspaceId) : undefined, lte(scheduledReports.nextRunAt, now), or(isNull(scheduledReports.lockedAt), lte(scheduledReports.lockedAt, new Date(now.getTime() - 10 * 60_000))))).orderBy(asc(scheduledReports.nextRunAt)).limit(limit);
   let processed = 0;
   let failed = 0;
+  let skipped = 0;
   for (const report of due) {
     const workerId = randomUUID();
     const [claimed] = await db.update(scheduledReports).set({ lockedAt: now, lockedBy: workerId, updatedAt: now }).where(and(eq(scheduledReports.id, report.id), or(isNull(scheduledReports.lockedAt), lte(scheduledReports.lockedAt, new Date(now.getTime() - 10 * 60_000))))).returning();
     if (!claimed) continue;
-    const periodEnd = now;
-    const periodStart = new Date(now.getTime() - 30 * 86_400_000);
+    const resolution = await resolveScheduleActor(report.workspaceId, report.createdById);
+    if (!resolution.ok) {
+      skipped += 1;
+      await recordSkippedRun(report, workerId, now, resolution.reason);
+      continue;
+    }
     const [run] = await db.insert(scheduledReportRuns).values({
       workspaceId: report.workspaceId,
       scheduledReportId: report.id,
-      periodStart,
-      periodEnd,
+      periodStart: now,
+      periodEnd: now,
       status: "running",
       recipientCount: Array.isArray(report.recipients) ? report.recipients.length : 0,
     }).returning();
     try {
-      const overview = await getReportsDataForWorkspace(report.workspaceId, 30);
-      const advanced = report.reportType === "advanced_hiring" ? await getAdvancedHiringAnalytics(report.workspaceId, { since: periodStart }) : null;
-      const bodyHtml = renderReportHtml(report.name, overview, advanced);
+      const built = await buildScheduledReport({
+        workspaceId: report.workspaceId,
+        name: report.name,
+        reportType: report.reportType === "advanced_hiring" ? "advanced_hiring" : "hiring_overview",
+        now,
+        actor: resolution.actor,
+      });
+      await db.update(scheduledReportRuns).set({
+        periodStart: built.window.from,
+        periodEnd: built.window.to,
+      }).where(eq(scheduledReportRuns.id, run.id));
+      // Key on the due slot, not the tick time, so a retried tick for the same
+      // slot does not send the period's report again.
+      const periodStart = report.nextRunAt ?? now;
       for (const to of (Array.isArray(report.recipients) ? report.recipients : [])) {
         await enqueueEmailOutbox(report.workspaceId, "report.scheduled", {
           to,
           subject: `${report.name} · Harly hiring report`,
-          bodyHtml,
+          bodyHtml: built.html,
           companyName: "Harly",
-        }, `scheduled-report:${report.id}:${periodEnd.toISOString()}:${to}`);
+        }, scheduledReportEmailDedupeKey({ scheduledReportId: report.id, periodStart, recipient: to }));
       }
       await db.update(scheduledReportRuns).set({ status: "queued", sentAt: new Date() }).where(eq(scheduledReportRuns.id, run.id));
       await db.update(scheduledReports).set({ lastRunAt: now, nextRunAt: nextRun(report.frequency, now), lockedAt: null, lockedBy: null, updatedAt: now }).where(and(eq(scheduledReports.id, report.id), eq(scheduledReports.lockedBy, workerId)));
@@ -96,41 +197,64 @@ export async function runDueScheduledReports(limit = 25) {
       await db.update(scheduledReports).set({ nextRunAt: nextRun("daily", now), lockedAt: null, lockedBy: null, updatedAt: now }).where(and(eq(scheduledReports.id, report.id), eq(scheduledReports.lockedBy, workerId)));
     }
   }
-  return { processed, failed };
+  return { processed, failed, skipped };
 }
 
-async function getReportsDataForWorkspace(workspaceId: string, rangeDays: number) {
-  // The existing page loader is session-gated. Scheduled workers use this
-  // narrow, workspace-scoped aggregate instead of impersonating a user.
-  const periodStart = new Date(Date.now() - rangeDays * 86_400_000);
-  const [applicationRows, hireRows] = await Promise.all([
-    db
-      .select({ appliedAt: applications.appliedAt })
-      .from(applications)
-      .innerJoin(
-        jobs,
-        and(
-          eq(jobs.id, applications.jobId),
-          eq(jobs.workspaceId, workspaceId),
-          isNull(jobs.deletedAt),
-        ),
-      )
-      .where(
-        and(
-          eq(applications.workspaceId, workspaceId),
-          gte(applications.appliedAt, periodStart),
-        ),
-    ),
-    getHiringEvents(workspaceId, { since: periodStart }),
-  ]);
-
-  return {
-    applications: applicationRows.length,
-    hires: hireRows.length,
-  };
+/**
+ * Builds the scheduled email for a workspace. It uses the same assembly as the
+ * Reports page, so the totals in the email match the page for the same range.
+ */
+export async function buildScheduledReport({
+  workspaceId,
+  name,
+  reportType,
+  now = new Date(),
+  actor,
+}: {
+  workspaceId: string;
+  name: string;
+  reportType: "hiring_overview" | "advanced_hiring";
+  now?: Date;
+  actor: ReportsActor;
+}): Promise<{
+  data: ReportsData;
+  advanced: AdvancedHiringAnalytics | null;
+  window: ReportWindow;
+  html: string;
+}> {
+  const timeZone = await getWorkspaceTimeZone(workspaceId);
+  const window = resolveWindow(SCHEDULED_REPORT_DAYS, timeZone, now);
+  const data = await loadReportsData({ workspaceId, days: SCHEDULED_REPORT_DAYS, now, actor });
+  const advanced =
+    reportType === "advanced_hiring"
+      ? await getAdvancedHiringAnalytics({ workspaceId, window, actor })
+      : null;
+  return { data, advanced, window, html: renderReportHtml(name, data, advanced) };
 }
 
-function renderReportHtml(name: string, overview: { applications: number; hires: number }, advanced: Awaited<ReturnType<typeof getAdvancedHiringAnalytics>> | null) {
-  const rows = advanced?.stageSla.map((row) => `<tr><td>${escapeHtml(row.stage)}</td><td>${row.transitions}</td><td>${row.averageDays ?? "—"}d</td><td>${row.breached}</td></tr>`).join("") ?? "";
-  return `<h1>${escapeHtml(name)}</h1><p>Applications: <strong>${overview.applications}</strong></p><p>Hires: <strong>${overview.hires}</strong></p>${advanced ? `<h2>Stage SLA</h2><table><tr><th>Stage</th><th>Transitions</th><th>Average</th><th>Breached</th></tr>${rows}</table>` : ""}`;
+function formatDays(value: number | null): string {
+  return value == null ? "No data" : `${Math.round(value)}d`;
+}
+
+function formatPct(value: number | null): string {
+  return value == null ? "—" : `${value}%`;
+}
+
+function renderReportHtml(name: string, data: ReportsData, advanced: AdvancedHiringAnalytics | null) {
+  const { summary, range } = data;
+  const scope = `${range.label} · as of ${data.generatedAt.slice(0, 16).replace("T", " ")} UTC`;
+  const funnelRows = data.funnel
+    .map((stage) => `<tr><td>${escapeHtml(stage.name)}</td><td>${stage.count}</td><td>${formatPct(stage.pct)}</td></tr>`)
+    .join("");
+  const slaRows = advanced?.stageSla
+    .map((row) => `<tr><td>${escapeHtml(row.stage)}</td><td>${row.transitions}</td><td>${row.averageDays == null ? "—" : `${row.averageDays}d`}</td><td>${row.breached}</td></tr>`)
+    .join("") ?? "";
+  return `<h1>${escapeHtml(name)}</h1>`
+    + `<p>${escapeHtml(scope)}</p>`
+    + `<p>Applications received: <strong>${summary.applications}</strong></p>`
+    + `<p>Hires: <strong>${summary.hires}</strong></p>`
+    + `<p>Average time to hire: <strong>${formatDays(summary.avgTimeToHireDays)}</strong></p>`
+    + `<p>Offer acceptance: <strong>${formatPct(summary.offerAcceptRate)}</strong></p>`
+    + `<h2>Funnel (applications received in range)</h2><table><tr><th>Stage</th><th>Reached</th><th>Share</th></tr>${funnelRows}</table>`
+    + (advanced ? `<h2>Stage SLA</h2><table><tr><th>Stage</th><th>Transitions</th><th>Average</th><th>Breached</th></tr>${slaRows}</table>` : "");
 }

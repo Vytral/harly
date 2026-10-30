@@ -5,8 +5,17 @@ import { OAuth2Client } from "google-auth-library";
 
 import { db, workspaceSettings } from "@harly/db";
 
+import {
+  CREDENTIALS_UNREADABLE_MESSAGE,
+  classifyIntegrationError,
+  safeErrorFields,
+} from "@/features/integrations/health/model";
+import { recordIntegrationFailure } from "@/features/integrations/health/repository";
 import { decryptSecret, isEncryptionConfigured } from "@/lib/crypto";
+import { createLogger } from "@/lib/logger";
 import { getHarlyPublicOrigin } from "@/lib/public-origin";
+
+const log = createLogger("gcal-config");
 
 export type WorkspaceGCalStatus = {
   enabled: boolean;
@@ -22,20 +31,46 @@ export type GCalConfig = {
   calendarId: string;
 };
 
-/** Mark a revoked OAuth connection unusable without touching the account label. */
+/**
+ * Google rejected the stored refresh token. Clear the dead token, keep the
+ * enabled intent and account details, and record why. The health row is what
+ * lets the UI offer "Reconnect Google Calendar" with the reason.
+ */
 export async function invalidateWorkspaceGCalConnection(
   workspaceId: string,
+  error: unknown,
 ): Promise<void> {
-  await db
-    .update(workspaceSettings)
-    .set({
-      gcalEnabled: false,
-      gcalRefreshTokenCiphertext: null,
-      gcalRefreshTokenIv: null,
-      gcalRefreshTokenTag: null,
-      updatedAt: new Date(),
-    })
-    .where(eq(workspaceSettings.organizationId, workspaceId));
+  try {
+    await db
+      .update(workspaceSettings)
+      .set({
+        gcalRefreshTokenCiphertext: null,
+        gcalRefreshTokenIv: null,
+        gcalRefreshTokenTag: null,
+        updatedAt: new Date(),
+      })
+      .where(eq(workspaceSettings.organizationId, workspaceId));
+  } catch (clearError) {
+    log.error({ err: safeErrorFields(clearError) }, "Failed to clear revoked Google Calendar token");
+  }
+  await recordIntegrationFailure(workspaceId, "gcal", error, { kind: "auth" });
+}
+
+/**
+ * Record a failed Google Calendar call. A revoked grant clears the dead token
+ * and records `needs_reconnect`; anything else is classified and counted.
+ * Returns true when the failure was an auth failure.
+ */
+export async function recordGCalCallFailure(
+  workspaceId: string,
+  error: unknown,
+): Promise<boolean> {
+  if (classifyIntegrationError("gcal", error).kind === "auth") {
+    await invalidateWorkspaceGCalConnection(workspaceId, error);
+    return true;
+  }
+  await recordIntegrationFailure(workspaceId, "gcal", error);
+  return false;
 }
 
 function getGoogleCredentials(): {
@@ -87,8 +122,6 @@ export async function getWorkspaceGCalStatus(
 export async function getWorkspaceGCalConfig(
   workspaceId: string,
 ): Promise<GCalConfig | null> {
-  if (!isEncryptionConfigured()) return null;
-
   const creds = getGoogleCredentials();
   if (!creds) return null;
 
@@ -108,31 +141,54 @@ export async function getWorkspaceGCalConfig(
   if (
     !row ||
     !row.gcalEnabled ||
-    !row.gcalRefreshTokenCiphertext ||
-    !row.gcalRefreshTokenIv ||
-    !row.gcalRefreshTokenTag
+    !row.gcalRefreshTokenCiphertext
   ) {
     return null;
   }
 
+  // A stored token that cannot be decrypted (for example after the encryption
+  // key changed) is an error with its own reason. Reconnecting cannot fix it.
+  const refreshToken = openRefreshToken(row);
+  if (!refreshToken) {
+    await recordIntegrationFailure(workspaceId, "gcal", CREDENTIALS_UNREADABLE_MESSAGE, {
+      kind: "other",
+      forceState: "error",
+    });
+    return null;
+  }
+
+  const oauth2Client = new OAuth2Client(
+    creds.clientId,
+    creds.clientSecret,
+    getRedirectUri(),
+  );
+  oauth2Client.setCredentials({ refresh_token: refreshToken });
+
+  return {
+    oauth2Client,
+    calendarId: row.gcalCalendarId ?? "primary",
+  };
+}
+
+function openRefreshToken(row: {
+  gcalRefreshTokenCiphertext: string | null;
+  gcalRefreshTokenIv: string | null;
+  gcalRefreshTokenTag: string | null;
+}): string | null {
+  if (
+    !row.gcalRefreshTokenCiphertext ||
+    !row.gcalRefreshTokenIv ||
+    !row.gcalRefreshTokenTag ||
+    !isEncryptionConfigured()
+  ) {
+    return null;
+  }
   try {
-    const refreshToken = decryptSecret({
+    return decryptSecret({
       ciphertext: row.gcalRefreshTokenCiphertext,
       iv: row.gcalRefreshTokenIv,
       tag: row.gcalRefreshTokenTag,
     });
-
-    const oauth2Client = new OAuth2Client(
-      creds.clientId,
-      creds.clientSecret,
-      getRedirectUri(),
-    );
-    oauth2Client.setCredentials({ refresh_token: refreshToken });
-
-    return {
-      oauth2Client,
-      calendarId: row.gcalCalendarId ?? "primary",
-    };
   } catch {
     return null;
   }

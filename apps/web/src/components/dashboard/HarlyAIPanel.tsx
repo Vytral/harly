@@ -20,6 +20,7 @@ import {
 } from "lucide-react";
 
 import { cn } from "@/lib/utils";
+import { useMotionSafe } from "@/lib/motion";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { HarlyAILogoMark } from "@/components/ui/icons/HarlyAILogoMark";
@@ -441,13 +442,16 @@ function Row({
   children: React.ReactNode;
   onClick?: () => void;
 }) {
+  // Under reduced motion the stagger is removed: a delayed row would stay
+  // hidden (fill-mode both) for up to 320ms, and that is motion the user opted out of.
+  const { reduce } = useMotionSafe();
   return (
     <div
       className={cn(
         "flex items-center gap-2.5 rounded-lg px-2 py-1.5 duration-300 animate-in fade-in slide-in-from-bottom-1 fill-mode-both",
         onClick && "cursor-pointer transition-colors hover:bg-accent/60",
       )}
-      style={{ animationDelay: `${Math.min(i, 8) * 40}ms` }}
+      style={reduce ? undefined : { animationDelay: `${Math.min(i, 8) * 40}ms` }}
       onClick={onClick}
     >
       {children}

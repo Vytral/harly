@@ -1,5 +1,6 @@
 import "server-only";
 
+import { applicationReceivedEmailDedupeKey } from "@/lib/email/dedupe-keys";
 import { enqueueEmailOutbox, processEmailOutbox } from "@/lib/email/outbox-processor";
 import type { PublicApplicationResult } from "@/features/applications/data";
 
@@ -27,7 +28,7 @@ export async function sendApplicationReceivedEmails(
       workspaceSlug: email.workspaceSlug,
       applicationId: email.applicationId,
       portalEnabled: email.portalEnabled,
-    }),
+    }, applicationReceivedEmailDedupeKey({ applicationId: email.applicationId, recipient: "candidate" })),
   ];
 
   for (const ownerEmail of email.ownerEmails) {
@@ -37,7 +38,11 @@ export async function sendApplicationReceivedEmails(
         candidateName: email.candidateName,
         candidateEmail: email.candidateEmail,
         jobTitle: email.jobTitle,
-      }),
+      }, applicationReceivedEmailDedupeKey({
+        applicationId: email.applicationId,
+        recipient: "recruiter",
+        recipientEmail: ownerEmail,
+      })),
     );
   }
 

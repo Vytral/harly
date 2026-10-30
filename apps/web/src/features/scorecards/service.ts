@@ -8,11 +8,12 @@ import {
   candidates,
   db,
   jobs,
-  jobStages,
   member,
   scorecards,
   type Scorecard,
 } from "@harly/db";
+
+import { findActiveJobStage } from "./stage";
 
 /** Workspace-scoped scorecard service for REST API. Never reads session state. */
 
@@ -172,41 +173,20 @@ export async function createScorecardForApi(input: {
     throw ApiError.unprocessable("A stage requires an application.");
   }
 
-  let stage:
-    | { id: string; name: string }
-    | undefined;
-  if (input.values.stageId) {
-    const [row] = await db
-      .select({ id: jobStages.id, name: jobStages.name })
-      .from(jobStages)
-      .where(
-        and(
-          eq(jobStages.workspaceId, input.workspaceId),
-          eq(jobStages.id, input.values.stageId),
-          eq(jobStages.jobId, application!.jobId),
-        ),
-      )
-      .limit(1);
-    if (!row) {
-      throw ApiError.unprocessable("Stage does not belong to the application job.");
+  let stage: { id: string; name: string } | undefined;
+  if (input.values.stageId || input.values.stageName) {
+    const resolved = await findActiveJobStage(db, {
+      workspaceId: input.workspaceId,
+      jobId: application!.jobId,
+      stageId: input.values.stageId,
+      stageName: input.values.stageName,
+    });
+    if (!resolved) {
+      throw ApiError.unprocessable(
+        "Stage is archived or does not belong to the application job.",
+      );
     }
-    stage = row;
-  } else if (input.values.stageName) {
-    const [row] = await db
-      .select({ id: jobStages.id, name: jobStages.name })
-      .from(jobStages)
-      .where(
-        and(
-          eq(jobStages.workspaceId, input.workspaceId),
-          eq(jobStages.jobId, application!.jobId),
-          eq(jobStages.name, input.values.stageName),
-        ),
-      )
-      .limit(1);
-    if (!row) {
-      throw ApiError.unprocessable("Stage does not belong to the application job.");
-    }
-    stage = row;
+    stage = resolved;
   }
 
   if (

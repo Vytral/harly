@@ -2,6 +2,8 @@ import Link from "next/link";
 import type { Route } from "next";
 import type { ComponentType } from "react";
 
+import { AlertTriangle } from "lucide-react";
+
 import {
   ArrowUpRightIcon,
   CheckIcon,
@@ -19,8 +21,19 @@ export type MarketplaceIntegration = {
   logoClassName?: string;
   tileClassName: string;
   href?: string;
-  status: "available" | "connected" | "coming-soon";
+  /**
+   * `attention` = connected but degraded or erroring; `reconnect` = the stored
+   * credential is dead and the user must reconnect.
+   */
+  status: "available" | "connected" | "attention" | "reconnect" | "coming-soon";
   actionLabel?: string;
+};
+
+/** Short state text shown on a marketplace row, next to the name. */
+const ROW_STATE_LABEL: Partial<Record<MarketplaceIntegration["status"], string>> = {
+  connected: "Connected",
+  attention: "Needs attention",
+  reconnect: "Reconnect required",
 };
 
 export type MarketplaceGroup = {
@@ -39,16 +52,21 @@ function RowIndicator({ integration }: { integration: MarketplaceIntegration }) 
   }
 
   const connected = integration.status === "connected";
+  const issue =
+    integration.status === "attention" || integration.status === "reconnect";
 
   return (
     <span
       className={cn(
         "flex size-8 shrink-0 items-center justify-center rounded-lg text-muted-foreground transition-colors group-hover:bg-accent group-hover:text-foreground",
         connected && "text-pine group-hover:text-pine",
+        issue && "text-clay group-hover:text-clay",
       )}
     >
       {connected ? (
         <CheckIcon className="size-4" />
+      ) : issue ? (
+        <AlertTriangle className="size-4" aria-hidden="true" />
       ) : integration.actionLabel === "Import" ? (
         <ArrowUpRightIcon className="size-4" />
       ) : (
@@ -83,9 +101,14 @@ function IntegrationRow({
           <span className="truncate text-sm font-medium text-foreground">
             {integration.name}
           </span>
-          {connected ? (
-            <span className="shrink-0 text-[11px] font-medium text-pine">
-              Connected
+          {ROW_STATE_LABEL[integration.status] ? (
+            <span
+              className={cn(
+                "shrink-0 text-[11px] font-medium",
+                connected ? "text-pine" : "text-clay",
+              )}
+            >
+              {ROW_STATE_LABEL[integration.status]}
             </span>
           ) : null}
         </span>

@@ -10,6 +10,7 @@ import {
   jsonb,
   pgEnum,
   pgTable,
+  primaryKey,
   text,
   timestamp,
   unique,
@@ -59,6 +60,24 @@ export const applicationStatusEnum = pgEnum("application_status", [
   "hired",
   "rejected",
   "withdrawn",
+]);
+
+/**
+ * Semantic meaning of a pipeline stage, independent of its display name.
+ * `custom` is an active, non-terminal stage with no special behavior.
+ * `hired`, `rejected` and `withdrawn` are terminal and drive application
+ * status. A NULL kind on a row means "written by a pre-0.3.0 build"; readers
+ * must fall back to inferring the kind from the stage name.
+ */
+export const jobStageKindEnum = pgEnum("job_stage_kind", [
+  "applied",
+  "screening",
+  "interview",
+  "offer",
+  "hired",
+  "rejected",
+  "withdrawn",
+  "custom",
 ]);
 
 export const activityEntityTypeEnum = pgEnum("activity_entity_type", [
@@ -635,6 +654,13 @@ export const workspaceSettings = pgTable("workspace_settings", {
   // When true, product emails omit the "Powered by Harly" footer credit and
   // system emails (invites, welcome) show the workspace name instead of Harly.
   hideHarlyBranding: boolean("hide_harly_branding").default(false).notNull(),
+  // Show Gravatar profile pictures for candidates without an uploaded photo.
+  // Off by default: enabling it sends a hash of each candidate's email address
+  // to gravatar.com, so only a workspace admin can turn it on.
+  gravatarEnabled: boolean("gravatar_enabled").default(false).notNull(),
+  // IANA time zone (e.g. "America/Los_Angeles") that day and month buckets in
+  // hiring reports and the dashboard are computed in. NULL means UTC.
+  timezone: text("timezone"),
   // AI provider config (bring-your-own-key). The API key is encrypted at rest
   // (AES-256-GCM) — never stored or returned in plaintext.
   aiEnabled: boolean("ai_enabled").default(false).notNull(),
@@ -1021,6 +1047,44 @@ export const slackDeliveries = pgTable(
   ],
 );
 
+/**
+ * Per-workspace health of each external integration, written from real call
+ * sites (token refresh, sync API calls, deliveries, explicit connection tests).
+ * One row per (workspace, integration). `last_error` is sanitized before it is
+ * stored and never contains tokens, secrets or URL query strings.
+ */
+export const integrationHealth = pgTable(
+  "integration_health",
+  {
+    workspaceId: text("workspace_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    integration: text("integration").notNull(),
+    // connected | degraded | needs_reconnect | error | not_connected
+    state: text("state").default("connected").notNull(),
+    lastOkAt: timestamp("last_ok_at", { withTimezone: true }),
+    lastErrorAt: timestamp("last_error_at", { withTimezone: true }),
+    lastError: text("last_error"),
+    consecutiveFailures: integer("consecutive_failures").default(0).notNull(),
+    ...timestamps(),
+  },
+  (table) => [
+    primaryKey({
+      name: "integration_health_pk",
+      columns: [table.workspaceId, table.integration],
+    }),
+    check(
+      "integration_health_state_check",
+      sql`${table.state} in ('connected', 'degraded', 'needs_reconnect', 'error', 'not_connected')`,
+    ),
+    check(
+      "integration_health_last_error_length_check",
+      sql`char_length(${table.lastError}) <= 300`,
+    ),
+    index("integration_health_attention_idx").on(table.workspaceId, table.state),
+  ],
+);
+
 export const slackDeliveryAttempts = pgTable(
   "slack_delivery_attempts",
   {
@@ -1388,14 +1452,24 @@ export const jobStages = pgTable(
     name: text("name").notNull(),
     color: text("color"),
     order: integer("order").notNull(),
+    kind: jobStageKindEnum("kind"),
+    /**
+     * Retired stages keep their history and past applications but are hidden
+     * from boards and pickers and free their name and position.
+     */
+    archivedAt: timestamp("archived_at", { withTimezone: true }),
     emailConfig: jsonb("email_config")
       .default(sql`'{"candidateUpdatesEnabled":true}'::jsonb`)
       .notNull(),
     ...timestamps(),
   },
   (table) => [
-    uniqueIndex("job_stages_job_order_idx").on(table.jobId, table.order),
-    uniqueIndex("job_stages_job_name_idx").on(table.jobId, table.name),
+    uniqueIndex("job_stages_job_order_idx")
+      .on(table.jobId, table.order)
+      .where(sql`${table.archivedAt} is null`),
+    uniqueIndex("job_stages_job_name_idx")
+      .on(table.jobId, table.name)
+      .where(sql`${table.archivedAt} is null`),
     index("job_stages_workspace_idx").on(table.workspaceId),
     index("job_stages_job_idx").on(table.jobId),
   ],
@@ -2859,7 +2933,9 @@ export const emailOutbox = pgTable(
   ],
 );
 
-/** Operational history only: no job payloads and no raw errors. */
+/** Operational history only: no job payloads. `status` is one of
+ * `succeeded | failed | skipped`; `error` holds a short, sanitized message for
+ * failed runs (legacy rows may carry `success` and a null error). */
 export const cronRuns = pgTable(
   "cron_runs",
   {
@@ -2871,6 +2947,7 @@ export const cronRuns = pgTable(
     counters: jsonb("counters")
       .default(sql`'{}'::jsonb`)
       .notNull(),
+    error: text("error"),
     createdAt: timestamp("created_at", { withTimezone: true })
       .defaultNow()
       .notNull(),
@@ -5801,6 +5878,62 @@ export const workflowActionEffects = pgTable(
       table.status,
     ),
   ],
+);
+
+/**
+ * Rows created by "Load sample data", one row per tracked entity. Removal
+ * deletes exactly these rows, in foreign-key order, and nothing else. There is
+ * no foreign key on entity_id because it points at several tables.
+ */
+export const sampleDataItems = pgTable(
+  "sample_data_items",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    workspaceId: text("workspace_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    entityType: text("entity_type").notNull(),
+    entityId: uuid("entity_id").notNull(),
+    batchId: uuid("batch_id").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [
+    uniqueIndex("sample_data_items_entity_uidx").on(
+      table.workspaceId,
+      table.entityType,
+      table.entityId,
+    ),
+    index("sample_data_items_workspace_batch_idx").on(
+      table.workspaceId,
+      table.batchId,
+    ),
+  ],
+);
+
+/**
+ * A member's getting-started checklist state in one workspace. A missing row
+ * means the defaults (not dismissed, nothing skipped). Completion is never
+ * stored here; it is derived from real workspace data.
+ */
+export const setupChecklistStates = pgTable(
+  "setup_checklist_states",
+  {
+    workspaceId: text("workspace_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    dismissedAt: timestamp("dismissed_at", { withTimezone: true }),
+    skippedKeys: jsonb("skipped_keys")
+      .$type<string[]>()
+      .default(sql`'[]'::jsonb`)
+      .notNull(),
+    ...timestamps(),
+  },
+  (table) => [primaryKey({ columns: [table.workspaceId, table.userId] })],
 );
 
 /**

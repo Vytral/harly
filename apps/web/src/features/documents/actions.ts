@@ -4,6 +4,8 @@ import { revalidatePath } from "next/cache";
 import { and, desc, eq, exists, inArray, isNull } from "drizzle-orm";
 import { z } from "zod";
 
+import { ApiError } from "@harly/api";
+
 import {
   activityEvents,
   applications,
@@ -25,10 +27,10 @@ import {
   signatureRecipients,
 } from "@harly/db";
 
-import { getDocumentAccessForUser } from "./access";
+import { associationTargetsInScope, resolveDocumentAccessInScope } from "./scope-access";
 import { slugifyDocumentCategory } from "./shared";
 import { verifyUploadedDocument as verifyUploadedDocumentShared } from "./verify";
-import { requirePermission } from "@/features/workspaces/permissions-server";
+import { requireOwnerOrAdmin, requirePermission } from "@/features/workspaces/permissions-server";
 import { isExternallyManagedSignatureProvider } from "@/lib/esign/signature-state";
 import { sendDocumentForEnvelope } from "@/lib/esign/document-signing";
 import { archiveSubmission, freshEsignContext } from "@/lib/esign/client";
@@ -210,6 +212,13 @@ export async function createDocument(input: {
   });
   if ("error" in checked) return { ok: false, error: checked.error };
   if (!await targetBelongsToWorkspace(context.organization.id, parsedAssociation.data)) return { ok: false, error: "The selected association was not found." };
+  // Judged by the same scope rule the document lists use. An out-of-scope target
+  // gets the same message as a missing one, so the caller learns nothing new.
+  const inScope = await associationTargetsInScope(
+    { workspaceId: context.organization.id, userId: context.user.id, roleKey: context.roleKey },
+    [parsedAssociation.data],
+  );
+  if (!inScope) return { ok: false, error: "The selected association was not found." };
   if (input.categoryId) {
     const [category] = await db.select({ id: documentCategories.id }).from(documentCategories).where(and(eq(documentCategories.id, input.categoryId), eq(documentCategories.workspaceId, context.organization.id), eq(documentCategories.active, true))).limit(1);
     if (!category) return { ok: false, error: "Category not found." };
@@ -263,7 +272,7 @@ export async function renameDocument(input: { documentId: string; name: string }
   const { context } = permission;
   const parsed = documentIdSchema.extend({ name: z.string().trim().min(1).max(255) }).safeParse(input);
   if (!parsed.success) return { ok: false, error: "Document name is invalid." };
-  const access = await getDocumentAccessForUser({ documentId: input.documentId, workspaceId: context.organization.id, userId: context.user.id, roleKey: context.roleKey });
+  const access = await resolveDocumentAccessInScope({ documentId: input.documentId, workspaceId: context.organization.id, userId: context.user.id, roleKey: context.roleKey });
   if (!access || access.level !== "manage") return { ok: false, error: "You cannot edit this document." };
   const archivedError = archivedDocumentError(access.document);
   if (archivedError) return { ok: false, error: archivedError };
@@ -281,7 +290,7 @@ export async function setDocumentStatus(input: { documentId: string; status: "ac
   const { context } = permission;
   const parsed = documentIdSchema.extend({ status: z.enum(["active", "archived"]) }).safeParse(input);
   if (!parsed.success) return { ok: false, error: "Invalid document status." };
-  const access = await getDocumentAccessForUser({ documentId: input.documentId, workspaceId: context.organization.id, userId: context.user.id, roleKey: context.roleKey });
+  const access = await resolveDocumentAccessInScope({ documentId: input.documentId, workspaceId: context.organization.id, userId: context.user.id, roleKey: context.roleKey });
   if (!access || access.level !== "manage") return { ok: false, error: "You cannot edit this document." };
   if (parsed.data.status === "archived") {
     const [activeHold] = await db
@@ -310,17 +319,27 @@ export async function setDocumentStatus(input: { documentId: string; status: "ac
   return { ok: true };
 }
 
+/** Owner/admin gate for document actions: a denial becomes an action result. */
+async function requireOwnerOrAdminResult(message: string): Promise<DocumentActionResult | null> {
+  try {
+    await requireOwnerOrAdmin(message);
+    return null;
+  } catch (error) {
+    if (error instanceof ApiError) return { ok: false, error: error.message };
+    throw error;
+  }
+}
+
 /** Permanently remove a document and every stored derivative. Owner/admin only. */
 export async function deleteDocument(input: { documentId: string }): Promise<DocumentActionResult> {
   const permission = await documentContext("documents:manage");
   if (permission.error) return { ok: false, error: permission.error };
+  const denied = await requireOwnerOrAdminResult("Only workspace owners and admins can delete documents.");
+  if (denied) return denied;
   const { context } = permission;
-  if (context.roleKey !== "owner" && context.roleKey !== "admin") {
-    return { ok: false, error: "Only workspace owners and admins can delete documents." };
-  }
   const parsed = documentIdSchema.safeParse(input);
   if (!parsed.success) return { ok: false, error: "Invalid document." };
-  const access = await getDocumentAccessForUser({
+  const access = await resolveDocumentAccessInScope({
     documentId: input.documentId,
     workspaceId: context.organization.id,
     userId: context.user.id,
@@ -399,7 +418,7 @@ export async function placeDocumentLegalHold(input: {
     })
     .safeParse(input);
   if (!parsed.success) return { ok: false, error: "Enter a reason for the legal hold." };
-  const access = await getDocumentAccessForUser({
+  const access = await resolveDocumentAccessInScope({
     documentId: input.documentId,
     workspaceId: context.organization.id,
     userId: context.user.id,
@@ -458,7 +477,7 @@ export async function releaseDocumentLegalHold(input: {
     )
     .limit(1);
   if (!hold) return { ok: false, error: "Active legal hold not found." };
-  const access = await getDocumentAccessForUser({
+  const access = await resolveDocumentAccessInScope({
     documentId: hold.documentId,
     workspaceId: context.organization.id,
     userId: context.user.id,
@@ -501,7 +520,7 @@ export async function setDocumentCategory(input: { documentId: string; categoryI
   const { context } = permission;
   const parsed = documentIdSchema.extend({ categoryId: z.uuid().nullable() }).safeParse(input);
   if (!parsed.success) return { ok: false, error: "Invalid category." };
-  const access = await getDocumentAccessForUser({ documentId: input.documentId, workspaceId: context.organization.id, userId: context.user.id, roleKey: context.roleKey });
+  const access = await resolveDocumentAccessInScope({ documentId: input.documentId, workspaceId: context.organization.id, userId: context.user.id, roleKey: context.roleKey });
   if (!access || access.level !== "manage") return { ok: false, error: "You cannot edit this document." };
   const archivedError = archivedDocumentError(access.document);
   if (archivedError) return { ok: false, error: archivedError };
@@ -521,7 +540,7 @@ export async function createDocumentVersion(input: { documentId: string; origina
   const permission = await documentContext("documents:manage");
   if (permission.error) return { ok: false, error: permission.error };
   const { context } = permission;
-  const access = await getDocumentAccessForUser({ documentId: input.documentId, workspaceId: context.organization.id, userId: context.user.id, roleKey: context.roleKey });
+  const access = await resolveDocumentAccessInScope({ documentId: input.documentId, workspaceId: context.organization.id, userId: context.user.id, roleKey: context.roleKey });
   if (!access || access.level !== "manage") return { ok: false, error: "You cannot edit this document." };
   const archivedError = archivedDocumentError(access.document);
   if (archivedError) return { ok: false, error: archivedError };
@@ -546,7 +565,7 @@ export async function saveDocumentAcl(input: { documentId: string; roles: Array<
   const { context } = permission;
   const parsed = documentIdSchema.extend({ roles: z.array(z.object({ roleKey: z.string().trim().min(1).max(80), accessLevel: accessLevelSchema })), members: z.array(z.object({ userId: z.string().min(1), accessLevel: accessLevelSchema })) }).safeParse(input);
   if (!parsed.success) return { ok: false, error: "Invalid access rules." };
-  const access = await getDocumentAccessForUser({ documentId: input.documentId, workspaceId: context.organization.id, userId: context.user.id, roleKey: context.roleKey });
+  const access = await resolveDocumentAccessInScope({ documentId: input.documentId, workspaceId: context.organization.id, userId: context.user.id, roleKey: context.roleKey });
   if (!access || access.level !== "manage") return { ok: false, error: "You cannot share this document." };
   const archivedError = archivedDocumentError(access.document);
   if (archivedError) return { ok: false, error: archivedError };
@@ -572,7 +591,7 @@ export async function assignDocument(input: { documentId: string; userId: string
   const { context } = permission;
   const parsed = documentIdSchema.extend({ userId: z.string().min(1).nullable(), assignmentType: z.enum(["owner", "reviewer"]) }).safeParse(input);
   if (!parsed.success) return { ok: false, error: "Invalid assignment." };
-  const access = await getDocumentAccessForUser({ documentId: input.documentId, workspaceId: context.organization.id, userId: context.user.id, roleKey: context.roleKey });
+  const access = await resolveDocumentAccessInScope({ documentId: input.documentId, workspaceId: context.organization.id, userId: context.user.id, roleKey: context.roleKey });
   if (!access || access.level !== "manage") return { ok: false, error: "You cannot assign this document." };
   const archivedError = archivedDocumentError(access.document);
   if (archivedError) return { ok: false, error: archivedError };
@@ -595,7 +614,7 @@ export async function saveDocumentSignature(input: { documentId: string; status:
   const { context } = permission;
   const parsed = documentIdSchema.extend({ status: z.enum(["unsigned", "pending", "signed", "declined", "expired"]), provider: z.string().max(80).nullable().optional(), envelopeId: z.string().max(255).nullable().optional(), url: z.url().nullable().optional(), expiresAt: z.iso.datetime().nullable().optional(), attestationNote: z.string().trim().max(2000).nullable().optional() }).safeParse(input);
   if (!parsed.success) return { ok: false, error: "Invalid signature details." };
-  const access = await getDocumentAccessForUser({ documentId: input.documentId, workspaceId: context.organization.id, userId: context.user.id, roleKey: context.roleKey });
+  const access = await resolveDocumentAccessInScope({ documentId: input.documentId, workspaceId: context.organization.id, userId: context.user.id, roleKey: context.roleKey });
   if (!access || access.level !== "manage") return { ok: false, error: "You cannot update this document." };
   const archivedError = archivedDocumentError(access.document);
   if (archivedError) return { ok: false, error: archivedError };
@@ -656,7 +675,7 @@ export async function setDocumentExpiresAt(input: { documentId: string; expiresA
   const { context } = permission;
   const parsed = documentIdSchema.extend({ expiresAt: z.iso.date().nullable() }).safeParse(input);
   if (!parsed.success) return { ok: false, error: "Enter a valid date." };
-  const access = await getDocumentAccessForUser({ documentId: input.documentId, workspaceId: context.organization.id, userId: context.user.id, roleKey: context.roleKey });
+  const access = await resolveDocumentAccessInScope({ documentId: input.documentId, workspaceId: context.organization.id, userId: context.user.id, roleKey: context.roleKey });
   if (!access || access.level !== "manage") return { ok: false, error: "You cannot edit this document." };
   const archivedError = archivedDocumentError(access.document);
   if (archivedError) return { ok: false, error: archivedError };
@@ -721,7 +740,7 @@ export async function sendDocumentForSignature(input: {
   const { context } = permission;
   const parsed = sendSignatureSchema.safeParse(input);
   if (!parsed.success) return { ok: false, error: "Enter a valid recipient email, name, and subject." };
-  const access = await getDocumentAccessForUser({
+  const access = await resolveDocumentAccessInScope({
     documentId: input.documentId,
     workspaceId: context.organization.id,
     userId: context.user.id,
@@ -761,7 +780,7 @@ export async function voidDocumentSignature(input: {
     .object({ documentId: z.uuid(), reason: z.string().trim().min(3).max(400) })
     .safeParse(input);
   if (!parsed.success) return { ok: false, error: "Enter a short reason for voiding the request." };
-  const access = await getDocumentAccessForUser({
+  const access = await resolveDocumentAccessInScope({
     documentId: input.documentId,
     workspaceId: context.organization.id,
     userId: context.user.id,
@@ -947,7 +966,7 @@ async function resolveManageableIds(
 ): Promise<string[]> {
   const accessible: string[] = [];
   for (const documentId of documentIds) {
-    const access = await getDocumentAccessForUser({ documentId, workspaceId, userId, roleKey });
+    const access = await resolveDocumentAccessInScope({ documentId, workspaceId, userId, roleKey });
     if (access?.level === "manage" && (!activeOnly || access.document.status === "active")) accessible.push(documentId);
   }
   return accessible;
@@ -1029,10 +1048,9 @@ export async function bulkSetDocumentCategory(input: {
 export async function bulkDeleteDocuments(input: { documentIds: string[] }): Promise<DocumentActionResult> {
   const permission = await documentContext("documents:manage");
   if (permission.error) return { ok: false, error: permission.error };
+  const denied = await requireOwnerOrAdminResult("Only workspace owners and admins can delete documents.");
+  if (denied) return denied;
   const { context } = permission;
-  if (context.roleKey !== "owner" && context.roleKey !== "admin") {
-    return { ok: false, error: "Only workspace owners and admins can delete documents." };
-  }
   const parsed = bulkIdsSchema.safeParse(input);
   if (!parsed.success) return { ok: false, error: "Invalid bulk delete request." };
 
@@ -1055,7 +1073,7 @@ export async function bulkDeleteDocuments(input: { documentIds: string[] }): Pro
       skippedPending += 1;
       continue;
     }
-    const access = await getDocumentAccessForUser({ documentId: doc.id, workspaceId: context.organization.id, userId: context.user.id, roleKey: context.roleKey });
+    const access = await resolveDocumentAccessInScope({ documentId: doc.id, workspaceId: context.organization.id, userId: context.user.id, roleKey: context.roleKey });
     if (access?.level === "manage") deletable.push(doc);
   }
   if (deletable.length === 0) {

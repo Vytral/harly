@@ -2,9 +2,11 @@ import { mkdir, writeFile, rm } from "node:fs/promises";
 import path from "node:path";
 
 import { eq } from "drizzle-orm";
+import type postgres from "postgres";
 
 import { createDatabaseClient, schema } from "./index";
 import { buildResumeLines, linesToPdf } from "./fake-resumes";
+import { DEFAULT_PIPELINE_STAGES, defaultStageRows } from "./stage-kind";
 
 type SeedClient = ReturnType<typeof createDatabaseClient>;
 
@@ -202,16 +204,7 @@ function resolveUploadsRoot(explicit?: string): string {
     : path.resolve(process.cwd(), "uploads");
 }
 
-const DEFAULT_STAGES = [
-  { name: "Applied", color: "#E0F2FE" },
-  { name: "Screening", color: "#F5F3FF" },
-  { name: "Interview", color: "#FEF3C7" },
-  { name: "Offer", color: "#DCFCE7" },
-  { name: "Hired", color: "#CCFBF1" },
-  { name: "Rejected", color: "#FEE2E2" },
-];
-
-type StageName = (typeof DEFAULT_STAGES)[number]["name"];
+type StageName = (typeof DEFAULT_PIPELINE_STAGES)[number]["name"];
 
 // Demo teammates — real `user` + `member` rows (no auth) so the dashboard can
 // show ownership, interviewers and a live team-activity feed.
@@ -598,6 +591,166 @@ export type SeedDemoOptions = {
  * open or close the DB connection; the caller owns its lifecycle.
  */
 
+/**
+ * Above this many candidates + jobs + applications, a workspace is treated as
+ * real data unless it is pinned as the demo template with DEMO_WORKSPACE_ID.
+ */
+export const UNPINNED_WIPE_RECORD_LIMIT = 25;
+
+/**
+ * Workspace-scoped tables whose rows are configuration or bookkeeping rather
+ * than records: workspace settings, custom roles and document access roles,
+ * pipeline stage definitions, per-member checklist state and sample-data
+ * tracking. The wipe guard does not count them, so a workspace that only holds
+ * configuration can be reseeded, while every other table counts as a record.
+ * Members, invitations and sessions are not workspace_id tables and never count.
+ */
+export const WIPE_GUARD_STRUCTURAL_TABLES = [
+  "workspace_settings",
+  "workspace_automation_policies",
+  "custom_roles",
+  "document_access_roles",
+  "job_stages",
+  "setup_checklist_states",
+  "sample_data_items",
+] as const;
+
+/**
+ * Records a workspace holds, for the wipe guard: the rows of every
+ * workspace-scoped table except the structural ones.
+ */
+export function countWipeGuardRecords(
+  rowCounts: ReadonlyArray<{ table: string; rows: number }>,
+): number {
+  const structural = new Set<string>(WIPE_GUARD_STRUCTURAL_TABLES);
+  return rowCounts
+    .filter((entry) => !structural.has(entry.table))
+    .reduce((total, entry) => total + entry.rows, 0);
+}
+
+export type SeedWipeGuardInput = {
+  workspaceId: string;
+  workspaceSlug: string;
+  workspaceName: string;
+  /** Value of SEED_CONFIRM_WIPE or --confirm-wipe, if the operator gave one. */
+  confirmation: string | null | undefined;
+  /** DEMO_WORKSPACE_ID, when the operator pinned the demo template. */
+  pinnedWorkspaceId: string | null;
+  /** Records in the workspace, as counted by countWipeGuardRecords. */
+  realRecordCount: number;
+};
+
+export type SeedWipeGuardDecision =
+  | { allowed: true }
+  | {
+      allowed: false;
+      reason:
+        | "missing_confirmation"
+        | "confirmation_mismatch"
+        | "pin_mismatch"
+        | "unpinned_workspace_has_records";
+      message: string;
+    };
+
+/**
+ * Decide whether the CLI may wipe a workspace. Pure so the rules are testable:
+ * the operator must type the workspace slug (a typo or a copied command for
+ * another install must not wipe the wrong data), and a workspace with real
+ * records needs an explicit pin to the demo template.
+ */
+export function evaluateSeedWipeGuard(input: SeedWipeGuardInput): SeedWipeGuardDecision {
+  const confirmation = input.confirmation?.trim() ?? "";
+  const target = `"${input.workspaceName}" (slug ${input.workspaceSlug}, id ${input.workspaceId})`;
+
+  if (confirmation === "") {
+    return {
+      allowed: false,
+      reason: "missing_confirmation",
+      message: `Refusing to wipe ${target}. Re-run with SEED_CONFIRM_WIPE=${input.workspaceSlug} (or --confirm-wipe=${input.workspaceSlug}) to confirm.`,
+    };
+  }
+
+  if (confirmation !== input.workspaceSlug) {
+    return {
+      allowed: false,
+      reason: "confirmation_mismatch",
+      message: `Refusing to wipe ${target}: the confirmation "${confirmation}" does not match the workspace slug "${input.workspaceSlug}".`,
+    };
+  }
+
+  if (input.pinnedWorkspaceId !== null && input.pinnedWorkspaceId !== input.workspaceId) {
+    return {
+      allowed: false,
+      reason: "pin_mismatch",
+      message: `Refusing to wipe ${target}: DEMO_WORKSPACE_ID pins ${input.pinnedWorkspaceId}, a different workspace.`,
+    };
+  }
+
+  if (input.pinnedWorkspaceId === null && input.realRecordCount > UNPINNED_WIPE_RECORD_LIMIT) {
+    return {
+      allowed: false,
+      reason: "unpinned_workspace_has_records",
+      message: `Refusing to wipe ${target}: it holds ${input.realRecordCount} records outside its settings and stage definitions (limit ${UNPINNED_WIPE_RECORD_LIMIT} without a pin). If this is the demo template, set DEMO_WORKSPACE_ID=${input.workspaceId} and run again.`,
+    };
+  }
+
+  return { allowed: true };
+}
+
+/**
+ * Row counts per workspace-scoped table, for showing the operator exactly what
+ * a wipe would delete. Only non-empty tables are returned.
+ */
+export async function countWorkspaceScopedRows(
+  sql: SeedClient["sql"],
+  workspaceId: string,
+): Promise<Array<{ table: string; rows: number }>> {
+  const scopedTables = await sql<{ table_name: string }[]>`
+    SELECT table_name
+    FROM information_schema.columns
+    WHERE table_schema = 'public' AND column_name = 'workspace_id'
+    ORDER BY table_name
+  `;
+  const counts: Array<{ table: string; rows: number }> = [];
+  for (const { table_name } of scopedTables) {
+    const [row] = await sql<{ n: number }[]>`
+      SELECT count(*)::int AS n FROM ${sql(table_name)} WHERE workspace_id = ${workspaceId}
+    `;
+    if (row && row.n > 0) counts.push({ table: table_name, rows: row.n });
+  }
+  return counts;
+}
+
+/**
+ * Rows that reference a workspace table but carry no workspace_id of their own.
+ * A replica-mode wipe turns foreign-key cascades off, so these would survive the
+ * wipe and point at deleted rows. They are deleted through their parent before
+ * the parent goes. Keep this list in step with the schema.
+ */
+async function deleteWorkspaceOrphanRows(
+  tx: postgres.TransactionSql<{}>,
+  workspaceId: string,
+): Promise<void> {
+  await tx`
+    DELETE FROM ai_conversation_candidates
+    WHERE conversation_id IN (
+      SELECT id FROM ai_conversations WHERE workspace_id = ${workspaceId}
+    )
+  `;
+  await tx`
+    DELETE FROM evaluation_criterion_results
+    WHERE evaluation_id IN (
+      SELECT id FROM ai_evaluations WHERE workspace_id = ${workspaceId}
+    )
+  `;
+  await tx`
+    DELETE FROM evaluation_criteria
+    WHERE rubric_id IN (
+      SELECT id FROM evaluation_rubrics WHERE workspace_id = ${workspaceId}
+    )
+  `;
+}
+
 async function wipeWorkspaceScopedData(input: {
   sql: SeedClient["sql"];
   workspaceId: string;
@@ -612,6 +765,7 @@ async function wipeWorkspaceScopedData(input: {
   `;
   await sql.begin(async (tx) => {
     await tx`SET LOCAL session_replication_role = 'replica'`;
+    await deleteWorkspaceOrphanRows(tx, workspaceId);
     for (const { table_name } of scopedTables) {
       await tx`DELETE FROM ${tx(table_name)} WHERE workspace_id = ${workspaceId}`;
     }
@@ -646,6 +800,7 @@ export async function deleteDemoSandbox(options: {
   `;
   await sql.begin(async (tx) => {
     await tx`SET LOCAL session_replication_role = 'replica'`;
+    await deleteWorkspaceOrphanRows(tx, workspaceId);
     for (const { table_name } of scopedTables) {
       await tx`DELETE FROM ${tx(table_name)} WHERE workspace_id = ${workspaceId}`;
     }
@@ -1010,15 +1165,7 @@ export async function seedDemoWorkspace(options: SeedDemoOptions): Promise<SeedD
 
       const stageRows = await db
         .insert(schema.jobStages)
-        .values(
-          DEFAULT_STAGES.map((stage, index) => ({
-            workspaceId,
-            jobId: created.id,
-            name: stage.name,
-            color: stage.color,
-            order: index + 1,
-          })),
-        )
+        .values(defaultStageRows({ workspaceId, jobId: created.id }))
         .returning({ id: schema.jobStages.id, name: schema.jobStages.name });
 
       const map = new Map<StageName, string>();

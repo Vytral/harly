@@ -171,7 +171,9 @@ export async function getBuilderData(workflowId?: string) {
         jobId: jobStages.jobId,
       })
       .from(jobStages)
-      .where(eq(jobStages.workspaceId, workspaceId))
+      .where(
+        and(eq(jobStages.workspaceId, workspaceId), isNull(jobStages.archivedAt)),
+      )
       .orderBy(asc(jobStages.order), asc(jobStages.name))
       .limit(80),
     db
@@ -646,6 +648,9 @@ export async function searchBuilderOptions(input: {
     .where(
       and(
         jobFilter,
+        // Searching offers only current stages; resolving a saved id must still
+        // find the stage an existing automation points at, archived or not.
+        exactId ? undefined : isNull(jobStages.archivedAt),
         exactId
           ? eq(jobStages.id, exactId)
           : needle

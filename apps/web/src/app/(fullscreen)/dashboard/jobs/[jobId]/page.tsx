@@ -17,10 +17,12 @@ import { JobForm } from "@/features/jobs/JobForm";
 import { JobActionsMenu } from "@/features/jobs/JobActionsMenu";
 import { JobShareButton } from "@/features/jobs/JobShareButton";
 import { JobStatusActions } from "@/features/jobs/JobStatusActions";
+import { StageEditorTrigger } from "@/features/pipeline/stage-editor/StageEditorTrigger";
 import { getWorkspaceAiStatus } from "@/lib/ai/config";
 import { getHarlyPublicOrigin } from "@/lib/public-origin";
 import { countCandidatePool } from "@/features/matching/data";
 import { getWorkspaceContext } from "@/features/workspaces/context";
+import { can, requirePagePermission } from "@/features/workspaces/permissions-server";
 
 export const dynamic = "force-dynamic";
 
@@ -33,22 +35,26 @@ type DashboardJobPageProps = {
 export default async function DashboardJobPage({
   params,
 }: DashboardJobPageProps) {
+  await requirePagePermission("jobs:view");
   const { jobId } = await params;
+  // Resolve the job first. getDashboardJob applies the caller's job scope, so a
+  // job outside it is not found and nothing job-specific (such as its hiring
+  // team) is loaded for it.
+  const result = await getDashboardJob(jobId);
+  if (!result) {
+    notFound();
+  }
   const { organization: workspace } = await getWorkspaceContext();
-  const [result, departments, hiringTeam, workspaceMembers, aiStatus, candidatePoolCount, careerPageData] =
+  const [departments, hiringTeam, workspaceMembers, aiStatus, candidatePoolCount, careerPageData, canEditJobs] =
     await Promise.all([
-      getDashboardJob(jobId),
       listWorkspaceDepartments(),
       listJobHiringTeam(jobId),
       listWorkspaceMembers(),
       getWorkspaceAiStatus(workspace.id),
       countCandidatePool(workspace.id),
       getCareerPageData(workspace.slug),
+      can("jobs:edit"),
     ]);
-
-  if (!result) {
-    notFound();
-  }
 
   const { job } = result;
   const appUrl = getHarlyPublicOrigin();
@@ -87,6 +93,13 @@ export default async function DashboardJobPage({
             slug={job.slug}
           />
           <JobStatusActions job={job} />
+          {canEditJobs ? (
+            <StageEditorTrigger
+              jobId={job.id}
+              jobTitle={job.title}
+              className="w-full justify-start"
+            />
+          ) : null}
         </>
       }
     />

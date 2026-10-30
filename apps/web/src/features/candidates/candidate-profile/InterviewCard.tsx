@@ -35,6 +35,8 @@ import { EditInterviewDialog } from "@/features/candidates/EditInterviewDialog";
 import { EvaluationDrawer } from "@/features/candidates/EvaluationDrawer";
 import type { ScheduleMemberOption } from "@/features/candidates/ScheduleDialog";
 import { setInterviewStatus } from "@/features/interviews/actions";
+import { unshownEmailWarning } from "@/lib/email/delivery-warning";
+
 import { retryInterviewSyncAction } from "@/features/interviews/sync-actions";
 import {
   interviewModeLabel,
@@ -127,6 +129,8 @@ export function InterviewCard({
         status === "completed" ? "Marked complete" : "Interview canceled",
       );
       if (result.warning) toast.warning(result.warning);
+      const emailNote = unshownEmailWarning(result);
+      if (emailNote) toast.warning(emailNote);
       (router as { refresh?: () => void }).refresh?.();
     });
   }

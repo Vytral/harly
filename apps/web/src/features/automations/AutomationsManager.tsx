@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import type { Route } from "next";
 import { toast } from "@/lib/notification-island/toast";
 
@@ -46,8 +47,18 @@ export function AutomationsManager({
   initialWorkflows: SerializedWorkflow[];
   initialApprovals: PendingWorkflowApproval[];
 }) {
+  const searchParams = useSearchParams();
+  const wantsRecipes = searchParams.get("recipes") === "1";
   const [workflows, setWorkflows] = useState(initialWorkflows);
-  const [showTemplates, setShowTemplates] = useState(false);
+  // `?recipes=1` (the onboarding checklist link) opens the recipes picker.
+  const [showTemplates, setShowTemplates] = useState(wantsRecipes);
+  // Re-open when the link is followed while this page is already mounted.
+  // Adjusting state during render avoids an effect that sets state.
+  const [seenWantsRecipes, setSeenWantsRecipes] = useState(wantsRecipes);
+  if (wantsRecipes !== seenWantsRecipes) {
+    setSeenWantsRecipes(wantsRecipes);
+    if (wantsRecipes) setShowTemplates(true);
+  }
   const [pending, startTransition] = useTransition();
   const [pendingDelete, setPendingDelete] = useState<{
     id: string;

@@ -7,6 +7,8 @@ export type SendEmailOptions = {
   replyTo?: string;
   messageId?: string;
   idempotencyKey?: string;
+  /** Extra headers, e.g. `X-Harly-Outbox-Id` for SMTP traceability. */
+  headers?: Record<string, string>;
   attachments?: EmailAttachment[];
 };
 
@@ -17,6 +19,33 @@ export type EmailAttachment = {
 };
 
 export type SendEmailResult = { messageId?: string };
+
+/**
+ * The provider may have accepted the message even though the caller never
+ * heard back (a socket timed out or reset after the message was handed over).
+ * Callers must not resend automatically: the email could arrive twice.
+ */
+export class DeliveryOutcomeUnknownError extends Error {
+  constructor(message: string, options?: { cause?: unknown }) {
+    super(message, options);
+    this.name = "DeliveryOutcomeUnknownError";
+  }
+}
+
+const AMBIGUOUS_SMTP_CODES = new Set(["ETIMEDOUT", "ECONNRESET", "ESOCKET", "EPIPE", "ECONNECTION"]);
+
+/**
+ * True when an SMTP failure may have happened after the message was handed
+ * over. A server reply with a response code is definitive (the message was
+ * rejected), and so is a connection that was refused before anything was sent.
+ */
+export function isAmbiguousSmtpError(error: unknown): boolean {
+  if (!(error instanceof Error)) return false;
+  const { code, responseCode } = error as { code?: unknown; responseCode?: unknown };
+  if (typeof responseCode === "number") return false;
+  if (typeof code === "string" && AMBIGUOUS_SMTP_CODES.has(code)) return true;
+  return /timed out|timeout|socket (closed|hang up)|connection (closed|reset)/i.test(error.message);
+}
 
 export type EmailSender = {
   send(options: SendEmailOptions): Promise<SendEmailResult>;
@@ -48,7 +77,7 @@ export type EmailProviderConfig = ResendProviderConfig | SmtpProviderConfig;
 
 function createResendSender(config: ResendProviderConfig): EmailSender {
   return {
-    async send({ to, subject, react, replyTo, messageId, idempotencyKey, attachments }) {
+    async send({ to, subject, react, replyTo, messageId, idempotencyKey, headers, attachments }) {
       const [{ render }, { Resend }] = await Promise.all([
         import("@react-email/render"),
         import("resend"),
@@ -63,7 +92,7 @@ function createResendSender(config: ResendProviderConfig): EmailSender {
           subject,
           html,
           replyTo,
-          headers: messageId ? { "Message-ID": messageId } : undefined,
+          headers: messageId || headers ? { ...headers, ...(messageId ? { "Message-ID": messageId } : {}) } : undefined,
           attachments: attachments?.map((attachment) => ({
             filename: attachment.filename,
             content: attachment.content,
@@ -85,6 +114,16 @@ function createResendSender(config: ResendProviderConfig): EmailSender {
   };
 }
 
+/**
+ * Bounded waits. A hung server must not hold a stage move or the outbox worker
+ * for nodemailer's default ten minutes.
+ */
+const SMTP_TIMEOUTS = {
+  connectionTimeout: 10_000,
+  greetingTimeout: 10_000,
+  socketTimeout: 20_000,
+} as const;
+
 function createSmtpSender(config: SmtpProviderConfig): EmailSender {
   async function transporter() {
     const { default: nodemailer } = await import("nodemailer");
@@ -94,30 +133,43 @@ function createSmtpSender(config: SmtpProviderConfig): EmailSender {
       port: config.port,
       secure: config.secure,
       auth: config.user ? { user: config.user, pass: config.pass } : undefined,
+      ...SMTP_TIMEOUTS,
     });
   }
 
   return {
-    async send({ to, subject, react, replyTo, messageId, attachments }) {
+    async send({ to, subject, react, replyTo, messageId, headers, attachments }) {
       const [{ render }, transport] = await Promise.all([
         import("@react-email/render"),
         transporter(),
       ]);
       const html = await render(react);
 
-      const info = await transport.sendMail({
-        from: config.from,
-        to,
-        subject,
-        html,
-        replyTo,
-        messageId,
-        attachments: attachments?.map((attachment) => ({
-          filename: attachment.filename,
-          content: attachment.content,
-          contentType: attachment.contentType,
-        })),
-      });
+      let info: { messageId?: string };
+      try {
+        info = await transport.sendMail({
+          from: config.from,
+          to,
+          subject,
+          html,
+          replyTo,
+          messageId,
+          headers,
+          attachments: attachments?.map((attachment) => ({
+            filename: attachment.filename,
+            content: attachment.content,
+            contentType: attachment.contentType,
+          })),
+        });
+      } catch (error) {
+        if (isAmbiguousSmtpError(error)) {
+          throw new DeliveryOutcomeUnknownError(
+            `SMTP delivery was interrupted after the message was handed over (${(error as Error).message}).`,
+            { cause: error },
+          );
+        }
+        throw error;
+      }
       return { messageId: info.messageId };
     },
     async verify() {

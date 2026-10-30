@@ -8,29 +8,81 @@ import {
   applicationStageHistory,
   candidates,
   db,
+  effectiveStageKind,
+  effectiveStageKindSql,
   interviews,
   jobs,
   jobStages,
   scorecards,
+  stageIsAnyKindSql,
   tasks,
   user,
 } from "@harly/db";
 import { getWorkspaceContext } from "@/features/workspaces/context";
-import { daysSince, formatShort } from "@/lib/date";
 import { candidateAvatarFallbackSrcs } from "@/lib/candidate-avatar";
-import { getHiringEvents } from "@/features/reports/data";
-import { can } from "@/features/workspaces/permissions-server";
+import { getWorkspaceGravatarEnabled } from "@/lib/gravatar";
+import {
+  getDailySeries,
+  getHiresByJob,
+  getHiringKpis,
+  getWorkspaceTimeZone,
+} from "@/features/reports/canonical";
+import { dayLabel, allTimeWindow, previousWindow, resolveWindow } from "@/features/reports/window";
+import {
+  actorHasPermission,
+  isUnrestrictedScope,
+  jobScopeSql,
+  taskScopeSql,
+  type WorkspaceSearchActor,
+} from "@/features/search/scope";
+import { resolveSearchActor } from "@/features/search/workspace-search";
+import type { Permission } from "@/features/workspaces/permissions";
 import { taskDueState } from "@/features/tasks/shared";
+import { daysSince } from "@/lib/date";
 
 const DAY_MS = 86_400_000;
 const PERF_DAYS = 14;
-const REVIEW_STAGES = ["Screening", "Interview"];
+/** Review-stage logic keys off stage kind, never the display name. */
+const REVIEW_KINDS = ["screening", "interview"] as const;
+const RISK_WINDOW_DAYS = 30;
 
-function startOfDay(value: Date): Date {
-  const d = new Date(value);
-  d.setHours(0, 0, 0, 0);
-  return d;
+/**
+ * The caller's permissions and role scope, resolved once per request. Every
+ * widget gates on this: a widget the caller cannot see returns nothing (or is
+ * omitted by the page) instead of raising an error.
+ */
+const widgetActor = cache(() => resolveSearchActor());
+
+function hasAnyPermission(actor: WorkspaceSearchActor, permissions: readonly Permission[]) {
+  return permissions.some((permission) => actorHasPermission(actor, permission));
 }
+
+/**
+ * Which home widgets the caller may see. The page renders a widget only when
+ * its flag is set, so the data for an omitted widget is never requested.
+ */
+export type DashboardWidgetAccess = {
+  reviewCandidates: boolean;
+  todayInterviews: boolean;
+  pipeline: boolean;
+  inbox: boolean;
+  tasks: boolean;
+  /** Canonical hiring metrics are workspace-wide, so only unrestricted actors see them. */
+  performance: boolean;
+};
+
+export const getDashboardWidgetAccess = cache(async (): Promise<DashboardWidgetAccess> => {
+  const actor = await widgetActor();
+  const has = (permission: Permission) => actorHasPermission(actor, permission);
+  return {
+    reviewCandidates: has("candidates:view"),
+    todayInterviews: hasAnyPermission(actor, ["interviews:manage", "interviews:feedback"]),
+    pipeline: has("candidates:view"),
+    inbox: has("candidates:view") || has("jobs:approve"),
+    tasks: has("tasks:read"),
+    performance: has("reports:read") && isUnrestrictedScope(actor.scope),
+  };
+});
 
 function interviewTypeLabel(type: string): string {
   switch (type) {
@@ -51,6 +103,10 @@ function interviewTypeLabel(type: string): string {
 
 export const getPipelineOverview = cache(async (jobId?: string) => {
   const { organization: workspace } = await getWorkspaceContext();
+  const actor = await widgetActor();
+  if (!actorHasPermission(actor, "candidates:view")) {
+    return { jobs: [], selected: null, stages: [], total: 0 };
+  }
 
   const openJobs = await db
     .select({ id: jobs.id, title: jobs.title })
@@ -60,6 +116,7 @@ export const getPipelineOverview = cache(async (jobId?: string) => {
         eq(jobs.workspaceId, workspace.id),
         eq(jobs.status, "open"),
         isNull(jobs.deletedAt),
+        jobScopeSql(actor),
       ),
     )
     .orderBy(asc(jobs.title));
@@ -80,6 +137,7 @@ export const getPipelineOverview = cache(async (jobId?: string) => {
         and(
           eq(applications.workspaceId, workspace.id),
           eq(applications.status, "active"),
+          inArray(applications.jobId, openJobs.map((job) => job.id)),
           exists(
             db
               .select({ id: candidates.id })
@@ -105,6 +163,7 @@ export const getPipelineOverview = cache(async (jobId?: string) => {
   const stageRows = await db
     .select({
       name: jobStages.name,
+      kind: jobStages.kind,
       color: jobStages.color,
       order: jobStages.order,
       value: count(applications.id),
@@ -134,14 +193,19 @@ export const getPipelineOverview = cache(async (jobId?: string) => {
       and(
         eq(jobStages.workspaceId, workspace.id),
         eq(jobStages.jobId, selected.id),
+        isNull(jobStages.archivedAt),
       ),
     )
     .groupBy(jobStages.id)
     .orderBy(asc(jobStages.order));
 
-  // The funnel view omits the terminal "Rejected" lane.
+  // The funnel view omits the terminal rejected lane. Decided by stage kind,
+  // so a renamed rejected stage is hidden and a custom stage named "Rejected"
+  // stays visible.
   const stages = stageRows
-    .filter((s) => s.name.toLowerCase() !== "rejected")
+    .filter(
+      (s) => effectiveStageKind({ kind: s.kind, name: s.name }) !== "rejected",
+    )
     .map((s) => ({
       name: s.name,
       color: s.color,
@@ -161,8 +225,13 @@ export const getPipelineOverview = cache(async (jobId?: string) => {
 
 export const getTodayInterviews = cache(async () => {
   const { organization: workspace } = await getWorkspaceContext();
-  const start = startOfDay(new Date());
-  const end = new Date(start.getTime() + DAY_MS);
+  const actor = await widgetActor();
+  if (!hasAnyPermission(actor, ["interviews:manage", "interviews:feedback"])) return [];
+  // "Today" is the workspace's local day, not the server's.
+  const timeZone = await getWorkspaceTimeZone(workspace.id);
+  const today = resolveWindow(1, timeZone, new Date());
+  const start = today.from;
+  const end = today.to;
 
   const rows = await db
     .select({
@@ -170,6 +239,7 @@ export const getTodayInterviews = cache(async () => {
       scheduledAt: interviews.scheduledAt,
       type: interviews.type,
       title: interviews.title,
+      candidateId: candidates.id,
       first: candidates.firstName,
       last: candidates.lastName,
       jobTitle: jobs.title,
@@ -200,6 +270,7 @@ export const getTodayInterviews = cache(async () => {
         eq(interviews.workspaceId, workspace.id),
         gte(interviews.scheduledAt, start),
         lt(interviews.scheduledAt, end),
+        jobScopeSql(actor),
       ),
     )
     .orderBy(asc(interviews.scheduledAt));
@@ -209,6 +280,7 @@ export const getTodayInterviews = cache(async () => {
     scheduledAt: r.scheduledAt,
     type: r.type,
     label: r.title ?? interviewTypeLabel(r.type),
+    candidateId: r.candidateId,
     candidate: `${r.first} ${r.last}`,
     job: r.jobTitle,
     interviewer: r.interviewer ?? null,
@@ -221,6 +293,9 @@ export const getTodayInterviews = cache(async () => {
 
 export const getCandidatesNeedingReview = cache(async () => {
   const { organization: workspace } = await getWorkspaceContext();
+  const actor = await widgetActor();
+  if (!actorHasPermission(actor, "candidates:view")) return [];
+  const gravatarEnabled = await getWorkspaceGravatarEnabled(workspace.id);
 
   const [rows, enteredRows] = await Promise.all([
     db
@@ -234,6 +309,7 @@ export const getCandidatesNeedingReview = cache(async () => {
         githubUrl: candidates.githubUrl,
         jobTitle: jobs.title,
         stageName: jobStages.name,
+        stageKind: effectiveStageKindSql(jobStages),
         appliedAt: applications.appliedAt,
         scorecardId: scorecards.id,
       })
@@ -259,7 +335,8 @@ export const getCandidatesNeedingReview = cache(async () => {
         and(
           eq(jobStages.workspaceId, workspace.id),
           eq(jobStages.id, applications.currentStageId),
-          inArray(jobStages.name, REVIEW_STAGES),
+          stageIsAnyKindSql(jobStages, REVIEW_KINDS),
+          isNull(jobStages.archivedAt),
         ),
       )
       // A submitted scorecard for the current stage means the review is done.
@@ -276,6 +353,7 @@ export const getCandidatesNeedingReview = cache(async () => {
         eq(applications.workspaceId, workspace.id),
         eq(applications.status, "active"),
         isNull(candidates.deletedAt),
+        jobScopeSql(actor),
         ),
       ),
     db
@@ -299,11 +377,10 @@ export const getCandidatesNeedingReview = cache(async () => {
         candidateId: r.candidateId,
         name: `${r.first} ${r.last}`,
         avatarUrl: r.avatarUrl,
-        avatarFallbackSrcs: candidateAvatarFallbackSrcs(r.email, r.githubUrl),
+        avatarFallbackSrcs: candidateAvatarFallbackSrcs(r.email, r.githubUrl, { gravatarEnabled }),
         job: r.jobTitle,
         stage: r.stageName,
-        action:
-          r.stageName === "Interview" ? "Interview feedback" : "Resume review",
+        action: r.stageKind === "interview" ? "Interview feedback" : "Resume review",
         ageDays: daysSince(since),
       };
     })
@@ -315,55 +392,67 @@ export const getCandidatesNeedingReview = cache(async () => {
 
 export const getJobsAtRisk = cache(async () => {
   const { organization: workspace } = await getWorkspaceContext();
+  const actor = await widgetActor();
+  if (!actorHasPermission(actor, "reports:read")) return [];
+  const timeZone = await getWorkspaceTimeZone(workspace.id);
+  const now = new Date();
+  const recentWindow = resolveWindow(RISK_WINDOW_DAYS, timeZone, now);
 
-  const rows = await db
-    .select({
-      id: jobs.id,
-      title: jobs.title,
-      createdAt: jobs.createdAt,
-      total: count(applications.id),
-      lastAppliedAt: sql<string | null>`max(${applications.appliedAt})`,
-      hired: sql<number>`count(*) filter (where ${applications.status} = 'hired')`,
-    })
-    .from(jobs)
-    .leftJoin(
-      applications,
-      and(
-        eq(applications.workspaceId, workspace.id),
-        eq(applications.jobId, jobs.id),
-        exists(
-          db
-            .select({ id: candidates.id })
-            .from(candidates)
-            .where(
-              and(
-                eq(candidates.id, applications.candidateId),
-                eq(candidates.workspaceId, workspace.id),
-                isNull(candidates.deletedAt),
+  const [rows, recentHires, allTimeHires] = await Promise.all([
+    db
+      .select({
+        id: jobs.id,
+        title: jobs.title,
+        publishedAt: jobs.publishedAt,
+        createdAt: jobs.createdAt,
+        total: count(applications.id),
+        lastAppliedAt: sql<string | null>`max(${applications.appliedAt})`,
+      })
+      .from(jobs)
+      .leftJoin(
+        applications,
+        and(
+          eq(applications.workspaceId, workspace.id),
+          eq(applications.jobId, jobs.id),
+          exists(
+            db
+              .select({ id: candidates.id })
+              .from(candidates)
+              .where(
+                and(
+                  eq(candidates.id, applications.candidateId),
+                  eq(candidates.workspaceId, workspace.id),
+                  isNull(candidates.deletedAt),
+                ),
               ),
-            ),
+          ),
         ),
-      ),
-    )
-    .where(
-      and(
-        eq(jobs.workspaceId, workspace.id),
-        eq(jobs.status, "open"),
-        isNull(jobs.deletedAt),
-      ),
-    )
-    .groupBy(jobs.id)
-    .orderBy(asc(jobs.createdAt));
-
-  const now = Date.now();
+      )
+      .where(
+        and(
+          eq(jobs.workspaceId, workspace.id),
+          eq(jobs.status, "open"),
+          isNull(jobs.deletedAt),
+          jobScopeSql(actor),
+        ),
+      )
+      .groupBy(jobs.id)
+      .orderBy(asc(jobs.createdAt)),
+    getHiresByJob({ workspaceId: workspace.id, window: recentWindow }),
+    getHiresByJob({ workspaceId: workspace.id, window: allTimeWindow(timeZone) }),
+  ]);
 
   return rows
     .map((r) => {
       const total = Number(r.total);
-      const hired = Number(r.hired);
-      const ageDays = (now - new Date(r.createdAt).getTime()) / DAY_MS;
+      const hiresLast30 = recentHires.get(r.id) ?? 0;
+      const hiresEver = allTimeHires.get(r.id) ?? 0;
+      // Age is measured from publish. Jobs that were never published fall back
+      // to creation so the signal still exists for them.
+      const publishedAt = r.publishedAt ?? r.createdAt;
+      const ageDays = (now.getTime() - new Date(publishedAt).getTime()) / DAY_MS;
       const lastAppDays = r.lastAppliedAt
-        ? (now - new Date(r.lastAppliedAt).getTime()) / DAY_MS
+        ? (now.getTime() - new Date(r.lastAppliedAt).getTime()) / DAY_MS
         : Infinity;
 
       let reason: string | null = null;
@@ -376,10 +465,10 @@ export const getJobsAtRisk = cache(async () => {
           reason = "No applications in 7 days";
           severity = "danger";
         }
-      } else if (ageDays >= 30 && hired === 0) {
+      } else if (ageDays >= RISK_WINDOW_DAYS && hiresLast30 === 0) {
         reason = "No hires in 30+ days";
         severity = "danger";
-      } else if (total >= 5 && hired / total < 0.1) {
+      } else if (total >= 5 && hiresEver / total < 0.1) {
         reason = "Low conversion rate";
         severity = "warning";
       }
@@ -395,169 +484,83 @@ export const getJobsAtRisk = cache(async () => {
 
 // ── Hiring performance (KPIs + daily series) ────────────────────────────────
 
-function splitCount(dates: (string | Date)[], windowStart: Date) {
-  let cur = 0;
-  let prev = 0;
-  for (const d of dates) {
-    const t = new Date(d).getTime();
-    if (t >= windowStart.getTime()) cur += 1;
-    else prev += 1;
-  }
-  return { cur, prev };
-}
-
-function pctDelta(cur: number, prev: number) {
-  if (prev === 0) return cur > 0 ? 100 : 0;
+/** Percent change, or null with no previous value (rendered as a dash). */
+function pctDelta(cur: number, prev: number): number | null {
+  if (prev === 0) return null;
   return Math.round(((cur - prev) / prev) * 100);
 }
 
-function bucketSeries(dates: (string | Date)[], windowStart: Date) {
-  const buckets = Array.from({ length: PERF_DAYS }, (_, i) => {
-    const date = new Date(windowStart.getTime() + i * DAY_MS);
-    return { label: formatShort(date), value: 0 };
-  });
-  for (const d of dates) {
-    const idx = Math.floor(
-      (startOfDay(new Date(d)).getTime() - windowStart.getTime()) / DAY_MS,
-    );
-    if (idx >= 0 && idx < PERF_DAYS) buckets[idx].value += 1;
-  }
-  return buckets;
-}
-
+/**
+ * Hiring performance over the last 14 local days, compared with the 14 days
+ * before. Every headline number comes from the canonical metric functions, and
+ * the Reports page uses the same ones.
+ */
 export const getHiringPerformance = cache(async () => {
   const { organization: workspace } = await getWorkspaceContext();
+  const actor = await widgetActor();
+  // The canonical metrics cannot be filtered by job, so a restricted actor
+  // must not see them at all. Callers check getDashboardWidgetAccess first.
+  if (!actorHasPermission(actor, "reports:read") || !isUnrestrictedScope(actor.scope)) {
+    throw new Error("You do not have access to hiring performance.");
+  }
+  const timeZone = await getWorkspaceTimeZone(workspace.id);
   const now = new Date();
-  const windowStart = startOfDay(new Date(now.getTime() - (PERF_DAYS - 1) * DAY_MS));
-  const prevStart = new Date(windowStart.getTime() - PERF_DAYS * DAY_MS);
+  const current = resolveWindow(PERF_DAYS, timeZone, now);
+  const prior = previousWindow(current, now);
+  const scope = { workspaceId: workspace.id };
 
-  const [appRows, interviewRows, hireRows, offerRows] = await Promise.all([
-    db
-      .select({ at: applications.appliedAt })
-      .from(applications)
-      .where(
-        and(
-          eq(applications.workspaceId, workspace.id),
-          gte(applications.appliedAt, prevStart),
-          exists(
-            db
-              .select({ id: candidates.id })
-              .from(candidates)
-              .where(
-                and(
-                  eq(candidates.id, applications.candidateId),
-                  eq(candidates.workspaceId, workspace.id),
-                  isNull(candidates.deletedAt),
-                ),
-              ),
-          ),
-          exists(
-            db
-              .select({ id: jobs.id })
-              .from(jobs)
-              .where(
-                and(
-                  eq(jobs.id, applications.jobId),
-                  eq(jobs.workspaceId, workspace.id),
-                  isNull(jobs.deletedAt),
-                ),
-              ),
-          ),
-        ),
-      ),
-    db
-      .select({ at: interviews.scheduledAt })
-      .from(interviews)
-      .where(
-        and(
-          eq(interviews.workspaceId, workspace.id),
-          gte(interviews.scheduledAt, prevStart),
-          exists(
-            db
-              .select({ id: candidates.id })
-              .from(candidates)
-              .where(
-                and(
-                  eq(candidates.id, interviews.candidateId),
-                  eq(candidates.workspaceId, workspace.id),
-                  isNull(candidates.deletedAt),
-                ),
-              ),
-          ),
-          exists(
-            db
-              .select({ id: jobs.id })
-              .from(jobs)
-              .where(
-                and(
-                  eq(jobs.id, interviews.jobId),
-                  eq(jobs.workspaceId, workspace.id),
-                  isNull(jobs.deletedAt),
-                ),
-              ),
-          ),
-        ),
-      ),
-    getHiringEvents(workspace.id, { since: prevStart }),
-    db
-      .select({ at: applicationStageHistory.createdAt })
-      .from(applicationStageHistory)
-      .innerJoin(
-        jobStages,
-        and(
-          eq(jobStages.id, applicationStageHistory.toStageId),
-          inArray(jobStages.name, ["Offer", "Hired"]),
-        ),
-      )
-      .where(
-        and(
-          eq(applicationStageHistory.workspaceId, workspace.id),
-          gte(applicationStageHistory.createdAt, prevStart),
-        ),
-      ),
-  ]);
+  const [kpis, priorKpis, applicationDays, interviewDays, hireDays, priorInterviewDays] =
+    await Promise.all([
+      getHiringKpis({ ...scope, window: current }),
+      getHiringKpis({ ...scope, window: prior }),
+      getDailySeries({ ...scope, window: current }, "applications"),
+      getDailySeries({ ...scope, window: current }, "interviews"),
+      getDailySeries({ ...scope, window: current }, "hires"),
+      getDailySeries({ ...scope, window: prior }, "interviews"),
+    ]);
 
-  const apps = splitCount(appRows.map((r) => r.at), windowStart);
-  const ivs = splitCount(interviewRows.map((r) => r.at), windowStart);
-  const hires = splitCount(hireRows.map((r) => r.hiredAt), windowStart);
-  const offers = splitCount(offerRows.map((r) => r.at), windowStart);
+  const sum = (points: { count: number }[]) => points.reduce((total, p) => total + p.count, 0);
+  const interviewsNow = sum(interviewDays);
+  const interviewsBefore = sum(priorInterviewDays);
+  const rateNow = kpis.offers.rate;
+  const ratePrior = priorKpis.offers.rate;
+  const acceptanceDelta = rateNow != null && ratePrior != null ? rateNow - ratePrior : null;
 
-  const curRate = offers.cur > 0 ? hires.cur / offers.cur : 0;
-  const prevRate = offers.prev > 0 ? hires.prev / offers.prev : 0;
-  const acceptanceDelta = Math.round((curRate - prevRate) * 100);
+  const toSeries = (points: { key: string; count: number }[]) =>
+    points.map((p) => ({ label: dayLabel(p.key), value: p.count }));
 
   return {
-    rangeLabel: "Last 14 days",
+    rangeLabel: `Last ${PERF_DAYS} days`,
     metrics: {
       applications: {
-        value: apps.cur,
-        deltaPct: pctDelta(apps.cur, apps.prev),
-        positive: apps.cur >= apps.prev,
+        value: kpis.applications,
+        deltaPct: pctDelta(kpis.applications, priorKpis.applications),
+        positive: kpis.applications >= priorKpis.applications,
         isRate: false,
       },
       interviews: {
-        value: ivs.cur,
-        deltaPct: pctDelta(ivs.cur, ivs.prev),
-        positive: ivs.cur >= ivs.prev,
+        value: interviewsNow,
+        deltaPct: pctDelta(interviewsNow, interviewsBefore),
+        positive: interviewsNow >= interviewsBefore,
         isRate: false,
       },
       hires: {
-        value: hires.cur,
-        deltaPct: pctDelta(hires.cur, hires.prev),
-        positive: hires.cur >= hires.prev,
+        value: kpis.hires,
+        deltaPct: pctDelta(kpis.hires, priorKpis.hires),
+        positive: kpis.hires >= priorKpis.hires,
         isRate: false,
       },
       offerAcceptance: {
-        value: Math.round(curRate * 100),
-        deltaPct: acceptanceDelta,
-        positive: acceptanceDelta >= 0,
+        value: rateNow,
+        deltaPct: acceptanceDelta == null ? null : Math.round(acceptanceDelta),
+        positive: acceptanceDelta == null ? true : acceptanceDelta >= 0,
         isRate: true,
       },
     },
     series: {
-      applications: bucketSeries(appRows.map((r) => r.at), windowStart),
-      interviews: bucketSeries(interviewRows.map((r) => r.at), windowStart),
-      hires: bucketSeries(hireRows.map((r) => r.hiredAt), windowStart),
+      applications: toSeries(applicationDays),
+      interviews: toSeries(interviewDays),
+      hires: toSeries(hireDays),
     },
   };
 });
@@ -569,9 +572,14 @@ type InboxIcon = "feedback" | "schedule" | "screen" | "approve";
 
 export const getInbox = cache(async () => {
   const { organization: workspace } = await getWorkspaceContext();
+  const actor = await widgetActor();
+  const seesCandidates = actorHasPermission(actor, "candidates:view");
+  // Draft-job approvals are an approver's item, so they need jobs:approve.
+  const seesDraftJobs = actorHasPermission(actor, "jobs:approve");
+  if (!seesCandidates && !seesDraftJobs) return [];
 
   const [rows, scorecardKeys, interviewedRows, draftJobs] = await Promise.all([
-    db
+    !seesCandidates ? [] : db
       .select({
         applicationId: applications.id,
         candidateId: candidates.id,
@@ -579,6 +587,7 @@ export const getInbox = cache(async () => {
         last: candidates.lastName,
         jobTitle: jobs.title,
         stageName: jobStages.name,
+        stageKind: effectiveStageKindSql(jobStages),
         appliedAt: applications.appliedAt,
       })
       .from(applications)
@@ -603,27 +612,29 @@ export const getInbox = cache(async () => {
         and(
           eq(jobStages.workspaceId, workspace.id),
           eq(jobStages.id, applications.currentStageId),
-          inArray(jobStages.name, REVIEW_STAGES),
+          stageIsAnyKindSql(jobStages, REVIEW_KINDS),
+          isNull(jobStages.archivedAt),
         ),
       )
       .where(
         and(
           eq(applications.workspaceId, workspace.id),
           eq(applications.status, "active"),
+          jobScopeSql(actor),
         ),
       ),
-    db
+    !seesCandidates ? [] : db
       .select({
         candidateId: scorecards.candidateId,
         stageName: scorecards.stageName,
       })
       .from(scorecards)
       .where(eq(scorecards.workspaceId, workspace.id)),
-    db
+    !seesCandidates ? [] : db
       .select({ applicationId: interviews.applicationId })
       .from(interviews)
       .where(eq(interviews.workspaceId, workspace.id)),
-    db
+    !seesDraftJobs ? [] : db
       .select({ id: jobs.id, title: jobs.title })
       .from(jobs)
       .where(
@@ -631,6 +642,7 @@ export const getInbox = cache(async () => {
           eq(jobs.workspaceId, workspace.id),
           eq(jobs.status, "draft"),
           isNull(jobs.deletedAt),
+          jobScopeSql(actor),
         ),
       ),
   ]);
@@ -658,7 +670,7 @@ export const getInbox = cache(async () => {
     const aging = daysSince(a.appliedAt);
     const hasScore = reviewed.has(`${a.candidateId}::${a.stageName}`);
 
-    if (a.stageName === "Interview") {
+    if (a.stageKind === "interview") {
       if (!interviewed.has(a.applicationId)) {
         items.push({
           id: `${a.applicationId}-schedule`,
@@ -682,7 +694,7 @@ export const getInbox = cache(async () => {
           rank: aging > 5 ? 0 : 1,
         });
       }
-    } else if (a.stageName === "Screening" && !hasScore) {
+    } else if (a.stageKind === "screening" && !hasScore) {
       items.push({
         id: `${a.applicationId}-screen`,
         icon: "screen",
@@ -731,7 +743,8 @@ export type InboxItem = Awaited<ReturnType<typeof getInbox>>[number];
 // ── My tasks (dashboard widget) ─────────────────────────────────────────────
 
 export const getMyDashboardTasks = cache(async () => {
-  if (!(await can("tasks:read"))) return [];
+  const actor = await widgetActor();
+  if (!actorHasPermission(actor, "tasks:read")) return [];
   const { organization: workspace, user: currentUser } = await getWorkspaceContext();
   const now = new Date();
 
@@ -770,6 +783,7 @@ export const getMyDashboardTasks = cache(async () => {
         isNull(tasks.deletedAt),
         eq(tasks.ownerId, currentUser.id),
         or(eq(tasks.status, "pending"), eq(tasks.status, "in_progress")),
+        taskScopeSql(actor),
       ),
     )
     .orderBy(

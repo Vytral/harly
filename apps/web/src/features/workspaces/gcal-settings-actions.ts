@@ -7,7 +7,16 @@ import { db, workspaceSettings } from "@harly/db";
 
 import { requirePermission } from "@/features/workspaces/permissions-server";
 import { assertNotDemo } from "@/features/demo/assert-not-demo";
-import { getWorkspaceGCalConfig } from "@/lib/gcal/config";
+import {
+  clearIntegrationHealth,
+  recordIntegrationSuccess,
+} from "@/features/integrations/health/repository";
+import { sanitizeIntegrationError } from "@/features/integrations/health/model";
+import {
+  getWorkspaceGCalConfig,
+  invalidateWorkspaceGCalConnection,
+  recordGCalCallFailure,
+} from "@/lib/gcal/config";
 import { listCalendars } from "@/lib/gcal/client";
 import { createLogger } from "@/lib/logger";
 
@@ -42,18 +51,12 @@ function googleAuthFailureMessage(err: unknown): string | null {
   return null;
 }
 
-/** Wipe the dead token so status flips back to "not connected". */
-async function clearGCalToken(organizationId: string): Promise<void> {
-  await db
-    .update(workspaceSettings)
-    .set({
-      gcalEnabled: false,
-      gcalRefreshTokenCiphertext: null,
-      gcalRefreshTokenIv: null,
-      gcalRefreshTokenTag: null,
-      updatedAt: new Date(),
-    })
-    .where(eq(workspaceSettings.organizationId, organizationId));
+/**
+ * Google rejected the grant: clear the dead token (same as a background sync
+ * failure), keep the enabled intent, and record the reason for the UI.
+ */
+async function clearGCalToken(organizationId: string, error: unknown): Promise<void> {
+  await invalidateWorkspaceGCalConnection(organizationId, error);
   revalidatePath(SETTINGS_PATH);
 }
 
@@ -70,6 +73,7 @@ export async function listGCalCalendarsAction(): Promise<
 
   try {
     const calendars = await listCalendars(config.oauth2Client);
+    await recordIntegrationSuccess(context.organization.id, "gcal");
     return {
       ok: true,
       calendars: calendars.map((c) => ({
@@ -82,13 +86,11 @@ export async function listGCalCalendarsAction(): Promise<
     log.error(err, "listGCalCalendarsAction failed");
     const authFailure = googleAuthFailureMessage(err);
     if (authFailure) {
-      await clearGCalToken(context.organization.id);
+      await clearGCalToken(context.organization.id, err);
       return { ok: false, error: authFailure };
     }
-    return {
-      ok: false,
-      error: err instanceof Error ? err.message : "Failed to list calendars.",
-    };
+    await recordGCalCallFailure(context.organization.id, err);
+    return { ok: false, error: sanitizeIntegrationError(err) };
   }
 }
 
@@ -141,6 +143,7 @@ export async function disconnectGCalAction(): Promise<GCalActionResult> {
     })
     .where(eq(workspaceSettings.organizationId, context.organization.id));
 
+  await clearIntegrationHealth(context.organization.id, "gcal");
   revalidatePath(SETTINGS_PATH);
   return { ok: true };
 }
@@ -156,17 +159,16 @@ export async function testGCalConnectionAction(): Promise<GCalActionResult> {
 
   try {
     await listCalendars(config.oauth2Client);
+    await recordIntegrationSuccess(context.organization.id, "gcal");
     return { ok: true };
   } catch (err) {
     log.error(err, "testGCalConnectionAction failed");
     const authFailure = googleAuthFailureMessage(err);
     if (authFailure) {
-      await clearGCalToken(context.organization.id);
+      await clearGCalToken(context.organization.id, err);
       return { ok: false, error: authFailure };
     }
-    return {
-      ok: false,
-      error: err instanceof Error ? err.message : "Connection test failed.",
-    };
+    await recordGCalCallFailure(context.organization.id, err);
+    return { ok: false, error: sanitizeIntegrationError(err) };
   }
 }

@@ -18,10 +18,10 @@ import { TASK_PRIORITIES, TASK_PRIORITY_LABELS, TASK_STATUS_LABELS } from "./sha
 type Member = { id: string; name: string; image: string | null };
 
 const PRIORITY_COLOR: Record<TaskPriority, string> = {
-  low: "border-zinc-300 text-zinc-500",
-  medium: "border-blue-300 text-blue-600",
-  high: "border-orange-300 text-orange-600",
-  urgent: "border-red-300 text-red-600",
+  low: "border-border text-muted-foreground",
+  medium: "border-status-quiet-ink/40 text-status-quiet-ink",
+  high: "border-warning/40 text-warning",
+  urgent: "border-destructive/40 text-destructive",
 };
 
 export function CreateTaskDialog({
@@ -149,7 +149,7 @@ export function CreateTaskDialog({
             </div>
 
             <div className="flex-1">
-              <label htmlFor="new-task-due-date" className="mb-1.5 block text-xs font-medium text-zinc-500">
+              <label htmlFor="new-task-due-date" className="mb-1.5 block text-xs font-medium text-muted-foreground">
                 <Calendar className="mr-1 inline size-3" />
                 Due date
               </label>
@@ -166,7 +166,7 @@ export function CreateTaskDialog({
           <TaskLinkFields value={links} options={contextOptions} onChange={setLinks} />
 
           <div>
-            <label className="mb-1.5 block text-xs font-medium text-zinc-500">
+            <label className="mb-1.5 block text-xs font-medium text-muted-foreground">
               <Flag className="mr-1 inline size-3" />
               Priority
             </label>
@@ -180,8 +180,8 @@ export function CreateTaskDialog({
                   className={cn(
                     "rounded-md border px-3 py-1.5 text-xs font-medium capitalize transition-colors",
                     priority === p
-                      ? cn(PRIORITY_COLOR[p], "bg-white shadow-sm dark:bg-zinc-800")
-                      : "border-transparent text-zinc-500 hover:text-zinc-700",
+                      ? cn(PRIORITY_COLOR[p], "bg-card shadow-sm")
+                      : "border-transparent text-muted-foreground hover:text-foreground",
                   )}
                 >
                   {TASK_PRIORITY_LABELS[p]}
@@ -191,7 +191,7 @@ export function CreateTaskDialog({
           </div>
 
           {error && (
-            <p role="alert" className="text-sm text-red-600">{error}</p>
+            <p role="alert" className="text-sm text-destructive">{error}</p>
           )}
 
           <DialogFooter>

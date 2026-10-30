@@ -17,6 +17,13 @@ import { getWorkspaceAiConfig } from "@/lib/ai/config";
 import { getModel } from "@/lib/ai/registry";
 import { toolsForProvider } from "@/lib/ai/provider-tools";
 import { buildHarlyTools } from "@/lib/ai/agent";
+import {
+  loadCandidateReferences,
+  toolsForModelHistory,
+  withRedactedToolErrors,
+  withToolResultRedaction,
+  type ToolResultRedactionContext,
+} from "@/lib/ai/agent/tool-result-redaction";
 import { buildHarlySystemPrompt } from "@/lib/ai/agent/system-prompt";
 import { getWorkspaceKnowledge } from "@/lib/ai/agent/workspace-knowledge";
 import { getHarlyCoreProductContext } from "@/lib/ai/knowledge/harly-product-knowledge";
@@ -118,6 +125,40 @@ type HarlyChatMessage = UIMessage<
   never,
   InferUITools<ReturnType<typeof buildHarlyTools>>
 >;
+
+type SurfaceContext = {
+  kind: "candidate" | "section";
+  label: string;
+  path: string;
+};
+
+const ANONYMIZED_SECTION_PATH_RE = /^\/dashboard(?:\/[a-z]+){0,2}$/;
+const CANDIDATE_PATH_ID_RE = /\/candidates\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})/iu;
+
+/**
+ * The page the user is on, as the system prompt may show it. The label and path
+ * come from the client, so with anonymization on they are rebuilt from the kind
+ * alone: a candidate's name never reaches the model through the page context.
+ */
+function surfaceForPrompt(
+  surface: SurfaceContext | undefined,
+  anonymize: boolean,
+): SurfaceContext | undefined {
+  if (!surface || !anonymize) return surface;
+  if (surface.kind === "candidate") {
+    const id = CANDIDATE_PATH_ID_RE.exec(surface.path)?.[1];
+    return {
+      kind: "candidate",
+      label: "Candidate profile",
+      path: id ? `/dashboard/candidates/${id}` : "/dashboard/candidates",
+    };
+  }
+  return {
+    kind: "section",
+    label: "Workspace section",
+    path: ANONYMIZED_SECTION_PATH_RE.test(surface.path) ? surface.path : "/dashboard",
+  };
+}
 
 function requestExceedsBodyLimit(req: Request): boolean {
   const contentLength = Number(req.headers.get("content-length"));
@@ -342,6 +383,14 @@ export async function POST(req: Request) {
     workspaceId,
     context.organization.name,
   );
+  // Identity redaction for what the model sees (tool results and earlier turns'
+  // results). The raw results still stream to the UI and persist.
+  const redaction: ToolResultRedactionContext = {
+    anonymize: config.resumeAnonymization,
+    conversationKey: conversationId ?? `unsaved:${crypto.randomUUID()}`,
+    resolveCandidateReferences: (request) =>
+      loadCandidateReferences(workspaceId, request),
+  };
   const tools = toolsForProvider(
     // Public demo: strip automation, outbound-email and fan-out scoring tools
     // (no-op on normal installs).
@@ -358,6 +407,8 @@ export async function POST(req: Request) {
     ),
     config.provider,
   );
+
+  const modelTools = withToolResultRedaction(tools, redaction);
 
   if (process.env.NODE_ENV !== "production") {
     // Fails loudly in dev/CI, never in prod, if a newly added tool forgot to
@@ -437,7 +488,7 @@ export async function POST(req: Request) {
       role: context.role,
       activeCandidateId: candidateId,
       mentionedCandidateIds,
-      activeSurface: surfaceContext,
+      activeSurface: surfaceForPrompt(surfaceContext, redaction.anonymize),
       workspaceKnowledge,
       productKnowledge: getHarlyCoreProductContext(),
       intent,
@@ -450,8 +501,10 @@ export async function POST(req: Request) {
       timeZone,
       activeAutomation: automationContext,
     }), demo),
-    messages: await convertToModelMessages(messages),
-    tools,
+    messages: await convertToModelMessages(withRedactedToolErrors(messages, redaction), {
+      tools: toolsForModelHistory(modelTools, redaction),
+    }),
+    tools: modelTools,
     activeTools: initialActiveTools,
     prepareStep: ({ stepNumber }) => {
       if (shouldWidenForStep(stepNumber)) {

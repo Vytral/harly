@@ -21,6 +21,7 @@ import {
   applicationQuestions,
   applications,
   candidateReferrals,
+  defaultStageRows,
   jobHiringTeam,
   jobStages,
   jobs,
@@ -38,6 +39,8 @@ import {
   type WorkspaceBoardBranding,
 } from "@/features/workspaces/board";
 import { getWorkspaceContext } from "@/features/workspaces/context";
+import { jobScopeSql } from "@/features/search/scope";
+import { resolveSearchActor } from "@/features/search/workspace-search";
 import { normalizeCareerPageConfig } from "@/features/career-page/config";
 import type { JobFormValues, JobStatus } from "./validation";
 
@@ -125,15 +128,6 @@ export {
   formatJobStatus,
 } from "@/lib/format";
 
-const defaultStages = [
-  { name: "Applied", color: "#E0F2FE" },
-  { name: "Screening", color: "#F5F3FF" },
-  { name: "Interview", color: "#FEF3C7" },
-  { name: "Offer", color: "#DCFCE7" },
-  { name: "Hired", color: "#CCFBF1" },
-  { name: "Rejected", color: "#FEE2E2" },
-];
-
 async function syncJobApplicationQuestions(
   tx: Parameters<Parameters<typeof db.transaction>[0]>[0],
   input: {
@@ -173,30 +167,47 @@ async function syncJobApplicationQuestions(
   }
 }
 
+/**
+ * Every job list here is filtered by the caller's role scope (jobAccess,
+ * departments, regions). Unrestricted callers get the same rows as before.
+ */
 export async function listDashboardJobs() {
-  const { organization: workspace } = await getWorkspaceContext();
+  const actor = await resolveSearchActor();
 
   return db
     .select()
     .from(jobs)
-    .where(and(eq(jobs.workspaceId, workspace.id), isNull(jobs.deletedAt)))
+    .where(
+      and(
+        eq(jobs.workspaceId, actor.workspaceId),
+        isNull(jobs.deletedAt),
+        jobScopeSql(actor),
+      ),
+    )
     .orderBy(desc(jobs.createdAt));
 }
 
 /** Lightweight job list for pickers (e.g. CSV import). */
 export async function listJobOptions() {
-  const { organization: workspace } = await getWorkspaceContext();
+  const actor = await resolveSearchActor();
 
   return db
     .select({ id: jobs.id, title: jobs.title, status: jobs.status })
     .from(jobs)
-    .where(and(eq(jobs.workspaceId, workspace.id), isNull(jobs.deletedAt)))
+    .where(
+      and(
+        eq(jobs.workspaceId, actor.workspaceId),
+        isNull(jobs.deletedAt),
+        jobScopeSql(actor),
+      ),
+    )
     .orderBy(desc(jobs.createdAt));
 }
 
 /** Jobs list enriched with per-role applicant counts for the dashboard table. */
 export async function listJobsWithStats() {
-  const { organization: workspace } = await getWorkspaceContext();
+  const actor = await resolveSearchActor();
+  const workspace = { id: actor.workspaceId };
   // Bind as ISO string , the raw sql template can't parametrize a JS Date here.
   const weekAgo = new Date(Date.now() - 7 * 86_400_000).toISOString();
 
@@ -223,19 +234,31 @@ export async function listJobsWithStats() {
         eq(applications.jobId, jobs.id),
       ),
     )
-    .where(and(eq(jobs.workspaceId, workspace.id), isNull(jobs.deletedAt)))
+    .where(
+      and(
+        eq(jobs.workspaceId, workspace.id),
+        isNull(jobs.deletedAt),
+        jobScopeSql(actor),
+      ),
+    )
     .groupBy(jobs.id)
     .orderBy(desc(jobs.createdAt));
 }
 
 /** Distinct department names across the workspace's jobs , for the combobox. */
 export async function listWorkspaceDepartments() {
-  const { organization: workspace } = await getWorkspaceContext();
+  const actor = await resolveSearchActor();
 
   const rows = await db
     .selectDistinct({ department: jobs.department })
     .from(jobs)
-    .where(and(eq(jobs.workspaceId, workspace.id), isNotNull(jobs.department)))
+    .where(
+      and(
+        eq(jobs.workspaceId, actor.workspaceId),
+        isNotNull(jobs.department),
+        jobScopeSql(actor),
+      ),
+    )
     .orderBy(asc(jobs.department));
 
   return rows
@@ -244,15 +267,16 @@ export async function listWorkspaceDepartments() {
 }
 
 export async function listTrashedJobs() {
-  const { organization: workspace } = await getWorkspaceContext();
+  const actor = await resolveSearchActor();
 
   return db
     .select()
     .from(jobs)
     .where(
       and(
-        eq(jobs.workspaceId, workspace.id),
+        eq(jobs.workspaceId, actor.workspaceId),
         sql`${jobs.deletedAt} is not null`,
+        jobScopeSql(actor),
       ),
     )
     .orderBy(desc(jobs.deletedAt));
@@ -339,6 +363,7 @@ export async function listOpenJobsForWorkspaceSlug(workspaceSlug: string) {
 
 export async function getDashboardJob(jobId: string) {
   const { organization: workspace } = await getWorkspaceContext();
+  const actor = await resolveSearchActor();
   const [job] = await db
     .select()
     .from(jobs)
@@ -347,6 +372,7 @@ export async function getDashboardJob(jobId: string) {
         eq(jobs.id, jobId),
         eq(jobs.workspaceId, workspace.id),
         isNull(jobs.deletedAt),
+        jobScopeSql(actor),
       ),
     )
     .limit(1);
@@ -359,7 +385,11 @@ export async function getDashboardJob(jobId: string) {
     .select()
     .from(jobStages)
     .where(
-      and(eq(jobStages.jobId, job.id), eq(jobStages.workspaceId, workspace.id)),
+      and(
+        eq(jobStages.jobId, job.id),
+        eq(jobStages.workspaceId, workspace.id),
+        isNull(jobStages.archivedAt),
+      ),
     )
     .orderBy(asc(jobStages.order));
 
@@ -488,15 +518,9 @@ export async function createJob(values: JobFormValues) {
       })
       .returning();
 
-    await tx.insert(jobStages).values(
-      defaultStages.map((stage, index) => ({
-        workspaceId: workspace.id,
-        jobId: createdJob.id,
-        name: stage.name,
-        color: stage.color,
-        order: index + 1,
-      })),
-    );
+    await tx
+      .insert(jobStages)
+      .values(defaultStageRows({ workspaceId: workspace.id, jobId: createdJob.id }));
 
     // Every job starts with an accountable collaborator. This also means that
     // job-scoped candidate notifications have a useful recipient from day one.

@@ -5,7 +5,7 @@ Drizzle ORM + PostgreSQL database layer for Harly.
 ## What's inside
 
 - **Schema** (`src/schema.ts`) — 40+ tables, 6 enums covering jobs, candidates, applications, pipeline stages, interviews, offers, tasks, notifications, audit logs, API keys, webhooks, email templates, legal pages, career pages, and more.
-- **Migrations** (`migrations/`) — 53 SQL migrations with snapshot + journal tracking.
+- **Migrations** (`migrations/`) — SQL migrations with snapshot + journal tracking.
 - **Client** (`src/client.ts`) — singleton Drizzle instance, workspace-scoped query helpers.
 - **Seed** — helpers for generating sample data.
 
@@ -25,8 +25,29 @@ pnpm db:generate    # Generate migration from schema.ts changes
 pnpm db:migrate     # Apply pending migrations
 pnpm db:push        # Push schema directly (dev only)
 pnpm db:seed        # Seed sample data
+pnpm db:seed:demo   # Reseed the public demo workspace (destructive, see below)
 pnpm db:studio      # Open Drizzle Studio
 ```
+
+### `pnpm db:seed:demo` and `SEED_CONFIRM_WIPE`
+
+`db:seed:demo` deletes every workspace-scoped row of the workspace it targets
+and writes fresh synthetic demo data. It refuses to run until you name that
+workspace's slug in the confirmation:
+
+```bash
+SEED_CONFIRM_WIPE=<workspace-slug> pnpm db:seed:demo
+# or
+pnpm db:seed:demo --confirm-wipe=<workspace-slug>
+```
+
+The slug must match exactly. The guard counts the rows of every workspace-scoped
+table except the structural ones (`WIPE_GUARD_STRUCTURAL_TABLES`: settings, custom
+roles, document access roles, pipeline stage definitions and sample-data
+bookkeeping). A workspace with more than 25 such rows must also be pinned with
+`DEMO_WORKSPACE_ID`. The programmatic demo sandbox and the cron reset call
+`seedDemoWorkspace()` directly and are not affected by this confirmation. The cron
+reset requires `DEMO_WORKSPACE_ID` when `DEMO_MODE=true`.
 
 ## Migration rules
 

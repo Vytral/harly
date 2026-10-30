@@ -2,7 +2,7 @@ import Link from "next/link";
 import type { Route } from "next";
 import { Trash2, Users } from "lucide-react";
 
-import { EmptyState } from "@/components/ui/EmptyState";
+import { EmptyState } from "@/components/ui/empty-state";
 import { Card } from "@/components/ui/card";
 import { UserAvatar } from "@/components/ui/UserAvatar";
 import {
@@ -25,9 +25,11 @@ import { AddCandidateDrawer } from "@/features/candidates/AddCandidateDrawer";
 import { listEmailTemplates } from "@/features/email-templates/data";
 import { listJobOptions } from "@/features/jobs/data";
 import { listWorkspaceMembers } from "@/features/jobs/hiring-team-data";
+import { isUnrestrictedScope } from "@/features/search/scope";
 import { getWorkspaceContext } from "@/features/workspaces/context";
-import { can } from "@/features/workspaces/permissions-server";
+import { can, getRolePolicy, requirePagePermission } from "@/features/workspaces/permissions-server";
 import { candidateAvatarFallbackSrcs } from "@/lib/candidate-avatar";
+import { getWorkspaceGravatarEnabled } from "@/lib/gravatar";
 import { formatRelative, formatShort } from "@/lib/date";
 import { cn } from "@/lib/utils";
 
@@ -55,6 +57,7 @@ type CandidatesPageProps = {
 };
 
 export default async function CandidatesPage({ searchParams }: CandidatesPageProps) {
+  await requirePagePermission("candidates:view");
   const { view, import: importSource, q, dept, role, stage, status, source, tag, sort, page: pageRaw } = await searchParams;
   const isTrash = view === "trash";
 const initialImportSource: ImportSource | undefined =
@@ -91,6 +94,8 @@ const initialImportSource: ImportSource | undefined =
     page: Number.isFinite(Number(pageRaw)) ? Number(pageRaw) : 1,
     pageSize: 50,
   };
+  const workspaceContext = await getWorkspaceContext();
+  const policy = await getRolePolicy(workspaceContext.organization.id, workspaceContext.roleKey);
   const [
     directory,
     facets,
@@ -98,18 +103,19 @@ const initialImportSource: ImportSource | undefined =
     emailTemplates,
     jobOptions,
     members,
-    workspaceContext,
     canCreateCandidates,
   ] = await Promise.all([
     listCandidateDirectory(directoryFilters),
     listCandidateDirectoryFacets(),
-    listTrashedCandidates(),
+    // The trash is not filtered by job scope, so a role limited to specific jobs
+    // does not load it (its names and emails cannot be scoped per candidate here).
+    isUnrestrictedScope(policy.scope) ? listTrashedCandidates() : Promise.resolve([]),
     listEmailTemplates(),
     listJobOptions(),
     listWorkspaceMembers(),
-    getWorkspaceContext(),
     can("candidates:edit"),
   ]);
+  const gravatarEnabled = await getWorkspaceGravatarEnabled(workspaceContext.organization.id);
 
   const rows: CandidateRow[] = directory.rows.map((candidate) => {
     const applied = candidate.latestApplication?.appliedAt ?? null;
@@ -119,7 +125,7 @@ const initialImportSource: ImportSource | undefined =
       email: candidate.email,
       phone: candidate.phone,
       avatarUrl: candidate.avatarUrl,
-      avatarFallbackSrcs: candidateAvatarFallbackSrcs(candidate.email, candidate.githubUrl),
+      avatarFallbackSrcs: candidateAvatarFallbackSrcs(candidate.email, candidate.githubUrl, { gravatarEnabled }),
       inPool: candidate.inPool,
       hasOpenPrivacyRequest: candidate.hasOpenPrivacyRequest,
       isReferred: candidate.isReferred,
@@ -164,7 +170,7 @@ const initialImportSource: ImportSource | undefined =
                   <UserAvatar
                     name={candidate.fullName}
                     src={null}
-                    fallbackSrcs={candidateAvatarFallbackSrcs(candidate.email, candidate.githubUrl)}
+                    fallbackSrcs={candidateAvatarFallbackSrcs(candidate.email, candidate.githubUrl, { gravatarEnabled })}
                     size="lg"
                   />
                   <span className="min-w-0">
@@ -197,7 +203,7 @@ const initialImportSource: ImportSource | undefined =
             title="No candidates yet"
             description="Share your public job board or import candidates from another ATS."
           />
-          <div className="flex justify-center gap-2">
+          <div className="flex flex-wrap justify-center gap-2">
             {canCreateCandidates ? (
               <AddCandidateDrawer
                 workspaceId={workspaceContext.organization.id}

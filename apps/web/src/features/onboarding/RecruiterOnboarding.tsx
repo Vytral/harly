@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { motion } from "motion/react";
+import { motion, useReducedMotion } from "motion/react";
 
 import { TwoFactorCard } from "@/features/security/TwoFactorCard";
 import { PasskeyQuickSetup } from "@/features/security/PasskeyQuickSetup";
@@ -52,6 +52,7 @@ export function RecruiterOnboarding({
   initialAvatar?: string | null;
 }) {
   const router = useRouter();
+  const reduceMotion = useReducedMotion();
   const [step, setStep] = useState(0);
   const [done, setDone] = useState(false);
   const [pending, startTransition] = useTransition();
@@ -96,9 +97,9 @@ export function RecruiterOnboarding({
     return (
       <div className="w-full max-w-md overflow-hidden rounded-3xl border border-border/70 bg-card p-8 text-center shadow-[0_18px_44px_-16px_rgba(31,41,38,0.16)] lg:p-10">
         <motion.span
-          initial={{ scale: 0.6, opacity: 0 }}
+          initial={reduceMotion ? false : { scale: 0.6, opacity: 0 }}
           animate={{ scale: 1, opacity: 1 }}
-          transition={{ type: "spring", stiffness: 320, damping: 18 }}
+          transition={reduceMotion ? { duration: 0 } : { type: "spring", stiffness: 320, damping: 18 }}
           className="mx-auto flex size-14 items-center justify-center rounded-2xl bg-sage text-pine ring-1 ring-pine/10"
         >
           <SealCheckDuotoneIcon className="size-8" />

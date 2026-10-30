@@ -2,7 +2,6 @@
 
 import { revalidatePath } from "next/cache";
 import { and, desc, eq, isNull, ne, sql } from "drizzle-orm";
-import { Output, generateText } from "ai";
 import { z } from "zod";
 
 import { db } from "@harly/db";
@@ -19,6 +18,14 @@ import {
 } from "@harly/db";
 import { getWorkspaceContext } from "@/features/workspaces/context";
 import { getInboundReplyTo } from "@/lib/email/inbound-token";
+import {
+  formatInterviewWhen as formatInterviewWhenText,
+} from "@/lib/email/interview-time";
+import {
+  queueInterviewEmail,
+  resolveInterviewEmailZoneFor,
+  type InterviewEmailQueueResult,
+} from "@/features/interviews/email-queue";
 import {
   syncInterviewToGCal,
   cancelInterviewGCalEvent,
@@ -54,23 +61,19 @@ import {
   requireInterviewPermission,
 } from "@/features/workspaces/permissions-server";
 import { getWorkspaceAiConfig } from "@/lib/ai/config";
-import { getModel } from "@/lib/ai/registry";
+import { generateInterviewBriefWithAI } from "@/lib/ai/surfaces/generate-interview-brief";
 import { summarizeInterviewNotesWithAI } from "@/lib/ai/surfaces/summarize-interview-notes";
-import {
-  interviewBriefSchema,
-  type InterviewBrief,
-  type InterviewNotesSummary,
-} from "@/lib/ai/schemas";
+import type { InterviewBrief, InterviewNotesSummary } from "@/lib/ai/schemas";
 import { createLogger } from "@/lib/logger";
-import { deriveMeetLink, parseScheduledAt } from "@/features/interviews/shared";
+import {
+  deriveMeetLink,
+  NonexistentLocalTimeError,
+  parseScheduledAt,
+} from "@/features/interviews/shared";
 import { extractResumeText } from "@/lib/resume/extract-text";
 import { resumeKeyFromUrl } from "@/lib/resume/storage-key";
 import { storage } from "@/lib/storage";
 import { maxResumeFileSize } from "@/lib/storage-validation";
-import {
-  enqueueEmailOutbox,
-  processEmailOutbox,
-} from "@/lib/email/outbox-processor";
 import { findWorkspaceMember } from "./core";
 import { lockInterviewerSchedule } from "./booking-lock";
 import { serializeInterview } from "./service";
@@ -90,28 +93,6 @@ const INTERVIEW_MODE_LABEL: Record<string, string> = {
   phone: "Phone call",
   onsite: "On-site",
 };
-
-async function queueInterviewEmail(
-  workspaceId: string,
-  kind: "interview.scheduled" | "interview.rescheduled" | "interview.canceled",
-  payload: Record<string, unknown>,
-  actorId?: string,
-): Promise<"sent" | "failed"> {
-  try {
-    const id = await enqueueEmailOutbox(
-      workspaceId,
-      kind,
-      payload,
-      undefined,
-      actorId,
-    );
-    const result = await processEmailOutbox({ ids: [id], workspaceId });
-    return result.sent > 0 && result.failed === 0 ? "sent" : "failed";
-  } catch (error) {
-    log.error(error, "Interview email could not be delivered");
-    return "failed";
-  }
-}
 
 async function isWorkspaceMember(workspaceId: string, userId: string) {
   const membership = await findWorkspaceMember(workspaceId, userId);
@@ -161,12 +142,25 @@ async function hasInterviewerConflict(
 }
 
 function formatInterviewWhen(when: Date, timeZone?: string | null): string {
-  return new Intl.DateTimeFormat("en", {
-    dateStyle: "long",
-    timeStyle: "short",
-    // Never let the app server's process TZ decide what the candidate sees.
-    timeZone: timeZone ?? "UTC",
-  }).format(when);
+  return formatInterviewWhenText(when, timeZone);
+}
+
+/**
+ * Parse a scheduling time for an action result. A time the zone skips is a
+ * validation error for the recruiter, not a silent shift.
+ */
+function parseInterviewTime(
+  value: string,
+  timeZone: string | null | undefined,
+): { ok: true; when: Date } | { ok: false; error: string } {
+  try {
+    return { ok: true, when: parseScheduledAt(value, timeZone) };
+  } catch (error) {
+    if (error instanceof NonexistentLocalTimeError) {
+      return { ok: false, error: error.message };
+    }
+    throw error;
+  }
 }
 
 const interviewTypes = [
@@ -277,6 +271,8 @@ export async function scheduleInterview(
   error?: string;
   warning?: string;
   emailStatus?: InterviewEmailStatus;
+  /** Accurate, non-blocking email copy; `warning` also carries it for older callers. */
+  emailWarning?: string;
   interviewId?: string;
 }> {
   try {
@@ -299,7 +295,9 @@ export async function scheduleInterview(
     );
 
     const data = parsed.data;
-    const when = parseScheduledAt(data.scheduledAt, data.timeZone);
+    const parsedWhen = parseInterviewTime(data.scheduledAt, data.timeZone);
+    if (!parsedWhen.ok) return { success: false, error: parsedWhen.error };
+    const when = parsedWhen.when;
 
     if (isPastWhen(when)) {
       return {
@@ -318,6 +316,13 @@ export async function scheduleInterview(
       };
     }
 
+    // The in-app confirmation and the candidate email show the same zone.
+    const displayZone = await resolveInterviewEmailZoneFor({
+      workspaceId: workspace.id,
+      kind: "interview.scheduled",
+      requested: data.timeZone ?? null,
+      actorId: user.id,
+    });
     const scheduledEvent: { current: PersistedDomainEvent | null } = {
       current: null,
     };
@@ -389,7 +394,7 @@ export async function scheduleInterview(
           meetLink: deriveMeetLink(data.mode, data.location),
           notes: data.notes ?? null,
         })
-        .returning({ id: interviews.id });
+        .returning({ id: interviews.id, updatedAt: interviews.updatedAt });
 
       if (!interview) {
         throw new Error("Interview could not be created.");
@@ -414,7 +419,7 @@ export async function scheduleInterview(
         candidateId: data.candidateId,
         type: "interview_scheduled",
         title: "Interview scheduled",
-        body: `Your interview is scheduled for ${formatInterviewWhen(when, data.timeZone)}.`,
+        body: `Your interview is scheduled for ${formatInterviewWhen(when, displayZone)}.`,
         href: `/portal/applications/${application.id}`,
         metadata: { interviewId: interview.id, applicationId: application.id },
       });
@@ -440,11 +445,16 @@ export async function scheduleInterview(
         },
       });
 
-      return { success: true as const, interviewId: interview.id };
+      return {
+        success: true as const,
+        interviewId: interview.id,
+        revision: interview.updatedAt.getTime(),
+      };
     });
 
     let warning: string | undefined;
     let emailStatus: InterviewEmailStatus | undefined;
+    let emailWarning: string | undefined;
     if (result.success) {
       if (scheduledEvent.current) {
         await publishPersistedDomainEvents([scheduledEvent.current]);
@@ -748,16 +758,19 @@ export async function scheduleInterview(
           workspace.id,
           data.applicationId,
         );
-        emailStatus = await queueInterviewEmail(
+        const queuedEmail: InterviewEmailQueueResult = await queueInterviewEmail(
           workspace.id,
           "interview.scheduled",
           {
+            interviewId: result.interviewId,
+            revision: result.revision,
             candidateEmail: recipient.email,
             candidateName: `${recipient.firstName} ${recipient.lastName}`,
             companyName: recipient.companyName,
             jobTitle: recipient.jobTitle,
             interviewType: INTERVIEW_TYPE_LABEL[data.type] ?? "Interview",
             scheduledAt: when.toISOString(),
+            timeZone: data.timeZone ?? null,
             mode: INTERVIEW_MODE_LABEL[data.mode] ?? data.mode,
             location: deliveryLocation,
             durationMins: data.durationMins,
@@ -766,11 +779,12 @@ export async function scheduleInterview(
             interviewerName,
           },
           user.id,
+          displayZone,
         );
-        if (emailStatus === "failed") {
-          warnings.push(
-            "The interview was scheduled, but the invitation email could not be sent.",
-          );
+        emailStatus = queuedEmail.status;
+        emailWarning = queuedEmail.warning;
+        if (queuedEmail.warning) {
+          warnings.push(`The interview was scheduled. ${queuedEmail.warning}`);
         }
       } else if (data.sendEmail) {
         emailStatus = "failed";
@@ -805,6 +819,7 @@ export async function scheduleInterview(
     return {
       ...result,
       ...(emailStatus ? { emailStatus } : {}),
+      ...(emailWarning ? { emailWarning } : {}),
       ...(warning ? { warning } : {}),
     };
   } catch (error) {
@@ -829,8 +844,9 @@ export async function setInterviewStatus(input: {
   interviewId: string;
   candidateId?: string;
   status: "completed" | "canceled";
-}): Promise<{ success: boolean; error?: string; warning?: string }> {
+}): Promise<{ success: boolean; error?: string; warning?: string; emailWarning?: string }> {
   try {
+    let emailWarning: string | undefined;
     const parsed = statusSchema.safeParse(input);
     if (!parsed.success) {
       return { success: false, error: "Invalid request." };
@@ -1029,10 +1045,12 @@ export async function setInterviewStatus(input: {
           workspace.id,
           info.applicationId,
         );
-        await queueInterviewEmail(
+        emailWarning = (await queueInterviewEmail(
           workspace.id,
           "interview.canceled",
           {
+            interviewId: parsed.data.interviewId,
+            revision: updatedInterview?.updatedAt?.getTime() ?? Date.now(),
             candidateEmail: info.email,
             candidateName: info.firstName,
             companyName: info.companyName,
@@ -1042,7 +1060,7 @@ export async function setInterviewStatus(input: {
             replyTo,
           },
           user.id,
-        );
+        )).warning;
       }
     }
 
@@ -1061,6 +1079,7 @@ export async function setInterviewStatus(input: {
 
     return {
       success: true,
+      ...(emailWarning ? { emailWarning } : {}),
       ...(providerWarnings.length > 0
         ? {
             warning: `Interview canceled, but ${providerWarnings.join(", ")} could not be synchronized. The provider meeting may still exist and needs manual cleanup.`,
@@ -1117,8 +1136,9 @@ export async function rescheduleInterview(input: {
   timeZone?: string | null;
   durationMins: number;
   location?: string | null;
-}): Promise<{ success: boolean; error?: string; warning?: string }> {
+}): Promise<{ success: boolean; error?: string; warning?: string; emailWarning?: string }> {
   try {
+    let emailWarning: string | undefined;
     const parsed = rescheduleSchema.safeParse(input);
     if (!parsed.success) {
       return {
@@ -1129,7 +1149,9 @@ export async function rescheduleInterview(input: {
 
     const { organization: workspace, user } = await getWorkspaceContext();
     const data = parsed.data;
-    const when = parseScheduledAt(data.scheduledAt, data.timeZone);
+    const parsedWhen = parseInterviewTime(data.scheduledAt, data.timeZone);
+    if (!parsedWhen.ok) return { success: false, error: parsedWhen.error };
+    const when = parsedWhen.when;
 
     await requireInterviewPermission(
       "interviews:manage",
@@ -1142,6 +1164,15 @@ export async function rescheduleInterview(input: {
         error: "Interview time must be in the future.",
       };
     }
+
+    // The in-app text and the reschedule email both use the original invite's zone.
+    const displayZone = await resolveInterviewEmailZoneFor({
+      workspaceId: workspace.id,
+      kind: "interview.rescheduled",
+      interviewId: data.interviewId,
+      requested: data.timeZone ?? null,
+      actorId: user.id,
+    });
 
     // Load the current interview first so the provider meeting is recreated
     // BEFORE we mutate the row. If the provider call fails, the database keeps
@@ -1406,11 +1437,12 @@ export async function rescheduleInterview(input: {
       Boolean(row.teamsMeetingId) ||
       Boolean(row.zoomMeetingId) ||
       Boolean(row.jitsiRoom);
+    const revisionAt = new Date();
     const rescheduleSet: Record<string, unknown> = {
       scheduledAt: when,
       durationMins: data.durationMins,
       location: data.location ?? null,
-      updatedAt: new Date(),
+      updatedAt: revisionAt,
     };
     if (!hasProviderMeeting) {
       rescheduleSet.meetLink = deriveMeetLink(row.mode, data.location);
@@ -1457,7 +1489,7 @@ export async function rescheduleInterview(input: {
         candidateId: row.candidateId,
         type: "interview_rescheduled",
         title: "Interview rescheduled",
-        body: `Your interview is now scheduled for ${formatInterviewWhen(when, data.timeZone)}.`,
+        body: `Your interview is now scheduled for ${formatInterviewWhen(when, displayZone)}.`,
         href: info?.applicationId
           ? `/portal/applications/${info.applicationId}`
           : null,
@@ -1507,10 +1539,12 @@ export async function rescheduleInterview(input: {
 
     if (info?.email) {
       const replyTo = await getInboundReplyTo(workspace.id, info.applicationId);
-      await queueInterviewEmail(
+      emailWarning = (await queueInterviewEmail(
         workspace.id,
         "interview.rescheduled",
         {
+          interviewId: data.interviewId,
+          revision: revisionAt.getTime(),
           candidateEmail: info.email,
           candidateName: info.firstName,
           companyName: info.companyName,
@@ -1520,10 +1554,12 @@ export async function rescheduleInterview(input: {
           mode: INTERVIEW_MODE_LABEL[info.mode] ?? info.mode,
           location: deliveryLocation,
           durationMins: data.durationMins,
+          timeZone: data.timeZone ?? null,
           replyTo,
         },
         user.id,
-      );
+        displayZone,
+      )).warning;
     }
 
     revalidatePath(`/dashboard/candidates/${row.candidateId}`);
@@ -1542,7 +1578,7 @@ export async function rescheduleInterview(input: {
       eventId: persistedEvent?.eventId,
     }, { actorId: user.id, skipDomainEvent: true, eventId: persistedEvent?.eventId });
 
-    return { success: true, ...(calendarWarning ? { warning: calendarWarning } : {}) };
+    return { success: true, ...(calendarWarning ? { warning: calendarWarning } : {}), ...(emailWarning ? { emailWarning } : {}) };
   } catch (error) {
     log.error(error, "rescheduleInterview failed");
     return {
@@ -1626,8 +1662,9 @@ export async function updateInterview(input: {
   title?: string | null;
   location?: string | null;
   notes?: string | null;
-}): Promise<{ success: boolean; error?: string; warning?: string }> {
+}): Promise<{ success: boolean; error?: string; warning?: string; emailWarning?: string }> {
   try {
+    let emailWarning: string | undefined;
     const parsed = updateSchema.safeParse(input);
     if (!parsed.success) {
       return {
@@ -1657,10 +1694,12 @@ export async function updateInterview(input: {
     // Parse the new time with the recruiter's timezone (same wall-clock
     // interpretation as scheduleInterview). Previously this used new Date()
     // directly, which interpreted naive strings as UTC and shifted the time.
-    const when =
-      data.scheduledAt && data.scheduledAt !== ""
-        ? parseScheduledAt(data.scheduledAt, data.timeZone)
-        : undefined;
+    let when: Date | undefined;
+    if (data.scheduledAt && data.scheduledAt !== "") {
+      const parsedWhen = parseInterviewTime(data.scheduledAt, data.timeZone);
+      if (!parsedWhen.ok) return { success: false, error: parsedWhen.error };
+      when = parsedWhen.when;
+    }
     if (when && isPastWhen(when)) {
       return {
         success: false,
@@ -1669,7 +1708,8 @@ export async function updateInterview(input: {
     }
 
     // Build the update payload , only set fields that were explicitly provided.
-    const set: Record<string, unknown> = { updatedAt: new Date() };
+    const revisionAt = new Date();
+    const set: Record<string, unknown> = { updatedAt: revisionAt };
     if (data.type !== undefined) set.type = data.type;
     if (data.mode !== undefined) set.mode = data.mode;
     if (data.title !== undefined) set.title = data.title;
@@ -2151,10 +2191,12 @@ export async function updateInterview(input: {
     // Send rescheduled email if date/time changed.
     if (data.scheduledAt && data.scheduledAt !== "" && info?.email) {
           const replyTo = await getInboundReplyTo(workspace.id, info.applicationId);
-      await queueInterviewEmail(
+      emailWarning = (await queueInterviewEmail(
         workspace.id,
         "interview.rescheduled",
         {
+          interviewId: data.interviewId,
+          revision: revisionAt.getTime(),
           candidateEmail: info.email,
           candidateName: info.firstName,
           companyName: info.companyName,
@@ -2165,10 +2207,11 @@ export async function updateInterview(input: {
           mode: INTERVIEW_MODE_LABEL[effectiveMode] ?? effectiveMode,
           location: data.location ?? undefined,
           durationMins: effectiveDurationMins,
+          timeZone: data.timeZone ?? null,
           replyTo,
         },
         user.id,
-      );
+      )).warning;
     }
 
     revalidatePath(`/dashboard/candidates/${row.candidateId}`);
@@ -2186,7 +2229,7 @@ export async function updateInterview(input: {
       eventId: persistedEvent?.eventId,
     }, { actorId: user.id, skipDomainEvent: true, eventId: persistedEvent?.eventId });
 
-    return { success: true, ...(calendarWarning ? { warning: calendarWarning } : {}) };
+    return { success: true, ...(calendarWarning ? { warning: calendarWarning } : {}), ...(emailWarning ? { emailWarning } : {}) };
   } catch (error) {
     log.error(error, "updateInterview failed");
     return {
@@ -2327,68 +2370,41 @@ export async function generateInterviewBriefAction(input: {
       .trim();
   }
 
-  const candidateBlock = [
-    `Name: ${briefRow.candidateFirst} ${briefRow.candidateLast}`,
-    briefRow.candidateHeadline
-      ? `Headline: ${briefRow.candidateHeadline}`
-      : null,
-    briefRow.candidateLocation
-      ? `Location: ${briefRow.candidateLocation}`
-      : null,
-    briefRow.candidateExperienceYears != null
-      ? `Experience: ${briefRow.candidateExperienceYears} years`
-      : null,
-    Array.isArray(briefRow.candidateSkills) &&
-    (briefRow.candidateSkills as string[]).length > 0
-      ? `Skills: ${(briefRow.candidateSkills as string[]).slice(0, 20).join(", ")}`
-      : null,
-    resumeText
-      ? `Resume:\n"""\n${resumeText.slice(0, 8000)}\n"""`
-      : "Resume: not available",
-  ]
-    .filter(Boolean)
-    .join("\n");
-
-  const jobBlock = [
-    `Title: ${briefRow.jobTitle}`,
-    `Description: ${stripHtml(briefRow.jobDescription).slice(0, 3000)}`,
-    briefRow.jobRequirements
-      ? `Requirements: ${stripHtml(briefRow.jobRequirements).slice(0, 1500)}`
-      : null,
-  ]
-    .filter(Boolean)
-    .join("\n");
-
-  const interviewBlock = [
-    `Interview type: ${INTERVIEW_TYPE_LABEL[briefRow.type] ?? briefRow.type}`,
-    `Duration: ${briefRow.durationMins} min`,
-    briefRow.notes ? `Interviewer notes: ${briefRow.notes}` : null,
-  ]
-    .filter(Boolean)
-    .join("\n");
-
   try {
-    const { output: briefOutput } = await generateText({
-      model: getModel(aiConfig),
-      system:
-        "You are an expert recruiter coach. Generate a focused pre-interview brief for " +
-        "the interviewer. Be specific and practical. `candidateSummary` is 2-4 sentences. " +
-        "`keyAreasToProbe` is 3-6 concise themes. `suggestedQuestions` is 4-8 concrete, " +
-        "open-ended questions. `redFlags` lists concerns worth watching, leave empty when " +
-        "there are none. Use plain text only, no markdown.",
-      prompt:
-        `Prepare an interview brief.\n\n## Candidate\n${candidateBlock}\n\n` +
-        `## Job\n${jobBlock}\n\n## Interview\n${interviewBlock}`,
-      output: Output.object({ schema: interviewBriefSchema }),
+    // The AI surface owns the prompt, so candidate identity follows the
+    // workspace anonymization setting exactly as it does everywhere else.
+    const brief = await generateInterviewBriefWithAI(aiConfig, {
+      candidate: {
+        fullName: `${briefRow.candidateFirst} ${briefRow.candidateLast}`.trim(),
+        headline: briefRow.candidateHeadline,
+        location: briefRow.candidateLocation,
+        skills: Array.isArray(briefRow.candidateSkills)
+          ? (briefRow.candidateSkills as string[])
+          : [],
+        experienceYears: briefRow.candidateExperienceYears,
+        resumeText,
+      },
+      job: {
+        title: briefRow.jobTitle,
+        description: stripHtml(briefRow.jobDescription),
+        requirements: briefRow.jobRequirements
+          ? stripHtml(briefRow.jobRequirements)
+          : null,
+        keywords: [],
+      },
+      interview: {
+        type: INTERVIEW_TYPE_LABEL[briefRow.type] ?? briefRow.type,
+        scheduledAt: briefRow.scheduledAt,
+        interviewerName: null,
+        durationMins: briefRow.durationMins,
+        notes: briefRow.notes,
+      },
+      existingScore: null,
     });
-
-    if (!briefOutput) {
-      return { success: false, error: "AI returned no structured output." };
-    }
 
     await db
       .update(interviews)
-      .set({ briefContent: briefOutput, updatedAt: new Date() })
+      .set({ briefContent: brief, updatedAt: new Date() })
       .where(
         and(
           eq(interviews.id, parsed.data.interviewId),
@@ -2397,7 +2413,7 @@ export async function generateInterviewBriefAction(input: {
       );
 
     revalidatePath(`/dashboard/candidates/${briefRow.candidateId}`);
-    return { success: true, brief: briefOutput };
+    return { success: true, brief };
   } catch (briefError) {
     log.error(briefError, "generateInterviewBriefAction failed");
     return {

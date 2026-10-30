@@ -1,18 +1,24 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { ReactElement } from "react";
 
-const { redirect, getPublicWorkspaceSlug, getCareerPageData, isPortalEnabled } = vi.hoisted(
-  () => ({
-    redirect: vi.fn((href: string) => {
-      throw new Error(`redirect:${href}`);
-    }),
-    getPublicWorkspaceSlug: vi.fn(),
-    getCareerPageData: vi.fn(),
-    isPortalEnabled: vi.fn(),
+const {
+  redirect,
+  getPublicWorkspaceSlug,
+  getCareerPageData,
+  isPortalEnabled,
+  resolveSignedInRootRoute,
+} = vi.hoisted(() => ({
+  redirect: vi.fn((href: string) => {
+    throw new Error(`redirect:${href}`);
   }),
-);
+  getPublicWorkspaceSlug: vi.fn(),
+  getCareerPageData: vi.fn(),
+  isPortalEnabled: vi.fn(),
+  resolveSignedInRootRoute: vi.fn(),
+}));
 
 vi.mock("next/navigation", () => ({ redirect }));
+vi.mock("@/features/onboarding/root-route", () => ({ resolveSignedInRootRoute }));
 vi.mock("@/lib/public-workspace", () => ({ getPublicWorkspaceSlug }));
 vi.mock("@/features/career-page/data", () => ({ getCareerPageData }));
 vi.mock("@/lib/portal-auth", () => ({ isPortalEnabled }));
@@ -28,6 +34,19 @@ import HomePage from "./page";
 describe("public home page", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    resolveSignedInRootRoute.mockResolvedValue(null);
+  });
+
+  it("sends a signed-in member to their app before loading the public board", async () => {
+    resolveSignedInRootRoute.mockResolvedValue("/dashboard");
+
+    await expect(
+      HomePage({ searchParams: Promise.resolve({}) }),
+    ).rejects.toThrow("redirect:/dashboard");
+
+    expect(redirect).toHaveBeenCalledWith("/dashboard");
+    expect(getPublicWorkspaceSlug).not.toHaveBeenCalled();
+    expect(getCareerPageData).not.toHaveBeenCalled();
   });
 
   it("renders the first workspace board at / with root-relative job links", async () => {

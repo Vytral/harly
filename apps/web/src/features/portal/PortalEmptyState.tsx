@@ -36,7 +36,7 @@ export function PortalEmptyState({
       {cta && (
         <Link
           href={cta.href}
-          className="mt-4 inline-flex items-center gap-1.5 rounded-full bg-pine px-4 py-2 text-sm font-semibold text-white hover:bg-pine-strong active:scale-[0.98] transition-colors"
+          className="mt-4 inline-flex items-center gap-1.5 rounded-full bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground hover:bg-primary/90 active:scale-[0.98] transition-colors"
         >
           {cta.label}
           <ArrowUpRightIcon className="size-3.5" />

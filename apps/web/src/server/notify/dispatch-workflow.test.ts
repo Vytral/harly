@@ -103,6 +103,26 @@ describe("workflow chat delivery", () => {
     const [, request] = mocks.fetch.mock.calls[0] as [string, RequestInit];
     expect(new Headers(request.headers).get("Idempotency-Key")).toBe("effect-discord-1");
   });
+  it("passes the workspace to the Telegram client so the delivery is recorded in integration health", async () => {
+    mocks.isDemoMode.mockReturnValue(false);
+    mocks.getWorkspaceTelegramConfig.mockResolvedValue({
+      botToken: "secret-token",
+      chatId: "-1001",
+      events: [],
+    });
+    mocks.sendTelegramMessage.mockResolvedValue(undefined);
+
+    await expect(
+      sendWorkflowTelegramMessage("workspace-1", "candidate.created", {
+        candidate: { name: "Ada" },
+      }),
+    ).resolves.toEqual({ provider: "telegram" });
+
+    expect(mocks.sendTelegramMessage).toHaveBeenCalledWith(
+      expect.objectContaining({ chatId: "-1001", workspaceId: "workspace-1" }),
+    );
+  });
+
   it("no-ops workflow Telegram delivery in demo mode without calling the Bot API", async () => {
     mocks.isDemoMode.mockReturnValue(true);
     mocks.getWorkspaceTelegramConfig.mockResolvedValue({

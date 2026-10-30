@@ -4,7 +4,7 @@ import { Star, Users } from "lucide-react";
 export function ReferralBadge({ featured }: { featured: boolean }) {
   if (featured) {
     return (
-      <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-1.5 py-0.5 text-[11px] font-semibold text-amber-700">
+      <span className="inline-flex items-center gap-1 rounded-full bg-warning-clay/10 px-1.5 py-0.5 text-[11px] font-semibold text-warning-clay">
         <Star className="size-3 fill-current" />
         Featured referral
       </span>

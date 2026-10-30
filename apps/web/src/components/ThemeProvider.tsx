@@ -10,7 +10,13 @@ import {
   type ReactNode,
 } from "react";
 
-type Theme = "light" | "dark" | "system";
+import {
+  THEME_STORAGE_KEY,
+  isThemePreference,
+  type ThemePreference,
+} from "@/lib/theme-bootstrap";
+
+type Theme = ThemePreference;
 type ResolvedTheme = "light" | "dark";
 
 type ThemeContextValue = {
@@ -79,41 +85,49 @@ export function ThemeProvider({
   enableSystem = true,
   enableColorScheme = true,
   disableTransitionOnChange = false,
-  storageKey = "theme",
+  storageKey = THEME_STORAGE_KEY,
   forcedTheme,
 }: ThemeProviderProps) {
   const [theme, setThemeState] = useState<Theme>(forcedTheme ?? defaultTheme);
   const [systemTheme, setSystemTheme] = useState<ResolvedTheme>("light");
+  // The server render and the first client render use the defaults above. The
+  // stored preference is read in the mount effect below; until that has run,
+  // the pre-paint script in <head> owns the root class, so applying the
+  // defaults here would flip a dark page to light for one frame.
+  const [hydrated, setHydrated] = useState(false);
 
   useEffect(() => {
     const media = window.matchMedia("(prefers-color-scheme: dark)");
     const updateSystemTheme = () => setSystemTheme(readSystemTheme());
-    let stored: Theme | null = null;
+    let stored: string | null = null;
     try {
-      stored = window.localStorage.getItem(storageKey) as Theme | null;
+      stored = window.localStorage.getItem(storageKey);
     } catch {
       // Theme persistence is optional in restricted browser contexts.
     }
-    const nextTheme = forcedTheme ?? (stored ?? defaultTheme);
+    const nextTheme: Theme = forcedTheme ?? (isThemePreference(stored) ? stored : defaultTheme);
 
     if (enableSystem) {
       updateSystemTheme();
       media.addEventListener("change", updateSystemTheme);
     }
-    queueMicrotask(() => setThemeState(nextTheme));
+    // Deferred so the state change is not a synchronous setState inside the
+    // effect body; both values land in the same render.
+    queueMicrotask(() => {
+      setThemeState(nextTheme);
+      setHydrated(true);
+    });
 
     return () => media.removeEventListener("change", updateSystemTheme);
   }, [
-    attribute,
     defaultTheme,
-    disableTransitionOnChange,
-    enableColorScheme,
     enableSystem,
     forcedTheme,
     storageKey,
   ]);
 
   useEffect(() => {
+    if (!hydrated) return;
     applyTheme(
       forcedTheme ?? theme,
       enableSystem ? systemTheme : "light",
@@ -127,6 +141,7 @@ export function ThemeProvider({
     enableColorScheme,
     enableSystem,
     forcedTheme,
+    hydrated,
     systemTheme,
     theme,
   ]);

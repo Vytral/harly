@@ -62,7 +62,7 @@ export function PortalHorizontalPipeline({
               <div
                 className={cn(
                   "flex size-6 shrink-0 items-center justify-center rounded-full ring-4 ring-card transition-colors",
-                  (completed || isPastTerminal) && "bg-pine text-white",
+                  (completed || isPastTerminal) && "bg-primary text-primary-foreground",
                   isCurrent && "bg-lime text-lime-ink ring-2 ring-lime/30",
                   isFuture && "border-2 border-hairline bg-card",
                   isTerminalCurrent && applicationStatus === "rejected" && "bg-rust text-white",

@@ -14,6 +14,8 @@ import {
 } from "@harly/db";
 import { getWorkspaceContext } from "@/features/workspaces/context";
 import { can, requirePermission } from "@/features/workspaces/permissions-server";
+import { candidateScopeSql, jobScopeSql, taskScopeSql } from "@/features/search/scope";
+import { resolveSearchActor } from "@/features/search/workspace-search";
 import type { TaskItem, TaskStatus } from "./shared";
 
 function toItem(row: {
@@ -121,8 +123,11 @@ export const listTasks = cache(
   }): Promise<TaskItem[]> => {
     await requirePermission("tasks:read");
     const { organization: workspace } = await getWorkspaceContext();
+    const actor = await resolveSearchActor();
 
     const conditions = [eq(tasks.workspaceId, workspace.id), isNull(tasks.deletedAt)];
+    const scope = taskScopeSql(actor);
+    if (scope) conditions.push(scope);
 
     // All statuses (incl. canceled) so the board can show the full lifecycle.
     if (filters?.status) {
@@ -161,6 +166,7 @@ export const listTasks = cache(
 export const getTask = cache(async (taskId: string): Promise<TaskItem | null> => {
   await requirePermission("tasks:read");
   const { organization: workspace } = await getWorkspaceContext();
+  const actor = await resolveSearchActor();
 
   const [row] = await baseQuery()
     .where(
@@ -168,6 +174,7 @@ export const getTask = cache(async (taskId: string): Promise<TaskItem | null> =>
         eq(tasks.id, taskId),
         eq(tasks.workspaceId, workspace.id),
         isNull(tasks.deletedAt),
+        taskScopeSql(actor),
       ),
     )
     .limit(1);
@@ -178,6 +185,7 @@ export const getTask = cache(async (taskId: string): Promise<TaskItem | null> =>
 export const getTaskCounts = cache(async () => {
   await requirePermission("tasks:read");
   const { organization: workspace } = await getWorkspaceContext();
+  const actor = await resolveSearchActor();
 
   const rows = await db
     .select({
@@ -185,7 +193,9 @@ export const getTaskCounts = cache(async () => {
       count: count(),
     })
     .from(tasks)
-    .where(and(eq(tasks.workspaceId, workspace.id), isNull(tasks.deletedAt)))
+    .where(
+      and(eq(tasks.workspaceId, workspace.id), isNull(tasks.deletedAt), taskScopeSql(actor)),
+    )
     .groupBy(tasks.status);
 
   const counts: Record<string, number> = {
@@ -276,6 +286,8 @@ export type TaskJobOption = { id: string; title: string };
 export const listTaskContextOptions = cache(async () => {
   await requirePermission("tasks:read");
   const { organization: workspace } = await getWorkspaceContext();
+  const actor = await resolveSearchActor();
+  const jobScope = jobScopeSql(actor);
 
   const [candidateRows, applicationRows, interviewRows, jobRows] = await Promise.all([
     db
@@ -286,7 +298,13 @@ export const listTaskContextOptions = cache(async () => {
         avatarUrl: candidates.avatarUrl,
       })
       .from(candidates)
-      .where(and(eq(candidates.workspaceId, workspace.id), isNull(candidates.deletedAt)))
+      .where(
+        and(
+          eq(candidates.workspaceId, workspace.id),
+          isNull(candidates.deletedAt),
+          candidateScopeSql(actor, candidates.id),
+        ),
+      )
       .orderBy(asc(candidates.lastName), asc(candidates.firstName))
       .limit(500),
     db
@@ -315,7 +333,7 @@ export const listTaskContextOptions = cache(async () => {
           isNull(jobs.deletedAt),
         ),
       )
-      .where(eq(applications.workspaceId, workspace.id))
+      .where(and(eq(applications.workspaceId, workspace.id), jobScope))
       .orderBy(desc(applications.appliedAt))
       .limit(500),
     db
@@ -345,13 +363,13 @@ export const listTaskContextOptions = cache(async () => {
           isNull(jobs.deletedAt),
         ),
       )
-      .where(eq(interviews.workspaceId, workspace.id))
+      .where(and(eq(interviews.workspaceId, workspace.id), jobScope))
       .orderBy(desc(interviews.scheduledAt))
       .limit(500),
     db
       .select({ id: jobs.id, title: jobs.title })
       .from(jobs)
-      .where(and(eq(jobs.workspaceId, workspace.id), isNull(jobs.deletedAt)))
+      .where(and(eq(jobs.workspaceId, workspace.id), isNull(jobs.deletedAt), jobScope))
       .orderBy(asc(jobs.title))
       .limit(500),
   ]);

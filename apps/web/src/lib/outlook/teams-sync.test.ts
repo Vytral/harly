@@ -25,6 +25,11 @@ vi.mock("drizzle-orm", () => ({
 }));
 vi.mock("./config", () => ({
   getWorkspaceOutlookConfig: mocks.getWorkspaceOutlookConfig,
+  recordOutlookCallFailure: vi.fn(async () => false),
+}));
+vi.mock("@/features/integrations/health/repository", () => ({
+  recordIntegrationSuccess: vi.fn(async () => undefined),
+  recordIntegrationFailure: vi.fn(async () => undefined),
 }));
 vi.mock("./client", () => ({
   createTeamsMeeting: mocks.createTeamsMeeting,

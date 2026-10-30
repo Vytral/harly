@@ -1,5 +1,8 @@
 "use client";
 
+import { IntegrationHealthNotice } from "@/features/integrations/health/ui/IntegrationHealthNotice";
+import type { IntegrationHealthView } from "@/features/integrations/health/model";
+import { providerStatusLabel, providerStatusTone } from "@/features/integrations/health/connection-label";
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "@/lib/notification-island/toast";
@@ -43,7 +46,9 @@ export function TelegramConnectPanel({
   canEdit,
   tileClassName,
   description,
+  health,
 }: {
+  health?: IntegrationHealthView;
   status: WorkspaceTelegramStatus;
   events: EventOption[];
   canEdit: boolean;
@@ -55,12 +60,12 @@ export function TelegramConnectPanel({
   const [open, setOpen] = useState(isConnected);
   const [togglePending, startToggle] = useTransition();
 
-  const statusTone = isConnected ? (status.enabled ? "on" : "off") : "neutral";
-  const statusLabel = isConnected
+  const statusTone = providerStatusTone(health, isConnected ? (status.enabled ? "on" : "off") : "neutral");
+  const statusLabel = providerStatusLabel(health, isConnected
     ? status.enabled
       ? "Connected"
       : "Disabled"
-    : "Not connected";
+    : "Not connected");
 
   function toggleEnabled(next: boolean) {
     if (!isConnected) return;
@@ -127,6 +132,7 @@ export function TelegramConnectPanel({
           ) : null
         }
       />
+      {health ? <IntegrationHealthNotice health={health} onReconnect={() => setOpen(true)} /> : null}
 
       {!status.encryptionReady ? (
         <div className="flex items-start gap-2 rounded-xl border border-clay/30 bg-clay/5 px-3 py-2 text-sm text-clay">
@@ -143,7 +149,7 @@ export function TelegramConnectPanel({
           <div className="grid grid-cols-1 divide-y sm:grid-cols-3 sm:divide-x sm:divide-y-0">
             <StatCell label="Bot">
               <TelegramLogo className="size-4" />
-              {status.botUsername ? `@${status.botUsername}` : "Connected"}
+              {status.botUsername ? `@${status.botUsername}` : providerStatusLabel(health, "Connected")}
             </StatCell>
             <StatCell label="Chat">
               <span className="font-mono text-[13px]">

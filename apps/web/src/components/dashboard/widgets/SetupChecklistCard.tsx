@@ -1,85 +1,37 @@
 "use client";
 
-import { useSyncExternalStore } from "react";
+import { useState, useSyncExternalStore, useTransition } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import type { Route } from "next";
-import { ArrowRight, Check, ChevronDown, Rocket, X } from "lucide-react";
+import { ArrowRight, Check, ChevronDown, Copy, EyeOff, Rocket, X } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import { tileClass } from "@/components/dashboard/widgets/primitives";
 import { SetupProgressRing } from "@/components/dashboard/SetupProgressRing";
+import { Button } from "@/components/ui/button";
 import type { SetupChecklist } from "@/features/dashboard/setup-checklist";
+import type { ChecklistRow } from "@/features/onboarding/checklist-model";
+import {
+  dismissSetupChecklistAction,
+  skipSetupChecklistItemAction,
+} from "@/features/onboarding/checklist-actions";
+import { loadSampleDataAction } from "@/features/sample-data/actions";
 
-const DISMISS_KEY = "harly:setup-checklist-dismissed";
 const COLLAPSE_KEY = "harly:setup-checklist-collapsed";
-const SKIPPED_KEY = "harly:setup-checklist-skipped-items";
-const EMPTY_SKIPPED: string[] = [];
-
-/** Set of item keys the user skipped (e.g. "Invite your team" for a solo
- *  workspace) , same localStorage/useSyncExternalStore pattern as the flags
- *  above, just storing a JSON array of keys instead of a boolean. */
-function makeSkippedStore() {
-  const listeners = new Set<() => void>();
-  const read = (): string[] => {
-    try {
-      const raw = window.localStorage.getItem(SKIPPED_KEY);
-      return raw ? (JSON.parse(raw) as string[]) : [];
-    } catch {
-      return [];
-    }
-  };
-  let cached: string[] = [];
-  let cachedRaw: string | null = null;
-  return {
-    subscribe(cb: () => void) {
-      listeners.add(cb);
-      return () => listeners.delete(cb);
-    },
-    get(): string[] {
-      const raw = (() => {
-        try {
-          return window.localStorage.getItem(SKIPPED_KEY);
-        } catch {
-          return null;
-        }
-      })();
-      if (raw !== cachedRaw) {
-        cachedRaw = raw;
-        cached = read();
-      }
-      return cached;
-    },
-    skip(key: string) {
-      const next = Array.from(new Set([...read(), key]));
-      try {
-        window.localStorage.setItem(SKIPPED_KEY, JSON.stringify(next));
-      } catch {
-        // Private mode / storage disabled , falls back to session-only state.
-      }
-      listeners.forEach((l) => l());
-    },
-  };
-}
-
-const skippedStore = makeSkippedStore();
-// React compares external-store snapshots by identity. Keep this value
-// stable across server renders so React does not detect a new snapshot on
-// every render and schedule an infinite update loop.
-const serverEmptyArray = () => EMPTY_SKIPPED;
 
 /**
- * A localStorage-backed boolean shared with React via useSyncExternalStore.
- * The SSR snapshot must equal `fallback`, so the server and the first client
- * render agree and nothing needs a setState-in-effect.
+ * Per-viewer convenience only: whether this browser shows the card expanded.
+ * Dismiss and skip are per member and per workspace, so they live on the server.
  */
-function makePersistedFlag(key: string, fallback = false) {
+function makeCollapseStore() {
   const listeners = new Set<() => void>();
   const read = () => {
     try {
-      const stored = window.localStorage.getItem(key);
-      return stored === null ? fallback : stored === "1";
+      const stored = window.localStorage.getItem(COLLAPSE_KEY);
+      return stored === null ? true : stored === "1";
     } catch {
-      return fallback;
+      return true;
     }
   };
   return {
@@ -90,64 +42,59 @@ function makePersistedFlag(key: string, fallback = false) {
     get: read,
     set(value: boolean) {
       try {
-        window.localStorage.setItem(key, value ? "1" : "0");
+        window.localStorage.setItem(COLLAPSE_KEY, value ? "1" : "0");
       } catch {
-        // Private mode / storage disabled , falls back to session-only state.
+        // Storage disabled: the toggle still works for this page view.
       }
-      listeners.forEach((l) => l());
+      listeners.forEach((listener) => listener());
     },
   };
 }
 
-const dismissStore = makePersistedFlag(DISMISS_KEY);
-// Collapsed by default. Home's hero surface is the human table; setup is a
-// single row you open on purpose, not a panel sitting on top of the work.
-const collapseStore = makePersistedFlag(COLLAPSE_KEY, true);
-const serverFalse = () => false;
+const collapseStore = makeCollapseStore();
+// Collapsed by default: the dashboard's hero surface is the human table, and
+// setup is one row you open on purpose.
 const serverTrue = () => true;
 
+type ActionResult = { ok: boolean; error?: string };
+
 /**
- * "Recommended next steps" , a progressive, benefit-led launch checklist.
- * Reads state from getSetupChecklist and links to existing pages. Renders as a
- * single collapsed header row by default (frame 02's stacked-row pattern), and
- * the page unmounts it entirely once every step is done.
+ * "Your first hour": a guided list derived from real workspace data. Rows
+ * link to the next step; the pipeline step can load sample data or copy the
+ * public job link once a job is live.
  */
 export function SetupChecklistCard({ checklist }: { checklist: SetupChecklist }) {
-  const dismissed = useSyncExternalStore(
-    dismissStore.subscribe,
-    dismissStore.get,
-    serverFalse,
-  );
+  const router = useRouter();
   const collapsed = useSyncExternalStore(
     collapseStore.subscribe,
     collapseStore.get,
     serverTrue,
   );
-  const skipped = useSyncExternalStore(
-    skippedStore.subscribe,
-    skippedStore.get,
-    serverEmptyArray,
-  );
-  const pendingItems = checklist.items.filter(
-    (item) => !item.done && !skipped.includes(item.key),
-  );
+  const [pending, startTransition] = useTransition();
+  const [error, setError] = useState<string | null>(null);
 
-  if (dismissed || pendingItems.length === 0) return null;
+  const rows = checklist.items.filter((item) => !item.done && !item.skipped);
+  if (rows.length === 0) return null;
 
-  // The 100%-complete celebration panel used to live here. Home's hero surface
-  // is the human table, and a full-width card congratulating you on finishing
-  // setup is exactly the noise DESIGN.md bans above it. The page now stops
-  // rendering the checklist once `allDone`, so there is nothing to celebrate
-  // with , finishing the list simply removes it.
+  function run(action: () => Promise<ActionResult>) {
+    setError(null);
+    startTransition(async () => {
+      const result = await action();
+      if (!result.ok) {
+        setError(result.error ?? "Something went wrong. Try again.");
+        return;
+      }
+      router.refresh();
+    });
+  }
 
   return (
     <section
       className={cn(
         tileClass,
-        "overflow-hidden duration-500 animate-in fade-in slide-in-from-bottom-2",
+        "overflow-hidden duration-500 animate-in fade-in slide-in-from-bottom-2 motion-reduce:animate-none",
       )}
     >
-      {/* Header , click to collapse/expand */}
       <button
         type="button"
         onClick={() => collapseStore.set(!collapsed)}
@@ -163,7 +110,7 @@ export function SetupChecklistCard({ checklist }: { checklist: SetupChecklist })
           </span>
           <div>
             <h2 className="font-display text-[15px] font-semibold tracking-tight">
-              Recommended next steps
+              Your first hour
             </h2>
             <p className="text-xs text-muted-foreground">
               {checklist.completed} of {checklist.total} done
@@ -188,81 +135,169 @@ export function SetupChecklistCard({ checklist }: { checklist: SetupChecklist })
           <SetupProgressRing percent={checklist.percent} size={34} showLabel />
           <ChevronDown
             className={cn(
-              "size-4 text-muted-foreground transition-transform duration-200",
+              "size-4 text-muted-foreground transition-transform duration-200 motion-reduce:transition-none",
               collapsed && "-rotate-90",
             )}
           />
         </div>
       </button>
 
-      {/* Rows */}
       {!collapsed ? (
-        <ul className="divide-y divide-border/50">
-          {pendingItems.map((item, i) => (
-            <li
-              key={item.key}
-              className="duration-500 animate-in fade-in slide-in-from-bottom-1"
-              style={{
-                animationDelay: `${i * 55}ms`,
-                animationFillMode: "backwards",
-              }}
+        <>
+          <ul className="divide-y divide-border/50">
+            {rows.map((item, i) => (
+              <li
+                key={item.key}
+                className="duration-500 animate-in fade-in slide-in-from-bottom-1 motion-reduce:animate-none"
+                style={{
+                  animationDelay: `${i * 55}ms`,
+                  animationFillMode: "backwards",
+                }}
+              >
+                <ChecklistRowView
+                  item={item}
+                  index={i}
+                  checklist={checklist}
+                  busy={pending}
+                  onRun={run}
+                />
+              </li>
+            ))}
+          </ul>
+
+          <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border/50 px-5 py-3">
+            {error ? (
+              <p role="alert" className="text-xs text-destructive">
+                {error}
+              </p>
+            ) : (
+              <span className="text-xs text-muted-foreground">
+                Hidden steps come back from your account menu.
+              </span>
+            )}
+            <button
+              type="button"
+              disabled={pending}
+              onClick={() => run(() => dismissSetupChecklistAction())}
+              className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-50"
             >
-              <div className="flex items-center gap-3.5 px-5 py-3.5">
-                <span
-                  className={cn(
-                    "flex size-7 shrink-0 items-center justify-center rounded-full text-xs font-semibold tabular-nums transition-colors",
-                    item.done
-                      ? "bg-sage text-pine ring-1 ring-pine/15"
-                      : "bg-muted text-muted-foreground",
-                  )}
-                >
-                  {item.done ? (
-                    <Check className="size-4 checkmark-anim" strokeWidth={2.4} />
-                  ) : (
-                    i + 1
-                  )}
-                </span>
-                <div className="min-w-0 flex-1">
-                  <p
-                    className={cn(
-                      "truncate text-sm font-medium",
-                      item.done ? "text-muted-foreground" : "text-foreground",
-                    )}
-                  >
-                    {item.title}
-                  </p>
-                  <p className="truncate text-xs text-muted-foreground">
-                    {item.value}
-                  </p>
-                </div>
-                <Link
-                  href={item.href as Route}
-                  className={cn(
-                    "group inline-flex shrink-0 items-center gap-1 rounded-lg px-2.5 py-1.5 text-sm font-medium transition-all",
-                    item.done
-                      ? "text-muted-foreground hover:text-foreground"
-                      : "text-primary hover:gap-1.5",
-                  )}
-                >
-                  {item.ctaLabel}
-                  <ArrowRight className="size-4" />
-                </Link>
-                {item.optional && !item.done ? (
-                  <button
-                    type="button"
-                    onClick={() => skippedStore.skip(item.key)}
-                    aria-label={`Skip "${item.title}"`}
-                    title="Skip this step"
-                    className="shrink-0 rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-                  >
-                    <X className="size-4" />
-                  </button>
-                ) : null}
-              </div>
-            </li>
-          ))}
-        </ul>
+              <EyeOff className="size-3.5" />
+              Hide checklist
+            </button>
+          </div>
+        </>
       ) : null}
     </section>
+  );
+}
+
+function ChecklistRowView({
+  item,
+  index,
+  checklist,
+  busy,
+  onRun,
+}: {
+  item: ChecklistRow;
+  index: number;
+  checklist: SetupChecklist;
+  busy: boolean;
+  onRun: (action: () => Promise<ActionResult>) => void;
+}) {
+  const isPipeline = item.key === "pipeline_candidates";
+  const showSkip = item.optional && !item.done;
+
+  return (
+    <div className="flex items-center gap-3.5 px-5 py-3.5">
+      <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-semibold tabular-nums text-muted-foreground">
+        {index + 1}
+      </span>
+      <div className="min-w-0 flex-1">
+        <p className="truncate text-sm font-medium text-foreground">{item.title}</p>
+        <p className="truncate text-xs text-muted-foreground">{item.value}</p>
+        {isPipeline ? (
+          <PipelineExtras checklist={checklist} busy={busy} onRun={onRun} />
+        ) : null}
+      </div>
+      <Link
+        href={(isPipeline ? "/dashboard/candidates" : item.href) as Route}
+        className="group inline-flex shrink-0 items-center gap-1 rounded-lg px-2.5 py-1.5 text-sm font-medium text-primary transition-all hover:gap-1.5"
+      >
+        {isPipeline ? "Import CSV" : item.ctaLabel}
+        <ArrowRight className="size-4" />
+      </Link>
+      {showSkip ? (
+        <button
+          type="button"
+          disabled={busy}
+          onClick={() => onRun(() => skipSetupChecklistItemAction(item.key))}
+          aria-label={`Skip "${item.title}"`}
+          title="Skip this step"
+          className="shrink-0 rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-50"
+        >
+          <X className="size-4" />
+        </button>
+      ) : null}
+    </div>
+  );
+}
+
+function PipelineExtras({
+  checklist,
+  busy,
+  onRun,
+}: {
+  checklist: SetupChecklist;
+  busy: boolean;
+  onRun: (action: () => Promise<ActionResult>) => void;
+}) {
+  const canLoadSample = checklist.visible && !checklist.sampleDataActive;
+  return (
+    <div className="mt-2 space-y-2">
+      {canLoadSample ? (
+        <Button
+          type="button"
+          size="sm"
+          variant="secondary"
+          disabled={busy}
+          onClick={() => onRun(() => loadSampleDataAction())}
+        >
+          Load sample data
+        </Button>
+      ) : null}
+      {checklist.publishedJob ? (
+        <CopyJobLink title={checklist.publishedJob.title} url={checklist.publishedJob.url} />
+      ) : null}
+    </div>
+  );
+}
+
+function CopyJobLink({ title, url }: { title: string; url: string }) {
+  const [copied, setCopied] = useState(false);
+
+  async function copy() {
+    try {
+      await navigator.clipboard.writeText(url);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 1500);
+    } catch {
+      setCopied(false);
+    }
+  }
+
+  return (
+    <div className="flex min-w-0 items-center gap-2 rounded-lg border border-border/60 bg-muted/40 px-2.5 py-1.5 text-xs">
+      <span className="shrink-0 text-muted-foreground">Live: {title}</span>
+      <span className="min-w-0 flex-1 truncate font-mono text-foreground/80">{url}</span>
+      <button
+        type="button"
+        onClick={copy}
+        aria-label={`Copy public link for ${title}`}
+        className="inline-flex shrink-0 items-center gap-1 rounded-md px-2 py-1 font-medium text-primary transition-colors hover:bg-background"
+      >
+        {copied ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}
+        {copied ? "Copied" : "Copy link"}
+      </button>
+    </div>
   );
 }

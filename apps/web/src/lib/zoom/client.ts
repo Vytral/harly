@@ -1,6 +1,13 @@
 import "server-only";
 
-import { getZoomCredentials, getZoomToken } from "./config";
+import { CREDENTIALS_UNREADABLE_MESSAGE } from "@/features/integrations/health/model";
+import {
+  recordIntegrationFailure,
+  recordIntegrationSuccess,
+} from "@/features/integrations/health/repository";
+
+import { getZoomTokenState } from "./config";
+import { refreshZoomAccessToken } from "./oauth";
 
 type ZoomMeeting = {
   id: number;
@@ -24,54 +31,60 @@ export class ZoomAPIError extends Error {
   }
 }
 
+function sendZoomRequest(
+  token: string,
+  path: string,
+  options: RequestInit,
+): Promise<Response> {
+  const headers = new Headers(options.headers);
+  headers.set("Authorization", `Bearer ${token}`);
+  return fetch(`https://api.zoom.us${path}`, { ...options, headers });
+}
+
+/**
+ * Call the Zoom REST API as the workspace. A 401 triggers one OAuth refresh
+ * (the rotated pair is persisted) and one retry. Every outcome is recorded in
+ * the integration health model.
+ */
 export async function zoomFetch<T>(
   workspaceId: string,
   path: string,
   options: RequestInit = {},
 ): Promise<T> {
-  const token = await getZoomToken(workspaceId);
-  if (!token) {
+  const state = await getZoomTokenState(workspaceId);
+  if (state.status === "not_connected") {
     throw new ZoomAPIError("Zoom is not installed.", 401, 0);
   }
+  if (state.status === "unreadable") {
+    // No HTTP status: this is a local configuration problem, not a provider answer.
+    throw new ZoomAPIError(CREDENTIALS_UNREADABLE_MESSAGE, 0, 0);
+  }
 
-  const headers = new Headers(options.headers);
-  headers.set("Authorization", `Bearer ${token}`);
+  let response = await sendZoomRequest(state.token, path, options);
 
-  const response = await fetch(`https://api.zoom.us${path}`, {
-    ...options,
-    headers,
-  });
+  if (response.status === 401) {
+    const refreshed = await refreshZoomAccessToken(workspaceId);
+    if (!refreshed.ok) {
+      // The refresh already recorded its failure, so do not record it twice.
+      throw new ZoomAPIError(refreshed.error, 401, 0);
+    }
+    response = await sendZoomRequest(refreshed.accessToken, path, options);
+  }
 
   if (!response.ok) {
     const body = await response.json().catch(() => null) as { message?: string; error_code?: number } | null;
-    throw new ZoomAPIError(
+    const error = new ZoomAPIError(
       body?.message ?? `Zoom API error: ${response.status}`,
       response.status,
       body?.error_code ?? response.status,
     );
+    await recordIntegrationFailure(workspaceId, "zoom", error);
+    throw error;
   }
 
+  await recordIntegrationSuccess(workspaceId, "zoom");
   if (response.status === 204) return undefined as T;
   return response.json() as Promise<T>;
-}
-
-export async function refreshZoomToken(workspaceId: string): Promise<string | null> {
-  const credentials = await getZoomCredentials(workspaceId);
-  if (!credentials) return null;
-
-  const currentToken = await getZoomToken(workspaceId);
-  if (!currentToken) return null;
-
-  // Try using the current token first
-  try {
-    await zoomFetch<{ id: string }>(workspaceId, "/v2/users/me");
-    return currentToken;
-  } catch {
-    // Token might be expired, try refresh
-  }
-
-  // Refresh token flow not implemented for Zoom , user needs to reconnect
-  return null;
 }
 
 export async function createMeeting(

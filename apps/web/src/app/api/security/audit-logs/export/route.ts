@@ -1,12 +1,18 @@
 import { NextResponse } from "next/server";
 
-import { getWorkspaceContext } from "@/features/workspaces/context";
+import { ApiError } from "@harly/api";
+
+import { requireDsarExport, type DsarExportAccess } from "@/features/privacy/export-access";
+import { isUnrestrictedScope } from "@/features/search/scope";
 import {
   getWorkspaceAuditLogs,
   type AuditLogFilters,
 } from "@/features/security/data";
 import { extractRequestMeta, logAuditEvent } from "@/lib/audit-log";
 import { toSafeCsv } from "@/lib/csv";
+
+/** Largest audit log export in one file. Anything beyond it is cut and flagged. */
+const AUDIT_EXPORT_ROW_LIMIT = 50_000;
 
 const SEVERITIES = new Set(["info", "warning", "critical"]);
 
@@ -26,13 +32,31 @@ function csvValue(value: unknown) {
 
 export async function GET(request: Request) {
   try {
-    const context = await getWorkspaceContext();
-    if (context.roleKey !== "owner" && context.roleKey !== "admin") {
+    let access: DsarExportAccess;
+    try {
+      access = await requireDsarExport(
+        "Exporting audit logs requires the Review privacy requests and Manage security permissions.",
+        { alsoRequire: "security:manage" },
+      );
+    } catch (error) {
+      if (error instanceof ApiError) {
+        return NextResponse.json(
+          { error: error.message },
+          { status: error.status },
+        );
+      }
+      throw error;
+    }
+
+    // The workspace-wide log is not a per-candidate view: a scoped role cannot
+    // export it, whatever permissions it holds.
+    if (!isUnrestrictedScope(access.actor.scope)) {
       return NextResponse.json(
-        { error: "Only workspace owners and admins can export audit logs." },
+        { error: "Exporting the audit log requires an unrestricted role scope." },
         { status: 403 },
       );
     }
+    const context = access.context;
 
     const url = new URL(request.url);
     const severity = url.searchParams.get("severity") ?? undefined;
@@ -53,7 +77,8 @@ export async function GET(request: Request) {
         severity: severity as AuditLogFilters["severity"],
         from: parseDate(url.searchParams.get("from"), "from"),
         to: parseDate(url.searchParams.get("to"), "to"),
-        limit: 50_000,
+        // One row past the cap, so a cut-short export is detectable.
+        limit: AUDIT_EXPORT_ROW_LIMIT + 1,
       };
     } catch (error) {
       return NextResponse.json(
@@ -87,10 +112,12 @@ export async function GET(request: Request) {
       },
     });
 
-    const logs = await getWorkspaceAuditLogs(context.organization.id, filters);
+    const fetched = await getWorkspaceAuditLogs(context.organization.id, filters);
+    const truncated = fetched.length > AUDIT_EXPORT_ROW_LIMIT;
+    const logs = truncated ? fetched.slice(0, AUDIT_EXPORT_ROW_LIMIT) : fetched;
     if (format === "json") {
       const filename = `harly-audit-logs-${new Date().toISOString().slice(0, 10)}.json`;
-      return new Response(JSON.stringify({ exportedAt: new Date().toISOString(), filters, logs }, null, 2), {
+      return new Response(JSON.stringify({ exportedAt: new Date().toISOString(), truncated, filters, logs }, null, 2), {
         headers: {
           "Content-Type": "application/json; charset=utf-8",
           "Content-Disposition": `attachment; filename="${filename}"`,
@@ -123,11 +150,15 @@ export async function GET(request: Request) {
       ]),
     ];
 
+    if (truncated) {
+      rows.push([`# Export truncated at ${AUDIT_EXPORT_ROW_LIMIT} rows; narrow the filters to export the rest.`]);
+    }
     const filename = `harly-audit-logs-${new Date().toISOString().slice(0, 10)}.csv`;
     return new Response(`\ufeff${toSafeCsv(rows)}`, {
       headers: {
         "Content-Type": "text/csv; charset=utf-8",
         "Content-Disposition": `attachment; filename="${filename}"`,
+        "X-Harly-Truncated": String(truncated),
         "Cache-Control": "private, no-store",
       },
     });

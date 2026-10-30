@@ -54,6 +54,9 @@ export type AuditLogFilters = {
   limit?: number;
 };
 
+/** Largest audit log export. The UI page never asks for more than its default page. */
+export const AUDIT_LOG_MAX_ROWS = 50_000;
+
 export async function getWorkspaceAuditLogs(
   workspaceId: string,
   filters: AuditLogFilters = {},
@@ -83,7 +86,8 @@ export async function getWorkspaceAuditLogs(
       ),
     )
     .orderBy(desc(auditLogs.createdAt))
-    .limit(Math.min(Math.max(filters.limit ?? 200, 1), 50_000));
+    // Exports ask for one row past their cap, to detect a truncated result.
+    .limit(Math.min(Math.max(filters.limit ?? 200, 1), AUDIT_LOG_MAX_ROWS + 1));
 
   return rows.map((r) => ({
     id: r.id,

@@ -7,6 +7,8 @@ import { z } from "zod";
 import { db, workspaceSettings } from "@harly/db";
 
 import { requirePermission } from "@/features/workspaces/permissions-server";
+import { clearIntegrationHealth } from "@/features/integrations/health/repository";
+import { sanitizeIntegrationError } from "@/features/integrations/health/model";
 import { encryptSecret, isEncryptionConfigured } from "@/lib/crypto";
 import { createLogger } from "@/lib/logger";
 import { getWorkspaceTelegramConfig } from "@/lib/telegram/config";
@@ -130,6 +132,7 @@ export async function disconnectTelegramAction(): Promise<TelegramActionResult> 
     })
     .where(eq(workspaceSettings.organizationId, context.organization.id));
 
+  await clearIntegrationHealth(context.organization.id, "telegram");
   revalidatePath(SETTINGS_PATH);
   return { ok: true };
 }
@@ -156,10 +159,16 @@ export async function sendTestTelegramAction(input: {
   if (!botToken) return { ok: false, error: "Enter a bot token to test." };
   if (!chatId) return { ok: false, error: "Enter a chat ID to test." };
 
+  // Only the saved configuration is health-tracked. An unsaved token that
+  // fails must not mark the integration as needing reconnect.
+  const saved = await getWorkspaceTelegramConfig(context.organization.id);
+  const testsSavedConfig = saved?.botToken === botToken && saved.chatId === chatId;
+
   try {
     await sendTelegramMessage({
       botToken,
       chatId,
+      workspaceId: testsSavedConfig ? context.organization.id : undefined,
       text: telegramText("application.created", {
         candidate: { name: "Jordan Rivera (test)" },
         job: { title: "Senior Engineer" },
@@ -170,7 +179,7 @@ export async function sendTestTelegramAction(input: {
     log.error(err, "sendTestTelegramAction failed");
     return {
       ok: false,
-      error: err instanceof Error ? err.message : "Test failed.",
+      error: sanitizeIntegrationError(err),
     };
   }
 }

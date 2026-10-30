@@ -71,4 +71,13 @@ export const STAGE_NAMES = [
   "Hired",
 ] as const;
 
+/** Stage kinds persisted alongside each fixture stage (same order as STAGE_NAMES). */
+export const STAGE_KINDS = [
+  "applied",
+  "screening",
+  "interview",
+  "offer",
+  "hired",
+] as const;
+
 export type Fixture = typeof FIXTURE;

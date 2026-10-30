@@ -10,7 +10,6 @@ import {
   candidates,
   db,
   emailOutbox,
-  jobStages,
   jobs,
   offers,
   signatureEnvelopes,
@@ -23,6 +22,9 @@ import {
   enqueueEmailOutbox,
   processEmailOutbox,
 } from "@/lib/email/outbox-processor";
+import { offerSendOutcomeMessage } from "@/lib/email/delivery-warning";
+import { offerEmailDedupeKey, offerExtendedEmailDedupeKey } from "@/lib/email/dedupe-keys";
+import { ensureStageOfKind } from "@/features/pipeline/stage-resolver";
 import { emitWebhookEvent } from "@/server/webhooks/emit";
 import {
   persistDomainEvent,
@@ -46,7 +48,11 @@ import {
 } from "@/lib/esign/native/offer-signing";
 import { isSignableNativeFieldsSnapshot } from "@/lib/esign/native/fields";
 import { getWorkspaceEsignStatus } from "@/lib/esign/config";
-import { withdrawSiblingApplicationsForHire } from "./withdraw-siblings";
+import {
+  publishSiblingWithdrawals,
+  withdrawSiblingApplicationsForHire,
+  type SiblingWithdrawal,
+} from "./withdraw-siblings";
 
 /** Workspace-scoped offer service for REST API. Never reads session state. */
 
@@ -467,9 +473,10 @@ export async function sendOfferForApi(input: {
     });
   }
 
-  // enqueueEmailOutbox dedupes by a hash of (kind, payload), so a double send
-  // (double-click, retry, AI agent) reuses the same outbox row instead of
-  // creating duplicates and double-counting deliveries / offer.sent events.
+  // Keyed by the workflow effect when there is one, otherwise by the offer and
+  // its terms, so a double send (double-click, retry, AI agent) reuses the same
+  // outbox row instead of creating duplicates and double-counting deliveries /
+  // offer.sent events.
   const outboxId = await enqueueEmailOutbox(
     input.workspaceId,
     "offer.extended",
@@ -478,9 +485,14 @@ export async function sendOfferForApi(input: {
       actorId: input.actorUserId,
       terms: serializeOfferTermsSnapshot(snapshotOfferTerms(offer)),
     },
-    input.workflowEffectId,
+    input.workflowEffectId ??
+      offerExtendedEmailDedupeKey({
+        offerId: offer.id,
+        terms: serializeOfferTermsSnapshot(snapshotOfferTerms(offer)),
+      }),
     input.actorUserId,
     database,
+    { resetTerminal: true },
   );
 
   await processEmailOutbox({ ids: [outboxId], database });
@@ -490,9 +502,7 @@ export async function sendOfferForApi(input: {
     .where(eq(emailOutbox.id, outboxId))
     .limit(1);
   if (delivery?.status !== "sent") {
-    throw ApiError.internal(
-      "Offer delivery failed. It has been queued for retry.",
-    );
+    throw ApiError.internal(offerSendOutcomeMessage(delivery?.status ?? "missing"));
   }
   return getOfferForApi({ ...input, database });
 }
@@ -513,6 +523,7 @@ export async function decideOfferForApi(input: {
     );
   }
 
+  let siblingWithdrawals: SiblingWithdrawal[] = [];
   const decided = await db.transaction(async (tx) => {
     const [updated] = await tx
       .update(offers)
@@ -558,23 +569,20 @@ export async function decideOfferForApi(input: {
         );
       }
 
-      const [hiredStage] = await tx
-        .select({ id: jobStages.id })
-        .from(jobStages)
-        .where(
-          and(
-            eq(jobStages.workspaceId, input.workspaceId),
-            eq(jobStages.jobId, offer.jobId),
-            sql`lower(${jobStages.name}) = 'hired'`,
-          ),
-        )
-        .limit(1);
+      // A hire is always recorded as a stage move. The hired stage is found by
+      // kind (not by name) and created when the job has none, so the
+      // application never ends up `hired` without a history row.
+      const hiredStage = await ensureStageOfKind(tx, {
+        workspaceId: input.workspaceId,
+        jobId: offer.jobId,
+        kind: "hired",
+      });
 
       const [hired] = await tx
         .update(applications)
         .set({
           status: "hired",
-          ...(hiredStage ? { currentStageId: hiredStage.id } : {}),
+          currentStageId: hiredStage.id,
           updatedAt: new Date(),
         })
         .where(
@@ -591,7 +599,7 @@ export async function decideOfferForApi(input: {
         );
       }
 
-      if (hiredStage && hiredStage.id !== application.currentStageId) {
+      if (hiredStage.id !== application.currentStageId) {
         await tx.insert(applicationStageHistory).values({
           workspaceId: input.workspaceId,
           applicationId: application.id,
@@ -600,7 +608,7 @@ export async function decideOfferForApi(input: {
           movedById: input.actorUserId,
         });
       }
-      await withdrawSiblingApplicationsForHire(tx, {
+      siblingWithdrawals = await withdrawSiblingApplicationsForHire(tx, {
         workspaceId: input.workspaceId,
         candidateId: offer.candidateId,
         hiredApplicationId: application.id,
@@ -644,6 +652,11 @@ export async function decideOfferForApi(input: {
     };
   });
 
+  await publishSiblingWithdrawals({
+    workspaceId: input.workspaceId,
+    actorUserId: input.actorUserId,
+    withdrawals: siblingWithdrawals,
+  });
   if (decided.event) {
     await publishPersistedDomainEvents([decided.event]);
     await emitWebhookEvent(input.workspaceId, "application.hired", {
@@ -762,6 +775,7 @@ export async function withdrawOfferForApi(input: {
           companyName: recipient.companyName,
           jobTitle: offer.title,
         },
+        offerEmailDedupeKey({ offerId: offer.id, kind: "withdrawn" }),
       );
       await processEmailOutbox({ ids: [id], workspaceId: input.workspaceId });
     }

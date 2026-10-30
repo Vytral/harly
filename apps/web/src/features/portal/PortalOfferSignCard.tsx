@@ -149,9 +149,9 @@ export function PortalOfferSignCard({
           onClick={startSigning}
           disabled={isPending}
           className={cn(
-            "inline-flex shrink-0 items-center justify-center gap-2 rounded-lg bg-pine px-5 py-2.5",
-            "text-sm font-semibold text-white shadow-sm transition-all",
-            "hover:bg-pine-strong active:scale-[0.98]",
+            "inline-flex shrink-0 items-center justify-center gap-2 rounded-lg bg-primary px-5 py-2.5",
+            "text-sm font-semibold text-primary-foreground shadow-sm transition-all",
+            "hover:bg-primary/90 active:scale-[0.98]",
             "disabled:cursor-not-allowed disabled:opacity-50 disabled:active:scale-100",
           )}
         >

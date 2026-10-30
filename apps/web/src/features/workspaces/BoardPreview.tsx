@@ -39,7 +39,7 @@ export function BoardPreview({
   const logo = (
     <div
       className={cn(
-        "flex size-9 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-white text-sm font-semibold text-ink",
+        "flex size-9 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-white text-sm font-semibold text-[#171717]",
         logoStyle === "bordered" && "border border-black/10 shadow-sm",
       )}
     >

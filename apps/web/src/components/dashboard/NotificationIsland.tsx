@@ -93,7 +93,7 @@ export function NotificationIsland({
       layout
       layoutId="topbar-command-pill"
       transition={springTransition}
-      className="flex h-8 items-center overflow-hidden rounded-full"
+      className="flex h-8 max-w-full min-w-0 items-center overflow-hidden rounded-full"
     >
       <AnimatePresence mode="popLayout" initial={false}>
         {item ? (
@@ -145,6 +145,7 @@ export function NotificationIsland({
             animate={{ opacity: 1, scale: 1 }}
             exit={reduceMotion ? { opacity: 0 } : { opacity: 0, scale: 0.97 }}
             transition={contentTransition}
+            className="min-w-0 max-w-full"
           >
             <WorkspacePill workspace={workspace} workspaceOptions={workspaceOptions} />
           </motion.div>

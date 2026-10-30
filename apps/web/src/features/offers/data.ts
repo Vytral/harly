@@ -4,6 +4,8 @@ import { and, desc, eq, isNull } from "drizzle-orm";
 
 import { candidates, db, jobs, offers, user as authUsers } from "@harly/db";
 
+import { jobScopeSql } from "@/features/search/scope";
+import { resolveSearchActor } from "@/features/search/workspace-search";
 import { getWorkspaceContext } from "@/features/workspaces/context";
 import type { CandidateOfferItem } from "./shared";
 
@@ -12,6 +14,7 @@ export async function listOffersForCandidate(
   candidateId: string,
 ): Promise<CandidateOfferItem[]> {
   const { organization: workspace } = await getWorkspaceContext();
+  const actor = await resolveSearchActor();
 
   const rows = await db
     .select({
@@ -46,6 +49,9 @@ export async function listOffersForCandidate(
         eq(jobs.workspaceId, workspace.id),
         eq(jobs.id, offers.jobId),
         isNull(jobs.deletedAt),
+        // An offer is visible only when its job is inside the caller's scope.
+        // Scoping here, not in the page or AI tool, keeps every reader consistent.
+        jobScopeSql(actor),
       ),
     )
     .leftJoin(authUsers, eq(authUsers.id, offers.createdById))

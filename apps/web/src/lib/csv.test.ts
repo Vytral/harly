@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { parseCsv, toCsv, toSafeCsv } from "./csv";
+import { neutralizeSpreadsheetFormula, parseCsv, toCsv, toSafeCsv } from "./csv";
 
 describe("parseCsv", () => {
   it("parses a simple CSV", () => {
@@ -86,5 +86,22 @@ describe("toSafeCsv", () => {
     expect(toSafeCsv([["=1+1", "+name", "-tag", "@handle", "plain"]])).toBe(
       "'=1+1,'+name,'-tag,'@handle,plain",
     );
+  });
+});
+
+describe("toSafeCsv leading characters", () => {
+  it("neutralizes a leading tab or carriage return, which spreadsheets also treat as a formula start", () => {
+    const rows = parseCsv(toSafeCsv([["\t=cmd|' /C calc'!A0", "\r=cmd", "\n+1+1"]]));
+    expect(rows[0]).toEqual(["'\t=cmd|' /C calc'!A0", "'\r=cmd", "'\n+1+1"]);
+  });
+
+  it("neutralizes formula characters after leading spaces", () => {
+    const rows = parseCsv(toSafeCsv([["  =1+1", " \t@SUM", " plain"]]));
+    expect(rows[0]).toEqual(["'  =1+1", "' \t@SUM", " plain"]);
+  });
+
+  it("exposes the same rule as a shared helper", () => {
+    expect(neutralizeSpreadsheetFormula("\t=x")).toBe("'\t=x");
+    expect(neutralizeSpreadsheetFormula("Ada Lovelace")).toBe("Ada Lovelace");
   });
 });

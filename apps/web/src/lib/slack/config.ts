@@ -4,6 +4,7 @@ import { and, count, desc, eq } from "drizzle-orm";
 
 import { db, slackDeliveries, workspaceSettings } from "@harly/db";
 
+import { sanitizeIntegrationError } from "@/features/integrations/health/model";
 import { decryptSecret, isEncryptionConfigured } from "@/lib/crypto";
 import { isWebhookEvent, type WebhookEvent } from "@/server/webhooks/events";
 
@@ -128,7 +129,8 @@ export async function getWorkspaceSlackStatus(
       ? {
           status: latest.status,
           attempts: latest.attempts,
-          error: latest.error,
+          // Rows written before delivery errors were sanitized may hold raw text.
+          error: latest.error ? sanitizeIntegrationError(latest.error) : null,
           createdAt: latest.createdAt.toISOString(),
         }
       : null,

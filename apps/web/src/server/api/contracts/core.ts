@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { NextResponse } from "next/server";
 
-import { ApiError, type ApiScope } from "@harly/api";
+import { ApiError, type ApiKeyType, type ApiScope } from "@harly/api";
 import { authenticateApiKey, hasApiScope, type ApiKeyContext } from "@/server/api/auth";
 import {
   reserveIdempotencyKey,
@@ -27,7 +27,15 @@ export type ContractDefinition = {
   summary: string;
   description?: string;
   tags?: string[];
-  auth?: { scopes: ApiScope[] };
+  auth?: {
+    scopes: ApiScope[];
+    /**
+     * Key types allowed to call this operation. Omit to allow any key type
+     * that holds the scopes. Publishable keys are browser-exposed, so every
+     * operation that changes existing data should be `["secret"]`.
+     */
+    keyTypes?: ApiKeyType[];
+  };
   idempotent?: boolean;
   parameters?: {
     path?: z.ZodObject<z.ZodRawShape>;
@@ -113,6 +121,14 @@ export function buildRouteHandler<
         request,
         contract.auth?.scopes?.[0],
       );
+      if (
+        contract.auth?.keyTypes &&
+        !contract.auth.keyTypes.includes(auth.type)
+      ) {
+        throw ApiError.forbidden(
+          `This operation requires a ${contract.auth.keyTypes.join(" or ")} API key.`,
+        );
+      }
       if (contract.auth?.scopes) {
         for (const scope of contract.auth.scopes.slice(1)) {
           if (!hasApiScope(auth.scopes, scope)) {

@@ -6,10 +6,15 @@ vi.mock("@/lib/esign/config", () => ({
   getWorkspaceEsignConfig: vi.fn(),
 }));
 vi.mock("@/lib/ssrf", () => ({ safeFetchHttp }));
+vi.mock("@/features/integrations/health/repository", () => ({
+  recordIntegrationSuccess: vi.fn(),
+  recordIntegrationFailure: vi.fn(),
+}));
 
 import { downloadDocusealFile } from "./client";
 
 const ctx = {
+  workspaceId: "workspace-1",
   baseUrl: "https://sign.example.test",
   apiUrl: "https://sign.example.test/api",
   apiToken: "workspace-secret",

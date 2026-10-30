@@ -52,7 +52,7 @@ export function DemoStylePreview({
     <>
       {/* A real strip (not an overlay): it never covers the page's own header,
           and it stays clear of the cookie banner at the bottom. */}
-      <div className="sticky top-0 z-50 border-b border-black/10 bg-white/95 text-neutral-900 backdrop-blur">
+      <div className="sticky top-0 z-50 border-b border-black/10 bg-background/95 text-foreground backdrop-blur">
         <div className="mx-auto flex max-w-6xl flex-col gap-2 px-4 py-2.5 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
           <div className="flex min-w-0 items-center gap-3">
             <span className="hidden shrink-0 text-xs font-semibold uppercase tracking-wide text-neutral-500 md:inline">

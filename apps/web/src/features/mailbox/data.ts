@@ -1,6 +1,6 @@
 import "server-only";
 
-import { and, desc, eq, inArray, isNotNull, isNull, or, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, isNotNull, isNull, or, sql, type SQL } from "drizzle-orm";
 import {
   applications,
   candidates,
@@ -16,6 +16,13 @@ import {
 } from "@harly/db";
 
 import { getWorkspaceContext } from "@/features/workspaces/context";
+import {
+  candidateScopeSql,
+  isUnrestrictedScope,
+  jobScopeSql,
+  type WorkspaceSearchActor,
+} from "@/features/search/scope";
+import { resolveSearchActor } from "@/features/search/workspace-search";
 import { getWorkspaceInboundEmailStatus } from "@/lib/email/config";
 import { getWorkspaceEmailSender } from "@/lib/email";
 
@@ -106,6 +113,27 @@ export function normalizeInboxFilter(value: string | undefined): InboxFilter {
 }
 
 
+/**
+ * Threads a restricted actor may see. A linked thread needs an in-scope
+ * candidate, and its application (when it names one) must be on an in-scope
+ * job. An unlinked thread (no candidate) is visible only to its owner, so an
+ * unassigned thread is never exposed to a scoped role. Unrestricted actors get
+ * no predicate and see every thread, as before.
+ */
+function mailThreadScopeSql(actor: WorkspaceSearchActor): SQL | undefined {
+  if (isUnrestrictedScope(actor.scope)) return undefined;
+  const scopedJob = jobScopeSql(actor);
+  const applicationInScope = sql`exists (select 1 from ${applications} inner join ${jobs} on ${jobs.id} = ${applications.jobId} where ${applications.id} = ${mailThreads.applicationId} and ${applications.workspaceId} = ${actor.workspaceId} and ${jobs.workspaceId} = ${actor.workspaceId} and ${jobs.deletedAt} is null and ${scopedJob})`;
+  return or(
+    and(
+      isNotNull(mailThreads.candidateId),
+      candidateScopeSql(actor, mailThreads.candidateId),
+      or(isNull(mailThreads.applicationId), applicationInScope),
+    ),
+    and(isNull(mailThreads.candidateId), eq(mailThreads.ownerId, actor.userId)),
+  );
+}
+
 export async function getInboxData(input: {
   filter?: string;
   page?: number;
@@ -121,6 +149,8 @@ export async function getInboxData(input: {
   currentUserId: string;
 }> {
   const { organization, user: currentUser } = await getWorkspaceContext();
+  const actor = await resolveSearchActor();
+  const threadScope = mailThreadScopeSql(actor);
   const filter = normalizeInboxFilter(input.filter);
   const requestedPage = Number.isFinite(input.page) ? Math.floor(input.page as number) : 0;
   const page = Math.min(100, Math.max(0, requestedPage));
@@ -210,9 +240,12 @@ export async function getInboxData(input: {
       .leftJoin(jobs, and(eq(jobs.id, applications.jobId), eq(jobs.workspaceId, organization.id), isNull(jobs.deletedAt)))
       .leftJoin(jobStages, and(eq(jobStages.id, applications.currentStageId), eq(jobStages.workspaceId, organization.id)))
       .where(
-        input.threadId
-          ? or(threadWhere, and(eq(mailThreads.workspaceId, organization.id), eq(mailThreads.id, input.threadId), activeCandidateLink))
-          : threadWhere,
+        and(
+          threadScope,
+          input.threadId
+            ? or(threadWhere, and(eq(mailThreads.workspaceId, organization.id), eq(mailThreads.id, input.threadId), activeCandidateLink))
+            : threadWhere,
+        ),
       )
       .orderBy(desc(mailThreads.lastMessageAt))
       .limit(limit),
@@ -225,12 +258,12 @@ export async function getInboxData(input: {
     db
       .select({ id: candidates.id, firstName: candidates.firstName, lastName: candidates.lastName, email: candidates.email, avatarUrl: candidates.avatarUrl })
       .from(candidates)
-      .where(and(eq(candidates.workspaceId, organization.id), isNull(candidates.deletedAt)))
+      .where(and(eq(candidates.workspaceId, organization.id), isNull(candidates.deletedAt), candidateScopeSql(actor, candidates.id)))
       .orderBy(candidates.lastName, candidates.firstName),
     db
       .select({ id: applications.id, candidateId: applications.candidateId, jobId: applications.jobId, jobTitle: jobs.title, status: applications.status })
       .from(applications)
-      .innerJoin(jobs, and(eq(jobs.id, applications.jobId), eq(jobs.workspaceId, organization.id), isNull(jobs.deletedAt)))
+      .innerJoin(jobs, and(eq(jobs.id, applications.jobId), eq(jobs.workspaceId, organization.id), isNull(jobs.deletedAt), jobScopeSql(actor)))
       .innerJoin(candidates, and(eq(candidates.id, applications.candidateId), eq(candidates.workspaceId, organization.id), isNull(candidates.deletedAt)))
       .where(eq(applications.workspaceId, organization.id))
       .orderBy(jobs.title),
@@ -399,6 +432,7 @@ export async function getInboxData(input: {
 
 export async function getUnreadInboxThreadCount(): Promise<number> {
   const { organization } = await getWorkspaceContext();
+  const actor = await resolveSearchActor();
   const [row] = await db
     .select({ count: sql<number>`count(*)::int` })
     .from(mailThreads)
@@ -409,6 +443,7 @@ export async function getUnreadInboxThreadCount(): Promise<number> {
         or(isNull(mailThreads.candidateId), isNotNull(candidates.id)),
         eq(mailThreads.status, "open"),
         sql`${mailThreads.unreadCount} > 0`,
+        mailThreadScopeSql(actor),
       ),
     );
   return row?.count ?? 0;

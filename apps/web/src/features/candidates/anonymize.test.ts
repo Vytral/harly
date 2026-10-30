@@ -53,3 +53,156 @@ describe("anonymize", () => {
     expect(anonymizedInitials({})).toBe("?");
   });
 });
+
+describe("anonymize: adversarial identity inputs", () => {
+  it("matches names with accents against their unaccented spelling and back", () => {
+    const jose = { firstName: "José", lastName: "Núñez", fullName: "José Núñez" };
+    for (const text of ["Jose Nunez led it.", "JOSÉ NÚÑEZ led it.", "josé nuñez led it."]) {
+      const out = redactText(text, jose) ?? "";
+      expect(out).not.toMatch(/jos|nu.ez/i);
+      expect(out).toContain("led it.");
+    }
+  });
+
+  it("masks names that end in a non-ASCII letter (word boundaries are Unicode-aware)", () => {
+    const zoe = { firstName: "Zoë", lastName: "Müller", fullName: "Zoë Müller" };
+    const out = redactText("Zoë and Zoe Müller joined in 2021.", zoe) ?? "";
+    expect(out).not.toMatch(/zo/i);
+    expect(out).toContain("2021");
+  });
+
+  it("masks 'John D.' and 'Last, First' forms of the candidate's name", () => {
+    const john = { firstName: "John", lastName: "Doe", fullName: "John Doe" };
+    expect(redactText("Referred by John D. last year.", john)).not.toMatch(/John/);
+    expect(redactText("Doe, John - referee.", john)).not.toMatch(/Doe|John/);
+  });
+
+  it("masks hyphenated and separated name variants interchangeably", () => {
+    const jean = { firstName: "Jean-Luc", lastName: "Picard", fullName: "Jean-Luc Picard" };
+    for (const text of ["Jean Luc Picard", "jean-luc picard", "Jean.Luc Picard"]) {
+      const out = redactText(text, jean) ?? "";
+      expect(out).not.toMatch(/picard/i);
+    }
+  });
+
+  it("masks an email address that appears in the text", () => {
+    expect(redactText("Contact: ada.l+jobs@mail.example.co.uk", identity)).not.toMatch(/example/);
+  });
+
+  it("masks obfuscated emails", () => {
+    expect(redactText("write to ada [at] example [dot] com", identity)).not.toMatch(/example/);
+    expect(redactText("write to ada (at) example.com", identity)).not.toMatch(/example/);
+  });
+
+  it.each([
+    "+44 20 7946 0958",
+    "(555) 123-4567",
+    "555-123-4567",
+    "+1.555.123.4567",
+    "5551234567",
+    "07946 0958",
+    "555-1234",
+  ])("masks phone format %s", (phone) => {
+    const out = redactText(`Call ${phone} any time.`, identity) ?? "";
+    expect(out).not.toContain(phone);
+    expect(out).toContain("any time.");
+  });
+
+  it.each(["2019-2021", "2019 - 2021", "Jan 2019 - Mar 2021", "3 years, 2015"])(
+    "keeps date ranges and counts intact: %s",
+    (date) => {
+      expect(redactText(`Worked ${date} at Acme.`, identity)).toContain(date);
+    },
+  );
+
+  it.each([
+    "github.com/adalovelace",
+    "https://www.linkedin.com/in/ada-lovelace/",
+    "www.example.org/ada",
+    "linkedin.com/in/ada",
+    "ada-portfolio.dev",
+  ])("masks link %s", (link) => {
+    const out = redactText(`Portfolio: ${link} shipped.`, identity) ?? "";
+    expect(out).not.toContain(link);
+    expect(out).toContain("shipped.");
+  });
+
+  it("masks social handles", () => {
+    expect(redactText("Find me on @ada_codes today", identity)).not.toContain("@ada_codes");
+  });
+
+  it("masks title-case street addresses and keeps prose such as 'years at Main'", () => {
+    expect(redactText("Lives at 221B Baker Street, London.", identity)).not.toContain("Baker Street");
+    expect(redactText("5 years at Main Street Labs.", identity)).toContain("years at Main");
+  });
+
+  it("does not match a name inside a longer word", () => {
+    const out = redactText("Adams and Adalovelace were not relevant.", identity) ?? "";
+    expect(out).toContain("Adams");
+    expect(out).toContain("Adalovelace");
+  });
+
+  it("redacts the candidate's name when only fullName is known", () => {
+    const out = redactText("Grace Hopper built compilers.", { fullName: "Grace Hopper" }) ?? "";
+    expect(out).not.toContain("Grace");
+    expect(out).not.toContain("Hopper");
+  });
+
+  it("strips generic identifiers even with no identity", () => {
+    const out = redactText("Mail me at x@y.io or github.com/x", {}) ?? "";
+    expect(out).not.toContain("x@y.io");
+    expect(out).not.toContain("github.com/x");
+  });
+});
+
+describe("anonymize: date and time values survive intact", () => {
+  it("keeps ISO dates, date-times and UTC stamps unchanged", () => {
+    const stamps = [
+      "2026-11-02",
+      "2026-11-02T10:30:00.000Z",
+      "2026-11-02T10:30:00+01:00",
+      "2026-11-02 10:30",
+      "02/11/2026",
+    ];
+    for (const stamp of stamps) {
+      expect(redactText(`Slot ${stamp} confirmed.`, identity), stamp).toBe(`Slot ${stamp} confirmed.`);
+    }
+  });
+
+  it("still masks real phone numbers next to a date", () => {
+    const out = redactText("Call +44 7700 900123 on 2026-11-02.", identity);
+    expect(out).not.toContain("7700 900123");
+    expect(out).toContain("2026-11-02");
+  });
+});
+
+describe("anonymize: single-word names", () => {
+  const may = { firstName: "May", lastName: "Lee", fullName: "May Lee" };
+
+  it("does not turn a month and day into a redaction when the first name is May", () => {
+    const out = redactText("Interview on May 12 with the team.", may);
+    expect(out).toContain("May 12");
+  });
+
+  it("still masks a capitalized first name that is not followed by a day number", () => {
+    const out = redactText("May shipped the migration.", may);
+    expect(out).not.toMatch(/^May /);
+  });
+
+  it("masks the full name even when it is followed by a day number", () => {
+    const out = redactText("May Lee 12 years of experience", may);
+    expect(out).not.toContain("May Lee");
+  });
+});
+
+describe("anonymize: precomputed name redactor", () => {
+  it("matches the single-identity behaviour for each identity", async () => {
+    const { createNameRedactor } = await import("./anonymize");
+    const redact = createNameRedactor([
+      { firstName: "Ada", lastName: "Lovelace", fullName: "Ada Lovelace" },
+      { firstName: "Grace", lastName: "Hopper", fullName: "Grace Hopper" },
+    ]);
+    const out = redact("Ada Lovelace and grace hopper compared notes.");
+    expect(out).not.toMatch(/Lovelace|hopper/i);
+  });
+});

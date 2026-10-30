@@ -13,7 +13,6 @@ import {
   candidateFiles,
   consentRecords,
   jobs,
-  jobStages,
   member as authMembers,
   organization,
   user as authUsers,
@@ -29,6 +28,7 @@ import {
 } from "@/features/jobs/config";
 import { buildQuestionAnswerRows } from "@/features/applications/questions";
 import { lockApplicationPipelineOrder } from "@/features/applications/pipeline-order";
+import { resolveEntryStage } from "@/features/pipeline/stage-resolver";
 import { verifyResumeUpload } from "@/features/applications/resume-upload";
 import { emitWebhookEvent } from "@/server/webhooks/emit";
 import {
@@ -416,17 +416,10 @@ export async function createPublicApplication(
         throw new Error("Candidate could not be created.");
       }
 
-      const [firstStage] = await tx
-        .select({ id: jobStages.id })
-        .from(jobStages)
-        .where(
-          and(
-            eq(jobStages.workspaceId, workspaceId),
-            eq(jobStages.jobId, job.id),
-          ),
-        )
-        .orderBy(asc(jobStages.order))
-        .limit(1);
+      const firstStage = await resolveEntryStage(tx, {
+        workspaceId,
+        jobId: job.id,
+      });
 
       if (!firstStage) {
         return {

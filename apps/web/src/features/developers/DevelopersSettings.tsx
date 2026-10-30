@@ -387,6 +387,9 @@ function ApiKeysSection({
                 </Chip>
               ))}
             </div>
+            <p className="text-xs text-muted-foreground">
+              API keys act across the whole workspace.
+            </p>
           </div>
           <Button
             size="sm"

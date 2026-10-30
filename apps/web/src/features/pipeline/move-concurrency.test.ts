@@ -16,7 +16,11 @@ const mocks = vi.hoisted(() => {
   };
 });
 
-vi.mock("@harly/db", () => ({
+vi.mock("@harly/db", async () => ({
+  // Pure stage-kind helpers are real: they decide status from stage kind.
+  ...(await vi.importActual<typeof import("@harly/db/stage-kind")>(
+    "@harly/db/stage-kind",
+  )),
   db: {
     transaction: (fn: (tx: unknown) => Promise<unknown>) =>
       mocks.transactionImpl(fn),
@@ -41,7 +45,13 @@ vi.mock("@harly/db", () => ({
   candidates: {},
   jobs: {},
   organization: {},
-  jobStages: { name: "jobStages.name", emailConfig: "jobStages.emailConfig" },
+  jobStages: {
+    id: "jobStages.id",
+    name: "jobStages.name",
+    kind: "jobStages.kind",
+    archivedAt: "jobStages.archivedAt",
+    emailConfig: "jobStages.emailConfig",
+  },
   applicationStageHistory: {},
   activityEvents: {},
   emailTemplates: { id: "emailTemplates.id" },
@@ -80,6 +90,9 @@ const APPLICATION_ROW = {
   workspaceName: "Acme",
   toStageName: "Interview",
   toStageEmailConfig: { candidateUpdatesEnabled: false },
+  // The locked target stage row read by lockStageForPlacement (same mock row).
+  name: "Interview",
+  kind: "interview",
 };
 
 function makeTx(firstUpdateRows: unknown[]) {
@@ -88,6 +101,7 @@ function makeTx(firstUpdateRows: unknown[]) {
     innerJoin: () => selectBuilder,
     where: () => selectBuilder,
     limit: () => selectBuilder,
+    for: () => selectBuilder,
     then: (_resolve: (v: unknown) => void) => _resolve([APPLICATION_ROW]),
   };
 
@@ -102,7 +116,11 @@ function makeTx(firstUpdateRows: unknown[]) {
   };
 
   const insertBuilder = {
-    values: () => ({ then: (_resolve: (v: unknown) => void) => _resolve([]) }),
+    values: () => ({
+      then: (_resolve: (v: unknown) => void) => _resolve([]),
+      // History rows return their id so the move can key its outbox email on it.
+      returning: async () => [{ id: "history-1", applicationId: "app-1" }],
+    }),
   };
 
   const tx = {
@@ -122,6 +140,7 @@ function makeTxWithFailures(failures: number) {
     innerJoin: () => selectBuilder,
     where: () => selectBuilder,
     limit: () => selectBuilder,
+    for: () => selectBuilder,
     then: (_resolve: (v: unknown) => void) => {
       // Each read returns the row with a *current* updatedAt, proving the
       // retry re-reads fresh state instead of reusing the first snapshot.
@@ -146,7 +165,11 @@ function makeTxWithFailures(failures: number) {
   };
 
   const insertBuilder = {
-    values: () => ({ then: (_resolve: (v: unknown) => void) => _resolve([]) }),
+    values: () => ({
+      then: (_resolve: (v: unknown) => void) => _resolve([]),
+      // History rows return their id so the move can key its outbox email on it.
+      returning: async () => [{ id: "history-1", applicationId: "app-1" }],
+    }),
   };
 
   const tx = {

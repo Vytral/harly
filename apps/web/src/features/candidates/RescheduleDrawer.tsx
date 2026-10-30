@@ -6,6 +6,8 @@ import { AlertTriangle } from "lucide-react";
 import { toast } from "@/lib/notification-island/toast";
 
 import { rescheduleInterview } from "@/features/interviews/actions";
+import { unshownEmailWarning } from "@/lib/email/delivery-warning";
+
 import { checkAvailability } from "@/lib/gcal/availability";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -19,6 +21,7 @@ import {
 import { SidePanel } from "@/components/ui/side-panel";
 import {
   getBrowserTimeZone,
+  NonexistentLocalTimeError,
   parseScheduledAt,
 } from "@/features/interviews/shared";
 
@@ -64,6 +67,10 @@ export function RescheduleDrawer({
       const start = parseScheduledAt(`${newDate}T${newTime}`, timeZone);
       const end = new Date(start.getTime() + Number(duration) * 60_000);
       const result = await checkAvailability({ timeMin: start, timeMax: end, excludeInterviewId: interviewId });
+      if (result.gcalAvailability === "unknown") {
+        setAvailabilityWarning("Google Calendar availability could not be checked for this time.");
+        return;
+      }
       if (result.gcalBusy.length > 0) {
         setAvailabilityWarning(
           `This time overlaps with ${result.gcalBusy.length} existing event${result.gcalBusy.length > 1 ? "s" : ""} on your calendar.`,
@@ -71,7 +78,11 @@ export function RescheduleDrawer({
       } else {
         setAvailabilityWarning(null);
       }
-    } catch {
+    } catch (error) {
+      if (error instanceof NonexistentLocalTimeError) {
+        setAvailabilityWarning(error.message);
+        return;
+      }
       // Silently fail , don't block rescheduling on availability check.
     } finally {
       setCheckingAvailability(false);
@@ -97,6 +108,8 @@ export function RescheduleDrawer({
         return;
       }
       if (result.warning) toast.warning(result.warning);
+      const emailNote = unshownEmailWarning(result);
+      if (emailNote) toast.warning(emailNote);
       toast.success("Interview rescheduled");
       setOpen(false);
       router.refresh();

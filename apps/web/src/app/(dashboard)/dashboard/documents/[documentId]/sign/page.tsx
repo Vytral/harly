@@ -2,10 +2,12 @@ import type { Route } from "next";
 import { notFound, redirect } from "next/navigation";
 import { NativeSignWorkspace } from "@/features/documents/NativeSignWorkspace";
 import { getDocumentAccess } from "@/features/documents/data";
+import { requirePagePermission } from "@/features/workspaces/permissions-server";
 
 export const dynamic = "force-dynamic";
 
 export default async function NativeSignPage({ params }: { params: Promise<{ documentId: string }> }) {
+  await requirePagePermission("documents:read");
   const { documentId } = await params;
   const access = await getDocumentAccess(documentId);
   if (!access || access.level !== "manage") notFound();

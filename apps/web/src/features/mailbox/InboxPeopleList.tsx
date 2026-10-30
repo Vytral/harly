@@ -1,6 +1,6 @@
 "use client";
 
-import { EmptyState } from "@/components/ui/EmptyState";
+import { EmptyState } from "@/components/ui/empty-state";
 import { UserAvatar } from "@/components/ui/UserAvatar";
 import { EnvelopeSimpleDuotoneIcon } from "@/components/ui/icons/phosphor";
 import { RelativeTime } from "@/lib/date-hydration";

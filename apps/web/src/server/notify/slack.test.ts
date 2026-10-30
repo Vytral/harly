@@ -44,6 +44,15 @@ vi.mock("@/lib/slack/config", () => ({
   getWorkspaceSlackConfig: mocks.getWorkspaceSlackConfig,
 }));
 
+const healthMocks = vi.hoisted(() => ({
+  recordFailure: vi.fn(),
+  recordSuccess: vi.fn(),
+}));
+vi.mock("@/features/integrations/health/repository", () => ({
+  recordIntegrationFailure: healthMocks.recordFailure,
+  recordIntegrationSuccess: healthMocks.recordSuccess,
+}));
+
 const defaultSlackConfig = {
     botToken: "xoxb-test",
     channelId: "C123",
@@ -178,5 +187,50 @@ describe("Slack notification payload", () => {
     expect(mocks.getWorkspaceSlackConfig).toHaveBeenCalledWith("workspace-1", injectedDatabase);
     expect(injectedDatabase.insert).toHaveBeenCalled();
     expect(injectedDatabase.update).toHaveBeenCalled();
+  });
+});
+
+describe("Slack delivery errors", () => {
+  const delivery = {
+    id: "delivery-2",
+    workspaceId: "workspace-1",
+    event: "candidate.created",
+    channelId: "C123",
+    payload: { text: "Candidate created", blocks: [] },
+    attempts: 0,
+  } as Parameters<typeof deliverSlack>[0];
+
+  beforeEach(() => {
+    mocks.getWorkspaceSlackConfig.mockReset();
+    mocks.getWorkspaceSlackConfig.mockResolvedValue(defaultSlackConfig);
+    mocks.updates.length = 0;
+    healthMocks.recordFailure.mockClear();
+    healthMocks.recordSuccess.mockClear();
+  });
+
+  it("stores a sanitized delivery error, never an address or token that Slack echoed", async () => {
+    mocks.postMessage.mockRejectedValueOnce(
+      new Error("channel rejected jane.doe@example.com with token=xoxb-123-456-secret-value"),
+    );
+
+    await deliverSlack(delivery, "worker-1");
+
+    const stored = mocks.updates.find((values) => "lastError" in values);
+    expect(stored).toBeDefined();
+    const text = String(stored?.lastError);
+    expect(text).not.toContain("jane.doe");
+    expect(text).not.toContain("secret-value");
+    expect(text).toContain("[email]");
+  });
+
+  it("records the start of a successful delivery so a later failure is not cleared by it", async () => {
+    mocks.postMessage.mockResolvedValueOnce({ ok: true });
+
+    const result = await deliverSlack(delivery, "worker-1");
+
+    expect(result).toBe("success");
+    expect(healthMocks.recordSuccess).toHaveBeenCalledWith("workspace-1", "slack", {
+      startedAt: expect.any(Date),
+    });
   });
 });

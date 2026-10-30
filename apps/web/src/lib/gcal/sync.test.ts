@@ -5,10 +5,17 @@ const mocks = vi.hoisted(() => ({
   getEvent: vi.fn(),
   getWorkspaceGCalConfig: vi.fn(),
   invalidateWorkspaceGCalConnection: vi.fn(),
+  recordGCalCallFailure: vi.fn(async () => false),
+  recordIntegrationSuccess: vi.fn(),
   update: vi.fn(),
   updateEvent: vi.fn(),
   deleteEvent: vi.fn(),
   and: vi.fn((...conditions: unknown[]) => conditions),
+  logError: vi.fn(),
+}));
+
+vi.mock("@/lib/logger", () => ({
+  createLogger: () => ({ error: mocks.logError, warn: vi.fn(), info: vi.fn() }),
 }));
 
 vi.mock("@harly/db", () => ({
@@ -22,6 +29,11 @@ vi.mock("drizzle-orm", () => ({
 vi.mock("@/lib/gcal/config", () => ({
   getWorkspaceGCalConfig: mocks.getWorkspaceGCalConfig,
   invalidateWorkspaceGCalConnection: mocks.invalidateWorkspaceGCalConnection,
+  recordGCalCallFailure: mocks.recordGCalCallFailure,
+}));
+vi.mock("@/features/integrations/health/repository", () => ({
+  recordIntegrationSuccess: mocks.recordIntegrationSuccess,
+  recordIntegrationFailure: vi.fn(),
 }));
 vi.mock("@/lib/gcal/client", () => ({
   createEvent: mocks.createEvent,
@@ -36,6 +48,7 @@ import {
   syncInterviewToGCal,
   updateInterviewGCalEvent,
 } from "./sync";
+
 
 describe("Google Calendar interview sync", () => {
   it("derives a stable provider event id", () => {
@@ -122,5 +135,36 @@ describe("Google Calendar interview sync", () => {
       }),
     ).resolves.toBe(true);
     expect(mocks.and.mock.calls.at(-1)).toHaveLength(2);
+  });
+});
+
+describe("Google Calendar sync logging", () => {
+  it("logs a gaxios-shaped failure without its request config or Authorization header", async () => {
+    mocks.getWorkspaceGCalConfig.mockResolvedValue({ oauth2Client: {}, calendarId: "primary" });
+    const gaxiosError = Object.assign(new Error("Request failed with status code 500"), {
+      code: 500,
+      config: {
+        url: "https://www.googleapis.com/calendar/v3/calendars/primary/events",
+        headers: { Authorization: "Bearer ya29.a0AfB_secret-access-token-value-0123456789" },
+      },
+      response: { status: 500, data: { error: { code: 500, message: "Backend Error" } } },
+    });
+    mocks.createEvent.mockRejectedValue(gaxiosError);
+
+    const result = await syncInterviewToGCal({
+      workspaceId: "workspace-1",
+      interviewId: "6A5346F8-D3E6-4B2E-9D12-DA950CC40274",
+      summary: "Panel",
+      start: new Date("2030-06-01T09:00:00.000Z"),
+      durationMins: 60,
+    });
+
+    expect(result.ok).toBe(false);
+    expect(mocks.logError).toHaveBeenCalled();
+    const logged = JSON.stringify(mocks.logError.mock.calls);
+    expect(logged).not.toContain("Authorization");
+    expect(logged).not.toContain("Bearer");
+    expect(logged).not.toContain("ya29");
+    expect(logged).toContain("Request failed with status code 500");
   });
 });

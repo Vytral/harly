@@ -1,13 +1,16 @@
 "use server";
 
+import { randomUUID } from "node:crypto";
+
 import { revalidatePath } from "next/cache";
-import { and, asc, desc, eq, inArray, isNull, isNotNull, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, isNull, sql } from "drizzle-orm";
 
 import { db } from "@harly/db";
 import {
   activityEvents,
   applications,
   applicationStageHistory,
+  applicationStatusForStage,
   candidatePortalNotifications,
   candidates,
   jobs,
@@ -18,6 +21,7 @@ import {
 import { getWorkspaceContext } from "@/features/workspaces/context";
 import {
   requireApplicationPermission,
+  requireJobPermission,
   requirePermission,
 } from "@/features/workspaces/permissions-server";
 import { emitWebhookEvent } from "@/server/webhooks/emit";
@@ -27,15 +31,13 @@ import {
   type PersistedDomainEvent,
 } from "@/server/events/emit";
 import { normalizeStageEmailConfig } from "@/features/pipeline/data";
+import { type PipelineApplicationStatus } from "@/features/pipeline/state";
+import { stageForApplicationStatus } from "@/features/applications/service";
+import { lockStageForPlacement } from "@/features/pipeline/stage-resolver";
 import {
-  statusForStageName,
-  terminalStageNameForStatus,
-  type PipelineApplicationStatus,
-} from "@/features/pipeline/state";
-import {
-  enqueueEmailOutbox,
-  processEmailOutbox,
-} from "@/lib/email/outbox-processor";
+  sendPipelineEmails,
+  type PipelineEmail,
+} from "@/features/pipeline/emails";
 
 type ApplicationStatus = PipelineApplicationStatus;
 
@@ -88,25 +90,6 @@ type StatusTransitionEvent = {
   event: "application.hired" | "application.rejected";
 };
 
-type PipelineEmail =
-  | {
-      type: "stage";
-      applicationId: string;
-      candidateEmail: string;
-      candidateName: string;
-      jobTitle: string;
-      stageName: string;
-      workspaceName: string;
-    }
-  | {
-      type: "rejected";
-      applicationId: string;
-      candidateEmail: string;
-      candidateName: string;
-      jobTitle: string;
-      workspaceName: string;
-    };
-
 import { createLogger } from "@/lib/logger";
 import {
   ConcurrencyConflictError,
@@ -115,37 +98,6 @@ import {
 } from "@/lib/concurrent";
 
 const log = createLogger("pipeline");
-
-async function sendPipelineEmails(
-  workspaceId: string,
-  emails: PipelineEmail[],
-  actorId?: string,
-) {
-  if (emails.length === 0) return;
-
-  const ids: string[] = [];
-  for (const email of emails) {
-    ids.push(
-      await enqueueEmailOutbox(
-        workspaceId,
-        email.type === "stage" ? "pipeline.stage" : "pipeline.rejected",
-        {
-          candidateEmail: email.candidateEmail,
-          candidateName: email.candidateName,
-          applicationId: email.applicationId,
-          jobTitle: email.jobTitle,
-          stageName: email.type === "stage" ? email.stageName : undefined,
-          workspaceName: email.workspaceName,
-          type: email.type,
-        },
-        undefined,
-        actorId,
-      ),
-    );
-  }
-
-  await processEmailOutbox({ ids, workspaceId });
-}
 
 async function getApplicationsForAction(
   applicationIds: string[],
@@ -214,7 +166,7 @@ async function requireAllApplicationPermissions(
 
 export async function moveApplicationInPipeline(
   input: MoveApplicationInPipelineInput,
-): Promise<{ success: boolean; error?: string }> {
+): Promise<{ success: boolean; error?: string; emailWarning?: string }> {
   await requireApplicationPermission("candidates:move", input.applicationId);
   const { organization: workspace, user } = await getWorkspaceContext();
 
@@ -241,7 +193,19 @@ export async function moveApplicationInPipeline(
       async () => {
         stageEvents.length = 0;
         domainEvents.length = 0;
+        const historyIdByApplication = new Map<string, string>();
         return db.transaction<PipelineEmail[]>(async (tx) => {
+          // Lock the target stage before anything else. The outcome below is
+          // derived from this locked row, so a concurrent kind change either
+          // commits first or waits until this move has committed.
+          const lockedTarget = await lockStageForPlacement(tx, {
+            workspaceId: input.workspaceId,
+            stageId: input.toStageId,
+          });
+          if (!lockedTarget) {
+            throw new Error("Application or target stage not found.");
+          }
+
           const [application] = await tx
             .select({
               id: applications.id,
@@ -284,6 +248,7 @@ export async function moveApplicationInPipeline(
                 eq(jobStages.workspaceId, input.workspaceId),
                 eq(jobStages.jobId, applications.jobId),
                 eq(jobStages.id, input.toStageId),
+                isNull(jobStages.archivedAt),
               ),
             )
             .where(
@@ -295,14 +260,15 @@ export async function moveApplicationInPipeline(
             .limit(1);
 
           // The join above also requires the target stage to belong to the
-          // application's own job, so a stage from another job fails here.
+          // application's own job (and to be active), so a stage from another
+          // job or an archived stage fails here.
           if (!application) {
             throw new Error("Application or target stage not found.");
           }
 
           const now = new Date();
           const changedStage = application.currentStageId !== input.toStageId;
-          const nextStatus = statusForStageName(application.toStageName);
+          const nextStatus = applicationStatusForStage(lockedTarget);
           const changedStatus = application.status !== nextStatus;
 
           const [updatedApplication] = await tx
@@ -361,13 +327,17 @@ export async function moveApplicationInPipeline(
           }
 
           if (changedStage) {
-            await tx.insert(applicationStageHistory).values({
-              workspaceId: input.workspaceId,
-              applicationId: input.applicationId,
-              fromStageId: application.currentStageId,
-              toStageId: input.toStageId,
-              movedById: user.id,
-            });
+            const [historyRow] = await tx
+              .insert(applicationStageHistory)
+              .values({
+                workspaceId: input.workspaceId,
+                applicationId: input.applicationId,
+                fromStageId: application.currentStageId,
+                toStageId: input.toStageId,
+                movedById: user.id,
+              })
+              .returning({ id: applicationStageHistory.id });
+            historyIdByApplication.set(input.applicationId, historyRow.id);
 
             await tx.insert(activityEvents).values({
               workspaceId: input.workspaceId,
@@ -492,6 +462,7 @@ export async function moveApplicationInPipeline(
               {
                 type: "rejected",
                 applicationId: application.id,
+                eventId: historyIdByApplication.get(application.id) ?? randomUUID(),
                 candidateEmail: application.candidateEmail,
                 candidateName,
                 jobTitle: application.jobTitle,
@@ -508,6 +479,7 @@ export async function moveApplicationInPipeline(
               {
                 type: "stage",
                 applicationId: application.id,
+                eventId: historyIdByApplication.get(application.id) ?? randomUUID(),
                 candidateEmail: application.candidateEmail,
                 candidateName,
                 jobTitle: application.jobTitle,
@@ -530,7 +502,7 @@ export async function moveApplicationInPipeline(
     );
 
     revalidatePath("/dashboard/pipeline");
-    void sendPipelineEmails(input.workspaceId, emails, user.id);
+    const pipelineEmails = await sendPipelineEmails(input.workspaceId, emails, user.id);
     await publishPersistedDomainEvents(domainEvents);
 
     for (const event of stageEvents) {
@@ -583,7 +555,7 @@ export async function moveApplicationInPipeline(
       }
     }
 
-    return { success: true };
+    return { success: true, emailWarning: pipelineEmails.emailWarning };
   } catch (error) {
     log.error(error, "moveApplicationInPipeline failed");
     if (isConcurrencyConflict(error) && error instanceof Error) {
@@ -595,7 +567,7 @@ export async function moveApplicationInPipeline(
 
 export async function moveApplicationStage(
   input: MoveApplicationStageInput,
-): Promise<{ success: boolean; error?: string }> {
+): Promise<{ success: boolean; error?: string; emailWarning?: string }> {
   return moveApplicationInPipeline({
     ...input,
     orderedApplicationIds: [input.applicationId],
@@ -604,7 +576,7 @@ export async function moveApplicationStage(
 
 export async function bulkMoveApplications(
   input: BulkMoveApplicationsInput,
-): Promise<{ success: boolean; error?: string }> {
+): Promise<{ success: boolean; error?: string; emailWarning?: string }> {
   try {
     if (
       !Array.isArray(input.applicationIds) ||
@@ -645,11 +617,23 @@ export async function bulkMoveApplications(
       async () => {
         stageEvents.length = 0;
         domainEvents.length = 0;
+        const historyIdByApplication = new Map<string, string>();
         return db.transaction<PipelineEmail[]>(async (tx) => {
+          // Lock the target FOR SHARE first; the outcome is derived from the
+          // locked row so a concurrent kind change cannot make it stale.
+          const lockedTarget = await lockStageForPlacement(tx, {
+            workspaceId: input.workspaceId,
+            stageId: input.toStageId,
+          });
+          if (!lockedTarget) {
+            throw new Error("Target stage not found.");
+          }
+
           const [targetStage] = await tx
             .select({
               id: jobStages.id,
               name: jobStages.name,
+              kind: jobStages.kind,
               emailConfig: jobStages.emailConfig,
             })
             .from(jobStages)
@@ -665,6 +649,7 @@ export async function bulkMoveApplications(
               and(
                 eq(jobStages.workspaceId, input.workspaceId),
                 eq(jobStages.id, input.toStageId),
+                isNull(jobStages.archivedAt),
               ),
             )
             .limit(1);
@@ -674,6 +659,7 @@ export async function bulkMoveApplications(
           }
 
           const toStageName = targetStage.name;
+          const nextStatus = applicationStatusForStage(lockedTarget);
           const stageEmailConfig = normalizeStageEmailConfig(
             targetStage.emailConfig,
           );
@@ -789,8 +775,6 @@ export async function bulkMoveApplications(
           for (const [fromStageId, appIds] of applicationsByStage) {
             if (appIds.length === 0) continue;
 
-            const nextStatus = statusForStageName(toStageName);
-
             for (const applicationId of appIds) {
               const appData = appDataById.get(applicationId);
               if (!appData) throw new Error("Application not found.");
@@ -817,15 +801,24 @@ export async function bulkMoveApplications(
               versionById.set(applicationId, now.toISOString());
             }
 
-            await tx.insert(applicationStageHistory).values(
-              appIds.map((applicationId) => ({
-                workspaceId: input.workspaceId,
-                applicationId,
-                fromStageId,
-                toStageId: input.toStageId,
-                movedById: user.id,
-              })),
-            );
+            const historyRows = await tx
+              .insert(applicationStageHistory)
+              .values(
+                appIds.map((applicationId) => ({
+                  workspaceId: input.workspaceId,
+                  applicationId,
+                  fromStageId,
+                  toStageId: input.toStageId,
+                  movedById: user.id,
+                })),
+              )
+              .returning({
+                id: applicationStageHistory.id,
+                applicationId: applicationStageHistory.applicationId,
+              });
+            for (const historyRow of historyRows) {
+              historyIdByApplication.set(historyRow.applicationId, historyRow.id);
+            }
 
             await tx.insert(activityEvents).values(
               appIds.map((applicationId) => ({
@@ -933,6 +926,7 @@ export async function bulkMoveApplications(
                 collectedEmails.push({
                   type: "rejected",
                   applicationId: appData.id,
+                  eventId: historyIdByApplication.get(appData.id) ?? randomUUID(),
                   candidateEmail: appData.candidateEmail,
                   candidateName,
                   jobTitle: appData.jobTitle,
@@ -945,6 +939,7 @@ export async function bulkMoveApplications(
                 collectedEmails.push({
                   type: "stage",
                   applicationId: appData.id,
+                  eventId: historyIdByApplication.get(appData.id) ?? randomUUID(),
                   candidateEmail: appData.candidateEmail,
                   candidateName,
                   jobTitle: appData.jobTitle,
@@ -995,7 +990,7 @@ export async function bulkMoveApplications(
     );
 
     revalidatePath("/dashboard/pipeline");
-    void sendPipelineEmails(input.workspaceId, emails, user.id);
+    const pipelineEmails = await sendPipelineEmails(input.workspaceId, emails, user.id);
     await publishPersistedDomainEvents(domainEvents);
 
     for (const evt of stageEvents) {
@@ -1048,7 +1043,7 @@ export async function bulkMoveApplications(
       }
     }
 
-    return { success: true };
+    return { success: true, emailWarning: pipelineEmails.emailWarning };
   } catch (error) {
     log.error(error, "bulkMoveApplications failed");
     if (isConcurrencyConflict(error) && error instanceof Error) {
@@ -1060,7 +1055,7 @@ export async function bulkMoveApplications(
 
 export async function updateApplicationStatus(
   input: UpdateApplicationStatusInput,
-): Promise<{ success: boolean; error?: string }> {
+): Promise<{ success: boolean; error?: string; emailWarning?: string }> {
   try {
     if (
       !input ||
@@ -1122,6 +1117,7 @@ export async function updateApplicationStatus(
         stageEvents.length = 0;
         statusEvents.length = 0;
         domainEvents.length = 0;
+        const historyIdByApplication = new Map<string, string>();
         return db.transaction<PipelineEmail[]>(async (tx) => {
           const now = new Date();
           const collectedEmails: PipelineEmail[] = [];
@@ -1134,108 +1130,18 @@ export async function updateApplicationStatus(
               emailConfig: unknown;
             } | null = null;
 
-            const terminalStageName = terminalStageNameForStatus(input.status);
-            if (terminalStageName) {
-              const [terminalStage] = await tx
-                .select({
-                  id: jobStages.id,
-                  name: jobStages.name,
-                  emailConfig: jobStages.emailConfig,
-                })
-                .from(jobStages)
-                .where(
-                  and(
-                    eq(jobStages.workspaceId, input.workspaceId),
-                    eq(jobStages.jobId, application.jobId),
-                    sql`lower(${jobStages.name}) = ${terminalStageName.toLowerCase()}`,
-                  ),
-                )
-                .limit(1);
-              targetStage = terminalStage ?? null;
-              if (targetStage) targetStageId = targetStage.id;
-            } else if (input.status === "active") {
-              const [currentStage] = await tx
-                .select({
-                  id: jobStages.id,
-                  name: jobStages.name,
-                  emailConfig: jobStages.emailConfig,
-                })
-                .from(jobStages)
-                .where(
-                  and(
-                    eq(jobStages.workspaceId, input.workspaceId),
-                    eq(jobStages.jobId, application.jobId),
-                    eq(jobStages.id, application.currentStageId),
-                  ),
-                )
-                .limit(1);
-
-              if (
-                currentStage &&
-                statusForStageName(currentStage.name) !== "active"
-              ) {
-                const [previousStage] = await tx
-                  .select({ fromStageId: applicationStageHistory.fromStageId })
-                  .from(applicationStageHistory)
-                  .where(
-                    and(
-                      eq(
-                        applicationStageHistory.workspaceId,
-                        input.workspaceId,
-                      ),
-                      eq(applicationStageHistory.applicationId, application.id),
-                      eq(
-                        applicationStageHistory.toStageId,
-                        application.currentStageId,
-                      ),
-                      isNotNull(applicationStageHistory.fromStageId),
-                    ),
-                  )
-                  .orderBy(
-                    desc(applicationStageHistory.createdAt),
-                    desc(applicationStageHistory.id),
-                  )
-                  .limit(1);
-
-                targetStageId =
-                  previousStage?.fromStageId ?? application.currentStageId;
-                if (targetStageId === application.currentStageId) {
-                  const [firstStage] = await tx
-                    .select({
-                      id: jobStages.id,
-                      name: jobStages.name,
-                      emailConfig: jobStages.emailConfig,
-                    })
-                    .from(jobStages)
-                    .where(
-                      and(
-                        eq(jobStages.workspaceId, input.workspaceId),
-                        eq(jobStages.jobId, application.jobId),
-                      ),
-                    )
-                    .orderBy(asc(jobStages.order))
-                    .limit(1);
-                  targetStageId = firstStage?.id ?? targetStageId;
-                  targetStage = firstStage ?? null;
-                } else {
-                  const [previousStageDetails] = await tx
-                    .select({
-                      id: jobStages.id,
-                      name: jobStages.name,
-                      emailConfig: jobStages.emailConfig,
-                    })
-                    .from(jobStages)
-                    .where(
-                      and(
-                        eq(jobStages.workspaceId, input.workspaceId),
-                        eq(jobStages.jobId, application.jobId),
-                        eq(jobStages.id, targetStageId),
-                      ),
-                    )
-                    .limit(1);
-                  targetStage = previousStageDetails ?? null;
-                }
-              }
+            // Placement follows the status: terminal statuses go to the job's
+            // stage of that kind, reactivation returns to an open stage.
+            const placed = await stageForApplicationStatus(tx, {
+              workspaceId: input.workspaceId,
+              jobId: application.jobId,
+              applicationId: application.id,
+              currentStageId: application.currentStageId,
+              status: input.status,
+            });
+            if (placed) {
+              targetStage = placed;
+              targetStageId = placed.id;
             }
 
             const stageChanged = targetStageId !== application.currentStageId;
@@ -1263,13 +1169,17 @@ export async function updateApplicationStatus(
             }
 
             if (stageChanged) {
-              await tx.insert(applicationStageHistory).values({
-                workspaceId: input.workspaceId,
-                applicationId: application.id,
-                fromStageId: application.currentStageId,
-                toStageId: targetStageId,
-                movedById: user.id,
-              });
+              const [historyRow] = await tx
+                .insert(applicationStageHistory)
+                .values({
+                  workspaceId: input.workspaceId,
+                  applicationId: application.id,
+                  fromStageId: application.currentStageId,
+                  toStageId: targetStageId,
+                  movedById: user.id,
+                })
+                .returning({ id: applicationStageHistory.id });
+              historyIdByApplication.set(application.id, historyRow.id);
               await tx.insert(activityEvents).values({
                 workspaceId: input.workspaceId,
                 actorId: user.id,
@@ -1379,6 +1289,7 @@ export async function updateApplicationStatus(
               collectedEmails.push({
                 type: "rejected",
                 applicationId: application.id,
+                eventId: historyIdByApplication.get(application.id) ?? randomUUID(),
                 candidateEmail: application.candidateEmail,
                 candidateName: `${application.candidateFirstName} ${application.candidateLastName}`,
                 jobTitle: application.jobTitle,
@@ -1394,6 +1305,7 @@ export async function updateApplicationStatus(
               collectedEmails.push({
                 type: "stage",
                 applicationId: application.id,
+                eventId: historyIdByApplication.get(application.id) ?? randomUUID(),
                 candidateEmail: application.candidateEmail,
                 candidateName: `${application.candidateFirstName} ${application.candidateLastName}`,
                 jobTitle: application.jobTitle,
@@ -1468,9 +1380,9 @@ export async function updateApplicationStatus(
         },
       );
     }
-    void sendPipelineEmails(input.workspaceId, emails, user.id);
+    const pipelineEmails = await sendPipelineEmails(input.workspaceId, emails, user.id);
 
-    return { success: true };
+    return { success: true, emailWarning: pipelineEmails.emailWarning };
   } catch (error) {
     log.error(error, "updateApplicationStatus failed");
     if (isConcurrencyConflict(error) && error instanceof Error) {
@@ -1485,6 +1397,9 @@ export async function updateStageEmailSettings(
 ): Promise<{ success: boolean; error?: string }> {
   try {
     await requirePermission("settings:edit");
+    // Same job-scoped check the stage editor uses: the stage belongs to a job
+    // the user may edit, not just any job in the workspace.
+    await requireJobPermission("jobs:edit", input.jobId);
     const { organization: workspace } = await getWorkspaceContext();
 
     if (workspace.id !== input.workspaceId) {
@@ -1504,12 +1419,13 @@ export async function updateStageEmailSettings(
           eq(jobStages.id, input.stageId),
           eq(jobStages.workspaceId, input.workspaceId),
           eq(jobStages.jobId, input.jobId),
+          isNull(jobStages.archivedAt),
         ),
       )
       .returning({ id: jobStages.id });
 
     if (!updatedStage) {
-      return { success: false, error: "Stage not found." };
+      return { success: false, error: "Stage not found, or it is archived." };
     }
 
     revalidatePath("/dashboard/pipeline");

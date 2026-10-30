@@ -10,6 +10,7 @@ import { publicBoardMetadata } from "@/features/career-page/seo";
 import { isDemoMode } from "@harly/config";
 import { DemoStylePreview } from "@/features/demo/DemoStylePreview";
 import { parseDemoStyle } from "@/features/demo/sandbox-styles";
+import { resolveSignedInRootRoute } from "@/features/onboarding/root-route";
 
 export const dynamic = "force-dynamic";
 
@@ -27,6 +28,10 @@ export default async function HomePage({
 }: {
   searchParams: Promise<{ style?: string }>;
 }) {
+  // Signed-in staff belong in the app, not on the public board.
+  const signedInRoute = await resolveSignedInRootRoute();
+  if (signedInRoute) redirect(signedInRoute as Route);
+
   const slug = await getPublicWorkspaceSlug();
   if (!slug) {
     redirect("/setup" as Route);

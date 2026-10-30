@@ -72,7 +72,7 @@ export function CandidateReferrals({
             className={cn(
               "flex max-w-full items-start gap-2 rounded-xl border px-3 py-2 text-xs",
               referral.featured
-                ? "border-amber-200 bg-amber-50 text-amber-800"
+                ? "border-warning-clay/30 bg-warning-clay/10 text-warning-clay"
                 : "border-border bg-accent/50 text-accent-foreground",
             )}
           >

@@ -1,98 +1,103 @@
+import type { StageKind } from "@harly/db/stage-kind";
+
+import { buildSpine, stageDisplayName } from "@/lib/stage-visuals";
 import { cn } from "@/lib/utils";
 
 /**
- * The pipeline spine , Harly's signature stage indicator.
+ * The pipeline spine, Harly's signature stage indicator.
  * A segmented bar of the hiring pipeline with the current stage filled in pine.
  * Shown anywhere a candidate appears (overview, rows, cards, profile headers)
  * so the ATS's core metaphor is always legible at a glance.
+ *
+ * Meaning comes from stage kinds: the hired and rejected/withdrawn treatments
+ * apply to whatever stage carries that kind, whatever it is called. Names are
+ * only used to find a position when no stage id is supplied.
  */
 
-const CANONICAL_STAGES = [
-  "Applied",
-  "Screening",
-  "Interview",
-  "Offer",
-  "Hired",
-] as const;
+const CANONICAL_STAGES: readonly PipelineSpineStage[] = [
+  { name: "Applied", kind: "applied" },
+  { name: "Screening", kind: "screening" },
+  { name: "Interview", kind: "interview" },
+  { name: "Offer", kind: "offer" },
+  { name: "Hired", kind: "hired" },
+];
 
-const REJECTED = new Set(["rejected", "declined", "withdrawn"]);
-const HIRED = new Set(["hired"]);
+export type PipelineSpineStage = {
+  id?: string;
+  name: string;
+  kind: StageKind;
+};
 
 type PipelineSpineProps = {
-  /** Current stage name (matched case-insensitively against `stages`). */
+  /** Current stage display name. */
   current: string;
-  /** Ordered stage names; defaults to the canonical pipeline. */
-  stages?: readonly string[];
+  /** Current stage id, preferred over the name for finding its position. */
+  currentId?: string | null;
+  /**
+   * Current stage kind. Callers that have it should pass it; without it the
+   * kind is inferred from the name, which is only correct for the default
+   * stage names.
+   */
+  currentKind?: StageKind | null;
+  /** Ordered stages; defaults to the canonical five-stage pipeline. */
+  stages?: readonly PipelineSpineStage[];
   /** Show the current stage label beside the spine. */
   showLabel?: boolean;
   className?: string;
 };
 
+const segmentClasses = {
+  done: "bg-primary",
+  current: "bg-primary ring-1 ring-primary/30",
+  todo: "bg-soft-kraft",
+  hired: "bg-success-olive",
+  rejected: "bg-destructive",
+  withdrawn: "bg-quiet-mist",
+} as const;
+
 export function PipelineSpine({
   current,
+  currentId = null,
+  currentKind = null,
   stages = CANONICAL_STAGES,
   showLabel = false,
   className,
 }: PipelineSpineProps) {
-  const normalized = current.trim().toLowerCase();
-  const isRejected = REJECTED.has(normalized);
-  const isHired = HIRED.has(normalized);
-  const activeIndex = stages.findIndex((s) => s.toLowerCase() === normalized);
-  const total = stages.length;
-  const position = activeIndex >= 0 ? activeIndex + 1 : 0;
+  const model = buildSpine({
+    current: { name: current, kind: currentKind },
+    currentId,
+    stages,
+  });
+  const isTerminal = model.terminal !== null;
+  const labelTone =
+    model.terminal === "rejected"
+      ? "text-destructive"
+      : model.terminal === "withdrawn"
+        ? "text-soft-ink"
+        : "text-muted-foreground";
 
-  const label = isRejected
-    ? "Rejected"
-    : activeIndex >= 0
-      ? stages[activeIndex]
-      : current;
+  const ariaLabel = isTerminal
+    ? model.label
+    : model.position > 0
+      ? `Stage: ${model.label} (${model.position} of ${model.total})`
+      : `Stage: ${stageDisplayName({ name: current, kind: currentKind })}`;
 
   return (
     <div className={cn("flex items-center gap-2", className)}>
-      <div
-        className="flex flex-1 items-center gap-1"
-        role="img"
-        aria-label={
-          isRejected
-            ? "Rejected"
-            : position > 0
-              ? `Stage: ${label} (${position} of ${total})`
-              : `Stage: ${label}`
-        }
-      >
-        {stages.map((stage, i) => {
-          const filled = !isRejected && !isHired && activeIndex >= 0 && i <= activeIndex;
-          const isCurrent = !isRejected && !isHired && i === activeIndex;
-          return (
-            <span
-              key={stage}
-              className={cn(
-                "h-1.5 flex-1 rounded-full transition-colors",
-                isRejected
-                  ? i <= activeIndex || activeIndex < 0
-                    ? "bg-destructive"
-                    : "bg-destructive/20"
-                  : isHired
-                    // Success olive, not a raw emerald. DESIGN.md bans a second
-                    // brand-green family competing with ink + chartreuse.
-                    ? "bg-success-olive"
-                    : filled
-                      ? "bg-primary"
-                      : "bg-soft-kraft",
-                isCurrent && "ring-1 ring-primary/30",
-              )}
-            />
-          );
-        })}
+      <div className="flex flex-1 items-center gap-1" role="img" aria-label={ariaLabel}>
+        {model.segments.map((segment) => (
+          <span
+            key={segment.key}
+            className={cn(
+              "h-1.5 flex-1 rounded-full transition-colors",
+              segmentClasses[segment.state],
+            )}
+          />
+        ))}
       </div>
       {showLabel ? (
-        <span
-          className={cn(
-            "shrink-0 text-xs font-medium tabular-nums",
-            isRejected ? "text-destructive" : "text-muted-foreground",
-          )}
-        >
-          {label}
+        <span className={cn("shrink-0 text-xs font-medium tabular-nums", labelTone)}>
+          {model.label}
         </span>
       ) : null}
     </div>

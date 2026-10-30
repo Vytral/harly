@@ -1,6 +1,7 @@
 "use client";
 
 import { cn } from "@/lib/utils";
+import { PORTAL_OUTCOME_LABELS } from "@/lib/stage-visuals";
 
 type PortalStatusBadgeProps = {
   status: "active" | "hired" | "rejected" | "withdrawn";
@@ -14,13 +15,6 @@ const BADGE_STYLES = {
   withdrawn: "bg-muted text-muted-foreground",
 } as const;
 
-const BADGE_LABELS = {
-  active: "In Progress",
-  hired: "Offer",
-  rejected: "Not Selected",
-  withdrawn: "Withdrawn",
-} as const;
-
 export function PortalStatusBadge({ status, size = "default" }: PortalStatusBadgeProps) {
   return (
     <span
@@ -30,7 +24,7 @@ export function PortalStatusBadge({ status, size = "default" }: PortalStatusBadg
         size === "default" ? "px-2.5 py-0.5 text-xs" : "px-2 py-px text-[11px]",
       )}
     >
-      {BADGE_LABELS[status]}
+      {PORTAL_OUTCOME_LABELS[status]}
     </span>
   );
 }

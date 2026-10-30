@@ -334,6 +334,124 @@ describe("POST /api/ai/chat", () => {
 });
 
 
+describe("POST /api/ai/chat with candidate anonymization on", () => {
+  const candidateId = "6a5346f8-d3e6-4b2e-9d12-da950cc40274";
+
+  beforeEach(async () => {
+    vi.clearAllMocks();
+    mocks.getWorkspaceContextOrNull.mockResolvedValue(context);
+    mocks.requirePermission.mockResolvedValue(context);
+    mocks.getRolePolicy.mockResolvedValue({
+      scope: { jobAccess: "all", departments: [], regions: [] },
+    });
+    mocks.getWorkspaceAiConfig.mockResolvedValue({ ...config, resumeAnonymization: true });
+    mocks.getModel.mockReturnValue("model");
+    mocks.buildHarlyTools.mockReturnValue({ lookup: { execute: vi.fn() } });
+    mocks.getWorkspaceKnowledge.mockResolvedValue(null);
+    mocks.validateUIMessages.mockResolvedValue([message]);
+    mocks.convertToModelMessages.mockResolvedValue([{ role: "user", content: "Hello" }]);
+    mocks.enforceRateLimit.mockResolvedValue({ remaining: 1, resetAt: Date.now() + 60_000 });
+    mocks.persistConversation.mockResolvedValue(undefined);
+    mocks.assertToolRoutingCoversAllTools.mockReturnValue(undefined);
+    mocks.resolveActiveToolGroups.mockReturnValue(new Set(["general"]));
+    mocks.selectActiveToolNames.mockReturnValue(["lookup"]);
+    mocks.shouldWidenForStep.mockImplementation((step: number) => step >= 2);
+    mocks.streamText.mockReturnValue({
+      totalUsage: Promise.resolve({ inputTokens: 1, outputTokens: 1 }),
+      toUIMessageStreamResponse: vi.fn(() => new Response("stream")),
+    });
+    // Render the real system prompt so the assertion covers what the model reads.
+    const actual = await vi.importActual<typeof import("@/lib/ai/agent/system-prompt")>(
+      "@/lib/ai/agent/system-prompt",
+    );
+    mocks.buildHarlySystemPrompt.mockImplementation(actual.buildHarlySystemPrompt);
+  });
+
+  it("keeps the active candidate's name out of the system prompt", async () => {
+    const response = await POST(
+      request({
+        messages: [message],
+        candidateId,
+        surfaceContext: {
+          kind: "candidate",
+          label: "Jane Doe",
+          path: `/dashboard/candidates/${candidateId}`,
+        },
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    const system = String(mocks.streamText.mock.calls[0]![0].system);
+    expect(system).not.toContain("Jane Doe");
+    expect(system).not.toContain("Jane");
+    expect(system).toContain("Active workspace surface: Candidate profile");
+    expect(system).toContain(candidateId);
+  });
+
+  it("does not trust a client label that smuggles a name through a section path", async () => {
+    await POST(
+      request({
+        messages: [message],
+        surfaceContext: {
+          kind: "section",
+          label: "Jane Doe pipeline",
+          path: "/dashboard/candidates/jane-doe",
+        },
+      }),
+    );
+
+    const system = String(mocks.streamText.mock.calls[0]![0].system);
+    expect(system).not.toContain("Jane");
+    expect(system).not.toContain("jane-doe");
+  });
+
+  it("keeps the surface label when anonymization is off", async () => {
+    mocks.getWorkspaceAiConfig.mockResolvedValue({ ...config, resumeAnonymization: false });
+    await POST(
+      request({
+        messages: [message],
+        candidateId,
+        surfaceContext: {
+          kind: "candidate",
+          label: "Jane Doe",
+          path: `/dashboard/candidates/${candidateId}`,
+        },
+      }),
+    );
+
+    const system = String(mocks.streamText.mock.calls[0]![0].system);
+    expect(system).toContain("Jane Doe");
+  });
+
+  it("never replays a raw tool error from an earlier turn to the model", async () => {
+    const history = [
+      message,
+      {
+        id: "message-2",
+        role: "assistant",
+        parts: [
+          {
+            type: "tool-sendCandidateEmail",
+            toolCallId: "call-err",
+            state: "output-error",
+            input: { candidateId },
+            errorText: "Email to Jane Doe failed at jane.doe@example.com",
+          },
+        ],
+      },
+      { ...message, id: "message-3", parts: [{ type: "text", text: "Retry" }] },
+    ];
+    mocks.validateUIMessages.mockResolvedValue(history);
+
+    const response = await POST(request({ messages: history }));
+
+    expect(response.status).toBe(200);
+    const sent = JSON.stringify(mocks.convertToModelMessages.mock.calls[0]![0]);
+    expect(sent).not.toContain("Jane");
+    expect(sent).not.toContain("jane.doe@example.com");
+  });
+});
+
 describe("POST /api/ai/chat in the public demo", () => {
   beforeEach(() => {
     vi.clearAllMocks();

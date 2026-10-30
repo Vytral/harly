@@ -1,7 +1,7 @@
 {
   "name": "harly",
   "private": true,
-  "version": "0.2.3",
+  "version": "0.3.0-beta.1",
   "description": "Open-source applicant tracking system for modern teams.",
   "license": "MIT",
   "engines": {

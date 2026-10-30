@@ -7,6 +7,14 @@ import { WebClient } from "@slack/web-api";
 import { db, slackDeliveries, workspaceSettings } from "@harly/db";
 
 import { requirePermission } from "@/features/workspaces/permissions-server";
+import {
+  sanitizeIntegrationError,
+} from "@/features/integrations/health/model";
+import {
+  clearIntegrationHealth,
+  recordIntegrationFailure,
+  recordIntegrationSuccess,
+} from "@/features/integrations/health/repository";
 import { encryptSecret, isEncryptionConfigured } from "@/lib/crypto";
 import { createLogger } from "@/lib/logger";
 import {
@@ -62,8 +70,8 @@ function isDeadSlackToken(err: unknown): boolean {
   return code !== null && DEAD_TOKEN_ERRORS.has(code);
 }
 
-/** Wipe the dead bot token so status flips back to "not connected". */
-async function clearSlackToken(organizationId: string): Promise<void> {
+/** Wipe the dead bot token so status flips back to "not connected", and record why. */
+async function clearSlackToken(organizationId: string, error: unknown): Promise<void> {
   await db
     .update(workspaceSettings)
     .set({
@@ -76,7 +84,13 @@ async function clearSlackToken(organizationId: string): Promise<void> {
       updatedAt: new Date(),
     })
     .where(eq(workspaceSettings.organizationId, organizationId));
+  await recordIntegrationFailure(organizationId, "slack", error, { kind: "auth" });
   revalidatePath(SETTINGS_PATH);
+}
+
+/** Record a Slack call outcome that did not revoke the token. */
+async function recordSlackFailure(organizationId: string, error: unknown): Promise<void> {
+  await recordIntegrationFailure(organizationId, "slack", error);
 }
 
 /** Save Slack App credentials (Client ID + Secret) for this workspace. */
@@ -155,13 +169,15 @@ export async function listSlackChannelsAction(): Promise<
       pageCount += 1;
     } while (cursor && channels.length < 1000 && pageCount < 10);
 
+    await recordIntegrationSuccess(context.organization.id, "slack");
     return { ok: true, channels };
   } catch (error) {
     log.error(error, "listSlackChannelsAction failed");
     if (isDeadSlackToken(error)) {
-      await clearSlackToken(context.organization.id);
+      await clearSlackToken(context.organization.id, error);
       return { ok: false, error: RECONNECT_MESSAGE };
     }
+    await recordSlackFailure(context.organization.id, error);
     return { ok: false, error: "Failed to fetch channels from Slack." };
   }
 }
@@ -194,9 +210,10 @@ export async function saveSlackSettingsAction(input: {
     } catch (error) {
       log.error(error, "saveSlackSettingsAction channel validation failed");
       if (isDeadSlackToken(error)) {
-        await clearSlackToken(context.organization.id);
+        await clearSlackToken(context.organization.id, error);
         return { ok: false, error: RECONNECT_MESSAGE };
       }
+      await recordSlackFailure(context.organization.id, error);
       return { ok: false, error: "Could not validate the selected Slack channel." };
     }
   }
@@ -256,6 +273,7 @@ export async function disconnectSlackAction(): Promise<SlackActionResult> {
     })
     .where(eq(workspaceSettings.organizationId, context.organization.id));
 
+  await clearIntegrationHealth(context.organization.id, "slack");
   revalidatePath(SETTINGS_PATH);
   await logAuditEvent({
     workspaceId: context.organization.id,
@@ -296,15 +314,16 @@ export async function testSlackAction(): Promise<SlackActionResult> {
         },
       ],
     });
+    await recordIntegrationSuccess(context.organization.id, "slack");
     return { ok: true };
   } catch (err) {
     log.error(err, "testSlackAction failed");
     if (isDeadSlackToken(err)) {
-      await clearSlackToken(context.organization.id);
+      await clearSlackToken(context.organization.id, err);
       return { ok: false, error: RECONNECT_MESSAGE };
     }
-    const msg = err instanceof Error ? err.message : "Send failed";
-    return { ok: false, error: msg };
+    await recordSlackFailure(context.organization.id, err);
+    return { ok: false, error: sanitizeIntegrationError(err) };
   }
 }
 

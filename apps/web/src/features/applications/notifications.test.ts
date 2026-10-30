@@ -71,4 +71,37 @@ describe("F1-14 application-received emails use the durable outbox", () => {
       workspaceId: "ws-1",
     });
   });
+
+  it("gives a second application with an identical recruiter payload its own recruiter email", async () => {
+    mocks.enqueueEmailOutbox.mockReset();
+    mocks.processEmailOutbox.mockReset();
+    mocks.enqueueEmailOutbox.mockResolvedValue("out");
+    mocks.processEmailOutbox.mockResolvedValue({ processed: 1, sent: 1, failed: 0 });
+
+    // The recruiter payload carries no application id, so only the durable key
+    // tells the two applications apart. Otherwise the second email is dropped.
+    await sendApplicationReceivedEmails({ ...EMAIL, ownerEmails: ["owner-a@example.com"] } as never);
+    await sendApplicationReceivedEmails({
+      ...EMAIL,
+      applicationId: "application-2",
+      ownerEmails: ["owner-a@example.com"],
+    } as never);
+
+    const recruiterCalls = mocks.enqueueEmailOutbox.mock.calls.filter((c) => c[1] === "application.received.recruiter");
+    expect(recruiterCalls).toHaveLength(2);
+    expect(recruiterCalls[0]?.[2]).toEqual(recruiterCalls[1]?.[2]);
+    expect(recruiterCalls[0]?.[3]).toBe("application-received:application-1:recruiter:owner-a@example.com");
+    expect(recruiterCalls[1]?.[3]).toBe("application-received:application-2:recruiter:owner-a@example.com");
+  });
+
+  it("keys the candidate confirmation on the application so a retry of the same submit dedupes", async () => {
+    mocks.enqueueEmailOutbox.mockReset();
+    mocks.processEmailOutbox.mockReset();
+    mocks.enqueueEmailOutbox.mockResolvedValue("out");
+    mocks.processEmailOutbox.mockResolvedValue({ processed: 1, sent: 1, failed: 0 });
+
+    await sendApplicationReceivedEmails({ ...EMAIL, ownerEmails: [] } as never);
+
+    expect(mocks.enqueueEmailOutbox.mock.calls[0]?.[3]).toBe("application-received:application-1:candidate");
+  });
 });

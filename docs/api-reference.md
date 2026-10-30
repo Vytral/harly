@@ -2,7 +2,7 @@
 
 This is the human-readable companion to the OpenAPI spec at [`/api/v1/openapi.json`](../apps/web/src/app/api/v1/openapi.json/route.ts).
 
-The OpenAPI document is the source of truth for request/response schemas, scopes, headers, pagination, and error envelopes. This page is an inventory for operators and integrators who want to see the full REST surface in one place.
+The OpenAPI document is the source of truth for request/response schemas, headers, pagination, and error envelopes. This page is an inventory for operators and integrators who want to see the full REST surface and the scope each operation requires in one place. Scope names come from `packages/api/src/scopes.ts`, and each operation's requirement comes from its contract in `apps/web/src/server/api/contracts`.
 
 Base URL:
 
@@ -23,107 +23,141 @@ Response conventions:
 
 ## Jobs
 
-| Method | Path                          | Scope          | Notes                                      |
-| ------ | ----------------------------- | -------------- | ------------------------------------------ |
-| GET    | `/jobs`                       | `jobs:read`    | List jobs, cursor-paginated                |
-| POST   | `/jobs`                       | `jobs:create`  | Create a draft job                         |
-| GET    | `/jobs/{id}/stages`           | `stages:read`  | List the ordered pipeline stages for a job |
-| PATCH  | `/jobs/{id}/stages/{stageId}` | `stages:write` | Update one stage                           |
+| Method | Path | Scope |
+| --- | --- | --- |
+| GET | `/jobs` | `jobs:read` |
+| POST | `/jobs` | `jobs:write` |
+| GET | `/jobs/{id}` | `jobs:read` |
+| PATCH | `/jobs/{id}` | `jobs:write` |
+| DELETE | `/jobs/{id}` | `jobs:write` |
+| POST | `/jobs/{id}/publish` | `jobs:write` |
+| POST | `/jobs/{id}/close` | `jobs:write` |
+| GET | `/jobs/{id}/stages` | `stages:read` |
+| POST | `/jobs/{id}/stages` | `stages:write` |
+| PATCH | `/jobs/{id}/stages/{stageId}` | `stages:write` |
+| POST | `/jobs/{id}/stages/reorder` | `stages:write` |
+| POST | `/jobs/{id}/stages/{stageId}/archive` | `stages:write` |
+| DELETE | `/jobs/{id}/stages/{stageId}` | `stages:write` |
+
+Stage lifecycle:
+
+- Listing omits archived stages unless `includeArchived=true`.
+- A new stage without `position` is inserted before the first hired, rejected or withdrawn stage. Several stages may share a kind.
+- Changing the kind of a stage is refused when it would move applications between outcomes (for example active to hired). Archive the stage instead, which merges its applications into a stage of the same outcome.
+- Archiving keeps the stage's history. Applications in it move to `mergeIntoStageId`.
+- Deleting is permanent and is refused for any stage that has held an application or appears in history, a scorecard, a document requirement or an automation. Archive those instead.
+- Reorder takes every active stage exactly once in `stageIds`.
 
 ## Candidates
 
-| Method | Path                            | Scope              | Notes                   |
-| ------ | ------------------------------- | ------------------ | ----------------------- |
-| GET    | `/candidates`                   | `candidates:read`  | List candidates         |
-| POST   | `/candidates`                   | `candidates:write` | Create a candidate      |
-| GET    | `/candidates/{id}`              | `candidates:read`  | Fetch one candidate     |
-| PATCH  | `/candidates/{id}`              | `candidates:write` | Update a candidate      |
-| DELETE | `/candidates/{id}`              | `candidates:write` | Delete a candidate      |
-| GET    | `/candidates/{id}/notes`        | `notes:read`       | List notes              |
-| POST   | `/candidates/{id}/notes`        | `notes:write`      | Add a note              |
-| GET    | `/candidates/{id}/tags`         | `tags:read`        | List tags               |
-| POST   | `/candidates/{id}/tags`         | `tags:write`       | Add a tag               |
-| DELETE | `/candidates/{id}/tags/{tagId}` | `tags:write`       | Remove a tag            |
-| GET    | `/candidates/{id}/files`        | `files:read`       | Safe file metadata only |
+| Method | Path | Scope |
+| --- | --- | --- |
+| GET | `/candidates` | `candidates:read` |
+| POST | `/candidates` | `candidates:write` |
+| GET | `/candidates/{id}` | `candidates:read` |
+| PATCH | `/candidates/{id}` | `candidates:write` |
+| DELETE | `/candidates/{id}` | `candidates:write` |
+| GET | `/candidates/{id}/notes` | `notes:read` |
+| POST | `/candidates/{id}/notes` | `notes:write` |
+| GET | `/candidates/{id}/tags` | `tags:read` |
+| POST | `/candidates/{id}/tags` | `tags:write` |
+| DELETE | `/candidates/{id}/tags/{tagId}` | `tags:write` |
+| GET | `/candidates/{id}/files` | `files:read` |
 
 ## Applications
 
-| Method | Path                        | Scope                | Notes                       |
-| ------ | --------------------------- | -------------------- | --------------------------- |
-| GET    | `/applications`             | `applications:read`  | List applications           |
-| POST   | `/applications`             | `applications:write` | Create an application       |
-| GET    | `/applications/{id}`        | `applications:read`  | Fetch one application       |
-| POST   | `/applications/{id}/move`   | `applications:write` | Move to a pipeline stage    |
-| POST   | `/applications/{id}/reject` | `applications:write` | Reject an application       |
-| POST   | `/applications/{id}/hire`   | `applications:write` | Mark hired                  |
-| POST   | `/applications/bulk`        | `applications:write` | Create applications in bulk |
+| Method | Path | Scope |
+| --- | --- | --- |
+| GET | `/applications` | `applications:read` |
+| POST | `/applications` | `applications:write` |
+| GET | `/applications/{id}` | `applications:read` |
+| POST | `/applications/{id}/move` | `applications:write` |
+| POST | `/applications/{id}/reject` | `applications:write` |
+| POST | `/applications/{id}/hire` | `applications:write` |
+| POST | `/applications/bulk` | `applications:write` |
 
 ## Interviews
 
-| Method | Path                        | Scope              | Notes                   |
-| ------ | --------------------------- | ------------------ | ----------------------- |
-| GET    | `/interviews`               | `interviews:read`  | List interviews         |
-| POST   | `/interviews`               | `interviews:write` | Schedule an interview   |
-| GET    | `/interviews/{id}`          | `interviews:read`  | Fetch one interview     |
-| PATCH  | `/interviews/{id}`          | `interviews:write` | Update an interview     |
-| POST   | `/interviews/{id}/cancel`   | `interviews:write` | Cancel an interview     |
-| POST   | `/interviews/{id}/complete` | `interviews:write` | Mark interview complete |
+| Method | Path | Scope |
+| --- | --- | --- |
+| GET | `/interviews` | `interviews:read` |
+| POST | `/interviews` | `interviews:write` |
+| GET | `/interviews/{id}` | `interviews:read` |
+| PATCH | `/interviews/{id}` | `interviews:write` |
+| POST | `/interviews/{id}/cancel` | `interviews:write` |
+| POST | `/interviews/{id}/complete` | `interviews:write` |
 
 ## Offers
 
-| Method | Path                    | Scope          | Notes                         |
-| ------ | ----------------------- | -------------- | ----------------------------- |
-| GET    | `/offers`               | `offers:read`  | List offers                   |
-| POST   | `/offers`               | `offers:write` | Create a draft offer          |
-| GET    | `/offers/{id}`          | `offers:read`  | Fetch one offer               |
-| PATCH  | `/offers/{id}`          | `offers:write` | Update a draft offer          |
-| POST   | `/offers/{id}/send`     | `offers:write` | Send an offer                 |
-| POST   | `/offers/{id}/decision` | `offers:write` | Record accept/reject decision |
-| POST   | `/offers/{id}/withdraw` | `offers:write` | Withdraw an offer             |
+| Method | Path | Scope |
+| --- | --- | --- |
+| GET | `/offers` | `offers:read` |
+| POST | `/offers` | `offers:write` |
+| GET | `/offers/{id}` | `offers:read` |
+| PATCH | `/offers/{id}` | `offers:write` |
+| POST | `/offers/{id}/send` | `offers:write` |
+| POST | `/offers/{id}/decision` | `offers:write` |
+| POST | `/offers/{id}/withdraw` | `offers:write` |
 
 ## Scorecards and tasks
 
-| Method | Path          | Scope              | Notes              |
-| ------ | ------------- | ------------------ | ------------------ |
-| GET    | `/scorecards` | `scorecards:read`  | List scorecards    |
-| POST   | `/scorecards` | `scorecards:write` | Create a scorecard |
-| GET    | `/tasks`      | `tasks:read`       | List tasks         |
-| POST   | `/tasks`      | `tasks:write`      | Create a task      |
-| GET    | `/tasks/{id}` | `tasks:read`       | Fetch one task     |
-| PATCH  | `/tasks/{id}` | `tasks:write`      | Update a task      |
-| DELETE | `/tasks/{id}` | `tasks:write`      | Delete a task      |
+| Method | Path | Scope |
+| --- | --- | --- |
+| GET | `/scorecards` | `scorecards:read` |
+| POST | `/scorecards` | `scorecards:write` |
+| GET | `/tasks` | `tasks:read` |
+| POST | `/tasks` | `tasks:write` |
+| GET | `/tasks/{id}` | `tasks:read` |
+| PATCH | `/tasks/{id}` | `tasks:write` |
+| DELETE | `/tasks/{id}` | `tasks:write` |
 
 ## Talent pool and activity
 
-| Method | Path                        | Scope           | Notes                            |
-| ------ | --------------------------- | --------------- | -------------------------------- |
-| GET    | `/pool-entries`             | `pool:read`     | List talent pool entries         |
-| POST   | `/pool-entries`             | `pool:write`    | Create a talent pool entry       |
-| DELETE | `/pool-entries/{id}`        | `pool:write`    | Remove a talent pool entry       |
-| POST   | `/pool-entries/{id}/assign` | `pool:write`    | Assign a pool candidate to a job |
-| GET    | `/activity-events`          | `activity:read` | Workspace audit timeline         |
+| Method | Path | Scope |
+| --- | --- | --- |
+| GET | `/pool-entries` | `pool:read` |
+| POST | `/pool-entries` | `pool:write` |
+| DELETE | `/pool-entries/{id}` | `pool:write` |
+| POST | `/pool-entries/{id}/assign` | `pool:write` |
+| GET | `/activity-events` | `activity:read` |
 
 ## Webhooks
 
-| Method | Path                                            | Scope             | Notes                     |
-| ------ | ----------------------------------------------- | ----------------- | ------------------------- |
-| GET    | `/webhooks`                                     | `webhooks:manage` | List webhook endpoints    |
-| POST   | `/webhooks`                                     | `webhooks:manage` | Create a webhook endpoint |
-| PATCH  | `/webhooks/{id}`                                | `webhooks:manage` | Update a webhook endpoint |
-| DELETE | `/webhooks/{id}`                                | `webhooks:manage` | Delete a webhook endpoint |
-| POST   | `/webhooks/{id}/test`                           | `webhooks:manage` | Send a test event         |
-| GET    | `/webhooks/{id}/deliveries`                     | `webhooks:read`   | List delivery log entries |
-| POST   | `/webhooks/{id}/deliveries/{deliveryId}/replay` | `webhooks:write`  | Replay a delivery         |
+| Method | Path | Scope |
+| --- | --- | --- |
+| GET | `/webhooks` | `webhooks:read` |
+| POST | `/webhooks` | `webhooks:write` |
+| PATCH | `/webhooks/{id}` | `webhooks:write` |
+| DELETE | `/webhooks/{id}` | `webhooks:write` |
+| POST | `/webhooks/{id}/test` | `webhooks:write` |
+| GET | `/webhooks/{id}/deliveries` | `webhooks:read` |
+| GET | `/webhooks/{id}/deliveries/{deliveryId}/attempts` | `webhooks:read` |
+| POST | `/webhooks/{id}/deliveries/{deliveryId}/replay` | `webhooks:write` |
+
+The legacy `webhooks:manage` scope is still accepted for existing keys and
+covers all webhook operations.
 
 ## API keys and identity
 
-| Method | Path                    | Scope            | Notes                                           |
-| ------ | ----------------------- | ---------------- | ----------------------------------------------- |
-| GET    | `/api-keys`             | `api_keys:read`  | List masked API keys                            |
-| POST   | `/api-keys`             | `api_keys:write` | Create a new API key                            |
-| DELETE | `/api-keys/{id}`        | `api_keys:write` | Revoke an API key                               |
-| POST   | `/api-keys/{id}/rotate` | `api_keys:write` | Rotate an API key and return the raw value once |
-| GET    | `/me`                   | none             | Introspect the current API key                  |
+| Method | Path | Scope |
+| --- | --- | --- |
+| GET | `/api-keys` | `api_keys:read` |
+| POST | `/api-keys` | `api_keys:write` |
+| DELETE | `/api-keys/{id}` | `api_keys:write` |
+| POST | `/api-keys/{id}/rotate` | `api_keys:write` |
+| GET | `/me` | none (introspects the presented key) |
+
+Publishable (`pk_`) keys are limited to `jobs:read` and `applications:write`, and
+only `POST /applications` (create) accepts them. Move, reject, hire and bulk-create
+require a secret key and return `403` for a publishable key.
+
+## Automations (withdrawn)
+
+Every `/automations` path returns `410 Gone` with the message from
+`AUTOMATIONS_API_GONE_MESSAGE`, even when Automations is enabled in the
+dashboard. The routes are `/automations`, `/automations/{id}`,
+`/automations/{id}/runs`, and the run retry and cancel routes beneath it. Use
+the dashboard for automations; see [Automations](../apps/docs/developers/automations.mdx).
 
 ## Pagination and filtering
 

@@ -80,6 +80,9 @@ When a request comes in:
 
 Harly tracks consent with timestamps and withdrawal events. Consent records are
 available in **Settings → Legal** and through the API (`activity:read` scope).
+The consent report export (`GET /api/security/consent-report`, JSON or CSV)
+requires the `dsar:manage` permission and covers only candidates inside the
+caller's job scope.
 
 | Record | What it captures |
 | --- | --- |
@@ -109,8 +112,10 @@ When a candidate is deleted or anonymized, evaluations, criterion evidence,
 embeddings, and queued evaluation jobs are removed with the candidate. Configure
 retention and legal holds before enabling automatic processing.
 
-When AI features are enabled, candidate data is sent to your configured
-provider. Before enabling:
+When AI features are enabled, some candidate data is sent to your configured
+provider. The [AI features page](/product/ai-features#what-leaves-your-server)
+lists what each feature sends and what the candidate anonymization setting
+changes. Before enabling:
 
 <Steps>
   <Step title="Choose a provider with a DPA">
@@ -121,12 +126,13 @@ provider. Before enabling:
     For each enabled AI feature, document: purpose, provider, model, what data
     is sent, who reviews the output, and what the human override path is.
 
-    | Feature | Data sent to provider |
+    | Feature | Sends candidate identity to the provider? |
     | --- | --- |
-    | Candidate matching | Job description + application answers |
-    | Assisted drafting | Job description + application context |
-    | Scorecard anonymization | Scorecard text (names stripped before send) |
-    | Chat | Current candidate or job context only |
+    | Candidate scoring and semantic matching | Yes, unless candidate anonymization is on. With it on, the name, location and contact details are removed |
+    | Email drafts, mailbox assistance, duplicate detection | Yes when anonymization is off. Paused when it is on |
+    | Scorecard comment refinement | The comment text, which can name the candidate. Paused when anonymization is on |
+    | Interview brief | Yes. Not yet covered by anonymization |
+    | Chat assistant | Yes, through the conversation. Tool results are redacted when anonymization is on; names typed into the conversation are still sent |
   </Step>
   <Step title="Notify candidates">
     If your jurisdiction or sector requires it, disclose AI use in your candidate
@@ -144,6 +150,42 @@ provider. Before enabling:
   suggestion without human review.
 </Info>
 
+## Candidate avatars and Gravatar
+
+Gravatar is off by default. When a candidate has no uploaded photo, Harly
+shows initials. A workspace owner or admin can turn on **Settings → Gravatar
+profile pictures** to show pictures from [Gravatar](https://gravatar.com)
+instead. When it is on, Harly sends a SHA-256 hash of each candidate's email
+address to `www.gravatar.com`. The image request is made by the viewer's
+browser, so Gravatar also receives that browser's IP address. While the setting
+is off, no email hash is sent to Gravatar and the page does not connect to
+Gravatar. Turning it on applies only from that point. Workspaces that existed
+before this setting was added start with it off. Upload a photo to replace
+any avatar.
+
+## Search recents in the browser
+
+The search palette (⌘K) remembers the last eight results you opened, so you can
+reopen them quickly. Each entry stores only what is needed to reopen it: the
+result type, its id, its display name, and the in-app link. It does not store
+contact details, headlines, or stage names. Recents are kept in the browser's
+local storage, separately for each user and workspace on that browser.
+
+- An entry is dropped 30 days after you last opened it. The palette removes
+  expired entries when it next opens.
+- Entries are removed when you sign out from the account menu, for every user
+  and workspace on that browser.
+- Entries are also dropped when you no longer have access to that type of
+  result, or when the record is no longer visible to you.
+- Clearing site data in your browser removes them at any time.
+- When the app starts, recents that belong to another user are removed, and so
+  are recents saved by earlier versions of Harly. This covers a session that
+  ended without signing out, such as an expired or revoked session.
+
+Recents stay in your browser. To show them, the palette sends the ids of your
+recent results to the server, which checks that you can still see each one and
+returns only those. Recents are not stored on the server.
+
 ## Audit log
 
 Every access, mutation, export, and deletion is captured with the acting member,
@@ -151,7 +193,8 @@ timestamp, and affected resource. The audit log is available in
 **Settings → Security → Audit log**.
 
 Export the audit log before deleting records that may be needed for an active
-investigation or regulatory response.
+investigation or regulatory response. Exporting requires the `dsar:manage`
+permission; see [access control](/security/access-control#who-can-export-sensitive-records).
 
 | Severity | Examples |
 | --- | --- |

@@ -7,6 +7,11 @@ import { db, workspaceSettings } from "@harly/db";
 
 import { requirePermission } from "@/features/workspaces/permissions-server";
 import { assertNotDemo } from "@/features/demo/assert-not-demo";
+import {
+  clearIntegrationHealth,
+  recordIntegrationFailure,
+  recordIntegrationSuccess,
+} from "@/features/integrations/health/repository";
 import { logAuditEvent } from "@/lib/audit-log";
 import { createLogger } from "@/lib/logger";
 import { DEFAULT_JITSI_BASE_URL } from "@/lib/jitsi/config";
@@ -97,6 +102,7 @@ export async function disconnectJitsiAction(): Promise<JitsiActionResult> {
     .update(workspaceSettings)
     .set({ jitsiEnabled: false, jitsiBaseUrl: null, updatedAt: new Date() })
     .where(eq(workspaceSettings.organizationId, context.organization.id));
+  await clearIntegrationHealth(context.organization.id, "jitsi");
 
   await logAuditEvent({
     workspaceId: context.organization.id,
@@ -132,6 +138,10 @@ export async function testJitsiConnectionAction(input: {
   const { url, error } = validateBaseUrl(target);
   if (!url) return { ok: false, error };
 
+  // Only the saved instance is health-tracked; an unsaved URL is just a check.
+  const testsSavedUrl = !input.baseUrl?.trim();
+  const workspaceId = testsSavedUrl ? context.organization.id : null;
+
   try {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 5000);
@@ -141,17 +151,24 @@ export async function testJitsiConnectionAction(input: {
         signal: controller.signal,
       });
       if (!res.ok) {
+        const failure = Object.assign(
+          new Error(`Jitsi instance returned ${res.status}`),
+          { status: res.status },
+        );
+        if (workspaceId) await recordIntegrationFailure(workspaceId, "jitsi", failure);
         return {
           ok: false,
           error: `Instance responded with HTTP ${res.status}.`,
         };
       }
+      if (workspaceId) await recordIntegrationSuccess(workspaceId, "jitsi");
       return { ok: true };
     } finally {
       clearTimeout(timeout);
     }
   } catch (err) {
     log.error(err, "testJitsiConnectionAction failed");
+    if (workspaceId) await recordIntegrationFailure(workspaceId, "jitsi", err);
     return {
       ok: false,
       error:

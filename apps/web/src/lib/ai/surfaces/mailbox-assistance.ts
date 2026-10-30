@@ -7,6 +7,11 @@ import { getModel } from "@/lib/ai/registry";
 import { recordAiUsage } from "@/lib/ai/usage";
 import { UNTRUSTED_DATA_GUARDRAIL } from "@/lib/ai/prompts/guardrails";
 import type { AiModelConfig } from "@/lib/ai/providers";
+import {
+  ANONYMIZATION_BLOCKED_MESSAGES,
+  assertAnonymizationAllows,
+  type AnonymizationSettings,
+} from "@/lib/ai/candidate-context";
 
 type MailMessageInput = {
   direction: "inbound" | "outbound";
@@ -49,9 +54,12 @@ function transcript(input: MailboxAssistanceInput) {
 }
 
 export async function generateMailboxSummaryWithAI(
-  config: AiModelConfig,
+  config: AiModelConfig & AnonymizationSettings,
   input: MailboxAssistanceInput,
 ) {
+  // Threads carry the candidate's email addresses and are addressed to them;
+  // they are not redacted, so the feature pauses instead.
+  assertAnonymizationAllows(config, ANONYMIZATION_BLOCKED_MESSAGES.mailboxAssistance);
   const result = await generateText({
     model: getModel(config),
     system: SYSTEM_PROMPT,
@@ -64,9 +72,10 @@ export async function generateMailboxSummaryWithAI(
 }
 
 export async function generateMailboxReplyWithAI(
-  config: AiModelConfig,
+  config: AiModelConfig & AnonymizationSettings,
   input: MailboxAssistanceInput,
 ) {
+  assertAnonymizationAllows(config, ANONYMIZATION_BLOCKED_MESSAGES.mailboxAssistance);
   const result = await generateText({
     model: getModel(config),
     system: `${SYSTEM_PROMPT} Draft a plain-text reply for a recruiter to review. Do not send it. Do not claim a meeting is booked or make promises not present in the thread. Do not include a subject or greeting if it would be speculative; write a useful, editable body.`,

@@ -4,6 +4,7 @@ import type React from "react";
 
 import {
   createEmailSender,
+  DeliveryOutcomeUnknownError,
   type EmailSender,
   type EmailAttachment,
   type SendEmailResult,
@@ -16,6 +17,17 @@ import { resolveSenderFromOverride } from "./sender-identity";
 import { createLogger } from "@/lib/logger";
 
 const log = createLogger("email");
+
+/*
+ * Outbox dedupe contract. Every caller that queues an email in the outbox (the
+ * enqueue function in ./outbox-processor) MUST pass a durable dedupe key that
+ * names the real-world event: a retry of the same event reuses the key, and a
+ * legitimate repeat of an identical payload gets a new key. Without a key the
+ * outbox dedupes on a hash of the payload, which silently drops a second event
+ * whose payload is identical, such as a re-move to the same stage or a
+ * scheduled report with the same body. Key builders live in ./dedupe-keys.
+ * enqueue-call-sites.test.ts fails on any call site that passes no key.
+ */
 
 export const emailSender = createEmailSender();
 
@@ -68,6 +80,15 @@ export async function getWorkspaceEmailSender(
   return createEmailSender(resolved);
 }
 
+export type SendWorkspaceEmailOptions = {
+  /**
+   * Let an unknown delivery outcome (the provider may have accepted the message)
+   * propagate as `DeliveryOutcomeUnknownError` instead of collapsing into `false`.
+   * Only callers that can record "do not resend" should set this.
+   */
+  rethrowUnknownOutcome?: boolean;
+};
+
 /**
  * Send an email on behalf of a workspace, using its own provider when
  * configured or the platform default otherwise. Returns whether the email
@@ -77,6 +98,7 @@ export async function sendWorkspaceEmail(
   workspaceId: string,
   options: SendEmailOptions,
   actorUserId?: string | null,
+  sendOptions?: SendWorkspaceEmailOptions,
 ): Promise<SendEmailResult | false> {
   // Public demo: swallow all workspace-scoped outbound email.
   if (isDemoMode()) {
@@ -92,6 +114,9 @@ export async function sendWorkspaceEmail(
   try {
     return await sender.send(options);
   } catch (error) {
+    if (sendOptions?.rethrowUnknownOutcome && error instanceof DeliveryOutcomeUnknownError) {
+      throw error;
+    }
     log.error(error, "[email] Failed to send workspace email");
     return false;
   }

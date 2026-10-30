@@ -2,6 +2,7 @@ import { listInterviewsForRange } from "@/features/interviews/data";
 import { CalendarBoard } from "@/features/interviews/CalendarBoard";
 import { listJobOptions } from "@/features/jobs/data";
 import { listWorkspaceMembers } from "@/features/jobs/hiring-team-data";
+import { requireAnyPagePermission } from "@/features/workspaces/permissions-server";
 
 const MONTH_LABEL_FORMAT = new Intl.DateTimeFormat("en", {
   month: "long",
@@ -21,6 +22,7 @@ type CalendarsPageProps = {
 };
 
 export default async function CalendarsPage({ searchParams }: CalendarsPageProps) {
+  await requireAnyPagePermission(["interviews:manage", "interviews:feedback"]);
   const { month: monthRaw } = await searchParams;
   const { year, month, param } = parseMonthParam(monthRaw);
 

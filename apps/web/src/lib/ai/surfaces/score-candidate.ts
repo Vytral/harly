@@ -7,6 +7,10 @@ import { recordAiUsage } from "@/lib/ai/usage";
 import { UNTRUSTED_DATA_GUARDRAIL } from "@/lib/ai/prompts/guardrails";
 import { candidateScoreSchema, type CandidateScore } from "@/lib/ai/schemas";
 import type { AiModelConfig } from "@/lib/ai/providers";
+import {
+  buildCandidateAiContext,
+  type AnonymizationSettings,
+} from "@/lib/ai/candidate-context";
 import type { EvaluationMode } from "@/lib/evaluation/mode";
 
 const SYSTEM_PROMPT =
@@ -38,6 +42,9 @@ export type ScoreCandidateInput = {
   };
   candidate: {
     fullName: string;
+    /** Optional split name; derived from `fullName` when omitted. */
+    firstName?: string | null;
+    lastName?: string | null;
     headline: string | null;
     location: string | null;
     /** Plain text extracted from the latest resume, when available. */
@@ -60,11 +67,17 @@ function plain(html: string | null): string {
 }
 
 export async function scoreCandidateWithAI(
-  config: AiModelConfig,
+  config: AiModelConfig & AnonymizationSettings,
   input: ScoreCandidateInput,
 ): Promise<CandidateScore> {
-  const { job, candidate } = input;
+  const { job } = input;
   const mode = job.evaluationMode ?? "balanced";
+  // Identity never reaches the prompt when anonymization is on: the name becomes
+  // a stable alias, contact details and location are dropped, and resume and
+  // answer text is redacted.
+  const candidate = buildCandidateAiContext(input.candidate, {
+    anonymize: config.resumeAnonymization === true,
+  });
 
   const jobBlock = [
     `Title: ${job.title}`,
@@ -88,13 +101,13 @@ export async function scoreCandidateWithAI(
       : null;
 
   const candidateBlock = [
-    `Name: ${candidate.fullName}`,
+    `Name: ${candidate.label}`,
     candidate.headline ? `Headline: ${candidate.headline}` : null,
     candidate.location ? `Location: ${candidate.location}` : null,
     candidate.experienceYears != null
       ? `Experience: ${candidate.experienceYears} years`
       : null,
-    candidate.skills && candidate.skills.length > 0
+    candidate.skills.length > 0
       ? `Skills: ${candidate.skills.slice(0, 20).join(", ")}`
       : null,
     answersBlock ? `Application answers:\n${answersBlock}` : null,

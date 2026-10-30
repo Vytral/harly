@@ -1,0 +1,133 @@
+---
+title: "API authorization"
+description: "How REST API v1 keys are authorized today: key types, key scopes, how writes are attributed, what role scopes do not cover, the known risks, and the hardening path for 0.4."
+---
+
+This page describes how the v1 REST API decides whether a request may run. It
+describes the behavior of Harly 0.3.0. The API is a compatibility surface, so
+the behavior below is intentional for 0.3.0; the risks and the planned
+hardening are listed at the end.
+
+## Summary
+
+- An API key is a workspace-level credential. It is not a person, and it is
+  not governed by the role scopes that limit people in the app.
+- A request is allowed when the key is valid and not revoked or expired, its
+  type allows the request, and it holds the scope the endpoint declares.
+- Role scopes (assigned-only jobs, department and region limits) do not apply
+  to API requests. A key with `candidates:read` reads every candidate in the
+  workspace, including candidates the key's creator could not open in the app.
+
+## How a request is authorized
+
+1. **Key lookup.** The key is matched by its hash. Malformed, unknown, revoked,
+   and expired keys are rejected with `401`.
+2. **Key type.** Secret keys (`harly_sk_…`) must be sent in the
+   `Authorization` header or `x-api-key`; they are refused in the query string.
+   Publishable keys (`harly_pk_…`) may also be sent as the `pk` query
+   parameter, because the embed widget runs in the browser. A publishable key
+   can hold only `jobs:read` and `applications:write`. Requested scopes that a
+   key type may not hold are dropped when the key is created.
+3. **Endpoint scope.** Each endpoint declares one required scope. A key must
+   hold it. `webhooks:manage` is a legacy umbrella that satisfies both
+   `webhooks:read` and `webhooks:write`. `GET /me` requires no scope; it only
+   reports the key's own scopes.
+4. **Rate limit.** Each key has its own budget of 1,000 requests per 10
+   minutes (120 on the public demo). The limit is checked before any work runs.
+5. **Work.** The endpoint's service runs against the key's workspace. No role
+   scope, job assignment, or hiring-team membership is checked.
+
+Key creation and rotation have their own rules:
+
+- A key can only be created with a secret key, and only with scopes that the
+  creating key itself holds (`api_keys:write`). In the app, creating a key
+  requires `integrations:manage`.
+- Rotation is refused when the new key would carry scopes the rotating key does
+  not hold.
+
+## Who a write is attributed to
+
+Writes need a workspace user for attribution, such as the creator of a job or a
+note. Harly resolves that user as follows (`server/api/actor.ts`):
+
+1. The user who created the key, if that user is still a member of the
+   workspace, whatever role they now hold.
+2. Otherwise, the first workspace owner.
+
+If the workspace has no owner, job creation fails with `422`.
+
+The activity trail records the resolved user as the actor. It does not record
+which key made the call, so an API write looks the same as a write by that
+person in the app.
+
+## Scope inventory
+
+The table lists every v1 endpoint and the scope it requires. No v1 route or
+contract applies a role scope, and the services those routes call do not
+either.
+
+| Scope | Endpoints |
+| --- | --- |
+| `jobs:read` | `GET /jobs`, `GET /jobs/{id}` |
+| `jobs:write` | `POST /jobs`, `PATCH /jobs/{id}`, `DELETE /jobs/{id}`, `POST /jobs/{id}/publish`, `POST /jobs/{id}/close` |
+| `stages:read` | `GET /jobs/{id}/stages` |
+| `stages:write` | Create, update, reorder, archive, and delete job stages |
+| `candidates:read` | `GET /candidates`, `GET /candidates/{id}` |
+| `candidates:write` | `POST /candidates`, `PATCH /candidates/{id}`, `DELETE /candidates/{id}` |
+| `notes:read` / `notes:write` | List and create candidate notes |
+| `tags:read` / `tags:write` | List, add, and remove candidate tags |
+| `files:read` | `GET /candidates/{id}/files` |
+| `applications:read` | `GET /applications`, `GET /applications/{id}` |
+| `applications:write` | Create, move, reject, hire, and bulk-update applications |
+| `interviews:read` / `interviews:write` | List, read, schedule, update, cancel, and complete interviews |
+| `offers:read` / `offers:write` | List, read, draft, update, send, decide, and withdraw offers |
+| `scorecards:read` / `scorecards:write` | List and create scorecards |
+| `tasks:read` / `tasks:write` | List, read, create, update, and delete tasks |
+| `pool:read` / `pool:write` | List, add, remove, and assign talent-pool entries |
+| `activity:read` | `GET /activity-events` |
+| `automations:read` / `automations:write` | List and read automations and runs; create, update, delete, retry, and cancel |
+| `webhooks:read` / `webhooks:write` | List and read endpoints and deliveries; create, update, delete, test, and replay |
+| `api_keys:read` / `api_keys:write` | List keys; create, delete, and rotate keys |
+| none | `GET /me` |
+
+## Known limitations in 0.3.0
+
+- **Workspace-wide reach.** Key scopes are the only restriction. A key with a
+  read scope sees all records of that kind in the workspace. Role scopes that
+  limit people in the app (assigned jobs, departments, regions) do not limit
+  keys.
+- **Keys outlive their creator's access.** Removing a member, or changing their
+  role, does not change the keys they created. Removal deletes the membership
+  row only; keys stay valid with their full scopes.
+- **Attribution falls back to an owner.** Once the creator is no longer a
+  member, the key's writes are attributed to the first owner. That owner is
+  credited with actions they did not take.
+- **Keys are not identified in the trail.** Activity and audit records carry the
+  attributed user, not the key id.
+- **Publishable keys are public.** Their two scopes are meant for browsers.
+  `applications:write` lets a browser holding the key create applications, so
+  the key should be treated as public and limited by rate limits only.
+- **Legacy umbrella scope.** `webhooks:manage` is still accepted and still
+  grants both webhook scopes.
+
+## Recommended hardening for 0.4
+
+These steps are planned for 0.4. They change behavior, so they need a migration
+path for existing keys.
+
+1. **Give each key a principal.** Store the creator's role and scope on the key
+   when it is created. On every request, apply the same job, candidate, and task
+   scope predicates the app uses, so list endpoints filter results and by-id
+   endpoints refuse out-of-scope records.
+2. **Re-check keys when people change.** Suspend or revoke a key when its
+   creator is removed or loses a permission the key relies on. Show the creator
+   and last-used time on each key in Settings.
+3. **Stop attributing to owners.** Fail a write when the creator is gone, rather
+   than attributing it to an owner. Attribute writes made with a key to a
+   service actor that records the key id.
+4. **Record the key on every write.** Put the key id in activity and audit
+   metadata so the trail can tell a key write from a person's own action.
+5. **Tighten key management.** Limit `api_keys:write` and key creation to owners
+   by default, and retire `webhooks:manage` for newly created keys.
+6. **Test by scope.** Add integration tests that run each endpoint family with a
+   scoped key and assert that out-of-scope records are absent or refused.

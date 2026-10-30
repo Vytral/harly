@@ -6,12 +6,19 @@ import { db } from "@harly/db";
 import {
   applications,
   candidates,
+  effectiveStageKind,
   jobHiringTeam,
   jobStages,
   jobs,
+  type StageKind,
   user as authUsers,
 } from "@harly/db";
 import { getWorkspaceContext } from "@/features/workspaces/context";
+
+import {
+  matchesStageFilter,
+  stageFilterValue,
+} from "@/features/dashboard/applications-board-stage";
 
 /**
  * Home's hero surface (DESIGN.md , Human Data Table).
@@ -43,7 +50,10 @@ export type BoardApplication = {
   jobId: string;
   jobTitle: string;
   department: string | null;
+  /** Display name of the current stage. Text only; never used for meaning. */
   stageName: string | null;
+  /** What the current stage means. Null when the application has no stage. */
+  stageKind: StageKind | null;
   appliedAt: Date;
   /** Whole days since the application landed. Drives the waiting column. */
   daysWaiting: number;
@@ -99,6 +109,7 @@ export async function getApplicationsBoard({
         jobTitle: jobs.title,
         department: jobs.department,
         stageName: jobStages.name,
+        stageKindValue: jobStages.kind,
         appliedAt: applications.appliedAt,
       })
       .from(applications)
@@ -136,9 +147,18 @@ export async function getApplicationsBoard({
       .orderBy(asc(jobs.title)),
 
     db
-      .select({ name: jobStages.name, order: jobStages.order })
+      .select({
+        name: jobStages.name,
+        kind: jobStages.kind,
+        order: jobStages.order,
+      })
       .from(jobStages)
-      .where(eq(jobStages.workspaceId, workspace.id))
+      .where(
+        and(
+          eq(jobStages.workspaceId, workspace.id),
+          isNull(jobStages.archivedAt),
+        ),
+      )
       .orderBy(asc(jobStages.order)),
   ]);
 
@@ -158,30 +178,32 @@ export async function getApplicationsBoard({
     jobTitle: row.jobTitle,
     department: row.department ?? null,
     stageName: row.stageName ?? null,
+    stageKind:
+      row.stageName === null
+        ? null
+        : effectiveStageKind({ kind: row.stageKindValue, name: row.stageName }),
     appliedAt: row.appliedAt,
     daysWaiting: dayjsBetween(row.appliedAt, now),
     team: teamByJob.get(row.jobId) ?? [],
   }));
 
-  // Stage names repeat across jobs (every job has its own "Screening" row), so
-  // filtering by name is intentional , the recruiter means the concept.
+  // Stages repeat across jobs (every job has its own "Screening" row), so the
+  // filter means the concept: the stage kind, or a custom stage's own name.
   const filtered = stage
-    ? all.filter((application) => application.stageName === stage)
+    ? all.filter((application) => matchesStageFilter(application, stage))
     : all;
 
-  const uniqueStages = new Map<string, number>();
+  const stageOptions = new Map<string, string>();
   for (const row of stageRows) {
-    if (!uniqueStages.has(row.name)) uniqueStages.set(row.name, row.order);
+    const value = stageFilterValue(row);
+    if (!stageOptions.has(value)) stageOptions.set(value, row.name);
   }
 
   return {
     applications: filtered,
     totalActive: all.length,
     jobOptions: jobRows.map((job) => ({ value: job.id, label: job.title })),
-    stageOptions: [...uniqueStages.keys()].map((name) => ({
-      value: name,
-      label: name,
-    })),
+    stageOptions: [...stageOptions].map(([value, label]) => ({ value, label })),
   };
 }
 

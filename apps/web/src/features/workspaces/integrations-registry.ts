@@ -1,6 +1,16 @@
 import "server-only";
 
 import { getWorkspaceContext } from "@/features/workspaces/context";
+import type {
+  IntegrationHealthKey,
+  IntegrationHealthView,
+} from "@/features/integrations/health/model";
+import {
+  buildHealthByKey,
+  integrationHealthKeyForSlug,
+  withSlackDeliveryHealth,
+} from "@/features/integrations/health/registry-mapping";
+import { getIntegrationHealth } from "@/features/integrations/health/repository";
 import { getWorkspaceCalStatus } from "@/lib/cal/config";
 import { getWorkspaceEsignStatus } from "@/lib/esign/config";
 import { getWorkspaceGCalStatus } from "@/lib/gcal/config";
@@ -323,13 +333,15 @@ export type IntegrationStatuses = {
   jitsi: Awaited<ReturnType<typeof getWorkspaceJitsiStatus>>;
   docuseal: Awaited<ReturnType<typeof getWorkspaceEsignStatus>>;
   captcha: Awaited<ReturnType<typeof getWorkspaceCaptchaStatus>>;
+  /** Unified health per provider integration (connected / degraded / reconnect). */
+  health: Record<IntegrationHealthKey, IntegrationHealthView>;
 };
 
 /** Fetch every connectable integration's status for a workspace in parallel. */
 export async function getIntegrationStatuses(
   workspaceId: string,
 ): Promise<IntegrationStatuses> {
-  const [email, cal, gcal, slack, outlook, zoom, chat, telegram, jitsi, docuseal, captcha] =
+  const [email, cal, gcal, slack, outlook, zoom, chat, telegram, jitsi, docuseal, captcha, storedHealth] =
     await Promise.all([
       getWorkspaceEmailStatus(workspaceId),
       getWorkspaceCalStatus(workspaceId),
@@ -342,8 +354,32 @@ export async function getIntegrationStatuses(
       getWorkspaceJitsiStatus(workspaceId),
       getWorkspaceEsignStatus(workspaceId),
       getWorkspaceCaptchaStatus(workspaceId),
+      getIntegrationHealth(workspaceId),
     ]);
-  return { email, cal, gcal, slack, outlook, zoom, chat, telegram, jitsi, docuseal, captcha };
+
+  const health = buildHealthByKey(
+    {
+      zoom: zoom.installationState === "installed",
+      gcal: gcal.enabled && gcal.hasRefreshToken,
+      outlook: outlook.enabled,
+      slack: slack.enabled,
+      telegram: telegram.hasToken,
+      jitsi: jitsi.enabled && Boolean(jitsi.baseUrl),
+      docuseal: docuseal.enabled && docuseal.hasToken,
+    },
+    withSlackDeliveryHealth(
+      storedHealth,
+      slack.lastDelivery
+        ? {
+            status: slack.lastDelivery.status,
+            error: slack.lastDelivery.error,
+            createdAt: slack.lastDelivery.createdAt,
+          }
+        : null,
+    ),
+  );
+
+  return { email, cal, gcal, slack, outlook, zoom, chat, telegram, jitsi, docuseal, captcha, health };
 }
 
 /** Resolve whether a given integration slug is currently connected. */
@@ -351,30 +387,22 @@ export function isConnected(
   slug: IntegrationSlug,
   statuses: IntegrationStatuses,
 ): boolean {
+  const key = integrationHealthKeyForSlug(slug);
+  if (key) return statuses.health[key].connected;
+  return isConfiguredWithoutHealth(slug, statuses);
+}
+
+function isConfiguredWithoutHealth(
+  slug: IntegrationSlug,
+  statuses: IntegrationStatuses,
+): boolean {
   switch (slug) {
     case "cal":
       return statuses.cal.enabled;
-    case "google-calendar":
-    case "google-meet":
-      return statuses.gcal.enabled;
-    case "zoom":
-      return statuses.zoom.installationState === "installed";
-    case "outlook-calendar":
-    case "outlook":
-    case "microsoft-teams":
-      return statuses.outlook.enabled;
-    case "slack":
-      return statuses.slack.enabled;
     case "discord":
       return (
         statuses.chat.provider === "discord" && statuses.chat.hasWebhook
       );
-    case "telegram":
-      return statuses.telegram.hasToken;
-    case "jitsi":
-      return statuses.jitsi.enabled && Boolean(statuses.jitsi.baseUrl);
-    case "docuseal":
-      return statuses.docuseal.enabled && statuses.docuseal.hasToken;
     case "harly-sign":
       // Built-in, no external connection required — always on.
       return true;

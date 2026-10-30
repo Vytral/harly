@@ -54,65 +54,47 @@ high-trust exception for private networks.
 ## Cron
 
 Prometheus scrapes `GET /api/metrics` with `Authorization: Bearer $METRICS_TOKEN`.
-The endpoint is never exposed without that token and also exposes operational
-queue/cron summaries as JSON when requested with `Accept: application/json`.
-Workspace operators can inspect secret-free connector status at
-`GET /api/health/integrations` with their Harly session; this reports configured
-state and check duration without returning credentials.
-Import `docs/observability/prometheus-alerts.yml` into the monitoring stack to
-alert on failed cron runs, high SSE p95 latency, and elevated HTTP 5xx rates.
+The endpoint returns `401` without that token. With `Accept: application/json`
+it also returns operational queue and cron summaries. Workspace members can
+read coarse connector health states at `GET /api/health/integrations` with
+their Harly session; members who can manage integrations also receive the
+per-provider status detail and last sanitized error. The endpoint never returns
+credentials or webhook secrets. Import `docs/observability/prometheus-alerts.yml` into
+the monitoring stack to alert on failed cron runs, high SSE p95 latency, and
+elevated HTTP 5xx rates.
 
-The scheduler calls these private endpoints with
-`Authorization: Bearer $CRON_SECRET`:
+The bundled scheduler calls these private endpoints with
+`Authorization: Bearer $CRON_SECRET`. Intervals are the defaults in
+`tooling/runtime/src/entrypoint.ts`:
 
-- `POST /api/cron/email-outbox` every 60 seconds
-- `POST /api/cron/domain-events` every 15 seconds (replay committed realtime events after a failed fast publish)
-- `POST /api/cron/automations` every 10 seconds where supported, or every 60 seconds as a declared fallback (drain v1/v2 workflow runs, retries, waits, and lease recovery)
-- `POST /api/cron/webhooks/dispatch` every 60 seconds (webhook and chat delivery only)
-- `POST /api/cron/esign-reminders` every 60 minutes (native signing reminders,
-  at most one per recipient per day)
-- `POST /api/cron/interview-sync` every 60 seconds
-- `POST /api/cron/mailbox-sync` every 120 seconds
-- `POST /api/cron/mail-reconciliation` every 60 seconds
+| Route | Interval |
+| --- | --- |
+| `POST /api/cron/domain-events` | 15 seconds (replays committed realtime events after a failed fast publish) |
+| `POST /api/cron/automations` | 10 seconds (drains v2 workflow runs, retries, waits, and lease recovery) |
+| `POST /api/cron/email-outbox` | 60 seconds |
+| `POST /api/cron/webhooks/dispatch` | 60 seconds (webhook delivery only) |
+| `POST /api/cron/esign-reconciliation` | 60 seconds |
+| `POST /api/cron/esign-reminders` | 60 minutes (at most one reminder per recipient per day) |
+| `POST /api/cron/interview-sync` | 60 seconds |
+| `POST /api/cron/evaluation-jobs` | 60 seconds |
+| `POST /api/cron/mailbox-sync` | 120 seconds |
+| `POST /api/cron/document-expiry` | 60 seconds |
+| `POST /api/cron/retention-enforcement` | 60 seconds |
+| `POST /api/cron/candidate-deletions` | 60 seconds |
+| `POST /api/cron/candidate-reconciliation` | 24 hours |
+| `POST /api/cron/mail-reconciliation` | 60 seconds (controlled mode, `dryRun: false`) |
+| `POST /api/cron/scheduled-reports` | 60 seconds |
+| `POST /api/cron/demo-reset` | 2 hours, scheduled only when `DEMO_MODE=true` |
 
 GET and query-string secrets are rejected. Mail reconciliation is report-only
-by default; the bundled worker runs it in controlled mode and safely
-normalizes stale `sending` rows to `unknown`. It never retries an outcome that
-may already have reached the provider. Email, SMTP, and webhook delivery are
-at-least-once; provider idempotency and durable queue keys reduce duplicate
-delivery after crashes.
+unless the request body sets `dryRun: false`; the bundled scheduler sends that
+body and safely normalizes stale `sending` rows to `unknown`.
+It never retries an outcome that may already have reached the provider. Email,
+SMTP, and webhook delivery are at-least-once; provider idempotency and durable
+queue keys reduce duplicate delivery after crashes.
 
-## Enterprise access control
+## Access control and identity
 
-Harly uses workspace-scoped RBAC. A custom role combines module/action
-permissions with an optional contextual scope:
-
-- `all` or `assigned` jobs;
-- allowed departments;
-- allowed regions.
-
-Resource guards resolve the active membership and workspace on the server, then
-apply the role policy to the job before allowing access to applications,
-candidates, interviews, or offers. Role assignment also enforces a privilege
-ceiling, so a scoped administrator cannot create a role broader than its own.
-
-Workspace owners can enforce MFA from Settings → Security. OIDC/SAML provider
-configuration is owner-gated and secrets are encrypted at rest. Security and
-administrative changes are written to the workspace audit log and can be
-filtered or exported from the security settings page.
-
-SCIM 2.0 provisioning is available to workspace owners from Settings →
-Security. Create a named token, copy it once, and configure the identity
-provider with:
-
-```text
-Base URL: ${HARLY_URL}/api/scim/v2.0/<workspace-id>
-Users endpoint: ${HARLY_URL}/api/scim/v2.0/<workspace-id>/Users
-Authentication: HTTP Bearer token
-```
-
-SCIM supports idempotent user create/update, active/inactive lifecycle,
-department, region, team, manager, title, and safe role mapping. Deactivation
-revokes the member's Harly sessions without deleting recruiting history.
-The service also exposes the standard discovery resources
-`/ServiceProviderConfig`, `/ResourceTypes`, and `/Schemas`.
+Workspace roles, scoped permissions, MFA, OIDC/SAML, SCIM provisioning, and the
+audit log are documented in [Access control](../apps/docs/security/access-control.mdx)
+and [SSO and SCIM](../apps/docs/security/sso-scim.mdx).

@@ -4,9 +4,17 @@ import { and, eq } from "drizzle-orm";
 
 import { db, interviews } from "@harly/db";
 
-import { getWorkspaceOutlookConfig } from "@/lib/outlook/config";
+import {
+  recordIntegrationSuccess,
+} from "@/features/integrations/health/repository";
+import {
+  getWorkspaceOutlookConfig,
+  recordOutlookCallFailure,
+  type OutlookConfig,
+} from "@/lib/outlook/config";
 import { createTeamsMeeting, deleteTeamsMeeting } from "@/lib/outlook/client";
 import { createLogger } from "@/lib/logger";
+import { safeErrorFields } from "@/features/integrations/health/model";
 
 const log = createLogger("outlook-teams-sync");
 
@@ -22,8 +30,10 @@ export async function syncInterviewToTeams(opts: {
   start: Date;
   durationMins: number;
 }): Promise<{ joinUrl?: string; meetingId: string } | null> {
+  let config: OutlookConfig | null = null;
   try {
-    const config = await getWorkspaceOutlookConfig(opts.workspaceId);
+    const startedAt = new Date();
+    config = await getWorkspaceOutlookConfig(opts.workspaceId);
     if (!config) return null;
 
     const meeting = await createTeamsMeeting(config.accessToken, {
@@ -50,9 +60,11 @@ export async function syncInterviewToTeams(opts: {
         ),
       );
 
+    await recordIntegrationSuccess(opts.workspaceId, "outlook", { startedAt });
     return { joinUrl: meeting.joinUrl, meetingId: meeting.id };
   } catch (err) {
-    log.error(err, "[teams-sync] Failed to create meeting");
+    log.error({ err: safeErrorFields(err) }, "[teams-sync] Failed to create meeting");
+    await recordOutlookCallFailure(opts.workspaceId, err, config?.refreshTokenCiphertext);
     return null;
   }
 }
@@ -65,8 +77,10 @@ export async function cancelInterviewTeamsMeeting(opts: {
   interviewId: string;
   teamsMeetingId: string;
 }): Promise<boolean> {
+  let config: OutlookConfig | null = null;
   try {
-    const config = await getWorkspaceOutlookConfig(opts.workspaceId);
+    const startedAt = new Date();
+    config = await getWorkspaceOutlookConfig(opts.workspaceId);
     if (!config) return false;
 
     await deleteTeamsMeeting(config.accessToken, opts.teamsMeetingId);
@@ -80,9 +94,11 @@ export async function cancelInterviewTeamsMeeting(opts: {
           eq(interviews.workspaceId, opts.workspaceId),
         ),
       );
+    await recordIntegrationSuccess(opts.workspaceId, "outlook", { startedAt });
     return true;
   } catch (err) {
-    log.error(err, "[teams-sync] Failed to cancel meeting");
+    log.error({ err: safeErrorFields(err) }, "[teams-sync] Failed to cancel meeting");
+    await recordOutlookCallFailure(opts.workspaceId, err, config?.refreshTokenCiphertext);
     return false;
   }
 }
@@ -113,7 +129,8 @@ export async function replaceInterviewToTeams(opts: {
       externalId: `harly:replace:${opts.interviewId}:${opts.start.getTime()}:${opts.durationMins}`,
     });
   } catch (error) {
-    log.error(error, "[teams-sync] Failed to create replacement meeting");
+    log.error({ err: safeErrorFields(error) }, "[teams-sync] Failed to create replacement meeting");
+    await recordOutlookCallFailure(opts.workspaceId, error, config.refreshTokenCiphertext);
     return { ok: false, reason: "create_failed" };
   }
 
@@ -132,25 +149,27 @@ export async function replaceInterviewToTeams(opts: {
       .returning({ id: interviews.id });
     persisted = rows.length > 0;
   } catch (error) {
-    log.error(error, "[teams-sync] Failed to persist replacement meeting");
+    log.error({ err: safeErrorFields(error) }, "[teams-sync] Failed to persist replacement meeting");
   }
 
   if (!persisted) {
     await deleteTeamsMeeting(config.accessToken, replacement.id).catch((error) =>
-      log.error(error, "[teams-sync] Failed to clean up unpersisted replacement"),
+      log.error({ err: safeErrorFields(error) }, "[teams-sync] Failed to clean up unpersisted replacement"),
     );
     return { ok: false, reason: "persist_failed" };
   }
 
   try {
     await deleteTeamsMeeting(config.accessToken, opts.previousMeetingId);
+    await recordIntegrationSuccess(opts.workspaceId, "outlook");
     return {
       ok: true,
       joinUrl: replacement.joinUrl,
       meetingId: replacement.id,
     };
   } catch (error) {
-    log.error(error, "[teams-sync] Failed to delete previous meeting");
+    log.error({ err: safeErrorFields(error) }, "[teams-sync] Failed to delete previous meeting");
+    await recordOutlookCallFailure(opts.workspaceId, error, config.refreshTokenCiphertext);
     try {
       const restored = await db
         .update(interviews)
@@ -168,12 +187,12 @@ export async function replaceInterviewToTeams(opts: {
         .returning({ id: interviews.id });
       if (restored.length > 0) {
         await deleteTeamsMeeting(config.accessToken, replacement.id).catch((cleanupError) =>
-          log.error(cleanupError, "[teams-sync] Failed to clean up replacement meeting"),
+          log.error({ err: safeErrorFields(cleanupError) }, "[teams-sync] Failed to clean up replacement meeting"),
         );
       }
     } catch (restoreError) {
       // Keep the valid replacement referenced if restoration itself fails.
-      log.error(restoreError, "[teams-sync] Failed to restore previous meeting");
+      log.error({ err: safeErrorFields(restoreError) }, "[teams-sync] Failed to restore previous meeting");
     }
     return { ok: false, reason: "old_meeting_not_deleted" };
   }

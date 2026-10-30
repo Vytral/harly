@@ -2,6 +2,12 @@ import "server-only";
 
 import { isDemoMode } from "@harly/config";
 
+import { IntegrationHttpError } from "@/features/integrations/health/model";
+import {
+  recordIntegrationFailure,
+  recordIntegrationSuccess,
+} from "@/features/integrations/health/repository";
+
 /**
  * Minimal Telegram Bot API client. Host is fixed to api.telegram.org , the
  * token never composes an arbitrary URL, so no SSRF surface.
@@ -39,7 +45,14 @@ async function telegramFetch<T>(
       | TelegramResponse<T>
       | null;
     if (!json?.ok) {
-      throw new Error(json?.description ?? `Telegram API error (${res.status}).`);
+      // Keep the HTTP status and Telegram's description: a 401 or a kicked-bot 403
+      // is a credential failure, and the classifier needs both to say so.
+      const description = json?.description;
+      throw new IntegrationHttpError(
+        description ?? `Telegram API error (${res.status}).`,
+        res.status,
+        description ? [description] : [],
+      );
     }
     return json.result as T;
   } finally {
@@ -56,17 +69,33 @@ export async function getTelegramBotInfo(
   return telegramFetch<TelegramBotInfo>(botToken, "getMe");
 }
 
-/** Send a message to a chat/channel. HTML parse mode for light formatting. */
+/**
+ * Send a message to a chat/channel. HTML parse mode for light formatting.
+ * Pass `workspaceId` to record the delivery outcome in the integration health
+ * model; the bot token itself is never recorded.
+ */
 export async function sendTelegramMessage(opts: {
   botToken: string;
   chatId: string;
   text: string;
   signal?: AbortSignal;
+  workspaceId?: string;
 }): Promise<void> {
-  await telegramFetch(opts.botToken, "sendMessage", {
-    chat_id: opts.chatId,
-    text: opts.text,
-    parse_mode: "HTML",
-    disable_web_page_preview: true,
-  }, opts.signal);
+  const startedAt = new Date();
+  try {
+    await telegramFetch(opts.botToken, "sendMessage", {
+      chat_id: opts.chatId,
+      text: opts.text,
+      parse_mode: "HTML",
+      disable_web_page_preview: true,
+    }, opts.signal);
+  } catch (error) {
+    if (opts.workspaceId) {
+      await recordIntegrationFailure(opts.workspaceId, "telegram", error);
+    }
+    throw error;
+  }
+  if (opts.workspaceId) {
+    await recordIntegrationSuccess(opts.workspaceId, "telegram", { startedAt });
+  }
 }

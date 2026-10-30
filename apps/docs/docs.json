@@ -91,6 +91,7 @@
         "icon": "code",
         "pages": [
           "developers/api-overview",
+          "developers/api-authorization",
           "developers/api-reference",
           "developers/webhooks",
           "developers/realtime",

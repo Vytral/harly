@@ -27,6 +27,7 @@ import {
   workspaceSettings,
 } from "@harly/db";
 import { isBuiltinRole } from "@/features/workspaces/permissions";
+import { isValidTimeZone } from "@/features/reports/window";
 import { provisionMemberSenderIdentity } from "@/features/workspaces/sender-identity";
 import {
   WelcomeEmail,
@@ -281,6 +282,13 @@ export async function updateWorkspaceProfileAction(
       };
     }
 
+    // Only a submitted value is changed. An empty value clears the zone to UTC.
+    const rawTimeZone = formData.get("timezone");
+    const timeZone = typeof rawTimeZone === "string" ? rawTimeZone.trim() : null;
+    if (timeZone && !isValidTimeZone(timeZone)) {
+      return { success: false, error: "Choose a valid time zone." };
+    }
+
     await db
       .update(authOrganizations)
       .set({
@@ -322,6 +330,7 @@ export async function updateWorkspaceProfileAction(
       sidebarLogoStyle: parsed.data.sidebarLogoStyle ?? "bordered",
       sidebarLogoUrl: parsed.data.sidebarLogoUrl || null,
       sidebarLogoDarkUrl: parsed.data.sidebarLogoDarkUrl || null,
+      ...(timeZone !== null ? { timezone: timeZone || null } : {}),
     };
     await db
       .insert(workspaceSettings)

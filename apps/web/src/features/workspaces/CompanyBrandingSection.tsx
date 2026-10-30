@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useEffect, useRef, useState } from "react";
+import { useActionState, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { toast } from "@/lib/notification-island/toast";
 
@@ -26,6 +26,13 @@ import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 
 const initialActionState = { success: false } as {
@@ -133,6 +140,13 @@ export function CompanyBrandingSection({
   const [hideHarlyBranding, setHideHarlyBranding] = useState(
     workspace.hideHarlyBranding,
   );
+  const [timezone, setTimezone] = useState(workspace.timezone ?? "UTC");
+  const timezoneOptions = useMemo(() => {
+    const zones = typeof Intl.supportedValuesOf === "function"
+      ? Intl.supportedValuesOf("timeZone")
+      : [];
+    return [...new Set(["UTC", ...zones, timezone])];
+  }, [timezone]);
 
   const previewColor = /^#[0-9a-fA-F]{6}$/.test(primaryColor)
     ? primaryColor
@@ -187,6 +201,32 @@ export function CompanyBrandingSection({
                 Square logo, used as the app icon and avatar.
               </p>
             </div>
+          </div>
+
+          {/* Reporting time zone */}
+          <div className="space-y-2">
+            <Label htmlFor="ws-timezone">Reporting time zone</Label>
+            <Select
+              value={timezone}
+              onValueChange={setTimezone}
+              disabled={!canEdit || savingProfile}
+            >
+              <SelectTrigger id="ws-timezone" className="w-full">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent className="max-h-72">
+                {timezoneOptions.map((zone) => (
+                  <SelectItem key={zone} value={zone}>
+                    {zone}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <input type="hidden" name="timezone" value={timezone} />
+            <p className="text-xs text-muted-foreground">
+              Hiring reports and dashboard days and months are counted in this
+              time zone.
+            </p>
           </div>
 
           {/* Sidebar logo */}

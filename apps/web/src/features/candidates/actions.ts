@@ -25,7 +25,9 @@ import {
 } from "@harly/db";
 import type { ResumeEducationItem, ResumeExperienceItem } from "@harly/db";
 import { getWorkspaceAiConfig } from "@/lib/ai/config";
+import { isAiAnonymizationBlockedError } from "@/lib/ai/candidate-context";
 import { parseResumeStructured } from "@/lib/ai/surfaces/parse-resume";
+import { isSampleEmailAddress } from "@/features/sample-data/constants";
 import {
   composerAttachmentsSchema,
   decodeComposerAttachments,
@@ -50,11 +52,14 @@ import {
   publishPersistedDomainEvents,
 } from "@/server/events/emit";
 import { serializeCandidate } from "./service";
+import { findActiveJobStage } from "@/features/scorecards/stage";
 import {
   createReferralRecord,
   serializeReferral as serializeCandidateReferral,
 } from "./referrals/service";
 import { updateApplicationStatus } from "@/features/pipeline/actions";
+import { candidateScopeSql, jobScopeSql } from "@/features/search/scope";
+import { resolveSearchActor } from "@/features/search/workspace-search";
 import {
   permanentlyDeleteCandidate,
   restoreCandidate,
@@ -164,7 +169,7 @@ export async function exportCandidateDirectoryAction(input: CandidateDirectoryFi
 export async function bulkUpdateCandidateStatusAction(input: {
   applicationIds: string[];
   status: "active" | "hired" | "rejected" | "withdrawn";
-}): Promise<{ success: boolean; error?: string }> {
+}): Promise<{ success: boolean; error?: string; emailWarning?: string }> {
   const parsed = bulkStatusSchema.safeParse(input);
   if (!parsed.success) {
     return { success: false, error: "Invalid selection." };
@@ -285,6 +290,8 @@ async function parseCandidateFileDetails(input: {
   fileName: string;
   fileType: string;
   fileSize: number;
+  /** The candidate's name, so the AI profile can strip it when anonymization is on. */
+  identity: { firstName: string | null; lastName: string | null };
 }): Promise<ParsedResumeDetails> {
   const empty = {
     summary: null,
@@ -323,7 +330,16 @@ async function parseCandidateFileDetails(input: {
     const aiConfig = await getWorkspaceAiConfig(input.workspaceId);
     if (aiConfig) {
       try {
-        const structured = await parseResumeStructured(aiConfig, text);
+        const fullName = [input.identity.firstName, input.identity.lastName]
+          .filter(Boolean)
+          .join(" ");
+        const structured = await parseResumeStructured(aiConfig, text, {
+          identity: {
+            firstName: input.identity.firstName,
+            lastName: input.identity.lastName,
+            fullName: fullName || null,
+          },
+        });
         return {
           summary: structured.summary ?? summarizeResumeText(text),
           skills: structured.skills,
@@ -397,7 +413,7 @@ export async function createCandidateNote(input: {
       };
     }
 
-    await requirePermission("collab:write");
+    await requireCandidatePermission("collab:write", input.candidateId);
 
     // Only keep mentions that resolve to real members of this workspace.
     const memberRows = await db
@@ -931,12 +947,27 @@ export async function attachCandidateFile(input: {
       return { success: false, error: "File upload is invalid." };
     }
 
+    const [candidateName] = await db
+      .select({ firstName: candidates.firstName, lastName: candidates.lastName })
+      .from(candidates)
+      .where(
+        and(
+          eq(candidates.id, input.candidateId),
+          eq(candidates.workspaceId, input.workspaceId),
+        ),
+      )
+      .limit(1);
+
     const parsedDetails = await parseCandidateFileDetails({
       workspaceId: input.workspaceId,
       fileUrl: parsed.data.fileUrl,
       fileName: parsed.data.fileName,
       fileType: parsed.data.fileType,
       fileSize: parsed.data.fileSize,
+      identity: {
+        firstName: candidateName?.firstName ?? null,
+        lastName: candidateName?.lastName ?? null,
+      },
     });
     const parsedAt =
       parsedDetails.summary ||
@@ -1152,21 +1183,15 @@ export async function createScorecard(input: {
     }
     let stageName: string | null = null;
     if (parsed.data.stageId) {
-      const [stage] = await db
-        .select({ id: jobStages.id, name: jobStages.name })
-        .from(jobStages)
-        .where(
-          and(
-            eq(jobStages.id, parsed.data.stageId),
-            eq(jobStages.workspaceId, input.workspaceId),
-            eq(jobStages.jobId, application.jobId),
-          ),
-        )
-        .limit(1);
+      const stage = await findActiveJobStage(db, {
+        workspaceId: input.workspaceId,
+        jobId: application.jobId,
+        stageId: parsed.data.stageId,
+      });
       if (!stage) {
         return {
           success: false,
-          error: "Stage does not belong to this application.",
+          error: "Stage is archived or does not belong to this application.",
         };
       }
       stageName = stage.name;
@@ -1276,12 +1301,16 @@ export async function removeCandidateTag(input: {
       return { success: false, error: "Workspace access denied." };
     }
     await requireCandidatePermission("candidates:edit", input.candidateId);
+    // Match the tag to the candidate the caller was checked against. Without
+    // the candidate predicate, a caller scoped to one candidate could delete a
+    // tag on a candidate outside their scope.
     await db
       .delete(candidateTags)
       .where(
         and(
           eq(candidateTags.id, input.tagId),
           eq(candidateTags.workspaceId, input.workspaceId),
+          eq(candidateTags.candidateId, input.candidateId),
         ),
       );
     revalidatePath(`/dashboard/candidates/${input.candidateId}`);
@@ -1343,8 +1372,11 @@ export async function sendBulkCandidateEmail(input: {
   const { interpolateTemplate } =
     await import("@/features/email-templates/interpolate");
   const { organization: workspace, user } = await getWorkspaceContext();
+  const actor = await resolveSearchActor();
 
   // Workspace-scoped fetch , ids from the client are never trusted directly.
+  // Candidates outside the caller's scope are dropped here, so they are never
+  // emailed and never reveal a name or address in the result.
   const rows = await db
     .select({
       id: candidates.id,
@@ -1357,6 +1389,7 @@ export async function sendBulkCandidateEmail(input: {
       and(
         eq(candidates.workspaceId, workspace.id),
         inArray(candidates.id, parsed.data.candidateIds),
+        candidateScopeSql(actor, candidates.id),
       ),
     );
 
@@ -1381,7 +1414,11 @@ export async function sendBulkCandidateEmail(input: {
     .from(applications)
     .innerJoin(
       jobs,
-      and(eq(jobs.workspaceId, workspace.id), eq(jobs.id, applications.jobId)),
+      and(
+        eq(jobs.workspaceId, workspace.id),
+        eq(jobs.id, applications.jobId),
+        jobScopeSql(actor),
+      ),
     )
     .where(
       and(
@@ -1419,6 +1456,9 @@ export async function sendBulkCandidateEmail(input: {
   let failed = 0;
 
   for (const candidate of rows) {
+    // Sample candidates use a reserved domain that cannot receive mail. They are
+    // skipped here, so they are neither sent nor reported as failures.
+    if (isSampleEmailAddress(candidate.email)) continue;
     const values = {
       candidate_first_name: candidate.firstName,
       candidate_last_name: candidate.lastName,
@@ -1721,6 +1761,9 @@ export async function generateEmailDraftAction(input: {
     });
     return { ok: true, subject: draft.subject, body: draft.body };
   } catch (error) {
+    if (isAiAnonymizationBlockedError(error)) {
+      return { ok: false, error: error.message };
+    }
     console.error("Email draft AI failed", error);
     return {
       ok: false,
@@ -2115,6 +2158,9 @@ export async function refineScorecardTextAction(input: {
     });
     return { ok: true, refined: result.refined };
   } catch (error) {
+    if (isAiAnonymizationBlockedError(error)) {
+      return { ok: false, error: error.message };
+    }
     console.error("Scorecard refine AI failed", error);
     return { ok: false, error: "Refinement failed. Check your AI settings." };
   }

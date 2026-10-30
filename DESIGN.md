@@ -359,6 +359,30 @@ Maximum **3** process sections or tabs for simple decision surfaces. Primary act
 
 Soft dashed or wash panel, one illustration-or-icon in sage/chartreuse wash square (16–20 radius), title, one sentence, one ink or signal CTA. Copy is operational (“Publish your first job”), not generic (“No items yet”).
 
+**Implementation:** `components/ui/empty-state.tsx` (`EmptyState`) is the only empty state. Props: `title`, `description` (required: say what puts the thing there), optional `icon`, `action` (a node, or `{ href, label }`), `secondaryAction`, `variant="empty" | "filtered"` (filtered = "your filters excluded everything"), and `compact` for panels, tables and drawers that already have a frame.
+
+### Status Pill
+
+**Role:** State without drama
+
+Implementation: `components/ui/status-pill.tsx`. Tones are semantic: `neutral` (pending, not started), `info` (in progress, queued), `success`, `warning`, `danger`, and `accent` (sage wash, the user's own or selected state, never chartreuse). Pair colour with text or an icon.
+
+### Segmented Control
+
+**Role:** One choice from a small, closed set shown side by side (type, mode, two to four way toggle). Longer lists use a Select.
+
+Implementation: `components/ui/segmented-control.tsx`. Radio-group semantics, one tab stop, arrow keys move and select (wrapping), Home and End jump to the ends.
+
+### Motion
+
+**Role:** Explain a state change. Never decorate.
+
+- **Animate** when something enters or leaves, changes state, or confirms an action the user just took.
+- **Do not animate** idle chrome, looping ornaments, or content already on screen at load.
+- **Properties:** `opacity` and `transform` only. The one exception is a disclosure that expands to reveal content, where reflow is the point.
+- **Tokens:** durations `instant 100ms / fast 150ms / base 220ms / slow 350ms`, easing `ease-out cubic-bezier(0.16, 1, 0.3, 1)`. Defined once in `lib/motion.ts` (for framer/motion) and mirrored as `--motion-*` and `--ease-*` custom properties in `app/globals.css`. Do not inline other curves or durations.
+- **Reduced motion:** every transition goes through `resolveTransition` or `useMotionSafe()` in `lib/motion.ts`, which collapse to instant. `globals.css` has a global guard that shortens CSS transitions and one-shot keyframes to 1ms. Spinners (`animate-spin`) keep turning, because a stopped spinner reads as a hang.
+
 ### Command Menu
 
 **Role:** Power user fast path
@@ -741,8 +765,10 @@ A UI change **passes** when:
 
 ### Known open items (do not re-derive , these are deliberate, not forgotten)
 
-1. **Icon families still mixed.** Lucide and Phosphor both ship. One family must win; the rail, top bar and human table are Lucide, so Lucide is the likely survivor. Mechanical but wide.
-2. **Pipeline board cards** keep their old card language. They should read like table rows in a column, not mini-cards.
+1. **Icon families still mixed.** Lucide and Phosphor both ship. One family must win; the rail, top bar and human table are Lucide, so Lucide is the likely survivor. Mechanical but wide. As of 0.3.0, 96 files still import `components/ui/icons/phosphor`, and `notifications/notification-icons.tsx` uses Iconify (`solar:*`) icons, a third family. Phosphor wrappers are kept until those are migrated.
+1a. **Raw palette classes remain in about 55 files** (`zinc-*`, `red-*`, `blue-*` and similar). The 0.3.0 pass moved the task dialogs, notification icons, cookie banner, pool table and the touched status pills to semantic tokens. The rest still need the same mapping.
+1b. **Ad-hoc empty states and status pills outside 0.3.0 scope:** `features/documents/DocumentsHub.tsx`, `features/mailbox/RecruitingInbox.tsx`, `features/reports/ReportsDashboard.tsx`, `features/developers/DevelopersSettings.tsx` (empty states), `features/workspaces/settings-ui.tsx` and `features/portal/PortalStatusBadge.tsx` (status pills), and `features/automations/AutomationsManager.tsx` (local `EmptyState`) should move to the shared primitives.
+1c. **Route boundaries.** Every dashboard section listed for 0.3.0 has `loading.tsx` and `error.tsx`. The fullscreen automation editor (`fullscreen/automations/[id]`) still has no `loading.tsx`, and fullscreen routes have no retry boundary.2. **Pipeline board cards** keep their old card language. They should read like table rows in a column, not mini-cards.
 3. **Dark mode** has correct tokens but no per-screen QA. Light identity was the priority, per this file.
 4. **Career page and Portal** are untouched on purpose , brand surfaces come after the daily tool, and the Portal keeps its deeper sidebar by design.
 5. **`.font-cal` is a retired alias** resolving to Onest display. New code uses `.font-display`; the ~14 old call sites can be renamed opportunistically.

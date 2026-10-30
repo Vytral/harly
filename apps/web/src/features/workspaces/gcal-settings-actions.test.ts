@@ -21,8 +21,17 @@ vi.mock("@harly/db", () => ({
 vi.mock("@/features/workspaces/permissions-server", () => ({
   requirePermission: vi.fn(async () => ({ organization: { id: "workspace-a" } })),
 }));
+const invalidateWorkspaceGCalConnection = vi.hoisted(() => vi.fn(async () => undefined));
+
 vi.mock("@/lib/gcal/config", () => ({
   getWorkspaceGCalConfig: vi.fn(async () => ({ oauth2Client: {} })),
+  invalidateWorkspaceGCalConnection,
+  recordGCalCallFailure: vi.fn(async () => false),
+}));
+vi.mock("@/features/integrations/health/repository", () => ({
+  recordIntegrationSuccess: vi.fn(async () => undefined),
+  clearIntegrationHealth: vi.fn(async () => undefined),
+  recordIntegrationFailure: vi.fn(async () => undefined),
 }));
 vi.mock("@/lib/gcal/client", () => ({ listCalendars }));
 vi.mock("@/lib/logger", () => ({
@@ -48,16 +57,15 @@ describe("Google Calendar settings connection errors", () => {
       error:
         "Google OAuth credentials are invalid. Update GOOGLE_CLIENT_ID/GOOGLE_CLIENT_SECRET and reconnect Google Calendar.",
     });
-    expect(update).toHaveBeenCalledWith(expect.anything());
-    expect(updateSet).toHaveBeenCalledWith(
-      expect.objectContaining({
-        gcalEnabled: false,
-        gcalRefreshTokenCiphertext: null,
-        gcalRefreshTokenIv: null,
-        gcalRefreshTokenTag: null,
-      }),
+    // The dead token is cleared through the shared helper, which keeps the
+    // enabled intent and records the reason (it is mocked here).
+    expect(invalidateWorkspaceGCalConnection).toHaveBeenCalledWith(
+      "workspace-a",
+      expect.any(Error),
     );
-    expect(updateWhere).toHaveBeenCalled();
+    expect(updateSet).not.toHaveBeenCalledWith(
+      expect.objectContaining({ gcalEnabled: false }),
+    );
   });
 
   it("keeps the reconnect guidance for a revoked refresh token", async () => {

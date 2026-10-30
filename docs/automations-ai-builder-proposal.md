@@ -1,6 +1,6 @@
 # Harly AI Builder — Propuesta de arquitectura y estado de implementación
 
-> **Estado actualizado el 16 de septiembre de 2026:** esta propuesta es el documento histórico de diseño. La implementación actualmente disponible vive en `ai-proposals.ts`, las tools del agente y el Automations Builder. Para el estado verificado, las brechas restantes y el plan vigente, consulta [Harly AI × Automations Builder](harly-ai-automations-integration-audit-2026-09-16.md).
+> **Estado actualizado el 16 de septiembre de 2026:** esta propuesta es el documento histórico de diseño. La implementación actualmente disponible vive en `ai-proposals.ts`, las tools del agente y el Automations Builder. Para el estado verificado, las brechas restantes y el plan vigente, consulta [Harly AI × Automations Builder](archive/harly-ai-automations-integration-audit-2026-09-16.md).
 
 Estado: **documento de arquitectura histórica; parcialmente implementado y sujeto a la auditoría vigente**. Todo lo citado abajo (`definition/schema-v2.ts`,
 `definition/validate.ts`, `builder/state/commands.ts`, `lib/ai/agent/write-tools.ts`, etc.) es

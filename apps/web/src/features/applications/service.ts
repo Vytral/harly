@@ -1,6 +1,6 @@
 import "server-only";
 
-import { and, asc, desc, eq, exists, getTableColumns, isNull, lt, or, sql } from "drizzle-orm";
+import { and, desc, eq, exists, getTableColumns, isNull, lt, or, sql } from "drizzle-orm";
 
 import { ApiError, type Cursor } from "@harly/api";
 import {
@@ -8,15 +8,26 @@ import {
   activityEvents,
   applications,
   applicationStageHistory,
+  applicationStatusForStage,
   candidatePortalNotifications,
   candidates,
+  entryStage,
   jobs,
   jobStages,
   organization,
   workspaceSettings,
   type Application,
+  type ApplicationOutcome,
+  type JobStage,
 } from "@harly/db";
-import { statusForStageName } from "@/features/pipeline/state";
+import {
+  ensureStageOfKind,
+  listActiveJobStages,
+  lockJobForStageChoice,
+  lockStageForPlacement,
+  resolveEntryStage,
+  type StageExecutor,
+} from "@/features/pipeline/stage-resolver";
 
 import { emitWebhookEvent } from "@/server/webhooks/emit";
 import {
@@ -29,6 +40,7 @@ import {
   enqueueEmailOutbox,
   processEmailOutbox,
 } from "@/lib/email/outbox-processor";
+import { applicationStatusEmailDedupeKey } from "@/lib/email/dedupe-keys";
 
 /** Workspace-scoped application service for the REST API. */
 const log = createLogger("applications");
@@ -52,6 +64,8 @@ async function notifyApplicationStatusChange(input: {
   workspaceId: string;
   application: Application;
   status: "hired" | "rejected";
+  /** The domain event that recorded this transition; keys the email to it. */
+  eventId: string;
   database?: typeof db;
 }) {
   const database = input.database ?? db;
@@ -120,7 +134,11 @@ async function notifyApplicationStatusChange(input: {
         workspaceName: details.workspaceName,
         type: "rejected",
       },
-      undefined,
+      applicationStatusEmailDedupeKey({
+        applicationId: input.application.id,
+        status: input.status,
+        eventId: input.eventId,
+      }),
       undefined,
       input.database,
     );
@@ -239,6 +257,8 @@ export async function createApplicationForApi(input: {
   const { workspaceId, jobId, candidateId } = input;
 
   const { application, event } = await db.transaction(async (tx) => {
+    // KEY SHARE conflicts with the FOR UPDATE that every stage change takes, so
+    // the entry stage read below cannot race a concurrent kind change.
     const [job] = await tx
       .select({ id: jobs.id })
       .from(jobs)
@@ -249,6 +269,7 @@ export async function createApplicationForApi(input: {
           isNull(jobs.deletedAt),
         ),
       )
+      .for("key share")
       .limit(1);
     if (!job) throw ApiError.notFound("Job not found.");
 
@@ -265,16 +286,11 @@ export async function createApplicationForApi(input: {
       .limit(1);
     if (!candidate) throw ApiError.notFound("Candidate not found.");
 
-    const [firstStage] = await tx
-      .select({ id: jobStages.id })
-      .from(jobStages)
-      .where(
-        and(eq(jobStages.workspaceId, workspaceId), eq(jobStages.jobId, jobId)),
-      )
-      .orderBy(asc(jobStages.order))
-      .limit(1);
+    const firstStage = await resolveEntryStage(tx, { workspaceId, jobId });
     if (!firstStage) {
-      throw ApiError.unprocessable("This job has no pipeline stages.");
+      throw ApiError.unprocessable(
+        "This job has no open pipeline stage to receive applications.",
+      );
     }
 
     // Serialise writes entering one stage. Besides preserving pipeline order,
@@ -461,13 +477,18 @@ export async function moveApplicationStageForApi(input: {
     }
 
     const [stage] = await database
-      .select({ id: jobStages.id, name: jobStages.name })
+      .select({
+        id: jobStages.id,
+        name: jobStages.name,
+        kind: jobStages.kind,
+      })
       .from(jobStages)
       .where(
         and(
           eq(jobStages.id, input.toStageId),
           eq(jobStages.workspaceId, input.workspaceId),
           eq(jobStages.jobId, application.jobId),
+          isNull(jobStages.archivedAt),
         ),
       )
       .limit(1);
@@ -477,8 +498,17 @@ export async function moveApplicationStageForApi(input: {
 
     const fromStageId = application.currentStageId;
 
-    const { updated, persistedEvents } = await database.transaction(async (tx) => {
-      const nextStatus = statusForStageName(stage.name);
+    const { updated, persistedEvents, toStageName } = await database.transaction(async (tx) => {
+      // Lock the target and derive the outcome from the row as it is now, so a
+      // concurrent kind change cannot leave a stale status behind.
+      const target = await lockStageForPlacement(tx, {
+        workspaceId: input.workspaceId,
+        stageId: input.toStageId,
+      });
+      if (!target || target.jobId !== application.jobId) {
+        throw ApiError.unprocessable("Target stage does not belong to this job.");
+      }
+      const nextStatus = applicationStatusForStage(target);
       const [next] = await tx
         .select({
           value: sql<number>`coalesce(max(${applications.pipelineOrder}), 0) + 1`,
@@ -534,7 +564,7 @@ export async function moveApplicationStageForApi(input: {
             application: serializeApplication(updatedApplication),
             fromStageId,
             toStageId: input.toStageId,
-            toStageName: stage.name,
+            toStageName: target.name,
             status: nextStatus,
           },
         }),
@@ -558,6 +588,7 @@ export async function moveApplicationStageForApi(input: {
       return {
         updated: updatedApplication,
         persistedEvents: events,
+        toStageName: target.name,
       };
     });
 
@@ -566,7 +597,7 @@ export async function moveApplicationStageForApi(input: {
       application: serializeApplication(updated),
       fromStageId,
       toStageId: input.toStageId,
-      toStageName: stage.name,
+      toStageName,
       status: updated.status,
       eventId: persistedEvents[0]?.eventId,
     }, { actorId: input.actorId, skipDomainEvent: true, eventId: persistedEvents[0]?.eventId, parentRunId: input.automationRunId, database });
@@ -614,35 +645,41 @@ async function setApplicationStatus(
   const database = input.database ?? db;
   const attemptStatus = async (): Promise<Application> => {
     const application = await getApplicationForApi({ ...input, database });
-    const terminalStageName = status === "hired" ? "Hired" : "Rejected";
-    const [terminalStage] = await database
-      .select({ id: jobStages.id })
-      .from(jobStages)
-      .where(
-        and(
-          eq(jobStages.workspaceId, input.workspaceId),
-          eq(jobStages.jobId, application.jobId),
-          eq(jobStages.name, terminalStageName),
-        ),
-      )
-      .limit(1);
 
     // Repeating the same command is a no-op. Do not create duplicate domain
     // events, portal notifications, or rejection emails for a logically
-    // idempotent status transition.
-    if (
-      application.status === status &&
-      (!terminalStage || application.currentStageId === terminalStage.id)
-    ) {
-      return application;
+    // idempotent status transition. An application that is already in any
+    // stage of this outcome (a job may have several rejected stages) stays put;
+    // it is not moved to the first stage of that kind.
+    if (application.status === status && application.currentStageId) {
+      const [currentStage] = await database
+        .select()
+        .from(jobStages)
+        .where(
+          and(
+            eq(jobStages.workspaceId, input.workspaceId),
+            eq(jobStages.id, application.currentStageId),
+          ),
+        )
+        .limit(1);
+      if (currentStage && applicationStatusForStage(currentStage) === status) {
+        return application;
+      }
     }
 
     const { updated, persistedEvent } = await database.transaction(async (tx) => {
+      // Resolved by stage kind, and created when the job has none, so the
+      // outcome is always recorded in stage history.
+      const terminalStage = await ensureStageOfKind(tx, {
+        workspaceId: input.workspaceId,
+        jobId: application.jobId,
+        kind: status,
+      });
       const [next] = await tx
         .update(applications)
         .set({
           status,
-          ...(terminalStage ? { currentStageId: terminalStage.id } : {}),
+          currentStageId: terminalStage.id,
           updatedAt: new Date(),
         })
         .where(
@@ -655,7 +692,7 @@ async function setApplicationStatus(
         .returning();
       if (!next) throw ApiError.conflict("Application changed; retry request.");
 
-      if (terminalStage && terminalStage.id !== application.currentStageId) {
+      if (terminalStage.id !== application.currentStageId) {
         await tx.insert(applicationStageHistory).values({
           workspaceId: input.workspaceId,
           applicationId: input.applicationId,
@@ -688,6 +725,7 @@ async function setApplicationStatus(
         workspaceId: input.workspaceId,
         application: updated,
         status,
+        eventId: persistedEvent.eventId,
         database,
       });
     }
@@ -736,6 +774,89 @@ export function rejectApplicationForApi(input: {
  * so a successful automation can never leave downstream workflows/webhooks
  * unaware of the status change. Repeating the same command is idempotent.
  */
+/**
+ * The stage an application must occupy for a status, resolved by stage kind.
+ * Returns null when the application may stay where it is.
+ *
+ * - hired / rejected / withdrawn: the job's stage of that kind, created at the
+ *   end of the pipeline when the job has none, so the outcome is always
+ *   recorded in stage history.
+ * - active: stays put unless its current stage is terminal or archived. It then
+ *   returns to the most recent open stage it came from, else the entry stage.
+ */
+export async function stageForApplicationStatus(
+  tx: StageExecutor,
+  input: {
+    workspaceId: string;
+    jobId: string;
+    applicationId: string;
+    currentStageId: string;
+    status: ApplicationOutcome;
+  },
+): Promise<JobStage | null> {
+  const scope = { workspaceId: input.workspaceId, jobId: input.jobId };
+  if (input.status !== "active") {
+    return ensureStageOfKind(tx, { ...scope, kind: input.status });
+  }
+
+  const [currentStage] = await tx
+    .select()
+    .from(jobStages)
+    .where(
+      and(
+        eq(jobStages.workspaceId, input.workspaceId),
+        eq(jobStages.id, input.currentStageId),
+      ),
+    )
+    .limit(1);
+  if (
+    currentStage &&
+    !currentStage.archivedAt &&
+    applicationStatusForStage(currentStage) === "active"
+  ) {
+    return null;
+  }
+
+  // Choosing an open stage must see the pipeline as committed: hold the job
+  // lock so no kind change can land between this read and the placement.
+  await lockJobForStageChoice(tx, scope);
+  const stages = await listActiveJobStages(tx, scope);
+  const openStages = new Map(
+    stages
+      .filter((stage) => applicationStatusForStage(stage) === "active")
+      .map((stage) => [stage.id, stage]),
+  );
+
+  // The most recent open stage the application entered before it became
+  // terminal. Terminal stages in between (e.g. withdrawn, then rejected) are
+  // skipped, so reactivation returns to where the candidate actually was.
+  const history = await tx
+    .select({ toStageId: applicationStageHistory.toStageId })
+    .from(applicationStageHistory)
+    .where(
+      and(
+        eq(applicationStageHistory.workspaceId, input.workspaceId),
+        eq(applicationStageHistory.applicationId, input.applicationId),
+      ),
+    )
+    .orderBy(
+      desc(applicationStageHistory.createdAt),
+      desc(applicationStageHistory.id),
+    );
+  for (const row of history) {
+    const previous = openStages.get(row.toStageId);
+    if (previous) return previous;
+  }
+
+  const entry = entryStage(stages);
+  if (!entry) {
+    throw ApiError.unprocessable(
+      "This job has no open pipeline stage to move the application into.",
+    );
+  }
+  return entry;
+}
+
 export async function setApplicationStatusForWorkflow(input: {
   workspaceId: string;
   applicationId: string;
@@ -751,9 +872,20 @@ export async function setApplicationStatusForWorkflow(input: {
     if (application.status === input.status) return application;
 
     const { updated, persistedEvent } = await database.transaction(async (tx) => {
+      const placed = await stageForApplicationStatus(tx, {
+        workspaceId: input.workspaceId,
+        jobId: application.jobId,
+        applicationId: input.applicationId,
+        currentStageId: application.currentStageId,
+        status: input.status,
+      });
       const [next] = await tx
         .update(applications)
-        .set({ status: input.status, updatedAt: new Date() })
+        .set({
+          status: input.status,
+          ...(placed ? { currentStageId: placed.id } : {}),
+          updatedAt: new Date(),
+        })
         .where(
           and(
             eq(applications.id, input.applicationId),
@@ -763,6 +895,16 @@ export async function setApplicationStatusForWorkflow(input: {
         )
         .returning();
       if (!next) throw ApiError.conflict("Application changed; retry request.");
+
+      if (placed && placed.id !== application.currentStageId) {
+        await tx.insert(applicationStageHistory).values({
+          workspaceId: input.workspaceId,
+          applicationId: input.applicationId,
+          fromStageId: application.currentStageId,
+          toStageId: placed.id,
+          movedById: input.actorId ?? null,
+        });
+      }
 
       await tx.insert(activityEvents).values({
         workspaceId: input.workspaceId,

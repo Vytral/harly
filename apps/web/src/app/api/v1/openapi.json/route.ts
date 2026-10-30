@@ -102,6 +102,9 @@ export const GET = withApi(async (request) => {
         ? {
             security: [{ bearerAuth: [] }],
             "x-harly-required-scopes": contract.auth.scopes,
+            ...(contract.auth.keyTypes
+              ? { "x-harly-key-types": contract.auth.keyTypes }
+              : {}),
           }
         : {}),
     };

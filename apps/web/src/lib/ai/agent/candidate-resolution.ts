@@ -1,7 +1,19 @@
 import "server-only";
 
+import { and, eq, inArray, isNull } from "drizzle-orm";
+
+import { candidates, db, jobs } from "@harly/db";
+
 import { getCandidateProfile } from "@/features/candidates/data";
 import { searchWorkspace } from "@/features/search/data";
+import {
+  actorHasPermission,
+  candidateScopeSql,
+  isUnrestrictedScope,
+  jobScopeSql,
+  type WorkspaceSearchActor,
+} from "@/features/search/scope";
+import { resolveSearchActor } from "@/features/search/workspace-search";
 import {
   rankCandidateMatches,
   type CandidateMatch,
@@ -54,6 +66,50 @@ function shouldResolveTopMatch(matches: CandidateMatch[]): boolean {
   return top.score >= 0.86 && top.score - second.score >= 0.08;
 }
 
+/** Whether the actor may see the candidate: candidates:view plus role scope. */
+async function candidateIsVisible(
+  actor: WorkspaceSearchActor,
+  candidateId: string,
+): Promise<boolean> {
+  if (!actorHasPermission(actor, "candidates:view")) return false;
+  const [row] = await db
+    .select({ id: candidates.id })
+    .from(candidates)
+    .where(
+      and(
+        eq(candidates.id, candidateId),
+        eq(candidates.workspaceId, actor.workspaceId),
+        isNull(candidates.deletedAt),
+        candidateScopeSql(actor, candidates.id),
+      ),
+    )
+    .limit(1);
+  return Boolean(row);
+}
+
+/** Keeps only the applications whose job lies inside the actor's scope. */
+async function applicationsVisibleTo<T extends { jobId: string }>(
+  actor: WorkspaceSearchActor,
+  applications: readonly T[],
+): Promise<T[]> {
+  if (isUnrestrictedScope(actor.scope)) return [...applications];
+  const jobIds = [...new Set(applications.map((application) => application.jobId))];
+  if (jobIds.length === 0) return [];
+  const visibleRows = await db
+    .select({ id: jobs.id })
+    .from(jobs)
+    .where(
+      and(
+        eq(jobs.workspaceId, actor.workspaceId),
+        inArray(jobs.id, jobIds),
+        isNull(jobs.deletedAt),
+        jobScopeSql(actor),
+      ),
+    );
+  const visible = new Set(visibleRows.map((row) => row.id));
+  return applications.filter((application) => visible.has(application.jobId));
+}
+
 /**
  * Resolve a human candidate reference into a workspace-scoped candidate.
  * The search adapter provides candidates; this module owns ranking,
@@ -81,8 +137,19 @@ export async function resolveCandidateReference(
   }
 
   const top = matches[0];
+  // The resolved candidate must be inside the caller's scope, and only
+  // applications on in-scope jobs are returned. A caller who cannot see the
+  // candidate gets the same "not found" answer as for an unknown name.
+  const actor = await resolveSearchActor();
+  if (!(await candidateIsVisible(actor, top.candidate.id))) {
+    return { status: "not_found", query: trimmedQuery };
+  }
   const profile = await getCandidateProfile(top.candidate.id);
   if (!profile) return { status: "not_found", query: trimmedQuery };
+  const visibleApplications = await applicationsVisibleTo(
+    actor,
+    profile.applications,
+  );
 
   return {
     status: "resolved",
@@ -91,7 +158,7 @@ export async function resolveCandidateReference(
     confidence:
       top.score >= 0.99 ? "exact" : top.score >= 0.86 ? "high" : "medium",
     reason: top.reason,
-    applications: profile.applications.map((application) => ({
+    applications: visibleApplications.map((application) => ({
       applicationId: application.id,
       jobId: application.jobId,
       job: application.jobTitle,

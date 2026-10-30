@@ -2,6 +2,7 @@ import { notFound, permanentRedirect } from "next/navigation";
 
 import { getProfileByUsernameAction, listPersonJobsAction } from "@/features/people/actions";
 import { PersonProfile } from "@/features/people/PersonProfile";
+import { requirePagePermission } from "@/features/workspaces/permissions-server";
 
 export const dynamic = "force-dynamic";
 
@@ -10,6 +11,7 @@ type PersonPageProps = {
 };
 
 export default async function PersonPage({ params }: PersonPageProps) {
+  await requirePagePermission("members:read");
   const { username } = await params;
   const result = await getProfileByUsernameAction(username);
 

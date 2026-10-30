@@ -488,9 +488,17 @@ function ResumeAnonymizationFeatureCard({
         Resume anonymization
       </h3>
       <p className="mt-1 text-sm text-muted-foreground">
-        Hide names, contacts, and links on candidate profiles during review, so
-        early screening leans on skills and experience, not identity. Reviewers
-        can reveal per candidate.
+        Hides identifying details on candidate profiles on screen, and removes
+        them from what is sent to your AI provider for scoring, matching,
+        interview note summaries, and the results of chat assistant tools. In
+        chat, candidates appear as &ldquo;Candidate&rdquo; with a short code, and
+        names you type into a conversation are still sent. Reviewers can reveal identity
+        per candidate on screen. While this is on, duplicate detection, email drafting, mailbox
+        assistance, resume autofill, AI resume summaries, and scorecard comment
+        refinement are paused, because they need to know who the candidate is.
+        It does not change stored records, and it cannot remove a name that is
+        not in the candidate record, such as a nickname that appears only in a
+        resume.
       </p>
     </Card>
   );
