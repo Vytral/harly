@@ -4,8 +4,8 @@ description: "How Harly authorizes REST API v1 keys: key types, endpoint scopes,
 ---
 
 This page describes how the v1 REST API decides whether a request may run. It
-describes the behavior of Harly 0.3.0. The API is a compatibility surface, so
-the behavior below is intentional for 0.3.0; the risks and the planned
+describes the behavior of Harly 0.2.4. The API is a compatibility surface, so
+the behavior below is intentional for 0.2.4; the risks and the planned
 hardening are listed at the end.
 
 ## Summary
@@ -90,7 +90,7 @@ either.
 | `api_keys:read` / `api_keys:write` | List keys; create, delete, and rotate keys |
 | none | `GET /me` |
 
-## Known limitations in 0.3.0
+## Known limitations in 0.2.4
 
 - **Workspace-wide reach.** Key scopes are the only restriction. A key with a
   read scope sees all records of that kind in the workspace. Role scopes that
@@ -110,9 +110,9 @@ either.
 - **Legacy umbrella scope.** `webhooks:manage` is still accepted and still
   grants both webhook scopes.
 
-## Recommended hardening for 0.4
+## Recommended hardening for a later release
 
-These steps are planned for 0.4. They change behavior, so they need a migration
+These steps are planned for a later release. They change behavior, so they need a migration
 path for existing keys.
 
 1. **Give each key a principal.** Store the creator's role and scope on the key

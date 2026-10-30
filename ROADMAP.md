@@ -12,8 +12,8 @@ Last reviewed: 2026-10-28
 | Status | Meaning |
 | --- | --- |
 | Shipped | Available in the current codebase and documented. A provider may still require its own account, approval, or credentials. |
-| Now | Work in the current release cycle (v0.3.0). Items are listed in priority order. |
-| Next | The next product investments after v0.3.0, expected for v0.4 or later. |
+| Now | Work in the current release cycle (v0.2.4). Items are listed in priority order. |
+| Next | The next product investments after v0.2.4, expected for v0.4 or later. |
 | Later | Valuable work that should follow the next product cycle. |
 | Exploring | A valid direction, but not a committed initiative. |
 | Not planned | Deliberately outside Harly's near-term product boundary. |
@@ -43,7 +43,7 @@ capability is only partly complete, the Now section says so.
 - Import candidates from CSV and through maintained adapters for Greenhouse,
   Lever, Ashby, Workable, and Join.
 - Use the dashboard search and quick navigation (search v1). Extending it is a
-  v0.3.0 theme.
+  v0.2.4 theme.
 
 See [Jobs](apps/docs/product/jobs.mdx),
 [Candidates and pipeline](apps/docs/product/candidates-and-pipeline.mdx), and
@@ -106,14 +106,14 @@ See [Access control](apps/docs/security/access-control.mdx),
 [Privacy](apps/docs/security/privacy.mdx), and
 [Self-hosting operations](apps/docs/self-hosting/operations.mdx).
 
-## Now — v0.3.0 release cycle
+## Now — v0.2.4 release cycle
 
-v0.3.0 makes the existing product dependable for a small recruiting team. Its
+v0.2.4 makes the existing product dependable for a small recruiting team. Its
 themes, in priority order, are trustworthy pipeline semantics and metrics,
 reliable email and integration health, global search, a first-hour onboarding
 path with sample data, and UI system polish.
 
-Every v0.3.0 change must also meet these release gates:
+Every v0.2.4 change must also meet these release gates:
 
 - A clean checkout passes the application, database, CLI, and documentation
   checks. The required checks are listed in [CONTRIBUTING.md](CONTRIBUTING.md).
@@ -159,7 +159,7 @@ Done when:
   Native Amazon SES API support is explicitly deferred. The reason is that SES
   exposes an SMTP interface, which the SMTP provider already covers, and a
   separate SES API integration would add maintenance cost without a clear
-  gain for v0.3.0. It is reconsidered only if SMTP cannot meet a real need.
+  gain for v0.2.4. It is reconsidered only if SMTP cannot meet a real need.
 
 ### NOW-3 — Global search
 
@@ -201,7 +201,7 @@ Done when:
 
 ## Next — v0.4 and later
 
-These items are deliberately deferred from v0.3.0. Each has a concrete outcome
+These items are deliberately deferred from v0.2.4. Each has a concrete outcome
 and an observable completion gate.
 
 - **Native interview scheduling and reminders.** Interviews can be scheduled and

@@ -33,13 +33,12 @@ Before tagging, write the version section below. Use these headings when they
 apply: `Added`, `Changed`, `Fixed`, `Removed`, `Security`. Note migrations and
 anything an operator must do before upgrading.
 
-## [0.3.0-beta.1]
+## [0.2.4]
 
-The first beta of 0.3.0; the stable release will carry these notes under `[0.3.0]`.
 A feature release that makes the hiring pipeline, reports, search, email and
 role-based access trustworthy. **It contains database migrations
 (`0153`–`0158`) and a few deliberate behavior changes.** Read
-[the upgrade notes](docs/release-0.3.0-upgrade-notes.md) before upgrading an
+[the upgrade notes](docs/release-0.2.4-upgrade-notes.md) before upgrading an
 existing installation.
 
 ### Added

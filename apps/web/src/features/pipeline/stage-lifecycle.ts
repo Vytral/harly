@@ -308,7 +308,7 @@ function shapeIssueKey(issue: PipelineShapeIssue): string {
 
 /**
  * Throws 409 only when an operation introduces a pipeline invariant violation
- * that the job did not already have. Jobs created before 0.3.0 can carry
+ * that the job did not already have. Jobs created before 0.2.4 can carry
  * legacy duplicate names; an operation that leaves those untouched (a colour
  * change, an unrelated archive) must still succeed, and one that resolves them
  * (renaming or archiving a duplicate) must too.

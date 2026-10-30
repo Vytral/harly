@@ -66,7 +66,7 @@ export const applicationStatusEnum = pgEnum("application_status", [
  * Semantic meaning of a pipeline stage, independent of its display name.
  * `custom` is an active, non-terminal stage with no special behavior.
  * `hired`, `rejected` and `withdrawn` are terminal and drive application
- * status. A NULL kind on a row means "written by a pre-0.3.0 build"; readers
+ * status. A NULL kind on a row means "written by a pre-0.2.4 build"; readers
  * must fall back to inferring the kind from the stage name.
  */
 export const jobStageKindEnum = pgEnum("job_stage_kind", [
