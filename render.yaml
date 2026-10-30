@@ -23,7 +23,7 @@ services:
     runtime: image
     plan: starter
     image:
-      url: ghcr.io/vytral/harly:0.2.3
+      url: ghcr.io/vytral/harly:0.2.4
     healthCheckPath: /api/health/ready
     preDeployCommand: node /app/runtime.mjs migrate
     envVars:
@@ -61,7 +61,7 @@ services:
     runtime: image
     plan: starter
     image:
-      url: ghcr.io/vytral/harly:0.2.3
+      url: ghcr.io/vytral/harly:0.2.4
     dockerCommand: scheduler
     envVars:
       - key: DATABASE_URL
