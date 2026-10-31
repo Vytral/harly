@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { ApplicationStatusBadge } from "@/components/ui/StatusBadge";
 import { CandidateActionBar } from "@/features/candidates/CandidateActionBar";
 import { CandidateActivityRail } from "@/features/candidates/CandidateActivityRail";
+import { RejectionReasonTag } from "@/features/rejection-reasons/RejectionReasonTag";
 import { CandidateContactLinks } from "@/features/candidates/CandidateContactLinks";
 import { CandidateSummaryCard } from "@/features/candidates/CandidateSummaryCard";
 import { CandidatePager } from "@/features/candidates/CandidatePager";
@@ -249,6 +250,9 @@ export default async function CandidateDetailPage({
             {latestApplication ? (
               <ApplicationStatusBadge status={latestApplication.status} />
             ) : null}
+            {latestApplication?.rejection ? (
+              <RejectionReasonTag rejection={latestApplication.rejection} showStatus={false} />
+            ) : null}
           </div>
           {candidate.headline || candidate.location ? (
             <p className="mt-0.5 flex flex-wrap items-center gap-x-1.5 text-[14px] leading-6 text-soft-ink">
@@ -443,6 +447,7 @@ export default async function CandidateDetailPage({
               createdAt={candidate.createdAt.toISOString()}
               tags={tags}
               applicationCount={applications.length}
+              rejection={latestApplication?.rejection ?? null}
             />
             <CandidateActivityRail activity={serializedActivity} />
           </div>

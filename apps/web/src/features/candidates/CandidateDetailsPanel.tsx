@@ -38,6 +38,10 @@ import {
 import { EducationList } from "@/features/candidates/EducationList";
 import { ExperienceTimeline } from "@/features/candidates/ExperienceTimeline";
 import { ApplicationStatusBadge } from "@/components/ui/StatusBadge";
+import {
+  RejectionReasonTag,
+  type ApplicationRejectionSummary,
+} from "@/features/rejection-reasons/RejectionReasonTag";
 import { Card } from "@/components/ui/card";
 import { InfoRow, InfoRows } from "@/components/ui/info-row";
 import { Badge } from "@/components/ui/badge";
@@ -52,6 +56,7 @@ type Application = {
   status: string;
   appliedAt: string;
   source: string | null;
+  rejection?: ApplicationRejectionSummary | null;
   answers: Array<{ id: string; label: string; type: string; answer: string }>;
 };
 
@@ -168,6 +173,11 @@ function ApplicationDisclosure({
             {application.jobTitle}
           </h3>
           <ApplicationStatusBadge status={application.status as never} />
+          <RejectionReasonTag
+            rejection={application.rejection}
+            showStatus={false}
+            className="truncate"
+          />
         </div>
         <Button
           asChild

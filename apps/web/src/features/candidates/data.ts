@@ -71,6 +71,8 @@ import {
   type WorkspaceSearchActor,
 } from "@/features/search/scope";
 import { resolveSearchActor } from "@/features/search/workspace-search";
+import { rejectionReasonLabels } from "@/features/rejection-reasons/data";
+import { rejectionReasonLabel } from "@/features/rejection-reasons/shared";
 import { deleteConversationsForCandidate } from "@/features/ai-chat/data";
 import {
   interviewTypeLabel,
@@ -219,6 +221,8 @@ export type CandidateActivityItem = {
   applicationId: string | null;
   type: string;
   label: string;
+  /** Secondary line, e.g. the internal rejection note. */
+  detail?: string | null;
   actorName: string | null;
   createdAt: Date;
 };
@@ -1004,6 +1008,9 @@ export async function getCandidateProfile(candidateId: string) {
       status: applications.status,
       appliedAt: applications.appliedAt,
       source: applications.source,
+      rejectionReasonCode: applications.rejectionReasonCode,
+      rejectionNote: applications.rejectionNote,
+      rejectedAt: applications.rejectedAt,
     })
     .from(applications)
     .innerJoin(
@@ -1039,6 +1046,11 @@ export async function getCandidateProfile(candidateId: string) {
     if (!visible) return null;
   }
   const scopedApplicationIds = new Set(candidateApplications.map((application) => application.id));
+  const reasonLabels = candidateApplications.some(
+    (application) => application.status === "rejected" && application.rejectionReasonCode,
+  )
+    ? await rejectionReasonLabels(workspace.id)
+    : new Map<string, string>();
   // Rows tied to an application are kept only when that application is in the
   // profile; candidate-level rows (no application) are kept as before.
   const inProfileScope = (applicationId: string | null) =>
@@ -1515,10 +1527,17 @@ export async function getCandidateProfile(candidateId: string) {
     }
 
     if (event.type === "application.rejected") {
+      const reasonLabel = textFromMetadata(event.metadata, "reasonLabel");
+      const note = textFromMetadata(event.metadata, "note");
+      const emailSent = isRecord(event.metadata) ? event.metadata.emailSent : undefined;
       return {
         id: event.id,
         type: event.type,
-        label: "Marked as rejected",
+        label: reasonLabel ? `Rejected · ${reasonLabel}` : "Marked as rejected",
+        detail:
+          [note, emailSent === false ? "No email sent" : null]
+            .filter(Boolean)
+            .join(" · ") || null,
         actorName: event.actorName,
         createdAt: event.createdAt,
       };
@@ -1716,10 +1735,20 @@ export async function getCandidateProfile(candidateId: string) {
     },
     inPool,
     referrals,
-    applications: candidateApplications.map((application) => ({
-      ...application,
-      answers: answersByApplication.get(application.id) ?? [],
-    })),
+    applications: candidateApplications.map(
+      ({ rejectionReasonCode, rejectionNote, rejectedAt, ...application }) => ({
+        ...application,
+        rejection:
+          application.status === "rejected"
+            ? {
+                reasonLabel: rejectionReasonLabel(rejectionReasonCode, reasonLabels),
+                note: rejectionNote,
+                rejectedAt: rejectedAt?.toISOString() ?? null,
+              }
+            : null,
+        answers: answersByApplication.get(application.id) ?? [],
+      }),
+    ),
     notes: notes.map((note) => ({
       id: note.id,
       body: note.body,

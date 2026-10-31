@@ -3,6 +3,10 @@
 import { Card } from "@/components/ui/card";
 import { InfoRow, InfoRows } from "@/components/ui/info-row";
 import { ShortDate } from "@/lib/date-hydration";
+import {
+  RejectionReasonTag,
+  type ApplicationRejectionSummary,
+} from "@/features/rejection-reasons/RejectionReasonTag";
 
 const SOURCE_LABEL: Record<string, string> = {
   public_form: "Job board",
@@ -30,6 +34,7 @@ export function CandidateSummaryCard({
   createdAt,
   tags,
   applicationCount,
+  rejection = null,
 }: {
   jobTitle: string | null;
   stageName: string | null;
@@ -38,6 +43,7 @@ export function CandidateSummaryCard({
   createdAt: string;
   tags: Array<{ id: string; label: string }>;
   applicationCount: number;
+  rejection?: ApplicationRejectionSummary | null;
 }) {
   return (
     <Card className="gap-0 py-0">
@@ -48,6 +54,12 @@ export function CandidateSummaryCard({
         <InfoRows>
           <InfoRow label="Job" value={jobTitle} />
           <InfoRow label="Stage" value={stageName} />
+          {rejection?.reasonLabel ? (
+            <InfoRow
+              label="Rejection"
+              value={<RejectionReasonTag rejection={rejection} showStatus={false} />}
+            />
+          ) : null}
           <InfoRow
             label="Source"
             value={source ? (SOURCE_LABEL[source] ?? source) : null}

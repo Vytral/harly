@@ -48,6 +48,8 @@ import {
   type Settlement,
 } from "@/features/pipeline/board-state";
 import { bulkDecisionConfirmCopy } from "@/features/pipeline/confirmation";
+import { RejectDialog } from "@/features/rejection-reasons/RejectDialog";
+import type { RejectionDecision } from "@/features/rejection-reasons/shared";
 import {
   CandidateCard,
   CandidateCardOverlay,
@@ -169,6 +171,8 @@ export function PipelineBoard({
   const [activeApplication, setActiveApplication] =
     useState<PipelineApplication | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set());
+  const [rejectOpen, setRejectOpen] = useState(false);
+  const [rejectTargets, setRejectTargets] = useState<PipelineApplication[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [announcement, setAnnouncement] = useState("");
   // Set when focus should move to a card once the board shows it (after a
@@ -391,14 +395,30 @@ export function PipelineBoard({
       return;
     }
 
+    // Every reject (one card or many) asks for a reason and an email choice;
+    // the decision is queued from RejectDialog's onConfirm.
+    if (status === "rejected") {
+      setRejectTargets(targets);
+      setRejectOpen(true);
+      return;
+    }
+
     if (
       targets.length > 1 &&
-      (status === "hired" || status === "rejected") &&
+      status === "hired" &&
       !(await confirm(bulkDecisionConfirmCopy(status, targets.length)))
     ) {
       return;
     }
 
+    enqueueStatus(targets, status);
+  }
+
+  function enqueueStatus(
+    targets: PipelineApplication[],
+    status: PipelineApplication["status"],
+    rejection?: RejectionDecision,
+  ) {
     enqueueOperation({
       kind: "status",
       id: newOperationId(),
@@ -408,6 +428,7 @@ export function PipelineBoard({
       issuedAt: new Date().toISOString(),
       applicationIds: targets.map((application) => application.id),
       status,
+      ...(rejection ? { rejection } : {}),
     });
   }
 
@@ -700,6 +721,17 @@ export function PipelineBoard({
           </DragOverlay>
         </DndContext>
       </div>
+
+      <RejectDialog
+        open={rejectOpen}
+        onOpenChange={setRejectOpen}
+        targets={rejectTargets.map((application) => ({
+          applicationId: application.id,
+          candidateName: displayName(application),
+          jobTitle: application.jobTitle,
+        }))}
+        onConfirm={(decision) => enqueueStatus(rejectTargets, "rejected", decision)}
+      />
     </Card>
   );
 }

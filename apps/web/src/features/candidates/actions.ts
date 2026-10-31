@@ -58,6 +58,12 @@ import {
   serializeReferral as serializeCandidateReferral,
 } from "./referrals/service";
 import { updateApplicationStatus } from "@/features/pipeline/actions";
+import {
+  rejectApplicationsSchema,
+  rejectionDecisionSchema,
+  type RejectApplicationsInput,
+  type RejectionDecision,
+} from "@/features/rejection-reasons/shared";
 import { candidateScopeSql, jobScopeSql } from "@/features/search/scope";
 import { resolveSearchActor } from "@/features/search/workspace-search";
 import {
@@ -99,6 +105,7 @@ export type CandidateActionState = {
 const bulkStatusSchema = z.object({
   applicationIds: z.array(z.string().min(1)).min(1).max(200),
   status: z.enum(["active", "hired", "rejected", "withdrawn"]),
+  rejection: rejectionDecisionSchema.optional(),
 });
 
 const emailLog = createLogger("candidate-email");
@@ -165,10 +172,17 @@ export async function exportCandidateDirectoryAction(input: CandidateDirectoryFi
   return { success: true as const, csv, count: rows.length };
 }
 
-/** Apply a status to many applications at once from the candidates list. */
+/**
+ * Apply a status to many applications at once from the candidates list.
+ *
+ * In-app rejections use `rejectApplicationsAction` (reason required). A
+ * "rejected" status sent here without `rejection` keeps the legacy behavior:
+ * reason "Other", rejection email sent with the active template.
+ */
 export async function bulkUpdateCandidateStatusAction(input: {
   applicationIds: string[];
   status: "active" | "hired" | "rejected" | "withdrawn";
+  rejection?: RejectionDecision;
 }): Promise<{ success: boolean; error?: string; emailWarning?: string }> {
   const parsed = bulkStatusSchema.safeParse(input);
   if (!parsed.success) {
@@ -182,6 +196,46 @@ export async function bulkUpdateCandidateStatusAction(input: {
     workspaceId: workspace.id,
     applicationIds: parsed.data.applicationIds,
     status: parsed.data.status,
+    ...(parsed.data.status === "rejected" && parsed.data.rejection
+      ? { rejection: parsed.data.rejection }
+      : {}),
+  });
+
+  if (result.success) {
+    revalidatePath("/dashboard/candidates");
+    revalidatePath("/dashboard/pipeline");
+  }
+
+  return result;
+}
+
+/**
+ * Reject one or more applications from RejectDialog: a reason is required,
+ * the note is internal, and `sendEmail` decides whether candidates get the
+ * rejection email (individually, with `templateId` or the active template).
+ * Permissions match every other status change: candidates:edit, checked per
+ * application inside updateApplicationStatus.
+ */
+export async function rejectApplicationsAction(
+  input: RejectApplicationsInput,
+): Promise<{ success: boolean; error?: string; emailWarning?: string }> {
+  const parsed = rejectApplicationsSchema.safeParse(input);
+  if (!parsed.success) {
+    return {
+      success: false,
+      error: parsed.error.issues[0]?.message ?? "Invalid rejection.",
+    };
+  }
+
+  await requirePermission("candidates:edit");
+
+  const { organization: workspace } = await getWorkspaceContext();
+  const { applicationIds, ...rejection } = parsed.data;
+  const result = await updateApplicationStatus({
+    workspaceId: workspace.id,
+    applicationIds,
+    status: "rejected",
+    rejection,
   });
 
   if (result.success) {

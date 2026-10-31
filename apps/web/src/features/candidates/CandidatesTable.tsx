@@ -31,6 +31,10 @@ import { bulkDecisionConfirmCopy } from "@/features/pipeline/confirmation";
 import { toSafeCsv } from "@/lib/csv";
 import { candidateHref, directoryOrigin } from "@/features/candidates/origin";
 import { BulkEmailDrawer } from "@/features/candidates/BulkEmailDrawer";
+import {
+  RejectDialog,
+  type RejectTarget,
+} from "@/features/rejection-reasons/RejectDialog";
 import type { EmailTemplateOption } from "@/features/candidates/EmailDrawer";
 import type {
   ImportJobOption,
@@ -197,6 +201,9 @@ export function CandidatesTable({
   const [tag, setTag] = useState(initialFilters?.tag ?? FILTER_ALL);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [bulkEmailOpen, setBulkEmailOpen] = useState(false);
+  const [rejectTargets, setRejectTargets] = useState<RejectTarget[]>([]);
+  const [rejectFromBulk, setRejectFromBulk] = useState(false);
+  const [rejectOpen, setRejectOpen] = useState(false);
   const [isPending, startTransition] = useTransition();
   const confirm = useConfirm();
   // Rows open the candidate with this list's URL filters, so the candidate
@@ -313,17 +320,30 @@ export function CandidatesTable({
   }
 
   async function runBulk(next: "hired" | "rejected" | "active") {
-    const applicationIds = filtered
-      .filter((r) => selected.has(r.id) && r.applicationId)
-      .map((r) => r.applicationId as string);
+    const selectedRows = filtered.filter((r) => selected.has(r.id) && r.applicationId);
+    const applicationIds = selectedRows.map((r) => r.applicationId as string);
 
     if (applicationIds.length === 0) {
       toast.error("Selected candidates have no application to update.");
       return;
     }
+    // Every reject, one candidate or many, asks for a reason and an email
+    // decision in RejectDialog.
+    if (next === "rejected") {
+      setRejectFromBulk(true);
+      setRejectTargets(
+        selectedRows.map((r) => ({
+          applicationId: r.applicationId as string,
+          candidateName: r.fullName,
+          jobTitle: r.role,
+        })),
+      );
+      setRejectOpen(true);
+      return;
+    }
     if (
       applicationIds.length > 1 &&
-      (next === "hired" || next === "rejected") &&
+      next === "hired" &&
       !(await confirm(bulkDecisionConfirmCopy(next, applicationIds.length)))
     ) {
       return;
@@ -354,6 +374,18 @@ export function CandidatesTable({
   ) {
     if (!row.applicationId) {
       toast.error("This candidate has no application to update.");
+      return;
+    }
+    if (next === "rejected") {
+      setRejectFromBulk(false);
+      setRejectTargets([
+        {
+          applicationId: row.applicationId,
+          candidateName: row.fullName,
+          jobTitle: row.role,
+        },
+      ]);
+      setRejectOpen(true);
       return;
     }
     startTransition(async () => {
@@ -817,6 +849,15 @@ export function CandidatesTable({
           .map((r) => r.id)}
         templates={emailTemplates}
         onSent={() => setSelected(new Set())}
+      />
+
+      <RejectDialog
+        open={rejectOpen}
+        onOpenChange={setRejectOpen}
+        targets={rejectTargets}
+        onRejected={() => {
+          if (rejectFromBulk) setSelected(new Set());
+        }}
       />
     </>
   );

@@ -1664,6 +1664,17 @@ export const applications = pgTable(
     // Lazily generated on first candidate-facing send — see
     // ensureApplicationInboundToken in apps/web/src/lib/email.
     inboundToken: text("inbound_token").unique(),
+    // Why the application was rejected. `rejectionReasonCode` is a stable code
+    // from the workspace's `rejection_reasons` catalog (defaults included);
+    // the note is internal and never shown to the candidate. All nullable:
+    // rejections recorded before this existed, and stage-drag rejections,
+    // carry no reason.
+    rejectionReasonCode: text("rejection_reason_code"),
+    rejectionNote: text("rejection_note"),
+    rejectedById: text("rejected_by_id").references(() => user.id, {
+      onDelete: "set null",
+    }),
+    rejectedAt: timestamp("rejected_at", { withTimezone: true }),
     ...timestamps(),
   },
   (table) => [
@@ -3023,6 +3034,39 @@ export type DomainEventOutbox = typeof domainEventOutbox.$inferSelect;
 export type NewDomainEventOutbox = typeof domainEventOutbox.$inferInsert;
 
 // Reusable outbound email templates with {{variable}} placeholders.
+// Workspace catalog of rejection reasons. `code` is the stable key stored on
+// `applications.rejection_reason_code`; renaming changes only `label`, and
+// archiving hides a reason from new rejections without touching history.
+// Default reasons are seeded lazily per workspace (see
+// apps/web/src/features/rejection-reasons).
+export const rejectionReasons = pgTable(
+  "rejection_reasons",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    workspaceId: text("workspace_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    code: text("code").notNull(),
+    label: text("label").notNull(),
+    position: integer("position").default(0).notNull(),
+    archivedAt: timestamp("archived_at", { withTimezone: true }),
+    ...timestamps(),
+  },
+  (table) => [
+    uniqueIndex("rejection_reasons_workspace_code_idx").on(
+      table.workspaceId,
+      table.code,
+    ),
+    index("rejection_reasons_workspace_position_idx").on(
+      table.workspaceId,
+      table.position,
+    ),
+  ],
+);
+
+export type RejectionReason = typeof rejectionReasons.$inferSelect;
+export type NewRejectionReason = typeof rejectionReasons.$inferInsert;
+
 export const emailTemplates = pgTable(
   "email_templates",
   {

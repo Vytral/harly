@@ -182,3 +182,24 @@ describe("sendPipelineEmails latency budget", () => {
     expect(summary.emailWarning).not.toContain("could not be queued");
   });
 });
+
+describe("sendPipelineEmails rejection template choice", () => {
+  beforeEach(() => {
+    mocks.states = [{ status: "sent" }];
+    mocks.process.mockResolvedValue({ processed: 1, sent: 1, failed: 0 });
+  });
+
+  it("carries the chosen template (or null for built-in) into the outbox payload", async () => {
+    await sendPipelineEmails("ws-1", [{ ...REJECTED_EMAIL, templateId: "tpl-1" }]);
+    await sendPipelineEmails("ws-1", [{ ...REJECTED_EMAIL, eventId: "hist-2", templateId: null }]);
+
+    expect(mocks.enqueue.mock.calls[0][2]).toMatchObject({ type: "rejected", templateId: "tpl-1" });
+    expect(mocks.enqueue.mock.calls[1][2]).toMatchObject({ type: "rejected", templateId: null });
+  });
+
+  it("omits templateId when none was chosen, so the active template applies", async () => {
+    await sendPipelineEmails("ws-1", [REJECTED_EMAIL]);
+
+    expect(mocks.enqueue.mock.calls[0][2]).not.toHaveProperty("templateId");
+  });
+});

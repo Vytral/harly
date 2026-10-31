@@ -41,6 +41,7 @@ import {
   processEmailOutbox,
 } from "@/lib/email/outbox-processor";
 import { applicationStatusEmailDedupeKey } from "@/lib/email/dedupe-keys";
+import { LEGACY_REJECTION_REASON_CODE } from "@/features/rejection-reasons/shared";
 
 /** Workspace-scoped application service for the REST API. */
 const log = createLogger("applications");
@@ -681,6 +682,22 @@ async function setApplicationStatus(
           status,
           currentStageId: terminalStage.id,
           updatedAt: new Date(),
+          // The REST API and workflows reject without a reason: record the
+          // legacy default ("Other") so every rejection carries one. Hiring
+          // clears any earlier rejection.
+          ...(status === "rejected"
+            ? {
+                rejectionReasonCode: LEGACY_REJECTION_REASON_CODE,
+                rejectionNote: null,
+                rejectedById: input.actorId ?? null,
+                rejectedAt: new Date(),
+              }
+            : {
+                rejectionReasonCode: null,
+                rejectionNote: null,
+                rejectedById: null,
+                rejectedAt: null,
+              }),
         })
         .where(
           and(
@@ -885,6 +902,10 @@ export async function setApplicationStatusForWorkflow(input: {
           status: input.status,
           ...(placed ? { currentStageId: placed.id } : {}),
           updatedAt: new Date(),
+          rejectionReasonCode: null,
+          rejectionNote: null,
+          rejectedById: null,
+          rejectedAt: null,
         })
         .where(
           and(

@@ -36,7 +36,10 @@ import {
   offerWithdrawnSubject,
 } from "@harly/emails";
 
-import { renderActiveEmailTemplate } from "@/features/email-templates/data";
+import {
+  renderActiveEmailTemplate,
+  renderRejectionTemplateById,
+} from "@/features/email-templates/data";
 import { isSampleEmailAddress } from "@/features/sample-data/constants";
 import { sendWorkspaceEmail, type SendEmailOptions } from "@/lib/email";
 import { getWorkspaceEmailBranding } from "@/lib/email/branding";
@@ -1318,6 +1321,8 @@ async function deliverPipelineEmail(row: OutboxRow, database: typeof db = db): P
     stageName?: string;
     workspaceName?: string;
     type?: "stage" | "rejected";
+    /** Rejection only: chosen template id, `null` = built-in, absent = active. */
+    templateId?: string | null;
   } | null;
 
   if (!p?.candidateEmail) {
@@ -1333,19 +1338,35 @@ async function deliverPipelineEmail(row: OutboxRow, database: typeof db = db): P
   const { first, last } = splitName(p.candidateName ?? "");
   const isStage = p.type === "stage";
   const templateType = isStage ? "stage_change" : "rejection";
+  const templateValues = {
+    candidate_first_name: first,
+    candidate_last_name: last,
+    candidate_full_name: p.candidateName ?? "",
+    job_title: p.jobTitle ?? "",
+    stage_name: isStage ? p.stageName : undefined,
+    company_name: p.workspaceName ?? "",
+  };
 
-  const custom = await renderActiveEmailTemplate(
-    row.workspaceId,
-    templateType,
-    {
-      candidate_first_name: first,
-      candidate_last_name: last,
-      candidate_full_name: p.candidateName ?? "",
-      job_title: p.jobTitle ?? "",
-      stage_name: isStage ? p.stageName : undefined,
-      company_name: p.workspaceName ?? "",
-    },
-  );
+  // A rejection can name its template (RejectDialog). `null` asks for the
+  // built-in email; an id that no longer exists falls back to the active one.
+  const chosenTemplateId = !isStage ? p.templateId : undefined;
+  const chosen =
+    typeof chosenTemplateId === "string"
+      ? await renderRejectionTemplateById(
+          row.workspaceId,
+          chosenTemplateId,
+          templateValues,
+        )
+      : null;
+  const custom =
+    chosen ??
+    (chosenTemplateId === null
+      ? null
+      : await renderActiveEmailTemplate(
+          row.workspaceId,
+          templateType,
+          templateValues,
+        ));
 
   const pipelineSubject = custom
     ? custom.subject

@@ -4,6 +4,7 @@ import {
 } from "@harly/db/stage-kind";
 
 import type { PipelineApplication, PipelineStage } from "@/features/pipeline/data";
+import type { RejectionDecision } from "@/features/rejection-reasons/shared";
 
 /**
  * Pure state for the pipeline board: the column layout, the optimistic
@@ -163,6 +164,8 @@ export type StatusOperation = OperationBase & {
   kind: "status";
   applicationIds: string[];
   status: ApplicationStatus;
+  /** Reason + email choice from RejectDialog; only set for "rejected". */
+  rejection?: RejectionDecision;
 };
 
 export type BulkMoveOperation = OperationBase & {

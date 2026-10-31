@@ -30,6 +30,7 @@ vi.mock("@/features/candidates/actions", () => ({
   bulkUpdateCandidateStatusAction: vi.fn(),
   trashCandidateAction: vi.fn(),
 }));
+vi.mock("@/features/rejection-reasons/RejectDialog", () => ({ RejectDialog: () => null }));
 vi.mock("@/features/pool/CandidatePoolButton", () => ({
   CandidatePoolButton: () => null,
   useCandidatePool: () => ({ inPool: false, isPending: false, toggle: vi.fn() }),

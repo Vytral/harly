@@ -51,6 +51,7 @@ import {
   trashCandidateAction,
 } from "@/features/candidates/actions";
 import { useCandidatePool } from "@/features/pool/CandidatePoolButton";
+import { RejectDialog } from "@/features/rejection-reasons/RejectDialog";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -186,9 +187,9 @@ function DecisionApplicationSelector({
 }
 
 /**
- * Status mutations for one application (reject / withdraw / hire / reactivate).
+ * Status mutations for one application (withdraw / hire / reactivate).
  * Hoisted so the decision bar and the ⋯ menu share one pending state and the
- * same confirm + toast behavior.
+ * same confirm + toast behavior. Rejecting goes through RejectDialog.
  */
 function useApplicationStatus(
   name: string,
@@ -198,17 +199,17 @@ function useApplicationStatus(
   const [isPending, startTransition] = useTransition();
   const confirm = useConfirm();
 
-  async function reject(status: "rejected" | "withdrawn", pastTense: string) {
+  async function withdraw() {
     if (!application) {
       toast.error("This candidate has no application to update.");
       return;
     }
     if (
       !(await confirm({
-        tone: pastTense === "withdrawn" ? "warning" : "destructive",
-        title: `${pastTense === "withdrawn" ? "Mark as withdrawn" : "Reject"} ${name}'s application?`,
-        description: `Applies to ${application.jobTitle}. Candidates may be notified depending on your stage emails.`,
-        confirmLabel: pastTense === "withdrawn" ? "Mark withdrawn" : "Reject",
+        tone: "warning",
+        title: `Mark ${name}'s application as withdrawn?`,
+        description: `Applies to ${application.jobTitle}. No rejection email is sent.`,
+        confirmLabel: "Mark withdrawn",
       }))
     ) {
       return;
@@ -216,13 +217,13 @@ function useApplicationStatus(
     startTransition(async () => {
       const result = await bulkUpdateCandidateStatusAction({
         applicationIds: [application.applicationId],
-        status,
+        status: "withdrawn",
       });
       if (result.success) {
         if (result.emailWarning) {
-          toast.warning(`${name} ${pastTense}. ${result.emailWarning}`);
+          toast.warning(`${name} withdrawn. ${result.emailWarning}`);
         } else {
-          toast.success(`${name} ${pastTense}.`);
+          toast.success(`${name} withdrawn.`);
         }
         (router as { refresh?: () => void }).refresh?.();
       } else {
@@ -270,7 +271,7 @@ function useApplicationStatus(
     });
   }
 
-  return { isPending, reject, change };
+  return { isPending, withdraw, change };
 }
 
 /** Reject: outline with rust text. Withdraw lives in the ⋯ menu. */
@@ -399,6 +400,7 @@ export function CandidateActionBar({
   const pool = useCandidatePool(candidate.id, inPool);
   const [resumeOpen, setResumeOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
+  const [rejectOpen, setRejectOpen] = useState(false);
   const scheduleRef = useRef<HTMLSpanElement>(null);
   const editRef = useRef<HTMLSpanElement>(null);
   // Menu selections run after the menu has closed and returned focus, so a
@@ -517,11 +519,31 @@ export function CandidateActionBar({
     />
   ) : null;
 
+  const rejectDialog = selectedApplication ? (
+    <RejectDialog
+      open={rejectOpen}
+      onOpenChange={setRejectOpen}
+      targets={[
+        {
+          applicationId: selectedApplication.applicationId,
+          candidateName: name,
+          jobTitle: selectedApplication.jobTitle,
+        },
+      ]}
+    />
+  ) : null;
+
   const reject = isHired ? null : (
     <RejectButton
       compact={variant === "compact"}
       pending={status.isPending}
-      onReject={() => status.reject("rejected", "rejected")}
+      onReject={() => {
+        if (!selectedApplication) {
+          toast.error("This candidate has no application to update.");
+          return;
+        }
+        setRejectOpen(true);
+      }}
       className={variant === "compact" ? undefined : "max-sm:flex-1"}
     />
   );
@@ -540,6 +562,7 @@ export function CandidateActionBar({
         {evaluate}
         {reject}
         <MoveStageButton target={moveTarget} />
+        {rejectDialog}
       </div>
     );
   }
@@ -615,7 +638,7 @@ export function CandidateActionBar({
               {menuStatusItems}
               {!isHired ? (
                 <DropdownMenuItem
-                  onSelect={() => queueAfterMenu(() => status.reject("withdrawn", "withdrawn"))}
+                  onSelect={() => queueAfterMenu(() => status.withdraw())}
                 >
                   <UserMinus className="size-4" />
                   Mark withdrawn
@@ -695,6 +718,8 @@ export function CandidateActionBar({
           </div>
         )}
       </div>
+
+      {rejectDialog}
 
       {/* Hidden triggers driven from the ⋯ menu */}
       <span ref={editRef} className="hidden">

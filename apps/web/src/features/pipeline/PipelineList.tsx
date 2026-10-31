@@ -19,6 +19,10 @@ import {
   updateApplicationStatus,
 } from "@/features/pipeline/actions";
 import { bulkDecisionConfirmCopy } from "@/features/pipeline/confirmation";
+import {
+  RejectDialog,
+  type RejectTarget,
+} from "@/features/rejection-reasons/RejectDialog";
 import { candidateHref, pipelineOrigin } from "@/features/candidates/origin";
 import type {
   PipelineApplication,
@@ -63,6 +67,8 @@ export function PipelineList({
   });
   const [query, setQuery] = useState(() => searchParams.get("q") ?? "");
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [rejectOpen, setRejectOpen] = useState(false);
+  const [rejectTargets, setRejectTargets] = useState<RejectTarget[]>([]);
   const selectAllId = useId();
   const [isPending, startTransition] = useTransition();
 
@@ -178,8 +184,28 @@ export function PipelineList({
 
   async function setStatus(status: "hired" | "rejected" | "active") {
     if (selectedIds.length === 0) return;
+    // Rejecting, one candidate or many, always goes through RejectDialog.
+    if (status === "rejected") {
+      const byId = new Map(applications.map((a) => [a.id, a]));
+      setRejectTargets(
+        selectedIds.flatMap((id) => {
+          const application = byId.get(id);
+          return application
+            ? [
+                {
+                  applicationId: application.id,
+                  candidateName: `${application.candidateFirstName} ${application.candidateLastName}`,
+                  jobTitle: application.jobTitle,
+                },
+              ]
+            : [];
+        }),
+      );
+      setRejectOpen(true);
+      return;
+    }
     if (
-      status !== "active" &&
+      status === "hired" &&
       selectedIds.length > 1 &&
       !(await confirm(bulkDecisionConfirmCopy(status, selectedIds.length)))
     ) {
@@ -375,6 +401,13 @@ export function PipelineList({
           ) : null}
         </div>
       </div>
+
+      <RejectDialog
+        open={rejectOpen}
+        onOpenChange={setRejectOpen}
+        targets={rejectTargets}
+        onRejected={() => setSelected(new Set())}
+      />
     </Card>
   );
 }
