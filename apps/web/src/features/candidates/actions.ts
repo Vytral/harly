@@ -371,11 +371,14 @@ async function parseCandidateFileDetails(input: {
       return empty;
     }
 
-    const { text } = await extractResumeText({
+    const { text, diagnostics } = await extractResumeText({
       buffer,
       fileName: input.fileName,
       mimeType: input.fileType,
     });
+    if (diagnostics.length > 0) {
+      console.warn("Resume extraction notes", { fileName: input.fileName, diagnostics });
+    }
     if (!text.trim()) return empty;
 
     // Prefer the AI structured parse (summary + skills + experience timeline +
@@ -388,6 +391,7 @@ async function parseCandidateFileDetails(input: {
           .filter(Boolean)
           .join(" ");
         const structured = await parseResumeStructured(aiConfig, text, {
+          workspaceId: input.workspaceId,
           identity: {
             firstName: input.identity.firstName,
             lastName: input.identity.lastName,
@@ -951,6 +955,69 @@ export async function updateCandidateAvatarAction(input: {
   }
 }
 
+const candidateFileHashColumns = {
+  id: candidateFiles.id,
+  fileName: candidateFiles.fileName,
+  fileUrl: candidateFiles.fileUrl,
+  fileType: candidateFiles.fileType,
+  fileSize: candidateFiles.fileSize,
+  contentHash: candidateFiles.contentHash,
+  parsedSummary: candidateFiles.parsedSummary,
+  parsedSkills: candidateFiles.parsedSkills,
+  parsedEducation: candidateFiles.parsedEducation,
+  parsedExperienceYears: candidateFiles.parsedExperienceYears,
+  parsedAt: candidateFiles.parsedAt,
+  createdAt: candidateFiles.createdAt,
+};
+
+/** Newest file of this candidate with the same content hash, if any. */
+async function findCandidateFileByHash(
+  executor: Pick<typeof db, "select">,
+  workspaceId: string,
+  candidateId: string,
+  contentHash: string,
+) {
+  const [existing] = await executor
+    .select(candidateFileHashColumns)
+    .from(candidateFiles)
+    .where(
+      and(
+        eq(candidateFiles.workspaceId, workspaceId),
+        eq(candidateFiles.candidateId, candidateId),
+        eq(candidateFiles.contentHash, contentHash.toLowerCase()),
+      ),
+    )
+    .orderBy(desc(candidateFiles.createdAt))
+    .limit(1);
+  return existing ?? null;
+}
+
+function toAttachedFile(
+  row: {
+    id: string;
+    fileName: string;
+    fileUrl: string;
+    fileType: string | null;
+    fileSize: number | null;
+    contentHash: string | null;
+    parsedSummary: string | null;
+    parsedSkills: unknown;
+    parsedEducation: string | null;
+    parsedExperienceYears: number | null;
+    parsedAt: Date | null;
+    createdAt: Date;
+  },
+  uploadedByName: string,
+) {
+  return {
+    ...row,
+    parsedSkills: Array.isArray(row.parsedSkills) ? (row.parsedSkills as string[]) : [],
+    parsedAt: row.parsedAt?.toISOString() ?? null,
+    createdAt: row.createdAt.toISOString(),
+    uploadedByName,
+  };
+}
+
 export async function attachCandidateFile(input: {
   candidateId: string;
   workspaceId: string;
@@ -1012,6 +1079,24 @@ export async function attachCandidateFile(input: {
       )
       .limit(1);
 
+    // Dedupe BEFORE parsing: a file we already hold (same content hash) must
+    // not be extracted or sent to the AI again. The in-transaction check below
+    // still guards the concurrent-upload race.
+    if (parsed.data.contentHash) {
+      const duplicate = await findCandidateFileByHash(
+        db,
+        input.workspaceId,
+        input.candidateId,
+        parsed.data.contentHash,
+      );
+      if (duplicate) {
+        return {
+          success: true,
+          file: toAttachedFile(duplicate, user.name),
+        };
+      }
+    }
+
     const parsedDetails = await parseCandidateFileDetails({
       workspaceId: input.workspaceId,
       fileUrl: parsed.data.fileUrl,
@@ -1050,48 +1135,14 @@ export async function attachCandidateFile(input: {
       }
 
       if (parsed.data.contentHash) {
-        const [existing] = await tx
-          .select({
-            id: candidateFiles.id,
-            fileName: candidateFiles.fileName,
-            fileUrl: candidateFiles.fileUrl,
-            fileType: candidateFiles.fileType,
-            fileSize: candidateFiles.fileSize,
-            contentHash: candidateFiles.contentHash,
-            parsedSummary: candidateFiles.parsedSummary,
-            parsedSkills: candidateFiles.parsedSkills,
-            parsedEducation: candidateFiles.parsedEducation,
-            parsedExperienceYears: candidateFiles.parsedExperienceYears,
-            parsedAt: candidateFiles.parsedAt,
-            createdAt: candidateFiles.createdAt,
-          })
-          .from(candidateFiles)
-          .where(
-            and(
-              eq(candidateFiles.workspaceId, input.workspaceId),
-              eq(candidateFiles.candidateId, input.candidateId),
-              eq(
-                candidateFiles.contentHash,
-                parsed.data.contentHash.toLowerCase(),
-              ),
-            ),
-          )
-          .orderBy(desc(candidateFiles.createdAt))
-          .limit(1);
-
+        const existing = await findCandidateFileByHash(
+          tx,
+          input.workspaceId,
+          input.candidateId,
+          parsed.data.contentHash,
+        );
         if (existing) {
-          return {
-            success: true,
-            file: {
-              ...existing,
-              parsedSkills: Array.isArray(existing.parsedSkills)
-                ? existing.parsedSkills
-                : [],
-              parsedAt: existing.parsedAt?.toISOString() ?? null,
-              createdAt: existing.createdAt.toISOString(),
-              uploadedByName: user.name,
-            },
-          };
+          return { success: true, file: toAttachedFile(existing, user.name) };
         }
       }
 

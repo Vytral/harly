@@ -12,7 +12,7 @@ import type {
 } from "./parsing/document";
 
 /** Version of the deterministic resume fact parser (Audit doc §5.1). Bump on parsing-behavior changes. */
-export const RESUME_PARSER_VERSION = "parser-v2";
+export const RESUME_PARSER_VERSION = "parser-v3";
 export interface TextProvenance {
   sourceType: "resume" | "job_description" | "application_qa" | "candidate_profile";
   section?: "experience" | "education" | "skills" | "summary" | "certifications" | "languages" | "header" | "other";
@@ -152,20 +152,124 @@ const SECTION_PATTERNS = {
     /^(?:languages?|idiomas)\b/i,
 };
 
-const MONTHS: Record<string, number> = {
-  jan: 1, january: 1, ene: 1, enero: 1,
-  feb: 2, february: 2, febrero: 2,
-  mar: 3, march: 3, marzo: 3,
-  apr: 4, april: 4, abr: 4, abril: 4,
-  may: 5, mayo: 5,
-  jun: 6, june: 6, junio: 6,
-  jul: 7, july: 7, julio: 7,
-  aug: 8, august: 8, ago: 8, agosto: 8,
-  sep: 9, sept: 9, september: 9, septiembre: 9,
-  oct: 10, october: 10, octubre: 10,
-  nov: 11, november: 11, noviembre: 11,
-  dec: 12, december: 12, dic: 12, diciembre: 12,
+/**
+ * Month names (EN/ES/PT/FR/DE, short and long), lowercase and accent-free: the
+ * matcher normalizes input with `foldDiacritics` before looking names up.
+ */
+const MONTH_NAMES: Record<number, string[]> = {
+  1: ["jan", "january", "ene", "enero", "janeiro", "janv", "janvier", "januar", "janner"],
+  2: ["feb", "february", "febrero", "fev", "fevereiro", "fevr", "fevrier", "februar"],
+  3: ["mar", "march", "marzo", "marco", "mars", "marz"],
+  4: ["apr", "april", "abr", "abril", "avr", "avril"],
+  5: ["may", "mayo", "mai", "maio"],
+  6: ["jun", "june", "junio", "junho", "juin", "juni"],
+  7: ["jul", "july", "julio", "julho", "juil", "juillet", "juli"],
+  8: ["aug", "august", "ago", "agosto", "aout"],
+  9: ["sep", "sept", "september", "septiembre", "setiembre", "set", "setembro", "septembre"],
+  10: ["oct", "october", "octubre", "out", "outubro", "octobre", "okt", "oktober"],
+  11: ["nov", "november", "noviembre", "novembro", "novembre"],
+  12: ["dec", "december", "dic", "diciembre", "dez", "dezembro", "decembre", "dezember"],
 };
+
+const MONTHS: Record<string, number> = {};
+for (const [num, names] of Object.entries(MONTH_NAMES)) {
+  for (const name of names) MONTHS[name] = Number(num);
+}
+
+/** Lowercase, strip accents and unify apostrophes (length-preserving for Latin text). */
+function foldDiacritics(text: string): string {
+  return text
+    .normalize("NFD")
+    .replace(/\p{M}/gu, "")
+    .replace(/[\u2018\u2019\u02bc`]/g, "'")
+    .toLowerCase();
+}
+
+const MONTH_ALT = Object.keys(MONTHS)
+  .sort((x, y) => y.length - x.length)
+  .join("|");
+
+/** "present" in the languages we parse (accent-free; matched against folded text). */
+const PRESENT_ALT = [
+  "present", "presente", "current", "currently", "now", "ongoing", "to date",
+  "actualidad", "actualmente", "actual", "hoy", "al presente",
+  "atualmente", "atual", "atualidade", "hoje",
+  "aujourd'hui", "aujourdhui", "actuellement", "en cours", "a ce jour",
+  "heute", "aktuell", "gegenwart", "bis heute", "derzeit",
+].join("|");
+
+const SINCE_ALT = "since|desde|depuis|seit|a partir de|a partir do";
+
+function dateTokenSource(group: string): string {
+  return (
+    `(?:(?:(?<m${group}>${MONTH_ALT})\\.?\\s*(?:,\\s*|del?\\s+)?` +
+    `|(?<n${group}>\\d{1,2})\\s*[/.\\-]\\s*)?` +
+    `(?<y${group}>(?:19|20)\\d{2}))`
+  );
+}
+
+const RANGE_SEP = "\\s*(?:[-\\u2013\\u2014/]|\\b(?:to|until|till|a|al|ate|hasta|bis|au)\\b)\\s*";
+
+const DATE_RANGE_RE = new RegExp(
+  `\\b${dateTokenSource("1")}${RANGE_SEP}(?:${dateTokenSource("2")}|(?<p>(?:${PRESENT_ALT}))(?![a-z]))`,
+  "u",
+);
+const DATE_SINCE_RE = new RegExp(`\\b(?:${SINCE_ALT})\\s+${dateTokenSource("1")}`, "u");
+
+type DateEndpoint = { year: number; month?: number };
+
+export interface FoundDateRange {
+  start: DateEndpoint;
+  end: DateEndpoint | "present";
+  /** Span in the original (unfolded) text. */
+  index: number;
+  length: number;
+}
+
+function endpointFrom(groups: Record<string, string | undefined>, key: string): DateEndpoint {
+  const name = groups[`m${key}`];
+  const num = groups[`n${key}`];
+  let month: number | undefined;
+  if (name) month = MONTHS[name];
+  else if (num) {
+    const n = Number(num);
+    if (n >= 1 && n <= 12) month = n;
+  }
+  return { year: Number(groups[`y${key}`]), month };
+}
+
+/**
+ * Locate a date range ("Jan 2020 - Mar 2022", "03/2020 - 05/2022",
+ * "2019 - actualmente") or an open-ended start ("Since 2021", "Desde 2021") in
+ * a line. Handles EN/ES/PT/FR/DE month names and "present" words.
+ */
+export function findDateRange(text: string): FoundDateRange | null {
+  const folded = foldDiacritics(text);
+  // Offsets are only trustworthy when folding preserved length.
+  const sameLength = folded.length === text.length;
+
+  const range = DATE_RANGE_RE.exec(folded);
+  if (range?.groups) {
+    const g = range.groups as Record<string, string | undefined>;
+    return {
+      start: endpointFrom(g, "1"),
+      end: g.p ? "present" : endpointFrom(g, "2"),
+      index: sameLength ? range.index : 0,
+      length: sameLength ? range[0].length : text.length,
+    };
+  }
+  const since = DATE_SINCE_RE.exec(folded);
+  if (since?.groups) {
+    const g = since.groups as Record<string, string | undefined>;
+    return {
+      start: endpointFrom(g, "1"),
+      end: "present",
+      index: sameLength ? since.index : 0,
+      length: sameLength ? since[0].length : text.length,
+    };
+  }
+  return null;
+}
 
 const DEGREE_LEVEL_HIERARCHY: Array<{
   level: ParsedEducationEntry["normalizedLevel"];
@@ -241,24 +345,18 @@ export function parseDateInterval(
     : resolveDateContext(referenceDateOrContext);
 
   const cleaned = cleanLine(text);
-  const presentRegex = /\b(present|current|now|actualidad|presente|hoy)\b/i;
 
-  const rangeMatch = cleaned.match(
-    /(?:([a-z]{3,9})\s+)?\b(19\d{2}|20\d{2})\b\s*(?:-|–|—|to|al?|\/)\s*(?:(?:([a-z]{3,9})\s+)?\b(19\d{2}|20\d{2})\b|(present|current|now|actualidad|presente|hoy))/i,
-  );
-
-  if (rangeMatch) {
-    const startMonth = rangeMatch[1] ? MONTHS[rangeMatch[1].toLowerCase().slice(0, 3)] : undefined;
-    const startYear = Number(rangeMatch[2]);
-    const isNow = Boolean(rangeMatch[5]) || presentRegex.test(rangeMatch[0]);
+  const found = findDateRange(cleaned);
+  if (found) {
+    const isNow = found.end === "present";
+    const startYear = found.start.year;
+    const startMonth = found.start.month;
+    const endYear = isNow ? dateCtx.referenceYear : (found.end as DateEndpoint).year;
     const endMonth = isNow
       ? startMonth ? dateCtx.referenceMonth : undefined
-      : rangeMatch[3]
-      ? MONTHS[rangeMatch[3].toLowerCase().slice(0, 3)]
-      : undefined;
-    const endYear = isNow ? dateCtx.referenceYear : Number(rangeMatch[4]);
+      : (found.end as DateEndpoint).month;
 
-    if (!Number.isNaN(startYear) && !Number.isNaN(endYear) && endYear >= startYear) {
+    if (endYear >= startYear) {
       let months: number;
       if (startMonth && endMonth) {
         months = (endYear - startYear) * 12 + (endMonth - startMonth);
@@ -291,6 +389,18 @@ export function parseDateInterval(
   return null;
 }
 
+/** Remove the date expression (and anything after it) from a role header line. */
+function stripDateFromHeader(cleaned: string): string {
+  let text = cleaned.replace(/\s*\([^)]*(?:19\d{2}|20\d{2})[^)]*\)/g, " ");
+  const found = findDateRange(text);
+  if (found) {
+    const before = text.slice(0, found.index).replace(/[\s|,:;\-(\[]+$/, "").trim();
+    const after = text.slice(found.index + found.length).replace(/^[\s|,:;\-)\]]+/, "").trim();
+    text = before.length >= 2 ? before : after;
+  }
+  return text.replace(/\s+/g, " ").replace(/[\s|,:;\-]+$/, "").trim();
+}
+
 export function parseRoleHeader(
   line: string,
   referenceDateOrContext?: EvaluationDateContext | string | Date | number,
@@ -304,10 +414,7 @@ export function parseRoleHeader(
 
   const interval = parseDateInterval(cleaned, referenceDateOrContext);
 
-  const textWithoutDate = cleaned
-    .replace(/\s*\([^)]*(?:19\d{2}|20\d{2}|present|actualidad)[^)]*\)/gi, "")
-    .replace(/\s*\|?\s*(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec|[A-Z]{3,9})?\s*\b(19\d{2}|20\d{2})\b\s*(?:-|–|—|to|al?)\s*(?:(?:[A-Z]{3,9}\s*)?\b(19\d{2}|20\d{2})\b|present|actualidad|current).*/gi, "")
-    .trim();
+  const textWithoutDate = stripDateFromHeader(cleaned);
 
   const separatorMatch = textWithoutDate.match(/\s*(?:—|–|-|\||\bat\b|@|,)\s*/i);
   if (separatorMatch && separatorMatch.index !== undefined) {

@@ -52,6 +52,32 @@ export interface TextReadability {
 }
 
 /**
+ * Legibility checks shared by every extraction path: letter/number density and
+ * replacement-character rate. Unicode-aware (`\p{L}\p{N}`), so Cyrillic, CJK,
+ * Arabic, Hebrew, Devanagari, etc. count as legible. The old ASCII/Latin-1
+ * class rated Russian (0.11) and Chinese (0.22) resumes as garbage.
+ * Does not enforce a minimum length; see `assessTextReadability`.
+ */
+export function assessTextLegibility(text: string): TextReadability {
+  const reasons: string[] = [];
+  const trimmed = text.trim();
+  if (trimmed.length > 0) {
+    // Spread by code point so astral characters count once.
+    const chars = Array.from(trimmed);
+    const alnum = (trimmed.match(/[\p{L}\p{N}]/gu) ?? []).length;
+    const density = alnum / chars.length;
+    if (density < 0.4) {
+      reasons.push(`low alphanumeric density (${density.toFixed(2)}) — likely binary/garbled extraction`);
+    }
+    const replacement = (trimmed.match(/\uFFFD/g) ?? []).length;
+    if (replacement / chars.length > 0.05) {
+      reasons.push(`high replacement-character rate (${replacement} U+FFFD) — failed decode`);
+    }
+  }
+  return { readable: reasons.length === 0, reasons };
+}
+
+/**
  * Conservative readability gate for a text-layer extraction (§6.3).
  * Answers only "is this usable as matching input" — never guesses content.
  * Thresholds err toward readable: a short but dense snippet still passes.
@@ -62,17 +88,7 @@ export function assessTextReadability(text: string): TextReadability {
   if (trimmed.length < 50) {
     reasons.push(`extracted text too short (${trimmed.length} chars)`);
   }
-  if (trimmed.length > 0) {
-    const alnum = (trimmed.match(/[a-zA-Z0-9À-ÿ]/g) ?? []).length;
-    const density = alnum / trimmed.length;
-    if (density < 0.4) {
-      reasons.push(`low alphanumeric density (${density.toFixed(2)}) — likely binary/garbled extraction`);
-    }
-    const replacement = (trimmed.match(/�/g) ?? []).length;
-    if (replacement / trimmed.length > 0.05) {
-      reasons.push(`high replacement-character rate (${replacement} U+FFFD) — failed decode`);
-    }
-  }
+  reasons.push(...assessTextLegibility(trimmed).reasons);
   return { readable: reasons.length === 0, reasons };
 }
 

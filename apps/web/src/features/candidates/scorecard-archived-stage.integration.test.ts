@@ -34,9 +34,10 @@ vi.mock("@/server/events/emit", () => ({
   persistDomainEvent: vi.fn(),
   publishPersistedDomainEvents: vi.fn(),
 }));
-vi.mock("@/lib/logger", () => ({
-  createLogger: () => ({ error: vi.fn(), warn: vi.fn(), info: vi.fn() }),
-}));
+vi.mock("@/lib/logger", () => {
+  const logger = { error: vi.fn(), warn: vi.fn(), info: vi.fn(), child: () => logger };
+  return { createLogger: () => logger, getServerLogger: () => logger };
+});
 
 import { createScorecard } from "./actions";
 

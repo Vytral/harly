@@ -124,7 +124,9 @@ export async function parseResumeAction(input: {
       const startedAt = Date.now();
       let ok = false;
       try {
-        const fields = await parseResumeWithAI(aiConfig, text, jobKeywords);
+        const fields = await parseResumeWithAI(aiConfig, text, jobKeywords, {
+          workspaceId: jobContext.workspaceId,
+        });
         ok = true;
         return { ok: true, fields };
       } catch (error) {
