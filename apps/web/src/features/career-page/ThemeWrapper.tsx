@@ -4,13 +4,16 @@ import { useEffect, useRef } from "react";
 
 import { cn } from "@/lib/utils";
 
-import { isLightColor, MODE_BG, type CareerPageConfig } from "./config";
+import type { CareerPageConfig } from "./config";
+import { resolveCanvas } from "./theme";
 
 /**
  * ThemeWrapper applies theme.{mode, background, font} to the career page.
  * Enables dark: pseudo-class when mode=dark, sets font family class, and
- * applies background color via inline style. Transitions smoothly (150ms ease)
- * with prefers-reduced-motion support.
+ * applies background color via inline style (see `resolveCanvas`). The `.light`
+ * / `.dark` class re-declares every app token (near-ink, soft-ink, hairline,
+ * pure-snow, ...), so templates use those tokens instead of fixed greys.
+ * `data-career-root` scopes the focus ring and prose rules in globals.css.
  */
 export function ThemeWrapper({
   config,
@@ -19,17 +22,12 @@ export function ThemeWrapper({
   config: CareerPageConfig;
   children: React.ReactNode;
 }) {
-  const { mode, background, font } = config.theme;
+  const { mode, font } = config.theme;
 
   // Keep canvas + mode coherent even for configs saved before this guard
-  // existed: dark mode must never paint on a light canvas (light text → ghost),
+  // existed: dark mode must never paint on a light canvas (light text, ghost),
   // and vice-versa. A deliberate in-mode tint (e.g. cream in light) is kept.
-  const effectiveBg = (() => {
-    const bg = background || MODE_BG[mode];
-    if (mode === "dark" && isLightColor(bg)) return MODE_BG.dark;
-    if (mode === "light" && !isLightColor(bg)) return MODE_BG.light;
-    return bg;
-  })();
+  const effectiveBg = resolveCanvas(config);
 
   const fontClass = {
     sans: "font-sans",
@@ -69,6 +67,7 @@ export function ThemeWrapper({
         colorScheme: mode === "dark" ? "dark" : "light",
       }}
       data-theme={mode}
+      data-career-root=""
     >
       {children}
     </div>

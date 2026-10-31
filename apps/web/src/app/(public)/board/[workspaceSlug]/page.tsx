@@ -30,7 +30,7 @@ export default async function BoardPage({ params }: Props) {
   const page = (
     <PublicCareerPage
       workspace={data.workspace}
-      jobs={data.jobs.map(({ id, slug, title, department, location, employmentType, workplaceType }) => ({ id, slug, title, department, location, employmentType, workplaceType }))}
+      jobs={data.jobs.map(({ id, slug, title, department, location, employmentType, workplaceType, salaryMin, salaryMax, currency, salaryPeriod }) => ({ id, slug, title, department, location, employmentType, workplaceType, salaryMin, salaryMax, currency, salaryPeriod }))}
       config={data.config}
       boardRoot={boardRoot}
       portalEnabled={portalEnabled}

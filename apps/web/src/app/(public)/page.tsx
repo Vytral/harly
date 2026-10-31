@@ -47,6 +47,10 @@ export default async function HomePage() {
     location: job.location,
     employmentType: job.employmentType,
     workplaceType: job.workplaceType,
+    salaryMin: job.salaryMin,
+    salaryMax: job.salaryMax,
+    currency: job.currency,
+    salaryPeriod: job.salaryPeriod,
   }));
 
   // Keep the self-hosted career site at `/`. Workspace-scoped routes remain

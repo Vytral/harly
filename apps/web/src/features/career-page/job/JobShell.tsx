@@ -9,7 +9,10 @@ import { cn, copyText } from "@/lib/utils";
 import { formatEmploymentType, formatWorkplaceType } from "@/lib/format";
 import type { WorkspaceBoardBranding } from "@/features/workspaces/board";
 
-import { isLightColor, type CareerPageConfig } from "../config";
+import type { CareerPageConfig } from "../config";
+import { boardBase } from "../job-filters";
+import { withAlpha } from "../color";
+import { careerTheme } from "../theme";
 import { CareerFooter } from "../CareerFooter";
 import { buildJobMeta, formatCompensation, type JobLike } from "./jobMeta";
 
@@ -44,21 +47,32 @@ export function JobShell({
   portalEnabled?: boolean;
   children: React.ReactNode;
 }) {
-  const accent = config.theme.accent ?? workspace.primaryColor;
-  const onAccent = isLightColor(accent) ? "#18181b" : "#ffffff";
-  const base = boardRoot === "/" ? "" : boardRoot;
+  const theme = careerTheme(config, workspace.primaryColor);
+  const { accent, onAccent, accentText } = theme;
+  const base = boardBase(boardRoot);
+  // The job page keeps the width of the list page it came from.
+  const widthClass =
+    config.template === "ashby"
+      ? "max-w-6xl"
+      : config.template === "playful"
+        ? "max-w-5xl"
+        : "max-w-4xl";
   const overviewHref = `${base}/jobs/${job.slug}` as Route;
   const applyHref = `${base}/apply/${job.slug}` as Route;
   const meta = buildJobMeta(job);
-  const logo = workspace.logoUrl;
+  // Honour hero.logoType here too, so the wordmark choice carries to job pages.
+  const logo =
+    config.hero.logoType === "fullLogo"
+      ? (workspace.fullLogoUrl ?? workspace.logoUrl)
+      : workspace.logoUrl;
+  const showName = config.hero.showName || !logo;
 
   const heroImage = config.hero.imageUrl ?? workspace.heroImageUrl;
   // Gradient is an image wash only , never a stray fade over a plain accent.
   const showGradient = config.hero.overlay === "gradient" && Boolean(heroImage);
-  const overlayFrom = config.hero.overlayFrom ?? `${accent}E6`;
-  const overlayTo = config.hero.overlayTo ?? `${accent}00`;
-  const radius =
-    config.theme.rounded === "sharp" ? "rounded-none" : "rounded-lg";
+  const overlayFrom = config.hero.overlayFrom ?? withAlpha(accent, 0.9);
+  const overlayTo = config.hero.overlayTo ?? withAlpha(accent, 0);
+  const radius = "rounded-[var(--career-r-btn,10px)]";
 
   // ── Animated tab indicator ──
   const navRef = useRef<HTMLElement>(null);
@@ -83,6 +97,7 @@ export function JobShell({
       document.documentElement.removeAttribute("data-tab-switch");
     }
 
+    const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     const activeLink = tabRefs.current[activeTab];
     if (activeLink && navRef.current && indicatorRef.current) {
       const navRect = navRef.current.getBoundingClientRect();
@@ -90,7 +105,7 @@ export function JobShell({
       const targetLeft = currentRect.left - navRect.left;
       const targetWidth = currentRect.width;
 
-      if (prevTab && prevTab !== activeTab) {
+      if (prevTab && prevTab !== activeTab && !reduceMotion) {
         const prevLink = tabRefs.current[prevTab];
         if (prevLink) {
           const prevRect = prevLink.getBoundingClientRect();
@@ -139,7 +154,7 @@ export function JobShell({
   ] as const;
 
   return (
-    <div className="flex min-h-screen flex-col text-zinc-900 dark:text-zinc-100">
+    <div className="flex min-h-screen flex-col text-near-ink" style={theme.vars}>
       {variant === "playful" ? (
         <header className="relative">
           <div
@@ -162,32 +177,35 @@ export function JobShell({
                 }}
               />
             )}
-            <div className="absolute inset-x-0 top-0 mx-auto max-w-5xl px-6 pt-5">
+            <div className={cn("absolute inset-x-0 top-0 mx-auto px-6 pt-5", widthClass)}>
               <Link
                 href={(boardRoot || "/") as Route}
-                className="inline-flex items-center gap-1.5 text-sm font-medium transition-opacity hover:opacity-80"
-                style={{
-                  color: heroImage || showGradient ? "#ffffff" : onAccent,
-                }}
+                className="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-medium transition-opacity hover:opacity-90"
+                style={
+                  heroImage
+                    ? { color: "#ffffff", backgroundColor: "rgba(0, 0, 0, 0.45)" }
+                    : { color: onAccent }
+                }
               >
                 <ArrowLeft className="size-4" strokeWidth={2} />
                 {workspace.name}
               </Link>
             </div>
           </div>
-          <div className="mx-auto max-w-5xl px-6">
-            <div className="relative -mt-9 flex size-[72px] items-center justify-center overflow-hidden rounded-3xl border border-zinc-200 bg-white shadow-lg dark:border-zinc-700 dark:bg-zinc-900">
+          <div className={cn("mx-auto px-6", widthClass)}>
+            {/* Logo plate is always white: workspace logos are drawn for a light ground. */}
+            <div className="relative -mt-9 flex size-[72px] items-center justify-center overflow-hidden rounded-[var(--career-r-card,16px)] border border-hairline bg-white shadow-lg">
               {logo ? (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img
                   src={logo}
                   alt={workspace.name}
-                  className="size-full object-cover"
+                  className="size-full object-contain p-2"
                 />
               ) : (
                 <span
                   className="text-2xl font-semibold"
-                  style={{ color: accent }}
+                  style={{ color: "var(--career-accent)" }}
                 >
                   {workspace.name.charAt(0).toUpperCase()}
                 </span>
@@ -196,22 +214,26 @@ export function JobShell({
           </div>
         </header>
       ) : (
-        <header className="border-b border-zinc-200 dark:border-zinc-800">
-          <div className="mx-auto flex max-w-5xl items-center gap-2 px-6 py-4">
+        <header className="border-b border-hairline">
+          <div className={cn("mx-auto flex items-center gap-2 px-6 py-4", widthClass)}>
             <Link
               href={(boardRoot || "/") as Route}
-              className="inline-flex items-center gap-2 text-sm font-medium text-zinc-500 transition-colors hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100"
+              className="inline-flex items-center gap-2 text-sm font-medium text-soft-ink transition-colors hover:text-near-ink"
             >
-              <ArrowLeft className="size-4" strokeWidth={1.8} />
+              <ArrowLeft className="size-4" strokeWidth={1.8} aria-hidden />
               {logo ? (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img
                   src={logo}
-                  alt={workspace.name}
-                  className="size-6 rounded object-contain"
+                  alt={showName ? "" : workspace.name}
+                  className={
+                    config.hero.logoType === "fullLogo"
+                      ? "h-6 w-auto max-w-[160px] object-contain"
+                      : "size-6 rounded object-contain"
+                  }
                 />
               ) : null}
-              {workspace.name}
+              {showName ? workspace.name : null}
             </Link>
           </div>
         </header>
@@ -223,6 +245,7 @@ export function JobShell({
           title={job.title}
           accent={accent}
           onAccent={onAccent}
+          widthClass={widthClass}
           activeTab={activeTab}
           applyHref={applyHref}
           overviewHref={overviewHref}
@@ -232,7 +255,8 @@ export function JobShell({
       ) : (
         <div
           className={cn(
-            "mx-auto w-full max-w-5xl flex-1 px-6 pb-20",
+            "mx-auto w-full flex-1 px-6 pb-20",
+            widthClass,
             variant === "playful" ? "pt-6" : "pt-10",
           )}
         >
@@ -252,10 +276,10 @@ export function JobShell({
               className={cn("lg:sticky lg:top-8 lg:self-start", reveal)}
               style={{ animationDelay: "80ms" }}
             >
-              <dl className="divide-y divide-zinc-200 dark:divide-zinc-800">
+              <dl className="divide-y divide-hairline">
                 {meta.map((m) => (
                   <div key={m.label} className="py-3.5 first:pt-0">
-                    <dt className="text-[11px] font-medium uppercase tracking-wide text-zinc-400 dark:text-zinc-500">
+                    <dt className="text-xs font-medium uppercase tracking-wide text-soft-ink">
                       {m.label}
                     </dt>
                     <dd className="mt-1 text-sm font-medium leading-snug">
@@ -266,11 +290,11 @@ export function JobShell({
               </dl>
               {activeTab === "application" ? (
                 <dl className="pt-1">
-                  <div className="border-t border-zinc-200 py-3.5 dark:border-zinc-800">
-                    <dt className="text-[11px] font-medium uppercase tracking-wide text-zinc-400 dark:text-zinc-500">
+                  <div className="border-t border-hairline py-3.5">
+                    <dt className="text-xs font-medium uppercase tracking-wide text-soft-ink">
                       Position
                     </dt>
-                    <dd className="mt-1 text-sm font-medium leading-snug text-zinc-900 dark:text-zinc-100">
+                    <dd className="mt-1 text-sm font-medium leading-snug text-near-ink">
                       {job.title}
                     </dd>
                   </div>
@@ -297,7 +321,7 @@ export function JobShell({
             >
               <nav
                 ref={navRef}
-                className="relative flex gap-8 border-b border-zinc-200 text-sm font-medium dark:border-zinc-800"
+                className="relative flex gap-8 border-b border-hairline text-sm font-medium"
               >
                 {tabs.map((t) => {
                   const on = activeTab === t.tab;
@@ -312,9 +336,10 @@ export function JobShell({
                         "pb-3 transition-colors",
                         on
                           ? ""
-                          : "text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100",
+                          : "text-soft-ink hover:text-near-ink",
                       )}
-                      style={on ? { color: accent } : undefined}
+                      aria-current={on ? "page" : undefined}
+                      style={on ? { color: accentText } : undefined}
                     >
                       {t.label}
                     </Link>
@@ -325,7 +350,7 @@ export function JobShell({
                   ref={indicatorRef}
                   className="absolute bottom-0 h-0.5 rounded-full"
                   style={{
-                    backgroundColor: accent,
+                    backgroundColor: accentText,
                     left: 0,
                     width: 0,
                   }}
@@ -338,14 +363,14 @@ export function JobShell({
         </div>
       )}
 
-      <footer className="border-t border-zinc-200 dark:border-zinc-800">
+      <footer className="border-t border-hairline">
         {variant === "join" && (
-          <div className="mx-auto max-w-5xl px-6 pt-6 text-xs text-zinc-400 dark:text-zinc-500">
-            <Link href={(boardRoot || "/") as Route} className="hover:text-zinc-700 dark:hover:text-zinc-300">
+          <div className={cn("mx-auto px-6 pt-6 text-xs text-soft-ink", widthClass)}>
+            <Link href={(boardRoot || "/") as Route} className="hover:text-near-ink">
               Home
             </Link>
             <span className="mx-1.5">/</span>
-            <Link href={(boardRoot || "/") as Route} className="hover:text-zinc-700 dark:hover:text-zinc-300">
+            <Link href={(boardRoot || "/") as Route} className="hover:text-near-ink">
               Jobs at {workspace.name}
             </Link>
             <span className="mx-1.5">/</span>
@@ -356,9 +381,9 @@ export function JobShell({
           <CareerFooter
             config={config}
             workspaceName={workspace.name}
-            maxWidth="max-w-5xl"
+            maxWidth={widthClass}
             portalEnabled={portalEnabled}
-            legalBasePath={boardRoot === "/" ? "/legal" : `${boardRoot}/legal`}
+            legalBasePath={`${base}/legal`}
           />
         </div>
       </footer>
@@ -379,6 +404,7 @@ function JoinJobContent({
   title,
   accent,
   onAccent,
+  widthClass,
   activeTab,
   applyHref,
   overviewHref,
@@ -388,6 +414,7 @@ function JoinJobContent({
   title: string;
   accent: string;
   onAccent: string;
+  widthClass: string;
   activeTab: "overview" | "application";
   applyHref: Route;
   overviewHref: Route;
@@ -410,13 +437,13 @@ function JoinJobContent({
   }
 
   return (
-    <div className="mx-auto w-full max-w-5xl flex-1 px-6 pb-20 pt-10">
+    <div className={cn("mx-auto w-full flex-1 px-6 pb-20 pt-10", widthClass)}>
       <h1 className={cn("text-2xl font-semibold tracking-tight sm:text-3xl", reveal)}>
         {title}
       </h1>
 
       <div
-        className={cn("mt-3 flex flex-wrap items-center gap-x-4 gap-y-1.5 text-sm text-zinc-500 dark:text-zinc-400", reveal)}
+        className={cn("mt-3 flex flex-wrap items-center gap-x-4 gap-y-1.5 text-sm text-soft-ink", reveal)}
         style={{ animationDelay: "40ms" }}
       >
         <span className="flex items-center gap-1.5">
@@ -449,12 +476,12 @@ function JoinJobContent({
         <aside className={cn("lg:sticky lg:top-8 lg:self-start", reveal)} style={{ animationDelay: "140ms" }}>
           {activeTab === "overview" ? (
             <>
-              <p className="text-xs font-semibold uppercase tracking-wide text-zinc-400 dark:text-zinc-500">
+              <p className="text-xs font-semibold uppercase tracking-wide text-soft-ink">
                 Interested?
               </p>
               <Link
                 href={applyHref}
-                className="mt-3 inline-flex h-10 w-full items-center justify-center rounded-full px-5 text-sm font-semibold transition-transform duration-150 active:scale-[0.98]"
+                className="mt-3 inline-flex h-10 w-full items-center justify-center rounded-full px-5 text-sm font-semibold transition-transform duration-150 active:scale-[0.98] motion-reduce:transition-none"
                 style={{ backgroundColor: accent, color: onAccent }}
               >
                 Apply now
@@ -463,21 +490,21 @@ function JoinJobContent({
           ) : (
             <Link
               href={overviewHref}
-              className="inline-flex items-center gap-1.5 text-sm font-medium text-zinc-500 transition-colors hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100"
+              className="inline-flex items-center gap-1.5 text-sm font-medium text-soft-ink transition-colors hover:text-near-ink"
             >
               <ArrowLeft className="size-3.5" strokeWidth={1.8} />
               Back to job
             </Link>
           )}
 
-          <p className="mt-6 text-xs font-semibold uppercase tracking-wide text-zinc-400 dark:text-zinc-500">
+          <p className="mt-6 text-xs font-semibold uppercase tracking-wide text-soft-ink">
             Share this job
           </p>
           <button
             type="button"
             onClick={copyLink}
             className={cn(
-              "mt-3 inline-flex h-9 items-center gap-2 rounded-lg border border-zinc-200 px-3.5 text-sm font-medium text-zinc-600 transition-colors hover:border-zinc-300 hover:text-zinc-900 dark:border-zinc-800 dark:text-zinc-400 dark:hover:border-zinc-700 dark:hover:text-zinc-100",
+              "mt-3 inline-flex h-9 items-center gap-2 rounded-[var(--career-r-btn,10px)] border border-hairline px-3.5 text-sm font-medium text-soft-ink transition-colors hover:border-mist-border hover:text-near-ink",
             )}
           >
             {copied ? (

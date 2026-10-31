@@ -95,7 +95,12 @@ export function JobLivePreview({
                 boardRoot={`/board/${workspace.slug}`}
                 activeTab="overview"
               >
-                <JobOverviewBody job={job} />
+                <JobOverviewBody
+                  job={job}
+                  process={config.process}
+                  accent={config.theme.accent ?? workspace.primaryColor ?? undefined}
+                  rounded={config.theme.rounded}
+                />
               </JobChrome>
             </div>
           </PreviewFrame>

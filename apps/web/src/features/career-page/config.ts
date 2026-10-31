@@ -5,7 +5,7 @@
  */
 import { z } from "zod";
 
-export const careerTemplates = ["minimal", "playful", "ashby", "join"] as const;
+export const careerTemplates = ["minimal", "playful", "ashby", "join", "showcase"] as const;
 export type CareerTemplate = (typeof careerTemplates)[number];
 
 export const fontFamilies = ["sans", "serif", "display", "mono"] as const;
@@ -19,6 +19,10 @@ export type CareerStat = { label: string; value: string; icon?: string };
 export type CareerValue = { title: string; body: string; art?: string };
 export type CareerFaqItem = { q: string; a: string };
 export type CareerTestimonial = { quote: string; name: string; role: string; avatar: string };
+export type CareerProcessStep = { title: string; body?: string };
+
+/** Max steps in the "How we hire" block. */
+export const MAX_PROCESS_STEPS = 8;
 
 export const socialPlatforms = [
   "x",
@@ -78,6 +82,8 @@ export type CareerPageConfig = {
     bannerLogoVariant: "light" | "dark";
     /** Text label for the "View jobs" CTA button. */
     ctaButtonText: string;
+    /** Small badge above the headline (Showcase). "" = template default ("We're hiring"). */
+    eyebrow?: string;
   };
   intro: { body: string; chips: CareerChip[] };
   overview: { enabled: boolean; title: string; stats: CareerStat[] };
@@ -86,8 +92,18 @@ export type CareerPageConfig = {
   testimonials: { enabled: boolean; title: string; items: CareerTestimonial[] };
   faq: { enabled: boolean; title: string; items: CareerFaqItem[] };
   positions: { title: string; filters: Array<"department" | "location" | "type"> };
-  /** `color` overrides the accent for the CTA banner. */
-  cta: { enabled: boolean; title: string; body: string; color: string | null; buttonText: string };
+  /** `color` overrides the accent for the CTA banner. `url` is where the CTA
+   *  button points ("" = fall back to the workspace website). */
+  cta: {
+    enabled: boolean;
+    title: string;
+    body: string;
+    color: string | null;
+    buttonText: string;
+    url?: string;
+  };
+  /** "How we hire": numbered interview steps (career page and job page). */
+  process?: { enabled: boolean; title: string; steps: CareerProcessStep[] };
   footer: {
     socials: CareerSocialLink[];
     /** Legal page slugs to show as links in the footer (e.g. ["privacy-policy", "terms-of-service"]). */
@@ -122,6 +138,7 @@ const EMPTY: CareerPageConfig = {
     bannerLogoDark: null,
     bannerLogoVariant: "dark",
     ctaButtonText: "View jobs",
+    eyebrow: "",
   },
   intro: { body: "", chips: [] },
   overview: { enabled: false, title: "Overview", stats: [] },
@@ -130,7 +147,8 @@ const EMPTY: CareerPageConfig = {
   testimonials: { enabled: false, title: "Testimonials", items: [] },
   faq: { enabled: false, title: "Frequently asked questions", items: [] },
   positions: { title: "Our open positions", filters: ["department", "location"] },
-  cta: { enabled: false, title: "", body: "", color: null, buttonText: "Get in touch" },
+  cta: { enabled: false, title: "", body: "", color: null, buttonText: "Get in touch", url: "" },
+  process: { enabled: false, title: "How we hire", steps: [] },
   footer: { socials: [], legalLinks: [] },
   seo: { indexable: true, title: "", description: "", faviconUrl: null, socialImageUrl: null },
   theme: { mode: "light", background: "#ffffff", font: "sans", accent: null, rounded: "soft" },
@@ -219,6 +237,33 @@ export const CAREER_PRESETS: Record<CareerTemplate, () => CareerPageConfig> = {
     cta: { ...EMPTY.cta, buttonText: "Get in touch" },
     theme: { mode: "light", background: "#ffffff", font: "sans", accent: null, rounded: "soft" },
   }),
+  showcase: () => ({
+    ...structuredClone(EMPTY),
+    template: "showcase",
+    hero: {
+      ...EMPTY.hero,
+      headline: "Build what's next with us",
+      overlay: "none",
+      logoPosition: "left",
+      ctaButtonText: "See open roles",
+      eyebrow: "",
+    },
+    // Sections render only once they hold real content (no demo content in prod).
+    overview: { enabled: true, title: "In numbers", stats: [] },
+    values: { enabled: true, title: "Why you'll like it here", items: [] },
+    testimonials: { enabled: true, title: "From the team", items: [] },
+    process: { enabled: false, title: "How we hire", steps: [] },
+    positions: { title: "Open roles", filters: ["department", "location", "type"] },
+    cta: {
+      ...EMPTY.cta,
+      enabled: false,
+      title: "Don't see your role?",
+      body: "We're always glad to meet great people. Tell us what you'd like to work on.",
+      buttonText: "Get in touch",
+      url: "",
+    },
+    theme: { mode: "light", background: "#f5f5f4", font: "sans", accent: null, rounded: "soft" },
+  }),
 };
 
 function asArray<T>(value: unknown): T[] {
@@ -277,6 +322,7 @@ export function normalizeCareerPageConfig(raw: unknown): CareerPageConfig {
       bannerLogoDark: safeImageUrl(r.hero?.bannerLogoDark),
       bannerLogoVariant: (["light", "dark"] as const).includes(r.hero?.bannerLogoVariant as "light" | "dark") ? (r.hero!.bannerLogoVariant as "light" | "dark") : base.hero.bannerLogoVariant,
       ctaButtonText: typeof r.hero?.ctaButtonText === "string" && r.hero.ctaButtonText.trim() ? r.hero.ctaButtonText.trim() : base.hero.ctaButtonText,
+      eyebrow: typeof r.hero?.eyebrow === "string" ? r.hero.eyebrow.trim().slice(0, 60) : "",
     },
     intro: {
       body: r.intro?.body ?? base.intro.body,
@@ -341,7 +387,9 @@ export function normalizeCareerPageConfig(raw: unknown): CareerPageConfig {
         ? r.cta.color
         : base.cta.color,
       buttonText: typeof r.cta?.buttonText === "string" && r.cta.buttonText.trim() ? r.cta.buttonText.trim() : base.cta.buttonText,
+      url: safeHttpUrl(r.cta?.url) ?? "",
     },
+    process: normalizeProcess(r.process),
     footer: {
       socials: asArray<CareerSocialLink>(r.footer?.socials).filter(
         (social) =>
@@ -372,6 +420,24 @@ export function normalizeCareerPageConfig(raw: unknown): CareerPageConfig {
         : base.theme.accent,
       rounded: validRounded(r.theme?.rounded, base.theme.rounded),
     },
+  };
+}
+
+function normalizeProcess(raw: unknown): NonNullable<CareerPageConfig["process"]> {
+  const p = (raw && typeof raw === "object" ? raw : {}) as Partial<
+    NonNullable<CareerPageConfig["process"]>
+  >;
+  return {
+    enabled: Boolean(p.enabled),
+    title: typeof p.title === "string" ? p.title : "How we hire",
+    steps: asArray<unknown>(p.steps)
+      .flatMap((step): CareerProcessStep[] => {
+        if (!step || typeof step !== "object") return [];
+        const v = step as Partial<CareerProcessStep>;
+        if (typeof v.title !== "string") return [];
+        return [{ title: v.title, body: typeof v.body === "string" ? v.body : "" }];
+      })
+      .slice(0, MAX_PROCESS_STEPS),
   };
 }
 
@@ -450,7 +516,7 @@ const stat = z.object({ label: s(40), value: s(60), icon: s(40).optional() });
 const value = z.object({ title: s(60), body: s(400), art: s(200).optional() });
 
 export const careerPageConfigSchema = z.object({
-  template: z.enum([...careerTemplates, ""] as ["minimal", "playful", "ashby", "join", ""]),
+  template: z.enum([...careerTemplates, ""] as const),
   hero: z.object({
     headline: s(120),
     subhead: s(200),
@@ -468,6 +534,7 @@ export const careerPageConfigSchema = z.object({
     bannerLogoDark: optionalImageUrl,
     bannerLogoVariant: z.enum(["light", "dark"]),
     ctaButtonText: s(60),
+    eyebrow: s(60).optional(),
   }),
   intro: z.object({ body: s(20000), chips: z.array(chip).max(12) }),
   overview: z.object({
@@ -506,7 +573,19 @@ export const careerPageConfigSchema = z.object({
     body: s(400),
     color: optionalHexColor,
     buttonText: s(60),
+    url: s(600)
+      .refine((value) => value === "" || safeHttpUrl(value) !== null, "Use a full http(s) link.")
+      .optional(),
   }),
+  process: z
+    .object({
+      enabled: z.boolean(),
+      title: s(60),
+      steps: z
+        .array(z.object({ title: s(80), body: s(400).optional() }))
+        .max(MAX_PROCESS_STEPS),
+    })
+    .optional(),
   footer: z.object({
     socials: z.array(z.object({ platform: z.enum(socialPlatforms), url: s(600).refine((value) => !value || safeHttpUrl(value) !== null, "Social links must use http(s).") })).max(8),
     legalLinks: z.array(s(80)).max(10),

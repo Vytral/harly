@@ -1,46 +1,20 @@
 "use client";
 
+import { Button } from "@/components/ui/button";
 import { useConfirm } from "@/components/ui/confirm-dialog";
 import { cn } from "@/lib/utils";
-import { CAREER_PRESETS, type CareerPageConfig, type CareerTemplate } from "@/features/career-page/config";
-import type { ConfigUpdater } from "../types";
-import { PanelHeader } from "./PanelKit";
+import { careerTemplates, type CareerPageConfig, type CareerTemplate } from "@/features/career-page/config";
 
-const TEMPLATE_META: Record<
-  CareerTemplate,
-  { label: string; blurb: string; ready: boolean; swatch: { bg: string; accent: string; ink: string } }
-> = {
-  minimal: {
-    label: "Minimal",
-    blurb: "Clean type, just the essentials",
-    ready: true,
-    swatch: { bg: "#ffffff", accent: "#1a1a1a", ink: "#e6e6e6" },
-  },
-  playful: {
-    label: "Playful",
-    blurb: "Colorful, friendly, high-energy",
-    ready: true,
-    swatch: { bg: "#FFF9E6", accent: "#f4c100", ink: "#f0e4b8" },
-  },
-  ashby: {
-    label: "Ashby",
-    blurb: "Structured, sidebar filters",
-    ready: true,
-    swatch: { bg: "#f7f7f5", accent: "#3f6212", ink: "#e2e2dd" },
-  },
-  join: {
-    label: "Join",
-    blurb: "Company profile tabs, job-board style",
-    ready: true,
-    swatch: { bg: "#ffffff", accent: "#18181b", ink: "#e4e4e7" },
-  },
-};
+import { resetDesign, resetEverything } from "../builder-logic";
+import { CheckIcon, ResetIcon } from "../builder-icons";
+import { TEMPLATE_CAPABILITIES, type TemplateCapabilities } from "../template-capabilities";
+import { Group, PanelHeader } from "./PanelKit";
 
 /** Tiny abstract wireframe of a template, drawn from its swatch palette. */
-function TemplateThumb({ swatch }: { swatch: { bg: string; accent: string; ink: string } }) {
+function TemplateThumb({ swatch }: { swatch: TemplateCapabilities["swatch"] }) {
   return (
     <div
-      className="flex h-16 w-20 shrink-0 flex-col gap-1.5 rounded-lg border border-border/70 p-2"
+      className="flex h-16 w-20 shrink-0 flex-col gap-1.5 rounded-[10px] border border-hairline p-2"
       style={{ background: swatch.bg }}
       aria-hidden
     >
@@ -57,89 +31,111 @@ function TemplateThumb({ swatch }: { swatch: { bg: string; accent: string; ink: 
 
 export function TemplatePanel({
   config,
-  update,
-  setConfig,
+  onTemplateChange,
+  onReset,
 }: {
   config: CareerPageConfig;
-  update: ConfigUpdater;
-  setConfig: (c: CareerPageConfig) => void;
+  onTemplateChange: (t: CareerTemplate) => void;
+  /** Replaces the whole config (resets). */
+  onReset: (next: CareerPageConfig) => void;
 }) {
   const confirm = useConfirm();
-  function chooseTemplate(t: CareerTemplate) {
-    if (config.template === "") {
-      setConfig(CAREER_PRESETS[t]());
-    } else {
-      update((d) => {
-        d.template = t;
-      });
-    }
+  const active = (config.template || "minimal") as CareerTemplate;
+  const activeLabel = TEMPLATE_CAPABILITIES[active].label;
+
+  async function handleResetDesign() {
+    const ok = await confirm({
+      tone: "warning",
+      title: `Reset the design to ${activeLabel} defaults?`,
+      description:
+        "Colours, font, hero layout and job filters go back to the template's defaults. Your text, photos, sections, SEO, socials and legal links stay as they are.",
+      confirmLabel: "Reset design",
+    });
+    if (ok) onReset(resetDesign(config));
+  }
+
+  async function handleResetEverything() {
+    const ok = await confirm({
+      tone: "destructive",
+      title: "Reset everything?",
+      description: `Every setting goes back to a fresh ${activeLabel} page: your intro, sections, testimonials, FAQ, SEO, indexing, social and legal links are cleared. Nothing changes on the live page until you publish.`,
+      confirmLabel: "Reset everything",
+      requireAck: "I understand my content will be cleared",
+    });
+    if (ok) onReset(resetEverything(config));
   }
 
   return (
-    <div className="space-y-6">
-      <PanelHeader title="Template" subtitle="Choose a base layout for your career page." />
+    <div className="space-y-4">
+      <PanelHeader
+        title="Template"
+        subtitle="The base layout. Switching keeps your content; controls a template doesn't use are hidden."
+      />
 
-      <div className="grid grid-cols-1 gap-3">
-        {(["minimal", "playful", "ashby", "join"] as const).map((t) => {
-          const meta = TEMPLATE_META[t];
-          const active = config.template === t;
+      <div role="radiogroup" aria-label="Template" className="grid grid-cols-1 gap-2">
+        {careerTemplates.map((t) => {
+          const meta = TEMPLATE_CAPABILITIES[t];
+          const isActive = active === t;
           return (
             <button
               key={t}
               type="button"
-              onClick={() => chooseTemplate(t)}
-              disabled={!meta.ready}
+              role="radio"
+              aria-checked={isActive}
+              onClick={() => onTemplateChange(t)}
               className={cn(
-                "group relative flex items-center gap-4 rounded-xl border p-3.5 text-left transition-all duration-150",
-                active
-                  ? "border-pine/50 bg-sage/40 ring-1 ring-pine/20"
-                  : meta.ready
-                    ? "border-border hover:border-pine/30 hover:bg-kraft/50"
-                    : "cursor-not-allowed opacity-40",
+                "flex items-center gap-4 rounded-[var(--radius-card)] border bg-pure-snow p-3 text-left transition-[border-color,box-shadow] duration-150",
+                "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                isActive
+                  ? "border-near-ink/70 shadow-[var(--shadow-card)]"
+                  : "border-hairline hover:border-mist-border",
               )}
             >
               <TemplateThumb swatch={meta.swatch} />
               <div className="min-w-0 flex-1">
-                <div className="flex items-center gap-2">
-                  <span className="font-cal text-base font-semibold text-foreground">{meta.label}</span>
-                  {active && (
-                    <span className="rounded-full bg-pine/10 px-2 py-0.5 text-[10px] font-medium text-pine">
-                      Active
-                    </span>
-                  )}
-                </div>
-                <p className="mt-0.5 text-xs text-ink-soft">{meta.blurb}</p>
-                {!meta.ready && (
-                  <span className="mt-1.5 inline-block rounded bg-clay/10 px-1.5 py-0.5 text-[10px] font-medium text-clay">
-                    Coming soon
-                  </span>
-                )}
+                <span className="block text-[14px] font-semibold text-near-ink">{meta.label}</span>
+                <p className="mt-0.5 text-[12px] leading-snug text-soft-ink">{meta.blurb}</p>
               </div>
+              <span
+                aria-hidden
+                className={cn(
+                  "grid size-5 shrink-0 place-items-center rounded-full border",
+                  isActive ? "border-transparent bg-chartreuse-signal text-near-ink" : "border-hairline",
+                )}
+              >
+                {isActive ? <CheckIcon className="size-3" strokeWidth={2.5} /> : null}
+              </span>
             </button>
           );
         })}
       </div>
 
-      {config.template !== "" && (
-        <button
-          type="button"
-          onClick={async () => {
-            if (
-              !(await confirm({
-                tone: "destructive",
-                title: "Reset to template defaults?",
-                description: "Every customised setting on your career page returns to the template's defaults. This cannot be undone.",
-                confirmLabel: "Reset settings",
-              }))
-            )
-              return;
-            setConfig(CAREER_PRESETS[config.template as CareerTemplate]());
-          }}
-          className="text-xs text-ink-soft underline-offset-2 hover:text-foreground hover:underline"
-        >
-          Reset to template defaults
-        </button>
-      )}
+      <Group title="Start over" description="Reset to the template's defaults">
+        <div className="space-y-3">
+          <div className="space-y-1.5">
+            <Button variant="outline" size="sm" onClick={handleResetDesign}>
+              <ResetIcon />
+              Reset design
+            </Button>
+            <p className="text-[12px] leading-snug text-soft-ink">
+              Look and layout only. Keeps everything you wrote, uploaded and configured.
+            </p>
+          </div>
+          <div className="space-y-1.5 border-t border-hairline pt-3">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={handleResetEverything}
+              className="text-danger-rust hover:bg-danger-rust/10 hover:text-danger-rust"
+            >
+              Reset everything
+            </Button>
+            <p className="text-[12px] leading-snug text-soft-ink">
+              Clears content, SEO and footer links too. Only goes live when you publish.
+            </p>
+          </div>
+        </div>
+      </Group>
     </div>
   );
 }

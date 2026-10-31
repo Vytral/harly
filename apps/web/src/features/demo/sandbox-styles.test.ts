@@ -31,4 +31,11 @@ describe("demo styles", () => {
     // Pure: the input is left alone.
     expect(base.template).toBe("playful");
   });
+
+  it("puts the showcase look on warm paper", () => {
+    const styled = applyDemoStyle(CAREER_PRESETS.playful(), "showcase");
+    expect(styled.template).toBe("showcase");
+    expect(styled.theme.background).toBe("#f5f5f4");
+    expect(parseDemoStyle("showcase")).toBe("showcase");
+  });
 });

@@ -41,6 +41,10 @@ export default async function CareerPagePage() {
         location: job.location,
         employmentType: job.employmentType,
         workplaceType: job.workplaceType,
+        salaryMin: job.salaryMin,
+        salaryMax: job.salaryMax,
+        currency: job.currency,
+        salaryPeriod: job.salaryPeriod,
       }))}
       availableLegalPages={availableLegalPages}
     />

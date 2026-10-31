@@ -11,4 +11,10 @@ export type Job = {
   location: string | null;
   employmentType: string;
   workplaceType: string;
+  /** Optional compensation. Templates show a salary only when the route's
+   *  job mapper passes these through (Showcase does; the others ignore them). */
+  salaryMin?: number | null;
+  salaryMax?: number | null;
+  currency?: string | null;
+  salaryPeriod?: string | null;
 };

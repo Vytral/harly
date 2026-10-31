@@ -941,28 +941,80 @@ html[data-tab-switch="true"] .animate-in {
   }
 }
 
-/* Career page gallery marquee */
+/* ── Career page (scoped: everything below is keyed on .career-* / [data-career-root]) ── */
+
+/* Marquee (gallery + testimonials). Two identical halves, translate 0 → -50%.
+   Pauses on hover, keyboard focus, and via the on-page pause button
+   ([data-paused]). Reduced motion: no animation, a plain scrollable strip, and
+   the duplicate half is hidden. */
 @keyframes career-marquee {
   from { transform: translateX(0); }
   to   { transform: translateX(-50%); }
 }
-
-.career-marquee-slow {
-  animation: career-marquee 32s linear infinite;
-}
-.career-marquee-normal {
-  animation: career-marquee 16s linear infinite;
-}
-.career-marquee-slow:hover,
-.career-marquee-normal:hover {
+.career-marquee-slow   { animation: career-marquee 32s linear infinite; }
+.career-marquee-normal { animation: career-marquee 16s linear infinite; }
+.career-marquee:hover .career-marquee-track,
+.career-marquee:focus-within .career-marquee-track,
+.career-marquee[data-paused="true"] .career-marquee-track {
   animation-play-state: paused;
 }
 @media (prefers-reduced-motion: reduce) {
   .career-marquee-slow,
-  .career-marquee-normal {
-    animation: none;
-  }
+  .career-marquee-normal { animation: none; }
+  .career-marquee-viewport { overflow-x: auto; -webkit-mask-image: none; mask-image: none; }
+  .career-marquee-clone { display: none; }
 }
+
+/* Keyboard focus ring for every interactive element on a career page. Zero
+   specificity so a component can still override it. */
+[data-career-root] :where(a, button, input, select, textarea, summary, [tabindex="0"]):focus-visible {
+  outline: 2px solid var(--career-accent, currentColor);
+  outline-offset: 2px;
+}
+
+/* Rich text typography (replaces the Tailwind typography plugin, which is not
+   installed). :where() keeps specificity at zero, so .prose-job and any
+   explicit utility still win. Links use the contrast-checked --career-accent. */
+:where(.career-prose) { line-height: 1.7; overflow-wrap: anywhere; }
+:where(.career-prose) > :first-child { margin-top: 0; }
+:where(.career-prose) > :last-child { margin-bottom: 0; }
+:where(.career-prose) :where(p, ul, ol, blockquote, pre, figure, table, hr) { margin-block: 0 0.9em; }
+:where(.career-prose) :where(h1, h2, h3, h4) {
+  font-weight: 600; letter-spacing: -0.01em; line-height: 1.3; margin-block: 1.4em 0.5em;
+}
+:where(.career-prose) h1 { font-size: 1.5em; }
+:where(.career-prose) h2 { font-size: 1.3em; }
+:where(.career-prose) h3 { font-size: 1.15em; }
+:where(.career-prose) h4 { font-size: 1em; }
+:where(.career-prose) ul { list-style: disc; padding-left: 1.4em; }
+:where(.career-prose) ol { list-style: decimal; padding-left: 1.4em; }
+:where(.career-prose) li { margin-block: 0.25em; }
+:where(.career-prose) li > :where(p) { margin-block: 0; }
+:where(.career-prose) a {
+  color: var(--career-accent, currentColor);
+  text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: 3px;
+}
+:where(.career-prose) a:hover { text-decoration-thickness: 2px; }
+:where(.career-prose) strong { font-weight: 600; }
+:where(.career-prose) em { font-style: italic; }
+:where(.career-prose) blockquote {
+  border-left: 3px solid var(--career-accent, currentColor);
+  padding-left: 1em; font-style: normal; color: var(--soft-ink, inherit);
+}
+:where(.career-prose) hr { border: 0; border-top: 1px solid var(--hairline-c, currentColor); }
+:where(.career-prose) :where(img, video, iframe) { max-width: 100%; height: auto; border-radius: 12px; }
+:where(.career-prose) iframe { width: 100%; aspect-ratio: 16 / 9; border: 0; }
+:where(.career-prose) :where(code) {
+  background: var(--card-inset, transparent); border-radius: 4px; padding: 0.1em 0.35em;
+  font-size: 0.875em; font-family: var(--font-mono);
+}
+:where(.career-prose) pre {
+  background: var(--card-inset, transparent); border-radius: 10px; padding: 0.85em 1em; overflow-x: auto;
+}
+:where(.career-prose) pre code { background: transparent; padding: 0; }
+:where(.career-prose) table { width: 100%; border-collapse: collapse; font-size: 0.95em; }
+:where(.career-prose) :where(th, td) { border-bottom: 1px solid var(--hairline-c, currentColor); padding: 0.5em 0.6em; text-align: left; }
+:where(.career-prose) th { font-weight: 600; }
 
 /* ── Candidate profile tab stagger-in ── */
 @keyframes tab-in {

@@ -5,6 +5,8 @@ import {
 } from "@/features/jobs/config";
 import { ThirdPartyEmbed } from "@/components/ThirdPartyEmbed";
 import { RichBody } from "@/features/career-page/RichBody";
+import { CareerProcess } from "@/features/career-page/CareerProcess";
+import type { CareerPageConfig } from "@/features/career-page/config";
 
 type JobLike = {
   description: string;
@@ -42,7 +44,20 @@ function Heading({ children }: { children: React.ReactNode }) {
  * inside any career template and in dark mode. The surrounding chrome (header,
  * meta column, tabs) is supplied by the per-template shell.
  */
-export function JobOverviewBody({ job }: { job: JobLike }) {
+export function JobOverviewBody({
+  job,
+  process,
+  accent,
+  rounded,
+}: {
+  job: JobLike;
+  /** Optional "How we hire" block from the career-page config. Rendered after
+   *  the role content when enabled and it has titled steps. */
+  process?: CareerPageConfig["process"];
+  /** Accent for the step numbers (theme accent ?? workspace primary). */
+  accent?: string;
+  rounded?: "soft" | "sharp";
+}) {
   const sections = parseJobContentSections(job.contentSections);
   const officePhotos = parseOfficePhotos(job.officePhotos);
   const keywords = parseKeywords(job.keywords);
@@ -107,6 +122,19 @@ export function JobOverviewBody({ job }: { job: JobLike }) {
               ))}
             </div>
           ) : null}
+        </section>
+      ) : null}
+
+      {process && accent ? (
+        <section>
+          <CareerProcess
+            process={process}
+            accent={accent}
+            rounded={rounded}
+            title={process.title || "How we hire"}
+            headingLevel={2}
+            compact
+          />
         </section>
       ) : null}
 
