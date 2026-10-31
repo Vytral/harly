@@ -22,6 +22,7 @@ import { motion, useReducedMotion } from "motion/react";
 
 import { Tile } from "@/components/dashboard/widgets/primitives";
 import { FilterPill } from "@/components/ui/FilterPill";
+import { ValueSwap } from "@/components/ui/value-swap";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 import { toSafeCsv } from "@/lib/csv";
@@ -140,7 +141,9 @@ function StatCell({
         {delta !== undefined ? <DeltaBadge value={delta} invert={invertDelta} /> : null}
       </div>
       <p className="mt-4 text-xs font-medium text-soft-ink">{label}</p>
-      <p className="font-display mt-1 text-[28px] leading-none tabular-nums text-near-ink">{value}</p>
+      <p className="font-display mt-1 text-[28px] leading-none tabular-nums text-near-ink">
+        <ValueSwap value={value} />
+      </p>
       <p className="mt-1 truncate text-xs text-soft-ink">{hint}</p>
     </motion.div>
   );
@@ -179,7 +182,11 @@ function CardHead({
   );
 }
 
-/** Data for screen readers that mirrors a chart, visually hidden. */
+/**
+ * Data for screen readers that mirrors a chart, visually hidden. The wrapper
+ * div carries sr-only: on a <table> itself Firefox paints the <caption>
+ * outside the clip, on top of the chart header.
+ */
 function ChartTable({
   caption,
   headers,
@@ -190,7 +197,8 @@ function ChartTable({
   rows: (string | number)[][];
 }) {
   return (
-    <table className="sr-only">
+    <div className="sr-only">
+    <table>
       <caption>{caption}</caption>
       <thead>
         <tr>
@@ -211,6 +219,7 @@ function ChartTable({
         ))}
       </tbody>
     </table>
+    </div>
   );
 }
 
@@ -365,21 +374,20 @@ export function ReportsDashboard({ data, canViewCandidates = false, canViewJobs 
             {`Hiring performance and pipeline health, ${rangeLower}.`}
           </p>
         </div>
-        <Button variant="outline" onClick={exportReportCsv}>
-          <Download className="size-4" />
-          Export CSV
-        </Button>
-      </div>
-
-      <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Report filters">
-        <FilterPill
-          label="Period"
-          value={String(comparison.rangeDays)}
-          onChange={(v) => router.push(`/dashboard/reports?range=${v}`)}
-          options={RANGE_OPTIONS.map((o) => o.value)}
-          labelMap={Object.fromEntries(RANGE_OPTIONS.map((o) => [o.value, o.label]))}
-          allValue={String(comparison.rangeDays)}
-        />
+        <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Report filters">
+          <FilterPill
+            label="Period"
+            value={String(comparison.rangeDays)}
+            onChange={(v) => router.push(`/dashboard/reports?range=${v}`)}
+            options={RANGE_OPTIONS.map((o) => o.value)}
+            labelMap={Object.fromEntries(RANGE_OPTIONS.map((o) => [o.value, o.label]))}
+            allValue={String(comparison.rangeDays)}
+          />
+          <Button variant="outline" onClick={exportReportCsv}>
+            <Download className="size-4" />
+            Export CSV
+          </Button>
+        </div>
       </div>
 
       <Card className="flex-row items-center gap-2.5 py-3.5 px-5">

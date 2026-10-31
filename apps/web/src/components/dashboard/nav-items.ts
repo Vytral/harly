@@ -62,16 +62,16 @@ export const primaryNav: NavItem[] = [
   { label: "Home", href: "/dashboard", icon: Home, exact: true },
   {
     label: "Hiring",
-    href: "/dashboard/inbox",
+    href: "/dashboard/jobs",
     icon: Briefcase,
+    // Jobs first: it works out of the box. Inbox needs a mailbox connected
+    // first, so it sits last.
     children: [
       {
-        label: "Inbox",
-        shellTitle: true,
-        href: "/dashboard/inbox",
-        icon: Inbox,
-        badge: "inbox",
-        requiredPermission: "candidates:view",
+        label: "Jobs",
+        href: "/dashboard/jobs",
+        icon: Briefcase,
+        requiredPermission: "jobs:view",
       },
       {
         label: "Pipeline",
@@ -81,10 +81,12 @@ export const primaryNav: NavItem[] = [
         requiredPermission: "candidates:view",
       },
       {
-        label: "Jobs",
-        href: "/dashboard/jobs",
-        icon: Briefcase,
-        requiredPermission: "jobs:view",
+        label: "Inbox",
+        shellTitle: true,
+        href: "/dashboard/inbox",
+        icon: Inbox,
+        badge: "inbox",
+        requiredPermission: "candidates:view",
       },
     ],
   },

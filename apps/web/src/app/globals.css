@@ -540,23 +540,6 @@
 .stagger-in > :nth-child(5) { animation-delay: 160ms; }
 .stagger-in > :nth-child(n + 6) { animation-delay: 200ms; }
 
-/* In-place number swap (KPI tiles): a 4px settle, no layout shift. */
-@keyframes value-swap {
-  from {
-    opacity: 0;
-    transform: translateY(4px);
-  }
-  to {
-    opacity: 1;
-    transform: none;
-  }
-}
-
-.value-swap {
-  display: inline-block;
-  animation: value-swap var(--motion-fast) var(--ease-out) both;
-}
-
 /* Kanban pickup: the drag overlay grows 2% as it leaves the lane. */
 @keyframes drag-pickup {
   from {
@@ -604,7 +587,6 @@
 
 @media (prefers-reduced-motion: reduce) {
   .stagger-in > *,
-  .value-swap,
   .drag-pickup {
     animation: none;
   }
@@ -1062,4 +1044,13 @@ html[data-tab-switch="true"] .animate-in {
   background-color: var(--warm-paper);
   background-image: linear-gradient(to bottom, var(--lime-glow) 0px, var(--warm-paper) 300px);
   background-repeat: no-repeat;
+}
+
+/* Radix scroll-lock pads <body> by the scrollbar width when a menu or dialog
+   opens. The html scrollbar gutter is already reserved (scrollbar-gutter:
+   stable), so that padding would push the whole page sideways. */
+html body[data-scroll-locked] {
+  --removed-body-scroll-bar-size: 0px !important;
+  margin-right: 0 !important;
+  padding-right: 0 !important;
 }

@@ -53,6 +53,7 @@ function SettingSection({
  * `children` renders full-width below the header (expanded detail, textarea).
  */
 function SettingRow({
+  icon,
   title,
   description,
   control,
@@ -62,6 +63,8 @@ function SettingRow({
   align = "center",
   className,
 }: {
+  /** Optional leading icon, drawn in a 32px bordered square. */
+  icon?: React.ReactNode
   title: React.ReactNode
   description?: React.ReactNode
   control?: React.ReactNode
@@ -80,6 +83,15 @@ function SettingRow({
           align === "center" ? "sm:items-center" : "sm:items-start",
         )}
       >
+        <div className="flex min-w-0 flex-1 items-start gap-3">
+        {icon ? (
+          <span
+            aria-hidden="true"
+            className="grid size-8 shrink-0 place-items-center rounded-[var(--radius-btn)] border border-hairline bg-pure-snow text-near-ink [&_svg]:size-4"
+          >
+            {icon}
+          </span>
+        ) : null}
         <div className="min-w-0 flex-1 space-y-0.5">
           {htmlFor ? (
             <label htmlFor={htmlFor} className={titleClass}>
@@ -94,12 +106,13 @@ function SettingRow({
             </p>
           ) : null}
         </div>
+        </div>
         {control ? (
           <div className="flex shrink-0 items-center gap-2 sm:justify-end">{control}</div>
         ) : null}
       </div>
       {React.Children.toArray(children).length > 0 ? (
-        <div className="mt-3 space-y-1">{children}</div>
+        <div className={cn("mt-3 space-y-1", icon && "pl-11")}>{children}</div>
       ) : null}
     </div>
   )

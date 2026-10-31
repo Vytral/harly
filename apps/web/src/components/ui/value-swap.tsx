@@ -1,26 +1,26 @@
 "use client";
 
-import { useState, type ReactNode } from "react";
+import type { ReactNode } from "react";
+import { TextMorph } from "torph/react";
 
 /**
- * Renders a value and, when it changes after mount, re-triggers a short 4px
- * settle + fade (`.value-swap`, transform/opacity only, so no layout shift).
- * First paint is static. Non-primitive children render as-is.
+ * Renders a stat value and morphs it when it changes (torph): numbers roll
+ * digit by digit by place value, strings morph per character. Reduced motion
+ * is respected by torph itself. Non-primitive children render as-is.
  */
 export function ValueSwap({ value }: { value: ReactNode }) {
-  const [previous, setPrevious] = useState(value);
-  const [swaps, setSwaps] = useState(0);
-  const comparable = typeof value === "string" || typeof value === "number";
-
-  if (comparable && value !== previous) {
-    setPrevious(value);
-    setSwaps((count) => count + 1);
+  if (typeof value !== "string" && typeof value !== "number") {
+    return <>{value}</>;
   }
-
-  if (!comparable) return <>{value}</>;
   return (
-    <span key={swaps} className={swaps > 0 ? "value-swap" : undefined}>
+    <TextMorph
+      as="span"
+      numbers={typeof value === "number"}
+      duration={350}
+      ease="cubic-bezier(0.16, 1, 0.3, 1)"
+      respectReducedMotion
+    >
       {value}
-    </span>
+    </TextMorph>
   );
 }

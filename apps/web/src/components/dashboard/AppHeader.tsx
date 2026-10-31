@@ -134,11 +134,15 @@ export function AppHeader({
   const settingsActive = isNavActive(pathname, settingsNav);
   const canInvite = userPermissions.includes("members:invite");
 
-  // Only a square mark fits the switcher; `full` branding is a wordmark.
+  // `bordered` = square mark + name; `full` = the uploaded wordmark alone.
   const markUrl =
     sidebarLogo.style === "bordered"
       ? (sidebarLogo.lightUrl ?? workspace.logoUrl)
       : workspace.logoUrl;
+  const wordmark =
+    sidebarLogo.style === "full" && sidebarLogo.lightUrl
+      ? { lightUrl: sidebarLogo.lightUrl, darkUrl: sidebarLogo.darkUrl }
+      : null;
 
   return (
     <div
@@ -163,6 +167,7 @@ export function AppHeader({
               workspaceOptions={workspaceOptions}
               subtitle={formatRole(role)}
               markUrl={markUrl}
+              wordmark={wordmark}
             />
           </div>
 

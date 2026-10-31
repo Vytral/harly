@@ -66,12 +66,18 @@ export function WorkspaceSwitcher({
   workspaceOptions,
   subtitle,
   markUrl,
+  wordmark,
 }: {
   workspace: { id: string; name: string; logoUrl: string | null };
   workspaceOptions: WorkspaceOption[];
   subtitle?: string;
   /** Square logo override (the sidebar branding may carry a wordmark). */
   markUrl?: string | null;
+  /**
+   * "Full logo" branding: the wordmark already says the workspace's name, so
+   * it replaces the mark and the name text entirely.
+   */
+  wordmark?: { lightUrl: string; darkUrl: string | null } | null;
 }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
@@ -96,7 +102,28 @@ export function WorkspaceSwitcher({
     });
   }
 
-  const content = (
+  const content = wordmark ? (
+    <>
+      {/* eslint-disable-next-line @next/next/no-img-element -- tenant upload, arbitrary aspect ratio */}
+      <img
+        src={wordmark.lightUrl}
+        alt=""
+        className={cn(
+          "h-8 w-auto max-w-[180px] object-contain object-left",
+          wordmark.darkUrl && "dark:hidden",
+        )}
+      />
+      {wordmark.darkUrl ? (
+        // eslint-disable-next-line @next/next/no-img-element -- tenant upload, arbitrary aspect ratio
+        <img
+          src={wordmark.darkUrl}
+          alt=""
+          className="hidden h-8 w-auto max-w-[180px] object-contain object-left dark:block"
+        />
+      ) : null}
+      <span className="sr-only">{workspace.name}</span>
+    </>
+  ) : (
     <>
       <WorkspaceMark
         name={workspace.name}

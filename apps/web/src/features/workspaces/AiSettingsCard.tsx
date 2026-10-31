@@ -33,6 +33,7 @@ import { DrawerLayout } from "@/features/candidates/DrawerLayout";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { CopyCheck, EyeOff, Gauge, ScanText, Wand2 } from "lucide-react";
 import {
   ClaudeLogo,
   GeminiLogo,
@@ -45,8 +46,6 @@ import {
   GlobeIcon,
   KeyDuotoneIcon,
   LightningIcon,
-  MagicWandDuotoneIcon,
-  ReadCvDuotoneIcon,
   RobotDuotoneIcon,
   SearchIcon,
   SpinnerIcon,
@@ -195,29 +194,29 @@ export function AiSettingsCard({
         </div>
       </Card>
 
-      {/* AI Features section */}
-      <div>
-        <h2 className="mb-3 text-sm font-semibold tracking-tight text-foreground/80">
-          AI Features
-        </h2>
-        <div className="grid gap-3 sm:grid-cols-2">
-          <FeatureCard
-            icon={ReadCvDuotoneIcon}
+      {/* AI features: one card of rows, icon + one line each. */}
+      <Card className="gap-0 py-0">
+        <div className="px-5 pt-5 pb-1">
+          <h2 className="text-[15px] font-semibold tracking-[-0.01em] text-near-ink">
+            AI features
+          </h2>
+        </div>
+        <SettingRows>
+          <FeatureRow
+            icon={<ScanText strokeWidth={1.8} />}
             title="Resume parsing"
-            description="Extract name, contacts, skills, and work history from uploaded CVs into structured candidate profiles automatically on apply."
-            alwaysOn
+            description="Turns uploaded CVs into structured candidate profiles."
           />
-          <FeatureCard
-            icon={MagicWandDuotoneIcon}
+          <FeatureRow
+            icon={<Wand2 strokeWidth={1.8} />}
             title="Job-description drafting"
-            description="Generate first-draft postings from a short brief in the job wizard. Title, keywords, and workplace type are enough to get a full draft."
-            alwaysOn
+            description="Drafts a job posting from a short brief."
           />
           <AutoScoreFeatureCard status={status} canEdit={canEdit} />
           <DuplicateCheckFeatureCard status={status} canEdit={canEdit} />
           <ResumeAnonymizationFeatureCard status={status} canEdit={canEdit} />
-        </div>
-      </div>
+        </SettingRows>
+      </Card>
 
       {/* Supported providers */}
       <Card className="gap-4">
@@ -287,33 +286,38 @@ function EncryptionWarning() {
   );
 }
 
-function FeatureCard({
-  icon: Icon,
+function FeatureRow({
+  icon,
   title,
   description,
-  alwaysOn = false,
 }: {
-  icon: React.ComponentType<{ className?: string }>;
+  icon: React.ReactNode;
   title: string;
   description: string;
-  alwaysOn?: boolean;
 }) {
   return (
-    <Card className="gap-0 p-5">
-      <div className="flex items-start justify-between gap-3">
-        <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-muted/70 text-foreground/80">
-          <Icon className="size-5" />
+    <SettingRow
+      icon={icon}
+      title={title}
+      description={description}
+      control={
+        <span className="rounded-full bg-sage-wash px-2 py-0.5 text-[11.5px] font-medium text-sage-ink">
+          Always on
         </span>
-        {alwaysOn ? (
-          <span className="mt-0.5 rounded-full bg-sage/60 px-2 py-0.5 text-[11px] font-semibold text-pine">
-            Always on
-          </span>
-        ) : null}
-      </div>
-      <h3 className="mt-3.5 text-sm font-semibold tracking-tight">{title}</h3>
-      <p className="mt-1 text-sm text-muted-foreground">{description}</p>
-    </Card>
+      }
+    />
   );
+}
+
+/** Why a model-backed toggle is locked, in one quiet line. */
+function LockedHint({ status }: { status: WorkspaceAiStatus }) {
+  if (!status.hasApiKey) {
+    return <p className="text-[12.5px] text-soft-ink">Connect a provider to turn this on.</p>;
+  }
+  if (!status.enabled) {
+    return <p className="text-[12.5px] text-warning-clay">Enable AI above to turn this on.</p>;
+  }
+  return null;
 }
 
 function AutoScoreFeatureCard({
@@ -344,15 +348,10 @@ function AutoScoreFeatureCard({
   }
 
   return (
-    <Card className="gap-0 p-0">
       <SettingRow
-        title={<>Auto-score applications</>}
-        description={
-          <>
-        Score each new application automatically as it arrives. No manual
-        trigger needed. Requires AI to be enabled.
-          </>
-        }
+        icon={<Gauge strokeWidth={1.8} />}
+        title="Auto-score applications"
+        description="Scores every new application as it arrives."
         control={
           <Switch
           checked={optimistic}
@@ -362,16 +361,8 @@ function AutoScoreFeatureCard({
           />
         }
       >
-      {disabled && status.hasApiKey && !status.enabled ? (
-            <p className="text-[12.5px] text-warning-clay">Enable AI above to activate.</p>
-          ) : null}
-          {!status.hasApiKey ? (
-            <p className="text-[12.5px] text-soft-ink">
-              Configure a provider to unlock.
-            </p>
-          ) : null}
+        <LockedHint status={status} />
       </SettingRow>
-    </Card>
   );
 }
 
@@ -405,15 +396,10 @@ function DuplicateCheckFeatureCard({
   }
 
   return (
-    <Card className="gap-0 p-0">
       <SettingRow
-        title={<>Duplicate detection</>}
-        description={
-          <>
-        Automatically flag potential duplicate candidates when a new application
-        arrives, and let you verify with AI from any candidate profile.
-          </>
-        }
+        icon={<CopyCheck strokeWidth={1.8} />}
+        title="Duplicate detection"
+        description="Flags likely duplicate candidates when someone applies."
         control={
           <Switch
           checked={optimistic}
@@ -423,16 +409,8 @@ function DuplicateCheckFeatureCard({
           />
         }
       >
-      {disabled && status.hasApiKey && !status.enabled ? (
-            <p className="text-[12.5px] text-warning-clay">Enable AI above to activate.</p>
-          ) : null}
-          {!status.hasApiKey ? (
-            <p className="text-[12.5px] text-soft-ink">
-              Configure a provider to unlock.
-            </p>
-          ) : null}
+        <LockedHint status={status} />
       </SettingRow>
-    </Card>
   );
 }
 
@@ -468,24 +446,10 @@ function ResumeAnonymizationFeatureCard({
   }
 
   return (
-    <Card className="gap-0 p-0">
       <SettingRow
-        title={<>Resume anonymization</>}
-        description={
-          <>
-        Hides identifying details on candidate profiles on screen, and removes
-        them from what is sent to your AI provider for scoring, matching,
-        interview note summaries, and the results of chat assistant tools. In
-        chat, candidates appear as &ldquo;Candidate&rdquo; with a short code, and
-        names you type into a conversation are still sent. Reviewers can reveal identity
-        per candidate on screen. While this is on, duplicate detection, email drafting, mailbox
-        assistance, resume autofill, AI resume summaries, and scorecard comment
-        refinement are paused, because they need to know who the candidate is.
-        It does not change stored records, and it cannot remove a name that is
-        not in the candidate record, such as a nickname that appears only in a
-        resume.
-          </>
-        }
+        icon={<EyeOff strokeWidth={1.8} />}
+        title="Resume anonymization"
+        description="Hides candidate identity on screen and from your AI provider. Features that need a name pause while it's on."
         control={
           <Switch
           checked={optimistic}
@@ -495,7 +459,6 @@ function ResumeAnonymizationFeatureCard({
           />
         }
       />
-    </Card>
   );
 }
 
