@@ -4,7 +4,8 @@
 @custom-variant dark (&:is(.dark *):not(:is(.light *)));
 
 /*
- * Harly admin theme , DESIGN.md is the authority for every value below.
+ * Harly admin theme. DESIGN.md is a light reference, not a rulebook: this
+ * file is the source of truth while the Deel-inspired redesign settles.
  *
  * Warm paper canvas → pure snow surfaces → row wash for selection. Structure
  * comes from luminance and spacing, not ornament: hairlines that disappear
@@ -29,7 +30,9 @@
   --pure-snow: #ffffff;    /* 1 , shell, panels, popovers */
   --soft-kraft: #efefed;   /* 2 , chips at rest, secondary fills */
   --row-wash: #f0f0ee;     /* 3 , hover/selected human rows */
-  --sage-wash: #eaf6c8;    /* 4 , soft active tint (nav, chips) */
+  --sage-wash: #eef9d6;    /* 4 , soft active tint (nav, chips) */
+  --card-inset: #f6f6f4;   /* rows/fields living inside a white card */
+  --lime-wash: #f1fbdd;    /* header glow, selected tiles, progress track */
 
   /* ── Ink ── */
   --near-ink: #171717;     /* primary text + primary solid actions */
@@ -41,9 +44,9 @@
   --mist-border: #e4e4e1;  /* slightly stronger dividers on pure white */
 
   /* ── Signal (rationed) ── */
-  --chartreuse-signal: #c8f560;
-  --chartreuse-ink: #2a330d;
-  --sage-ink-c: #44520f;
+  --chartreuse-signal: #b8f04a;
+  --chartreuse-ink: #23300a;
+  --sage-ink-c: #3f5a0c;
 
   /* ── Status + tags ── */
   --status-quiet: #e8eef2;      /* neutral status pill bg (Pending) */
@@ -112,7 +115,7 @@
   /* Charts still need separable hues , they are data, not chrome. Ink leads,
      chartreuse is the single accent, the rest are quiet neutrals + semantics. */
   --chart-1: var(--near-ink);
-  --chart-2: #a3cc3a;
+  --chart-2: #8fcf2a;
   --chart-3: var(--status-quiet-ink);
   --chart-4: var(--warning-clay);
   --chart-5: var(--danger-rust);
@@ -236,6 +239,8 @@
   --color-chartreuse-signal: var(--chartreuse-signal);
   --color-chartreuse-ink: var(--chartreuse-ink);
   --color-sage-wash: var(--sage-wash);
+  --color-card-inset: var(--card-inset);
+  --color-lime-wash: var(--lime-wash);
   --color-status-quiet: var(--status-quiet);
   --color-status-quiet-ink: var(--status-quiet-ink);
   --color-tag-solid: var(--tag-solid);
@@ -251,22 +256,28 @@
   --radius-xl: 20px;
   --radius-row: 14px;   /* selected rows / soft blocks */
   --radius-shell: 24px; /* app outer frame */
+  --radius-btn: 10px;   /* buttons (pills stay for chips, filters, nav) */
+  --radius-card: 16px;  /* every white card */
+  --radius-inner: 12px; /* rows/fields inside a card */
 
   /* Depth = row wash + paper contrast, not drop shadows on every card. */
   --shadow-soft: 0 1px 2px rgba(23, 23, 23, 0.04);
   --shadow-float: 0 8px 30px rgba(23, 23, 23, 0.06);
+  /* Cards sit on the canvas by luminance; a 1px whisper keeps them legible on white. */
+  --shadow-card: 0 0 0 1px rgba(23, 23, 23, 0.04);
 
   --spacing-rail: 60px;    /* icon rail width */
   --spacing-topbar: 56px;  /* top bar height */
+  --spacing-header: 64px;  /* pill nav header height */
   --spacing-row: 60px;     /* human table row height */
 
   /* ── Type , Onest only. Static speaks, variable labels (DESIGN.md). ── */
   --font-sans:
-    var(--font-onest), ui-sans-serif, system-ui, -apple-system,
+    var(--font-instrument), ui-sans-serif, system-ui, -apple-system,
     "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
   /* Chrome face: pills, statuses, badges, column heads, keyboard hints. */
   --font-chrome:
-    var(--font-onest-var), var(--font-onest), ui-sans-serif, system-ui,
+    var(--font-instrument), ui-sans-serif, system-ui,
     sans-serif;
   --font-mono:
     var(--font-geist-mono), ui-monospace, "SF Mono", "Menlo", "Consolas",
@@ -274,7 +285,7 @@
   /* Display is the SAME family , weight 600 + tight tracking does the work
      (see the .font-display rule below). Never a second family. */
   --font-display:
-    var(--font-onest), ui-sans-serif, system-ui, sans-serif;
+    var(--font-instrument), ui-sans-serif, system-ui, sans-serif;
   /* Serif = UI serif stack for the customer-branded career-page `font-serif`
      theme option only. Not part of the Harly admin identity. */
   --font-serif:
@@ -689,7 +700,9 @@
   --pure-snow: #1d1d1b;
   --soft-kraft: #262624;
   --row-wash: #232321;
-  --sage-wash: #2a331a;
+  --sage-wash: #263114;
+  --card-inset: #232321;
+  --lime-wash: #1f2812;
 
   --near-ink: #f2f2f0;
   --soft-ink: #9c9c98;
@@ -698,9 +711,9 @@
   --hairline-c: #2c2c2a;
   --mist-border: #323230;
 
-  --chartreuse-signal: #c8f560;
-  --chartreuse-ink: #2a330d;
-  --sage-ink-c: #d8f18f;
+  --chartreuse-signal: #b8f04a;
+  --chartreuse-ink: #23300a;
+  --sage-ink-c: #cdef8a;
 
   --status-quiet: #24303a;
   --status-quiet-ink: #a9bcc9;
@@ -753,7 +766,7 @@
   --ring: var(--near-ink);
 
   --chart-1: #d8e8a8;
-  --chart-2: #a3cc3a;
+  --chart-2: #8fcf2a;
   --chart-3: var(--status-quiet-ink);
   --chart-4: var(--warning-clay);
   --chart-5: var(--danger-rust);
