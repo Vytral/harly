@@ -23,6 +23,7 @@ import { HarlyAILogoMark } from "@/components/ui/icons/HarlyAILogoMark";
 import { RelativeTime } from "@/lib/date-hydration";
 import { formatModelLabel, type AiProviderId } from "@/lib/ai/providers";
 import { cn } from "@/lib/utils";
+import { scoreBand } from "@/lib/evaluation/score-band";
 
 const PROVIDER_LOGO: Record<
   AiProviderId,
@@ -42,20 +43,26 @@ const RECOMMENDATION_META = {
   no: { label: "No", className: "bg-danger-rust/10 text-danger-rust" },
 } as const;
 
-/** Score bands, same cut-offs as the scorer: 80+ strong, 60-79 solid,
- * 40-59 mixed, under 40 weak. */
+/** Colour per shared score band (lib/evaluation/score-band.ts). */
 function scoreTone(score: number | null | undefined) {
   if (score == null) return "text-muted-foreground";
-  if (score >= 80) return "text-success-olive";
-  if (score >= 60) return "text-[color-mix(in_oklab,var(--success-olive)_70%,var(--warning-clay))]";
-  if (score >= 40) return "text-warning-clay";
-  return "text-danger-rust";
+  switch (scoreBand(score)) {
+    case "strong":
+      return "text-success-olive";
+    case "good":
+      return "text-[color-mix(in_oklab,var(--success-olive)_70%,var(--warning-clay))]";
+    case "mixed":
+      return "text-warning-clay";
+    default:
+      return "text-danger-rust";
+  }
 }
 
 /** Soft wash behind the score ring, matching its band. */
 function scoreWash(score: number) {
-  if (score >= 60) return "bg-success-olive/10";
-  if (score >= 40) return "bg-warning-clay/10";
+  const band = scoreBand(score);
+  if (band === "strong" || band === "good") return "bg-success-olive/10";
+  if (band === "mixed") return "bg-warning-clay/10";
   return "bg-danger-rust/10";
 }
 

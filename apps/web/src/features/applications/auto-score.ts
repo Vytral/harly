@@ -1,7 +1,7 @@
 import "server-only";
 
 import { and, eq } from "drizzle-orm";
-import { sourceScopedEvaluationFields } from "@/features/evaluations/source-fields";
+import { aiEngineVersion, sourceScopedEvaluationFields } from "@/features/evaluations/source-fields";
 
 import {
   activityEvents,
@@ -193,7 +193,10 @@ export async function scheduleAutoScore(
     let result = rulesEvaluation.result;
     if (aiConfig) {
       try {
-        result = await scoreCandidateWithAI(aiConfig, scoreInput);
+        result = await scoreCandidateWithAI(aiConfig, {
+          ...scoreInput,
+          rubricCriteria: publishedRubric?.criteria,
+        });
         source = "ai";
       } catch (aiError) {
         console.warn(
@@ -213,7 +216,10 @@ export async function scheduleAutoScore(
       provider: source === "ai" && aiConfig ? aiConfig.provider : "harly",
       modelId: source === "ai" && aiConfig ? aiConfig.modelId : RULES_EVALUATION_VERSION,
       engine: source === "ai" ? "provider-ai" : "harly-rules",
-      engineVersion: source === "ai" && aiConfig ? aiConfig.modelId : RULES_EVALUATION_VERSION,
+      engineVersion:
+        source === "ai" && aiConfig
+          ? aiEngineVersion(aiConfig.modelId, evaluationMode)
+          : `${RULES_EVALUATION_VERSION}:${evaluationMode}`,
       rubricVersion: rulesEvaluation.rubric.version,
       rubricSnapshot: rulesEvaluation.rubric,
       result,
@@ -447,7 +453,10 @@ export async function evaluateApplicationForWorkflow(input: {
     let result = rulesEvaluation.result;
     if (aiConfig) {
       try {
-        result = await scoreCandidateWithAI(aiConfig, scoreInput);
+        result = await scoreCandidateWithAI(aiConfig, {
+          ...scoreInput,
+          rubricCriteria: publishedRubric?.criteria,
+        });
         source = "ai";
       } catch (aiError) {
         console.warn(
@@ -470,7 +479,9 @@ export async function evaluateApplicationForWorkflow(input: {
         source === "ai" && aiConfig ? aiConfig.modelId : RULES_EVALUATION_VERSION,
       engine: source === "ai" ? "provider-ai" : "harly-rules",
       engineVersion:
-        source === "ai" && aiConfig ? aiConfig.modelId : RULES_EVALUATION_VERSION,
+        source === "ai" && aiConfig
+          ? aiEngineVersion(aiConfig.modelId, evaluationMode)
+          : `${RULES_EVALUATION_VERSION}:${evaluationMode}`,
       rubricVersion: rulesEvaluation.rubric.version,
       rubricSnapshot: rulesEvaluation.rubric,
       result,

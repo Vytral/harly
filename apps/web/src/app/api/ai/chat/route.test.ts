@@ -59,6 +59,7 @@ vi.mock("@/lib/ai/agent/tool-routing", () => ({
   selectActiveToolNames: mocks.selectActiveToolNames,
   TOOL_GROUPS: { automations: ["simulateAutomationProposal"] },
   turnNeedsWriteTools: () => true,
+  buildToolGroupLoader: () => ({}),
 }));
 
 /** The system prompt as the model reads it (core + per-turn context). */

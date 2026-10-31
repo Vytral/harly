@@ -21,6 +21,7 @@ import type { PipelineApplication } from "@/features/pipeline/data";
 import { candidateHref, pipelineOrigin } from "@/features/candidates/origin";
 import { useDaysSince } from "@/lib/date-hydration";
 import { cn } from "@/lib/utils";
+import { scoreBand, type ScoreBand } from "@/lib/evaluation/score-band";
 
 type CandidateCardProps = {
   application: PipelineApplication;
@@ -56,6 +57,13 @@ const recommendationLabel: Record<
   no: "Weak fit",
 };
 
+/** Dot colour per shared score band (lib/evaluation/score-band.ts). */
+function dotTone(band: ScoreBand) {
+  if (band === "strong" || band === "good") return "bg-chartreuse-signal";
+  if (band === "mixed") return "bg-warning-clay";
+  return "bg-quiet-mist";
+}
+
 function AiFitNote({
   score,
   recommendation,
@@ -75,9 +83,7 @@ function AiFitNote({
             aria-hidden="true"
             className={cn(
               "size-1.5 rounded-full",
-              recommendation === "no"
-                ? "bg-quiet-mist"
-                : "bg-chartreuse-signal",
+              dotTone(scoreBand(score)),
             )}
           />
           {label}

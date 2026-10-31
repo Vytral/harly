@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { and, eq, notInArray } from "drizzle-orm";
 import { z } from "zod";
-import { sourceScopedEvaluationFields } from "@/features/evaluations/source-fields";
+import { aiEngineVersion, sourceScopedEvaluationFields } from "@/features/evaluations/source-fields";
 
 import {
   activityEvents,
@@ -218,7 +218,10 @@ export async function generateAiEvaluationAction(input: {
     let result = rulesEvaluation.result;
     if (aiConfig) {
       try {
-        result = await scoreCandidateWithAI(aiConfig, scoreInput);
+        result = await scoreCandidateWithAI(aiConfig, {
+          ...scoreInput,
+          rubricCriteria: publishedRubric?.criteria,
+        });
         source = "ai";
       } catch (aiError) {
         console.warn(
@@ -241,7 +244,7 @@ export async function generateAiEvaluationAction(input: {
       engine: source === "ai" ? "provider-ai" : "harly-rules",
       engineVersion:
         source === "ai" && aiConfig
-          ? `${aiConfig.modelId}:${evaluationMode}`
+          ? aiEngineVersion(aiConfig.modelId, evaluationMode)
           : `${RULES_EVALUATION_VERSION}:${evaluationMode}`,
       // Prefer rules as persisted authority for rubric / assessments / coverage.
       rubricVersion: rulesEvaluation.rubric.version,
@@ -295,6 +298,10 @@ export async function generateAiEvaluationAction(input: {
     });
 
     revalidatePath(`/dashboard/candidates/${row.candidateId}`);
+    revalidatePath("/dashboard/pipeline");
+    revalidatePath("/dashboard/jobs");
+    revalidatePath(`/dashboard/jobs/${row.jobId}`);
+    revalidatePath("/dashboard/talent-pool");
     return { success: true, source, aiFellBack: Boolean(aiConfig) && source === "rules" };
   } catch (error) {
     console.error("Automatic evaluation failed", error);
@@ -370,7 +377,7 @@ export async function bulkGenerateAiEvaluationsForJobAction(input: {
     ? job.evaluationMode
     : "balanced";
   const currentEvaluationVersion = aiConfig
-    ? `${aiConfig.modelId}:${evaluationMode}`
+    ? aiEngineVersion(aiConfig.modelId, evaluationMode)
     : `${RULES_EVALUATION_VERSION}:${evaluationMode}`;
 
   // Re-score applications without an evaluation or with an obsolete engine

@@ -20,6 +20,7 @@ import {
 } from "lucide-react";
 
 import { cn, randomId } from "@/lib/utils";
+import { scoreBand } from "@/lib/evaluation/score-band";
 import { useMotionSafe } from "@/lib/motion";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -594,14 +595,13 @@ function ToolResultCard({
       ? (o.strengths as string[])
       : [];
     const gaps = Array.isArray(o.gaps) ? (o.gaps as string[]) : [];
+    const band = scoreBand(score);
     const tone =
-      score >= 80
+      band === "strong" || band === "good"
         ? "from-emerald-500/15 to-emerald-500/5 text-emerald-600 dark:text-emerald-400"
-        : score >= 60
-          ? "from-blue-500/15 to-blue-500/5 text-blue-600 dark:text-blue-400"
-          : score >= 40
-            ? "from-amber-500/15 to-amber-500/5 text-amber-600 dark:text-amber-400"
-            : "from-rose-500/15 to-rose-500/5 text-rose-600 dark:text-rose-400";
+        : band === "mixed"
+          ? "from-amber-500/15 to-amber-500/5 text-amber-600 dark:text-amber-400"
+          : "from-rose-500/15 to-rose-500/5 text-rose-600 dark:text-rose-400";
     return (
       <Card className="gap-2.5 overflow-hidden border-border/70 p-3 shadow-none">
         <div className="flex items-center gap-3">
@@ -1275,14 +1275,14 @@ function ToolResultCard({
       summary: string;
     }>;
     if (list.length === 0) return null;
-    const tone = (score: number) =>
-      score >= 80
+    const tone = (score: number) => {
+      const band = scoreBand(score);
+      return band === "strong" || band === "good"
         ? "text-emerald-600 dark:text-emerald-400"
-        : score >= 60
-          ? "text-blue-600 dark:text-blue-400"
-          : score >= 40
-            ? "text-amber-600 dark:text-amber-400"
-            : "text-rose-600 dark:text-rose-400";
+        : band === "mixed"
+          ? "text-amber-600 dark:text-amber-400"
+          : "text-rose-600 dark:text-rose-400";
+    };
     return (
       <Card className="gap-2 border-border/70 p-3 shadow-none">
         {list.map((c, i) => (

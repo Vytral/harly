@@ -70,8 +70,8 @@ export const jobDraftSchema = z.object({
 export type JobDraft = z.infer<typeof jobDraftSchema>;
 
 export const candidateScoreSchema = z.object({
-  // Overall fit 0-100. Calibrated: 80+ exceptional fit, 60-79 solid, 40-59
-  // partial, <40 weak.
+  // Overall fit 0-100, bands from lib/evaluation/score-band.ts: 80+ strong,
+  // 60-79 good, 40-59 mixed, <40 weak.
   score: z.number(),
   recommendation: z.enum(["strong_yes", "yes", "maybe", "no"]),
   // 2-3 sentence plain-text verdict a recruiter can read at a glance.

@@ -44,6 +44,7 @@ import {
 import { StatusPill, type StatusPillTone } from "@/components/ui/status-pill";
 import { UserAvatar } from "@/components/ui/UserAvatar";
 import { cn } from "@/lib/utils";
+import { scoreBand } from "@/lib/evaluation/score-band";
 
 const SOURCE_META: Record<string, { label: string; tone: StatusPillTone }> = {
   applied: { label: "Applied", tone: "info" },
@@ -60,9 +61,16 @@ const RECOMMENDATION_META: Record<string, { label: string; className: string }> 
 };
 
 function scoreTone(score: number) {
-  if (score >= 60) return "text-primary";
-  if (score >= 40) return "text-warning";
-  return "text-destructive";
+  switch (scoreBand(score)) {
+    case "strong":
+      return "text-success-olive";
+    case "good":
+      return "text-primary";
+    case "mixed":
+      return "text-warning";
+    default:
+      return "text-destructive";
+  }
 }
 
 type PoolViewProps = {

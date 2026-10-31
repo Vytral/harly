@@ -14,6 +14,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { UserAvatar } from "@/components/ui/UserAvatar";
 import { RULES_EVALUATION_VERSION } from "@/lib/evaluation/version";
 import { cn } from "@/lib/utils";
+import { scoreBand } from "@/lib/evaluation/score-band";
 
 const RECOMMENDATION_META = {
   strong_yes: { label: "Strong yes", className: "bg-sage-wash text-success-olive" },
@@ -31,9 +32,16 @@ function needsEvaluation(application: PipelineApplication) {
 }
 
 function scoreTone(score: number) {
-  if (score >= 60) return "text-success-olive";
-  if (score >= 40) return "text-warning-clay";
-  return "text-destructive";
+  switch (scoreBand(score)) {
+    case "strong":
+      return "text-success-olive";
+    case "good":
+      return "text-[color-mix(in_oklab,var(--success-olive)_70%,var(--warning-clay))]";
+    case "mixed":
+      return "text-warning-clay";
+    default:
+      return "text-destructive";
+  }
 }
 
 type JobCandidateRankingProps = {
