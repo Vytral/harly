@@ -47,7 +47,8 @@ const generateSchema = z.object({
 });
 
 export type GenerateAiEvaluationResult =
-  | { success: true }
+  /** `aiFellBack`: AI is configured but this score came from the rules. */
+  | { success: true; source: "ai" | "rules"; aiFellBack: boolean }
   | { success: false; error: string; reason?: "not_configured" };
 
 /** Generate (or regenerate) the AI fit evaluation for one application. */
@@ -297,7 +298,7 @@ export async function generateAiEvaluationAction(input: {
     });
 
     revalidatePath(`/dashboard/candidates/${row.candidateId}`);
-    return { success: true };
+    return { success: true, source, aiFellBack: Boolean(aiConfig) && source === "rules" };
   } catch (error) {
     console.error("Automatic evaluation failed", error);
     return {
@@ -311,7 +312,14 @@ export async function generateAiEvaluationAction(input: {
 // ── Bulk scoring ────────────────────────────────────────────────────────────
 
 export type BulkGenerateResult =
-  | { success: true; succeeded: number; failed: number; remaining: number }
+  | {
+      success: true;
+      succeeded: number;
+      failed: number;
+      remaining: number;
+      /** Scored with the rules because the AI call failed. */
+      fellBack: number;
+    }
   | { success: false; error?: string; reason?: "not_configured" };
 
 const BULK_BATCH_SIZE = 25;
@@ -415,6 +423,7 @@ export async function bulkGenerateAiEvaluationsForJobAction(input: {
   const CONCURRENCY = 5;
   let succeeded = 0;
   let failed = 0;
+  let fellBack = 0;
 
   for (let i = 0; i < batch.length; i += CONCURRENCY) {
     const chunk = batch.slice(i, i + CONCURRENCY);
@@ -426,13 +435,14 @@ export async function bulkGenerateAiEvaluationsForJobAction(input: {
     for (const r of results) {
       if (r.status === "fulfilled" && r.value.success) {
         succeeded++;
+        if (r.value.aiFellBack) fellBack++;
       } else {
         failed++;
       }
     }
   }
 
-  return { success: true, succeeded, failed, remaining };
+  return { success: true, succeeded, failed, remaining, fellBack };
 }
 
 // ── Duplicate detection ─────────────────────────────────────────────────────

@@ -1,6 +1,6 @@
 import "server-only";
 
-import { Output, generateText } from "ai";
+import { NoObjectGeneratedError, Output, generateText } from "ai";
 
 import { getModel } from "@/lib/ai/registry";
 import { recordAiUsage } from "@/lib/ai/usage";
@@ -118,29 +118,53 @@ export async function scoreCandidateWithAI(
     .filter(Boolean)
     .join("\n");
 
-  const result = await generateText({
-    model: getModel(config),
-    system: SYSTEM_PROMPT,
-    prompt: `Score this candidate against this job using the ${mode} evaluation style.\n\nEvaluation style guidance:\n- relaxed: value transferable skills and reasonable trainability; a teachable gap should not automatically prevent a yes.\n- balanced: weigh direct evidence most heavily, but allow one or two teachable gaps for a yes.\n- strict: treat missing or unverified required criteria as blockers.\n\n## Job\n${jobBlock}\n\n## Candidate\n${candidateBlock}`,
-    output: Output.object({
-      schema: candidateScoreSchema,
-      name: "candidate_fit_evaluation",
-      description:
-        "A calibrated candidate-to-job fit evaluation with evidence.",
-    }),
-  });
+  const prompt = `Score this candidate against this job using the ${mode} evaluation style.\n\nEvaluation style guidance:\n- relaxed: value transferable skills and reasonable trainability; a teachable gap should not automatically prevent a yes.\n- balanced: weigh direct evidence most heavily, but allow one or two teachable gaps for a yes.\n- strict: treat missing or unverified required criteria as blockers.\n\n## Job\n${jobBlock}\n\n## Candidate\n${candidateBlock}`;
 
-  recordAiUsage({
-    surface: "score",
-    provider: config.provider,
-    modelId: config.modelId,
-    promptTokens: result.usage.inputTokens ?? 0,
-    completionTokens: result.usage.outputTokens ?? 0,
-  });
+  const recordUsage = (usage: { inputTokens?: number; outputTokens?: number } | undefined) =>
+    recordAiUsage({
+      surface: "score",
+      provider: config.provider,
+      modelId: config.modelId,
+      promptTokens: usage?.inputTokens ?? 0,
+      completionTokens: usage?.outputTokens ?? 0,
+    });
 
-  const output = result.output;
-  if (!output) {
-    throw new Error("AI returned no structured output for the evaluation.");
+  // A model occasionally breaks the shape (seen: `strengths` sent as a string
+  // holding half-escaped JSON). Salvage that answer when the content is
+  // there, otherwise ask once more, before the caller falls back to rules.
+  async function attempt(): Promise<CandidateScore> {
+    try {
+      const result = await generateText({
+        model: getModel(config),
+        system: SYSTEM_PROMPT,
+        prompt,
+        output: Output.object({
+          schema: candidateScoreSchema,
+          name: "candidate_fit_evaluation",
+          description:
+            "A calibrated candidate-to-job fit evaluation with evidence.",
+        }),
+      });
+      recordUsage(result.usage);
+      if (!result.output) {
+        throw new Error("AI returned no structured output for the evaluation.");
+      }
+      return result.output;
+    } catch (error) {
+      if (!NoObjectGeneratedError.isInstance(error)) throw error;
+      recordUsage(error.usage);
+      const salvaged = salvageCandidateScore(error.text);
+      if (salvaged) return salvaged;
+      throw error;
+    }
+  }
+
+  let output: CandidateScore;
+  try {
+    output = await attempt();
+  } catch (error) {
+    if (!NoObjectGeneratedError.isInstance(error)) throw error;
+    output = await attempt();
   }
 
   const clamp = (n: number) => Math.max(0, Math.min(100, Math.round(n)));
@@ -177,4 +201,47 @@ export async function scoreCandidateWithAI(
     gaps: output.gaps.slice(0, 8),
     criteria,
   };
+}
+
+/** Quoted strings that are values, not object keys (`"x"` not followed by `:`). */
+const QUOTED_VALUE_RE = /"((?:[^"\\]|\\.)*)"(?!\s*:)/g;
+
+function coerceStringList(value: unknown): unknown {
+  if (Array.isArray(value) || typeof value !== "string") return value;
+  try {
+    const parsed: unknown = JSON.parse(value);
+    if (Array.isArray(parsed)) return parsed;
+  } catch {
+    // Not valid JSON on its own; fall through to pulling out quoted items.
+  }
+  const items = Array.from(value.matchAll(QUOTED_VALUE_RE), (match) =>
+    match[1].replace(/\\"/g, '"').trim(),
+  ).filter(Boolean);
+  if (items.length > 0) return items;
+  return value
+    .split(/\n|;/)
+    .map((item) => item.replace(/^[\s\-*•]+/, "").trim())
+    .filter(Boolean);
+}
+
+/**
+ * Recovers a usable evaluation from raw model text that failed the schema,
+ * when the only problem is a list sent as a string. Returns null otherwise.
+ */
+export function salvageCandidateScore(text: string | undefined): CandidateScore | null {
+  if (!text) return null;
+  let raw: unknown;
+  try {
+    raw = JSON.parse(text);
+  } catch {
+    return null;
+  }
+  if (!raw || typeof raw !== "object") return null;
+  const record = raw as Record<string, unknown>;
+  const parsed = candidateScoreSchema.safeParse({
+    ...record,
+    strengths: coerceStringList(record.strengths),
+    gaps: coerceStringList(record.gaps),
+  });
+  return parsed.success ? parsed.data : null;
 }

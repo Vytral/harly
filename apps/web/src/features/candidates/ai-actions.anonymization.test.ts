@@ -211,7 +211,7 @@ describe("automatic scoring wiring", () => {
 
     const result = await generateAiEvaluationAction({ applicationId: APPLICATION_ID });
 
-    expect(result).toEqual({ success: true });
+    expect(result).toEqual({ success: true, source: "ai", aiFellBack: false });
     expect(mocks.scoreCandidateWithAI).toHaveBeenCalledWith(
       expect.objectContaining({ resumeAnonymization: true }),
       expect.objectContaining({

@@ -124,7 +124,11 @@ function GenerateButton({
         toast.error(result.error);
         return;
       }
-      toast.success(aiConfigured ? "AI evaluation ready" : "Automatic evaluation ready");
+      if (result.aiFellBack) {
+        toast.warning("Scored with Harly's built-in rules: the AI provider didn't return a usable answer.");
+      } else {
+        toast.success(aiConfigured ? "AI evaluation ready" : "Automatic evaluation ready");
+      }
       (router as { refresh?: () => void }).refresh?.();
     });
   }

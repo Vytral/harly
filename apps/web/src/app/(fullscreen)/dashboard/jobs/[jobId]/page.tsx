@@ -88,31 +88,35 @@ export default async function DashboardJobPage({
       headerActions={
         <JobActionsMenu jobId={job.id} slug={job.slug} redirectAfterTrash />
       }
+      // Rendered twice (rail + mobile popover), so the children carry keys.
       railActions={
         <>
           {stats ? (
             <JobHiringProgress
+              key="progress"
               jobId={job.id}
               applicants={stats.applicants}
               active={stats.activeApplicants}
               newThisWeek={stats.newApplicants}
             />
           ) : null}
-          <Button asChild variant="outline" size="sm" className="w-full justify-start">
+          <Button key="view" asChild variant="outline" size="sm" className="w-full justify-start">
             <a href={`/jobs/${job.slug}`} target="_blank" rel="noreferrer">
               <ExternalLink className="size-4" />
               View job
             </a>
           </Button>
           <JobShareButton
+            key="share"
             url={publicUrl}
             title={job.title}
             workspaceSlug={workspace.slug}
             slug={job.slug}
           />
-          <JobStatusActions job={job} />
+          <JobStatusActions key="status" job={job} />
           {canEditJobs ? (
             <StageEditorTrigger
+              key="stages"
               jobId={job.id}
               jobTitle={job.title}
               className="w-full justify-start"

@@ -89,6 +89,7 @@ export function JobCandidateRanking({
     setRanking(true);
     let totalSucceeded = 0;
     let totalFailed = 0;
+    let totalFellBack = 0;
     try {
       for (let guard = 0; guard < 100; guard++) {
         const result = await bulkGenerateAiEvaluationsForJobAction({ jobId });
@@ -103,10 +104,17 @@ export function JobCandidateRanking({
 
         totalSucceeded += result.succeeded;
         totalFailed += result.failed;
-        if (result.remaining === 0 || result.succeeded === 0) break;
+        totalFellBack += result.fellBack;
+        // Rules-scored rows still count as "unscored" for AI, so another round
+        // would re-score the same people. Stop and say so instead.
+        if (result.remaining === 0 || result.succeeded === 0 || result.fellBack > 0) break;
       }
 
-      if (totalSucceeded > 0 || totalFailed > 0) {
+      if (totalFellBack > 0) {
+        toast.warning(
+          `${totalFellBack} of ${totalSucceeded} scored with Harly's built-in rules: the AI provider didn't return a usable answer. Try again in a moment.`,
+        );
+      } else if (totalSucceeded > 0 || totalFailed > 0) {
         toast.success(
           `Scored ${totalSucceeded} candidate${totalSucceeded === 1 ? "" : "s"}` +
             (totalFailed > 0 ? ` · ${totalFailed} failed` : ""),
