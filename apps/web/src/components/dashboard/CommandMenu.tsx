@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { useEffect, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import type { Route } from "next";
@@ -52,6 +53,7 @@ import {
 } from "@/features/search/recents";
 import type { SearchGroupKey } from "@/features/search/results";
 import type { SearchRange } from "@/features/search/query";
+import { useHarlyAI } from "@/components/dashboard/HarlyAIWidget";
 import type { Permission } from "@/features/workspaces/permissions";
 
 /** Id of the header button that opens the palette; focus returns here on close. */
@@ -209,6 +211,13 @@ export function CommandMenu({
   function go(href: string) {
     onOpenChange(false);
     router.push(href as Route);
+  }
+
+  // Hand the question to Harly AI instead of searching for it.
+  const harly = useHarlyAI();
+  function askHarly(text: string) {
+    onOpenChange(false);
+    harly.ask(text);
   }
 
   function openResult(item: RecentSearchItem) {
@@ -421,6 +430,22 @@ export function CommandMenu({
               </div>
             ) : null}
 
+            {hasQuery ? (
+              <CommandGroup>
+                <CommandItem
+                  value={`ask-harly-${state.query}`}
+                  onSelect={() => askHarly(state.query)}
+                  className="gap-3 rounded-2xl"
+                >
+                  <Image src="/harly-ai-animado.svg" alt="" width={16} height={16} unoptimized className="size-4 shrink-0" />
+                  <span className="min-w-0 flex-1 truncate">
+                    Ask Harly AI &ldquo;{state.query}&rdquo;
+                  </span>
+                  <kbd className="font-chrome text-[11px] text-quiet-mist">AI</kbd>
+                </CommandItem>
+              </CommandGroup>
+            ) : null}
+
             {hasQuery && hasResults && seeAllHref && !isStale ? (
               <CommandGroup>
                 <CommandItem
@@ -454,6 +479,15 @@ export function CommandMenu({
                   ))}
                 </CommandGroup>
                 <CommandGroup heading="Actions">
+                  <CommandItem
+                    value="action-ask-harly"
+                    onSelect={() => askHarly("")}
+                    className="gap-3 rounded-2xl"
+                  >
+                    <Image src="/harly-ai-animado.svg" alt="" width={16} height={16} unoptimized className="size-4 shrink-0" />
+                    <span className="flex-1">Ask Harly AI</span>
+                    <kbd className="font-chrome text-[11px] text-quiet-mist">⌘J</kbd>
+                  </CommandItem>
                   <CommandItem
                     value="action-new-job"
                     onSelect={() => go("/dashboard/jobs/new")}

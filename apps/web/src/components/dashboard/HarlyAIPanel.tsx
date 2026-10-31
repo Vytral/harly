@@ -9,11 +9,12 @@ import { DefaultChatTransport } from "ai";
 import {
   X,
   ArrowUp,
-  Check,
-  Paperclip,
+  ChevronDown,
   Settings,
   Square,
-  PanelLeft,
+  History,
+  LayoutGrid,
+  UserRound,
   Plus,
   Trash2,
   MessageSquare,
@@ -23,8 +24,10 @@ import { cn } from "@/lib/utils";
 import { useMotionSafe } from "@/lib/motion";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { useConfirm } from "@/components/ui/confirm-dialog";
 import { HarlyAILogoMark } from "@/components/ui/icons/HarlyAILogoMark";
 import { Markdown } from "@/components/ui/markdown";
+import { TextShimmer } from "@/components/ui/text-shimmer";
 import {
   ChatContainerRoot,
   ChatContainerContent,
@@ -56,62 +59,6 @@ import type {
 
 // ─── Phosphor icons ────────────────────────────────────────────────────────────
 
-const PhFunnel = () => (
-  <svg
-    xmlns="http://www.w3.org/2000/svg"
-    width="13"
-    height="13"
-    viewBox="0 0 256 256"
-    aria-hidden="true"
-  >
-    <path
-      fill="currentColor"
-      d="M230.6 49.53A15.81 15.81 0 0 0 216 40H40a16 16 0 0 0-11.81 26.76l.08.09L96 139.17V216a16 16 0 0 0 24.87 13.32l32-21.34a16 16 0 0 0 7.13-13.32v-55.49l67.74-72.32l.08-.09a15.8 15.8 0 0 0 2.78-17.23m-84.42 81.05A8 8 0 0 0 144 136v58.66L112 216v-80a8 8 0 0 0-2.16-5.47L40 56h176Z"
-    />
-  </svg>
-);
-const PhEnvelope = () => (
-  <svg
-    xmlns="http://www.w3.org/2000/svg"
-    width="13"
-    height="13"
-    viewBox="0 0 256 256"
-    aria-hidden="true"
-  >
-    <path
-      fill="currentColor"
-      d="M224 48H32a8 8 0 0 0-8 8v136a16 16 0 0 0 16 16h176a16 16 0 0 0 16-16V56a8 8 0 0 0-8-8m-96 85.15L52.57 64h150.86ZM98.71 128L40 181.81V74.19Zm11.84 10.85l12 11.05a8 8 0 0 0 10.82 0l12-11.05l58 53.15H52.57ZM157.29 128L216 74.18v107.64Z"
-    />
-  </svg>
-);
-const PhUserCheck = () => (
-  <svg
-    xmlns="http://www.w3.org/2000/svg"
-    width="13"
-    height="13"
-    viewBox="0 0 256 256"
-    aria-hidden="true"
-  >
-    <path
-      fill="currentColor"
-      d="M144 157.68a68 68 0 1 0-71.9 0c-20.65 6.76-39.23 19.39-54.17 37.17a8 8 0 0 0 12.25 10.3C50.25 181.19 77.91 168 108 168s57.75 13.19 77.87 37.15a8 8 0 0 0 12.25-10.3c-14.94-17.78-33.52-30.41-54.12-37.17M56 100a52 52 0 1 1 52 52a52.06 52.06 0 0 1-52-52m197.66 33.66l-32 32a8 8 0 0 1-11.32 0l-16-16a8 8 0 0 1 11.32-11.32L216 148.69l26.34-26.35a8 8 0 0 1 11.32 11.32"
-    />
-  </svg>
-);
-const PhChartBar = () => (
-  <svg
-    xmlns="http://www.w3.org/2000/svg"
-    width="13"
-    height="13"
-    viewBox="0 0 256 256"
-    aria-hidden="true"
-  >
-    <path
-      fill="currentColor"
-      d="M224 200h-8V40a8 8 0 0 0-8-8h-56a8 8 0 0 0-8 8v40H96a8 8 0 0 0-8 8v40H48a8 8 0 0 0-8 8v64h-8a8 8 0 0 0 0 16h192a8 8 0 0 0 0-16M160 48h40v152h-40Zm-56 48h40v104h-40Zm-48 48h32v56H56Z"
-    />
-  </svg>
-);
 const PhCheck = ({ className }: { className?: string }) => (
   <svg
     xmlns="http://www.w3.org/2000/svg"
@@ -143,53 +90,97 @@ const PhWarning = ({ className }: { className?: string }) => (
   </svg>
 );
 
-const QUICK_PROMPTS = [
-  { icon: PhFunnel, label: "How's my pipeline?", color: "text-blue-500" },
-  { icon: PhUserCheck, label: "Who needs review?", color: "text-green-500" },
-  {
-    icon: PhChartBar,
-    label: "Show my hiring report",
-    color: "text-purple-500",
-  },
-  {
-    icon: PhEnvelope,
-    label: "Which jobs are at risk?",
-    color: "text-orange-500",
-  },
-];
+type Starter = {
+  label: string;
+  /** Sent as-is when clicked; `prefill` drops it in the composer to finish. */
+  prompt: string;
+  prefill?: boolean;
+};
+
+/**
+ * Starters follow where the recruiter is. Each one is a real request the
+ * agent can answer with its tools, sent on click (one step, not two).
+ */
+export function startersFor(surface?: { kind: "candidate" | "section"; label: string }): Starter[] {
+  if (surface?.kind === "candidate") {
+    const name = surface.label && surface.label !== "Current candidate" ? surface.label : "this candidate";
+    return [
+      { label: `Summarize ${name}`, prompt: `Summarize ${name}'s profile: experience, strengths and gaps for the role.` },
+      { label: "Score the CV for this job", prompt: `Evaluate ${name}'s resume against the job they applied to.` },
+      { label: "Prepare the interview", prompt: `Prepare an interview brief for ${name} with focus areas and questions.` },
+      { label: "What's the next step?", prompt: `What's the next step for ${name}?` },
+    ];
+  }
+  switch (surface?.label) {
+    case "Jobs":
+      return [
+        { label: "Which jobs are at risk?", prompt: "Which of my jobs are at risk, and why?" },
+        { label: "Draft a job description", prompt: "Draft a job description for ", prefill: true },
+        { label: "Roles with few applicants", prompt: "Which open roles got the fewest applicants this month?" },
+      ];
+    case "Candidates":
+      return [
+        { label: "Who needs my review?", prompt: "Who needs my review right now?" },
+        { label: "Compare top candidates", prompt: "Compare the top candidates for ", prefill: true },
+        { label: "Find duplicates", prompt: "Are there duplicate candidates I should merge?" },
+      ];
+    case "Tasks":
+      return [
+        { label: "What's overdue?", prompt: "Which of my tasks are overdue or due today?" },
+        { label: "Create a task", prompt: "Create a task to ", prefill: true },
+      ];
+    case "Interview calendar":
+      return [
+        { label: "Who do I interview today?", prompt: "Who am I interviewing today, and what should I know?" },
+        { label: "Prepare my next interview", prompt: "Prepare a brief for my next interview." },
+      ];
+    case "Reports":
+      return [
+        { label: "Summarize this month", prompt: "Summarize this month's hiring: applications, hires and time to hire." },
+        { label: "Where do candidates drop off?", prompt: "Where do candidates drop off in my funnel?" },
+      ];
+    default:
+      return [
+        { label: "What needs me today?", prompt: "What needs my attention today?" },
+        { label: "Who needs my review?", prompt: "Who needs my review right now?" },
+        { label: "Which jobs are at risk?", prompt: "Which of my jobs are at risk, and why?" },
+        { label: "Summarize this week", prompt: "Summarize this week's hiring activity." },
+      ];
+  }
+}
 
 // Human labels for the "calling a tool" inline state.
 export const TOOL_LABELS: Record<string, string> = {
   // Automations tools
-  "tool-listAutomationTools": "Checking automation tools",
+  "tool-listAutomationTools": "Looking at automation steps",
   "tool-searchAutomations": "Searching automations",
   "tool-getAutomationContext": "Reading automation draft",
   "tool-prepareAutomationPatch": "Preparing automation proposal",
   "tool-simulateAutomationProposal": "Simulating automation",
   "tool-applyAutomationProposal": "Applying automation changes",
-  "tool-resolveAutomationResources": "Resolving automation resources",
-  "tool-prepareAutomationPlan": "Preparing automation plan",
-  "tool-compilePlan": "Compiling automation plan",
-  "tool-runBranchCoverage": "Analyzing branch coverage",
+  "tool-resolveAutomationResources": "Matching jobs and stages",
+  "tool-prepareAutomationPlan": "Planning the automation",
+  "tool-compilePlan": "Building the automation",
+  "tool-runBranchCoverage": "Testing every path",
   "tool-diagnoseWorkflowRun": "Diagnosing workflow run",
   "tool-getWorkflowRunDiagnosis": "Diagnosing workflow run",
   "tool-prepareAutomationRepair": "Preparing automation repair",
   // Capabilities & workspace
-  "tool-workspaceCapabilities": "Checking workspace capabilities",
+  "tool-workspaceCapabilities": "Checking what's set up",
   "tool-connectedIntegrations": "Checking connected integrations",
-  "tool-userPermissions": "Checking permissions",
-  "tool-harlyProductKnowledge": "Consulting Harly documentation",
+  "tool-userPermissions": "Checking your access",
+  "tool-harlyProductKnowledge": "Checking how Harly works",
   "tool-resolveCandidate": "Finding candidate",
   "tool-resolveJob": "Finding job",
-  "tool-resolveApplication": "Finding application",
+  "tool-resolveApplication": "Finding the application",
   "tool-reviewCandidate": "Evaluating candidate profile",
   "tool-candidateNextAction": "Determining next action",
   "tool-prepareInterview": "Preparing interview scheduling",
   "tool-hiringBrief": "Preparing hiring brief",
-  "tool-getCandidateContext": "Reading candidate context",
-  "tool-getApplicationContext": "Reading application context",
+  "tool-getCandidateContext": "Reading the candidate",
+  "tool-getApplicationContext": "Reading the application",
   "tool-getJobStatus": "Checking job status",
-  "tool-jobContext": "Reading job context",
+  "tool-jobContext": "Reading the job",
   "tool-jobDistributionOptions": "Checking job distribution options",
   // Core operational tools
   "tool-reviewPipeline": "Checking pipeline",
@@ -229,7 +220,7 @@ export function getToolLabel(partType: string): string {
   if (TOOL_LABELS[partType]) return TOOL_LABELS[partType];
   const name = partType.startsWith("tool-") ? partType.slice(5) : partType;
   const spaced = name.replace(/([A-Z])/g, " $1").toLowerCase().trim();
-  return spaced ? `Checking ${spaced}` : "Working";
+  return spaced ? `Looking at ${spaced}` : "Working";
 }
 
 /**
@@ -307,17 +298,7 @@ const MARKDOWN_COMPONENTS = {
 // ─── Typing / tool indicator ─────────────────────────────────────────────────
 
 function ThinkingShimmer({ label = "Thinking" }: { label?: string }) {
-  return (
-    <span
-      className="bg-[length:200%_100%] bg-clip-text text-[13px] font-medium text-transparent animate-shimmer"
-      style={{
-        backgroundImage:
-          "linear-gradient(90deg, var(--muted-foreground) 0%, var(--muted-foreground) 40%, var(--foreground) 50%, var(--muted-foreground) 60%, var(--muted-foreground) 100%)",
-      }}
-    >
-      {label}…
-    </span>
-  );
+  return <TextShimmer className="text-[13px] font-medium">{`${label}…`}</TextShimmer>;
 }
 
 function ToolStatus({
@@ -329,40 +310,21 @@ function ToolStatus({
 }) {
   if (state === "interrupted") {
     return (
-      <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
-        <PhWarning className="shrink-0 text-amber-500" />
-        <span>
-          {label} was interrupted before finishing — send a message to continue.
-        </span>
+      <div className="flex items-center gap-1.5 text-[12px] text-soft-ink">
+        <PhWarning className="shrink-0 text-warning-clay" />
+        <span>{label} stopped before finishing.</span>
       </div>
     );
   }
   if (state === "running") {
-    return (
-      <div className="flex items-center gap-1.5">
-        <span className="relative flex size-2">
-          <span className="absolute inline-flex size-full animate-ping rounded-full bg-primary/50" />
-          <span className="relative inline-flex size-2 rounded-full bg-primary" />
-        </span>
-        <span
-          className="bg-[length:200%_100%] bg-clip-text text-[12px] font-medium text-transparent animate-shimmer"
-          style={{
-            backgroundImage:
-              "linear-gradient(90deg, var(--muted-foreground) 0%, var(--muted-foreground) 40%, var(--foreground) 50%, var(--muted-foreground) 60%, var(--muted-foreground) 100%)",
-          }}
-        >
-          {label}…
-        </span>
-      </div>
-    );
+    return <ThinkingShimmer label={label} />;
   }
-  // Collapsed once finished , a quiet one-liner.
   return (
-    <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+    <div className="flex items-center gap-1.5 text-[12px] text-soft-ink">
       {state === "error" ? (
-        <PhWarning className="shrink-0 text-rose-500" />
+        <PhWarning className="shrink-0 text-danger-rust" />
       ) : (
-        <PhCheck className="shrink-0 text-emerald-500" />
+        <PhCheck className="shrink-0 text-success-olive" />
       )}
       <span>{label}</span>
     </div>
@@ -375,19 +337,19 @@ function ToolStatus({
 // summary covers them).
 
 const STAGE_BAR_COLORS = [
-  "bg-blue-500",
-  "bg-violet-500",
-  "bg-amber-500",
-  "bg-emerald-500",
-  "bg-rose-500",
-  "bg-cyan-500",
+  "bg-chart-1",
+  "bg-chart-2",
+  "bg-chart-3",
+  "bg-chart-4",
+  "bg-chart-5",
+  "bg-quiet-mist",
 ];
 
 const REC_TONE: Record<string, string> = {
-  strong_yes: "text-emerald-600 dark:text-emerald-400",
-  yes: "text-emerald-600 dark:text-emerald-400",
-  maybe: "text-amber-600 dark:text-amber-400",
-  no: "text-rose-600 dark:text-rose-400",
+  strong_yes: "text-success-olive",
+  yes: "text-success-olive",
+  maybe: "text-warning-clay",
+  no: "text-danger-rust",
 };
 
 // ── Card primitives ──────────────────────────────────────────────────────────
@@ -1672,6 +1634,15 @@ function getWriteActionPreview(
   }
 }
 
+// Writes whose receipt carries an undo (lib/ai/agent/action-receipts.ts:
+// AgentActionUndo). Everything else is final once confirmed, and the card says
+// so before the recruiter clicks.
+const REVERSIBLE_WRITES = new Set([
+  "moveCandidateStage",
+  "createTask",
+  "scheduleInterview",
+]);
+
 function WriteConfirmCard({
   toolCallId,
   toolName,
@@ -1724,40 +1695,50 @@ function WriteConfirmCard({
     requiresCanonicalPreview &&
     (!serverPreview || serverPreview.title === "Verifying action…");
   const preview = verifying
-    ? { title: "Verifying action…", details: [] }
+    ? { title: "Checking details…", details: [] }
     : serverPreview?.canonical && serverPreview.ok
       ? serverPreview
       : localPreview;
+  const blocked = Boolean(requiresCanonicalPreview && serverPreview && !serverPreview.ok && !verifying);
+  const reversible = REVERSIBLE_WRITES.has(toolName);
   const titleId = `write-action-${toolCallId}`;
 
   if (done) {
+    const ok = done.confirmed && !done.error;
     return (
       <div
-        className="overflow-hidden rounded-xl border border-border/70 bg-muted/30 px-3 py-2.5 text-[12px] duration-200 animate-in fade-in slide-in-from-bottom-1"
+        className="flex items-center gap-2.5 rounded-[var(--radius-inner)] border border-hairline bg-pure-snow px-3 py-2.5 text-[13px] duration-200 animate-in fade-in slide-in-from-bottom-1 motion-reduce:animate-none"
         role={done.error ? "alert" : "status"}
         aria-live={done.error ? "assertive" : "polite"}
       >
-        {done.confirmed && !done.error ? (
-          <div className="flex items-center gap-1.5 text-emerald-600 dark:text-emerald-400">
-            <Check className="size-3.5 shrink-0" />
-            <span>{done.message ?? "Done."}</span>
-          </div>
-        ) : done.error ? (
-          <span className="text-destructive">{done.error}</span>
-        ) : (
-          <span className="text-muted-foreground">Cancelled.</span>
-        )}
-        {/* On a successful move, show the stage path as confirmation. */}
-        {isMove && done.confirmed && !done.error && from && to && (
-          <div className="mt-2">
-            <StagePath from={from} to={to} animate />
-          </div>
-        )}
-        {done.confirmed && done.undoable && !done.undone && onUndo ? (
+        <span
+          aria-hidden="true"
+          className={cn(
+            "size-2 shrink-0 rounded-full",
+            done.error ? "bg-danger-rust" : ok ? (done.undone ? "bg-quiet-mist" : "bg-chartreuse-signal") : "bg-quiet-mist",
+          )}
+        />
+        <div className="min-w-0 flex-1">
+          <p className={cn("leading-snug", done.error ? "text-danger-rust" : "text-near-ink")}>
+            {done.error
+              ? done.error
+              : done.undone
+                ? "Undone."
+                : ok
+                  ? (done.message ?? "Done.")
+                  : "Cancelled. Nothing changed."}
+          </p>
+          {isMove && ok && !done.undone && from && to ? (
+            <div className="mt-1.5">
+              <StagePath from={from} to={to} animate />
+            </div>
+          ) : null}
+        </div>
+        {ok && done.undoable && !done.undone && onUndo ? (
           <Button
             size="sm"
-            variant="ghost"
-            className="mt-2 h-7 px-2 text-xs"
+            variant="outline"
+            className="h-7 shrink-0 px-2.5 text-[12.5px]"
             onClick={onUndo}
             disabled={done.undoing}
           >
@@ -1770,49 +1751,55 @@ function WriteConfirmCard({
 
   return (
     <section
-      className="overflow-hidden rounded-xl border border-border/70 bg-card shadow-sm duration-200 animate-in fade-in slide-in-from-bottom-1"
+      className="overflow-hidden rounded-[var(--radius-inner)] border border-hairline bg-pure-snow duration-200 animate-in fade-in slide-in-from-bottom-1 motion-reduce:animate-none"
       aria-labelledby={titleId}
-      aria-busy={pending}
+      aria-busy={pending || verifying}
     >
-      <div className="space-y-2.5 px-3 py-2.5">
-        <div className="space-y-0.5">
-          <h3
-            id={titleId}
-            className="text-[13px] font-semibold leading-snug text-foreground"
-          >
+      <div className="space-y-2.5 px-3 pt-3 pb-2.5">
+        <div className="flex items-start justify-between gap-2">
+          <h3 id={titleId} className="text-[14px] font-semibold leading-snug tracking-[-0.01em] text-near-ink">
             {preview.title}
           </h3>
-          <p className="text-[11px] leading-snug text-muted-foreground">
-            Review the exact changes below before confirming.
-          </p>
+          {!verifying && !blocked ? (
+            <span
+              className={cn(
+                "inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-[11.5px] font-medium",
+                reversible ? "bg-sage-wash text-sage-ink" : "bg-card-inset text-soft-ink",
+              )}
+            >
+              <span
+                aria-hidden="true"
+                className={cn("size-1.5 rounded-full", reversible ? "bg-success-olive" : "bg-warning-clay")}
+              />
+              {reversible ? "Reversible" : "Can't be undone"}
+            </span>
+          ) : null}
         </div>
-        {requiresCanonicalPreview &&
-        serverPreview &&
-        !serverPreview.ok &&
-        !verifying ? (
+        {blocked ? (
           <p
-            className="rounded-lg bg-destructive/10 px-2.5 py-2 text-[11px] leading-snug text-destructive"
+            className="rounded-[var(--radius-btn)] bg-danger-rust/10 px-2.5 py-2 text-[12.5px] leading-snug text-danger-rust"
             role="alert"
           >
-            {serverPreview.error ?? "The action could not be verified."}
+            {serverPreview?.error ?? "This action couldn't be verified, so it can't run."}
           </p>
-        ) : (
-          preview.details.length > 0 && (
-            <dl className="space-y-1.5 rounded-lg bg-muted/45 px-2.5 py-2 text-[11px] leading-snug">
-              {preview.details.map((item) => (
-                <div
-                  key={item.label}
-                  className="grid grid-cols-[5.5rem_minmax(0,1fr)] gap-2"
-                >
-                  <dt className="text-muted-foreground">{item.label}</dt>
-                  <dd className="min-w-0 break-words font-medium text-foreground">
-                    {item.value}
-                  </dd>
-                </div>
-              ))}
-            </dl>
-          )
-        )}
+        ) : verifying ? (
+          <div className="space-y-1.5" aria-hidden="true">
+            <div className="h-8 animate-pulse rounded-[var(--radius-btn)] bg-card-inset motion-reduce:animate-none" />
+            <div className="h-8 animate-pulse rounded-[var(--radius-btn)] bg-card-inset motion-reduce:animate-none" />
+          </div>
+        ) : preview.details.length > 0 ? (
+          <dl className="space-y-1">
+            {preview.details.map((item) => (
+              <div
+                key={item.label}
+                className="flex items-start justify-between gap-3 rounded-[var(--radius-btn)] bg-card-inset px-2.5 py-1.5 text-[12.5px] leading-snug"
+              >
+                <dt className="shrink-0 text-soft-ink">{item.label}</dt>
+                <dd className="min-w-0 break-words text-right font-medium text-near-ink">{item.value}</dd>
+              </div>
+            ))}
+          </dl>
+        ) : null}
         {toolName === "applyAutomationProposal" &&
         serverPreview?.automationLifecycle ? (
           <AutomationLifecycleChip
@@ -1820,47 +1807,35 @@ function WriteConfirmCard({
             reason={serverPreview.automationLifecycle.reason}
           />
         ) : null}
-        {summary && (
-          <p className="text-[11px] leading-snug text-muted-foreground">
-            <span className="font-medium text-foreground/80">
-              Agent summary:
-            </span>{" "}
-            {summary}
-          </p>
-        )}
+        {summary ? (
+          <p className="text-[12.5px] leading-snug text-soft-ink">{summary}</p>
+        ) : null}
         {toolName === "applyAutomationProposal" &&
         serverPreview?.canonical &&
         serverPreview.ok &&
         serverPreview.automationChanges ? (
           <AutomationProposalCard preview={serverPreview} />
         ) : null}
-        {isMove && who && from && to && (
-          <div>
-            <StagePath from={from} to={to} />
-          </div>
-        )}
+        {isMove && who && from && to ? <StagePath from={from} to={to} /> : null}
       </div>
-      <div className="flex gap-2 border-t border-border/50 bg-muted/30 px-3 py-2">
-        <Button
-          size="sm"
-          className="h-7 flex-1 px-3 text-xs"
-          onClick={onConfirm}
-          disabled={
-            pending || verifying || Boolean(serverPreview && !serverPreview.ok)
-          }
-          aria-label={`Confirm: ${preview.title}`}
-        >
-          {pending ? "Working…" : "Confirm"}
-        </Button>
+      <div className="flex justify-end gap-2 border-t border-hairline px-3 py-2.5">
         <Button
           size="sm"
           variant="ghost"
-          className="h-7 px-3 text-xs"
+          className="h-8 px-3 text-[13px]"
           onClick={onCancel}
           disabled={pending}
           aria-label={`Cancel: ${preview.title}`}
         >
           Cancel
+        </Button>
+        <Button
+          size="sm"
+          className="h-8 px-3 text-[13px]"
+          onClick={onConfirm}
+          disabled={pending || verifying || blocked}
+        >
+          {pending ? "Working…" : verifying ? "Checking…" : preview.title}
         </Button>
       </div>
     </section>
@@ -2032,45 +2007,43 @@ function StagePath({
 
 function EmptyState({
   firstName,
-  onPromptClick,
+  surface,
+  onStarter,
 }: {
   firstName: string;
-  onPromptClick: (p: string) => void;
+  surface?: { kind: "candidate" | "section"; label: string };
+  onStarter: (starter: Starter) => void;
 }) {
+  const starters = startersFor(surface);
+  const heading =
+    surface?.kind === "candidate" && surface.label !== "Current candidate"
+      ? `What do you need on ${surface.label}?`
+      : `How can I help, ${firstName}?`;
   return (
-    <div className="flex flex-col items-center gap-5 px-4 py-10 text-center">
-      <Image
-        src="/harly-ai-animado.svg"
-        alt="Harly AI"
-        width={88}
-        height={88}
-        unoptimized
-        priority
-      />
-      <div className="flex flex-col gap-1">
-        <h2 className="text-[18px] font-semibold tracking-[-0.01em]">
-          Hi {firstName} 👋
-        </h2>
-        <p className="text-[13px] text-muted-foreground">
-          What can I help you with today?
-        </p>
+    <div className="flex flex-col gap-3.5 px-1 pt-1 pb-1">
+      <div className="flex flex-col items-start gap-2.5">
+        <Image src="/harly-ai-animado.svg" alt="" width={32} height={32} unoptimized priority />
+        <h2 className="font-display text-[19px] leading-tight text-near-ink">{heading}</h2>
       </div>
-      <div className="flex flex-wrap justify-center gap-1.5">
-        {QUICK_PROMPTS.map(({ icon: Icon, label, color }, i) => (
-          <button
-            key={label}
-            type="button"
-            onClick={() => onPromptClick(label)}
-            className="flex h-8 items-center gap-1.5 rounded-full border border-border/60 bg-card px-3 text-[12px] font-medium text-foreground/80 duration-300 animate-in fade-in slide-in-from-bottom-1 fill-mode-both transition-[background-color,border-color,color,transform] hover:-translate-y-[1px] hover:border-primary/30 hover:bg-muted/60 hover:text-foreground"
-            style={{ animationDelay: `${i * 40}ms` }}
-          >
-            <span className={cn("shrink-0", color)}>
-              <Icon />
-            </span>
-            {label}
-          </button>
+      <ul className="flex flex-col gap-1.5">
+        {starters.map((starter, i) => (
+          <li key={starter.label}>
+            <button
+              type="button"
+              onClick={() => onStarter(starter)}
+              className="group flex w-full items-center justify-between gap-3 rounded-[var(--radius-btn)] bg-card-inset px-3 py-2.5 text-left text-[13.5px] text-near-ink transition-colors duration-150 hover:bg-soft-kraft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-near-ink animate-in fade-in slide-in-from-bottom-1 fill-mode-both duration-200 motion-reduce:animate-none"
+              style={{ animationDelay: `${i * 40}ms` }}
+            >
+              <span>{starter.label}</span>
+              <ArrowUp className="size-3.5 rotate-45 text-quiet-mist transition-colors group-hover:text-near-ink" strokeWidth={2.2} />
+            </button>
+          </li>
         ))}
-      </div>
+      </ul>
+      <p className="text-[12px] leading-snug text-soft-ink">
+        I can also move candidates, schedule interviews, send emails and create
+        tasks. Nothing changes until you confirm.
+      </p>
     </div>
   );
 }
@@ -2129,6 +2102,8 @@ type HarlyChatProps = {
     draftRevision?: number;
   }) => void | Promise<void>;
   onConversationActivity: () => void;
+  pendingPrompt?: string | null;
+  onPendingPromptConsumed?: () => void;
 };
 
 /**
@@ -2172,6 +2147,8 @@ function HarlyChat({
   automationContext,
   onAutomationApplied,
   onConversationActivity,
+  pendingPrompt,
+  onPendingPromptConsumed,
 }: HarlyChatProps) {
   const [input, setInput] = useState("");
   const [mentionQuery, setMentionQuery] = useState<string | null>(null);
@@ -2224,7 +2201,7 @@ function HarlyChat({
     [],
   );
 
-  const { messages, sendMessage, addToolOutput, status, stop, error } = useChat({
+  const { messages, sendMessage, regenerate, addToolOutput, status, stop, error } = useChat({
     id: conversationId,
     messages: initialMessages as never,
     transport,
@@ -2332,9 +2309,17 @@ function HarlyChat({
     }));
   }
 
-  function submit() {
-    const text = input.trim();
+  // Context the recruiter was looking at when each turn was sent, keyed by the
+  // user-message ordinal, so the thread can say "Now about X" when it changes.
+  const [contextMarks, setContextMarks] = useState<Record<number, string>>({});
+
+  function send(raw: string) {
+    const text = raw.trim();
     if (!text || isBusy) return;
+    const ordinal = messages.filter((m) => m.role === "user").length;
+    if (surfaceContext?.label) {
+      setContextMarks((previous) => ({ ...previous, [ordinal]: surfaceContext.label }));
+    }
     sendMessage(
       { text },
       {
@@ -2351,10 +2336,61 @@ function HarlyChat({
     setInput("");
   }
 
+  function submit() {
+    send(input);
+  }
+
+  // Hand-off from ⌘K: send once, as soon as the chat can take a turn.
+  const sendRef = useRef(send);
+  useEffect(() => {
+    sendRef.current = send;
+  });
+  useEffect(() => {
+    if (!pendingPrompt || isBusy) return;
+    sendRef.current(pendingPrompt);
+    onPendingPromptConsumed?.();
+  }, [pendingPrompt, isBusy, onPendingPromptConsumed]);
+
+  function runStarter(starter: Starter) {
+    if (starter.prefill) {
+      setInput(starter.prompt);
+      return;
+    }
+    send(starter.prompt);
+  }
+
+  /**
+   * Retry after a failed turn. When the failure left the user's message
+   * unanswered, regenerate that turn instead of sending a duplicate message.
+   */
+  function retryLast() {
+    if (isBusy) return;
+    if (messages.at(-1)?.role === "user") {
+      void regenerate({
+        body: {
+          conversationId,
+          candidateId,
+          mentionedCandidateIds: Object.keys(mentionedCandidates),
+          surfaceContext,
+          automationContext,
+          timeZone,
+        },
+      });
+      return;
+    }
+    const lastUser = [...messages].reverse().find((m) => m.role === "user");
+    if (!lastUser) return;
+    const text = (lastUser.parts as Array<{ type: string; text?: string }>)
+      .filter((part) => part.type === "text")
+      .map((part) => part.text ?? "")
+      .join("");
+    send(text);
+  }
+
   function continueConversation() {
     if (isBusy) return;
     sendMessage(
-      { text: "Continue the previous automation request. Summarize what is ready for my review and show the next safe action." },
+      { text: "Continue where you stopped. Finish my previous request and tell me what's ready for my review." },
       {
         body: {
           conversationId,
@@ -2477,20 +2513,36 @@ function HarlyChat({
             {!hasMessages && (
               <EmptyState
                 firstName={firstName}
-                onPromptClick={(p) => setInput(p)}
+                surface={surfaceContext}
+                onStarter={runStarter}
               />
             )}
 
-            {messages.map((message) => {
+            {messages.map((message, messageIndex) => {
               if (message.role === "user") {
                 const text = message.parts
                   .filter((p) => p.type === "text")
                   .map((p) => (p as { text: string }).text)
                   .join("");
+                const ordinal = messages
+                  .slice(0, messageIndex)
+                  .filter((m) => m.role === "user").length;
+                const mark = contextMarks[ordinal];
+                const previousMark = ordinal > 0 ? contextMarks[ordinal - 1] : undefined;
+                const contextChanged = Boolean(mark && previousMark && mark !== previousMark);
                 return (
-                  <div key={message.id} className="flex justify-end">
-                    <div className="max-w-[80%] rounded-2xl rounded-br-sm bg-primary px-3.5 py-2 text-[13px] leading-[22px] text-primary-foreground">
-                      {text}
+                  <div key={message.id} className="flex flex-col gap-3">
+                    {contextChanged ? (
+                      <div className="flex items-center gap-2 text-[11.5px] text-soft-ink" role="separator">
+                        <span className="h-px flex-1 bg-hairline" />
+                        <span>Now about {mark}</span>
+                        <span className="h-px flex-1 bg-hairline" />
+                      </div>
+                    ) : null}
+                    <div className="flex justify-end">
+                      <div className="max-w-[85%] rounded-[var(--radius-inner)] rounded-br-[6px] bg-near-ink px-3.5 py-2 text-[13.5px] leading-[21px] text-pure-snow">
+                        {text}
+                      </div>
                     </div>
                   </div>
                 );
@@ -2633,76 +2685,66 @@ function HarlyChat({
               );
               const hasErrors = toolExecutions.some((e) => e.state === "error");
 
+              // One calm line: the live step while working; afterwards a quiet
+              // "Checked X · N more" that expands to the full step list.
               let statusSection: React.ReactNode = null;
+              const doneCount = toolExecutions.filter((e) => e.state === "done").length;
               if (runningExecution) {
                 statusSection = (
-                  <div className="flex flex-col gap-1">
-                    <ToolStatus
-                      key={runningExecution.id}
-                      label={runningExecution.label}
-                      state="running"
-                    />
+                  <div className="flex items-center gap-2" aria-live="polite">
+                    <ThinkingShimmer label={runningExecution.label} />
+                    {doneCount > 0 ? (
+                      <span className="text-[12px] text-quiet-mist">· {doneCount} done</span>
+                    ) : null}
                   </div>
                 );
               } else if (interruptedExecutions.length > 0) {
                 statusSection = (
                   <div className="flex flex-col gap-1">
                     {interruptedExecutions.map((exec) => (
-                      <ToolStatus
-                        key={exec.id}
-                        label={exec.label}
-                        state="interrupted"
-                      />
+                      <ToolStatus key={exec.id} label={exec.label} state="interrupted" />
                     ))}
                   </div>
                 );
-              } else if (toolExecutions.length > 0) {
-                if (toolExecutions.length === 1 && !hasErrors) {
-                  statusSection = (
-                    <div className="flex flex-col gap-1">
-                      <ToolStatus
-                        key={toolExecutions[0]!.id}
-                        label={toolExecutions[0]!.label}
-                        state="done"
-                      />
+              } else if (toolExecutions.length === 1) {
+                statusSection = (
+                  <ToolStatus
+                    key={toolExecutions[0]!.id}
+                    label={toolExecutions[0]!.label}
+                    state={toolExecutions[0]!.state}
+                  />
+                );
+              } else if (toolExecutions.length > 1) {
+                const errorCount = toolExecutions.filter((e) => e.state === "error").length;
+                const first = toolExecutions[0]!.label;
+                statusSection = (
+                  <details className="group text-[12px] text-soft-ink">
+                    <summary className="inline-flex cursor-pointer select-none list-none items-center gap-1.5 rounded-md transition-colors hover:text-near-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-near-ink [&::-webkit-details-marker]:hidden">
+                      {hasErrors ? (
+                        <PhWarning className="shrink-0 text-warning-clay" />
+                      ) : (
+                        <PhCheck className="shrink-0 text-success-olive" />
+                      )}
+                      <span>
+                        {first} · {toolExecutions.length - 1} more
+                        {errorCount > 0 ? ` (${errorCount} with issues)` : ""}
+                      </span>
+                      <ChevronDown className="size-3 transition-transform duration-150 group-open:rotate-180" />
+                    </summary>
+                    <div className="mt-1.5 flex flex-col gap-1 border-l border-hairline pl-3">
+                      {toolExecutions.map((exec) => (
+                        <ToolStatus key={exec.id} label={exec.label} state={exec.state} />
+                      ))}
                     </div>
-                  );
-                } else {
-                  const summaryText = hasErrors
-                    ? `${toolExecutions.filter((e) => e.state === "error").length} operations with warnings`
-                    : `${toolExecutions.length} operations completed`;
-                  statusSection = (
-                    <details className="group text-[11px] text-muted-foreground">
-                      <summary className="inline-flex cursor-pointer select-none items-center gap-1.5 font-medium transition-colors hover:text-foreground">
-                        {hasErrors ? (
-                          <PhWarning className="shrink-0 text-rose-500" />
-                        ) : (
-                          <PhCheck className="shrink-0 text-emerald-500" />
-                        )}
-                        <span>{summaryText}</span>
-                        <span className="text-[9px] text-muted-foreground/60 transition-transform group-open:rotate-180">
-                          ▾
-                        </span>
-                      </summary>
-                      <div className="mt-1 flex flex-col gap-1 border-l border-border/50 pl-3">
-                        {toolExecutions.map((exec) => (
-                          <ToolStatus
-                            key={exec.id}
-                            label={exec.label}
-                            state={exec.state}
-                          />
-                        ))}
-                      </div>
-                    </details>
-                  );
-                }
+                  </details>
+                );
               }
 
               const fullText = textParts.join("");
               const textEl = fullText.trim() ? (
                 <Markdown
                   key="text-body"
-                  className="prose prose-sm max-w-none text-[13px] leading-[22px] text-foreground prose-p:my-1 prose-headings:my-1.5 prose-ul:my-1 prose-ol:my-1 prose-li:my-0 prose-pre:my-1.5"
+                  className="prose prose-sm max-w-none text-[13.5px] leading-[22px] text-near-ink prose-p:my-1 prose-headings:my-1.5 prose-ul:my-1 prose-ol:my-1 prose-li:my-0 prose-pre:my-1.5"
                   components={MARKDOWN_COMPONENTS}
                 >
                   {fullText}
@@ -2723,17 +2765,17 @@ function HarlyChat({
               const cutoffEl = wasCutOff ? (
                 <div
                   key="cutoff-notice"
-                  className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] leading-snug text-muted-foreground"
+                  className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[12px] leading-snug text-soft-ink"
                   role="status"
                 >
-                  <span>Harly AI stopped before finishing this response.</span>
+                  <span>I stopped before finishing.</span>
                   <button
                     type="button"
                     onClick={continueConversation}
                     className="font-medium text-foreground underline decoration-border underline-offset-2 transition-colors hover:decoration-foreground disabled:cursor-not-allowed disabled:opacity-50"
                     disabled={isBusy}
                   >
-                    Continue safely
+                    Continue
                   </button>
                 </div>
               ) : null;
@@ -2742,7 +2784,7 @@ function HarlyChat({
               const messageErrorEl = partErrorMessage ? (
                 <p
                   key="stream-error-notice"
-                  className="text-[11px] leading-snug text-rose-600 dark:text-rose-400"
+                  className="text-[12px] leading-snug text-danger-rust"
                   role="alert"
                 >
                   {partErrorMessage}
@@ -2750,16 +2792,8 @@ function HarlyChat({
               ) : null;
 
               return (
-                <div key={message.id} className="flex items-start gap-2">
-                  <Image
-                    src="/harly-ai-animado.svg"
-                    alt="Harly AI"
-                    width={18}
-                    height={18}
-                    unoptimized
-                    className="mt-1 shrink-0"
-                  />
-                  <div className="flex min-w-0 flex-1 flex-col gap-2">
+                <div key={message.id} className="flex items-start">
+                  <div className="flex min-w-0 flex-1 flex-col gap-2.5">
                     {statusSection}
                     {lastReadCard}
                     {textEl}
@@ -2807,15 +2841,7 @@ function HarlyChat({
             })}
 
             {status === "submitted" && (
-              <div className="flex items-center gap-2">
-                <Image
-                  src="/harly-ai-animado.svg"
-                  alt="Harly AI"
-                  width={18}
-                  height={18}
-                  unoptimized
-                  className="shrink-0"
-                />
+              <div aria-live="polite">
                 <ThinkingShimmer />
               </div>
             )}
@@ -2827,13 +2853,19 @@ function HarlyChat({
               const text = chatErrorMessage(error);
               return text ? (
                 <div
-                  className="flex items-start gap-2 rounded-lg border border-rose-200/60 bg-rose-50 px-3 py-2 dark:border-rose-900/50 dark:bg-rose-950/40"
+                  className="flex items-start gap-2 rounded-[var(--radius-inner)] bg-danger-rust/10 px-3 py-2.5"
                   role="alert"
                 >
-                  <PhWarning className="mt-0.5 shrink-0 text-rose-500" />
-                  <p className="text-[12px] leading-snug text-rose-700 dark:text-rose-300">
-                    {text}
-                  </p>
+                  <PhWarning className="mt-0.5 shrink-0 text-danger-rust" />
+                  <p className="min-w-0 flex-1 text-[12.5px] leading-snug text-danger-rust">{text}</p>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-7 shrink-0 px-2.5 text-[12.5px]"
+                    onClick={retryLast}
+                  >
+                    Try again
+                  </Button>
                 </div>
               ) : null;
             })()}
@@ -2843,11 +2875,11 @@ function HarlyChat({
         </ChatContainerRoot>
 
         {/* Input */}
-        <div className="shrink-0 border-t border-border/60 p-3">
+        <div className="shrink-0 border-t border-hairline p-3">
           <div className="relative">
             {mentionCandidates.length > 0 ? (
-              <div className="absolute inset-x-0 bottom-full z-10 mb-2 overflow-hidden rounded-xl border border-border/70 bg-popover p-1 shadow-lg">
-                <p className="px-2 py-1 text-[10px] font-medium uppercase tracking-[0.12em] text-muted-foreground">
+              <div className="absolute inset-x-0 bottom-full z-10 mb-2 overflow-hidden rounded-[var(--radius-inner)] border border-hairline bg-popover p-1 shadow-[var(--shadow-float)]">
+                <p className="type-col-head px-2 py-1">
                   Mention candidate
                 </p>
                 {mentionCandidates.map((candidate) => (
@@ -2883,25 +2915,20 @@ function HarlyChat({
               onSubmit={submit}
               isLoading={isBusy}
               maxHeight={120}
-              className="rounded-3xl border-border/60 bg-muted/30 px-3 py-2 shadow-none"
+              className="rounded-[var(--radius-inner)] border-mist-border bg-pure-snow px-3 py-2 shadow-none focus-within:border-near-ink focus-within:ring-3 focus-within:ring-near-ink/10"
             >
               <PromptInputTextarea
-                placeholder="Ask Harly AI… Use @ to mention a candidate"
-                className="min-h-[36px] bg-transparent py-1 text-[13px] dark:bg-transparent"
+                placeholder={
+                  surfaceContext?.kind === "candidate" && surfaceContext.label !== "Current candidate"
+                    ? `Ask about ${surfaceContext.label}…`
+                    : "Ask Harly AI…"
+                }
+                className="min-h-[36px] bg-transparent py-1 text-[13.5px] dark:bg-transparent"
               />
-              <PromptInputActions className="justify-between pt-1">
-                <PromptInputAction tooltip="Attach files (coming soon)">
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon-sm"
-                    disabled
-                    className="cursor-not-allowed text-muted-foreground/50"
-                    aria-label="Attach files (coming soon)"
-                  >
-                    <Paperclip className="size-3.5" />
-                  </Button>
-                </PromptInputAction>
+              <PromptInputActions className="items-center justify-between pt-1">
+                <span className="text-[11.5px] text-quiet-mist">
+                  @ to mention · Enter to send
+                </span>
                 <PromptInputAction tooltip={isBusy ? "Stop" : "Send (Enter)"}>
                   {isBusy ? (
                     <Button
@@ -3067,6 +3094,9 @@ type HarlyAIPanelProps = {
   canConfigureAi?: boolean;
   open: boolean;
   onClose: () => void;
+  /** A question handed over from elsewhere (⌘K), sent once the chat is ready. */
+  pendingPrompt?: string | null;
+  onPendingPromptConsumed?: () => void;
   /** Candidate currently visible in the dashboard. */
   candidateId?: string;
   surfaceContext?: {
@@ -3095,6 +3125,8 @@ export function HarlyAIPanel({
   canConfigureAi = false,
   open,
   onClose,
+  pendingPrompt,
+  onPendingPromptConsumed,
   candidateId,
   surfaceContext,
   automationContext,
@@ -3109,6 +3141,7 @@ export function HarlyAIPanel({
     [],
   );
   const [historyOpen, setHistoryOpen] = useState(false);
+  const confirm = useConfirm();
 
   useEffect(() => {
     let cancelled = false;
@@ -3124,14 +3157,20 @@ export function HarlyAIPanel({
       };
     }
 
-    void loadConversationAction(storedId).then((messages) => {
-      if (cancelled) return;
-      if (messages) {
+    // A failed restore (expired session, AI turned off) must not leave the
+    // panel stuck on "Restoring…": fall back to a fresh conversation.
+    void loadConversationAction(storedId)
+      .then((messages) => {
+        if (cancelled || !messages) return;
         setConversationId(storedId);
         setInitialMessages(messages);
-      }
-      setRestoredPersistenceKey(persistenceKey);
-    });
+      })
+      .catch(() => {
+        window.sessionStorage.removeItem(`harly-ai:conversation:${persistenceKey}`);
+      })
+      .finally(() => {
+        if (!cancelled) setRestoredPersistenceKey(persistenceKey);
+      });
 
     return () => {
       cancelled = true;
@@ -3173,66 +3212,139 @@ export function HarlyAIPanel({
   }
 
   async function removeConversation(id: string) {
+    const ok = await confirm({
+      tone: "destructive",
+      title: "Delete this conversation?",
+      description: "Its messages are removed for you. Actions it already ran stay done.",
+      confirmLabel: "Delete conversation",
+    });
+    if (!ok) return;
     await deleteConversationAction(id);
     setConversations((prev) => prev.filter((c) => c.id !== id));
     if (id === conversationId) startNewChat();
   }
 
+  // Escape closes; opening moves focus to the composer, closing hands it back
+  // to whatever opened the panel (the launcher, ⌘J, the command menu).
+  const panelRef = useRef<HTMLDivElement>(null);
+  const returnFocusRef = useRef<HTMLElement | null>(null);
+  const onCloseRef = useRef(onClose);
+  useEffect(() => {
+    onCloseRef.current = onClose;
+  }, [onClose]);
+  useEffect(() => {
+    if (!open) return;
+    returnFocusRef.current = document.activeElement as HTMLElement | null;
+    const frame = requestAnimationFrame(() => {
+      panelRef.current?.querySelector<HTMLTextAreaElement>("textarea")?.focus();
+    });
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape" && !event.defaultPrevented) onCloseRef.current();
+    }
+    window.addEventListener("keydown", onKeyDown);
+    return () => {
+      cancelAnimationFrame(frame);
+      window.removeEventListener("keydown", onKeyDown);
+      returnFocusRef.current?.focus?.();
+    };
+  }, [open]);
+
+  // The recruiter can detach the conversation from the page they're on.
+  const [detachedPath, setDetachedPath] = useState<string | null>(null);
+  const attached = surfaceContext && detachedPath !== surfaceContext.path;
+  const effectiveContext = attached ? surfaceContext : undefined;
+  const effectiveCandidateId = attached ? candidateId : undefined;
+
   return (
     <div
+      ref={panelRef}
+      role="dialog"
+      aria-modal="false"
+      aria-label="Harly AI"
       className={cn(
-        "fixed bottom-20 left-3 right-3 z-50 w-auto text-sm leading-6 transition-all duration-200 ease-out sm:left-auto sm:right-6 sm:w-[440px]",
+        "fixed bottom-[84px] left-3 right-3 z-50 w-auto text-sm leading-6 transition-[opacity,transform] duration-200 ease-out sm:left-auto sm:right-6 sm:w-[420px] motion-reduce:transition-none",
         open
           ? "translate-y-0 opacity-100 pointer-events-auto"
           : "invisible translate-y-3 opacity-0 pointer-events-none",
       )}
       aria-hidden={!open}
     >
-      <Card
-        className="relative flex h-[min(560px,calc(100dvh-7.5rem))] flex-col overflow-hidden border border-border/50 p-0 shadow-[0_1px_2px_rgba(23,23,23,0.04),0_4px_16px_rgba(23,23,23,0.03)] sm:h-[560px]"
-        aria-label="Harly AI assistant"
-      >
+      <Card className="relative flex h-[min(600px,calc(100dvh-7.5rem))] flex-col gap-0 overflow-hidden rounded-[var(--radius-card)] border border-hairline bg-pure-snow p-0 py-0 shadow-[var(--shadow-float)]">
         {/* Header */}
-        <div className="flex shrink-0 items-center justify-between border-b border-border/60 px-3 py-3">
-          <div className="flex items-center gap-1.5">
-            {aiEnabled && (
+        <div className="shrink-0 border-b border-hairline px-3 pt-2.5 pb-2.5">
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex min-w-0 items-center gap-2">
+              <HarlyAILogoMark className="size-5 shrink-0" />
+              <span className="text-[14px] font-semibold tracking-[-0.01em] text-near-ink">Harly AI</span>
+            </div>
+            <div className="flex items-center gap-0.5">
+              {aiEnabled ? (
+                <>
+                  <Button
+                    variant="ghost"
+                    size="icon-sm"
+                    className="text-soft-ink"
+                    onClick={() => setHistoryOpen(true)}
+                    aria-label="Chat history"
+                    title="Chat history"
+                  >
+                    <History className="size-4" />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon-sm"
+                    className="text-soft-ink"
+                    onClick={startNewChat}
+                    aria-label="New chat"
+                    title="New chat"
+                  >
+                    <Plus className="size-4" />
+                  </Button>
+                </>
+              ) : null}
               <Button
                 variant="ghost"
                 size="icon-sm"
-                className="text-muted-foreground"
-                onClick={() => setHistoryOpen(true)}
-                aria-label="Chat history"
+                className="text-soft-ink"
+                onClick={onClose}
+                aria-label="Close Harly AI"
+                title="Close (Esc)"
               >
-                <PanelLeft className="size-4" />
+                <X className="size-4" />
               </Button>
-            )}
-            <HarlyAILogoMark className="size-5 shrink-0" />
-            <span className="text-sm font-semibold tracking-tight">
-              Harly AI
-            </span>
+            </div>
           </div>
-          <div className="flex items-center gap-0.5">
-            {aiEnabled && (
-              <Button
-                variant="ghost"
-                size="icon-sm"
-                className="text-muted-foreground"
-                onClick={startNewChat}
-                aria-label="New chat"
-              >
-                <Plus className="size-4" />
-              </Button>
-            )}
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              className="text-muted-foreground"
-              onClick={onClose}
-              aria-label="Close Harly AI"
-            >
-              <X className="size-4" />
-            </Button>
-          </div>
+          {aiEnabled && surfaceContext ? (
+            <div className="mt-2 flex items-center gap-1.5">
+              {attached ? (
+                <span className="inline-flex max-w-full items-center gap-1.5 rounded-full bg-lime-wash py-0.5 pl-2 pr-1 text-[12px] font-medium text-sage-ink">
+                  {surfaceContext.kind === "candidate" ? (
+                    <UserRound className="size-3.5 shrink-0" strokeWidth={2} />
+                  ) : (
+                    <LayoutGrid className="size-3.5 shrink-0" strokeWidth={2} />
+                  )}
+                  <span className="truncate">{surfaceContext.label}</span>
+                  <button
+                    type="button"
+                    onClick={() => setDetachedPath(surfaceContext.path)}
+                    className="grid size-4 place-items-center rounded-full hover:bg-sage-ink/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-near-ink"
+                    aria-label={`Stop using ${surfaceContext.label} as context`}
+                  >
+                    <X className="size-3" strokeWidth={2.2} />
+                  </button>
+                </span>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setDetachedPath(null)}
+                  className="inline-flex items-center gap-1.5 rounded-full border border-dashed border-mist-border px-2 py-0.5 text-[12px] text-soft-ink hover:text-near-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-near-ink"
+                >
+                  <Plus className="size-3" strokeWidth={2.2} />
+                  Use {surfaceContext.label} as context
+                </button>
+              )}
+            </div>
+          ) : null}
         </div>
 
         {!aiEnabled ? (
@@ -3242,8 +3354,8 @@ export function HarlyAIPanel({
         ) : (
           <>
             {restoringConversation ? (
-              <div className="flex flex-1 items-center justify-center text-xs text-muted-foreground">
-                Restoring your chat…
+              <div className="flex flex-1 items-center justify-center">
+                <ThinkingShimmer label="Restoring your chat" />
               </div>
             ) : (
               <HarlyChat
@@ -3251,11 +3363,13 @@ export function HarlyAIPanel({
                 conversationId={conversationId}
                 initialMessages={initialMessages}
                 userName={userName}
-                candidateId={candidateId}
-                surfaceContext={surfaceContext}
+                candidateId={effectiveCandidateId}
+                surfaceContext={effectiveContext}
                 automationContext={automationContext}
                 onAutomationApplied={onAutomationApplied}
                 onConversationActivity={refreshList}
+                pendingPrompt={pendingPrompt}
+                onPendingPromptConsumed={onPendingPromptConsumed}
               />
             )}
             <HistoryDrawer
@@ -3264,7 +3378,7 @@ export function HarlyAIPanel({
               activeId={conversationId}
               onSelect={openConversation}
               onNew={startNewChat}
-              onDelete={removeConversation}
+              onDelete={(id) => void removeConversation(id)}
               onClose={() => setHistoryOpen(false)}
             />
           </>
@@ -3275,4 +3389,4 @@ export function HarlyAIPanel({
 }
 
 // The launcher lives in HarlyAILauncher (bottom-right), rendered by
-// HarlyAIProvider; the command menu can also open the panel.
+// HarlyAIProvider; ⌘J and the command menu's "Ask Harly AI" open it too.

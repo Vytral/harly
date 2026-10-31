@@ -21,12 +21,15 @@ type HarlyAIContextValue = {
   toggle: () => void;
   /** False when the workspace has no usable AI config; the panel then explains how to turn it on. */
   enabled: boolean;
+  /** Open the panel and send `text` as a new turn (command menu hand-off). */
+  ask: (text: string) => void;
 };
 
 const HarlyAIContext = createContext<HarlyAIContextValue>({
   open: false,
   toggle: () => {},
   enabled: false,
+  ask: () => {},
 });
 
 /** Read by anything that opens the panel (launcher, command menu). */
@@ -126,9 +129,28 @@ export function HarlyAIProvider({
   }, [activeCandidateId]);
 
   const toggle = useCallback(() => setOpen((v) => !v), []);
+  const close = useCallback(() => setOpen(false), []);
+  const [pendingPrompt, setPendingPrompt] = useState<string | null>(null);
+  const ask = useCallback((text: string) => {
+    setOpen(true);
+    if (text.trim()) setPendingPrompt(text.trim());
+  }, []);
+
+  // ⌘J / Ctrl+J toggles the panel from anywhere (⌘K stays search).
+  useEffect(() => {
+    function onKeyDown(event: KeyboardEvent) {
+      if ((event.metaKey || event.ctrlKey) && !event.shiftKey && !event.altKey && event.key.toLowerCase() === "j") {
+        event.preventDefault();
+        toggle();
+      }
+    }
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [toggle]);
+
   const value = useMemo(
-    () => ({ open, toggle, enabled: aiEnabled }),
-    [open, toggle, aiEnabled],
+    () => ({ open, toggle, enabled: aiEnabled, ask }),
+    [open, toggle, aiEnabled, ask],
   );
 
   return (
@@ -140,7 +162,9 @@ export function HarlyAIProvider({
         aiEnabled={aiEnabled}
         canConfigureAi={canConfigureAi}
         open={open}
-        onClose={() => setOpen(false)}
+        onClose={close}
+        pendingPrompt={pendingPrompt}
+        onPendingPromptConsumed={() => setPendingPrompt(null)}
         candidateId={activeCandidateId}
         surfaceContext={surfaceContext}
       />

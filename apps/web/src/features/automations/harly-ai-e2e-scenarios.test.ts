@@ -811,16 +811,16 @@ describe("Harly AI × Automations End-to-End Scenarios", () => {
       }
 
       expect(getToolLabel("tool-listAutomationTools")).toBe(
-        "Checking automation tools",
+        "Looking at automation steps",
       );
       expect(getToolLabel("tool-prepareAutomationPlan")).toBe(
-        "Preparing automation plan",
+        "Planning the automation",
       );
       expect(getToolLabel("tool-simulateAutomationProposal")).toBe(
         "Simulating automation",
       );
       expect(getToolLabel("tool-customSecurityScan")).toBe(
-        "Checking custom security scan",
+        "Looking at custom security scan",
       );
     });
   });
