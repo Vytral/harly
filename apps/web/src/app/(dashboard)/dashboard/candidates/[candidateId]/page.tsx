@@ -1,7 +1,7 @@
 import type { Route } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ArrowLeft, MapPin, UserPlus } from "lucide-react";
+import { ArrowLeft, MapPin } from "lucide-react";
 
 import { CandidateAvatarEdit } from "@/features/candidates/CandidateAvatarEdit";
 import { Button } from "@/components/ui/button";
@@ -297,12 +297,6 @@ export default async function CandidateDetailPage({
               members={members}
               currentUserId={workspaceContext.user.id}
               canAttributeToOthers={canEditCandidates}
-              trigger={
-                <Button type="button" variant="ghost" size="sm" className="h-6 gap-1 px-2 text-xs text-soft-ink">
-                  <UserPlus className="size-3.5" />
-                  Refer
-                </Button>
-              }
             />
           ) : null}
         </div>
