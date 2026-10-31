@@ -1,13 +1,13 @@
 "use client";
 
-import Image from "next/image";
 import { X } from "lucide-react";
 
+import { AssistantAvatar, useHarlyAI } from "@/components/dashboard/HarlyAIContext";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 
 /**
- * Bottom-right launcher for Harly AI (Deel's chat bubble). The panel opens
+ * Bottom-right launcher for the AI assistant (Harly AI unless the workspace renamed it) (Deel's chat bubble). The panel opens
  * just above it; while open the mark swaps to a close glyph. Always rendered,
  * so the copilot is discoverable before AI is configured.
  */
@@ -18,7 +18,8 @@ export function HarlyAILauncher({
   open: boolean;
   onToggle: () => void;
 }) {
-  const label = open ? "Close Harly AI" : "Ask Harly AI";
+  const { assistant } = useHarlyAI();
+  const label = open ? `Close ${assistant.name}` : `Ask ${assistant.name}`;
   return (
     <Tooltip>
       <TooltipTrigger asChild>
@@ -42,13 +43,10 @@ export function HarlyAILauncher({
               open ? "rotate-90 scale-75 opacity-0" : "rotate-0 scale-100 opacity-100",
             )}
           >
-            <Image
-              src="/harly-ai-animado.svg"
-              alt=""
-              width={28}
-              height={28}
-              className="size-7"
-              unoptimized
+            <AssistantAvatar
+              avatarUrl={assistant.avatarUrl}
+              size={28}
+              className={cn("size-7", assistant.avatarUrl && "rounded-full")}
             />
           </span>
           <X

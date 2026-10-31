@@ -22,6 +22,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { withHint, ariaKeys } from "@/components/dashboard/shortcuts/catalog";
 import { cn } from "@/lib/utils";
 
 type CreateAction = {
@@ -96,6 +97,14 @@ function ActionItem({ action }: { action: CreateAction }) {
   );
 }
 
+/** True when the "+" menu would show at least one entry for this viewer. */
+export function canQuickCreate(userPermissions: string[], hasInvite: boolean) {
+  return (
+    hasInvite ||
+    [...HIRING, ...WORK].some((action) => userPermissions.includes(action.permission))
+  );
+}
+
 /**
  * Header "+" — one round ink control (the only solid action in the band) that
  * opens straight into creation flows, filtered by what the viewer may do.
@@ -103,9 +112,14 @@ function ActionItem({ action }: { action: CreateAction }) {
 export function QuickCreateButton({
   userPermissions,
   onInvite,
+  open,
+  onOpenChange,
 }: {
   userPermissions: string[];
   onInvite?: () => void;
+  /** Optional control, so the "c" shortcut can open the menu. */
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
 }) {
   const can = (action: CreateAction) => userPermissions.includes(action.permission);
   const hiring = HIRING.filter(can);
@@ -113,11 +127,12 @@ export function QuickCreateButton({
   if (hiring.length === 0 && work.length === 0 && !onInvite) return null;
 
   return (
-    <DropdownMenu>
+    <DropdownMenu open={open} onOpenChange={onOpenChange}>
       <Tooltip>
         <TooltipTrigger asChild>
           <DropdownMenuTrigger
             aria-label="Create"
+            aria-keyshortcuts={ariaKeys("create.open")}
             className={cn(
               "inline-flex size-9 shrink-0 items-center justify-center rounded-full bg-near-ink text-pure-snow",
               "transition-[background-color,transform] duration-150 ease-out hover:bg-pine-strong active:scale-95",
@@ -128,7 +143,7 @@ export function QuickCreateButton({
             <Plus className="size-[18px] transition-transform duration-200 ease-out" strokeWidth={2.25} />
           </DropdownMenuTrigger>
         </TooltipTrigger>
-        <TooltipContent>Create</TooltipContent>
+        <TooltipContent>{withHint("Create", "create.open")}</TooltipContent>
       </Tooltip>
       <DropdownMenuContent align="end" sideOffset={8} className="w-72 p-1.5">
         {hiring.length > 0 ? (

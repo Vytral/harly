@@ -17,7 +17,8 @@ import {
 } from "@/components/dashboard/CommandMenu";
 import { NotificationIsland } from "@/components/dashboard/NotificationIsland";
 import { NotificationsBell } from "@/components/dashboard/NotificationsBell";
-import { QuickCreateButton } from "@/components/dashboard/QuickCreateMenu";
+import { QuickCreateButton, canQuickCreate } from "@/components/dashboard/QuickCreateMenu";
+import { GlobalShortcuts } from "@/components/dashboard/shortcuts";
 import { SubNav } from "@/components/dashboard/SubNav";
 import { useStickyBar } from "@/components/dashboard/StickyBarContext";
 import { UserMenu } from "@/components/dashboard/UserMenu";
@@ -106,6 +107,7 @@ export function AppHeader({
   const { stickyBarVisible } = useStickyBar();
   const [commandOpen, setCommandOpen] = useState(false);
   const [inviteOpen, setInviteOpen] = useState(false);
+  const [createOpen, setCreateOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
 
   useEffect(() => {
@@ -203,6 +205,8 @@ export function AppHeader({
             <QuickCreateButton
               userPermissions={userPermissions}
               onInvite={canInvite ? () => setInviteOpen(true) : undefined}
+              open={createOpen}
+              onOpenChange={setCreateOpen}
             />
             <SearchButton onClick={() => setCommandOpen(true)} />
             {canSettings ? (
@@ -259,6 +263,12 @@ export function AppHeader({
         </div>
       </div>
 
+      <GlobalShortcuts
+        userPermissions={userPermissions}
+        canCreate={canQuickCreate(userPermissions, canInvite)}
+        onOpenSearch={() => setCommandOpen(true)}
+        onOpenCreate={() => setCreateOpen(true)}
+      />
       <CommandMenu
         open={commandOpen}
         onOpenChange={setCommandOpen}
@@ -430,7 +440,7 @@ function SearchButton({ onClick }: { onClick: () => void }) {
           type="button"
           onClick={onClick}
           aria-label="Search"
-          aria-keyshortcuts="Meta+K Control+K"
+          aria-keyshortcuts="Meta+K Control+K /"
           className={cn(
             headerRoundButton,
             "xl:w-auto xl:gap-2 xl:pl-3 xl:pr-1.5",
@@ -445,6 +455,7 @@ function SearchButton({ onClick }: { onClick: () => void }) {
       <TooltipContent className="flex items-center gap-2 xl:hidden">
         Search
         <kbd className="font-chrome text-[11px] text-quiet-mist">⌘K</kbd>
+        <kbd className="font-chrome text-[11px] text-quiet-mist">/</kbd>
       </TooltipContent>
     </Tooltip>
   );

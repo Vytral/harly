@@ -5,13 +5,18 @@ import { eq } from "drizzle-orm";
 import { generateText } from "ai";
 import { z } from "zod";
 
-import { db, workspaceSettings } from "@harly/db";
+import { db, organization, workspaceSettings } from "@harly/db";
 
 import { requirePermission } from "@/features/workspaces/permissions-server";
 import { encryptSecret, isEncryptionConfigured } from "@/lib/crypto";
 import { getWorkspaceAiConfig, getWorkspaceAiStatus } from "@/lib/ai/config";
 import { fetchOpenRouterModels, getModel } from "@/lib/ai/registry";
 import { assertSafeAiBaseUrl } from "@/lib/ai/base-url";
+import {
+  assistantBrandingSchema,
+  writeAssistantBranding,
+  type AssistantBranding,
+} from "@/lib/ai/assistant-branding-shared";
 import { isAiProviderId, type OpenRouterModel } from "@/lib/ai/providers";
 
 import { assertNotDemo } from "@/features/demo/assert-not-demo";
@@ -251,4 +256,37 @@ export async function searchOpenRouterModelsAction(
     : all;
 
   return filtered.slice(0, 50);
+}
+
+/** Save the Harly AI assistant's name / avatar / "Powered by" flag (stored in organization.metadata). */
+export async function saveAssistantBrandingAction(
+  input: AssistantBranding,
+): Promise<AiSettingsActionResult> {
+  assertNotDemo();
+  const context = await requirePermission("settings:edit");
+
+  const parsed = assistantBrandingSchema.safeParse(input);
+  if (!parsed.success) {
+    return {
+      ok: false,
+      error: parsed.error.issues[0]?.message ?? "Invalid assistant settings.",
+    };
+  }
+
+  const [row] = await db
+    .select({ metadata: organization.metadata })
+    .from(organization)
+    .where(eq(organization.id, context.organization.id))
+    .limit(1);
+
+  // Merge into the existing metadata so unrelated keys survive.
+  const next = writeAssistantBranding(row?.metadata, parsed.data);
+  await db
+    .update(organization)
+    .set({ metadata: next })
+    .where(eq(organization.id, context.organization.id));
+
+  revalidatePath("/settings/ai");
+  revalidatePath("/dashboard", "layout");
+  return { ok: true };
 }

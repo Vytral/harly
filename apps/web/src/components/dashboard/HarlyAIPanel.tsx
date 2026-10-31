@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useRef, useEffect, useCallback, useMemo } from "react";
-import Image from "next/image";
 import Link from "next/link";
 import type { Route } from "next";
 import { useChat } from "@ai-sdk/react";
@@ -26,8 +25,11 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { useConfirm } from "@/components/ui/confirm-dialog";
 import { HarlyAILogoMark } from "@/components/ui/icons/HarlyAILogoMark";
+import { AssistantAvatar, useHarlyAI } from "@/components/dashboard/HarlyAIContext";
+import { DEFAULT_ASSISTANT_NAME } from "@/lib/ai/assistant-branding-shared";
 import { Markdown } from "@/components/ui/markdown";
 import { TextShimmer } from "@/components/ui/text-shimmer";
+import { UiBlocks } from "@/components/dashboard/harly-ai/UiBlocks";
 import {
   ChatContainerRoot,
   ChatContainerContent,
@@ -2014,6 +2016,7 @@ function EmptyState({
   surface?: { kind: "candidate" | "section"; label: string };
   onStarter: (starter: Starter) => void;
 }) {
+  const { assistant } = useHarlyAI();
   const starters = startersFor(surface);
   const heading =
     surface?.kind === "candidate" && surface.label !== "Current candidate"
@@ -2022,7 +2025,7 @@ function EmptyState({
   return (
     <div className="flex flex-col gap-3.5 px-1 pt-1 pb-1">
       <div className="flex flex-col items-start gap-2.5">
-        <Image src="/harly-ai-animado.svg" alt="" width={32} height={32} unoptimized priority />
+        <AssistantAvatar avatarUrl={assistant.avatarUrl} size={32} className={cn("size-8", assistant.avatarUrl && "rounded-full")} />
         <h2 className="font-display text-[19px] leading-tight text-near-ink">{heading}</h2>
       </div>
       <ul className="flex flex-col gap-1.5">
@@ -2048,20 +2051,29 @@ function EmptyState({
   );
 }
 
+/** Tiny attribution under the composer, only for white-labelled (renamed) assistants. */
+function PoweredByFootnote() {
+  const { assistant } = useHarlyAI();
+  if (!assistant.showPoweredBy || assistant.name === DEFAULT_ASSISTANT_NAME) return null;
+  return (
+    <p className="pt-1.5 text-center text-[11px] leading-none text-quiet-mist">
+      Powered by Harly
+    </p>
+  );
+}
+
 function NotConfiguredState({ canConfigure }: { canConfigure: boolean }) {
+  const { assistant } = useHarlyAI();
   return (
     <div className="flex flex-col items-center gap-4 px-6 py-12 text-center">
-      <Image
-        src="/harly-ai-animado.svg"
-        alt="Harly AI"
-        width={72}
-        height={72}
-        unoptimized
-        priority
+      <AssistantAvatar
+        avatarUrl={assistant.avatarUrl}
+        size={72}
+        className={cn("size-[72px]", assistant.avatarUrl && "rounded-full")}
       />
       <div className="flex flex-col gap-1">
         <h2 className="text-[16px] font-semibold tracking-tight">
-          Harly AI isn&apos;t set up yet
+          {assistant.name} isn&apos;t set up yet
         </h2>
         <p className="text-[13px] leading-relaxed text-muted-foreground">
           {canConfigure
@@ -2150,6 +2162,7 @@ function HarlyChat({
   pendingPrompt,
   onPendingPromptConsumed,
 }: HarlyChatProps) {
+  const { assistant } = useHarlyAI();
   const [input, setInput] = useState("");
   const [mentionQuery, setMentionQuery] = useState<string | null>(null);
   const [mentionCandidates, setMentionCandidates] = useState<
@@ -2567,6 +2580,8 @@ function HarlyChat({
                 state: "running" | "done" | "error" | "interrupted";
               }[] = [];
               const writeEls: React.ReactNode[] = [];
+              // Interactive answer blocks (presentUi), drawn from the tool input.
+              const uiEls: React.ReactNode[] = [];
               let partErrorMessage: string | null = null;
               // Collect pending updateTask confirmations so we can offer a
               // single "Confirm all" when the agent batches several.
@@ -2595,6 +2610,20 @@ function HarlyChat({
                 const toolName = part.type.slice("tool-".length);
 
                 // Write tool → confirm card (inline with text flow).
+                if (toolName === "presentUi") {
+                  if (part.input) {
+                    uiEls.push(
+                      <UiBlocks
+                        key={part.toolCallId ?? `ui-${i}`}
+                        input={part.input}
+                        onSend={send}
+                        disabled={isBusy}
+                      />,
+                    );
+                  }
+                  return;
+                }
+
                 if (isAgentWriteTool(toolName)) {
                   if (!part.input || !part.toolCallId) return;
                   const callId = part.toolCallId;
@@ -2759,7 +2788,7 @@ function HarlyChat({
               const wasCutOff = isStrandedAssistantTurn({
                 isBusy,
                 text: fullText,
-                writeCardCount: writeEls.length,
+                writeCardCount: writeEls.length + uiEls.length,
                 toolExecutionCount: toolExecutions.length,
               });
               const cutoffEl = wasCutOff ? (
@@ -2795,8 +2824,9 @@ function HarlyChat({
                 <div key={message.id} className="flex items-start">
                   <div className="flex min-w-0 flex-1 flex-col gap-2.5">
                     {statusSection}
-                    {lastReadCard}
+                    {uiEls.length > 0 ? null : lastReadCard}
                     {textEl}
+                    {uiEls}
                     {messageErrorEl}
                     {cutoffEl}
                     {writeEls}
@@ -2921,7 +2951,7 @@ function HarlyChat({
                 placeholder={
                   surfaceContext?.kind === "candidate" && surfaceContext.label !== "Current candidate"
                     ? `Ask about ${surfaceContext.label}…`
-                    : "Ask Harly AI…"
+                    : `Ask ${assistant.name}…`
                 }
                 className="min-h-[36px] bg-transparent py-1 text-[13.5px] dark:bg-transparent"
               />
@@ -2955,6 +2985,7 @@ function HarlyChat({
                 </PromptInputAction>
               </PromptInputActions>
             </PromptInput>
+            <PoweredByFootnote />
           </div>
         </div>
       </>
@@ -3142,6 +3173,7 @@ export function HarlyAIPanel({
   );
   const [historyOpen, setHistoryOpen] = useState(false);
   const confirm = useConfirm();
+  const { assistant } = useHarlyAI();
 
   useEffect(() => {
     let cancelled = false;
@@ -3260,7 +3292,7 @@ export function HarlyAIPanel({
       ref={panelRef}
       role="dialog"
       aria-modal="false"
-      aria-label="Harly AI"
+      aria-label={assistant.name}
       className={cn(
         "fixed bottom-[84px] left-3 right-3 z-50 w-auto text-sm leading-6 transition-[opacity,transform] duration-200 ease-out sm:left-auto sm:right-6 sm:w-[420px] motion-reduce:transition-none",
         open
@@ -3274,8 +3306,12 @@ export function HarlyAIPanel({
         <div className="shrink-0 border-b border-hairline px-3 pt-2.5 pb-2.5">
           <div className="flex items-center justify-between gap-2">
             <div className="flex min-w-0 items-center gap-2">
-              <HarlyAILogoMark className="size-5 shrink-0" />
-              <span className="text-[14px] font-semibold tracking-[-0.01em] text-near-ink">Harly AI</span>
+              {assistant.avatarUrl ? (
+                <AssistantAvatar avatarUrl={assistant.avatarUrl} size={20} className="size-5 shrink-0 rounded-full" />
+              ) : (
+                <HarlyAILogoMark className="size-5 shrink-0" />
+              )}
+              <span className="truncate text-[14px] font-semibold tracking-[-0.01em] text-near-ink">{assistant.name}</span>
             </div>
             <div className="flex items-center gap-0.5">
               {aiEnabled ? (
@@ -3307,7 +3343,7 @@ export function HarlyAIPanel({
                 size="icon-sm"
                 className="text-soft-ink"
                 onClick={onClose}
-                aria-label="Close Harly AI"
+                aria-label={`Close ${assistant.name}`}
                 title="Close (Esc)"
               >
                 <X className="size-4" />

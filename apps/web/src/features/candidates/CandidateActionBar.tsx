@@ -65,9 +65,13 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuSeparator,
+  DropdownMenuShortcut,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
+import { ariaKeys, withHint, type ShortcutId } from "@/components/dashboard/shortcuts/catalog";
+import { usePublishCandidateActions } from "@/components/dashboard/shortcuts/candidate-actions";
+import { useShortcut } from "@/components/dashboard/shortcuts/useShortcut";
 
 function isPdfResume(
   url: string,
@@ -296,7 +300,8 @@ function RejectButton({
         "border-destructive/30 text-destructive hover:border-destructive/50 hover:bg-destructive/10 hover:text-destructive",
         className,
       )}
-      title="Reject candidate"
+      title={withHint("Reject candidate", "candidate.reject")}
+      aria-keyshortcuts={ariaKeys("candidate.reject")}
     >
       <ProhibitIcon className="size-4" />
       {compact ? <span className="sr-only">Reject</span> : "Reject"}
@@ -403,6 +408,9 @@ export function CandidateActionBar({
   const [rejectOpen, setRejectOpen] = useState(false);
   const scheduleRef = useRef<HTMLSpanElement>(null);
   const editRef = useRef<HTMLSpanElement>(null);
+  const emailRef = useRef<HTMLSpanElement>(null);
+  const evaluateRef = useRef<HTMLSpanElement>(null);
+  const moveRef = useRef<HTMLSpanElement>(null);
   // Menu selections run after the menu has closed and returned focus, so a
   // drawer or dialog they open is not immediately stolen back by the trigger.
   const afterMenuClose = useRef<(() => void) | null>(null);
@@ -444,12 +452,14 @@ export function CandidateActionBar({
     key: StageActionKey,
     Icon: ComponentType<{ className?: string }>,
     label: string,
-    extraClass?: string,
+    shortcut?: ShortcutId,
   ) => (
     <Button
       size="sm"
       variant={key === stageActionKey && key !== "evaluate" ? "soft" : "outline"}
-      className={cn("max-sm:flex-1", extraClass)}
+      className="max-sm:flex-1"
+      title={shortcut ? withHint(label, shortcut) : undefined}
+      aria-keyshortcuts={shortcut ? ariaKeys(shortcut) : undefined}
     >
       <Icon className="size-4" />
       {label}
@@ -459,12 +469,14 @@ export function CandidateActionBar({
   const compactTrigger = (
     Icon: ComponentType<{ className?: string }>,
     label: string,
+    shortcut?: ShortcutId,
   ) => (
     <Button
       size="sm"
       variant="ghost"
       className="hidden size-8 p-0 text-muted-foreground hover:text-foreground md:inline-flex"
-      title={label}
+      title={shortcut ? withHint(label, shortcut) : label}
+      aria-keyshortcuts={shortcut ? ariaKeys(shortcut) : undefined}
     >
       <Icon className="size-4" />
       <span className="sr-only">{label}</span>
@@ -499,8 +511,8 @@ export function CandidateActionBar({
       cal={cal}
       trigger={
         variant === "compact"
-          ? compactTrigger(CalendarClock, "Schedule")
-          : triggerButton("schedule", CalendarClock, "Schedule")
+          ? compactTrigger(CalendarClock, "Schedule", "candidate.schedule")
+          : triggerButton("schedule", CalendarClock, "Schedule", "candidate.schedule")
       }
     />
   );
@@ -513,8 +525,8 @@ export function CandidateActionBar({
       stageName={selectedApplication.currentStageName ?? stageName}
       trigger={
         variant === "compact"
-          ? compactTrigger(ClipboardCheck, "Evaluate")
-          : triggerButton("evaluate", ClipboardCheck, "Evaluate")
+          ? compactTrigger(ClipboardCheck, "Evaluate", "candidate.evaluate")
+          : triggerButton("evaluate", ClipboardCheck, "Evaluate", "candidate.evaluate")
       }
     />
   ) : null;
@@ -546,6 +558,40 @@ export function CandidateActionBar({
       }}
       className={variant === "compact" ? undefined : "max-sm:flex-1"}
     />
+  );
+
+  /*
+   * Keyboard shortcuts and ⌘K actions. Only the full bar owns them (the sticky
+   * "compact" bar is a second copy of the same buttons), and every one drives
+   * the visible control: it clicks the same trigger or opens the same dialog,
+   * so disabled and pending states apply exactly as for a mouse click.
+   */
+  const owner = variant === "full";
+  const canMove = Boolean(moveTarget?.nextStage);
+  const canReject = !isHired && Boolean(selectedApplication) && !status.isPending;
+  const canEvaluate = Boolean(selectedApplication);
+  const openMove = () => clickTrigger(moveRef);
+  const openReject = () => setRejectOpen(true);
+  const openEvaluate = () => clickTrigger(evaluateRef);
+  const openSchedule = () => clickTrigger(scheduleRef);
+  const openEmail = () => clickTrigger(emailRef);
+
+  useShortcut("candidate.move", openMove, { enabled: owner && canMove });
+  useShortcut("candidate.reject", openReject, { enabled: owner && canReject });
+  useShortcut("candidate.evaluate", openEvaluate, { enabled: owner && canEvaluate });
+  useShortcut("candidate.schedule", openSchedule, { enabled: owner });
+
+  usePublishCandidateActions(
+    {
+      ...(canMove && moveTarget?.nextStage
+        ? { move: { label: `Move to ${moveTarget.nextStage.name}`, run: openMove } }
+        : {}),
+      ...(canReject ? { reject: { label: "Reject…", run: openReject } } : {}),
+      ...(canEvaluate ? { evaluate: { label: "Evaluate", run: openEvaluate } } : {}),
+      schedule: { label: "Schedule interview", run: openSchedule },
+      email: { label: "Email", run: openEmail },
+    },
+    owner,
   );
 
   // ── Compact (sticky bar): fast-path actions only ──
@@ -593,7 +639,12 @@ export function CandidateActionBar({
 
   // Schedule / Email already sit in row 1 (emphasized for this stage); only
   // Evaluate needs its own slot in the decision bar.
-  const contextual = stageActionKey === "evaluate" ? evaluate : null;
+  const contextual =
+    stageActionKey === "evaluate" ? (
+      <span ref={evaluateRef} className="contents">
+        {evaluate}
+      </span>
+    ) : null;
   const stepperStage = selectedApplication?.currentStageName ?? stageName;
 
   return (
@@ -602,7 +653,9 @@ export function CandidateActionBar({
         <div className="min-w-0 flex-1">{identity}</div>
 
         <div className="flex shrink-0 items-center gap-2">
-          {email}
+          <span ref={emailRef} className="contents">
+            {email}
+          </span>
           <span ref={scheduleRef} className="hidden sm:inline-flex">
             {schedule}
           </span>
@@ -635,6 +688,15 @@ export function CandidateActionBar({
                 <CalendarClock className="size-4" />
                 Schedule
               </DropdownMenuItem>
+              {stageActionKey !== "evaluate" && selectedApplication ? (
+                <DropdownMenuItem
+                  onSelect={() => queueAfterMenu(() => clickTrigger(evaluateRef))}
+                >
+                  <ClipboardCheck className="size-4" />
+                  Evaluate
+                  <DropdownMenuShortcut aria-hidden>E</DropdownMenuShortcut>
+                </DropdownMenuItem>
+              ) : null}
               {menuStatusItems}
               {!isHired ? (
                 <DropdownMenuItem
@@ -714,14 +776,21 @@ export function CandidateActionBar({
           <div className="ml-auto flex items-center gap-2 max-sm:w-full">
             {reject}
             {contextual}
-            <MoveStageButton target={moveTarget} className="max-sm:flex-1" />
+            <span ref={moveRef} className="contents">
+              <MoveStageButton target={moveTarget} className="max-sm:flex-1" />
+            </span>
           </div>
         )}
       </div>
 
       {rejectDialog}
 
-      {/* Hidden triggers driven from the ⋯ menu */}
+      {/* Hidden triggers driven from the ⋯ menu and the E shortcut */}
+      {stageActionKey !== "evaluate" ? (
+        <span ref={evaluateRef} className="hidden">
+          {evaluate}
+        </span>
+      ) : null}
       <span ref={editRef} className="hidden">
         <EditCandidateDrawer
           candidate={candidate}

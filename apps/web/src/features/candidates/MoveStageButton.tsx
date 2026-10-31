@@ -8,6 +8,7 @@ import { useAdvanceAfterDecision } from "@/features/candidates/queue-navigation-
 import { withKeyLock } from "@/lib/client-mutex";
 import { Button } from "@/components/ui/button";
 import { ArrowLineRightIcon } from "@/components/ui/icons/phosphor";
+import { ariaKeys, withHint } from "@/components/dashboard/shortcuts/catalog";
 import { cn } from "@/lib/utils";
 
 export type MoveStageTarget = {
@@ -78,7 +79,12 @@ export function MoveStageButton({
       onClick={move}
       disabled={!nextStage || isPending}
       className={cn("gap-1.5", className)}
-      title={nextStage ? `Move to ${nextStage.name}` : "Already in the final stage"}
+      title={
+        nextStage
+          ? withHint(`Move to ${nextStage.name}`, "candidate.move")
+          : "Already in the final stage"
+      }
+      aria-keyshortcuts={nextStage ? ariaKeys("candidate.move") : undefined}
     >
       {nextStage ? (
         <>

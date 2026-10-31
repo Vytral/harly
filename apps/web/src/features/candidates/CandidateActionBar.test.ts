@@ -54,6 +54,7 @@ vi.mock("@/components/ui/dropdown-menu", () => ({
   DropdownMenuContent: () => null,
   DropdownMenuItem: () => null,
   DropdownMenuSeparator: () => null,
+  DropdownMenuShortcut: () => null,
   DropdownMenuTrigger: () => null,
 }));
 vi.mock("@/components/ui/icons/phosphor", () => ({

@@ -1,8 +1,13 @@
+"use client";
+
 import type { Route } from "next";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { ariaKeys, displayKey, SHORTCUTS } from "@/components/dashboard/shortcuts/catalog";
+import { useShortcut } from "@/components/dashboard/shortcuts/useShortcut";
 
 type PagerLink = { href: string; name: string } | null;
 
@@ -29,6 +34,15 @@ export function CandidatePager({
   /** The unfiltered directory reads "Candidate 3 of 20". */
   plain?: boolean;
 }) {
+  const router = useRouter();
+  // J / K walk the same list the buttons do, following the origin queue.
+  useShortcut("candidate.next", () => next && router.push(next.href as Route), {
+    enabled: Boolean(next),
+  });
+  useShortcut("candidate.prev", () => prev && router.push(prev.href as Route), {
+    enabled: Boolean(prev),
+  });
+
   if (total === 0 && !next) return null;
 
   const status =
@@ -52,7 +66,9 @@ export function CandidatePager({
 function PagerButton({ link, direction }: { link: PagerLink; direction: "prev" | "next" }) {
   const Icon = direction === "prev" ? ChevronLeft : ChevronRight;
   const fallback = direction === "prev" ? "Previous candidate" : "Next candidate";
+  const id = direction === "prev" ? "candidate.prev" : "candidate.next";
   const label = link ? `${fallback}: ${link.name}` : fallback;
+  const hinted = `${label} · ${displayKey(SHORTCUTS[id].keys)}`;
 
   if (!link) {
     return (
@@ -63,7 +79,12 @@ function PagerButton({ link, direction }: { link: PagerLink; direction: "prev" |
   }
   return (
     <Button asChild size="sm" variant="ghost" className="size-8 p-0">
-      <Link href={link.href as Route} aria-label={label} title={label}>
+      <Link
+        href={link.href as Route}
+        aria-label={label}
+        aria-keyshortcuts={ariaKeys(id)}
+        title={hinted}
+      >
         <Icon className="size-4" />
       </Link>
     </Button>

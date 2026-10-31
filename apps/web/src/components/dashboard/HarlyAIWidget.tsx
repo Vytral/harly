@@ -2,40 +2,19 @@
 
 import { usePathname } from "next/navigation";
 import {
-  createContext,
   useCallback,
-  useContext,
   useEffect,
   useMemo,
   useState,
   type ReactNode,
 } from "react";
 import { getCandidateContextAction } from "@/features/ai-chat/actions";
+import { DEFAULT_CLIENT_ASSISTANT, type ClientAssistantBranding } from "@/lib/ai/assistant-branding-shared";
+import { HarlyAIContext } from "./HarlyAIContext";
 import { HarlyAIPanel } from "./HarlyAIPanel";
 import { HarlyAILauncher } from "./HarlyAILauncher";
 
-type HarlyAIContextValue = {
-  /** Whether the AI panel is currently open. */
-  open: boolean;
-  /** Toggle the panel. Wired to the bottom-right launcher and ⌘K. */
-  toggle: () => void;
-  /** False when the workspace has no usable AI config; the panel then explains how to turn it on. */
-  enabled: boolean;
-  /** Open the panel and send `text` as a new turn (command menu hand-off). */
-  ask: (text: string) => void;
-};
-
-const HarlyAIContext = createContext<HarlyAIContextValue>({
-  open: false,
-  toggle: () => {},
-  enabled: false,
-  ask: () => {},
-});
-
-/** Read by anything that opens the panel (launcher, command menu). */
-export function useHarlyAI() {
-  return useContext(HarlyAIContext);
-}
+export { useHarlyAI } from "./HarlyAIContext";
 
 function candidateIdFromPath(pathname: string | null): string | undefined {
   const match = pathname?.match(
@@ -68,6 +47,7 @@ export function HarlyAIProvider({
   aiEnabled,
   canConfigureAi = false,
   candidateId,
+  assistant = DEFAULT_CLIENT_ASSISTANT,
   children,
 }: {
   userName: string;
@@ -78,6 +58,8 @@ export function HarlyAIProvider({
   canConfigureAi?: boolean;
   /** Optional candidate context, so the conversation is erased with the candidate (IA-02). */
   candidateId?: string;
+  /** Workspace branding of the assistant: display name, avatar, "Powered by Harly" flag. */
+  assistant?: ClientAssistantBranding;
   children: ReactNode;
 }) {
   const [open, setOpen] = useState(false);
@@ -149,8 +131,8 @@ export function HarlyAIProvider({
   }, [toggle]);
 
   const value = useMemo(
-    () => ({ open, toggle, enabled: aiEnabled, ask }),
-    [open, toggle, aiEnabled, ask],
+    () => ({ open, toggle, enabled: aiEnabled, ask, assistant }),
+    [open, toggle, aiEnabled, ask, assistant],
   );
 
   return (

@@ -18,6 +18,7 @@ import { isLiveSandboxWorkspace } from "@/features/demo/sandbox-access";
 
 import { getWorkspaceContext } from "@/features/workspaces/context";
 import { getWorkspaceAiStatus } from "@/lib/ai/config";
+import { getClientAssistantBranding } from "@/lib/ai/assistant-branding";
 import { getCurrentPermissions } from "@/features/workspaces/permissions-server";
 import {
   getSidebarBranding,
@@ -60,6 +61,7 @@ export default async function DashboardLayout({
     roles,
     userPermissions,
     aiStatus,
+    assistantBranding,
     taskDueCount,
     ownProfile,
   ] = await Promise.all([
@@ -71,6 +73,7 @@ export default async function DashboardLayout({
     listWorkspaceRoles(),
     getCurrentPermissions(),
     getWorkspaceAiStatus(organization.id),
+    getClientAssistantBranding(organization.id),
     getMyTasksDueCount(),
     getOwnProfileAction(),
   ]);
@@ -94,6 +97,7 @@ export default async function DashboardLayout({
             aiStatus.enabled && aiStatus.hasApiKey && aiStatus.encryptionReady
           }
           canConfigureAi={userPermissions.includes("settings:edit") && !demo}
+          assistant={assistantBranding}
         >
           {/*
           Deel-style shell: a sticky lime-washed header (switcher, pill tabs,
