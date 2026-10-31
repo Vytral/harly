@@ -1,28 +1,21 @@
-import { Card } from "@/components/ui/card";
-import { Skeleton } from "@/components/ui/skeleton";
+import { DirectoryCardSkeleton, DirectoryTabsSkeleton, PageTitleRowSkeleton, SkeletonRegion } from "@/components/skeletons";
 
+/** Mirrors candidates/page.tsx: title row, All/Trash tabs, one directory card. */
 export default function CandidatesLoading() {
   return (
-    <div className="space-y-6">
-      <div className="space-y-2">
-        <Skeleton className="h-3 w-20" />
-        <Skeleton className="h-7 w-44" />
-        <Skeleton className="h-4 w-80 max-w-full" />
-      </div>
-      <Skeleton className="h-10 w-full max-w-md rounded-lg" />
-      <Card className="gap-0 divide-y py-0">
-        {Array.from({ length: 6 }).map((_, index) => (
-          <div key={index} className="flex items-center gap-3 p-4">
-            <Skeleton className="size-9 rounded-full" />
-            <div className="flex-1 space-y-2">
-              <Skeleton className="h-4 w-40" />
-              <Skeleton className="h-3 w-56" />
-            </div>
-            <Skeleton className="hidden h-3 w-24 sm:block" />
-            <Skeleton className="h-6 w-16 rounded-full" />
-          </div>
-        ))}
-      </Card>
-    </div>
+    <SkeletonRegion className="space-y-6">
+      <PageTitleRowSkeleton titleWidth="w-44" actionWidths={["w-28", "w-40"]} />
+      <DirectoryTabsSkeleton widths={["w-16", "w-20"]} />
+      <DirectoryCardSkeleton
+        chips={["w-28", "w-24", "w-24", "w-24", "w-24", "w-20"]}
+        trailing="w-36"
+        columns={[
+          { width: "w-28", hide: "md" },
+          { width: "w-28", hide: "md" },
+          { width: "w-20", hide: "lg" },
+          { width: "w-20", pill: true },
+        ]}
+      />
+    </SkeletonRegion>
   );
 }

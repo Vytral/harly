@@ -1,5 +1,5 @@
 import { cn } from "@/lib/utils";
-import { Card } from "@/components/ui/card";
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { tileClass } from "@/components/dashboard/widgets/primitives";
 
@@ -28,6 +28,28 @@ function SkeletonContainer({
       className={className}
     >
       {children}
+    </div>
+  );
+}
+
+/**
+ * Root of a loading tree: aria-busy plus a screen-reader "Loading…" label.
+ * The label sits outside the spaced column so `space-y-*` on `className`
+ * never counts it as a sibling.
+ */
+export function SkeletonRegion({
+  children,
+  className,
+  label = "Loading…",
+}: {
+  children: React.ReactNode;
+  className?: string;
+  label?: string;
+}) {
+  return (
+    <div aria-busy="true">
+      <span className="sr-only">{label}</span>
+      <div className={className}>{children}</div>
     </div>
   );
 }
@@ -94,6 +116,54 @@ export function StatTileSkeleton({
   );
 }
 
+/**
+ * Mirrors StatTile exactly (components/ui/stat-tile.tsx): 16px label row,
+ * 28px number line box, 16px hint line. `labelPill` matches StatusPill labels.
+ */
+export function KpiTileSkeleton({
+  labelPill = false,
+  hint = true,
+  className,
+}: {
+  labelPill?: boolean;
+  hint?: boolean;
+  className?: string;
+}) {
+  return (
+    <div
+      className={cn(
+        "flex min-w-0 flex-col gap-1 rounded-[var(--radius-inner)] bg-card-inset px-4 py-3.5",
+        className,
+      )}
+    >
+      <div className={cn("flex items-center", labelPill ? "h-5" : "h-4")}>
+        <Skeleton className={labelPill ? "h-5 w-16 rounded-full" : "h-3 w-20"} />
+      </div>
+      <div className="flex h-7 items-center">
+        <Skeleton className="h-6 w-14" />
+      </div>
+      {hint ? (
+        <div className="flex h-4 items-center">
+          <Skeleton className="h-3 w-24" />
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+/** Stat strip inside a `p-3` card (jobs overview): 2 cols, 4 on lg. */
+export function KpiStripSkeleton({ count = 4 }: { count?: number }) {
+  return (
+    <div className={cn(tileClass, "p-3")}>
+      <div className="grid grid-cols-2 gap-2 lg:grid-cols-4">
+        {Array.from({ length: count }).map((_, i) => (
+          <KpiTileSkeleton key={i} labelPill />
+        ))}
+      </div>
+    </div>
+  );
+}
+
 /** A row of stat tiles. */
 export function StatsGridSkeleton({
   count = 4,
@@ -117,34 +187,58 @@ export function StatsGridSkeleton({
   );
 }
 
-/** Mirrors Tile + TileHeader + TileRow: 16px card, 32px icon chip, inset rows. */
+/** Mirrors TileHeader: 32px icon chip, 15px title, optional action on the right. */
+export function TileHeaderSkeleton({
+  titleWidth = "w-32",
+  action = false,
+}: {
+  titleWidth?: string;
+  action?: boolean;
+}) {
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1 px-5 pt-5">
+      <div className="flex min-w-0 items-center gap-2.5">
+        <Skeleton className="size-8 shrink-0 rounded-[var(--radius-btn)]" />
+        <Skeleton className={cn("h-4", titleWidth)} />
+      </div>
+      {action ? <Skeleton className="h-7 w-16 rounded-[var(--radius-btn)]" /> : null}
+    </div>
+  );
+}
+
+/**
+ * Mirrors Tile + TileHeader + TileRow: 16px card, 32px icon chip, rows of
+ * 40px avatar with two text lines and a trailing control.
+ */
 export function TileSkeleton({
   rows = 3,
   className,
   headerAction = true,
+  trailing = "badge",
+  titleWidth = "w-32",
 }: {
   rows?: number;
   className?: string;
   headerAction?: boolean;
+  trailing?: "badge" | "button" | "none";
+  titleWidth?: string;
 }) {
   return (
     <div className={cn(tileClass, "flex h-full min-w-0 flex-col pb-3", className)}>
-      <div className="flex items-center justify-between gap-2 px-5 pt-5">
-        <div className="flex items-center gap-2.5">
-          <Skeleton className="size-8 rounded-[var(--radius-btn)]" />
-          <Skeleton className="h-4 w-32" />
-        </div>
-        {headerAction ? <Skeleton className="h-7 w-16 rounded-[var(--radius-btn)]" /> : null}
-      </div>
+      <TileHeaderSkeleton titleWidth={titleWidth} action={headerAction} />
       <div className="mt-3 flex flex-1 flex-col gap-1 px-2">
         {Array.from({ length: rows }).map((_, i) => (
-          <div key={i} className="flex items-center gap-3 px-3 py-2.5">
-            <Skeleton className="size-9 rounded-full" />
-            <div className="flex-1 space-y-1.5">
+          <div key={i} className="flex items-center gap-3 px-3 py-2">
+            <Skeleton className="size-10 shrink-0 rounded-full" />
+            <div className="min-w-0 flex-1 space-y-1.5">
               <Skeleton className="h-3.5 w-full max-w-[12rem]" />
               <Skeleton className="h-3 w-20" />
             </div>
-            <Skeleton className="h-5 w-14 rounded-full" />
+            {trailing === "badge" ? (
+              <Skeleton className="h-6 w-14 shrink-0 rounded-full" />
+            ) : trailing === "button" ? (
+              <Skeleton className="h-8 w-20 shrink-0 rounded-[var(--radius-btn)]" />
+            ) : null}
           </div>
         ))}
       </div>
@@ -263,6 +357,362 @@ export function TableSkeleton({
   );
 }
 
+/* ── Page chrome ─────────────────────────────────────────────────────────── */
+
+/**
+ * Mirrors PageTitleRow / the title rows on the list pages: a 36px title line
+ * (28px type), optional 20px description, and right-aligned action buttons
+ * (36px high). The shell draws the title for routes listed in nav-items with
+ * `shellTitle`, so those pages must not use this for the title.
+ */
+export function PageTitleRowSkeleton({
+  titleWidth = "w-44",
+  description = false,
+  actionWidths = ["w-28"],
+  className,
+}: {
+  titleWidth?: string;
+  description?: boolean;
+  actionWidths?: string[];
+  className?: string;
+}) {
+  return (
+    <div className={cn("flex flex-wrap items-end justify-between gap-x-4 gap-y-3", className)}>
+      <div className="min-w-0">
+        <div className="flex h-9 items-center">
+          <Skeleton className={cn("h-6", titleWidth)} />
+        </div>
+        {description ? (
+          <div className="mt-1 flex h-5 items-center">
+            <Skeleton className="h-3.5 w-80 max-w-full" />
+          </div>
+        ) : null}
+      </div>
+      {actionWidths.length > 0 ? (
+        <div className="flex flex-wrap items-center gap-2">
+          {actionWidths.map((width, i) => (
+            <Skeleton key={i} className={cn("h-9 rounded-[var(--radius-btn)]", width)} />
+          ))}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+/** Mirrors DirectoryTabs: underline tabs (14px labels, 12px below) on a hairline. */
+export function DirectoryTabsSkeleton({
+  widths = ["w-16", "w-20"],
+}: {
+  widths?: string[];
+}) {
+  return (
+    <div className="flex gap-6 border-b border-hairline">
+      {widths.map((width, i) => (
+        <div key={i} className="flex flex-col justify-end pb-3">
+          <div className="flex h-5 items-center">
+            <Skeleton className={cn("h-3.5", width)} />
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/* ── Directory tables ────────────────────────────────────────────────────── */
+
+export type SkeletonColumn = {
+  /** Wrapper width, e.g. "w-24". */
+  width: string;
+  /** Breakpoint below which the column is hidden (mirrors the real table). */
+  hide?: "sm" | "md" | "lg";
+  /** Render as a 24px status pill instead of a text line. */
+  pill?: boolean;
+};
+
+const hideClass = {
+  sm: "hidden sm:block",
+  md: "hidden md:block",
+  lg: "hidden lg:block",
+} as const;
+
+/**
+ * Table body mirroring the People directory (`dirTable`: 44px header on a card
+ * inset, 60px rows with a hairline) or the HumanTable (no row borders, 60px
+ * rows, rounded). `identity` is the 48px avatar or the 36px rounded chip.
+ */
+export function DirectoryTableSkeleton({
+  variant = "directory",
+  rows = 7,
+  identity = "avatar",
+  columns = [],
+  checkbox = true,
+  actions = true,
+}: {
+  variant?: "directory" | "human";
+  rows?: number;
+  identity?: "avatar" | "chip";
+  columns?: SkeletonColumn[];
+  checkbox?: boolean;
+  actions?: boolean;
+}) {
+  const isDirectory = variant === "directory";
+  const headClass = isDirectory
+    ? "flex h-11 items-center gap-4 bg-card-inset px-5"
+    : "flex h-8 items-end gap-4 px-4 pb-2";
+  const rowClass = isDirectory
+    ? "flex h-[60px] items-center gap-4 border-t border-hairline px-5"
+    : "flex h-[var(--spacing-row)] items-center gap-4 rounded-[var(--radius-row)] px-4";
+
+  return (
+    <div className={isDirectory ? "overflow-x-auto" : "px-2 pb-3"}>
+      <div className={headClass}>
+        {checkbox ? <Skeleton className="size-4 shrink-0 rounded-sm" /> : null}
+        <div className="min-w-0 flex-1">
+          <Skeleton className="h-3 w-20" />
+        </div>
+        {columns.map((column, i) => (
+          <div key={i} className={cn("shrink-0", column.width, column.hide && hideClass[column.hide])}>
+            <Skeleton className="h-3 w-16" />
+          </div>
+        ))}
+        {actions ? <div className="w-8 shrink-0" /> : null}
+      </div>
+
+      {Array.from({ length: rows }).map((_, rowIndex) => (
+        <div key={rowIndex} className={rowClass}>
+          {checkbox ? <Skeleton className="size-4 shrink-0 rounded-sm" /> : null}
+          <div className="flex min-w-0 flex-1 items-center gap-3">
+            {identity === "chip" ? (
+              <Skeleton className="size-9 shrink-0 rounded-[var(--radius-inner)]" />
+            ) : (
+              <Skeleton className="size-12 shrink-0 rounded-full" />
+            )}
+            <div className="min-w-0 flex-1 space-y-1.5">
+              <Skeleton className="h-3.5 w-40 max-w-full" />
+              <Skeleton className="h-3 w-28" />
+            </div>
+          </div>
+          {columns.map((column, i) => (
+            <div key={i} className={cn("shrink-0", column.width, column.hide && hideClass[column.hide])}>
+              {column.pill ? (
+                <Skeleton className="h-6 w-full rounded-full" />
+              ) : (
+                <Skeleton className="h-3 w-full" />
+              )}
+            </div>
+          ))}
+          {actions ? <Skeleton className="size-8 shrink-0 rounded-[var(--radius-btn)]" /> : null}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/**
+ * The white directory card (filter bar, total line, table). Mirrors
+ * DirectoryCard / FilterBar / TotalLine in features/candidates/directory-chrome
+ * and the JobsTable card (`variant="human"`).
+ */
+export function DirectoryCardSkeleton({
+  variant = "directory",
+  search = true,
+  countButton = true,
+  chips = [],
+  trailing,
+  total = true,
+  rows = 7,
+  identity = "avatar",
+  columns = [],
+  checkbox = true,
+  actions = true,
+  className,
+}: {
+  variant?: "directory" | "human";
+  search?: boolean;
+  countButton?: boolean;
+  chips?: string[];
+  /** Width class of a button pushed to the right of the filter bar. */
+  trailing?: string;
+  total?: boolean;
+  rows?: number;
+  identity?: "avatar" | "chip";
+  columns?: SkeletonColumn[];
+  checkbox?: boolean;
+  actions?: boolean;
+  className?: string;
+}) {
+  return (
+    <Card className={cn("gap-0 overflow-hidden py-0", className)}>
+      <div className="flex flex-wrap items-center gap-2 px-5 py-4">
+        {search ? <Skeleton className="h-9 w-full rounded-full sm:w-64" /> : null}
+        {countButton ? <Skeleton className="h-9 w-10 rounded-full" /> : null}
+        {chips.map((width, i) => (
+          <Skeleton key={i} className={cn("h-9 rounded-full", width)} />
+        ))}
+        {trailing ? <Skeleton className={cn("ml-auto h-9 rounded-full", trailing)} /> : null}
+      </div>
+      {total ? (
+        <div className="flex min-h-12 items-center border-t border-hairline px-5 py-3">
+          <Skeleton className="h-3.5 w-28" />
+        </div>
+      ) : null}
+      <DirectoryTableSkeleton
+        variant={variant}
+        rows={rows}
+        identity={identity}
+        columns={columns}
+        checkbox={checkbox}
+        actions={actions}
+      />
+    </Card>
+  );
+}
+
+/* ── Profile and detail cards ────────────────────────────────────────────── */
+
+/** Mirrors InfoRows / InfoRow: 44px inset rows, label left, value right. */
+export function InfoRowsSkeleton({
+  rows = 3,
+  className,
+}: {
+  rows?: number;
+  className?: string;
+}) {
+  const valueWidths = ["w-28", "w-36", "w-20", "w-44", "w-24"];
+  return (
+    <div className={cn("flex flex-col gap-1.5", className)}>
+      {Array.from({ length: rows }).map((_, i) => (
+        <div
+          key={i}
+          className="flex min-h-11 items-center justify-between gap-4 rounded-[var(--radius-inner)] bg-card-inset px-4 py-2.5"
+        >
+          <Skeleton className="h-3.5 w-14" />
+          <Skeleton className={cn("h-3.5", valueWidths[i % valueWidths.length])} />
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/**
+ * Titled card (Card + CardHeader + CardContent) holding either info rows or
+ * text lines. Mirrors the Contact / Specialties / About cards on profile pages.
+ */
+export function InfoCardSkeleton({
+  body = "rows",
+  count = 3,
+  titleWidth = "w-20",
+  className,
+}: {
+  body?: "rows" | "text";
+  count?: number;
+  titleWidth?: string;
+  className?: string;
+}) {
+  const textWidths = ["w-full", "w-11/12", "w-4/5", "w-full", "w-2/3"];
+  return (
+    <Card className={className}>
+      <CardHeader>
+        <div className="flex h-5 items-center">
+          <Skeleton className={cn("h-4", titleWidth)} />
+        </div>
+      </CardHeader>
+      <CardContent>
+        {body === "rows" ? (
+          <InfoRowsSkeleton rows={count} />
+        ) : (
+          <div className="space-y-2">
+            {Array.from({ length: count }).map((_, i) => (
+              <Skeleton key={i} className={cn("h-3.5", textWidths[i % textWidths.length])} />
+            ))}
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+/** Mirrors TileHeader + inset 2x2 KPI grid (AtAGlance). */
+export function AtAGlanceSkeleton({ className }: { className?: string }) {
+  return (
+    <div className={cn(tileClass, "flex h-full min-w-0 max-w-full flex-col", className)}>
+      <TileHeaderSkeleton titleWidth="w-24" />
+      <div className="grid grid-cols-2 gap-2 px-5 pb-5 pt-4">
+        {Array.from({ length: 4 }).map((_, i) => (
+          <KpiTileSkeleton key={i} />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/** Inbox workspace card: command bar, people pane, thread pane, side pane. */
+export function InboxSkeleton() {
+  const pills = ["w-14", "w-24", "w-[4.5rem]", "w-28", "w-[5.5rem]", "w-[4.5rem]"];
+  return (
+    <SkeletonRegion>
+      <div className="flex h-[calc(100dvh-15rem)] min-h-[34rem] min-w-0 flex-col overflow-hidden rounded-[var(--radius-card)] bg-card shadow-[var(--shadow-card)]">
+        {/* Command bar: search, filter pills (sm+), refresh. */}
+        <div className="flex min-h-14 items-center gap-3 border-b border-hairline px-4 py-2.5">
+          <Skeleton className="h-9 w-full shrink-0 rounded-full lg:w-[328px]" />
+          <div className="ml-auto hidden items-center gap-1 sm:flex">
+            {pills.map((width, i) => (
+              <Skeleton key={i} className={cn("h-8 shrink-0 rounded-full", width)} />
+            ))}
+          </div>
+          <Skeleton className="size-8 shrink-0 rounded-[var(--radius-btn)]" />
+        </div>
+
+        <div className="relative flex min-h-0 flex-1 overflow-hidden">
+          {/* People pane: full width on phones, 280px on lg. */}
+          <div className="min-h-0 w-full shrink-0 border-r border-hairline bg-card lg:w-[280px]">
+            <div className="flex items-center justify-between gap-2 border-b border-hairline px-4 py-2.5">
+              <Skeleton className="h-3 w-16" />
+              <Skeleton className="h-3 w-4" />
+            </div>
+            <ul className="px-2 py-1">
+              {Array.from({ length: 8 }).map((_, i) => (
+                <li key={i} className="flex items-center gap-3 rounded-[var(--radius-md)] px-3 py-2.5">
+                  <Skeleton className="size-9 shrink-0 rounded-full" />
+                  <div className="min-w-0 flex-1 space-y-1.5">
+                    <Skeleton className="h-3.5 w-32" />
+                    <Skeleton className="h-3 w-44 max-w-full" />
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </div>
+
+          {/* Thread / conversation pane. */}
+          <div className="hidden min-h-0 min-w-0 flex-1 bg-card lg:block">
+            <div className="border-b border-hairline px-5 py-3.5">
+              <Skeleton className="h-4 w-36" />
+              <Skeleton className="mt-2 h-3 w-28" />
+            </div>
+            <div className="space-y-5 px-5 py-4">
+              {Array.from({ length: 5 }).map((_, i) => (
+                <div key={i} className="space-y-2">
+                  <Skeleton className="h-3 w-48" />
+                  <Skeleton className="h-3 w-full max-w-[22rem]" />
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Side pane: candidate details and actions. */}
+          <aside className="hidden min-h-0 shrink-0 border-l border-hairline bg-card-inset/50 p-4 lg:block lg:w-[300px] xl:w-[320px]">
+            <div className="space-y-3">
+              <Skeleton className="h-24 w-full rounded-[var(--radius-inner)]" />
+              <Skeleton className="h-9 w-full rounded-[var(--radius-btn)]" />
+              <Skeleton className="h-9 w-full rounded-[var(--radius-btn)]" />
+            </div>
+          </aside>
+        </div>
+      </div>
+    </SkeletonRegion>
+  );
+}
+
 /** Generic form section with label + input blocks. */
 export function FormSkeleton({
   fields = 4,
@@ -373,39 +823,36 @@ export function SettingsSkeleton({
 }
 
 /**
- * Dashboard home skeleton , mirrors DashboardPage exactly (greeting, triage
- * strip, then three 3/2-col widget rows) so nothing shifts on mount.
+ * Dashboard home skeleton. Mirrors DashboardPage: centered greeting (32/40px
+ * title, 20px subline), then a two-column grid of widget tiles (left: the work,
+ * right: context). Tile counts follow the real page's typical content.
  */
 export function DashboardSkeleton() {
   return (
-    <SkeletonContainer
-      ariaLabel="Loading dashboard"
-      className="mx-auto w-full max-w-[1200px] pb-6"
-    >
-      <header className="flex flex-col items-center gap-2.5 px-4 pb-2 pt-6 sm:pt-8">
-        <Skeleton className="h-10 w-72 max-w-full" />
-        <Skeleton className="h-3.5 w-64 max-w-full" />
+    <SkeletonRegion className="mx-auto w-full max-w-[1200px] pb-6">
+      <header className="px-4 pb-2 pt-6 text-center sm:pt-8">
+        <div className="mx-auto flex h-[2.2rem] items-center justify-center sm:h-11">
+          <Skeleton className="h-7 w-72 max-w-full sm:h-9" />
+        </div>
+        <div className="mx-auto mt-2 flex h-5 max-w-xl items-center justify-center">
+          <Skeleton className="h-3.5 w-80 max-w-full" />
+        </div>
       </header>
 
       <div className="mt-6 grid items-start gap-4 lg:grid-cols-2">
         <div className="flex min-w-0 flex-col gap-4">
-          <TileSkeleton rows={3} />
-          <TileSkeleton rows={3} />
-          <TileSkeleton rows={2} />
+          <TileSkeleton rows={4} trailing="button" titleWidth="w-36" />
+          <TileSkeleton rows={3} titleWidth="w-56" headerAction />
+          <TileSkeleton rows={3} titleWidth="w-40" />
+          <TileSkeleton rows={3} titleWidth="w-28" />
         </div>
         <div className="flex min-w-0 flex-col gap-4">
-          <div className={cn(tileClass, "p-3")}>
-            <div className="grid grid-cols-2 gap-2">
-              {Array.from({ length: 4 }).map((_, i) => (
-                <StatTileSkeleton key={i} />
-              ))}
-            </div>
-          </div>
-          <TileSkeleton rows={3} />
-          <TileSkeleton rows={2} />
+          <AtAGlanceSkeleton />
+          <TileSkeleton rows={3} titleWidth="w-36" />
+          <TileSkeleton rows={3} titleWidth="w-24" />
         </div>
       </div>
-    </SkeletonContainer>
+    </SkeletonRegion>
   );
 }
 

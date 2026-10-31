@@ -1,10 +1,19 @@
-import { CardListSkeleton, PageHeaderSkeleton } from "@/components/skeletons";
+import { DirectoryCardSkeleton, PageTitleRowSkeleton, SkeletonRegion } from "@/components/skeletons";
 
+/** Mirrors people/page.tsx: Team title row with description, then the people directory card. */
 export default function PeopleLoading() {
   return (
-    <div className="space-y-5">
-      <PageHeaderSkeleton hasActions={false} />
-      <CardListSkeleton count={8} avatar lines={1} trailing="text" />
-    </div>
+    <SkeletonRegion className="space-y-6">
+      <PageTitleRowSkeleton titleWidth="w-20" description actionWidths={[]} />
+      <DirectoryCardSkeleton
+        actions={false}
+        chips={["w-28", "w-32"]}
+        columns={[
+          { width: "w-28", hide: "sm", pill: true },
+          { width: "w-40", hide: "md" },
+          { width: "w-24", hide: "sm" },
+        ]}
+      />
+    </SkeletonRegion>
   );
 }
