@@ -23,6 +23,9 @@ const Toaster = ({ ...props }: ToasterProps) => {
     <Sonner
       theme={theme as ToasterProps["theme"]}
       position="bottom-center"
+      // Sits just above the status island (bottom-5, h-10) so both can show.
+      offset={{ bottom: 72 }}
+      mobileOffset={{ bottom: 72 }}
       className="toaster group"
       icons={{
         success: <CircleCheckIcon className="size-4 text-[var(--chartreuse-signal)]" />,

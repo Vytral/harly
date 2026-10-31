@@ -251,7 +251,9 @@ export function AppHeader({
       </div>
 
       {/* Toast-like island: floats just under the band, nothing when idle. */}
-      <div className="pointer-events-none absolute inset-x-0 top-full z-40 mt-2 flex justify-center px-4">
+      {/* Status island: bottom-centre, the same dark pill as toasts (one
+          notification surface). Fixed, so it never collides with the sub-nav. */}
+      <div className="pointer-events-none fixed inset-x-0 bottom-5 z-[60] flex justify-center px-4">
         <div className="pointer-events-auto max-w-full">
           <NotificationIsland demoMode={demoMode} />
         </div>

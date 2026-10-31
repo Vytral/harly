@@ -29,7 +29,8 @@ export function HarlyAILauncher({
           aria-expanded={open}
           className={cn(
             "fixed bottom-4 right-4 z-50 grid size-12 place-items-center rounded-full sm:bottom-5 sm:right-6 sm:size-[52px]",
-            "bg-near-ink text-pure-snow shadow-[var(--shadow-float)] ring-1 ring-black/5",
+            // White in light mode, elevated charcoal in dark; the mark carries the colour.
+            "bg-pure-snow text-near-ink shadow-[var(--shadow-float)] ring-1 ring-hairline",
             "transition-[transform,background-color] duration-150 ease-out hover:scale-105 active:scale-95",
             "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-near-ink focus-visible:ring-offset-2 focus-visible:ring-offset-warm-paper",
             "motion-reduce:transition-none motion-reduce:hover:scale-100",
