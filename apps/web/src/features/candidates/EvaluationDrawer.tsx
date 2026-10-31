@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useTransition, type ReactNode } from "react";
-import { useRouter } from "next/navigation";
 import { Minus, ThumbsDown, ThumbsUp } from "lucide-react";
 import { toast } from "@/lib/notification-island/toast";
 
@@ -11,6 +10,7 @@ import {
   suggestScorecardAttributesAction,
   type ScorecardAttribute,
 } from "@/features/candidates/actions";
+import { useAdvanceAfterDecision } from "@/features/candidates/queue-navigation-context";
 import { Button } from "@/components/ui/button";
 import { SidePanel } from "@/components/ui/side-panel";
 import { Textarea } from "@/components/ui/textarea";
@@ -44,7 +44,7 @@ export function EvaluationDrawer({
   stageName: string | null;
   trigger: ReactNode;
 }) {
-  const router = useRouter();
+  const advance = useAdvanceAfterDecision();
   const [open, setOpen] = useState(false);
   const [rating, setRating] = useState<RatingKey | null>(null);
   const [comment, setComment] = useState("");
@@ -129,12 +129,14 @@ export function EvaluationDrawer({
         toast.error(result.error ?? "Could not save the evaluation.");
         return;
       }
-      toast.success("Evaluation saved");
       setOpen(false);
       setRating(null);
       setComment("");
       setAttributes(null);
-      router.refresh();
+      // In the review queue an evaluation is the decision: go on to the next item.
+      if (!advance(applicationId, () => "Evaluation saved")) {
+        toast.success("Evaluation saved");
+      }
     });
   }
 

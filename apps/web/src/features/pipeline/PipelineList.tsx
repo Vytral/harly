@@ -1,9 +1,10 @@
 "use client";
 
 import { useConfirm } from "@/components/ui/confirm-dialog";
-import { useId, useMemo, useState, useTransition } from "react";
+import { useEffect, useId, useMemo, useState, useTransition } from "react";
+import type { Route } from "next";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import {
   ArrowRightLeft,
   CheckCircle2,
@@ -18,6 +19,7 @@ import {
   updateApplicationStatus,
 } from "@/features/pipeline/actions";
 import { bulkDecisionConfirmCopy } from "@/features/pipeline/confirmation";
+import { candidateHref, pipelineOrigin } from "@/features/candidates/origin";
 import type {
   PipelineApplication,
   PipelineStage,
@@ -52,13 +54,45 @@ export function PipelineList({
 }: PipelineListProps) {
   const router = useRouter();
   const confirm = useConfirm();
-  const [activeStage, setActiveStage] = useState<string>(ALL);
-  const [query, setQuery] = useState("");
+  const searchParams = useSearchParams();
+  // Stage tab and search live in the URL (?stage=<id>&q=…), so "Back" from a
+  // candidate restores them and the candidate's pager walks the same list.
+  const [activeStage, setActiveStage] = useState<string>(() => {
+    const fromUrl = searchParams.get("stage");
+    return fromUrl && stages.some((stage) => stage.id === fromUrl) ? fromUrl : ALL;
+  });
+  const [query, setQuery] = useState(() => searchParams.get("q") ?? "");
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const selectAllId = useId();
   const [isPending, startTransition] = useTransition();
 
   const workspaceId = applications[0]?.workspaceId ?? "";
+  const jobId = applications[0]?.jobId ?? "";
+  const origin = useMemo(
+    () =>
+      pipelineOrigin({
+        jobId,
+        stage: activeStage === ALL ? null : activeStage,
+        q: query,
+      }),
+    [jobId, activeStage, query],
+  );
+
+  // Mirror the filters into the URL without a server round trip (the native
+  // history API keeps the Next router and useSearchParams in sync).
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (origin.stage) params.set("stage", origin.stage);
+    else params.delete("stage");
+    if (origin.q) params.set("q", origin.q);
+    else params.delete("q");
+    const next = params.toString();
+    if (next === window.location.search.replace(/^\?/, "")) return;
+    const handle = window.setTimeout(() => {
+      window.history.replaceState(null, "", `${window.location.pathname}${next ? `?${next}` : ""}`);
+    }, 250);
+    return () => window.clearTimeout(handle);
+  }, [origin]);
   const stageById = useMemo(
     () => new Map(stages.map((s) => [s.id, s])),
     [stages],
@@ -265,6 +299,7 @@ export function PipelineList({
             const fullName = `${a.candidateFirstName} ${a.candidateLastName}`;
             const isSelected = selected.has(a.id);
             const currentStage = stageById.get(a.currentStageId);
+            const href = candidateHref(a.candidateId, origin, a.id);
             const stageName = currentStage?.name ?? "Unknown stage";
             return (
               <div
@@ -273,12 +308,12 @@ export function PipelineList({
                 tabIndex={0}
                 aria-label={`Open ${fullName} profile`}
                 data-state={isSelected ? "selected" : undefined}
-                onClick={() => router.push(`/dashboard/candidates/${a.candidateId}`)}
+                onClick={() => router.push(href as Route)}
                 onKeyDown={(e) => {
                   if (e.target !== e.currentTarget) return;
                   if (e.key === "Enter" || e.key === " ") {
                     e.preventDefault();
-                    router.push(`/dashboard/candidates/${a.candidateId}`);
+                    router.push(href as Route);
                   }
                 }}
                 className="group grid cursor-pointer grid-cols-[auto_minmax(0,1fr)] items-center gap-x-3 gap-y-2 px-4 py-3.5 transition-colors hover:bg-row-wash/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-near-ink data-[state=selected]:bg-lime-wash sm:px-5 sm:grid-cols-[auto_minmax(0,1.4fr)_minmax(0,1fr)_auto]"
@@ -291,7 +326,7 @@ export function PipelineList({
                   />
                 </div>
                 <Link
-                  href={`/dashboard/candidates/${a.candidateId}`}
+                  href={href as Route}
                   onClick={(event) => event.stopPropagation()}
                   className="flex min-w-0 items-center gap-3"
                 >

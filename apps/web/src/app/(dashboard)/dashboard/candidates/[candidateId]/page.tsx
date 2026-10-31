@@ -1,3 +1,4 @@
+import type { Route } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowLeft, MapPin, UserPlus } from "lucide-react";
@@ -18,7 +19,11 @@ import { CandidateReferrals } from "@/features/candidates/referrals/CandidateRef
 import { ReferCandidateDrawer } from "@/features/candidates/referrals/ReferCandidateDrawer";
 import { DuplicateDetectionCard } from "@/features/candidates/DuplicateDetectionCard";
 import { IdentityShield, Redact, RedactLink } from "@/features/candidates/IdentityShield";
-import { getCandidateProfile, listCandidates, findSuspectDuplicates } from "@/features/candidates/data";
+import { getCandidateProfile, findSuspectDuplicates } from "@/features/candidates/data";
+import { parseCandidateNavigation } from "@/features/candidates/origin";
+import { getCandidatePageNavigation } from "@/features/candidates/queue-neighbors";
+import { CandidateQueueNavigationProvider } from "@/features/candidates/queue-navigation-context";
+import { resolveSearchActor } from "@/features/search/workspace-search";
 import { getNextStage } from "@/features/pipeline/data";
 import { listCandidateInterviews } from "@/features/interviews/data";
 import { listEmailTemplates } from "@/features/email-templates/data";
@@ -42,12 +47,16 @@ export const dynamic = "force-dynamic";
 
 type CandidateDetailPageProps = {
   params: Promise<{ candidateId: string }>;
+  /** Origin context, see `@/features/candidates/origin`. */
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
 };
 
 export default async function CandidateDetailPage({
   params,
+  searchParams,
 }: CandidateDetailPageProps) {
-  const { candidateId } = await params;
+  const [{ candidateId }, rawSearchParams] = await Promise.all([params, searchParams]);
+  const navigationContext = parseCandidateNavigation(rawSearchParams);
 
   try {
     await requireCandidatePermission("candidates:view", candidateId);
@@ -55,10 +64,13 @@ export default async function CandidateDetailPage({
     notFound();
   }
 
-  const [profile, allCandidates, members, jobOptions, candidateInterviews, candidateOffers, emailTemplates, relatedDocuments] =
+  const [profile, navigation, members, jobOptions, candidateInterviews, candidateOffers, emailTemplates, relatedDocuments] =
     await Promise.all([
       getCandidateProfile(candidateId),
-      listCandidates(),
+      // Previous / next follow the origin list with one bounded, scoped query.
+      resolveSearchActor().then((actor) =>
+        getCandidatePageNavigation(actor, navigationContext, candidateId),
+      ),
       listWorkspaceMembers(),
       listJobOptions(),
       listCandidateInterviews(candidateId),
@@ -86,7 +98,7 @@ export default async function CandidateDetailPage({
     privacyRequests,
     referrals,
   } = profile;
-  const applications = (
+  const visibleApplications = (
     await Promise.all(
       candidateApplications.map(async (application) => {
         try {
@@ -98,6 +110,14 @@ export default async function CandidateDetailPage({
       }),
     )
   ).filter((application): application is (typeof candidateApplications)[number] => Boolean(application));
+  // The application the origin row stood for (queue / pipeline) leads, so the
+  // header and the decision bar act on it.
+  const originApplication = navigationContext.applicationId
+    ? visibleApplications.find((application) => application.id === navigationContext.applicationId) ?? null
+    : null;
+  const applications = originApplication
+    ? [originApplication, ...visibleApplications.filter((application) => application !== originApplication)]
+    : visibleApplications;
 
   const visibleApplicationIds = new Set(
     applications.map((application) => application.id),
@@ -124,19 +144,6 @@ export default async function CandidateDetailPage({
   const offers = candidateOffers.filter((offer) =>
     visibleApplicationIds.has(offer.applicationId),
   );
-
-  const scopedCandidates = (
-    await Promise.all(
-      allCandidates.map(async (candidateRow) => {
-        try {
-          await requireCandidatePermission("candidates:view", candidateRow.id);
-          return candidateRow;
-        } catch {
-          return null;
-        }
-      }),
-    )
-  ).filter((candidateRow): candidateRow is (typeof allCandidates)[number] => Boolean(candidateRow));
 
   const [calStatus, aiStatus, esignStatus, workspaceContext, canManageDsar, canDeleteCandidates, canCollaborate, canEditCandidates] = await Promise.all([
     getWorkspaceCalStatus(workspaceId),
@@ -179,31 +186,12 @@ export default async function CandidateDetailPage({
     ),
   ]);
 
-  const railCandidates = scopedCandidates
-    .slice()
-    .sort((a, b) => {
-      const aTime = a.latestApplication?.appliedAt?.getTime() ?? 0;
-      const bTime = b.latestApplication?.appliedAt?.getTime() ?? 0;
-      return bTime - aTime;
-    })
-    .map((c) => ({
-      id: c.id,
-      fullName: c.fullName,
-      email: c.email,
-      avatarUrl: c.avatarUrl ?? null,
-      role: c.latestApplication?.jobTitle ?? null,
-      stage: c.latestApplication?.currentStageName ?? null,
-    }));
-
   const scheduleApplications = applications.map((application) => ({
     applicationId: application.id,
     jobTitle: application.jobTitle,
     currentStageName: application.currentStageName,
     status: application.status,
   }));
-  const activeIndex = railCandidates.findIndex((entry) => entry.id === candidate.id);
-  const prevId = activeIndex > 0 ? railCandidates[activeIndex - 1]?.id ?? null : null;
-  const nextId = activeIndex >= 0 ? railCandidates[activeIndex + 1]?.id ?? null : null;
   const actionCandidate = {
     id: candidate.id,
     workspaceId,
@@ -341,21 +329,33 @@ export default async function CandidateDetailPage({
     aiConfigured,
   };
 
+  const queueNavigation = {
+    autoAdvance: navigation.origin.kind === "review",
+    candidateName: fullName,
+    applicationId: originApplication?.id ?? null,
+    nextHref: navigation.next?.href ?? null,
+    nextName: navigation.next?.name ?? null,
+    doneHref: navigation.doneHref,
+  };
+
   return (
+    <CandidateQueueNavigationProvider value={queueNavigation}>
     <div className="space-y-4">
       <div className="flex items-center justify-between gap-3">
         <Button asChild variant="ghost" size="sm" className="-ml-2 w-fit">
-          <Link href="/dashboard/candidates">
+          <Link href={navigation.backHref as Route}>
             <ArrowLeft className="size-4" />
-            Back to candidates
+            {navigation.backLabel}
           </Link>
         </Button>
 
         <CandidatePager
-          prevId={prevId}
-          nextId={nextId}
-          position={activeIndex >= 0 ? activeIndex + 1 : null}
-          total={railCandidates.length}
+          prev={navigation.prev}
+          next={navigation.next}
+          position={navigation.position}
+          total={navigation.total}
+          label={navigation.label}
+          plain={navigation.origin.kind === "candidates" && Object.keys(navigation.origin.filters).length === 0}
         />
       </div>
 
@@ -449,5 +449,6 @@ export default async function CandidateDetailPage({
         </div>
       </div>
     </div>
+    </CandidateQueueNavigationProvider>
   );
 }

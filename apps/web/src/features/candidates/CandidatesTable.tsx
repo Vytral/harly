@@ -29,6 +29,7 @@ import {
 import { addToPoolAction, removeFromPoolAction } from "@/features/pool/actions";
 import { bulkDecisionConfirmCopy } from "@/features/pipeline/confirmation";
 import { toSafeCsv } from "@/lib/csv";
+import { candidateHref, directoryOrigin } from "@/features/candidates/origin";
 import { BulkEmailDrawer } from "@/features/candidates/BulkEmailDrawer";
 import type { EmailTemplateOption } from "@/features/candidates/EmailDrawer";
 import type {
@@ -198,6 +199,22 @@ export function CandidatesTable({
   const [bulkEmailOpen, setBulkEmailOpen] = useState(false);
   const [isPending, startTransition] = useTransition();
   const confirm = useConfirm();
+  // Rows open the candidate with this list's URL filters, so the candidate
+  // page's previous / next walk this list and "Back" restores it.
+  const origin = useMemo(
+    () =>
+      directoryOrigin({
+        q: initialFilters?.query,
+        dept: initialFilters?.dept,
+        role: initialFilters?.role,
+        stage: initialFilters?.stage,
+        status: initialFilters?.status,
+        source: initialFilters?.source,
+        tag: initialFilters?.tag,
+        sort: initialFilters?.sort,
+      }),
+    [initialFilters],
+  );
 
   function navigateWithFilter(key: string, value: string) {
     const params = new URLSearchParams(window.location.search);
@@ -640,7 +657,7 @@ export function CandidatesTable({
 
                       <td className={cn(dirTd, "max-w-[360px] py-2")}>
                         <Link
-                          href={`/dashboard/candidates/${row.id}` as Route}
+                          href={candidateHref(row.id, origin) as Route}
                           className="flex min-w-0 items-center gap-3 rounded-md outline-none focus-visible:ring-2 focus-visible:ring-near-ink"
                         >
                           <UserAvatar
@@ -734,7 +751,7 @@ export function CandidatesTable({
                           row={row}
                           disabled={isPending}
                           onView={() =>
-                            router.push(`/dashboard/candidates/${row.id}`)
+                            router.push(candidateHref(row.id, origin) as Route)
                           }
                           onStatus={(next) => runRowStatus(row, next)}
                           onDelete={() => runDelete(row)}

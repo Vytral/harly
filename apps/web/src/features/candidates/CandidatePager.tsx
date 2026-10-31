@@ -1,62 +1,71 @@
-"use client";
-
 import type { Route } from "next";
-import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 
+type PagerLink = { href: string; name: string } | null;
+
 /**
- * Always-visible prev/next candidate navigation, next to "Back to
- * candidates" in the page header , not gated on scroll like the sticky bar.
+ * Always-visible prev/next navigation next to "Back", walking the list the
+ * page was opened from (review queue, filtered directory, pipeline). Links,
+ * so they are keyboard reachable, prefetched and open in a new tab.
  */
 export function CandidatePager({
-  prevId,
-  nextId,
+  prev,
+  next,
   position,
   total,
+  label,
+  plain = false,
 }: {
-  prevId: string | null;
-  nextId: string | null;
+  prev: PagerLink;
+  next: PagerLink;
+  /** 1-based; null when the candidate is not in that list (any more). */
   position: number | null;
   total: number;
+  /** The origin list, e.g. "Review queue". */
+  label: string;
+  /** The unfiltered directory reads "Candidate 3 of 20". */
+  plain?: boolean;
 }) {
-  const router = useRouter();
+  if (total === 0 && !next) return null;
 
-  if (position === null || total === 0) return null;
-
-  function go(id: string | null) {
-    if (!id) return;
-    router.push(`/dashboard/candidates/${id}` as Route);
-  }
+  const status =
+    position === null
+      ? `Not in ${label} · ${total} left`
+      : plain
+        ? `Candidate ${position} of ${total}`
+        : `${position} of ${total} in ${label}`;
 
   return (
-    <div className="flex items-center gap-1 text-sm text-muted-foreground">
-      <Button
-        size="sm"
-        variant="ghost"
-        className="size-8 p-0 disabled:opacity-30"
-        disabled={!prevId}
-        onClick={() => go(prevId)}
-        title="Previous candidate"
-      >
-        <ChevronLeft className="size-4" />
-        <span className="sr-only">Previous candidate</span>
-      </Button>
-      <span className="tabular-nums">
-        Candidate {position} of {total}
+    <nav aria-label={`${label} navigation`} className="flex items-center gap-1 text-sm text-muted-foreground">
+      <PagerButton link={prev} direction="prev" />
+      <span className="tabular-nums" aria-live="polite">
+        {status}
       </span>
-      <Button
-        size="sm"
-        variant="ghost"
-        className="size-8 p-0 disabled:opacity-30"
-        disabled={!nextId}
-        onClick={() => go(nextId)}
-        title="Next candidate"
-      >
-        <ChevronRight className="size-4" />
-        <span className="sr-only">Next candidate</span>
+      <PagerButton link={next} direction="next" />
+    </nav>
+  );
+}
+
+function PagerButton({ link, direction }: { link: PagerLink; direction: "prev" | "next" }) {
+  const Icon = direction === "prev" ? ChevronLeft : ChevronRight;
+  const fallback = direction === "prev" ? "Previous candidate" : "Next candidate";
+  const label = link ? `${fallback}: ${link.name}` : fallback;
+
+  if (!link) {
+    return (
+      <Button size="sm" variant="ghost" className="size-8 p-0 disabled:opacity-30" disabled aria-label={fallback}>
+        <Icon className="size-4" />
       </Button>
-    </div>
+    );
+  }
+  return (
+    <Button asChild size="sm" variant="ghost" className="size-8 p-0">
+      <Link href={link.href as Route} aria-label={label} title={label}>
+        <Icon className="size-4" />
+      </Link>
+    </Button>
   );
 }

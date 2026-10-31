@@ -1,6 +1,7 @@
 "use client";
 
 import { useRef } from "react";
+import type { Route } from "next";
 import Link from "next/link";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
@@ -17,6 +18,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import type { PipelineApplication } from "@/features/pipeline/data";
+import { candidateHref, pipelineOrigin } from "@/features/candidates/origin";
 import { useDaysSince } from "@/lib/date-hydration";
 import { cn } from "@/lib/utils";
 
@@ -126,6 +128,12 @@ export function CandidateCard({
   });
   const fullName = `${application.candidateFirstName} ${application.candidateLastName}`;
   const stageStartedAt = application.lastStageMovedAt ?? application.createdAt;
+  // Opened from the board: the candidate's pager walks the board column by column.
+  const href = candidateHref(
+    application.candidateId,
+    pipelineOrigin({ jobId: application.jobId, view: "board" }),
+    application.id,
+  ) as Route;
 
   return (
     <article
@@ -147,14 +155,14 @@ export function CandidateCard({
             )
           : 0;
         if (!isDragging && movedDistance <= 6) {
-          router.push(`/dashboard/candidates/${application.candidateId}`);
+          router.push(href);
         }
       }}
       onKeyDown={(event) => {
         if (event.target !== event.currentTarget) return;
         if (event.key === "Enter" || event.key === " ") {
           event.preventDefault();
-          router.push(`/dashboard/candidates/${application.candidateId}`);
+          router.push(href);
         }
       }}
       className={cn(
@@ -188,7 +196,7 @@ export function CandidateCard({
           />
         </span>
         <Link
-          href={`/dashboard/candidates/${application.candidateId}`}
+          href={href}
           onClick={(event) => event.stopPropagation()}
           className="flex min-w-0 flex-1 items-center gap-2.5"
         >
