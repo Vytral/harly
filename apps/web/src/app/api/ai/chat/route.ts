@@ -47,10 +47,12 @@ import { recordHarlyAgentTrace } from "@/lib/ai/agent/observability";
 import { classifyHarlyIntent } from "@/lib/ai/agent/intent";
 import {
   assertToolRoutingCoversAllTools,
+  buildToolGroupLoader,
   resolveActiveToolGroups,
   selectActiveToolNames,
   TOOL_GROUPS,
   turnNeedsWriteTools,
+  type HarlyToolGroup,
 } from "@/lib/ai/agent/tool-routing";
 import { persistConversation } from "@/features/ai-chat/data";
 import { recordAiUsage } from "@/lib/ai/usage";
@@ -460,18 +462,28 @@ export async function POST(req: Request) {
     resolveCandidateReferences: (request) =>
       loadCandidateReferences(workspaceId, request),
   };
+  // Groups the model asked for with `loadToolGroups` during this turn.
+  const loadedToolGroups = new Set<HarlyToolGroup>();
+  let loadedWrites = false;
   const tools = toolsForProvider(
     // Public demo: strip automation, outbound-email and fan-out scoring tools
     // (no-op on normal installs).
     withoutDemoBlockedTools(
-      buildHarlyTools({
-        workspaceId,
-        userId,
-        permissions: userPermissions,
-        activeCandidateId: candidateId,
-        mentionedCandidateIds,
-        activeAutomation: automationContext,
-      }),
+      {
+        ...buildHarlyTools({
+          workspaceId,
+          userId,
+          permissions: userPermissions,
+          activeCandidateId: candidateId,
+          mentionedCandidateIds,
+          activeAutomation: automationContext,
+        }),
+        // Widens `activeTools` mid-turn (see prepareStep) when routing was too narrow.
+        ...buildToolGroupLoader((groups, includeWrites) => {
+          groups.forEach((group) => loadedToolGroups.add(group));
+          if (includeWrites) loadedWrites = true;
+        }),
+      },
       demo,
     ),
     config.provider,
@@ -499,16 +511,15 @@ export async function POST(req: Request) {
   // list also keeps the cached prompt prefix (tools → system) byte-identical
   // between steps.
   // Read-only turns ("summarize X") also skip every write schema.
+  const turnIncludesWrites = turnNeedsWriteTools({
+    message: latestMessageText,
+    intent,
+    activeAutomation: automationContext,
+  });
   const turnActiveTools = selectActiveToolNames(
     Object.keys(tools),
     turnToolGroups,
-    {
-      includeWrites: turnNeedsWriteTools({
-        message: latestMessageText,
-        intent,
-        activeAutomation: automationContext,
-      }),
-    },
+    { includeWrites: turnIncludesWrites },
   ) as Array<keyof typeof tools> | undefined;
 
   let messages: HarlyChatMessage[];
@@ -633,6 +644,15 @@ export async function POST(req: Request) {
           },
           "ai prompt breakdown",
         );
+      }
+      // Changing the list costs a cache miss, so only once the model asked.
+      if (loadedToolGroups.size > 0 || loadedWrites) {
+        const widened = selectActiveToolNames(
+          Object.keys(tools),
+          new Set([...turnToolGroups, ...loadedToolGroups]),
+          { includeWrites: turnIncludesWrites || loadedWrites },
+        ) as Array<keyof typeof tools> | undefined;
+        return { activeTools: widened ?? (Object.keys(tools) as Array<keyof typeof tools>) };
       }
       return {};
     },

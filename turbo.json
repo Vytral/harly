@@ -3,6 +3,7 @@
   "globalPassThroughEnv": [
     "DATABASE_URL",
     "HARLY_URL",
+    "HARLY_DEV_ORIGINS",
     "NEXT_PUBLIC_APP_URL",
     "OPENHIRE_APP_NAME",
     "BETTER_AUTH_SECRET",

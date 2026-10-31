@@ -1,5 +1,8 @@
 import "server-only";
 
+import { tool } from "ai";
+import { z } from "zod";
+
 import type { HarlyIntent } from "./intent";
 import { AGENT_WRITE_TOOLS } from "./write-tool-names";
 import type { HarlyToolContext } from "./tools";
@@ -38,6 +41,8 @@ export const TOOL_GROUPS: Record<HarlyToolGroup, readonly string[]> = {
     // Interactive answer blocks (lists, tables, charts, choices, forms): the
     // answer-style contract asks for it on every reply, so it is always on.
     "presentUi",
+    // Escape hatch for a narrow route: widens this turn's tool set.
+    "loadToolGroups",
     "workspaceCapabilities",
     "userPermissions",
     "harlyProductKnowledge",
@@ -378,4 +383,32 @@ export function assertToolRoutingCoversAllTools(allToolNames: readonly string[])
       `Harly tool routing: tool(s) not assigned to any group in tool-routing.ts, so the gateway can never surface them: ${uncovered.join(", ")}`,
     );
   }
+}
+
+const LOADABLE_GROUPS = Object.keys(TOOL_GROUPS).filter(
+  (group) => group !== "general",
+) as [HarlyToolGroup, ...HarlyToolGroup[]];
+
+/**
+ * `loadToolGroups`: lets the model recover when keyword routing left out the
+ * tools it needs ("I can't do that" would otherwise be the answer). The route
+ * widens `activeTools` from the next step on via `onLoad`. Costs ~150 tokens
+ * of schema and nothing when unused.
+ */
+export function buildToolGroupLoader(
+  onLoad: (groups: HarlyToolGroup[], includeWrites: boolean) => void,
+) {
+  return {
+    loadToolGroups: tool({
+      description: `Load more tools for this turn when the ones you have don't cover the request. Groups: ${LOADABLE_GROUPS.join(", ")}. Set includeWrites when the user wants something changed.`,
+      inputSchema: z.object({
+        groups: z.array(z.enum(LOADABLE_GROUPS)).min(1).max(4),
+        includeWrites: z.boolean().optional(),
+      }),
+      execute: async ({ groups, includeWrites }) => {
+        onLoad(groups, includeWrites ?? false);
+        return { loaded: toolNamesForGroups(new Set(groups)).length };
+      },
+    }),
+  };
 }

@@ -47,6 +47,12 @@ const nextConfig: NextConfig = {
           // persistent cache can otherwise grow to several GB under .next/dev.
           turbopackFileSystemCacheForDev: false,
         },
+  // Dev only: lets another device on the LAN load dev assets and HMR
+  // (hosts from `HARLY_DEV_ORIGINS`, the same list the auth origin check uses).
+  allowedDevOrigins: (process.env.HARLY_DEV_ORIGINS ?? "")
+    .split(",")
+    .map((origin) => origin.trim().replace(/^https?:\/\//, "").replace(/:\d+$/, ""))
+    .filter(Boolean),
   typedRoutes: true,
   transpilePackages: [
     "@harly/db",

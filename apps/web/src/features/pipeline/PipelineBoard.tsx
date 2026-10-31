@@ -377,6 +377,17 @@ export function PipelineBoard({
 
     if (!operation) return;
 
+    // A drop that rejects goes through the same reason + email dialog as the
+    // Reject action; cancelling leaves the card where it was.
+    if (operation.outcome === "rejected") {
+      const dragged = findApplicationStage(columns, operation.applicationId)?.application;
+      if (dragged && dragged.status !== "rejected") {
+        setRejectTargets([dragged]);
+        setRejectOpen(true);
+        return;
+      }
+    }
+
     // Dropping into a capped column appends the card, so the column opens far
     // enough to show it.
     revealUpTo(operation.toStageId, operation.index);

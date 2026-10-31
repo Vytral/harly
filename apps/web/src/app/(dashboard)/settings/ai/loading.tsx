@@ -76,6 +76,31 @@ export default function AiSettingsLoading() {
           ))}
         </div>
       </Card>
+
+      {/* AssistantBrandingCard: header, then name / avatar / powered-by rows. */}
+      <Card className="gap-0 overflow-hidden p-0">
+        <div className="space-y-2 px-6 pt-6 pb-4">
+          <Skeleton className="h-4 w-24" />
+          <Skeleton className="h-3.5 w-80 max-w-full" />
+        </div>
+        <div className="divide-y divide-hairline border-t border-hairline">
+          {["name", "avatar", "powered"].map((row) => (
+            <div key={row} className="flex items-center justify-between gap-6 px-6 py-4">
+              <div className="min-w-0 flex-1 space-y-1.5">
+                <Skeleton className="h-3.5 w-28" />
+                <Skeleton className="h-3 w-56 max-w-full" />
+              </div>
+              {row === "name" ? (
+                <Skeleton className="h-9 w-56 shrink-0 rounded-[var(--radius-btn)]" />
+              ) : row === "avatar" ? (
+                <Skeleton className="size-10 shrink-0 rounded-full" />
+              ) : (
+                <Skeleton className="h-5 w-9 shrink-0 rounded-full" />
+              )}
+            </div>
+          ))}
+        </div>
+      </Card>
     </div>
   );
 }

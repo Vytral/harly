@@ -153,6 +153,7 @@ export function startersFor(surface?: { kind: "candidate" | "section"; label: st
 
 // Human labels for the "calling a tool" inline state.
 export const TOOL_LABELS: Record<string, string> = {
+  "tool-loadToolGroups": "Getting the right tools",
   // Automations tools
   "tool-listAutomationTools": "Looking at automation steps",
   "tool-searchAutomations": "Searching automations",
