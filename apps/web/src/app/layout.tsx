@@ -36,6 +36,9 @@ export async function generateMetadata(): Promise<Metadata> {
     icons: {
       icon: "/favicon.svg",
     },
+    // iOS Safari otherwise rewrites phone numbers, dates and addresses into
+    // links before hydration, which breaks it (seen on candidate pages).
+    formatDetection: { telephone: false, date: false, address: false, email: false },
   };
 }
 
