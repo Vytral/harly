@@ -1,5 +1,6 @@
 "use client";
 
+import { useConfirm } from "@/components/ui/confirm-dialog";
 import type { ComponentType } from "react";
 import { useState, useTransition } from "react";
 
@@ -170,16 +171,20 @@ function RejectButton({
 }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
+  const confirm = useConfirm();
 
-  function run(status: "rejected" | "withdrawn", pastTense: string) {
+  async function run(status: "rejected" | "withdrawn", pastTense: string) {
     if (!application) {
       toast.error("This candidate has no application to update.");
       return;
     }
     if (
-      !window.confirm(
-        `${pastTense === "withdrawn" ? "Mark" : "Reject"} ${name}'s application for ${application.jobTitle}?`,
-      )
+      !(await confirm({
+        tone: pastTense === "withdrawn" ? "warning" : "destructive",
+        title: `${pastTense === "withdrawn" ? "Mark as withdrawn" : "Reject"} ${name}'s application?`,
+        description: `Applies to ${application.jobTitle}. Candidates may be notified depending on your stage emails.`,
+        confirmLabel: pastTense === "withdrawn" ? "Mark withdrawn" : "Reject",
+      }))
     ) {
       return;
     }
@@ -254,8 +259,9 @@ function CandidateStatusMenu({
 }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
+  const confirmAction = useConfirm();
 
-  function handleSelect(
+  async function handleSelect(
     status: CandidateStatus,
     label: string,
     confirmMessage: string,
@@ -265,11 +271,13 @@ function CandidateStatusMenu({
       return;
     }
     if (
-      !window.confirm(
-        confirmMessage
+      !(await confirmAction({
+        title: confirmMessage
           .replace("{name}", name)
           .replace("{job}", application.jobTitle),
-      )
+        description: "You can change the status again later.",
+        confirmLabel: label,
+      }))
     ) {
       return;
     }

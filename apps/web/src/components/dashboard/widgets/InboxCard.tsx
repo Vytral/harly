@@ -48,24 +48,24 @@ export function InboxCard({
         count={items.length}
         action={<TileLink href="/dashboard/inbox">View all</TileLink>}
       />
-      <div className="flex flex-1 flex-col px-2 pb-2 pt-1">
+      <div className="flex flex-1 flex-col px-2 pb-3 pt-3">
         {items.length > 0 ? (
           <>
-            <ul className="divide-y divide-border/60">
+            <ul className="flex flex-col gap-0.5">
               {visible.map((item) => {
                 const Icon = iconMap[item.icon];
                 return (
                   <li key={item.id}>
                     <Link
                       href={item.href as Route}
-                      className="group flex items-center gap-3 rounded-xl px-3 py-2.5 transition hover:bg-muted/60"
+                      className="group flex items-center gap-3 rounded-[var(--radius-md)] px-3 py-2.5 transition-colors hover:bg-row-wash"
                     >
-                      <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-muted text-muted-foreground">
+                      <span className="grid size-9 shrink-0 place-items-center rounded-full bg-card-inset text-near-ink">
                         <Icon className="size-4" strokeWidth={1.8} />
                       </span>
                     <div className="min-w-0 flex-1">
                       <p className="truncate text-sm font-medium" title={item.title}>{item.title}</p>
-                      <p className="truncate text-xs text-muted-foreground" title={item.subtitle}>{item.subtitle}</p>
+                      <p className="truncate text-xs text-soft-ink" title={item.subtitle}>{item.subtitle}</p>
                     </div>
                       <Badge variant={dueVariant[item.dueState]} className="shrink-0">
                         {item.due}
@@ -81,8 +81,8 @@ export function InboxCard({
                 type="button"
                 onClick={() => setShowAll(true)}
                 className={cn(
-                  "mx-3 mt-1 flex items-center justify-center gap-1.5 rounded-xl px-3 py-2.5",
-                  "text-xs font-medium text-muted-foreground transition hover:bg-muted/60",
+                  "mx-3 mt-1 flex items-center justify-center gap-1.5 rounded-[var(--radius-md)] px-3 py-2.5",
+                  "text-xs font-medium text-soft-ink transition hover:bg-row-wash",
                 )}
               >
                 <ChevronDown className="size-3.5" strokeWidth={1.8} />
@@ -93,8 +93,8 @@ export function InboxCard({
                 type="button"
                 onClick={() => setShowAll(false)}
                 className={cn(
-                  "mx-3 mt-1 flex items-center justify-center gap-1.5 rounded-xl px-3 py-2.5",
-                  "text-xs font-medium text-muted-foreground transition hover:bg-muted/60",
+                  "mx-3 mt-1 flex items-center justify-center gap-1.5 rounded-[var(--radius-md)] px-3 py-2.5",
+                  "text-xs font-medium text-soft-ink transition hover:bg-row-wash",
                 )}
               >
                 <ChevronUp className="size-3.5" strokeWidth={1.8} />

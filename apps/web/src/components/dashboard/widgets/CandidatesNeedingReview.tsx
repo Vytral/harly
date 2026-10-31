@@ -1,6 +1,6 @@
 import Link from "next/link";
 import type { Route } from "next";
-import { ArrowRight, ClipboardCheck } from "lucide-react";
+import { ClipboardCheck } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -28,14 +28,14 @@ export function CandidatesNeedingReview({
         title="Candidates needing your review"
         action={<TileLink href="/dashboard/candidates">View all</TileLink>}
       />
-      <div className="flex flex-1 flex-col px-2 pb-2 pt-1">
+      <div className="flex flex-1 flex-col px-2 pb-3 pt-3">
         {candidates.length > 0 ? (
-          <ul className="flex-1 divide-y divide-border/60">
+          <ul className="flex-1 flex flex-col gap-0.5">
             {candidates.map((c) => (
               <li key={c.id}>
                 <Link
                   href={`/dashboard/candidates/${c.candidateId}` as Route}
-                  className="group flex items-center gap-3 rounded-xl px-3 py-3 transition hover:bg-muted/60"
+                  className="group flex items-center gap-3 rounded-[var(--radius-md)] px-3 py-2.5 transition-colors hover:bg-row-wash"
                 >
                   <UserAvatar
                     name={c.name}
@@ -45,9 +45,9 @@ export function CandidatesNeedingReview({
                   />
                   <div className="min-w-0 flex-[1.3]">
                     <p className="truncate text-sm font-medium" title={c.name}>{c.name}</p>
-                    <p className="truncate text-xs text-muted-foreground" title={c.job}>{c.job}</p>
+                    <p className="truncate text-xs text-soft-ink" title={c.job}>{c.job}</p>
                   </div>
-                  <Badge variant="secondary" className="hidden shrink-0 sm:inline-flex">
+                  <Badge variant="neutral" dot={false} className="hidden shrink-0 sm:inline-flex">
                     {c.stage}
                   </Badge>
                   <div className="hidden w-36 shrink-0 text-right md:block">
@@ -56,22 +56,21 @@ export function CandidatesNeedingReview({
                       className={cn(
                         "truncate text-xs",
                         c.ageDays > 3
-                          ? "text-destructive"
-                          : "text-muted-foreground",
+                          ? "text-danger-rust"
+                          : "text-soft-ink",
                       )}
                     >
                       {agingLabel(c.ageDays)}
                     </p>
                   </div>
                   <Button
-                    variant="ghost"
+                    variant="outline"
                     size="sm"
-                    className="shrink-0 opacity-0 transition-opacity group-hover:opacity-100 max-md:hidden"
+                    className="shrink-0 max-md:hidden"
                     asChild
                   >
                     <span>
                       Review
-                      <ArrowRight className="size-3.5" strokeWidth={1.8} />
                     </span>
                   </Button>
                 </Link>

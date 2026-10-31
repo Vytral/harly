@@ -11,11 +11,6 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
 
 function Items() {
   return (
@@ -45,26 +40,21 @@ function Items() {
 }
 
 /**
- * The "+" in the icon rail (frame 01 puts create in the icon group, not the top
- * bar). It is an *action*, not a destination, so it doesn't count against the
- * five-primary-nav cap , but it is deliberately quiet: ink on hover wash, not a
- * chartreuse button. Chartreuse in the shell is reserved for the AI signal.
+ * The compact ink "+ New" button in the header. It is an *action*, not a
+ * destination; ink is the action colour, so it is the one solid control in the
+ * band. Icon-only below `md`, where the header row is tight.
  */
 export function QuickCreateButton() {
   return (
     <DropdownMenu>
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <DropdownMenuTrigger
-            aria-label="Create"
-            className="flex size-10 items-center justify-center rounded-[12px] border border-mist-border bg-pure-snow text-near-ink transition-colors hover:bg-row-wash focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-near-ink"
-          >
-            <Plus className="size-[18px]" strokeWidth={2} />
-          </DropdownMenuTrigger>
-        </TooltipTrigger>
-        <TooltipContent side="right">Create</TooltipContent>
-      </Tooltip>
-      <DropdownMenuContent side="right" align="start" className="min-w-52">
+      <DropdownMenuTrigger
+        aria-label="Create"
+        className="inline-flex h-9 shrink-0 items-center justify-center gap-1.5 rounded-[var(--radius-btn)] bg-near-ink px-2.5 text-[14px] font-medium text-pure-snow transition-colors duration-150 ease-out hover:bg-near-ink/85 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-near-ink focus-visible:ring-offset-2 focus-visible:ring-offset-lime-wash md:px-3.5"
+      >
+        <Plus className="size-4" strokeWidth={2.25} />
+        <span className="hidden md:inline">New</span>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" sideOffset={8} className="min-w-52">
         <Items />
       </DropdownMenuContent>
     </DropdownMenu>

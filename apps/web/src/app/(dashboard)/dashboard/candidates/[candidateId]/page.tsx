@@ -22,7 +22,9 @@ import { LinkedinLogo } from "@/components/ui/icons/brands";
 
 import { PipelineSpine } from "@/components/ui/PipelineSpine";
 import { CandidateAvatarEdit } from "@/features/candidates/CandidateAvatarEdit";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { ApplicationStatusBadge } from "@/components/ui/StatusBadge";
 import { CandidateActionBar } from "@/features/candidates/CandidateActionBar";
 import { CandidateActivityRail } from "@/features/candidates/CandidateActivityRail";
 import { CandidatePager } from "@/features/candidates/CandidatePager";
@@ -334,7 +336,7 @@ export default async function CandidateDetailPage({
           >
             {/* Identity header , one cohesive block, no decorative banner */}
             <IdentityShield anonymize={aiStatus.resumeAnonymization}>
-            <div className="rounded-2xl border border-border/70 bg-card p-5">
+            <div className="rounded-[var(--radius-card)] bg-card p-6 shadow-[var(--shadow-card)]">
             <div className="flex flex-col gap-4 lg:flex-row lg:flex-wrap lg:items-start lg:justify-between">
               {/* Identity + contact, all in one column tight to the avatar */}
               <div className="flex min-w-0 lg:min-w-[400px] flex-1 items-start gap-4">
@@ -348,31 +350,34 @@ export default async function CandidateDetailPage({
                 <div className="min-w-0 space-y-2.5">
                   <div>
                     <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1">
-                      <h1 className="font-display text-xl font-semibold tracking-tight">
+                      <h1 className="font-display text-[28px] leading-tight tracking-[-0.01em] text-near-ink">
                         <Redact>{fullName}</Redact>
                       </h1>
+                      {latestApplication ? (
+                        <ApplicationStatusBadge status={latestApplication.status} />
+                      ) : null}
                       {latestApplication?.source ? (
-                        <span className="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">
+                        <Badge variant="neutral" dot={false} className="gap-1">
                           {SOURCE_ICON[latestApplication.source] ?? (
                             <Briefcase className="size-3.5" />
                           )}
                           {SOURCE_LABEL[latestApplication.source] ??
                             latestApplication.source}
-                        </span>
+                        </Badge>
                       ) : null}
                     </div>
                     {candidate.headline ? (
-                      <p className="mt-1 text-sm leading-6 text-muted-foreground">
+                      <p className="mt-1 text-[14px] leading-6 text-soft-ink">
                         {candidate.headline}
                       </p>
                     ) : null}
                   </div>
 
                   {/* Contact + social , one compact inline row */}
-                  <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-sm text-muted-foreground">
+                  <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-[13.5px] text-soft-ink">
                     <RedactLink
                       href={`mailto:${candidate.email}`}
-                      className="inline-flex items-center gap-1.5 transition-colors hover:text-foreground"
+                      className="inline-flex items-center gap-1.5 transition-colors hover:text-near-ink"
                     >
                       <Mail className="size-4 shrink-0" strokeWidth={1.6} />
                       {candidate.email}
@@ -380,7 +385,7 @@ export default async function CandidateDetailPage({
                     {candidate.phone ? (
                       <RedactLink
                         href={`tel:${candidate.phone}`}
-                        className="inline-flex items-center gap-1.5 transition-colors hover:text-foreground"
+                        className="inline-flex items-center gap-1.5 transition-colors hover:text-near-ink"
                       >
                         <Phone className="size-4 shrink-0" strokeWidth={1.6} />
                         {candidate.phone}
@@ -391,7 +396,7 @@ export default async function CandidateDetailPage({
                         href={`https://maps.google.com/?q=${encodeURIComponent(candidate.location)}`}
                         target="_blank"
                         rel="noreferrer"
-                        className="inline-flex items-center gap-1.5 transition-colors hover:text-foreground"
+                        className="inline-flex items-center gap-1.5 transition-colors hover:text-near-ink"
                       >
                         <MapPin className="size-4 shrink-0" strokeWidth={1.6} />
                         {candidate.location}
@@ -412,7 +417,7 @@ export default async function CandidateDetailPage({
                         href={candidate.linkedinUrl}
                         target="_blank"
                         rel="noreferrer"
-                        className="inline-flex items-center gap-1.5 transition-colors hover:text-foreground"
+                        className="inline-flex items-center gap-1.5 transition-colors hover:text-near-ink"
                       >
                         <LinkedinLogo className="size-4" />
                         LinkedIn
@@ -423,7 +428,7 @@ export default async function CandidateDetailPage({
                         href={candidate.githubUrl}
                         target="_blank"
                         rel="noreferrer"
-                        className="inline-flex items-center gap-1.5 transition-colors hover:text-foreground"
+                        className="inline-flex items-center gap-1.5 transition-colors hover:text-near-ink"
                       >
                         <GithubIcon className="size-4" />
                         GitHub
@@ -434,7 +439,7 @@ export default async function CandidateDetailPage({
                         href={candidate.websiteUrl}
                         target="_blank"
                         rel="noreferrer"
-                        className="inline-flex items-center gap-1.5 transition-colors hover:text-foreground"
+                        className="inline-flex items-center gap-1.5 transition-colors hover:text-near-ink"
                       >
                         <Globe className="size-4" strokeWidth={1.6} />
                         Website

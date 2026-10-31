@@ -43,7 +43,7 @@ export function GravatarSettingsCard({ enabled }: { enabled: boolean }) {
   return (
     <Card className="gap-0 p-5">
       <div className="flex items-start justify-between gap-3">
-        <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-muted/70 text-foreground/80">
+        <span className="flex size-10 shrink-0 items-center justify-center rounded-[var(--radius-btn)] border border-hairline bg-pure-snow text-near-ink">
           <UserRound className="size-5" strokeWidth={1.5} />
         </span>
         <Switch

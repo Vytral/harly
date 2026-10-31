@@ -1,5 +1,6 @@
 "use client";
 
+import { useConfirm } from "@/components/ui/confirm-dialog";
 import { cn } from "@/lib/utils";
 import { CAREER_PRESETS, type CareerPageConfig, type CareerTemplate } from "@/features/career-page/config";
 import type { ConfigUpdater } from "../types";
@@ -63,6 +64,7 @@ export function TemplatePanel({
   update: ConfigUpdater;
   setConfig: (c: CareerPageConfig) => void;
 }) {
+  const confirm = useConfirm();
   function chooseTemplate(t: CareerTemplate) {
     if (config.template === "") {
       setConfig(CAREER_PRESETS[t]());
@@ -121,8 +123,16 @@ export function TemplatePanel({
       {config.template !== "" && (
         <button
           type="button"
-          onClick={() => {
-            if (!confirm("Reset all settings to template defaults? This cannot be undone.")) return;
+          onClick={async () => {
+            if (
+              !(await confirm({
+                tone: "destructive",
+                title: "Reset to template defaults?",
+                description: "Every customised setting on your career page returns to the template's defaults. This cannot be undone.",
+                confirmLabel: "Reset settings",
+              }))
+            )
+              return;
             setConfig(CAREER_PRESETS[config.template as CareerTemplate]());
           }}
           className="text-xs text-ink-soft underline-offset-2 hover:text-foreground hover:underline"

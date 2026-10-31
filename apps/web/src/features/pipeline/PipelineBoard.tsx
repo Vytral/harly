@@ -1,5 +1,6 @@
 "use client";
 
+import { useConfirm } from "@/components/ui/confirm-dialog";
 import {
   useEffect,
   useMemo,
@@ -46,7 +47,7 @@ import {
   type BoardOperation,
   type Settlement,
 } from "@/features/pipeline/board-state";
-import { bulkDecisionConfirmationMessage } from "@/features/pipeline/confirmation";
+import { bulkDecisionConfirmCopy } from "@/features/pipeline/confirmation";
 import {
   CandidateCard,
   CandidateCardOverlay,
@@ -143,6 +144,7 @@ export function PipelineBoard({
   applications,
 }: PipelineBoardProps) {
   const router = useRouter();
+  const confirm = useConfirm();
   const [stages, setStages] = useState(initialStages);
   const baseColumns = useMemo(
     () => buildColumns(stages, applications),
@@ -376,7 +378,7 @@ export function PipelineBoard({
     enqueueOperation(operation);
   }
 
-  function handleStatusChange(
+  async function handleStatusChange(
     applicationIds: string[],
     status: PipelineApplication["status"],
   ) {
@@ -391,7 +393,7 @@ export function PipelineBoard({
     if (
       targets.length > 1 &&
       (status === "hired" || status === "rejected") &&
-      !window.confirm(bulkDecisionConfirmationMessage(status, targets.length))
+      !(await confirm(bulkDecisionConfirmCopy(status, targets.length)))
     ) {
       return;
     }

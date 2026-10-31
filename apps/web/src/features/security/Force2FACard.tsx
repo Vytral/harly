@@ -74,7 +74,7 @@ export function Force2FACard({
       )}
 
       {enabled && (
-        <div className="rounded-xl border border-clay/20 bg-clay/5 px-4 py-3 text-sm text-clay">
+        <div className="rounded-xl border border-warning-clay/20 bg-warning-clay/5 px-4 py-3 text-sm text-clay">
           Members without 2FA will be prompted to enable it on their next login.
         </div>
       )}

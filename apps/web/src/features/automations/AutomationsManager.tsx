@@ -16,16 +16,7 @@ import {
   LightningIcon,
   MagicWandDuotoneIcon,
 } from "@/components/ui/icons/phosphor";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 
 import {
   createWorkflowFromTemplateAction,
@@ -154,29 +145,22 @@ export function AutomationsManager({
         ))}
       </div>
 
-      <AlertDialog
+      <ConfirmDialog
         open={Boolean(pendingDelete)}
         onOpenChange={(open) => {
           if (!open) setPendingDelete(null);
         }}
-      >
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Delete this automation?</AlertDialogTitle>
-            <AlertDialogDescription>
-              {pendingDelete
-                ? `“${pendingDelete.name}” will be removed. This cannot be undone.`
-                : "This cannot be undone."}
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Keep it</AlertDialogCancel>
-            <AlertDialogAction variant="destructive" onClick={confirmRemove}>
-              Delete
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+        tone="destructive"
+        title="Delete this automation?"
+        description={
+          pendingDelete
+            ? `“${pendingDelete.name}” will stop running and be removed. This cannot be undone.`
+            : "This cannot be undone."
+        }
+        confirmLabel="Delete automation"
+        cancelLabel="Keep it"
+        onConfirm={confirmRemove}
+      />
     </div>
   );
 }

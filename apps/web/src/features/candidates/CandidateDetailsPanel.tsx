@@ -38,6 +38,8 @@ import {
 import { EducationList } from "@/features/candidates/EducationList";
 import { ExperienceTimeline } from "@/features/candidates/ExperienceTimeline";
 import { ApplicationStatusBadge } from "@/components/ui/StatusBadge";
+import { Card } from "@/components/ui/card";
+import { InfoRow, InfoRows } from "@/components/ui/info-row";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ShortDate } from "@/lib/date-hydration";
@@ -97,7 +99,7 @@ function Section({
   hidden?: boolean;
 }) {
   if (hidden) return null;
-  return <section className="px-5 py-5 sm:px-6">{children}</section>;
+  return <section className="px-5 py-5">{children}</section>;
 }
 
 function SkillsList({ skills }: { skills: string[] }) {
@@ -143,20 +145,6 @@ function ApplicationMetaItem({
   );
 }
 
-function DetailRow({
-  label,
-  value,
-}: {
-  label: string;
-  value: React.ReactNode;
-}) {
-  return (
-    <>
-      <dt className="text-sm text-muted-foreground">{label}</dt>
-      <dd className="min-w-0 text-sm text-foreground">{value}</dd>
-    </>
-  );
-}
 
 function ApplicationDisclosure({
   application,
@@ -173,7 +161,7 @@ function ApplicationDisclosure({
     <div className="group/app space-y-0 py-4 first:pt-0 last:pb-0">
       <div className="flex items-center gap-3">
         <div className="flex min-w-0 flex-1 items-center gap-2.5">
-          <span className="flex size-7 shrink-0 items-center justify-center rounded-md bg-muted/70 text-muted-foreground">
+          <span className="flex size-7 shrink-0 items-center justify-center rounded-[var(--radius-btn)] border border-hairline bg-pure-snow text-near-ink">
             <Briefcase className="size-3.5" strokeWidth={1.8} />
           </span>
           <h3 className="truncate text-sm font-medium text-foreground">
@@ -233,7 +221,7 @@ function ApplicationDisclosure({
         aria-hidden={!open}
       >
         <div className="overflow-hidden">
-          <dl className="mt-3 space-y-3 rounded-md border border-border/70 bg-muted/25 p-4">
+          <dl className="mt-3 space-y-3 rounded-[var(--radius-inner)] bg-card-inset p-4">
             {application.answers.map((answer) => (
               <div key={answer.id} className="space-y-1">
                 <dt className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
@@ -302,14 +290,14 @@ export function CandidateDetailsPanel({
   );
 
   return (
-    <section className="overflow-hidden rounded-lg border border-border bg-card shadow-sm shadow-black/[0.03]">
+    <Card className="gap-0 overflow-hidden py-0">
       <button
         type="button"
         onClick={() => setOpen((value) => !value)}
-        className="flex w-full items-center justify-between gap-3 bg-muted/40 px-5 py-3.5 text-left sm:px-6"
+        className="flex w-full items-center justify-between gap-3 px-5 py-4 text-left transition-colors hover:bg-card-inset/60"
         aria-expanded={open}
       >
-        <span className="text-sm font-semibold">Details</span>
+        <span className="text-[15px] font-semibold tracking-[-0.01em]">Details</span>
         {open ? (
           <ChevronUp className="size-4 text-muted-foreground" strokeWidth={1.8} />
         ) : (
@@ -318,7 +306,7 @@ export function CandidateDetailsPanel({
       </button>
 
       {open ? (
-        <div className="divide-y divide-border/70 border-t bg-card">
+        <div className="divide-y divide-hairline border-t border-hairline">
           <Section>
             <div className="flex flex-wrap items-baseline justify-between gap-2">
               <SectionLabel>Resume</SectionLabel>
@@ -379,102 +367,102 @@ export function CandidateDetailsPanel({
 
           <Section hidden={!hasContactDetails}>
             <SectionLabel>Contact details</SectionLabel>
-            <dl className="mt-4 grid gap-x-6 gap-y-4 sm:grid-cols-[11rem_minmax(0,1fr)]">
-              <DetailRow
+            <InfoRows className="mt-4">
+              <InfoRow
                 label="Email"
                 value={
                   <a
                     href={`mailto:${email}`}
-                    className="inline-flex items-center gap-2 break-all text-foreground transition-colors hover:text-primary"
+                    className="inline-flex items-center gap-2 text-near-ink transition-colors hover:underline"
                   >
-                    <Mail className="size-3.5 shrink-0 text-muted-foreground" />
+                    <Mail className="size-3.5 shrink-0 text-soft-ink" />
                     {email}
                   </a>
                 }
               />
               {phone ? (
-                <DetailRow
+                <InfoRow
                   label="Phone"
                   value={
                     <a
                       href={`tel:${phone}`}
-                      className="inline-flex items-center gap-2 text-foreground transition-colors hover:text-primary"
+                      className="inline-flex items-center gap-2 text-near-ink transition-colors hover:underline"
                     >
-                      <Phone className="size-3.5 shrink-0 text-muted-foreground" />
+                      <Phone className="size-3.5 shrink-0 text-soft-ink" />
                       {phone}
                     </a>
                   }
                 />
               ) : null}
               {address ? (
-                <DetailRow
+                <InfoRow
                   label="Address"
                   value={
                     <a
                       href={`https://maps.google.com/?q=${encodeURIComponent(address)}`}
                       target="_blank"
                       rel="noreferrer"
-                      className="inline-flex items-center gap-2 text-foreground transition-colors hover:text-primary"
+                      className="inline-flex items-center gap-2 text-near-ink transition-colors hover:underline"
                     >
-                      <Globe className="size-3.5 shrink-0 text-muted-foreground" />
+                      <Globe className="size-3.5 shrink-0 text-soft-ink" />
                       {address}
                     </a>
                   }
                 />
               ) : null}
               {linkedinUrl ? (
-                <DetailRow
+                <InfoRow
                   label="LinkedIn"
                   value={
                     <a
                       href={linkedinUrl}
                       target="_blank"
                       rel="noreferrer"
-                      className="inline-flex items-center gap-2 break-all text-foreground transition-colors hover:text-primary"
+                      className="inline-flex items-center gap-2 text-near-ink transition-colors hover:underline"
                     >
-                      <ExternalLink className="size-3.5 shrink-0 text-muted-foreground" />
+                      <ExternalLink className="size-3.5 shrink-0 text-soft-ink" />
                       {linkedinUrl}
                     </a>
                   }
                 />
               ) : null}
               {githubUrl ? (
-                <DetailRow
+                <InfoRow
                   label="GitHub"
                   value={
                     <a
                       href={githubUrl}
                       target="_blank"
                       rel="noreferrer"
-                      className="inline-flex items-center gap-2 break-all text-foreground transition-colors hover:text-primary"
+                      className="inline-flex items-center gap-2 text-near-ink transition-colors hover:underline"
                     >
-                      <ExternalLink className="size-3.5 shrink-0 text-muted-foreground" />
+                      <ExternalLink className="size-3.5 shrink-0 text-soft-ink" />
                       {githubUrl}
                     </a>
                   }
                 />
               ) : null}
               {websiteUrl ? (
-                <DetailRow
+                <InfoRow
                   label="Website"
                   value={
                     <a
                       href={websiteUrl}
                       target="_blank"
                       rel="noreferrer"
-                      className="inline-flex items-center gap-2 break-all text-foreground transition-colors hover:text-primary"
+                      className="inline-flex items-center gap-2 text-near-ink transition-colors hover:underline"
                     >
-                      <ExternalLink className="size-3.5 shrink-0 text-muted-foreground" />
+                      <ExternalLink className="size-3.5 shrink-0 text-soft-ink" />
                       {websiteUrl}
                     </a>
                   }
                 />
               ) : null}
-            </dl>
+            </InfoRows>
           </Section>
 
           {applications.length > 0 ? (
-            <section className="px-5 py-5 sm:px-6">
+            <section className="px-5 py-5">
               <SectionLabel meta={`${applications.length} total`}>
                 Applications
               </SectionLabel>
@@ -516,6 +504,6 @@ export function CandidateDetailsPanel({
           </Section>
         </div>
       ) : null}
-    </section>
+    </Card>
   );
 }

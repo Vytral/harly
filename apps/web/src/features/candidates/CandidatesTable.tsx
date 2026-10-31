@@ -1,5 +1,6 @@
 "use client";
 
+import { useConfirm } from "@/components/ui/confirm-dialog";
 import { useMemo, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -26,7 +27,7 @@ import {
   trashCandidateAction,
 } from "@/features/candidates/actions";
 import { addToPoolAction, removeFromPoolAction } from "@/features/pool/actions";
-import { bulkDecisionConfirmationMessage } from "@/features/pipeline/confirmation";
+import { bulkDecisionConfirmCopy } from "@/features/pipeline/confirmation";
 import { toSafeCsv } from "@/lib/csv";
 import { BulkEmailDrawer } from "@/features/candidates/BulkEmailDrawer";
 import type { EmailTemplateOption } from "@/features/candidates/EmailDrawer";
@@ -186,6 +187,7 @@ export function CandidatesTable({
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [bulkEmailOpen, setBulkEmailOpen] = useState(false);
   const [isPending, startTransition] = useTransition();
+  const confirm = useConfirm();
 
   function navigateWithFilter(key: string, value: string) {
     const params = new URLSearchParams(window.location.search);
@@ -283,7 +285,7 @@ export function CandidatesTable({
     });
   }
 
-  function runBulk(next: "hired" | "rejected" | "active") {
+  async function runBulk(next: "hired" | "rejected" | "active") {
     const applicationIds = filtered
       .filter((r) => selected.has(r.id) && r.applicationId)
       .map((r) => r.applicationId as string);
@@ -295,7 +297,7 @@ export function CandidatesTable({
     if (
       applicationIds.length > 1 &&
       (next === "hired" || next === "rejected") &&
-      !window.confirm(bulkDecisionConfirmationMessage(next, applicationIds.length))
+      !(await confirm(bulkDecisionConfirmCopy(next, applicationIds.length)))
     ) {
       return;
     }
@@ -345,11 +347,14 @@ export function CandidatesTable({
     });
   }
 
-  function runDelete(row: CandidateRow) {
+  async function runDelete(row: CandidateRow) {
     if (
-      !window.confirm(
-        `Move ${row.fullName} to trash? You can restore them later from the Trash tab.`,
-      )
+      !(await confirm({
+        tone: "destructive",
+        title: `Move ${row.fullName} to trash?`,
+        description: "They leave the active list. You can restore them later from the Trash tab.",
+        confirmLabel: "Move to trash",
+      }))
     ) {
       return;
     }
@@ -393,13 +398,16 @@ export function CandidatesTable({
     });
   }
 
-  function runBulkDelete() {
+  async function runBulkDelete() {
     const ids = filtered.filter((r) => selected.has(r.id)).map((r) => r.id);
     if (ids.length === 0) return;
     if (
-      !window.confirm(
-        `Move ${ids.length} candidate${ids.length === 1 ? "" : "s"} to trash? You can restore them later.`,
-      )
+      !(await confirm({
+        tone: "destructive",
+        title: `Move ${ids.length} candidate${ids.length === 1 ? "" : "s"} to trash?`,
+        description: "They leave the active list. You can restore them later from the Trash tab.",
+        confirmLabel: `Move ${ids.length} to trash`,
+      }))
     ) {
       return;
     }

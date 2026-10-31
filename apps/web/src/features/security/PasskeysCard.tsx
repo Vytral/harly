@@ -175,7 +175,7 @@ export function PasskeysCard({
           {passkeyList.map((pk) => (
             <div
               key={pk.id}
-              className="flex items-center justify-between gap-4 rounded-xl border bg-card px-4 py-3"
+              className="flex items-center justify-between gap-4 rounded-[var(--radius-inner)] bg-card-inset px-4 py-3"
             >
               <div className="flex items-center gap-3 min-w-0">
                 <FingerPrintDuotoneIcon className="size-5 shrink-0 text-muted-foreground" />

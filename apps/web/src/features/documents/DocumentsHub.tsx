@@ -1,5 +1,6 @@
 "use client";
 
+import { useConfirm } from "@/components/ui/confirm-dialog";
 import { useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { Route } from "next";
@@ -138,6 +139,7 @@ export function DocumentsHub({
   canManageTemplates?: boolean;
 }) {
   const router = useRouter();
+  const confirm = useConfirm();
   const [query, setQuery] = useState("");
   const [category, setCategory] = useState("all");
   const [section, setSection] = useState<"active" | "archived">("active");
@@ -301,11 +303,14 @@ export function DocumentsHub({
     })();
   }
 
-  function bulkDelete() {
+  async function bulkDelete() {
     if (
-      !window.confirm(
-        `Permanently delete ${selectedInView.length} document${selectedInView.length === 1 ? "" : "s"}? This cannot be undone.`,
-      )
+      !(await confirm({
+        tone: "destructive",
+        title: `Delete ${selectedInView.length} document${selectedInView.length === 1 ? "" : "s"} permanently?`,
+        description: "They are removed for everyone, along with their version history. This cannot be undone.",
+        confirmLabel: `Delete ${selectedInView.length} document${selectedInView.length === 1 ? "" : "s"}`,
+      }))
     )
       return;
     runBulk(

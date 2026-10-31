@@ -1,5 +1,6 @@
 "use client";
 
+import { useConfirm } from "@/components/ui/confirm-dialog";
 import { useState, useTransition, useRef } from "react";
 import { useRouter } from "next/navigation";
 import type { Route } from "next";
@@ -170,6 +171,7 @@ export function TemplatesManager({
 }) {
   const previewValues = { ...PREVIEW_VALUES, company_name: workspaceName };
   const router = useRouter();
+  const confirm = useConfirm();
   const [isPending, startTransition] = useTransition();
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<EmailTemplateItem | null>(null);
@@ -234,8 +236,16 @@ export function TemplatesManager({
     });
   }
 
-  function remove(template: EmailTemplateItem) {
-    if (!window.confirm(`Delete the "${template.name}" template?`)) return;
+  async function remove(template: EmailTemplateItem) {
+    if (
+      !(await confirm({
+        tone: "destructive",
+        title: `Delete the "${template.name}" template?`,
+        description: "Emails that use it will fall back to the default wording. This cannot be undone.",
+        confirmLabel: "Delete template",
+      }))
+    )
+      return;
     startTransition(async () => {
       const result = await deleteEmailTemplate({ templateId: template.id });
       if (!result.success) {
@@ -480,8 +490,19 @@ export function TemplatesManager({
       <Sheet
         open={open}
         mobilePresentation="side"
-        onOpenChange={(next) => {
-          if (!next && isDirty && !window.confirm("Discard unsaved changes?")) return;
+        onOpenChange={async (next) => {
+          if (
+            !next &&
+            isDirty &&
+            !(await confirm({
+              tone: "warning",
+              title: "Discard unsaved changes?",
+              description: "Your edits to this template will be lost.",
+              confirmLabel: "Discard changes",
+              cancelLabel: "Keep editing",
+            }))
+          )
+            return;
           if (!next) closeEditor();
           else setOpen(true);
         }}

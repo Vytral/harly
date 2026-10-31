@@ -5,6 +5,7 @@ import { isValidElement, type ComponentType, type ReactNode } from "react";
 
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { SpotEmpty, SpotIcon } from "@/components/ui/spot-illustrations";
 
 /**
  * Structural, not family-specific: Lucide and Phosphor glyphs both satisfy it,
@@ -36,7 +37,8 @@ export type EmptyStateAction = ReactNode | EmptyStateLinkAction;
  * or `{ href, label }` for a navigation CTA. `secondaryAction` is a node.
  */
 export function EmptyState({
-  icon: Icon = Inbox,
+  icon,
+  illustration,
   title,
   description,
   action,
@@ -46,6 +48,11 @@ export function EmptyState({
   className,
 }: {
   icon?: EmptyStateIcon;
+  /**
+   * Replaces the default spot illustration (a lime-wash blob holding `icon`,
+   * or the folder spot when no icon is given). Pass `null` for no artwork.
+   */
+  illustration?: ReactNode;
   title: string;
   description: ReactNode;
   action?: EmptyStateAction;
@@ -55,26 +62,32 @@ export function EmptyState({
   className?: string;
 }) {
   const framed = variant === "empty" && !compact;
+  const Icon = icon ?? Inbox;
+  const art =
+    illustration !== undefined ? (
+      illustration
+    ) : icon ? (
+      <SpotIcon icon={icon} />
+    ) : (
+      <SpotEmpty size={80} />
+    );
 
   return (
     <div
       className={cn(
         "animate-empty-state flex flex-col items-center text-center",
         compact ? "px-4 py-6" : "px-6 py-12",
-        framed && "rounded-xl border border-dashed bg-card",
+        framed && "rounded-[var(--radius-card)] border border-dashed border-mist-border bg-card",
         className,
       )}
     >
-      {compact ? null : (
-        <span className="mb-4 flex size-12 items-center justify-center rounded-xl bg-accent text-accent-foreground">
-          <Icon className="size-5" />
-        </span>
-      )}
       {compact ? (
         <Icon className="mb-2 size-4 text-quiet-mist" />
+      ) : art ? (
+        <div className="mb-4 flex items-center justify-center">{art}</div>
       ) : null}
-      <p className="text-[15px] font-medium text-foreground">{title}</p>
-      <div className="mt-1.5 max-w-md text-sm leading-6 text-muted-foreground">
+      <p className="text-[15px] font-semibold tracking-tight text-near-ink">{title}</p>
+      <div className="mt-1.5 max-w-md text-sm leading-6 text-soft-ink">
         {description}
       </div>
       {action || secondaryAction ? (

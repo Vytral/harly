@@ -155,7 +155,7 @@ export function LoginMethodsCard({
       ) : (
         <>
           {!customize ? (
-            <p className="rounded-xl border bg-muted/40 px-4 py-3 text-sm text-muted-foreground">
+            <p className="rounded-[var(--radius-inner)] bg-card-inset px-4 py-3 text-sm text-muted-foreground">
               The login screen automatically shows every method you&apos;ve
               configured. Turn on <span className="font-medium">Customize</span>{" "}
               to restrict staff to a specific set (for example, SSO only).
@@ -168,7 +168,7 @@ export function LoginMethodsCard({
                 return (
                   <div
                     key={method}
-                    className="flex items-center justify-between gap-4 rounded-xl border bg-card px-4 py-3"
+                    className="flex items-center justify-between gap-4 rounded-[var(--radius-inner)] bg-card-inset px-4 py-3"
                   >
                     <div>
                       <p className="text-sm font-medium">
@@ -205,7 +205,7 @@ export function LoginMethodsCard({
               type="button"
               onClick={handleSave}
               disabled={isPending}
-              className="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition hover:bg-pine-strong disabled:cursor-not-allowed disabled:opacity-50"
+              className="rounded-[var(--radius-btn)] bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition hover:bg-pine-strong disabled:cursor-not-allowed disabled:opacity-50"
             >
               {isPending ? "Saving…" : "Save changes"}
             </button>

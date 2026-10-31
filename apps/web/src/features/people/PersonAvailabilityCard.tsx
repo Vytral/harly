@@ -1,4 +1,3 @@
-import { Clock } from "lucide-react";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import type { WeeklyAvailability } from "@harly/db";
@@ -33,26 +32,23 @@ export function PersonAvailabilityCard({
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="flex items-center gap-1.5 text-sm font-medium text-muted-foreground">
-          <Clock className="size-3.5" />
-          Availability
-        </CardTitle>
+        <CardTitle>Availability</CardTitle>
       </CardHeader>
       <CardContent className="space-y-3 text-sm">
         {timezone && (
           <div className="flex items-center justify-between">
-            <span className="text-muted-foreground">Timezone</span>
+            <span className="text-soft-ink">Timezone</span>
             <span className="font-medium">{timezone}</span>
           </div>
         )}
         {capacityHoursPerWeek != null && (
           <div className="flex items-center justify-between">
-            <span className="text-muted-foreground">Capacity</span>
+            <span className="text-soft-ink">Capacity</span>
             <span className="font-medium">{capacityHoursPerWeek} hrs/week</span>
           </div>
         )}
         {hasAvailability && (
-          <div className="space-y-1.5 border-t pt-3">
+          <div className="space-y-1.5 border-t border-hairline pt-3">
             {(Object.keys(DAY_LABELS) as (keyof WeeklyAvailability)[]).map(
               (day) => {
                 const ranges = weeklyAvailability?.[day] ?? [];
@@ -62,7 +58,7 @@ export function PersonAvailabilityCard({
                     key={day}
                     className="flex items-center justify-between gap-2"
                   >
-                    <span className="text-muted-foreground">
+                    <span className="text-soft-ink">
                       {DAY_LABELS[day]}
                     </span>
                     <span className="font-medium tabular-nums">

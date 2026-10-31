@@ -1,5 +1,6 @@
 "use client";
 
+import { useConfirm } from "@/components/ui/confirm-dialog";
 import { useId, useMemo, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -16,7 +17,7 @@ import {
   bulkMoveApplications,
   updateApplicationStatus,
 } from "@/features/pipeline/actions";
-import { bulkDecisionConfirmationMessage } from "@/features/pipeline/confirmation";
+import { bulkDecisionConfirmCopy } from "@/features/pipeline/confirmation";
 import type {
   PipelineApplication,
   PipelineStage,
@@ -49,6 +50,7 @@ export function PipelineList({
   applications,
 }: PipelineListProps) {
   const router = useRouter();
+  const confirm = useConfirm();
   const [activeStage, setActiveStage] = useState<string>(ALL);
   const [query, setQuery] = useState("");
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -139,12 +141,12 @@ export function PipelineList({
     });
   }
 
-  function setStatus(status: "hired" | "rejected" | "active") {
+  async function setStatus(status: "hired" | "rejected" | "active") {
     if (selectedIds.length === 0) return;
     if (
       status !== "active" &&
       selectedIds.length > 1 &&
-      !window.confirm(bulkDecisionConfirmationMessage(status, selectedIds.length))
+      !(await confirm(bulkDecisionConfirmCopy(status, selectedIds.length)))
     ) {
       return;
     }

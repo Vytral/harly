@@ -1,5 +1,6 @@
 "use client";
 
+import { useConfirm } from "@/components/ui/confirm-dialog";
 import Link from "next/link";
 import type { Route } from "next";
 import { useRouter } from "next/navigation";
@@ -31,12 +32,21 @@ export function DocumentTemplatesManager({
   canReadDocuments: boolean;
 }) {
   const router = useRouter();
+  const confirm = useConfirm();
   const [pending, startTransition] = useTransition();
   const active = templates.filter((template) => !template.archivedAt);
   const archived = templates.filter((template) => template.archivedAt);
 
-  function archive(template: WorkflowDocumentTemplateItem) {
-    if (!window.confirm(`Archive the “${template.name}” document template? Published workflows keep their snapshot.`)) return;
+  async function archive(template: WorkflowDocumentTemplateItem) {
+    if (
+      !(await confirm({
+        tone: "warning",
+        title: `Archive the “${template.name}” template?`,
+        description: "Published workflows keep their snapshot. New workflows can no longer use it.",
+        confirmLabel: "Archive template",
+      }))
+    )
+      return;
     startTransition(async () => {
       const result = await archiveWorkflowDocumentTemplate({ templateId: template.id });
       if (!result.success) {

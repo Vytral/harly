@@ -8,8 +8,6 @@ import { TextMorph } from "torph/react";
 import { getIslandState, subscribeIsland, type IslandStatus } from "@/lib/notification-island/store";
 import { cn } from "@/lib/utils";
 
-import { WorkspacePill } from "./WorkspaceSwitcher";
-import type { WorkspaceOption } from "@/features/workspaces/data";
 
 const DEMO_SEEN_KEY = "harly:demo-island-seen";
 const DEMO_MESSAGE =
@@ -38,21 +36,16 @@ const STATUS_META: Record<
 };
 
 /**
- * The centered topbar pill, now a Dynamic-Island-style morph target: idle
- * shows the workspace pill (`Syntrix / All`), an active island notification
- * shares its layoutId so the container resizes into place instead of
- * swapping abruptly. See lib/notification-island/toast.ts for the API.
+ * The floating status pill under the header: a Dynamic-Island-style morph
+ * target that renders nothing while idle and morphs between island
+ * notifications (and the demo notice) without swapping abruptly. See lib/notification-island/toast.ts for the API.
  *
  * In demo mode, the first visit shows a one-time notice here (then persists
  * dismissal) so the full-width banner no longer crowds the real UI.
  */
 export function NotificationIsland({
-  workspace,
-  workspaceOptions,
   demoMode = false,
 }: {
-  workspace: { id: string; name: string; logoUrl: string | null };
-  workspaceOptions: WorkspaceOption[];
   demoMode?: boolean;
 }) {
   const state = useSyncExternalStore(subscribeIsland, getIslandState, getIslandState);
@@ -104,7 +97,7 @@ export function NotificationIsland({
             exit={reduceMotion ? { opacity: 0 } : { opacity: 0, scale: 0.97 }}
             transition={contentTransition}
             className={cn(
-              "flex h-8 items-center gap-2 rounded-full border px-3",
+              "flex h-8 items-center gap-2 rounded-full border px-3 shadow-[var(--shadow-float)]",
               STATUS_META[item.status].shellClassName,
             )}
           >
@@ -130,7 +123,7 @@ export function NotificationIsland({
             animate={{ opacity: 1, scale: 1 }}
             exit={reduceMotion ? { opacity: 0 } : { opacity: 0, scale: 0.97 }}
             transition={contentTransition}
-            className="flex h-8 max-w-[min(92vw,420px)] items-center gap-2 rounded-full border border-chartreuse-signal/50 bg-sage-wash px-3"
+            className="flex h-8 max-w-[min(92vw,420px)] items-center gap-2 rounded-full border border-chartreuse-signal/50 bg-sage-wash px-3 shadow-[var(--shadow-float)]"
             role="status"
           >
             <Sparkles className="size-3.5 shrink-0 text-sage-ink" strokeWidth={2} />
@@ -138,18 +131,7 @@ export function NotificationIsland({
               {DEMO_MESSAGE}
             </span>
           </motion.div>
-        ) : (
-          <motion.div
-            key="idle"
-            initial={reduceMotion ? { opacity: 0 } : { opacity: 0, scale: 0.95 }}
-            animate={{ opacity: 1, scale: 1 }}
-            exit={reduceMotion ? { opacity: 0 } : { opacity: 0, scale: 0.97 }}
-            transition={contentTransition}
-            className="min-w-0 max-w-full"
-          >
-            <WorkspacePill workspace={workspace} workspaceOptions={workspaceOptions} />
-          </motion.div>
-        )}
+        ) : null}
       </AnimatePresence>
     </motion.div>
   );

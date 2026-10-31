@@ -4,16 +4,8 @@ import { useState } from "react";
 import { AlertTriangle } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
+import { Callout } from "@/components/ui/callout";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import {
   Dialog,
   DialogContent,
@@ -62,7 +54,7 @@ export function ArchiveStageDialog({
   return (
     <Dialog open={stage !== null} onOpenChange={(open) => !open && onCancel()}>
       <DialogContent className="sm:max-w-md">
-        <DialogHeader>
+        <DialogHeader align="start">
           <DialogTitle>Archive {stage?.name ?? "stage"}?</DialogTitle>
           <DialogDescription>
             Archived stages leave the board and the stage pickers. Their history is kept. Archived
@@ -140,37 +132,19 @@ export function DeleteStageDialog({
   onConfirm: () => void;
 }) {
   return (
-    <AlertDialog open={stage !== null} onOpenChange={(open) => !open && onCancel()}>
-      <AlertDialogContent>
-        <AlertDialogHeader>
-          <AlertDialogTitle>Delete {stage?.name ?? "stage"}?</AlertDialogTitle>
-          <AlertDialogDescription>
-            This removes the stage for good. It is only possible for a stage no candidate has ever
-            been in. Otherwise, archive it instead.
-          </AlertDialogDescription>
-        </AlertDialogHeader>
-        {notice ? (
-          <p role="alert" className="text-sm text-destructive">
-            {notice}
-          </p>
-        ) : null}
-        <AlertDialogFooter>
-          <AlertDialogCancel disabled={busy} onClick={onCancel}>
-            Cancel
-          </AlertDialogCancel>
-          <AlertDialogAction
-            variant="destructive"
-            disabled={busy}
-            onClick={(event) => {
-              // Keep the dialog open until the server answers; the editor closes it.
-              event.preventDefault();
-              onConfirm();
-            }}
-          >
-            {busy ? "Deleting…" : "Delete stage"}
-          </AlertDialogAction>
-        </AlertDialogFooter>
-      </AlertDialogContent>
-    </AlertDialog>
+    <ConfirmDialog
+      open={stage !== null}
+      onOpenChange={(open) => !open && onCancel()}
+      tone="destructive"
+      title={`Delete ${stage?.name ?? "stage"}?`}
+      description="This removes the stage for good. It is only possible for a stage no candidate has ever been in. Otherwise, archive it instead."
+      confirmLabel="Delete stage"
+      busy={busy}
+      // Stay open until the server answers; the editor closes it.
+      closeOnConfirm={false}
+      onConfirm={onConfirm}
+    >
+      {notice ? <Callout tone="danger">{notice}</Callout> : null}
+    </ConfirmDialog>
   );
 }

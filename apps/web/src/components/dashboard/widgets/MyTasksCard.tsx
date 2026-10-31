@@ -9,12 +9,12 @@ import { Tile, TileHeader, TileLink, EmptyHint } from "./primitives";
 
 const priorityVariant: Record<
   MyDashboardTask["priority"],
-  "destructive" | "danger" | "warning" | "secondary"
+  "danger" | "warning" | "neutral"
 > = {
-  urgent: "destructive",
+  urgent: "danger",
   high: "danger",
   medium: "warning",
-  low: "secondary",
+  low: "neutral",
 };
 
 const priorityLabel: Record<MyDashboardTask["priority"], string> = {
@@ -25,9 +25,9 @@ const priorityLabel: Record<MyDashboardTask["priority"], string> = {
 };
 
 const dueStateClass: Record<string, string> = {
-  overdue: "text-destructive",
-  today: "text-warning",
-  soon: "text-muted-foreground",
+  overdue: "text-danger-rust",
+  today: "text-warning-clay",
+  soon: "text-soft-ink",
 };
 
 function formatDue(task: MyDashboardTask): string | null {
@@ -52,9 +52,9 @@ export function MyTasksCard({
         title="My tasks"
         action={<TileLink href="/dashboard/tasks">View all</TileLink>}
       />
-      <div className="flex flex-1 flex-col px-2 pb-2 pt-1">
+      <div className="flex flex-1 flex-col px-2 pb-3 pt-3">
         {tasks.length > 0 ? (
-          <ul className="flex-1 divide-y divide-border/60">
+          <ul className="flex-1 flex flex-col gap-0.5">
             {tasks.map((task) => {
               const due = formatDue(task);
               const href = task.candidateId
@@ -65,13 +65,13 @@ export function MyTasksCard({
                 <li key={task.id}>
                   <Link
                     href={href}
-                    className="group flex items-center gap-3 rounded-xl px-3 py-3 transition hover:bg-muted/60"
+                    className="group flex items-center gap-3 rounded-[var(--radius-md)] px-3 py-2.5 transition-colors hover:bg-row-wash"
                   >
                     <div className="min-w-0 flex-1">
                       <p className="truncate text-sm font-medium">{task.title}</p>
                       <div className="flex items-center gap-2">
                         {task.context && (
-                          <p className="truncate text-xs text-muted-foreground">
+                          <p className="truncate text-xs text-soft-ink">
                             {task.context}
                           </p>
                         )}

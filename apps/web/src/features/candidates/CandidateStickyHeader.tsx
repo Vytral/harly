@@ -5,6 +5,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Phone } from "lucide-react";
 
 import { useStickyBar } from "@/components/dashboard/StickyBarContext";
+import { Badge } from "@/components/ui/badge";
 import { UserAvatar } from "@/components/ui/UserAvatar";
 
 type CandidateStickyHeaderProps = {
@@ -73,7 +74,7 @@ export function CandidateStickyHeader({
         aria-hidden={!pinned}
       >
         <div
-          className="flex h-14 items-center gap-3 overflow-hidden rounded-b-xl border border-t-0 border-border/70 bg-background/90 px-3 shadow-md backdrop-blur-md transition-[opacity,transform] duration-300 sm:px-4"
+          className="flex h-14 items-center gap-3 overflow-hidden border-b border-hairline bg-warm-paper/85 px-3 backdrop-blur-md supports-[backdrop-filter]:bg-warm-paper/70 transition-[opacity,transform] duration-300 sm:px-4"
           style={{
             opacity: pinned ? 1 : 0,
             transform: pinned ? "translateY(0)" : "translateY(-100%)",
@@ -83,16 +84,16 @@ export function CandidateStickyHeader({
             <UserAvatar name={name} src={avatarUrl} fallbackSrcs={fallbackSrcs} size="sm" />
 
             <div className="flex min-w-0 items-center gap-2">
-              <span className="truncate text-sm font-semibold">{name}</span>
+              <span className="truncate text-sm font-semibold text-near-ink">{name}</span>
               {stageName ? (
-                <span className="hidden shrink-0 rounded-full bg-accent px-2 py-0.5 text-xs font-medium text-accent-foreground sm:inline">
+                <Badge variant="info" className="hidden shrink-0 sm:inline-flex">
                   {stageName}
-                </span>
+                </Badge>
               ) : null}
               {phone ? (
                 <a
                   href={`tel:${phone}`}
-                  className="hidden shrink-0 items-center gap-1 text-xs text-muted-foreground hover:text-foreground lg:inline-flex"
+                  className="hidden shrink-0 items-center gap-1 text-xs text-soft-ink hover:text-near-ink lg:inline-flex"
                 >
                   <Phone className="size-3.5" strokeWidth={1.6} />
                   {phone}

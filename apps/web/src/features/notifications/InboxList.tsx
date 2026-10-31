@@ -1,5 +1,6 @@
 "use client";
 
+import { useConfirm } from "@/components/ui/confirm-dialog";
 import { useState, useTransition } from "react";
 import type { Route } from "next";
 import { useRouter } from "next/navigation";
@@ -36,6 +37,7 @@ type Filter = "all" | "unread";
 
 export function InboxList({ items }: { items: NotificationItem[] }) {
   const router = useRouter();
+  const confirm = useConfirm();
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [filter, setFilter] = useState<Filter>("all");
@@ -118,8 +120,15 @@ export function InboxList({ items }: { items: NotificationItem[] }) {
     });
   }
 
-  function removeAll() {
-    if (!window.confirm("Delete all notifications? This cannot be undone."))
+  async function removeAll() {
+    if (
+      !(await confirm({
+        tone: "destructive",
+        title: "Delete all notifications?",
+        description: "Your whole inbox is cleared. This cannot be undone.",
+        confirmLabel: "Delete all",
+      }))
+    )
       return;
     setError(null);
     startTransition(async () => {

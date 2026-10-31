@@ -29,9 +29,13 @@ import {
 } from "@/components/ui/popover";
 import { RelativeTime } from "@/lib/date-hydration";
 import { cn } from "@/lib/utils";
+import {
+  headerCornerBadge,
+  headerRoundButton,
+} from "@/components/dashboard/header-styles";
 import { useRealtimeEvent } from "@/components/dashboard/RealtimeProvider";
 
-/** Top-bar bell with unread badge and a quick peek at recent notifications. */
+/** Header bell with unread badge and a quick peek at recent notifications. */
 export function NotificationsBell({
   notifications,
   unreadCount,
@@ -161,10 +165,9 @@ export function NotificationsBell({
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
-        <Button
-          variant="ghost"
-          size="icon"
-          className="relative text-muted-foreground"
+        <button
+          type="button"
+          className={headerRoundButton}
           aria-label={
             unread > 0 ? `Notifications (${unread} unread)` : "Notifications"
           }
@@ -176,17 +179,20 @@ export function NotificationsBell({
             viewBox="0 0 24 24"
             fill="none"
             stroke="currentColor"
-            strokeWidth="1.5"
+            strokeWidth="1.8"
             strokeLinecap="round"
             strokeLinejoin="round"
+            aria-hidden="true"
           >
             <path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9" />
             <path d="M10.3 21a1.94 1.94 0 0 0 3.4 0" />
           </svg>
           {unread > 0 ? (
-            <span className="absolute right-1.5 top-1.5 flex size-2 rounded-full bg-primary ring-2 ring-background" />
+            <span aria-hidden="true" className={headerCornerBadge}>
+              {unread > 9 ? "9+" : unread}
+            </span>
           ) : null}
-        </Button>
+        </button>
       </PopoverTrigger>
       <PopoverContent align="end" className="w-96 p-0">
         <div className="flex items-center justify-between gap-3 border-b px-4 py-3">

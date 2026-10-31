@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Check, ChevronDown } from "lucide-react";
 
@@ -56,16 +57,21 @@ export function WorkspaceMark({
 }
 
 /**
- * The centered workspace pill , the only thing in the middle of the top bar
- * (DESIGN.md , Top Bar). Reads `{Workspace} / All ▾` behind a small chartreuse
- * brand dot. No page title, no breadcrumb: the page names itself in content.
+ * Workspace switcher for the header's left edge: square mark, workspace name
+ * with a small subtitle, and a chevron when the viewer belongs to more than one
+ * workspace. Below `md` it collapses to the mark alone.
  */
-export function WorkspacePill({
+export function WorkspaceSwitcher({
   workspace,
   workspaceOptions,
+  subtitle,
+  markUrl,
 }: {
   workspace: { id: string; name: string; logoUrl: string | null };
   workspaceOptions: WorkspaceOption[];
+  subtitle?: string;
+  /** Square logo override (the sidebar branding may carry a wordmark). */
+  markUrl?: string | null;
 }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
@@ -90,41 +96,62 @@ export function WorkspacePill({
     });
   }
 
-  const label = (
+  const content = (
     <>
-      <span
-        aria-hidden="true"
-        className="size-2 shrink-0 rounded-full bg-chartreuse-signal"
+      <WorkspaceMark
+        name={workspace.name}
+        logoUrl={markUrl === undefined ? workspace.logoUrl : markUrl}
+        className="size-9 rounded-[10px]"
+        priority
       />
-      <span className="max-w-[180px] truncate text-[14px] font-medium text-near-ink">
-        {workspace.name}
+      <span className="hidden min-w-0 flex-col text-left md:flex">
+        <span className="max-w-[160px] truncate text-[15px] font-semibold leading-5 tracking-tight text-near-ink">
+          {workspace.name}
+        </span>
+        {subtitle ? (
+          <span className="max-w-[160px] truncate text-[12px] leading-4 text-soft-ink">
+            {subtitle}
+          </span>
+        ) : null}
       </span>
-      <span className="text-[14px] text-quiet-mist">/</span>
-      <span className="text-[14px] text-soft-ink">All</span>
     </>
   );
 
+  const triggerClass =
+    "flex min-w-0 items-center gap-2.5 rounded-[12px] p-1 pr-1.5 transition-colors duration-150 ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-near-ink";
+
   if (!switchable) {
     return (
-      <div className="flex h-8 min-w-0 max-w-full items-center gap-2 rounded-full border border-mist-border bg-pure-snow px-3">
-        {label}
-      </div>
+      <Link
+        href="/dashboard"
+        aria-label={`${workspace.name}, go to home`}
+        className={cn(triggerClass, "hover:bg-pure-snow/60 md:pr-3")}
+      >
+        {content}
+      </Link>
     );
   }
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger
-        aria-label="Switch workspace"
-        className="flex h-8 min-w-0 max-w-full items-center gap-2 rounded-full border border-mist-border bg-pure-snow px-3 transition-colors hover:bg-row-wash focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-near-ink"
+        aria-label={`Switch workspace, current: ${workspace.name}`}
+        className={cn(
+          triggerClass,
+          "hover:bg-pure-snow/60 data-[state=open]:bg-pure-snow/70",
+        )}
       >
-        {label}
+        {content}
         <ChevronDown
-          className="size-3.5 shrink-0 text-quiet-mist"
+          className="hidden size-4 shrink-0 text-near-ink md:block"
           strokeWidth={2}
         />
       </PopoverTrigger>
-      <PopoverContent align="center" sideOffset={8} className="w-64 p-2">
+      <PopoverContent
+        align="start"
+        sideOffset={8}
+        className="w-64 rounded-[var(--radius-card)] border-0 p-2 shadow-[var(--shadow-float)]"
+      >
         <p className="type-col-head px-2 py-1.5">Workspace</p>
         {workspaceOptions.map((ws) => (
           <button
@@ -132,15 +159,16 @@ export function WorkspacePill({
             type="button"
             onClick={() => switchTo(ws.authOrganizationId)}
             disabled={isPending}
+            aria-current={ws.isActive ? "true" : undefined}
             className={cn(
-              "flex w-full items-center gap-2.5 rounded-[10px] px-2 py-2 transition-colors disabled:opacity-50",
+              "flex w-full items-center gap-2.5 rounded-[10px] px-2 py-2 transition-colors duration-150 ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-near-ink disabled:opacity-50",
               ws.isActive ? "bg-row-wash" : "hover:bg-row-wash/70",
             )}
           >
             <WorkspaceMark
               name={ws.name}
               logoUrl={ws.logoUrl}
-              className="size-7 rounded-[9px]"
+              className="size-8 rounded-[10px]"
             />
             <span className="flex-1 truncate text-left text-[14px] font-medium text-near-ink">
               {ws.name}

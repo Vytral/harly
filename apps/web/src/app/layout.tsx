@@ -3,6 +3,7 @@ import localFont from "next/font/local";
 import { GeistMono } from "geist/font/mono";
 
 import { ThemeProvider } from "@/components/ThemeProvider";
+import { ConfirmProvider } from "@/components/ui/confirm-dialog";
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { CookiePanel } from "@/components/CookieConsentBanner";
@@ -62,8 +63,10 @@ export default function RootLayout({
           enableSystem
           disableTransitionOnChange
         >
-          <TooltipProvider delayDuration={200}>{children}</TooltipProvider>
-          <Toaster position="bottom-right" richColors closeButton />
+          <TooltipProvider delayDuration={200}>
+            <ConfirmProvider>{children}</ConfirmProvider>
+          </TooltipProvider>
+          <Toaster position="bottom-center" closeButton />
           <CookiePanel />
         </ThemeProvider>
       </body>

@@ -67,7 +67,7 @@ function Segmented<T extends string>({
   disabled?: boolean;
 }) {
   return (
-    <div className="inline-flex rounded-xl border bg-muted/50 p-1">
+    <div className="inline-flex rounded-[var(--radius-btn)] bg-card-inset p-1">
       {options.map((option) => (
         <button
           key={option.value}
@@ -75,9 +75,9 @@ function Segmented<T extends string>({
           disabled={disabled}
           onClick={() => onChange(option.value)}
           className={cn(
-            "rounded-lg px-3.5 py-1.5 text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-60",
+            "rounded-[var(--radius-sm)] px-3.5 py-1.5 text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-60",
             value === option.value
-              ? "bg-card text-foreground shadow-sm ring-1 ring-border"
+              ? "bg-pure-snow text-near-ink shadow-[var(--shadow-card)]"
               : "text-muted-foreground hover:text-foreground",
           )}
         >
@@ -392,7 +392,7 @@ export function CompanyBrandingSection({
             />
           </div>
 
-          <label className="flex items-start justify-between gap-4 rounded-xl border bg-card px-4 py-3.5">
+          <label className="flex items-start justify-between gap-4 rounded-[var(--radius-inner)] bg-card-inset px-4 py-3.5">
             <span>
               <span className="block text-sm font-medium text-foreground">
                 Remove Harly branding from emails

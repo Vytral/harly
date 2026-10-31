@@ -1,5 +1,6 @@
 "use client";
 
+import { useConfirm } from "@/components/ui/confirm-dialog";
 import { useCallback, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { KanbanSquare, List, Plus, Search } from "lucide-react";
@@ -73,6 +74,7 @@ export function TasksView({
   const [status, setStatus] = useState("all");
   const [due, setDue] = useState("all");
   const router = useRouter();
+  const confirm = useConfirm();
 
   const tasks = useMemo(
     () =>
@@ -118,7 +120,15 @@ export function TasksView({
 
   const runRemove = useCallback(
     async (id: string) => {
-      if (!window.confirm("Archive this task? It will leave the active task list.")) return;
+      if (
+        !(await confirm({
+          tone: "warning",
+          title: "Archive this task?",
+          description: "It will leave the active task list.",
+          confirmLabel: "Archive task",
+        }))
+      )
+        return;
       setPending((p) => new Set(p).add(id));
       setRemoved((r) => new Set(r).add(id));
       const res = await deleteTask(id);

@@ -26,22 +26,22 @@ export function TodayInterviews({
         title="Today's interviews"
         action={<TileLink href="/dashboard/pipeline">View pipeline</TileLink>}
       />
-      <div className="flex flex-1 flex-col px-2 pb-3 pt-1">
+      <div className="flex flex-1 flex-col px-2 pb-3 pt-3">
         {interviews.length > 0 ? (
           <ul className="flex-1 space-y-0.5">
             {interviews.map((iv) => (
               <li
                 key={iv.id}
-                className="flex items-start gap-3 rounded-xl px-3 py-2.5"
+                className="flex items-start gap-3 rounded-[var(--radius-md)] px-3 py-2.5"
               >
-                <span className="w-16 shrink-0 pt-0.5 text-xs font-medium tabular-nums text-muted-foreground">
+                <span className="w-16 shrink-0 pt-0.5 text-xs font-medium tabular-nums text-soft-ink">
                   {timeFmt.format(new Date(iv.scheduledAt))}
                 </span>
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-sm font-medium">{iv.candidate}</p>
-                  <p className="truncate text-xs text-muted-foreground">{iv.job}</p>
+                  <p className="truncate text-xs text-soft-ink">{iv.job}</p>
                   {iv.interviewer ? (
-                    <span className="mt-1.5 flex items-center gap-1.5 text-xs text-muted-foreground">
+                    <span className="mt-1.5 flex items-center gap-1.5 text-xs text-soft-ink">
                       <UserAvatar
                         name={iv.interviewer}
                         src={iv.interviewerImage}
@@ -52,7 +52,7 @@ export function TodayInterviews({
                     </span>
                   ) : null}
                 </div>
-                <Badge variant="secondary" className="shrink-0">
+                <Badge variant="neutral" dot={false} className="shrink-0">
                   {iv.label}
                 </Badge>
                 {iv.gcalEventId ? (
@@ -60,7 +60,7 @@ export function TodayInterviews({
                     href={`https://calendar.google.com/calendar/event?eid=${btoa(iv.gcalEventId).replace(/=/g, "")}`}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="shrink-0 text-muted-foreground hover:text-foreground"
+                    className="shrink-0 text-soft-ink hover:text-foreground"
                     title="View in Google Calendar"
                   >
                     <ExternalLink className="size-3.5" />

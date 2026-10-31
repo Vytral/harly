@@ -34,12 +34,12 @@ export function SectionHeader({
       )}
     >
       <div className="flex items-start gap-4">
-        <span className="flex size-11 shrink-0 items-center justify-center rounded-2xl bg-sage text-pine ring-1 ring-pine/10">
-          <Icon className="size-6" />
+        <span className="grid size-10 shrink-0 place-items-center rounded-[var(--radius-btn)] border border-hairline bg-pure-snow text-near-ink">
+          <Icon className="size-5" />
         </span>
         <div className="space-y-1">
           <div className="flex flex-wrap items-center gap-2">
-            <h2 className="font-display text-lg font-semibold tracking-tight">
+            <h2 className="text-[16px] font-semibold tracking-[-0.01em] text-near-ink">
               {title}
             </h2>
             {badge}
@@ -57,17 +57,17 @@ export function SectionHeader({
 }
 
 const pillTone = {
-  on: "bg-sage text-sage-ink",
-  off: "bg-muted text-muted-foreground",
-  warn: "bg-clay/10 text-clay",
-  neutral: "border bg-card text-muted-foreground",
+  on: "bg-sage-wash text-success-olive",
+  off: "bg-status-quiet text-status-quiet-ink",
+  warn: "bg-warning-clay/10 text-warning-clay",
+  neutral: "bg-status-quiet text-status-quiet-ink",
 } as const;
 
 const dotTone = {
-  on: "bg-pine",
-  off: "bg-muted-foreground/50",
-  warn: "bg-clay",
-  neutral: "bg-muted-foreground/50",
+  on: "bg-current",
+  off: "bg-current",
+  warn: "bg-current",
+  neutral: "bg-current",
 } as const;
 
 export type PillTone = keyof typeof pillTone;

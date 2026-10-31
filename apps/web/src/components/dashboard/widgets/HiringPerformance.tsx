@@ -42,8 +42,10 @@ export function HiringPerformance({
   return (
     <Tile className={className}>
       <div className="flex flex-wrap items-center justify-between gap-2 px-5 pt-5">
-        <h2 className="flex items-center gap-2 text-sm font-semibold">
-          <BarChart3 className="size-4 text-muted-foreground" strokeWidth={1.8} />
+        <h2 className="flex items-center gap-2.5 text-[15px] font-semibold tracking-[-0.01em] text-near-ink">
+          <span className="grid size-8 shrink-0 place-items-center rounded-[var(--radius-btn)] border border-hairline bg-pure-snow">
+            <BarChart3 className="size-4" strokeWidth={1.8} />
+          </span>
           Hiring performance
         </h2>
         <div className="flex items-center gap-2">
@@ -62,7 +64,7 @@ export function HiringPerformance({
         </div>
       </div>
 
-      <div className="grid gap-5 px-5 pb-5 pt-4 lg:grid-cols-[minmax(260px,0.9fr)_1.3fr]">
+      <div className="grid gap-5 px-5 pb-5 pt-4 2xl:grid-cols-[minmax(260px,0.9fr)_1.3fr]">
         <div className="grid grid-cols-2 gap-3">
           {kpis.map((kpi) => {
             // A null value or delta means "no data" (for example, no offers were
@@ -73,20 +75,20 @@ export function HiringPerformance({
             return (
               <div
                 key={kpi.label}
-                className="rounded-xl border border-border/60 bg-background/40 p-4"
+                className="rounded-[var(--radius-inner)] bg-card-inset p-4"
               >
-                <p className="truncate text-xs text-muted-foreground">{kpi.label}</p>
-                <p className="mt-1 text-2xl font-semibold tabular-nums">
+                <p className="truncate text-[12.5px] font-medium text-soft-ink">{kpi.label}</p>
+                <p className="font-display mt-1.5 text-[28px] leading-none tabular-nums text-near-ink">
                   {kpi.value == null ? "—" : kpi.isRate ? `${kpi.value}%` : kpi.value}
                 </p>
                 <p
                   className={cn(
                     "mt-1 flex items-center gap-1 text-xs font-medium",
                     !hasDelta
-                      ? "text-muted-foreground"
+                      ? "text-soft-ink"
                       : up
-                        ? "text-primary"
-                        : "text-destructive",
+                        ? "text-success-olive"
+                        : "text-danger-rust",
                   )}
                 >
                   {hasDelta ? (
@@ -105,7 +107,7 @@ export function HiringPerformance({
                   ) : (
                     "—"
                   )}
-                  <span className="font-normal text-muted-foreground">
+                  <span className="font-normal text-soft-ink">
                     vs previous 14 days
                   </span>
                 </p>

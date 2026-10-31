@@ -144,10 +144,10 @@ export function MembersAndRoles({
   return (
     <Tabs value={tab} onValueChange={setTab} className="gap-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <TabsList className="h-11 gap-1 rounded-xl bg-muted/70 p-1">
+        <TabsList className="h-11 gap-1 rounded-[var(--radius-btn)] bg-card-inset p-1">
           <TabsTrigger
             value="members"
-            className="gap-2 rounded-lg px-4 data-[state=active]:shadow-sm"
+            className="gap-2 rounded-[var(--radius-sm)] px-4 data-[state=active]:shadow-sm"
           >
             <UsersThreeIcon className="size-4" />
             Members
@@ -156,7 +156,7 @@ export function MembersAndRoles({
           {canManageRoles ? (
             <TabsTrigger
               value="roles"
-              className="gap-2 rounded-lg px-4 data-[state=active]:shadow-sm"
+              className="gap-2 rounded-[var(--radius-sm)] px-4 data-[state=active]:shadow-sm"
             >
               <ShieldCheckDuotoneIcon className="size-4" />
               Roles
@@ -402,7 +402,7 @@ function MembersPanel({
       </div>
 
       <Card className="gap-0 overflow-hidden py-0">
-        <div className="flex items-center justify-between border-b bg-muted/20 px-5 py-2.5">
+        <div className="flex items-center justify-between border-b border-hairline bg-card-inset px-5 py-2.5">
           <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
             {visible.length} {visible.length === 1 ? "member" : "members"}
           </p>

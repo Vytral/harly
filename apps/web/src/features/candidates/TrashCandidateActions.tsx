@@ -7,14 +7,7 @@ import { toast } from "@/lib/notification-island/toast";
 
 import { permanentlyDeleteCandidateAction, restoreCandidateAction } from "./actions";
 import { Button } from "@/components/ui/button";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 
 export function TrashCandidateActions({
   candidateId,
@@ -39,17 +32,16 @@ export function TrashCandidateActions({
     });
   }
 
-  function deleteForever() {
-    startTransition(async () => {
-      const result = await permanentlyDeleteCandidateAction(candidateId);
-      if (result.success) {
-        toast.success("Candidate deleted permanently.");
-        setConfirmOpen(false);
-        router.refresh();
-      } else {
-        toast.error(result.error ?? "Could not delete the candidate.");
-      }
-    });
+  async function deleteForever() {
+    const result = await permanentlyDeleteCandidateAction(candidateId);
+    if (result.success) {
+      toast.success("Candidate deleted permanently.");
+      router.refresh();
+    } else {
+      toast.error(result.error ?? "Could not delete the candidate.");
+      // Keep the dialog open so the user can read the error and retry.
+      throw new Error(result.error);
+    }
   }
 
   return (
@@ -74,34 +66,15 @@ export function TrashCandidateActions({
         <Trash2 className="size-4" />
       </Button>
 
-      <Dialog open={confirmOpen} onOpenChange={setConfirmOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Delete permanently?</DialogTitle>
-            <DialogDescription>
-              “{candidateName}” and all their applications, notes, files, and
-              messages will be removed for good. This can&apos;t be undone. Any
-              pending erasure request will be marked fulfilled.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => setConfirmOpen(false)}
-              disabled={isPending}
-            >
-              Cancel
-            </Button>
-            <Button
-              variant="destructive"
-              onClick={deleteForever}
-              disabled={isPending}
-            >
-              {isPending ? "Deleting…" : "Delete permanently"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <ConfirmDialog
+        open={confirmOpen}
+        onOpenChange={setConfirmOpen}
+        tone="destructive"
+        title="Delete candidate permanently?"
+        description={`“${candidateName}” and all their applications, notes, files, and messages will be removed for good. Any pending erasure request will be marked fulfilled. This can't be undone.`}
+        confirmLabel="Delete permanently"
+        onConfirm={deleteForever}
+      />
     </div>
   );
 }

@@ -2,6 +2,7 @@
 
 /* eslint-disable @next/next/no-img-element */
 
+import { useConfirm } from "@/components/ui/confirm-dialog";
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
@@ -494,6 +495,7 @@ export function DocumentDetailView({
   document: DocumentListItem;
 }) {
   const router = useRouter();
+  const confirm = useConfirm();
   const [previewOpen, setPreviewOpen] = useState(false);
   const [renameOpen, setRenameOpen] = useState(false);
   const [accessOpen, setAccessOpen] = useState(false);
@@ -589,12 +591,15 @@ export function DocumentDetailView({
     submitSignatureStatus("signed", attestNote);
     setAttestOpen(false);
   }
-  function deleteCurrentDocument() {
+  async function deleteCurrentDocument() {
     if (
       !data.canDelete ||
-      !window.confirm(
-        `Permanently delete “${document.name}”? This cannot be undone.`,
-      )
+      !(await confirm({
+        tone: "destructive",
+        title: `Delete “${document.name}” permanently?`,
+        description: "The document and its version history are removed for everyone. This cannot be undone.",
+        confirmLabel: "Delete document",
+      }))
     )
       return;
     startTransition(async () => {
