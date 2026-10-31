@@ -2075,7 +2075,7 @@ function EmptyState({
   );
 }
 
-function NotConfiguredState() {
+function NotConfiguredState({ canConfigure }: { canConfigure: boolean }) {
   return (
     <div className="flex flex-col items-center gap-4 px-6 py-12 text-center">
       <Image
@@ -2091,15 +2091,19 @@ function NotConfiguredState() {
           Harly AI isn&apos;t set up yet
         </h2>
         <p className="text-[13px] leading-relaxed text-muted-foreground">
-          Connect an AI provider key to start chatting with your hiring copilot.
+          {canConfigure
+            ? "Connect an AI provider key to start chatting with your hiring copilot."
+            : "Ask a workspace admin to connect an AI provider in Settings."}
         </p>
       </div>
-      <Button asChild size="sm" className="gap-1.5">
-        <Link href="/settings/ai">
-          <Settings className="size-3.5" />
-          Open AI settings
-        </Link>
-      </Button>
+      {canConfigure ? (
+        <Button asChild size="sm" className="gap-1.5">
+          <Link href="/settings/ai">
+            <Settings className="size-3.5" />
+            Open AI settings
+          </Link>
+        </Button>
+      ) : null}
     </div>
   );
 }
@@ -3060,6 +3064,7 @@ type HarlyAIPanelProps = {
   userName: string;
   persistenceKey: string;
   aiEnabled: boolean;
+  canConfigureAi?: boolean;
   open: boolean;
   onClose: () => void;
   /** Candidate currently visible in the dashboard. */
@@ -3087,6 +3092,7 @@ export function HarlyAIPanel({
   userName,
   persistenceKey,
   aiEnabled,
+  canConfigureAi = false,
   open,
   onClose,
   candidateId,
@@ -3231,7 +3237,7 @@ export function HarlyAIPanel({
 
         {!aiEnabled ? (
           <div className="flex flex-1 items-center justify-center">
-            <NotConfiguredState />
+            <NotConfiguredState canConfigure={canConfigureAi} />
           </div>
         ) : (
           <>
@@ -3268,6 +3274,5 @@ export function HarlyAIPanel({
   );
 }
 
-// The floating action button that used to live here is gone. A permanent FAB is
-// a second brand identity shouting over the work; AI now opens from the top
-// bar's chartreuse signal button and from the command menu (DESIGN.md).
+// The launcher lives in HarlyAILauncher (bottom-right), rendered by
+// HarlyAIProvider; the command menu can also open the panel.

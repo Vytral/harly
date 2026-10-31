@@ -93,6 +93,7 @@ export default async function DashboardLayout({
           aiEnabled={
             aiStatus.enabled && aiStatus.hasApiKey && aiStatus.encryptionReady
           }
+          canConfigureAi={userPermissions.includes("settings:edit") && !demo}
         >
           {/*
           Deel-style shell: a sticky lime-washed header (switcher, pill tabs,

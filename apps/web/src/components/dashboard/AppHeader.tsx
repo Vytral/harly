@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
@@ -9,7 +8,6 @@ import {
   LayoutGrid,
   Search,
   Settings,
-  X,
 } from "lucide-react";
 import { LayoutGroup, motion, useReducedMotion } from "motion/react";
 
@@ -17,7 +15,6 @@ import {
   COMMAND_MENU_TRIGGER_ID,
   CommandMenu,
 } from "@/components/dashboard/CommandMenu";
-import { useHarlyAI } from "@/components/dashboard/HarlyAIWidget";
 import { NotificationIsland } from "@/components/dashboard/NotificationIsland";
 import { NotificationsBell } from "@/components/dashboard/NotificationsBell";
 import { QuickCreateButton } from "@/components/dashboard/QuickCreateMenu";
@@ -207,7 +204,6 @@ export function AppHeader({
               userPermissions={userPermissions}
               onInvite={canInvite ? () => setInviteOpen(true) : undefined}
             />
-            <AiSignalButton />
             <SearchButton onClick={() => setCommandOpen(true)} />
             {canSettings ? (
               <Tooltip>
@@ -457,40 +453,3 @@ function SearchButton({ onClick }: { onClick: () => void }) {
  * when open it flips to ink + a close glyph so it reads as the panel's toggle.
  * Hidden entirely when AI isn't configured, rather than shown disabled.
  */
-function AiSignalButton() {
-  const { open, toggle, enabled } = useHarlyAI();
-  if (!enabled) return null;
-
-  return (
-    <Tooltip>
-      <TooltipTrigger asChild>
-        <button
-          type="button"
-          onClick={toggle}
-          aria-label={open ? "Close Harly AI" : "Ask Harly AI"}
-          aria-pressed={open}
-          className={cn(
-            headerRoundButton,
-            open && "bg-near-ink text-pure-snow hover:bg-near-ink",
-          )}
-        >
-          {open ? (
-            <X className="size-[17px]" strokeWidth={2} />
-          ) : (
-            <Image
-              src="/harly-ai-animado.svg"
-              alt=""
-              width={22}
-              height={22}
-              className="size-[22px] shrink-0"
-              unoptimized
-            />
-          )}
-        </button>
-      </TooltipTrigger>
-      <TooltipContent>
-        {open ? "Close Harly AI" : "Ask Harly AI"}
-      </TooltipContent>
-    </Tooltip>
-  );
-}

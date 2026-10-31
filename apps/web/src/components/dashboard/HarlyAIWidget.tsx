@@ -12,13 +12,14 @@ import {
 } from "react";
 import { getCandidateContextAction } from "@/features/ai-chat/actions";
 import { HarlyAIPanel } from "./HarlyAIPanel";
+import { HarlyAILauncher } from "./HarlyAILauncher";
 
 type HarlyAIContextValue = {
   /** Whether the AI panel is currently open. */
   open: boolean;
-  /** Toggle the panel. Wired to the top bar's signal button. */
+  /** Toggle the panel. Wired to the bottom-right launcher and ⌘K. */
   toggle: () => void;
-  /** False when the workspace has no usable AI config , the trigger hides. */
+  /** False when the workspace has no usable AI config; the panel then explains how to turn it on. */
   enabled: boolean;
 };
 
@@ -28,7 +29,7 @@ const HarlyAIContext = createContext<HarlyAIContextValue>({
   enabled: false,
 });
 
-/** Read by the top bar so AI lives in chrome you can ignore, not a FAB. */
+/** Read by anything that opens the panel (launcher, command menu). */
 export function useHarlyAI() {
   return useContext(HarlyAIContext);
 }
@@ -52,19 +53,17 @@ function surfaceLabelFromPath(pathname: string | null): string {
 }
 
 /**
- * Hosts the AI panel and publishes its toggle through context.
- *
- * This used to render a permanent floating action button in the bottom-right
- * corner , a second brand identity shouting over the work (DESIGN.md: "AI is
- * optional guidance inside flows, not a permanent noisy FAB"). The panel is
- * unchanged; only its trigger moved into the top bar's signal button, which is
- * also where the command menu sends AI actions.
+ * Hosts the AI panel, its bottom-right launcher, and publishes the toggle
+ * through context. The launcher is always visible (Deel-style chat bubble) so
+ * the copilot is discoverable even before a provider is configured; the panel
+ * then shows a setup state instead of the chat.
  */
 export function HarlyAIProvider({
   userName,
   userId,
   workspaceId,
   aiEnabled,
+  canConfigureAi = false,
   candidateId,
   children,
 }: {
@@ -72,6 +71,8 @@ export function HarlyAIProvider({
   userId: string;
   workspaceId: string;
   aiEnabled: boolean;
+  /** Admins see "Open AI settings" in the not-set-up state; others are told to ask one. */
+  canConfigureAi?: boolean;
   /** Optional candidate context, so the conversation is erased with the candidate (IA-02). */
   candidateId?: string;
   children: ReactNode;
@@ -137,11 +138,13 @@ export function HarlyAIProvider({
         userName={userName}
         persistenceKey={persistenceKey}
         aiEnabled={aiEnabled}
+        canConfigureAi={canConfigureAi}
         open={open}
         onClose={() => setOpen(false)}
         candidateId={activeCandidateId}
         surfaceContext={surfaceContext}
       />
+      <HarlyAILauncher open={open} onToggle={toggle} />
     </HarlyAIContext>
   );
 }
