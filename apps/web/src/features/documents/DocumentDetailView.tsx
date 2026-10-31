@@ -2,76 +2,107 @@
 
 /* eslint-disable @next/next/no-img-element */
 
-import { useConfirm } from "@/components/ui/confirm-dialog";
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import type { Route } from "next";
 import {
   Archive,
   ArchiveRestore,
-  CalendarClock,
+  BellRing,
+  ChevronDown,
   Download,
-  FileArchive,
-  FileImage,
   FileText,
-  FolderCog,
   Gavel,
   LockKeyhole,
+  MoreHorizontal,
+  Pencil,
+  Send,
   ShieldAlert,
   ShieldCheck,
-  Send,
   Trash2,
+  Upload,
   Users,
 } from "lucide-react";
 import { toast } from "@/lib/notification-island/toast";
+import type { SignatureTimeline as SignatureTimelineData } from "@/lib/esign/native/timeline";
 
 import { Button } from "@/components/ui/button";
+import { Callout } from "@/components/ui/callout";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { useConfirm } from "@/components/ui/confirm-dialog";
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
+  Breadcrumb,
+  BreadcrumbItem,
+  BreadcrumbLink,
+  BreadcrumbList,
+  BreadcrumbPage,
+  BreadcrumbSeparator,
+} from "@/components/ui/breadcrumb";
+import { InfoRow, InfoRows } from "@/components/ui/info-row";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
+import { PageHeader } from "@/components/ui/PageHeader";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { SettingRow, SettingRows } from "@/components/ui/setting-row";
+import { StatusPill } from "@/components/ui/status-pill";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { UserAvatar } from "@/components/ui/UserAvatar";
 import { DocxViewer } from "@/features/candidates/DocxViewer";
 import { PdfViewer } from "@/features/candidates/PdfViewer";
 import {
   assignDocument,
   deleteDocument,
-  placeDocumentLegalHold,
-  releaseDocumentLegalHold,
-  renameDocument,
-  saveDocumentSignature,
-  sendDocumentForSignature,
   setDocumentCategory,
   setDocumentExpiresAt,
   setDocumentStatus,
-  voidDocumentSignature,
 } from "./actions";
+import {
+  LegalHoldDialog,
+  RecordOfflineSignatureDialog,
+  RenameDialog,
+  SendForSignatureDialog,
+  VoidSignatureDialog,
+} from "./DocumentDetailDialogs";
 import { DocumentFieldPlacementDialog } from "./DocumentFieldPlacementDialog";
 import {
   AccessDialog,
-  StatusPill,
   UploadDialog,
   formatActivityType,
   formatDate,
+  iconForDocument,
 } from "./DocumentShared";
+import { DocumentVersionsPanel } from "./DocumentVersionsPanel";
+import { SignatureStatusCard, useSignerActions } from "./SignatureStatusCard";
 import {
-  DOCUMENT_STATUS_META,
-  SIGNATURE_STATUS_META,
+  describeExpiry,
+  documentStateMeta,
   documentTypeLabel,
   formatDocumentSize,
   isPreviewable,
-  type DocumentHubData,
-  type DocumentListItem,
+  type DocumentDetailBundle,
 } from "./shared";
 
-function DocumentPreview({ document }: { document: DocumentListItem }) {
+const TONE_TO_PILL = {
+  neutral: "neutral",
+  success: "success",
+  warning: "warning",
+  danger: "danger",
+} as const;
+
+function DocumentPreview({ document }: { document: DocumentDetailBundle["document"] }) {
   const url = `/api/documents/${document.id}`;
   if (document.mimeType === "application/pdf")
     return (
@@ -88,7 +119,7 @@ function DocumentPreview({ document }: { document: DocumentListItem }) {
     return <DocxViewer fileUrl={url} className="min-h-[70vh]" />;
   if (document.mimeType.startsWith("image/"))
     return (
-      <div className="flex min-h-[70vh] items-center justify-center rounded-lg border bg-muted/20 p-4">
+      <div className="flex min-h-[70vh] items-center justify-center rounded-[var(--radius-inner)] bg-card-inset p-4">
         <img
           src={url}
           alt={document.name}
@@ -97,348 +128,9 @@ function DocumentPreview({ document }: { document: DocumentListItem }) {
       </div>
     );
   return (
-    <div className="flex min-h-40 items-center justify-center rounded-lg border border-dashed text-sm text-muted-foreground">
+    <div className="flex min-h-40 items-center justify-center rounded-[var(--radius-inner)] bg-card-inset text-sm text-soft-ink">
       Preview is not available for this file type.
     </div>
-  );
-}
-
-function SendForSignatureDialog({
-  data,
-  document,
-  open,
-  onOpenChange,
-}: {
-  data: DocumentHubData;
-  document: DocumentListItem;
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-}) {
-  const router = useRouter();
-  const [email, setEmail] = useState("");
-  const [recipientName, setRecipientName] = useState("");
-  const [subject, setSubject] = useState(`Please sign: ${document.name}`);
-  const [message, setMessage] = useState("");
-  const [error, setError] = useState<string | null>(null);
-  const [isPending, startTransition] = useTransition();
-
-  function reset() {
-    setEmail("");
-    setRecipientName("");
-    setSubject(`Please sign: ${document.name}`);
-    setMessage("");
-    setError(null);
-  }
-
-  function submit() {
-    setError(null);
-    startTransition(async () => {
-      const result = await sendDocumentForSignature({
-        documentId: document.id,
-        recipientEmail: email,
-        recipientName,
-        subject,
-        message: message.trim() || null,
-      });
-      if (!result.ok) {
-        setError(result.error ?? "Could not send for signature.");
-        return;
-      }
-      toast.success("Sent for signature");
-      reset();
-      onOpenChange(false);
-      router.refresh();
-    });
-  }
-
-  const connected = data.esign.connected && data.esign.hasWebhookSecret;
-
-  return (
-    <Dialog
-      open={open}
-      onOpenChange={(value) => {
-        if (!value) reset();
-        onOpenChange(value);
-      }}
-    >
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>Send for signature</DialogTitle>
-          <DialogDescription>
-            DocuSeal emails the recipient — any email address, whether or not
-            they&apos;re a candidate on file. The signed PDF and audit log
-            return to this workspace automatically.
-          </DialogDescription>
-        </DialogHeader>
-        {!connected ? (
-          <div className="space-y-3 py-2">
-            <p className="rounded-md border border-warning/30 bg-warning/[0.06] px-3 py-3 text-sm text-warning">
-              DocuSeal is{" "}
-              {data.esign.connected
-                ? "connected but missing its webhook secret"
-                : "not connected"}
-              . Finish setup in Settings → Integrations before sending for
-              signature.
-            </p>
-          </div>
-        ) : (
-          <div className="space-y-4 py-2">
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <div className="space-y-2">
-                <Label htmlFor="signer-email">Recipient email</Label>
-                <Input
-                  id="signer-email"
-                  type="email"
-                  value={email}
-                  onChange={(event) => setEmail(event.target.value)}
-                  placeholder="taylor@example.com"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="signer-name">Recipient name</Label>
-                <Input
-                  id="signer-name"
-                  value={recipientName}
-                  onChange={(event) => setRecipientName(event.target.value)}
-                  placeholder="Taylor Okafor"
-                />
-              </div>
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="signer-subject">Email subject</Label>
-              <Input
-                id="signer-subject"
-                value={subject}
-                onChange={(event) => setSubject(event.target.value)}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="signer-message">Message (optional)</Label>
-              <textarea
-                id="signer-message"
-                value={message}
-                onChange={(event) => setMessage(event.target.value)}
-                rows={3}
-                className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                placeholder="Add a short note for the signer…"
-              />
-            </div>
-            {error ? (
-              <p
-                className="rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive"
-                role="alert"
-              >
-                {error}
-              </p>
-            ) : null}
-          </div>
-        )}
-        <DialogFooter>
-          <Button
-            variant="outline"
-            onClick={() => onOpenChange(false)}
-            disabled={isPending}
-          >
-            Cancel
-          </Button>
-          <Button
-            onClick={submit}
-            disabled={
-              !connected ||
-              isPending ||
-              !email.trim() ||
-              !recipientName.trim() ||
-              !subject.trim()
-            }
-          >
-            <Send className="size-4" />
-            {isPending ? "Sending…" : "Send for signature"}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
-function VoidSignatureDialog({
-  document,
-  open,
-  onOpenChange,
-}: {
-  document: DocumentListItem;
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-}) {
-  const router = useRouter();
-  const [reason, setReason] = useState("");
-  const [error, setError] = useState<string | null>(null);
-  const [isPending, startTransition] = useTransition();
-  function submit() {
-    setError(null);
-    startTransition(async () => {
-      const result = await voidDocumentSignature({
-        documentId: document.id,
-        reason,
-      });
-      if (!result.ok) {
-        setError(result.error ?? "Could not void the request.");
-        return;
-      }
-      toast.success("Signature request voided");
-      setReason("");
-      onOpenChange(false);
-      router.refresh();
-    });
-  }
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>Void signature request</DialogTitle>
-          <DialogDescription>
-            This cancels the signing request. Recipients can no longer sign it,
-            and the original document is left unsigned.
-          </DialogDescription>
-        </DialogHeader>
-        <div className="space-y-4 py-2">
-          <div className="space-y-2">
-            <Label htmlFor="void-reason">Reason</Label>
-            <textarea
-              id="void-reason"
-              value={reason}
-              onChange={(event) => setReason(event.target.value)}
-              rows={3}
-              className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              placeholder="Recipient email was wrong…"
-            />
-          </div>
-          {error ? (
-            <p
-              className="rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive"
-              role="alert"
-            >
-              {error}
-            </p>
-          ) : null}
-        </div>
-        <DialogFooter>
-          <Button
-            variant="outline"
-            onClick={() => onOpenChange(false)}
-            disabled={isPending}
-          >
-            Cancel
-          </Button>
-          <Button
-            variant="destructive"
-            onClick={submit}
-            disabled={isPending || reason.trim().length < 3}
-          >
-            {isPending ? "Voiding…" : "Void request"}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
-function LegalHoldDialog({
-  document,
-  open,
-  onOpenChange,
-  activeHold,
-}: {
-  document: DocumentListItem;
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  activeHold: DocumentListItem["legalHolds"][number] | null;
-}) {
-  const router = useRouter();
-  const [reason, setReason] = useState("");
-  const [reference, setReference] = useState("");
-  const [isPending, startTransition] = useTransition();
-  const releasing = Boolean(activeHold);
-
-  function submit() {
-    startTransition(async () => {
-      const result = releasing
-        ? await releaseDocumentLegalHold({
-            holdId: activeHold!.id,
-            releaseReason: reason,
-          })
-        : await placeDocumentLegalHold({
-            documentId: document.id,
-            reason,
-            reference: reference || null,
-          });
-      if (!result.ok) {
-        toast.error(result.error ?? "Could not update legal hold.");
-        return;
-      }
-      toast.success(releasing ? "Legal hold released" : "Legal hold placed");
-      setReason("");
-      setReference("");
-      onOpenChange(false);
-      router.refresh();
-    });
-  }
-
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>
-            {releasing ? "Release legal hold" : "Place legal hold"}
-          </DialogTitle>
-          <DialogDescription>
-            {releasing
-              ? "Record why this hold is being released. Other active holds, if any, remain in force."
-              : "This protects the document from archival until every active hold is released."}
-          </DialogDescription>
-        </DialogHeader>
-        <div className="space-y-4 py-2">
-          <div className="space-y-2">
-            <Label htmlFor="legal-hold-reason">
-              {releasing ? "Release reason" : "Reason"}
-            </Label>
-            <textarea
-              id="legal-hold-reason"
-              value={reason}
-              onChange={(event) => setReason(event.target.value)}
-              rows={4}
-              className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              placeholder={
-                releasing
-                  ? "Investigation closed…"
-                  : "Active litigation, audit, or preservation notice…"
-              }
-            />
-          </div>
-          {!releasing ? (
-            <div className="space-y-2">
-              <Label htmlFor="legal-hold-reference">Reference (optional)</Label>
-              <Input
-                id="legal-hold-reference"
-                value={reference}
-                onChange={(event) => setReference(event.target.value)}
-                placeholder="Matter, ticket, or case reference"
-              />
-            </div>
-          ) : null}
-        </div>
-        <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
-            Cancel
-          </Button>
-          <Button
-            onClick={submit}
-            disabled={isPending || reason.trim().length < 3}
-          >
-            {isPending ? "Saving…" : releasing ? "Release hold" : "Place hold"}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
   );
 }
 
@@ -446,57 +138,73 @@ function ExpiresAtField({
   document,
   editable,
 }: {
-  document: DocumentListItem;
+  document: DocumentDetailBundle["document"];
   editable: boolean;
 }) {
   const router = useRouter();
-  const [value, setValue] = useState(
-    document.expiresAt ? document.expiresAt.slice(0, 10) : "",
-  );
+  const saved = document.expiresAt ? document.expiresAt.slice(0, 10) : "";
+  const [value, setValue] = useState(saved);
   const [isPending, startTransition] = useTransition();
-  const dirty = value !== (document.expiresAt ? document.expiresAt.slice(0, 10) : "");
-  function save() {
+  const dirty = value !== saved;
+  const hint = describeExpiry(document.expiresAt);
+  function save(next: string) {
     startTransition(async () => {
       const result = await setDocumentExpiresAt({
         documentId: document.id,
-        expiresAt: value || null,
+        expiresAt: next || null,
       });
       if (!result.ok) {
         toast.error(result.error ?? "Could not save the date.");
         return;
       }
-      toast.success(value ? "Date saved" : "Date cleared");
+      setValue(next);
+      toast.success(next ? "Date saved" : "Date cleared");
       router.refresh();
     });
   }
   return (
-    <div className="flex items-center gap-2">
-      <Input
-        type="date"
-        value={value}
-        disabled={!editable || isPending}
-        onChange={(event) => setValue(event.target.value)}
-        className="h-8 w-40"
-      />
-      {dirty ? (
-        <Button size="sm" variant="outline" onClick={save} disabled={isPending}>
-          {isPending ? "Saving…" : "Save"}
-        </Button>
+    <div className="space-y-1.5 sm:text-right">
+      <div className="flex flex-wrap items-center gap-2 sm:justify-end">
+        <Input
+          type="date"
+          aria-label="Expiration date"
+          value={value}
+          disabled={!editable || isPending}
+          onChange={(event) => setValue(event.target.value)}
+          className="h-8 w-40"
+        />
+        {dirty ? (
+          <Button size="sm" onClick={() => save(value)} disabled={isPending}>
+            {isPending ? "Saving…" : "Save"}
+          </Button>
+        ) : saved && editable ? (
+          <Button size="sm" variant="ghost" onClick={() => save("")} disabled={isPending}>
+            Clear
+          </Button>
+        ) : null}
+      </div>
+      {hint && !dirty ? (
+        <p className={`text-[12px] ${hint.tone === "danger" ? "text-danger-rust" : hint.tone === "warning" ? "text-warning-clay" : "text-soft-ink"}`}>
+          {hint.days < 0 ? `Passed ${hint.label}` : `Expires ${hint.label}`}
+        </p>
       ) : null}
     </div>
   );
 }
 
 export function DocumentDetailView({
-  data,
-  document,
+  bundle,
+  documentsHref = "/dashboard/documents",
+  signatureTimeline = null,
 }: {
-  data: DocumentHubData;
-  document: DocumentListItem;
+  bundle: DocumentDetailBundle;
+  documentsHref?: string;
+  signatureTimeline?: SignatureTimelineData | null;
 }) {
+  const { data, document, versions, signature } = bundle;
   const router = useRouter();
   const confirm = useConfirm();
-  const [previewOpen, setPreviewOpen] = useState(false);
+  const signerActions = useSignerActions(document);
   const [renameOpen, setRenameOpen] = useState(false);
   const [accessOpen, setAccessOpen] = useState(false);
   const [versionOpen, setVersionOpen] = useState(false);
@@ -504,22 +212,13 @@ export function DocumentDetailView({
   const [nativeSendOpen, setNativeSendOpen] = useState(false);
   const [voidOpen, setVoidOpen] = useState(false);
   const [holdOpen, setHoldOpen] = useState(false);
-  const [attestOpen, setAttestOpen] = useState(false);
-  const [attestNote, setAttestNote] = useState("");
-  const [nextName, setNextName] = useState(document.name);
+  const [offlineOpen, setOfflineOpen] = useState(false);
+  const [tab, setTab] = useState("preview");
   const [isPending, startTransition] = useTransition();
 
-  const status =
-    DOCUMENT_STATUS_META[document.status] ?? DOCUMENT_STATUS_META.active;
-  const signature =
-    SIGNATURE_STATUS_META[document.signatureStatus] ??
-    SIGNATURE_STATUS_META.unsigned;
+  const state = documentStateMeta(document);
   const isArchived = document.status === "archived";
-  const Icon = document.mimeType.startsWith("image/")
-    ? FileImage
-    : document.mimeType === "application/pdf" || document.mimeType.includes("word")
-      ? FileText
-      : FileArchive;
+  const Icon = iconForDocument(document.mimeType);
   const activeHolds = document.legalHolds.filter((hold) => !hold.releasedAt);
   const activeHold = activeHolds[0] ?? null;
 
@@ -528,12 +227,19 @@ export function DocumentDetailView({
   // distinction instead of letting mutation actions fail with a vague error.
   const restrictedByAcl = data.canManage && document.currentAccessLevel !== "manage";
   const canManageThis = data.canManage && document.currentAccessLevel === "manage";
-  // Terminal-but-retryable states: a declined or expired request should still
-  // let the sender try again, not dead-end with no send controls at all.
-  const canSendForSignature =
-    document.signatureStatus === "unsigned" ||
-    document.signatureStatus === "declined" ||
-    document.signatureStatus === "expired";
+  const status = document.signatureStatus;
+  const canStartSignature = canManageThis && !isArchived && (status === "unsigned" || status === "declined" || status === "expired");
+  const nativeChannel = data.remoteSignEnabled;
+  const docusealChannel = data.esign.connected;
+  const isPdf = document.mimeType === "application/pdf";
+  const currentSigner = signature?.signers.find((signer) => signer.state === "invited") ?? null;
+  const signedCount = signature?.signers.filter((signer) => signer.state === "signed").length ?? 0;
+  const versionLocked =
+    status === "signed" || status === "pending"
+      ? status === "signed"
+        ? "Signed documents are final. Upload the revised file as a new document."
+        : "A signature request is in progress. Void it before uploading a new version."
+      : null;
 
   function run(
     action: () => Promise<{ ok: boolean; error?: string }>,
@@ -548,48 +254,6 @@ export function DocumentDetailView({
       toast.success(success);
       router.refresh();
     });
-  }
-  function rename() {
-    run(
-      () => renameDocument({ documentId: document.id, name: nextName }),
-      "Name updated",
-    );
-    setRenameOpen(false);
-  }
-  const assignmentFor = (assignmentType: "owner" | "reviewer") =>
-    document.assignments.find(
-      (assignment) => assignment.assignmentType === assignmentType,
-    )?.userId ?? "";
-  const submitSignatureStatus = (
-    nextStatus: keyof typeof SIGNATURE_STATUS_META,
-    attestationNote?: string,
-  ) =>
-    run(
-      () =>
-        saveDocumentSignature({
-          documentId: document.id,
-          status: nextStatus,
-          provider: document.signatureProvider,
-          envelopeId: document.signatureEnvelopeId,
-          url: document.signatureUrl,
-          expiresAt: document.expiresAt,
-          attestationNote,
-        }),
-      "Signature status updated",
-    );
-  const saveSignatureStatus = (
-    nextStatus: keyof typeof SIGNATURE_STATUS_META,
-  ) => {
-    if (nextStatus === "signed") {
-      setAttestNote("");
-      setAttestOpen(true);
-      return;
-    }
-    submitSignatureStatus(nextStatus);
-  };
-  function confirmAttestation() {
-    submitSignatureStatus("signed", attestNote);
-    setAttestOpen(false);
   }
   async function deleteCurrentDocument() {
     if (
@@ -609,587 +273,437 @@ export function DocumentDetailView({
         return;
       }
       toast.success("Document deleted");
-      router.push("/dashboard/documents");
+      router.push(documentsHref as Route);
     });
   }
+  const assignmentFor = (assignmentType: "owner" | "reviewer") =>
+    document.assignments.find((assignment) => assignment.assignmentType === assignmentType)?.userId ?? "none";
+
+  const sendChannels = [
+    ...(nativeChannel ? [{ key: "native", label: "Send for signature", run: () => setNativeSendOpen(true) }] : []),
+    ...(docusealChannel ? [{ key: "docuseal", label: "Send with DocuSeal", run: () => setSendSignOpen(true) }] : []),
+  ];
+  const signNow = () => router.push(`/dashboard/documents/${document.id}/sign` as Route);
+
+  // One primary action, driven by the document's state.
+  let primary: React.ReactNode = null;
+  const sendLabel = status === "unsigned" ? "Send for signature" : "Send again";
+  const startOptions = sendChannels.length + (isPdf ? 1 : 0);
+  if (canStartSignature && startOptions === 1) {
+    primary = sendChannels[0] ? (
+      <Button onClick={sendChannels[0].run}>
+        <Send />
+        {sendLabel}
+      </Button>
+    ) : (
+      <Button onClick={signNow}>
+        <LockKeyhole />
+        Sign myself
+      </Button>
+    );
+  } else if (canStartSignature && startOptions > 1) {
+    primary = (
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button>
+            <Send />
+            {sendLabel}
+            <ChevronDown />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end">
+          {sendChannels.map((channel) => (
+            <DropdownMenuItem key={channel.key} onSelect={channel.run}>
+              {channel.label}
+            </DropdownMenuItem>
+          ))}
+          {isPdf ? (
+            <DropdownMenuItem onSelect={signNow}>
+              <LockKeyhole />
+              Sign myself
+            </DropdownMenuItem>
+          ) : null}
+        </DropdownMenuContent>
+      </DropdownMenu>
+    );
+  } else if (canManageThis && !isArchived && status === "pending" && document.signatureProvider === "native" && currentSigner) {
+    primary = (
+      <Button disabled={signerActions.busyId === currentSigner.id} onClick={() => signerActions.remind(currentSigner)}>
+        <BellRing />
+        Remind {currentSigner.name.split(" ")[0]}
+      </Button>
+    );
+  } else if (canManageThis && !isArchived && status === "pending") {
+    primary = (
+      <Button variant="outline" onClick={() => setVoidOpen(true)}>
+        Void request
+      </Button>
+    );
+  } else {
+    primary = (
+      <Button variant={status === "signed" ? "default" : "outline"} asChild>
+        <a href={`/api/documents/${document.id}?download=1`}>
+          <Download />
+          {status === "signed" ? "Download signed copy" : "Download"}
+        </a>
+      </Button>
+    );
+  }
+
+  const overflow = (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button variant="outline" size="icon" aria-label="More actions">
+          <MoreHorizontal />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="w-52">
+        <DropdownMenuItem asChild>
+          <a href={`/api/documents/${document.id}?download=1`}>
+            <Download />
+            Download
+          </a>
+        </DropdownMenuItem>
+        {canManageThis ? (
+          <>
+            <DropdownMenuItem disabled={isArchived} onSelect={() => setRenameOpen(true)}>
+              <Pencil />
+              Rename
+            </DropdownMenuItem>
+            <DropdownMenuItem disabled={isArchived || Boolean(versionLocked)} onSelect={() => setVersionOpen(true)}>
+              <Upload />
+              Upload new version
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              disabled={isPending}
+              onSelect={() =>
+                run(
+                  () => setDocumentStatus({ documentId: document.id, status: isArchived ? "active" : "archived" }),
+                  isArchived ? "Document restored" : "Document archived",
+                )
+              }
+            >
+              {isArchived ? <ArchiveRestore /> : <Archive />}
+              {isArchived ? "Restore" : "Archive"}
+            </DropdownMenuItem>
+          </>
+        ) : null}
+        {data.canDelete ? (
+          <>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem variant="destructive" disabled={isPending} onSelect={() => void deleteCurrentDocument()}>
+              <Trash2 />
+              Delete
+            </DropdownMenuItem>
+          </>
+        ) : null}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
 
   return (
-    <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_22rem]">
-      <div className="min-w-0 space-y-5">
-        <div className="rounded-2xl border border-border/70 bg-card p-5 shadow-xs">
-          <div className="flex items-start gap-3">
-            <span className="flex size-12 shrink-0 items-center justify-center rounded-xl bg-accent text-primary">
-              <Icon className="size-5" />
-            </span>
-            <div className="min-w-0 flex-1">
-              <h1 className="break-words font-display text-xl font-semibold tracking-tight">
-                {document.name}
-              </h1>
-              <p className="mt-1 text-xs text-muted-foreground">
-                {documentTypeLabel(document.mimeType)} ·{" "}
-                {formatDocumentSize(document.sizeBytes)} · v
-                {document.currentVersion}
-              </p>
-              <div className="mt-3 flex flex-wrap gap-1.5">
-                <StatusPill className={status.className}>{status.label}</StatusPill>
-                <StatusPill className={signature.className}>
-                  {signature.label}
-                </StatusPill>
-                {document.category ? (
-                  <StatusPill className="bg-muted text-muted-foreground">
-                    {document.category.name}
+    <div className="space-y-5 duration-500 animate-in fade-in slide-in-from-bottom-1">
+      <Breadcrumb>
+        <BreadcrumbList>
+          <BreadcrumbItem>
+            <BreadcrumbLink asChild>
+              <Link href={documentsHref as Route}>Documents</Link>
+            </BreadcrumbLink>
+          </BreadcrumbItem>
+          <BreadcrumbSeparator />
+          <BreadcrumbItem>
+            <BreadcrumbPage className="max-w-[40ch] truncate">{document.name}</BreadcrumbPage>
+          </BreadcrumbItem>
+        </BreadcrumbList>
+      </Breadcrumb>
+
+      <PageHeader
+        title={document.name}
+        titleBadge={
+          <StatusPill tone={TONE_TO_PILL[state.tone]}>{state.label}</StatusPill>
+        }
+        description={`${documentTypeLabel(document.mimeType)} · ${formatDocumentSize(document.sizeBytes)} · v${document.currentVersion}${document.category ? ` · ${document.category.name}` : ""}`}
+        actions={
+          <>
+            {primary}
+            {overflow}
+          </>
+        }
+      />
+
+      {restrictedByAcl ? (
+        <Callout tone="warning" icon={<ShieldAlert />}>
+          An access rule limits you to read-only on this document, so management
+          actions are unavailable even though you can manage documents in general.
+        </Callout>
+      ) : null}
+      {activeHolds.length > 0 ? (
+        <Callout tone="warning" icon={<Gavel />} title="This document is under legal hold">
+          {activeHolds.map((hold) => hold.reason).join(" · ")}. It cannot be archived until every hold is released.
+        </Callout>
+      ) : null}
+      {isArchived ? (
+        <Callout tone="info" icon={<Archive />}>
+          Archived documents are read-only. Restore it from the menu to edit or send it.
+        </Callout>
+      ) : null}
+
+      <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_22rem] lg:grid-rows-[auto_1fr]">
+        <div className="lg:col-start-2 lg:row-start-1">
+          <SignatureStatusCard
+            data={data}
+            document={document}
+            signature={signature}
+            canManage={canManageThis}
+            archived={isArchived}
+            onSendNative={() => setNativeSendOpen(true)}
+            onSendDocuSeal={() => setSendSignOpen(true)}
+            onVoid={() => setVoidOpen(true)}
+            onRecordOffline={() => setOfflineOpen(true)}
+            onSignNow={signNow}
+            timeline={signatureTimeline}
+          />
+        </div>
+
+        <Card className="min-w-0 lg:col-start-1 lg:row-span-2 lg:row-start-1">
+          <CardContent>
+            <Tabs value={tab} onValueChange={setTab}>
+              <TabsList
+                variant="line"
+                className="w-full justify-start gap-5 border-b border-hairline [&>button]:flex-none [&>button]:px-0.5"
+              >
+                <TabsTrigger value="preview">Preview</TabsTrigger>
+                <TabsTrigger value="versions">Versions ({versions.length})</TabsTrigger>
+                <TabsTrigger value="activity">Activity ({document.activity.length})</TabsTrigger>
+              </TabsList>
+              <TabsContent value="preview" className="mt-4">
+                {isPreviewable(document.mimeType) ? (
+                  <DocumentPreview document={document} />
+                ) : (
+                  <div className="flex min-h-40 flex-col items-center justify-center gap-3 rounded-[var(--radius-inner)] bg-card-inset text-sm text-soft-ink">
+                    <FileText className="size-6" />
+                    Preview is not available for this file type.
+                    <Button size="sm" variant="outline" asChild>
+                      <a href={`/api/documents/${document.id}?download=1`}>
+                        <Download />
+                        Download
+                      </a>
+                    </Button>
+                  </div>
+                )}
+              </TabsContent>
+              <TabsContent value="versions" className="mt-4">
+                <DocumentVersionsPanel
+                  documentId={document.id}
+                  versions={versions}
+                  canUpload={canManageThis && !isArchived}
+                  lockedReason={versionLocked}
+                  onUpload={() => setVersionOpen(true)}
+                />
+              </TabsContent>
+              <TabsContent value="activity" className="mt-4">
+                {document.activity.length === 0 ? (
+                  <p className="py-6 text-center text-sm text-soft-ink">No activity yet.</p>
+                ) : (
+                  <ul className="divide-y divide-hairline">
+                    {document.activity.map((event) => (
+                      <li key={event.id} className="py-3 text-sm first:pt-0 last:pb-0">
+                        <p className="font-medium text-near-ink">{formatActivityType(event.type)}</p>
+                        <p className="mt-0.5 text-xs text-soft-ink">
+                          {event.actorName ?? "System"} · {formatDate(event.createdAt)}
+                        </p>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </TabsContent>
+            </Tabs>
+          </CardContent>
+        </Card>
+
+        <div className="space-y-5 lg:col-start-2 lg:row-start-2">
+          <Card className="gap-3">
+            <CardHeader>
+              <CardTitle>Details</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <InfoRows>
+                <InfoRow label="Linked to" value={document.associationLabels.join(" · ") || "Workspace"} />
+                <InfoRow
+                  label="Owner"
+                  value={
+                    document.ownerId ? (
+                      <span className="inline-flex items-center gap-2">
+                        <UserAvatar name={document.ownerName ?? "Workspace"} src={document.ownerImage} size="sm" />
+                        {document.ownerName}
+                      </span>
+                    ) : (
+                      "Workspace"
+                    )
+                  }
+                />
+                <InfoRow label="Updated" value={formatDate(document.updatedAt)} />
+                <InfoRow label="Checksum" value={<span className="font-mono text-[12px]" title={document.checksum}>{document.checksum.slice(0, 12)}…</span>} />
+              </InfoRows>
+            </CardContent>
+            <SettingRows className="border-t border-hairline">
+              <SettingRow
+                title="Category"
+                control={
+                  <Select
+                    value={document.category?.id ?? "none"}
+                    disabled={!canManageThis || isArchived || isPending}
+                    onValueChange={(value) =>
+                      run(
+                        () => setDocumentCategory({ documentId: document.id, categoryId: value === "none" ? null : value }),
+                        "Category updated",
+                      )
+                    }
+                  >
+                    <SelectTrigger size="sm" className="w-44" aria-label="Category">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent position="popper" align="end">
+                      <SelectItem value="none">No category</SelectItem>
+                      {data.categories
+                        .filter((category) => category.active)
+                        .map((category) => (
+                          <SelectItem key={category.id} value={category.id}>
+                            {category.name}
+                          </SelectItem>
+                        ))}
+                    </SelectContent>
+                  </Select>
+                }
+              />
+              <SettingRow
+                title="Effective / expiration date"
+                description="A reminder date for the paperwork itself, separate from the signature."
+                align="start"
+                control={<ExpiresAtField document={document} editable={canManageThis && !isArchived} />}
+              />
+            </SettingRows>
+          </Card>
+
+          <Card className="gap-0 py-2">
+            <CardHeader className="pt-3 pb-1">
+              <CardTitle>People</CardTitle>
+            </CardHeader>
+            <SettingRows>
+              {(["owner", "reviewer"] as const).map((assignmentType) => (
+                <SettingRow
+                  key={assignmentType}
+                  title={assignmentType === "owner" ? "Responsible" : "Reviewer"}
+                  control={
+                    <Select
+                      value={assignmentFor(assignmentType)}
+                      disabled={!canManageThis || isArchived || isPending}
+                      onValueChange={(value) =>
+                        run(
+                          () =>
+                            assignDocument({
+                              documentId: document.id,
+                              userId: value === "none" ? null : value,
+                              assignmentType,
+                            }),
+                          `${assignmentType === "owner" ? "Responsible" : "Reviewer"} updated`,
+                        )
+                      }
+                    >
+                      <SelectTrigger size="sm" className="w-44" aria-label={assignmentType === "owner" ? "Responsible" : "Reviewer"}>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent position="popper" align="end" className="max-h-64">
+                        <SelectItem value="none">Not assigned</SelectItem>
+                        {data.members.map((member) => (
+                          <SelectItem key={member.id} value={member.id}>
+                            {member.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  }
+                />
+              ))}
+            </SettingRows>
+          </Card>
+
+          <Card className="gap-0 py-2">
+            <SettingRow
+              icon={<ShieldCheck />}
+              title="Access"
+              description={
+                document.accessRoles.length + document.accessMembers.length === 0
+                  ? "Follows the workspace Documents permission."
+                  : `${document.accessRoles.length + document.accessMembers.length} explicit rule${document.accessRoles.length + document.accessMembers.length === 1 ? "" : "s"}. The owner and admins always keep access.`
+              }
+              control={
+                data.canShare ? (
+                  <Button size="sm" variant="outline" disabled={isArchived} onClick={() => setAccessOpen(true)}>
+                    <Users />
+                    Manage
+                  </Button>
+                ) : undefined
+              }
+            />
+          </Card>
+
+          <details className="group rounded-[var(--radius-card)] bg-card shadow-[var(--shadow-card)]">
+            <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-5 py-4 text-[15px] font-semibold tracking-[-0.01em] [&::-webkit-details-marker]:hidden">
+              <span className="flex items-center gap-2">
+                <Gavel className="size-4 text-soft-ink" />
+                Governance
+              </span>
+              <span className="flex items-center gap-2">
+                {activeHolds.length > 0 ? (
+                  <StatusPill size="sm" tone="warning">
+                    {activeHolds.length} hold{activeHolds.length === 1 ? "" : "s"}
                   </StatusPill>
                 ) : null}
-              </div>
-            </div>
-          </div>
-
-          {restrictedByAcl ? (
-            <div className="mt-4 flex items-start gap-2 rounded-xl border border-warning/30 bg-warning/[0.06] px-3 py-2.5 text-sm text-warning">
-              <ShieldAlert className="mt-0.5 size-4 shrink-0" />
-              <p>
-                An access rule restricts this document to specific people —
-                you have read-only access here, so management actions are
-                unavailable even though you can manage documents generally.
-              </p>
-            </div>
-          ) : null}
-
-          <div className="mt-5 grid grid-cols-2 gap-x-4 gap-y-4 border-t border-border/70 pt-4 text-sm sm:grid-cols-3">
-            <div>
-              <p className="text-xs text-muted-foreground">Association</p>
-              <p className="mt-1 font-medium">
-                {document.associationLabels.join(" · ") || "Workspace"}
-              </p>
-            </div>
-            <div>
-              <p className="text-xs text-muted-foreground">Owner</p>
-              <div className="mt-1 flex items-center gap-2">
-                {document.ownerId ? (
-                  <>
-                    <UserAvatar
-                      name={document.ownerName ?? "Workspace"}
-                      src={document.ownerImage}
-                      size="sm"
-                    />
-                    <span className="truncate font-medium">
-                      {document.ownerName}
-                    </span>
-                  </>
-                ) : (
-                  <span className="font-medium">Workspace</span>
-                )}
-              </div>
-            </div>
-            <div>
-              <p className="text-xs text-muted-foreground">Updated</p>
-              <p className="mt-1 font-medium">{formatDate(document.updatedAt)}</p>
-            </div>
-            <div>
-              <p className="text-xs text-muted-foreground">Versions</p>
-              <p className="mt-1 font-medium">{document.versionCount}</p>
-            </div>
-            <div>
-              <p className="text-xs text-muted-foreground">Checksum</p>
-              <p
-                className="mt-1 truncate font-mono text-[11px]"
-                title={document.checksum}
-              >
-                {document.checksum.slice(0, 12)}…
-              </p>
-            </div>
-            <div>
-              <p className="flex items-center gap-1 text-xs text-muted-foreground">
-                <CalendarClock className="size-3.5" />
-                Effective / expiration date
-              </p>
-              <div className="mt-1">
-                <ExpiresAtField
-                  document={document}
-                  editable={canManageThis && !isArchived}
-                />
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div className="rounded-2xl border border-border/70 bg-card p-5 shadow-xs">
-          <div className="mb-3 flex items-center justify-between">
-            <p className="text-sm font-semibold">Preview</p>
-            <Button
-              size="sm"
-              variant="outline"
-              disabled={!isPreviewable(document.mimeType)}
-              onClick={() => setPreviewOpen((current) => !current)}
-            >
-              <FileText className="size-4" />
-              {previewOpen ? "Hide preview" : "Show preview"}
-            </Button>
-          </div>
-          {previewOpen ? (
-            <DocumentPreview document={document} />
-          ) : (
-            <div className="flex min-h-40 items-center justify-center rounded-lg border border-dashed text-sm text-muted-foreground">
-              {isPreviewable(document.mimeType)
-                ? "Preview hidden — click Show preview to load it."
-                : "Preview is not available for this file type."}
-            </div>
-          )}
-        </div>
-
-        {document.activity.length > 0 ? (
-          <div className="rounded-2xl border border-border/70 bg-card p-5 shadow-xs">
-            <p className="mb-3 text-sm font-semibold">Recent activity</p>
-            <div className="divide-y divide-border/70">
-              {document.activity.map((event) => (
-                <div key={event.id} className="py-2.5 text-sm first:pt-0 last:pb-0">
-                  <p className="capitalize">{formatActivityType(event.type)}</p>
-                  <p className="mt-0.5 text-xs text-muted-foreground">
-                    {event.actorName ?? "System"} ·{" "}
-                    {formatDate(event.createdAt)}
-                  </p>
-                </div>
-              ))}
-            </div>
-          </div>
-        ) : null}
-      </div>
-
-      <div className="space-y-5">
-        <div className="space-y-2 rounded-2xl border border-border/70 bg-card p-5 shadow-xs">
-          <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-            Actions
-          </p>
-          <div className="grid grid-cols-2 gap-2">
-            <Button size="sm" variant="outline" asChild>
-              <a href={`/api/documents/${document.id}?download=1`}>
-                <Download className="size-4" />
-                Download
-              </a>
-            </Button>
-            {canManageThis ? (
-              <Button
-                size="sm"
-                variant="outline"
-                disabled={isArchived}
-                onClick={() => setRenameOpen(true)}
-              >
-                Rename
-              </Button>
-            ) : null}
-            {canManageThis ? (
-              <Button
-                size="sm"
-                variant="outline"
-                disabled={isPending}
-                onClick={() =>
-                  run(
-                    () =>
-                      setDocumentStatus({
-                        documentId: document.id,
-                        status:
-                          document.status === "archived"
-                            ? "active"
-                            : "archived",
-                      }),
-                    document.status === "archived"
-                      ? "Document restored"
-                      : "Document archived",
-                  )
-                }
-              >
-                {document.status === "archived" ? (
-                  <ArchiveRestore className="size-4" />
-                ) : (
-                  <Archive className="size-4" />
-                )}
-                {document.status === "archived" ? "Restore" : "Archive"}
-              </Button>
-            ) : null}
-            {canManageThis ? (
-              <Button
-                size="sm"
-                variant="outline"
-                disabled={
-                  isArchived ||
-                  isPending ||
-                  document.signatureStatus === "signed" ||
-                  document.signatureStatus === "pending"
-                }
-                onClick={() => setVersionOpen(true)}
-              >
-                New version
-              </Button>
-            ) : null}
-            {data.canDelete ? (
-              <Button
-                size="sm"
-                variant="destructive"
-                disabled={isPending}
-                onClick={deleteCurrentDocument}
-              >
-                <Trash2 className="size-4" />
-                Delete
-              </Button>
-            ) : null}
-          </div>
-        </div>
-
-        <div className="space-y-2 rounded-2xl border border-border/70 bg-card p-5 shadow-xs">
-          <div className="flex items-center justify-between">
-            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-              Category
-            </p>
-            <FolderCog className="size-4 text-muted-foreground" />
-          </div>
-          <select
-            value={document.category?.id ?? ""}
-            disabled={!canManageThis || isArchived}
-            onChange={(event) =>
-              run(
-                () =>
-                  setDocumentCategory({
-                    documentId: document.id,
-                    categoryId: event.target.value || null,
-                  }),
-                "Category updated",
-              )
-            }
-            className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
-          >
-            <option value="">No category</option>
-            {data.categories
-              .filter((category) => category.active)
-              .map((category) => (
-                <option key={category.id} value={category.id}>
-                  {category.name}
-                </option>
-              ))}
-          </select>
-        </div>
-
-        <div className="space-y-3 rounded-2xl border border-border/70 bg-card p-5 shadow-xs">
-          <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-            Assignments
-          </p>
-          {(["owner", "reviewer"] as const).map((assignmentType) => (
-            <label key={assignmentType} className="block space-y-1.5">
-              <span className="text-sm font-medium">
-                {assignmentType === "owner" ? "Responsible" : "Reviewer"}
+                <ChevronDown className="size-4 text-soft-ink transition-transform group-open:rotate-180" />
               </span>
-              <select
-                value={assignmentFor(assignmentType)}
-                disabled={!canManageThis || isArchived || isPending}
-                onChange={(event) =>
-                  run(
-                    () =>
-                      assignDocument({
-                        documentId: document.id,
-                        userId: event.target.value || null,
-                        assignmentType,
-                      }),
-                    `${assignmentType === "owner" ? "Responsible" : "Reviewer"} updated`,
-                  )
-                }
-                className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
-              >
-                <option value="">Not assigned</option>
-                {data.members.map((member) => (
-                  <option key={member.id} value={member.id}>
-                    {member.name}
-                  </option>
-                ))}
-              </select>
-            </label>
-          ))}
-        </div>
-
-        <div className="space-y-2 rounded-2xl border border-border/70 bg-card p-5 shadow-xs">
-          <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-            Access & ownership
-          </p>
-          <div className="rounded-xl border border-border/70 bg-muted/20 p-3 text-sm">
-            <p className="flex items-center gap-2">
-              <ShieldCheck className="size-4 text-primary" />
-              {document.accessRoles.length + document.accessMembers.length === 0
-                ? "Workspace permission"
-                : `${document.accessRoles.length + document.accessMembers.length} explicit rule${document.accessRoles.length + document.accessMembers.length === 1 ? "" : "s"}`}
-            </p>
-            <p className="mt-1 text-xs leading-5 text-muted-foreground">
-              Owner and workspace admins retain access. ACL rules can narrow
-              access for everyone else.
-            </p>
-          </div>
-          {data.canShare ? (
-            <Button
-              size="sm"
-              variant="outline"
-              className="w-full"
-              disabled={isArchived}
-              onClick={() => setAccessOpen(true)}
-            >
-              <Users className="size-4" />
-              Manage access
-            </Button>
-          ) : null}
-        </div>
-
-        <div className="space-y-3 rounded-2xl border border-border/70 bg-card p-5 shadow-xs">
-          <div className="flex items-center justify-between">
-            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-              Signature
-            </p>
-            <LockKeyhole className="size-4 text-muted-foreground" />
-          </div>
-          <select
-            value={document.signatureStatus}
-            disabled={!canManageThis || isArchived || isPending}
-            onChange={(event) =>
-              saveSignatureStatus(
-                event.target.value as keyof typeof SIGNATURE_STATUS_META,
-              )
-            }
-            className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
-          >
-            {Object.entries(SIGNATURE_STATUS_META).map(([key, item]) => (
-              <option key={key} value={key}>
-                {item.label}
-              </option>
-            ))}
-          </select>
-          <div className="rounded-xl border border-border/70 p-3 text-sm">
-            <p className="flex items-center gap-2">
-              <LockKeyhole className="size-4 text-muted-foreground" />
-              {signature.label}
-            </p>
-            {document.signatureProvider ? (
-              <p className="mt-1 text-xs text-muted-foreground">
-                {document.signatureProvider}
+            </summary>
+            <div className="space-y-3 px-5 pb-5">
+              <p className="text-[12.5px] leading-snug text-soft-ink">
+                Preservation notices and signed evidence stay workspace-scoped and ACL-protected.
               </p>
-            ) : null}
-            {document.signatureUrl ? (
-              <a
-                href={document.signatureUrl}
-                target="_blank"
-                rel="noreferrer"
-                className="mt-2 inline-block text-xs font-medium text-primary underline-offset-2 hover:underline"
-              >
-                Open DocuSeal submission
-              </a>
-            ) : null}
-            {document.manualSignatureNote ? (
-              <div className="mt-2 rounded-md bg-warning/10 p-2 text-xs text-warning">
-                <p className="font-medium">Manual attestation</p>
-                <p className="mt-0.5 leading-5">
-                  {document.manualSignatureNote}
-                </p>
-                <p className="mt-1 text-[11px] text-muted-foreground">
-                  {document.manualSignedByName ?? "A manager"} ·{" "}
-                  {document.manualSignedAt
-                    ? formatDate(document.manualSignedAt)
-                    : ""}
-                </p>
-              </div>
-            ) : null}
-          </div>
-          {canManageThis ? (
-            <div className="grid gap-2">
-              <Button
-                disabled={
-                  isArchived ||
-                  document.status !== "active" ||
-                  document.signatureStatus !== "unsigned" ||
-                  document.mimeType !== "application/pdf"
-                }
-                onClick={() =>
-                  router.push(`/dashboard/documents/${document.id}/sign`)
-                }
-              >
-                <LockKeyhole className="size-4" />
-                Sign now
-              </Button>
-              {document.signatureStatus === "pending" &&
-              (document.signatureProvider === "docuseal" || document.signatureProvider === "native") ? (
-                <Button
-                  size="sm"
-                  variant="outline"
-                  disabled={isArchived}
-                  onClick={() => setVoidOpen(true)}
-                >
-                  <LockKeyhole className="size-4" />
-                  Void request
+              <div className="flex flex-wrap gap-2">
+                <Button size="sm" variant="outline" asChild>
+                  <a href={`/api/documents/${document.id}/evidence`}>
+                    <Download />
+                    Export evidence
+                  </a>
                 </Button>
-              ) : canSendForSignature ? (
-                <div className={data.esign.connected && data.remoteSignEnabled ? "grid grid-cols-2 gap-2" : "grid gap-2"}>
-                  {data.remoteSignEnabled ? (
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      disabled={isArchived}
-                      onClick={() => setNativeSendOpen(true)}
-                    >
-                      <LockKeyhole className="size-4" />
-                      Native link
-                    </Button>
-                  ) : (
-                    <p className="rounded-lg border border-border/70 bg-muted/30 p-3 text-xs leading-5 text-muted-foreground">
-                      Remote signing links are disabled. <Link href="/settings/signature" className="font-medium text-foreground underline underline-offset-2">Enable them in Signature settings</Link>.
-                    </p>
-                  )}
-                  {data.esign.connected ? (
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      disabled={isArchived}
-                      onClick={() => setSendSignOpen(true)}
-                    >
-                      <Send className="size-4" />
-                      DocuSeal
-                    </Button>
-                  ) : null}
-                </div>
+                {canManageThis ? (
+                  <Button size="sm" variant="outline" disabled={isArchived && !activeHold} onClick={() => setHoldOpen(true)}>
+                    <Gavel />
+                    {activeHold ? "Release legal hold" : "Place legal hold"}
+                  </Button>
+                ) : null}
+              </div>
+              {activeHolds.length > 0 ? (
+                <ul className="space-y-1.5 text-[12.5px] text-soft-ink">
+                  {activeHolds.map((hold) => (
+                    <li key={hold.id} className="rounded-[var(--radius-inner)] bg-card-inset px-3 py-2">
+                      {hold.reason}
+                      {hold.reference ? <span className="block text-quiet-mist">Ref {hold.reference}</span> : null}
+                    </li>
+                  ))}
+                </ul>
               ) : null}
             </div>
-          ) : null}
-        </div>
-
-        <div className="space-y-3 rounded-2xl border border-border/70 bg-card p-5 shadow-xs">
-          <div className="flex items-center justify-between gap-3">
-            <p className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-              <Gavel className="size-4" />
-              Governance
-            </p>
-            {activeHolds.length > 0 ? (
-              <StatusPill className="bg-warning/10 text-warning">
-                {activeHolds.length} active hold
-                {activeHolds.length === 1 ? "" : "s"}
-              </StatusPill>
-            ) : null}
-          </div>
-          <p className="text-xs leading-5 text-muted-foreground">
-            Preservation notices and signed evidence remain workspace-scoped
-            and ACL-protected.
-          </p>
-          <div className="grid gap-2 sm:grid-cols-2">
-            <Button size="sm" variant="outline" asChild>
-              <a href={`/api/documents/${document.id}/evidence`}>
-                <Download className="size-4" />
-                Export evidence
-              </a>
-            </Button>
-            {canManageThis ? (
-              <Button
-                size="sm"
-                variant="outline"
-                disabled={document.status === "archived" && !activeHold}
-                onClick={() => setHoldOpen(true)}
-              >
-                <Gavel className="size-4" />
-                {activeHold ? "Release legal hold" : "Place legal hold"}
-              </Button>
-            ) : null}
-          </div>
-          {activeHolds.length > 0 ? (
-            <div className="space-y-2 rounded-xl border border-warning/30 bg-warning/[0.04] p-3 text-sm">
-              <p className="font-medium text-warning">
-                This document is preserved.
-              </p>
-              {activeHolds.map((hold) => (
-                <div
-                  key={hold.id}
-                  className="border-t border-warning/20 pt-2 text-xs leading-5 text-warning/80"
-                >
-                  <p>{hold.reason}</p>
-                  {hold.reference ? (
-                    <p className="mt-0.5">Reference: {hold.reference}</p>
-                  ) : null}
-                </div>
-              ))}
-            </div>
-          ) : null}
+          </details>
         </div>
       </div>
 
-      <Dialog open={renameOpen} onOpenChange={setRenameOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Rename document</DialogTitle>
-            <DialogDescription>This changes metadata only.</DialogDescription>
-          </DialogHeader>
-          <Input
-            value={nextName}
-            onChange={(event) => setNextName(event.target.value)}
-          />
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setRenameOpen(false)}>
-              Cancel
-            </Button>
-            <Button onClick={rename} disabled={!nextName.trim() || isPending}>
-              Save name
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-      <AccessDialog
-        data={data}
-        document={document}
-        open={accessOpen}
-        onOpenChange={setAccessOpen}
-      />
-      <UploadDialog
-        data={data}
-        open={versionOpen}
-        onOpenChange={setVersionOpen}
-        replaceDocument={document}
-      />
-      <SendForSignatureDialog
-        data={data}
-        document={document}
-        open={sendSignOpen}
-        onOpenChange={setSendSignOpen}
-      />
-      <DocumentFieldPlacementDialog
-        document={document}
-        open={nativeSendOpen}
-        onOpenChange={setNativeSendOpen}
-      />
-      <VoidSignatureDialog
-        document={document}
-        open={voidOpen}
-        onOpenChange={setVoidOpen}
-      />
-      <LegalHoldDialog
-        document={document}
-        activeHold={activeHold}
-        open={holdOpen}
-        onOpenChange={setHoldOpen}
-      />
-      <Dialog open={attestOpen} onOpenChange={setAttestOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Record manual signature</DialogTitle>
-            <DialogDescription>
-              Describe how and when it was signed.
-            </DialogDescription>
-          </DialogHeader>
-          <Textarea
-            value={attestNote}
-            onChange={(event) => setAttestNote(event.target.value)}
-            rows={3}
-          />
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setAttestOpen(false)}>
-              Cancel
-            </Button>
-            <Button
-              onClick={confirmAttestation}
-              disabled={attestNote.trim().length < 3 || isPending}
-            >
-              Confirm signed
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <RenameDialog key={document.name} document={document} open={renameOpen} onOpenChange={setRenameOpen} />
+      <AccessDialog data={data} document={document} open={accessOpen} onOpenChange={setAccessOpen} />
+      <UploadDialog data={data} open={versionOpen} onOpenChange={setVersionOpen} replaceDocument={document} />
+      <SendForSignatureDialog data={data} document={document} open={sendSignOpen} onOpenChange={setSendSignOpen} />
+      <DocumentFieldPlacementDialog document={document} open={nativeSendOpen} onOpenChange={setNativeSendOpen} />
+      <VoidSignatureDialog document={document} signedCount={signedCount} open={voidOpen} onOpenChange={setVoidOpen} />
+      <LegalHoldDialog document={document} activeHold={activeHold} open={holdOpen} onOpenChange={setHoldOpen} />
+      <RecordOfflineSignatureDialog document={document} open={offlineOpen} onOpenChange={setOfflineOpen} />
     </div>
   );
 }

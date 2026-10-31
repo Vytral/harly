@@ -1,7 +1,9 @@
 "use server";
 
+import { createHash, randomBytes, randomUUID } from "node:crypto";
+
 import { revalidatePath } from "next/cache";
-import { and, desc, eq, exists, inArray, isNull } from "drizzle-orm";
+import { and, desc, eq, exists, ilike, inArray, isNull, or } from "drizzle-orm";
 import { z } from "zod";
 
 import { ApiError } from "@harly/api";
@@ -20,17 +22,27 @@ import {
   signatureArtifacts,
   documentVersions,
   documents,
+  emailOutbox,
   jobs,
   member as authMembers,
   offers,
   signatureEnvelopes,
+  signatureEvents,
   signatureRecipients,
 } from "@harly/db";
 
 import { associationTargetsInScope, resolveDocumentAccessInScope } from "./scope-access";
 import { slugifyDocumentCategory } from "./shared";
 import { verifyUploadedDocument as verifyUploadedDocumentShared } from "./verify";
-import { requireOwnerOrAdmin, requirePermission } from "@/features/workspaces/permissions-server";
+import { requireOwnerOrAdmin, requirePermission, getRolePolicy } from "@/features/workspaces/permissions-server";
+import { candidateScopeSql, jobScopeSql } from "@/features/search/scope";
+import { listActiveWorkflowDocumentTemplates } from "@/features/document-templates/data";
+import { generateDocumentForWorkflow } from "./workflow-generation";
+import { renderTemplateForApplication } from "./generate-from-template";
+import { encryptSecret } from "@/lib/crypto";
+import { processEmailOutbox } from "@/lib/email/outbox-processor";
+import { remindNativeSigner, rotateNativePortalSigningLink } from "@/lib/esign/native/remote";
+import type { GenerateTargetOption, GenerateTemplateOption } from "./shared";
 import { isExternallyManagedSignatureProvider } from "@/lib/esign/signature-state";
 import { sendDocumentForEnvelope } from "@/lib/esign/document-signing";
 import { archiveSubmission, freshEsignContext } from "@/lib/esign/client";
@@ -38,7 +50,7 @@ import { createLogger } from "@/lib/logger";
 import { storage } from "@/lib/storage";
 import { persistDomainEvent, publishPersistedDomainEvents } from "@/server/events/emit";
 import { documentAutomationContext } from "@/lib/esign/document-automation-context";
-import { WORKING_DOCUMENT_KIND } from "@/lib/esign/native/working-pdf";
+import { voidNativeSignature } from "@/lib/esign/native/void";
 
 const log = createLogger("documents-actions");
 
@@ -797,80 +809,15 @@ export async function voidDocumentSignature(input: {
     if (!document.signatureEnvelopeRefId) {
       return { ok: false, error: "Could not resolve the native signing envelope." };
     }
-    const signatureChange = await db.transaction(async (tx) => {
-      const [envelope] = await tx
-        .select({ id: signatureEnvelopes.id, status: signatureEnvelopes.status })
-        .from(signatureEnvelopes)
-        .where(and(eq(signatureEnvelopes.workspaceId, context.organization.id), eq(signatureEnvelopes.id, document.signatureEnvelopeRefId!)))
-        .for("update")
-        .limit(1);
-      if (!envelope || envelope.status !== "sent") {
-        throw new Error("This signature request is already complete.");
-      }
-      const [working] = await tx
-        .select({ id: signatureArtifacts.id, storageKey: signatureArtifacts.storageKey })
-        .from(signatureArtifacts)
-        .where(and(
-          eq(signatureArtifacts.workspaceId, context.organization.id),
-          eq(signatureArtifacts.envelopeId, envelope.id),
-          eq(signatureArtifacts.kind, WORKING_DOCUMENT_KIND),
-        ))
-        .limit(1);
-      const recipients = await tx
-        .select({ id: signatureRecipients.id })
-        .from(signatureRecipients)
-        .where(and(eq(signatureRecipients.envelopeId, envelope.id), eq(signatureRecipients.workspaceId, context.organization.id)));
-      for (const recipient of recipients) {
-        await tx.update(signatureRecipients).set({
-          status: "voided",
-          providerRecipientId: `native-voided:${recipient.id}`,
-          updatedAt: new Date(),
-        }).where(eq(signatureRecipients.id, recipient.id));
-      }
-      await tx.update(signatureEnvelopes).set({ status: "voided", voidedAt: new Date(), updatedAt: new Date() }).where(eq(signatureEnvelopes.id, envelope.id));
-      if (working) await tx.delete(signatureArtifacts).where(eq(signatureArtifacts.id, working.id));
-      await tx.update(documents).set({
-        signatureStatus: "unsigned",
-        signatureProvider: null,
-        signatureEnvelopeId: null,
-        signatureEnvelopeRefId: null,
-        signatureUrl: null,
-        expiresAt: null,
-        updatedAt: new Date(),
-      }).where(and(eq(documents.id, input.documentId), eq(documents.workspaceId, context.organization.id)));
-      await logDocumentActivity(tx, {
-        workspaceId: context.organization.id,
-        actorId: context.user.id,
-        documentId: input.documentId,
-        type: "document.signature_voided",
-        metadata: { provider: "native", envelopeId: envelope.id, reason: parsed.data.reason },
-      });
-      const targetContext = await documentAutomationContext(tx, context.organization.id, input.documentId);
-      const event = await persistDomainEvent(tx, {
-        name: "document.signature_voided",
-        workspaceId: context.organization.id,
-        actorId: context.user.id,
-        aggregateType: "document",
-        aggregateId: input.documentId,
-        payload: { document: { id: input.documentId }, ...targetContext, status: "unsigned", provider: "native", envelopeId: envelope.id, reason: parsed.data.reason },
-      });
-      return { event, targetContext, workingKey: working?.storageKey ?? null, envelopeId: envelope.id };
-    }).catch((error: unknown) => {
-      log.error({ error, documentId: input.documentId }, "voidDocumentSignature: native void failed");
-      return { error: error instanceof Error ? error.message : "Could not void the signature request." };
-    });
-    if ("error" in signatureChange) return { ok: false, error: signatureChange.error };
-    if (signatureChange.workingKey) await storage.delete(signatureChange.workingKey).catch(() => undefined);
-    await publishPersistedDomainEvents([signatureChange.event]);
-    const { emitWebhookEvent } = await import("@/server/webhooks/emit");
-    await emitWebhookEvent(context.organization.id, "document.signature_voided", {
-      document: { id: input.documentId },
-      ...signatureChange.targetContext,
-      status: "unsigned",
-      provider: "native",
-      envelopeId: signatureChange.envelopeId,
+    const voided = await voidNativeSignature({
+      workspaceId: context.organization.id,
+      documentId: input.documentId,
+      envelopeId: document.signatureEnvelopeRefId,
+      actorId: context.user.id,
+      actorName: context.user.name,
       reason: parsed.data.reason,
-    }, { actorId: context.user.id, skipDomainEvent: true, eventId: signatureChange.event.eventId });
+    });
+    if (!voided.ok) return { ok: false, error: voided.error };
     revalidatePath("/dashboard/documents");
     return { ok: true };
   }
@@ -1103,4 +1050,226 @@ export async function bulkDeleteDocuments(input: { documentIds: string[] }): Pro
     return { ok: true, error: `${deletable.length} deleted. ${skipped} skipped (legal hold${skippedPending > 0 ? " or pending signature" : ""}).` };
   }
   return { ok: true };
+}
+
+
+/* ── Signer actions (native links) ──────────────────────────────────────── */
+
+type SignerTarget = {
+  workspaceId: string;
+  documentName: string;
+  envelopeId: string;
+  recipient: { id: string; email: string; name: string; linkExpiresAt: Date };
+};
+
+/** A native signer whose link is live: the only kind a reminder or fresh link can serve. */
+async function resolveLiveNativeSigner(
+  context: DocumentPermissionContext["context"],
+  input: { documentId: string; recipientId: string },
+): Promise<SignerTarget | { error: string }> {
+  const parsed = z.object({ documentId: z.uuid(), recipientId: z.uuid() }).safeParse(input);
+  if (!parsed.success) return { error: "Invalid signer." };
+  const access = await resolveDocumentAccessInScope({ documentId: input.documentId, workspaceId: context.organization.id, userId: context.user.id, roleKey: context.roleKey });
+  if (!access || access.level !== "manage") return { error: "You cannot manage this document." };
+  const archivedError = archivedDocumentError(access.document);
+  if (archivedError) return { error: archivedError };
+  const document = access.document;
+  if (document.signatureProvider !== "native" || document.signatureStatus !== "pending" || !document.signatureEnvelopeRefId) {
+    return { error: "This document has no native signing request in progress." };
+  }
+  const [recipient] = await db
+    .select({ id: signatureRecipients.id, email: signatureRecipients.email, name: signatureRecipients.name, status: signatureRecipients.status, linkExpiresAt: signatureRecipients.linkExpiresAt })
+    .from(signatureRecipients)
+    .where(and(
+      eq(signatureRecipients.id, input.recipientId),
+      eq(signatureRecipients.workspaceId, context.organization.id),
+      eq(signatureRecipients.envelopeId, document.signatureEnvelopeRefId),
+      eq(signatureRecipients.role, "signer"),
+    ))
+    .limit(1);
+  if (!recipient) return { error: "Signer not found." };
+  if (recipient.status !== "sent") return { error: "This signer is not the one being asked to sign right now." };
+  if (!recipient.linkExpiresAt || recipient.linkExpiresAt <= new Date()) {
+    return { error: "This signing link has expired. Void the request and send it again." };
+  }
+  return {
+    workspaceId: context.organization.id,
+    documentName: document.name,
+    envelopeId: document.signatureEnvelopeRefId,
+    recipient: { id: recipient.id, email: recipient.email, name: recipient.name, linkExpiresAt: recipient.linkExpiresAt },
+  };
+}
+
+/**
+ * Email the current signer a fresh link right now. Links are stored hashed, so
+ * a reminder replaces the previous link (the same rule the daily cron follows).
+ * Limited to one reminder per signer per minute by the event key.
+ */
+export async function remindSignatureRecipient(input: { documentId: string; recipientId: string }): Promise<DocumentActionResult> {
+  const permission = await documentContext("documents:manage");
+  if (permission.error) return { ok: false, error: permission.error };
+  const { context } = permission;
+  const target = await resolveLiveNativeSigner(context, input);
+  if ("error" in target) return { ok: false, error: target.error };
+
+  // Shared with the scheduled reminders: same throttle and cap, and earlier
+  // links keep working (old token hashes are kept), unlike a link rotation.
+  const reminded = await remindNativeSigner({
+    workspaceId: target.workspaceId,
+    documentId: input.documentId,
+    actorId: context.user.id,
+    recipientId: target.recipient.id,
+  });
+  if (!reminded.ok) return { ok: false, error: reminded.error };
+  await db.transaction((tx) =>
+    logDocumentActivity(tx, { workspaceId: target.workspaceId, actorId: context.user.id, documentId: input.documentId, type: "document.signature_reminded", metadata: { recipientId: target.recipient.id } }),
+  );
+  revalidatePath(`/dashboard/documents/${input.documentId}`);
+  return { ok: true };
+}
+
+/**
+ * A fresh signing URL to hand over by other means. Issuing one replaces the
+ * link the signer was emailed (only hashes are stored), so callers confirm first.
+ */
+export async function createSignatureShareLink(input: { documentId: string; recipientId: string }): Promise<{ ok: boolean; error?: string; url?: string }> {
+  const permission = await documentContext("documents:manage");
+  if (permission.error) return { ok: false, error: permission.error };
+  const { context } = permission;
+  const target = await resolveLiveNativeSigner(context, input);
+  if ("error" in target) return { ok: false, error: target.error };
+  const rotated = await rotateNativePortalSigningLink({ workspaceId: target.workspaceId, recipientId: target.recipient.id });
+  if (!rotated.ok) return { ok: false, error: rotated.error };
+  await db.insert(activityEvents).values({
+    workspaceId: target.workspaceId,
+    actorId: context.user.id,
+    entityType: "document",
+    entityId: input.documentId,
+    type: "document.signature_link_copied",
+    metadata: { recipientId: target.recipient.id },
+  });
+  revalidatePath(`/dashboard/documents/${input.documentId}`);
+  return { ok: true, url: rotated.signingUrl };
+}
+
+/* ── Generate a document from a template ────────────────────────────────── */
+
+export async function getGenerateDocumentOptions(): Promise<{ ok: boolean; error?: string; templates: GenerateTemplateOption[] }> {
+  const permission = await documentContext("documents:manage");
+  if (permission.error) return { ok: false, error: permission.error, templates: [] };
+  const templates = await listActiveWorkflowDocumentTemplates();
+  return { ok: true, templates: templates.map((template) => ({ id: template.id, name: template.name, title: template.title })) };
+}
+
+/** Applications the caller can see, by candidate or job name, or all of one candidate's. */
+export async function searchGenerateDocumentTargets(input: { query?: string; candidateId?: string }): Promise<{ ok: boolean; error?: string; targets: GenerateTargetOption[] }> {
+  const permission = await documentContext("documents:manage");
+  if (permission.error) return { ok: false, error: permission.error, targets: [] };
+  const { context } = permission;
+  const parsed = z.object({ query: z.string().trim().max(80).optional(), candidateId: z.uuid().optional() }).safeParse(input);
+  if (!parsed.success) return { ok: false, error: "Invalid search.", targets: [] };
+  const policy = await getRolePolicy(context.organization.id, context.roleKey);
+  const actor = { workspaceId: context.organization.id, userId: context.user.id, permissions: policy.permissions, scope: policy.scope };
+  const needle = parsed.data.query ? `%${parsed.data.query.replace(/[%_\\]/g, "\\$&")}%` : null;
+  const rows = await db
+    .select({
+      applicationId: applications.id,
+      candidateId: candidates.id,
+      firstName: candidates.firstName,
+      lastName: candidates.lastName,
+      jobTitle: jobs.title,
+    })
+    .from(applications)
+    .innerJoin(candidates, eq(candidates.id, applications.candidateId))
+    .innerJoin(jobs, eq(jobs.id, applications.jobId))
+    .where(and(
+      eq(applications.workspaceId, context.organization.id),
+      isNull(candidates.deletedAt),
+      isNull(jobs.deletedAt),
+      candidateScopeSql(actor, candidates.id),
+      jobScopeSql(actor),
+      parsed.data.candidateId ? eq(candidates.id, parsed.data.candidateId) : undefined,
+      needle ? or(ilike(candidates.firstName, needle), ilike(candidates.lastName, needle), ilike(jobs.title, needle)) : undefined,
+    ))
+    .orderBy(desc(applications.appliedAt))
+    .limit(15);
+  return {
+    ok: true,
+    targets: rows.map((row) => ({
+      applicationId: row.applicationId,
+      candidateId: row.candidateId,
+      candidateName: `${row.firstName} ${row.lastName}`.trim(),
+      jobTitle: row.jobTitle,
+    })),
+  };
+}
+
+async function authorizeGenerateTarget(context: DocumentPermissionContext["context"], applicationId: string) {
+  const target = { targetType: "application" as const, targetId: applicationId };
+  if (!z.uuid().safeParse(applicationId).success || !(await targetBelongsToWorkspace(context.organization.id, target))) {
+    return "Candidate application not found.";
+  }
+  const inScope = await associationTargetsInScope({ workspaceId: context.organization.id, userId: context.user.id, roleKey: context.roleKey }, [target]);
+  return inScope ? null : "Candidate application not found.";
+}
+
+/** Fill the template for one application without saving anything. */
+export async function previewTemplateDocument(input: { templateId: string; applicationId: string }): Promise<{ ok: boolean; error?: string; title?: string; html?: string; blank?: string[] }> {
+  const permission = await documentContext("documents:manage");
+  if (permission.error) return { ok: false, error: permission.error };
+  const { context } = permission;
+  const denied = await authorizeGenerateTarget(context, input.applicationId);
+  if (denied) return { ok: false, error: denied };
+  if (!z.uuid().safeParse(input.templateId).success) return { ok: false, error: "Choose a template." };
+  const rendered = await renderTemplateForApplication({ workspaceId: context.organization.id, actorId: context.user.id, templateId: input.templateId, applicationId: input.applicationId });
+  if (!rendered.ok) return { ok: false, error: rendered.error };
+  return { ok: true, title: rendered.title, html: rendered.body, blank: rendered.blank };
+}
+
+/**
+ * Generate the PDF for one candidate application and save it to the library,
+ * linked to the application and its candidate. Each click makes a new document.
+ */
+export async function generateDocumentFromTemplate(input: { templateId: string; applicationId: string }): Promise<DocumentActionResult> {
+  const permission = await documentContext("documents:manage");
+  if (permission.error) return { ok: false, error: permission.error };
+  const { context } = permission;
+  const denied = await authorizeGenerateTarget(context, input.applicationId);
+  if (denied) return { ok: false, error: denied };
+  if (!z.uuid().safeParse(input.templateId).success) return { ok: false, error: "Choose a template." };
+  const rendered = await renderTemplateForApplication({ workspaceId: context.organization.id, actorId: context.user.id, templateId: input.templateId, applicationId: input.applicationId });
+  if (!rendered.ok) return { ok: false, error: rendered.error };
+  const result = await generateDocumentForWorkflow({
+    workspaceId: context.organization.id,
+    actorUserId: context.user.id,
+    applicationId: input.applicationId,
+    title: rendered.title,
+    body: rendered.body,
+    effectKey: `manual:${randomUUID()}`,
+  }).catch((error: unknown) => {
+    log.error({ error }, "generateDocumentFromTemplate failed");
+    return null;
+  });
+  if (!result) return { ok: false, error: "Could not generate the document. Try again." };
+  if (!result.ok) return { ok: false, error: result.error };
+  // The workflow generator links the application; also link the candidate so the
+  // candidate filter and profile find it.
+  await db.insert(documentAssociations).values({
+    workspaceId: context.organization.id,
+    documentId: result.documentId,
+    targetType: "candidate",
+    targetId: result.candidateId,
+    createdById: context.user.id,
+  });
+  await db.insert(activityEvents).values({
+    workspaceId: context.organization.id,
+    actorId: context.user.id,
+    entityType: "document",
+    entityId: result.documentId,
+    type: "document.generated",
+    metadata: { source: "manual", templateName: rendered.templateName, applicationId: input.applicationId },
+  });
+  revalidatePath("/dashboard/documents");
+  revalidatePath(`/dashboard/candidates/${result.candidateId}`);
+  return { ok: true, documentId: result.documentId };
 }
