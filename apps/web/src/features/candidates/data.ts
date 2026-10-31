@@ -1793,7 +1793,10 @@ export async function getCandidateProfile(candidateId: string) {
       // Prefer full criterionAssessments (details) as canonical UI path — do not
       // truncate to the legacy 8-item criteria JSON when the snapshot is present.
       criteria: (() => {
-        if (details.size > 0) {
+        // The rules snapshot is the rules engine's own breakdown; an AI score
+        // shows the AI's criteria (rows saved before this fix still carry a
+        // rules snapshot next to an AI score, so gate on the source).
+        if (row.source === "rules" && details.size > 0) {
           return [...details.values()].map((detail) => ({
             label: detail.label ?? "",
             score: detail.score ?? null,

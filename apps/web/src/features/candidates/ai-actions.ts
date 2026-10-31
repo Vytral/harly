@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { and, eq, notInArray } from "drizzle-orm";
 import { z } from "zod";
+import { sourceScopedEvaluationFields } from "@/features/evaluations/source-fields";
 
 import {
   activityEvents,
@@ -246,15 +247,11 @@ export async function generateAiEvaluationAction(input: {
       rubricVersion: rulesEvaluation.rubric.version,
       rubricSnapshot: rulesEvaluation.rubric,
       result,
-      criterionResults: rulesEvaluation.criterionResults,
+      ...sourceScopedEvaluationFields(source, rulesEvaluation, result),
       candidateFactsSnapshot: rulesEvaluation.candidateFacts,
       skillProfilesSnapshot: rulesEvaluation.skillProfiles,
       evaluationMetadataSnapshot: rulesEvaluation.metadata,
-      criterionDetailsSnapshot: rulesEvaluation.criterionAssessments,
       impactHighlightsSnapshot: rulesEvaluation.impactHighlights,
-      evidenceCoverage: rulesEvaluation.evidenceCoverage,
-      confidence: rulesEvaluation.confidence,
-      requiresHumanReview: rulesEvaluation.requiresHumanReview || source === "ai",
       usedResume: resume.text !== null,
       generatedById: context.user.id,
       inputFingerprintSource: scoreInput,

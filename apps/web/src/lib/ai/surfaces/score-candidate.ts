@@ -180,14 +180,17 @@ export async function scoreCandidateWithAI(
   const evidenceCap = evidenceCoverage < 0.5 ? 59 : evidenceCoverage < 0.8 ? 79 : 100;
   const calibratedScore = Math.min(clamp(output.score), evidenceCap);
   const thresholds = {
-    relaxed: { strong: 85, yes: 65, coverageStrong: 60, coverageYes: 40, maxGapsStrong: 2, maxGapsYes: 4 },
-    balanced: { strong: 85, yes: 70, coverageStrong: 80, coverageYes: 60, maxGapsStrong: 1, maxGapsYes: 3 },
-    strict: { strong: 90, yes: 80, coverageStrong: 90, coverageYes: 80, maxGapsStrong: 0, maxGapsYes: 1 },
+    relaxed: { strong: 85, yes: 65, coverageStrong: 60, coverageYes: 40, maxGapsStrong: 2 },
+    balanced: { strong: 85, yes: 70, coverageStrong: 80, coverageYes: 60, maxGapsStrong: 1 },
+    strict: { strong: 90, yes: 80, coverageStrong: 90, coverageYes: 80, maxGapsStrong: 0 },
   }[mode];
   const recommendation =
     calibratedScore >= thresholds.strong && evidenceCoverage * 100 >= thresholds.coverageStrong && gapCount <= thresholds.maxGapsStrong
       ? "strong_yes"
-      : calibratedScore >= thresholds.yes && evidenceCoverage * 100 >= thresholds.coverageYes && gapCount <= thresholds.maxGapsYes
+      // Gap count gates only strong_yes: the model lists minor caveats as gaps,
+      // and counting them here turned clear yeses into maybes (score and
+      // evidence coverage already carry the real blockers).
+      : calibratedScore >= thresholds.yes && evidenceCoverage * 100 >= thresholds.coverageYes
         ? "yes"
         : calibratedScore >= 45
           ? "maybe"

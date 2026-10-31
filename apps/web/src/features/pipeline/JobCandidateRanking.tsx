@@ -12,6 +12,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { UserAvatar } from "@/components/ui/UserAvatar";
+import { RULES_EVALUATION_VERSION } from "@/lib/evaluation/version";
 import { cn } from "@/lib/utils";
 
 const RECOMMENDATION_META = {
@@ -21,13 +22,11 @@ const RECOMMENDATION_META = {
   no: { label: "No", className: "bg-destructive/10 text-destructive" },
 } as const;
 
-const CURRENT_RULES_VERSION = "rules-v3";
-
 function needsEvaluation(application: PipelineApplication) {
   return (
     application.aiScore == null ||
     (application.evaluationSource === "rules" &&
-      application.evaluationEngineVersion !== CURRENT_RULES_VERSION)
+      application.evaluationEngineVersion?.split(":")[0] !== RULES_EVALUATION_VERSION)
   );
 }
 

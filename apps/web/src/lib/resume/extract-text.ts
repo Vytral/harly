@@ -86,7 +86,10 @@ export function rtfToPlainText(rtf: string): string {
 async function extractPdf(buffer: Buffer): Promise<string> {
   const { extractText, getDocumentProxy } = await import("unpdf");
   const pdf = await getDocumentProxy(new Uint8Array(buffer));
-  const { text } = await extractText(pdf, { mergePages: true });
+  // Per page, not `mergePages`: merging collapses every whitespace run, line
+  // breaks included, into one space, and the resume parser reads line by line
+  // (roles, education and skills all came back empty).
+  const { text } = await extractText(pdf, { mergePages: false });
   return Array.isArray(text) ? text.join("\n") : text;
 }
 

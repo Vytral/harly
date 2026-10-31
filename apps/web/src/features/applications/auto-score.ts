@@ -1,6 +1,7 @@
 import "server-only";
 
 import { and, eq } from "drizzle-orm";
+import { sourceScopedEvaluationFields } from "@/features/evaluations/source-fields";
 
 import {
   activityEvents,
@@ -216,15 +217,11 @@ export async function scheduleAutoScore(
       rubricVersion: rulesEvaluation.rubric.version,
       rubricSnapshot: rulesEvaluation.rubric,
       result,
-      criterionResults: rulesEvaluation.criterionResults,
+      ...sourceScopedEvaluationFields(source, rulesEvaluation, result),
       candidateFactsSnapshot: rulesEvaluation.candidateFacts,
       skillProfilesSnapshot: rulesEvaluation.skillProfiles,
       evaluationMetadataSnapshot: rulesEvaluation.metadata,
-      criterionDetailsSnapshot: rulesEvaluation.criterionAssessments,
       impactHighlightsSnapshot: rulesEvaluation.impactHighlights,
-      evidenceCoverage: rulesEvaluation.evidenceCoverage,
-      confidence: rulesEvaluation.confidence,
-      requiresHumanReview: rulesEvaluation.requiresHumanReview || source === "ai",
       usedResume: resumeText !== null,
       generatedById: null,
       inputFingerprintSource: scoreInput,
@@ -477,16 +474,11 @@ export async function evaluateApplicationForWorkflow(input: {
       rubricVersion: rulesEvaluation.rubric.version,
       rubricSnapshot: rulesEvaluation.rubric,
       result,
-      criterionResults: rulesEvaluation.criterionResults,
+      ...sourceScopedEvaluationFields(source, rulesEvaluation, result),
       candidateFactsSnapshot: rulesEvaluation.candidateFacts,
       skillProfilesSnapshot: rulesEvaluation.skillProfiles,
       evaluationMetadataSnapshot: rulesEvaluation.metadata,
-      criterionDetailsSnapshot: rulesEvaluation.criterionAssessments,
       impactHighlightsSnapshot: rulesEvaluation.impactHighlights,
-      evidenceCoverage: rulesEvaluation.evidenceCoverage,
-      confidence: rulesEvaluation.confidence,
-      requiresHumanReview:
-        rulesEvaluation.requiresHumanReview || source === "ai",
       usedResume: resumeText !== null,
       generatedById: input.actorUserId ?? null,
       inputFingerprintSource: scoreInput,
