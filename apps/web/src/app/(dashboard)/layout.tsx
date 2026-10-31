@@ -99,7 +99,7 @@ export default async function DashboardLayout({
           round actions, sub-nav) over a warm-paper canvas. The page scrolls
           with the document and the content sits in one centred column.
         */}
-          <div className="min-h-dvh w-full bg-warm-paper">
+          <div className="min-h-dvh w-full shell-glow">
             <a
               href="#main-content"
               className="sr-only focus-visible:not-sr-only focus-visible:fixed focus-visible:left-4 focus-visible:top-4 focus-visible:z-50 focus-visible:rounded-[var(--radius-btn)] focus-visible:bg-near-ink focus-visible:px-3 focus-visible:py-2 focus-visible:text-sm focus-visible:text-pure-snow"

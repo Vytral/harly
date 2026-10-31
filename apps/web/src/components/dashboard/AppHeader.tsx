@@ -150,7 +150,7 @@ export function AppHeader({
         data-scrolled={scrolled || undefined}
         className={cn(
           "min-h-0 overflow-hidden border-b border-transparent transition-[background-color,border-color,backdrop-filter] duration-200 ease-out",
-          "bg-gradient-to-b from-lime-wash to-warm-paper",
+          "bg-transparent",
           "data-[scrolled]:border-hairline data-[scrolled]:bg-warm-paper/85 data-[scrolled]:bg-none data-[scrolled]:backdrop-blur-md",
           stickyBarVisible && "pointer-events-none",
         )}

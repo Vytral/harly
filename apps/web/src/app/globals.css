@@ -32,7 +32,8 @@
   --row-wash: #f0f0ee;     /* 3 , hover/selected human rows */
   --sage-wash: #eef9d6;    /* 4 , soft active tint (nav, chips) */
   --card-inset: #f6f6f4;   /* rows/fields living inside a white card */
-  --lime-wash: #f1fbdd;    /* header glow, selected tiles, progress track */
+  --lime-wash: #f1fbdd;    /* selected tiles, progress track */
+  --lime-glow: #e4f6bf;    /* top-of-page wash behind the header */
 
   /* ── Ink ── */
   --near-ink: #171717;     /* primary text + primary solid actions */
@@ -703,6 +704,7 @@
   --sage-wash: #263114;
   --card-inset: #232321;
   --lime-wash: #1f2812;
+  --lime-glow: #1c2410;
 
   --near-ink: #f2f2f0;
   --soft-ink: #9c9c98;
@@ -950,4 +952,11 @@ html[data-tab-switch="true"] .animate-in {
     animation-duration: 1s !important;
     animation-iteration-count: infinite !important;
   }
+}
+
+/* App canvas with a soft lime wash behind the header (Deel's tinted band). */
+.shell-glow {
+  background-color: var(--warm-paper);
+  background-image: linear-gradient(to bottom, var(--lime-glow) 0px, var(--warm-paper) 300px);
+  background-repeat: no-repeat;
 }
