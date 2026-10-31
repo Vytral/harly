@@ -112,8 +112,11 @@ export function UserMenu({
     });
   }
 
-  const canRestoreChecklist =
-    !demoMode && (role === "owner" || role === "admin");
+  const isWorkspaceAdmin = role === "owner" || role === "admin";
+  const canRestoreChecklist = !demoMode && isWorkspaceAdmin;
+  // Product links (GitHub, docs, issues, beta badge) are for whoever runs the
+  // install, not for day-to-day recruiters and interviewers.
+  const showProductLinks = !demoMode && isWorkspaceAdmin;
 
   function switchTo(organizationId: string) {
     if (organizationId === workspace.id) return;
@@ -268,9 +271,10 @@ export function UserMenu({
           ) : null}
         </div>
 
-        <DropdownMenuSeparator className="m-0" />
-
         {/* ── GitHub ── */}
+        {showProductLinks ? (
+        <>
+        <DropdownMenuSeparator className="m-0" />
         <div className="px-3 py-2">
           <DropdownMenuItem asChild className={itemClass}>
             <a href={REPO_URL} target="_blank" rel="noreferrer">
@@ -280,9 +284,11 @@ export function UserMenu({
             </a>
           </DropdownMenuItem>
         </div>
+        </>
+        ) : null}
 
         {/* ── Public beta: quiet status, plus where to get help ── */}
-        {!demoMode ? (
+        {showProductLinks ? (
           <>
             <DropdownMenuSeparator className="m-0" />
             <div className="px-3 py-2">

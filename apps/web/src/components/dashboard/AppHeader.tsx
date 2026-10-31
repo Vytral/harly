@@ -6,7 +6,6 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   ChevronDown,
-  CircleHelp,
   LayoutGrid,
   Search,
   Settings,
@@ -59,7 +58,6 @@ import type { Permission } from "@/features/workspaces/permissions";
 import { spring } from "@/lib/motion";
 import { cn } from "@/lib/utils";
 
-const DOCS_URL = "https://docs.harly.dev";
 
 type AppHeaderProps = {
   user: {
@@ -160,7 +158,10 @@ export function AppHeader({
           stickyBarVisible && "pointer-events-none",
         )}
       >
-        <header className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-x-2 px-3 md:h-16 md:gap-x-4 md:px-5">
+        {/* Equal 1fr side columns put the pills on the true centre line; with
+            `auto` sides they drifted left because the action cluster is wider
+            than the logo. */}
+        <header className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-x-2 px-3 md:h-16 md:gap-x-4 lg:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] md:px-5">
           <div className="flex h-14 items-center md:h-16">
             <WorkspaceSwitcher
               workspace={workspace}
@@ -202,7 +203,10 @@ export function AppHeader({
           </nav>
 
           <div className="col-start-3 row-start-1 flex h-14 items-center justify-end gap-1.5 md:h-16 md:gap-2">
-            <QuickCreateButton />
+            <QuickCreateButton
+              userPermissions={userPermissions}
+              onInvite={canInvite ? () => setInviteOpen(true) : undefined}
+            />
             <AiSignalButton />
             <SearchButton onClick={() => setCommandOpen(true)} />
             {canSettings ? (
@@ -222,22 +226,6 @@ export function AppHeader({
                   </Link>
                 </TooltipTrigger>
                 <TooltipContent>Settings</TooltipContent>
-              </Tooltip>
-            ) : null}
-            {!demoMode ? (
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <a
-                    href={DOCS_URL}
-                    target="_blank"
-                    rel="noreferrer"
-                    aria-label="Help and documentation"
-                    className={cn(headerRoundButton, "hidden lg:inline-flex")}
-                  >
-                    <CircleHelp className="size-[18px]" strokeWidth={1.8} />
-                  </a>
-                </TooltipTrigger>
-                <TooltipContent>Help</TooltipContent>
               </Tooltip>
             ) : null}
             <NotificationsBell

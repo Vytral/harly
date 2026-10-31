@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { useOpenFromQuery } from "@/components/dashboard/use-open-from-query";
 import { UserPlus } from "lucide-react";
 import { toast } from "@/lib/notification-island/toast";
 
@@ -37,7 +38,8 @@ export function AddCandidateDrawer({
   currentUserId: string;
 }) {
   const router = useRouter();
-  const [open, setOpen] = useState(false);
+  // `?new=1` (header "+" menu) opens the drawer on arrival.
+  const [open, setOpen] = useOpenFromQuery("new");
   const [isPending, startTransition] = useTransition();
   const [referring, setReferring] = useState(false);
   const [jobId, setJobId] = useState(NO_JOB);

@@ -20,6 +20,7 @@ import { type TaskHandlers } from "./task-ui";
 import { taskDueState, type TaskItem, type TaskStatus } from "./shared";
 import { TASK_PRIORITIES, TASK_PRIORITY_LABELS, TASK_STATUSES, TASK_STATUS_LABELS } from "./shared";
 import type { TaskContextOptions } from "./TaskLinkFields";
+import { useOpenFromQuery } from "@/components/dashboard/use-open-from-query";
 
 type Member = { id: string; name: string; image: string | null };
 type View = "list" | "board";
@@ -59,7 +60,8 @@ export function TasksView({
   const [removed, setRemoved] = useState<Set<string>>(() => new Set());
   const [pending, setPending] = useState<Set<string>>(() => new Set());
   const [view, setView] = useState<View>("list");
-  const [createOpen, setCreateOpen] = useState(false);
+  // `?new=1` (header "+" menu) opens the create sheet on arrival.
+  const [createOpen, setCreateOpen] = useOpenFromQuery("new");
   const [createStatus, setCreateStatus] = useState<TaskStatus>("pending");
   const [editingTask, setEditingTask] = useState<TaskItem | null>(null);
   const [query, setQuery] = useState("");
@@ -138,7 +140,7 @@ export function TasksView({
         router.refresh();
       }
     },
-    [router, settle],
+    [confirm, router, settle],
   );
 
   const handlers = useMemo<TaskHandlers>(
@@ -153,7 +155,7 @@ export function TasksView({
       },
       edit: (task) => setEditingTask(task),
     }),
-    [pending, runStatus, runRemove],
+    [pending, runStatus, runRemove, setCreateOpen],
   );
 
   const filtered = useMemo(() => {
