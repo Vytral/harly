@@ -65,7 +65,7 @@ export function StatusPill({
   return (
     <span
       className={cn(
-        "font-chrome inline-flex items-center gap-1.5 whitespace-nowrap rounded-full font-medium leading-none",
+        "font-chrome inline-flex items-center gap-1.5 whitespace-nowrap rounded-full font-medium leading-none transition-colors duration-150",
         sizeClasses[size],
         toneClasses[tone],
         className,

@@ -159,7 +159,7 @@ export function CandidateCard({
       }}
       className={cn(
         // White card on the inset lane: card shadow, 1px lift on hover.
-        "group cursor-pointer rounded-[var(--radius-inner)] bg-pure-snow px-3 py-3 shadow-[var(--shadow-card)] transition-[transform,box-shadow,background-color] duration-150",
+        "group cursor-pointer rounded-[var(--radius-inner)] bg-pure-snow px-3 py-3 shadow-[var(--shadow-card)] transition-[transform,box-shadow,background-color,opacity] duration-150",
         "hover:-translate-y-px hover:shadow-[var(--shadow-soft),var(--shadow-card)] motion-reduce:hover:translate-y-0",
         "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-near-ink",
         selected
@@ -258,7 +258,7 @@ export function CandidateCardOverlay({ application }: CandidateCardOverlayProps)
   const fullName = `${application.candidateFirstName} ${application.candidateLastName}`;
 
   return (
-    <article className="w-56 cursor-grabbing rounded-[var(--radius-inner)] bg-pure-snow px-3 py-3 shadow-[var(--shadow-float)] lg:w-64">
+    <article className="drag-pickup w-56 cursor-grabbing rounded-[var(--radius-inner)] bg-pure-snow px-3 py-3 shadow-[var(--shadow-float)] lg:w-64">
       <div className="flex items-center gap-2.5">
         <UserAvatar
           name={fullName}

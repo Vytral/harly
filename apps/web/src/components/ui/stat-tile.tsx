@@ -1,5 +1,6 @@
 import * as React from "react";
 
+import { ValueSwap } from "@/components/ui/value-swap";
 import { cn } from "@/lib/utils";
 
 /**
@@ -30,7 +31,7 @@ export function StatTile({
       data-slot="stat-tile"
       data-selected={selected || undefined}
       className={cn(
-        "flex min-w-0 flex-col gap-1 rounded-[var(--radius-inner)] bg-card-inset px-4 py-3.5 transition-[background-color,box-shadow]",
+        "flex min-w-0 flex-col gap-1 rounded-[var(--radius-inner)] bg-card-inset px-4 py-3.5 transition-[background-color,box-shadow] duration-150",
         selected && "bg-pure-snow shadow-[inset_0_0_0_1.5px_var(--near-ink)]",
         className,
       )}
@@ -46,7 +47,7 @@ export function StatTile({
           muted ? "text-quiet-mist" : "text-near-ink",
         )}
       >
-        {value}
+        <ValueSwap value={value} />
       </div>
       {hint ? <div className="text-[12px] text-soft-ink">{hint}</div> : null}
     </div>

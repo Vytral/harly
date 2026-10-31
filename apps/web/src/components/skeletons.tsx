@@ -1,6 +1,7 @@
 import { cn } from "@/lib/utils";
-import { Card, CardContent } from "@/components/ui/card";
+import { Card } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
+import { tileClass } from "@/components/dashboard/widgets/primitives";
 
 /**
  * Shared skeleton building blocks for the whole app.
@@ -24,7 +25,7 @@ function SkeletonContainer({
     <div
       aria-busy="true"
       aria-label={ariaLabel}
-      className={cn("animate-pulse", className)}
+      className={className}
     >
       {children}
     </div>
@@ -68,7 +69,7 @@ export function PageHeaderSkeleton({
   );
 }
 
-/** Generic stat tile (icon + value + label + hint). */
+/** Mirrors StatTile: inset block, label row, 28px number, optional hint. */
 export function StatTileSkeleton({
   className,
   accent,
@@ -77,16 +78,19 @@ export function StatTileSkeleton({
   accent?: boolean;
 }) {
   return (
-    <Card className={cn("p-4", className)}>
-      <CardContent className="flex items-center justify-between p-0">
+    <div
+      className={cn(
+        "flex min-w-0 flex-col gap-1 rounded-[var(--radius-inner)] bg-card-inset px-4 py-3.5",
+        className,
+      )}
+    >
+      <div className="flex items-center justify-between gap-2">
         <Skeleton className="h-3 w-20" />
-        <Skeleton
-          className={cn("size-8 rounded-xl", accent ? "bg-primary/20" : "")}
-        />
-      </CardContent>
-      <Skeleton className="mt-4 h-7 w-16" />
-      <Skeleton className="mt-1 h-3 w-28" />
-    </Card>
+        <Skeleton className={cn("size-4 rounded", accent && "bg-lime-wash")} />
+      </div>
+      <Skeleton className="mt-1 h-7 w-14" />
+      <Skeleton className="mt-1 h-3 w-24" />
+    </div>
   );
 }
 
@@ -102,22 +106,18 @@ export function StatsGridSkeleton({
 }) {
   return (
     <SkeletonContainer ariaLabel="Loading stats">
-      <div
-        className={cn(
-          "grid grid-cols-2 gap-3",
-          columns,
-          className,
-        )}
-      >
-        {Array.from({ length: count }).map((_, i) => (
-          <StatTileSkeleton key={i} accent={i === 2} />
-        ))}
+      <div className={cn(tileClass, "p-3")}>
+        <div className={cn("grid grid-cols-2 gap-2", columns, className)}>
+          {Array.from({ length: count }).map((_, i) => (
+            <StatTileSkeleton key={i} accent={i === 2} />
+          ))}
+        </div>
       </div>
     </SkeletonContainer>
   );
 }
 
-/** Dashboard tile shell with header + body rows. */
+/** Mirrors Tile + TileHeader + TileRow: 16px card, 32px icon chip, inset rows. */
 export function TileSkeleton({
   rows = 3,
   className,
@@ -128,29 +128,27 @@ export function TileSkeleton({
   headerAction?: boolean;
 }) {
   return (
-    <Card className={cn("flex h-full flex-col", className)}>
-      <CardContent className="flex flex-1 flex-col p-5">
-        <div className="flex items-center justify-between gap-2">
-          <div className="flex items-center gap-2">
-            <Skeleton className="size-4 rounded" />
-            <Skeleton className="h-4 w-32" />
-          </div>
-          {headerAction ? <Skeleton className="h-3 w-16" /> : null}
+    <div className={cn(tileClass, "flex h-full min-w-0 flex-col pb-3", className)}>
+      <div className="flex items-center justify-between gap-2 px-5 pt-5">
+        <div className="flex items-center gap-2.5">
+          <Skeleton className="size-8 rounded-[var(--radius-btn)]" />
+          <Skeleton className="h-4 w-32" />
         </div>
-        <div className="mt-4 flex flex-1 flex-col gap-3">
-          {Array.from({ length: rows }).map((_, i) => (
-            <div key={i} className="flex items-center gap-3">
-              <Skeleton className="size-9 rounded-lg" />
-              <div className="flex-1 space-y-1.5">
-                <Skeleton className="h-3.5 w-full max-w-[12rem]" />
-                <Skeleton className="h-3 w-20" />
-              </div>
-              <Skeleton className="h-5 w-14 rounded-full" />
+        {headerAction ? <Skeleton className="h-7 w-16 rounded-[var(--radius-btn)]" /> : null}
+      </div>
+      <div className="mt-3 flex flex-1 flex-col gap-1 px-2">
+        {Array.from({ length: rows }).map((_, i) => (
+          <div key={i} className="flex items-center gap-3 px-3 py-2.5">
+            <Skeleton className="size-9 rounded-full" />
+            <div className="flex-1 space-y-1.5">
+              <Skeleton className="h-3.5 w-full max-w-[12rem]" />
+              <Skeleton className="h-3 w-20" />
             </div>
-          ))}
-        </div>
-      </CardContent>
-    </Card>
+            <Skeleton className="h-5 w-14 rounded-full" />
+          </div>
+        ))}
+      </div>
+    </div>
   );
 }
 
@@ -204,7 +202,7 @@ export function CardListSkeleton({
   className?: string;
 }) {
   return (
-    <Card className={cn("gap-0 divide-y divide-border/60 overflow-hidden py-0", className)}>
+    <Card className={cn("gap-0 divide-y divide-hairline overflow-hidden py-0", className)}>
       {Array.from({ length: count }).map((_, i) => (
         <div key={i} className="px-4 sm:px-5">
           <ListItemSkeleton avatar={avatar} lines={lines} trailing={trailing} />
@@ -229,7 +227,7 @@ export function TableSkeleton({
   return (
     <Card className={cn("gap-0 overflow-hidden py-0", className)}>
       {showHeader ? (
-        <div className="grid border-b border-border/60 bg-muted/40 px-4 py-2.5 sm:px-5">
+        <div className="grid border-b border-hairline bg-card-inset px-4 py-2.5 sm:px-5">
           <div className="flex gap-3">
             {Array.from({ length: columns }).map((_, i) => (
               <Skeleton
@@ -243,7 +241,7 @@ export function TableSkeleton({
           </div>
         </div>
       ) : null}
-      <div className="divide-y divide-border/60">
+      <div className="divide-y divide-hairline">
         {Array.from({ length: rows }).map((_, i) => (
           <div key={i} className="flex items-center gap-3 px-4 py-3 sm:px-5">
             <Skeleton className="size-9 shrink-0 rounded-full" />
@@ -315,7 +313,7 @@ export function CalendarSkeleton({ className }: { className?: string }) {
           ))}
         </div>
         <div className="overflow-hidden rounded-xl border border-border">
-          <div className="grid grid-cols-7 border-b border-border bg-muted/40">
+          <div className="grid grid-cols-7 border-b border-border bg-card-inset">
             {Array.from({ length: 7 }).map((_, i) => (
               <Skeleton key={i} className="mx-auto my-2 h-3 w-8" />
             ))}
@@ -382,39 +380,31 @@ export function DashboardSkeleton() {
   return (
     <SkeletonContainer
       ariaLabel="Loading dashboard"
-      className="mx-auto w-full max-w-[1440px] space-y-5 pb-4"
+      className="mx-auto w-full max-w-[1200px] pb-6"
     >
-      <header className="flex items-center gap-3">
-        <Skeleton className="size-11 shrink-0 rounded-full" />
-        <div className="space-y-2">
-          <Skeleton className="h-6 w-48" />
-          <Skeleton className="h-3.5 w-64 max-w-full" />
-        </div>
+      <header className="flex flex-col items-center gap-2.5 px-4 pb-2 pt-6 sm:pt-8">
+        <Skeleton className="h-10 w-72 max-w-full" />
+        <Skeleton className="h-3.5 w-64 max-w-full" />
       </header>
 
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        {Array.from({ length: 4 }).map((_, i) => (
-          <div key={i} className="rounded-xl border border-border/60 p-4">
-            <Skeleton className="h-7 w-10" />
-            <Skeleton className="mt-2 h-3 w-24" />
+      <div className="mt-6 grid items-start gap-4 lg:grid-cols-2">
+        <div className="flex min-w-0 flex-col gap-4">
+          <TileSkeleton rows={3} />
+          <TileSkeleton rows={3} />
+          <TileSkeleton rows={2} />
+        </div>
+        <div className="flex min-w-0 flex-col gap-4">
+          <div className={cn(tileClass, "p-3")}>
+            <div className="grid grid-cols-2 gap-2">
+              {Array.from({ length: 4 }).map((_, i) => (
+                <StatTileSkeleton key={i} />
+              ))}
+            </div>
           </div>
-        ))}
+          <TileSkeleton rows={3} />
+          <TileSkeleton rows={2} />
+        </div>
       </div>
-
-      <section className="grid gap-4 lg:grid-cols-5">
-        <TileSkeleton rows={3} className="lg:col-span-3" />
-        <TileSkeleton rows={3} className="lg:col-span-2" />
-      </section>
-
-      <section className="grid gap-4 lg:grid-cols-5">
-        <TileSkeleton rows={3} className="lg:col-span-3" />
-        <TileSkeleton rows={3} className="lg:col-span-2" />
-      </section>
-
-      <section className="grid gap-4 lg:grid-cols-5">
-        <TileSkeleton rows={2} className="lg:col-span-2" />
-        <TileSkeleton rows={2} className="lg:col-span-3" />
-      </section>
     </SkeletonContainer>
   );
 }
@@ -436,14 +426,14 @@ export function PipelineBoardSkeleton({ columns = 5 }: { columns?: number }) {
           {Array.from({ length: columns }).map((_, index) => (
             <div
               key={index}
-              className="w-56 shrink-0 rounded-xl border bg-muted/40 lg:w-64"
+              className="w-56 shrink-0 rounded-[var(--radius-card)] bg-card-inset lg:w-64"
             >
-              <div className="border-b p-2.5">
+              <div className="p-3">
                 <Skeleton className="h-4 w-20" />
               </div>
               <div className="space-y-2 p-2">
-                <Skeleton className="h-20 rounded-xl" />
-                <Skeleton className="h-20 rounded-xl" />
+                <Skeleton className="h-16 rounded-[var(--radius-inner)] bg-pure-snow shadow-[var(--shadow-card)]" />
+                <Skeleton className="h-16 rounded-[var(--radius-inner)] bg-pure-snow shadow-[var(--shadow-card)]" />
               </div>
             </div>
           ))}

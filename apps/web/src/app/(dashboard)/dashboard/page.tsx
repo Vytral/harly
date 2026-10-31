@@ -142,7 +142,7 @@ export default async function DashboardPage({
 
       <div className="mt-6 grid items-start gap-4 lg:grid-cols-2">
         {hasLeftColumn ? (
-          <div className="flex min-w-0 flex-col gap-4">
+          <div className="stagger-in flex min-w-0 flex-col gap-4">
             {forYou.length > 0 ? <ForYouTodayCard items={forYou} /> : null}
             {access.reviewCandidates ? <CandidatesNeedingReview candidates={review} /> : null}
             {access.pipeline ? <PipelineOverviewCard data={pipeline} /> : null}
@@ -150,7 +150,7 @@ export default async function DashboardPage({
           </div>
         ) : null}
         {hasRightColumn ? (
-          <div className="flex min-w-0 flex-col gap-4">
+          <div className="stagger-in flex min-w-0 flex-col gap-4">
             {glance.length > 0 ? <AtAGlanceCard items={glance} /> : null}
             {access.todayInterviews ? <TodayInterviews interviews={interviews} /> : null}
             {access.inbox ? <InboxCard items={inbox} /> : null}

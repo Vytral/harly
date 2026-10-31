@@ -56,6 +56,7 @@ import type {
   WorkspaceOption,
 } from "@/features/workspaces/data";
 import type { Permission } from "@/features/workspaces/permissions";
+import { spring } from "@/lib/motion";
 import { cn } from "@/lib/utils";
 
 const DOCS_URL = "https://docs.harly.dev";
@@ -142,14 +143,14 @@ export function AppHeader({
   return (
     <div
       className={cn(
-        "sticky top-0 z-30 grid transition-[grid-template-rows] duration-300",
+        "sticky top-0 z-30 grid transition-[grid-template-rows] duration-[var(--motion-slow)] ease-out",
         stickyBarVisible ? "grid-rows-[0fr]" : "grid-rows-[1fr]",
       )}
     >
       <div
         data-scrolled={scrolled || undefined}
         className={cn(
-          "min-h-0 overflow-hidden border-b border-transparent transition-[background-color,border-color,backdrop-filter] duration-200 ease-out",
+          "min-h-0 overflow-hidden border-b border-transparent transition-[background-color,border-color,backdrop-filter] duration-[var(--motion-base)] ease-out",
           "bg-transparent",
           "data-[scrolled]:border-hairline data-[scrolled]:bg-warm-paper/85 data-[scrolled]:bg-none data-[scrolled]:backdrop-blur-md",
           stickyBarVisible && "pointer-events-none",
@@ -293,11 +294,7 @@ function ActivePillBackdrop() {
     <motion.span
       layoutId="header-active-pill"
       aria-hidden="true"
-      transition={
-        reduceMotion
-          ? { duration: 0 }
-          : { type: "spring", stiffness: 520, damping: 40, mass: 0.8 }
-      }
+      transition={reduceMotion ? { duration: 0 } : spring.pill}
       className="absolute inset-0 rounded-full bg-pure-snow shadow-[var(--shadow-card)]"
     />
   );

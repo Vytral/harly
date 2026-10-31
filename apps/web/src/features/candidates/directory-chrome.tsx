@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import type { Route } from "next";
-import type { ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { Search, SlidersHorizontal } from "lucide-react";
 
 import { Card } from "@/components/ui/card";
@@ -309,7 +309,7 @@ export const dirTable = "w-full min-w-[640px] border-collapse text-left text-[14
 export const dirTh =
   "h-11 whitespace-nowrap bg-card-inset px-4 text-left text-[12.5px] font-medium text-soft-ink first:pl-5 last:pr-5";
 export const dirTr =
-  "group/row h-[60px] border-t border-hairline transition-colors hover:bg-row-wash/60 data-[state=selected]:bg-lime-wash";
+  "group/row h-[60px] border-t border-hairline transition-colors duration-[120ms] hover:bg-row-wash/60 data-[state=selected]:bg-lime-wash";
 export const dirTd = "px-4 align-middle first:pl-5 last:pr-5";
 
 /* ── Floating bulk bar ───────────────────────────────────────────────────── */
@@ -327,19 +327,36 @@ export function BulkActionBar({
   onClear: () => void;
   children: ReactNode;
 }) {
-  if (count === 0) return null;
+  // Keep the bar mounted for the 140ms exit, showing the last real count.
+  const [mounted, setMounted] = useState(count > 0);
+  const [shownCount, setShownCount] = useState(count);
+  if (count > 0 && !mounted) setMounted(true);
+  if (count > 0 && count !== shownCount) setShownCount(count);
+  useEffect(() => {
+    if (count > 0 || !mounted) return;
+    const timer = setTimeout(() => setMounted(false), 140);
+    return () => clearTimeout(timer);
+  }, [count, mounted]);
+  if (!mounted) return null;
+  const open = count > 0;
   return (
     <div className="pointer-events-none fixed inset-x-0 bottom-6 z-40 flex justify-center px-4">
       <div
         role="toolbar"
         aria-label="Bulk actions"
-        className="pointer-events-auto flex max-w-full flex-wrap items-center gap-1 rounded-[28px] bg-near-ink py-1.5 pr-2 pl-4 text-pure-snow shadow-[var(--shadow-float)] duration-200 animate-in fade-in slide-in-from-bottom-2 motion-reduce:animate-none"
+        data-state={open ? "open" : "closed"}
+        className={cn(
+          "pointer-events-auto flex max-w-full flex-wrap items-center gap-1 rounded-[28px] bg-near-ink py-1.5 pr-2 pl-4 text-pure-snow shadow-[var(--shadow-float)] ease-out motion-reduce:animate-none",
+          open
+            ? "animate-in fade-in slide-in-from-bottom-2 duration-200"
+            : "pointer-events-none animate-out fade-out slide-out-to-bottom-2 fill-mode-forwards duration-[140ms] motion-reduce:invisible",
+        )}
       >
         <span
           className="mr-1 text-[13px] font-medium tabular-nums"
           aria-live="polite"
         >
-          {count} selected
+          {shownCount} selected
         </span>
         {children}
         <BulkAction onClick={onClear} aria-label="Clear selection">

@@ -20,7 +20,7 @@ export default function TasksLoading() {
         {Array.from({ length: 6 }).map((_, i) => (
           <div
             key={i}
-            className="flex items-center gap-3 rounded-xl border border-border/60 bg-card px-4 py-3"
+            className="flex items-center gap-3 rounded-[var(--radius-inner)] bg-pure-snow px-4 py-3 shadow-[var(--shadow-card)]"
           >
             <div className="flex-1 space-y-1.5">
               <Skeleton className="h-4 w-48" />

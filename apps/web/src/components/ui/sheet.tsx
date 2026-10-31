@@ -90,7 +90,7 @@ function SheetOverlay({
     <SheetPrimitive.Overlay
       data-slot="sheet-overlay"
       className={cn(
-        "fixed inset-0 z-50 bg-ink/30 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:animate-in data-[state=open]:fade-in-0 motion-reduce:animate-none",
+        "fixed inset-0 z-50 bg-ink/30 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:duration-[160ms] data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:duration-[220ms] motion-reduce:animate-none",
         className
       )}
       {...props}
@@ -141,7 +141,7 @@ function SheetContent({
       <SheetPrimitive.Content
         data-slot="sheet-content"
         className={cn(
-          "fixed z-50 flex flex-col gap-4 overflow-y-auto bg-pure-snow text-near-ink shadow-[var(--shadow-float)] outline-none ease-out data-[state=closed]:animate-out data-[state=closed]:duration-200 data-[state=open]:animate-in data-[state=open]:duration-300 motion-reduce:animate-none",
+          "fixed z-50 flex flex-col gap-4 overflow-y-auto bg-pure-snow text-near-ink shadow-[var(--shadow-float)] outline-none ease-out data-[state=closed]:animate-out data-[state=closed]:duration-[160ms] data-[state=open]:animate-in data-[state=open]:duration-[220ms] motion-reduce:animate-none",
           // Floating drawer: 8px inset from the viewport, 16px radius all round.
           side === "right" &&
             "inset-y-2 right-2 h-[calc(100dvh-1rem)] w-[calc(100%-1rem)] rounded-[var(--radius-card)] data-[state=closed]:slide-out-to-right data-[state=open]:slide-in-from-right sm:max-w-sm",

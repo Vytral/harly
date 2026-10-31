@@ -511,6 +511,107 @@
   }
 }
 
+/* ── Polish motion (transitions.dev token scale) ──
+   All composite-only (transform/opacity). Every rule below is switched off
+   under prefers-reduced-motion at the end of this block. */
+
+/* First paint of a group of widgets: 6px rise + fade, 40ms apart, capped at
+   the 6th child (200ms) so the last card never feels late. Runs on mount only;
+   a router refresh keeps the DOM, so it never replays. */
+@keyframes rise-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.stagger-in > * {
+  animation: rise-in var(--motion-base) var(--ease-out) both;
+}
+.stagger-in > :nth-child(2) { animation-delay: 40ms; }
+.stagger-in > :nth-child(3) { animation-delay: 80ms; }
+.stagger-in > :nth-child(4) { animation-delay: 120ms; }
+.stagger-in > :nth-child(5) { animation-delay: 160ms; }
+.stagger-in > :nth-child(n + 6) { animation-delay: 200ms; }
+
+/* In-place number swap (KPI tiles): a 4px settle, no layout shift. */
+@keyframes value-swap {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.value-swap {
+  display: inline-block;
+  animation: value-swap var(--motion-fast) var(--ease-out) both;
+}
+
+/* Kanban pickup: the drag overlay grows 2% as it leaves the lane. */
+@keyframes drag-pickup {
+  from {
+    transform: scale(1);
+  }
+  to {
+    transform: scale(1.02);
+  }
+}
+
+.drag-pickup {
+  animation: drag-pickup var(--motion-fast) var(--ease-out) both;
+}
+
+/* Skeleton shimmer: a soft sheen sweeps the block once per 1.6s. The sheen is
+   a pseudo-element moved with transform, so it stays on the compositor. */
+:root {
+  --skeleton-sheen: rgba(255, 255, 255, 0.65);
+}
+.dark {
+  --skeleton-sheen: rgba(255, 255, 255, 0.07);
+}
+
+@keyframes skeleton-sweep {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(100%);
+  }
+}
+
+.skeleton-shimmer {
+  position: relative;
+  overflow: hidden;
+}
+.skeleton-shimmer::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  background: linear-gradient(90deg, transparent, var(--skeleton-sheen), transparent);
+  animation: skeleton-sweep 1.6s var(--ease-in-out) infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .stagger-in > *,
+  .value-swap,
+  .drag-pickup {
+    animation: none;
+  }
+  .skeleton-shimmer::after {
+    animation: none;
+    display: none;
+  }
+}
+
 /* ── Auth motion (login / signup / forgot / reset) ──
    Values reference the transitions.dev motion-token scale (see
    .agents/skills/transitions-dev). Duration-fast 250ms / smooth-out easing for

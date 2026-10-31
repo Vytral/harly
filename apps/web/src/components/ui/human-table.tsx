@@ -86,7 +86,7 @@ export function Tr({
     <tr
       data-selected={selected ? "true" : undefined}
       className={cn(
-        "group/row transition-colors",
+        "group/row transition-colors duration-[120ms] [&>td]:transition-colors [&>td]:duration-[120ms]",
         "[&>td]:h-[var(--spacing-row)] [&>td]:bg-transparent [&>td]:align-middle",
         "[&>td:first-child]:rounded-l-[var(--radius-row)] [&>td:last-child]:rounded-r-[var(--radius-row)]",
         selected
