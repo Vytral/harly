@@ -1,6 +1,7 @@
 import "server-only";
 
 import { buildReadTools, type HarlyToolContext } from "./tools";
+import { buildUiTools } from "./ui-blocks";
 import { buildWriteTools } from "./write-tools";
 
 /**
@@ -12,6 +13,7 @@ export function buildHarlyTools(ctx: HarlyToolContext) {
   return {
     ...buildReadTools(ctx),
     ...buildWriteTools(ctx.permissions),
+    ...buildUiTools(),
   };
 }
 

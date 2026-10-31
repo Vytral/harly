@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { buildWorkspaceKnowledge } from "./workspace-knowledge";
+import { buildWorkspaceKnowledge, workspaceKnowledgeDetailFor } from "./workspace-knowledge";
 
 describe("workspace knowledge", () => {
   it("uses existing brand and careers settings as bounded factual context", () => {
@@ -32,5 +32,22 @@ describe("workspace knowledge", () => {
 
   it("does not create fake company memory when nothing is configured", () => {
     expect(buildWorkspaceKnowledge({ workspaceName: "Syntrix" })).toBeNull();
+  });
+
+  it("keeps only identity lines in brief mode and picks full detail for company-voiced turns", () => {
+    const brief = buildWorkspaceKnowledge(
+      {
+        workspaceName: "Syntrix",
+        tagline: "Build useful things",
+        description: "A product company.",
+        careerPageConfig: { values: { enabled: true, items: [{ title: "Clarity", body: "x" }] } },
+      },
+      "brief",
+    );
+    expect(brief).toContain("Tagline: Build useful things");
+    expect(brief).not.toContain("Clarity");
+    expect(workspaceKnowledgeDetailFor({ message: "Summarize Ana", activeGroups: new Set(["candidates"]) })).toBe("brief");
+    expect(workspaceKnowledgeDetailFor({ message: "Redacta un correo", activeGroups: new Set(["candidates"]) })).toBe("full");
+    expect(workspaceKnowledgeDetailFor({ message: "hola", activeGroups: new Set(["aiGeneration"]) })).toBe("full");
   });
 });

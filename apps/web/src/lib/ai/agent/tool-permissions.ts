@@ -12,6 +12,8 @@ export const AGENT_READ_TOOL_PERMISSIONS: Record<string, Permission | null> = {
   workspaceCapabilities: null,
   userPermissions: null,
   harlyProductKnowledge: null,
+  // Presentation only (interactive answer blocks); no data access of its own.
+  presentUi: null,
   connectedIntegrations: "collab:write",
   recentAgentActions: "collab:write",
 

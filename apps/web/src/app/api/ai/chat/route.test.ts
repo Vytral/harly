@@ -7,7 +7,7 @@ const mocks = vi.hoisted(() => ({
   getWorkspaceAiConfig: vi.fn(),
   getModel: vi.fn(),
   buildHarlyTools: vi.fn(),
-  buildHarlySystemPrompt: vi.fn(),
+  buildHarlySystemPromptParts: vi.fn(),
   getWorkspaceKnowledge: vi.fn(),
   validateUIMessages: vi.fn(),
   convertToModelMessages: vi.fn(),
@@ -18,7 +18,6 @@ const mocks = vi.hoisted(() => ({
   assertToolRoutingCoversAllTools: vi.fn(),
   resolveActiveToolGroups: vi.fn(),
   selectActiveToolNames: vi.fn(),
-  shouldWidenForStep: vi.fn(),
 }));
 
 vi.mock("ai", () => ({
@@ -38,15 +37,19 @@ vi.mock("@/lib/ai/config", () => ({ getWorkspaceAiConfig: mocks.getWorkspaceAiCo
 vi.mock("@/lib/ai/registry", () => ({ getModel: mocks.getModel }));
 vi.mock("@/lib/ai/agent", () => ({ buildHarlyTools: mocks.buildHarlyTools }));
 vi.mock("@/lib/ai/agent/system-prompt", () => ({
-  buildHarlySystemPrompt: mocks.buildHarlySystemPrompt,
+  buildHarlySystemPromptParts: mocks.buildHarlySystemPromptParts,
 }));
 vi.mock("@/lib/ai/agent/workspace-knowledge", () => ({
   getWorkspaceKnowledge: mocks.getWorkspaceKnowledge,
+  workspaceKnowledgeDetailFor: () => "brief",
 }));
 vi.mock("@/server/api/ratelimit", () => ({
   enforceRateLimit: mocks.enforceRateLimit,
   enforcePersistentRateLimit: mocks.enforceRateLimit,
   clientIp: () => "203.0.113.7",
+}));
+vi.mock("@/lib/ai/assistant-branding", () => ({
+  getAssistantBranding: vi.fn(async () => ({ assistantName: "Harly AI" })),
 }));
 vi.mock("@/lib/ai/usage", () => ({ recordAiUsage: mocks.recordAiUsage }));
 vi.mock("@/features/ai-chat/data", () => ({ persistConversation: mocks.persistConversation }));
@@ -54,8 +57,16 @@ vi.mock("@/lib/ai/agent/tool-routing", () => ({
   assertToolRoutingCoversAllTools: mocks.assertToolRoutingCoversAllTools,
   resolveActiveToolGroups: mocks.resolveActiveToolGroups,
   selectActiveToolNames: mocks.selectActiveToolNames,
-  shouldWidenForStep: mocks.shouldWidenForStep,
+  TOOL_GROUPS: { automations: ["simulateAutomationProposal"] },
+  turnNeedsWriteTools: () => true,
 }));
+
+/** The system prompt as the model reads it (core + per-turn context). */
+function systemText(system: unknown): string {
+  return Array.isArray(system)
+    ? system.map((part: { content: string }) => part.content).join("\n\n")
+    : String(system);
+}
 
 import { POST } from "./route";
 
@@ -88,7 +99,7 @@ describe("POST /api/ai/chat", () => {
     mocks.getWorkspaceAiConfig.mockResolvedValue(config);
     mocks.getModel.mockReturnValue("model");
     mocks.buildHarlyTools.mockReturnValue({ lookup: { execute: vi.fn() } });
-    mocks.buildHarlySystemPrompt.mockReturnValue("system");
+    mocks.buildHarlySystemPromptParts.mockReturnValue({ core: "system", context: "turn" });
     mocks.getWorkspaceKnowledge.mockResolvedValue(null);
     mocks.validateUIMessages.mockResolvedValue([message]);
     mocks.convertToModelMessages.mockResolvedValue([{ role: "user", content: "Hello" }]);
@@ -97,7 +108,6 @@ describe("POST /api/ai/chat", () => {
     mocks.assertToolRoutingCoversAllTools.mockReturnValue(undefined);
     mocks.resolveActiveToolGroups.mockReturnValue(new Set(["general"]));
     mocks.selectActiveToolNames.mockReturnValue(["lookup"]);
-    mocks.shouldWidenForStep.mockImplementation((step: number) => step >= 2);
     mocks.streamText.mockReturnValue({
       totalUsage: Promise.resolve({ inputTokens: 13, outputTokens: 21 }),
       toUIMessageStreamResponse: vi.fn(() => new Response("stream")),
@@ -191,7 +201,7 @@ describe("POST /api/ai/chat", () => {
       activeCandidateId: candidateId,
       mentionedCandidateIds: [],
     });
-    expect(mocks.buildHarlySystemPrompt).toHaveBeenCalledWith(
+    expect(mocks.buildHarlySystemPromptParts).toHaveBeenCalledWith(
       expect.objectContaining({ activeCandidateId: candidateId }),
     );
   });
@@ -229,7 +239,7 @@ describe("POST /api/ai/chat", () => {
     );
   });
 
-  it("narrows the initial tool set via the routing gateway, then widens from step 2 on", async () => {
+  it("narrows the tool set via the routing gateway and keeps it on every step", async () => {
     mocks.resolveActiveToolGroups.mockReturnValue(new Set(["general", "candidates"]));
     mocks.selectActiveToolNames.mockReturnValue(["lookup"]);
 
@@ -240,13 +250,32 @@ describe("POST /api/ai/chat", () => {
     expect(mocks.resolveActiveToolGroups).toHaveBeenCalledWith(
       expect.objectContaining({ message: "Hello", intent: expect.any(String) }),
     );
-    expect(mocks.selectActiveToolNames).toHaveBeenCalledWith(["lookup"], expect.any(Set));
+    expect(mocks.selectActiveToolNames).toHaveBeenCalledWith(["lookup"], expect.any(Set), {
+      includeWrites: true,
+    });
 
     const call = mocks.streamText.mock.calls[0]![0];
     expect(call.activeTools).toEqual(["lookup"]);
     expect(typeof call.prepareStep).toBe("function");
-    expect(call.prepareStep({ stepNumber: 1 })).toEqual({});
-    expect(call.prepareStep({ stepNumber: 2 })).toEqual({ activeTools: undefined });
+    await expect(call.prepareStep({ stepNumber: 1, messages: [] })).resolves.toEqual({});
+    await expect(call.prepareStep({ stepNumber: 2, messages: [] })).resolves.toEqual({});
+  });
+
+  it("puts the stable core first with an Anthropic cache breakpoint and the per-turn context last", async () => {
+    await POST(request({ messages: [message] }));
+
+    const call = mocks.streamText.mock.calls[0]![0];
+    expect(call.system).toEqual([
+      {
+        role: "system",
+        content: "system",
+        providerOptions: { anthropic: { cacheControl: { type: "ephemeral" } } },
+      },
+      { role: "system", content: "turn" },
+    ]);
+    expect(call.providerOptions).toEqual({
+      anthropic: { cacheControl: { type: "ephemeral" } },
+    });
   });
 
   it("gives automation builds a larger bounded orchestration budget", async () => {
@@ -355,7 +384,6 @@ describe("POST /api/ai/chat with candidate anonymization on", () => {
     mocks.assertToolRoutingCoversAllTools.mockReturnValue(undefined);
     mocks.resolveActiveToolGroups.mockReturnValue(new Set(["general"]));
     mocks.selectActiveToolNames.mockReturnValue(["lookup"]);
-    mocks.shouldWidenForStep.mockImplementation((step: number) => step >= 2);
     mocks.streamText.mockReturnValue({
       totalUsage: Promise.resolve({ inputTokens: 1, outputTokens: 1 }),
       toUIMessageStreamResponse: vi.fn(() => new Response("stream")),
@@ -364,7 +392,7 @@ describe("POST /api/ai/chat with candidate anonymization on", () => {
     const actual = await vi.importActual<typeof import("@/lib/ai/agent/system-prompt")>(
       "@/lib/ai/agent/system-prompt",
     );
-    mocks.buildHarlySystemPrompt.mockImplementation(actual.buildHarlySystemPrompt);
+    mocks.buildHarlySystemPromptParts.mockImplementation(actual.buildHarlySystemPromptParts);
   });
 
   it("keeps the active candidate's name out of the system prompt", async () => {
@@ -381,7 +409,7 @@ describe("POST /api/ai/chat with candidate anonymization on", () => {
     );
 
     expect(response.status).toBe(200);
-    const system = String(mocks.streamText.mock.calls[0]![0].system);
+    const system = systemText(mocks.streamText.mock.calls[0]![0].system);
     expect(system).not.toContain("Jane Doe");
     expect(system).not.toContain("Jane");
     expect(system).toContain("Active workspace surface: Candidate profile");
@@ -400,7 +428,7 @@ describe("POST /api/ai/chat with candidate anonymization on", () => {
       }),
     );
 
-    const system = String(mocks.streamText.mock.calls[0]![0].system);
+    const system = systemText(mocks.streamText.mock.calls[0]![0].system);
     expect(system).not.toContain("Jane");
     expect(system).not.toContain("jane-doe");
   });
@@ -419,7 +447,7 @@ describe("POST /api/ai/chat with candidate anonymization on", () => {
       }),
     );
 
-    const system = String(mocks.streamText.mock.calls[0]![0].system);
+    const system = systemText(mocks.streamText.mock.calls[0]![0].system);
     expect(system).toContain("Jane Doe");
   });
 
@@ -469,14 +497,13 @@ describe("POST /api/ai/chat in the public demo", () => {
       sendCandidateEmail: {},
       applyAutomationProposal: {},
     });
-    mocks.buildHarlySystemPrompt.mockReturnValue("system");
+    mocks.buildHarlySystemPromptParts.mockReturnValue({ core: "system", context: "turn" });
     mocks.getWorkspaceKnowledge.mockResolvedValue(null);
     mocks.validateUIMessages.mockResolvedValue([message]);
     mocks.convertToModelMessages.mockResolvedValue([{ role: "user", content: "Hello" }]);
     mocks.enforceRateLimit.mockResolvedValue({ remaining: 1, resetAt: Date.now() + 60_000 });
     mocks.resolveActiveToolGroups.mockReturnValue(new Set(["general"]));
     mocks.selectActiveToolNames.mockReturnValue(undefined);
-    mocks.shouldWidenForStep.mockReturnValue(false);
     mocks.streamText.mockReturnValue({
       totalUsage: Promise.resolve({ inputTokens: 1, outputTokens: 1 }),
       toUIMessageStreamResponse: vi.fn(() => new Response("stream")),
@@ -551,6 +578,6 @@ describe("POST /api/ai/chat in the public demo", () => {
     expect(Object.keys(options.tools)).toEqual(["lookup"]);
     expect(options.stopWhen).toEqual({ count: 6 });
     expect(options.maxOutputTokens).toBe(1_536);
-    expect(options.system).toContain("## Public demo");
+    expect(systemText(options.system)).toContain("## Public demo");
   });
 });

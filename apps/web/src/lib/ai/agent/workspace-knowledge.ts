@@ -20,10 +20,19 @@ function clip(value: string | null | undefined, max: number): string | null {
   return normalized.length > max ? `${normalized.slice(0, max)}…` : normalized;
 }
 
+/**
+ * How much workspace memory the chat prompt carries. `full` is the bounded
+ * careers/brand context (can reach several thousand characters); `brief` is
+ * the identity lines only, for turns that do not write company-voiced copy.
+ */
+export type WorkspaceKnowledgeDetail = "brief" | "full";
+
 /** Build compact, factual context from existing workspace branding settings. */
 export function buildWorkspaceKnowledge(
   input: WorkspaceKnowledgeInput,
+  detail: WorkspaceKnowledgeDetail = "full",
 ): string | null {
+  if (detail === "brief") return buildBriefWorkspaceKnowledge(input);
   const career = normalizeCareerPageConfig(input.careerPageConfig);
   const lines = [
     `Company: ${clip(input.workspaceName, 120)}`,
@@ -99,9 +108,38 @@ ${career.faq.items
   return lines.length > 1 ? lines.join("\n") : null;
 }
 
+function buildBriefWorkspaceKnowledge(input: WorkspaceKnowledgeInput): string | null {
+  const lines = [
+    `Company: ${clip(input.workspaceName, 120)}`,
+    clip(input.tagline, 160) ? `Tagline: ${clip(input.tagline, 160)}` : null,
+    clip(input.websiteUrl, 160) ? `Website: ${clip(input.websiteUrl, 160)}` : null,
+  ].filter((line): line is string => Boolean(line));
+  return lines.length > 1 ? lines.join("\n") : null;
+}
+
+/**
+ * Turns that write company-voiced copy (job drafts, emails, templates) or ask
+ * about the company itself get the full careers/brand memory; every other
+ * turn gets the identity lines only.
+ */
+export function workspaceKnowledgeDetailFor(input: {
+  message: string;
+  activeGroups: ReadonlySet<string>;
+}): WorkspaceKnowledgeDetail {
+  if (input.activeGroups.has("aiGeneration") || input.activeGroups.has("templates")) {
+    return "full";
+  }
+  return /\b(company|compa[nñ][ií]a|empresa|cultur|values|valores|benefit|beneficio|careers?|about us|nosotros|brand|marca|tone|tono|job description|descripci[oó]n del puesto|redact|draft|borrador|escrib|write)\w*/i.test(
+    input.message,
+  )
+    ? "full"
+    : "brief";
+}
+
 export async function getWorkspaceKnowledge(
   workspaceId: string,
   workspaceName: string,
+  detail: WorkspaceKnowledgeDetail = "full",
 ): Promise<string | null> {
   try {
     const [settings] = await db
@@ -121,7 +159,7 @@ export async function getWorkspaceKnowledge(
       description: settings?.description,
       websiteUrl: settings?.websiteUrl,
       careerPageConfig: settings?.careerPageConfig,
-    });
+    }, detail);
   } catch {
     // Brand context is an enhancement; a settings/read failure must never take
     // down the core chat agent.

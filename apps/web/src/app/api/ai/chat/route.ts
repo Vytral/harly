@@ -24,16 +24,33 @@ import {
   withToolResultRedaction,
   type ToolResultRedactionContext,
 } from "@/lib/ai/agent/tool-result-redaction";
-import { buildHarlySystemPrompt } from "@/lib/ai/agent/system-prompt";
-import { getWorkspaceKnowledge } from "@/lib/ai/agent/workspace-knowledge";
-import { getHarlyCoreProductContext } from "@/lib/ai/knowledge/harly-product-knowledge";
+import { buildHarlySystemPromptParts } from "@/lib/ai/agent/system-prompt";
+import {
+  getWorkspaceKnowledge,
+  workspaceKnowledgeDetailFor,
+} from "@/lib/ai/agent/workspace-knowledge";
+import { getHarlyProductBrief } from "@/lib/ai/knowledge/harly-product-knowledge";
+import {
+  compactHistoryForModel,
+  withCompactToolOutputs,
+} from "@/lib/ai/agent/context-budget";
+import {
+  buildPromptTokenBreakdown,
+  isTokenDebugEnabled,
+  measureToolDefinitions,
+  systemPromptSections,
+  type ToolDefinitionsSize,
+} from "@/lib/ai/agent/token-debug";
+import { getServerLogger } from "@/lib/logger";
+import { getAssistantBranding } from "@/lib/ai/assistant-branding";
 import { recordHarlyAgentTrace } from "@/lib/ai/agent/observability";
 import { classifyHarlyIntent } from "@/lib/ai/agent/intent";
 import {
   assertToolRoutingCoversAllTools,
   resolveActiveToolGroups,
   selectActiveToolNames,
-  shouldWidenForStep,
+  TOOL_GROUPS,
+  turnNeedsWriteTools,
 } from "@/lib/ai/agent/tool-routing";
 import { persistConversation } from "@/features/ai-chat/data";
 import { recordAiUsage } from "@/lib/ai/usage";
@@ -63,6 +80,17 @@ const AUTOMATION_STEP_BUDGET = 16;
 const CHAT_RATE_LIMIT_WINDOW_MS = 60_000;
 const CHAT_WORKSPACE_RATE_LIMIT = 40;
 const CHAT_USER_RATE_LIMIT = 12;
+
+/**
+ * Automation proposals carry hashes, revisions and graphs the model must pass
+ * back verbatim, so their results are never compacted.
+ */
+const UNCOMPACTED_TOOL_RESULTS: ReadonlySet<string> = new Set(TOOL_GROUPS.automations);
+
+/** Anthropic prompt-cache breakpoint (ignored by every other provider). */
+const ANTHROPIC_CACHE_BREAKPOINT = {
+  anthropic: { cacheControl: { type: "ephemeral" as const } },
+};
 
 // NOTE: the AI SDK v6 client (DefaultChatTransport / useChat v4) sends extra
 // top-level keys (`id`, `trigger`, `messageId`). Only validate the fields we
@@ -240,6 +268,27 @@ function latestUserText(messages: unknown[]): string {
   return "";
 }
 
+/** Tool names called in the last two turns (newest user message excluded). */
+function recentToolNames(messages: unknown[], turns = 2): string[] {
+  const names = new Set<string>();
+  let seenUsers = 0;
+  for (let index = messages.length - 1; index >= 0; index -= 1) {
+    const record = messages[index] as Record<string, unknown> | null;
+    if (!record || typeof record !== "object") continue;
+    if (record.role === "user") {
+      seenUsers += 1;
+      if (seenUsers > turns) break;
+      continue;
+    }
+    if (!Array.isArray(record.parts)) continue;
+    for (const part of record.parts as Array<Record<string, unknown>>) {
+      const type = part?.type;
+      if (typeof type === "string" && type.startsWith("tool-")) names.add(type.slice(5));
+    }
+  }
+  return [...names];
+}
+
 async function consumeSseStream(stream: ReadableStream<string>): Promise<void> {
   const reader = stream.getReader();
   try {
@@ -379,10 +428,30 @@ export async function POST(req: Request) {
   const agentStartedAt = Date.now();
   const agentToolCalls = new Set<string>();
   let agentOutcome: "completed" | "failed" | "aborted" = "completed";
-  const workspaceKnowledge = await getWorkspaceKnowledge(
-    workspaceId,
-    context.organization.name,
-  );
+  // Tool routing gateway: one bounded tool set for the whole turn (routed
+  // groups + always-on read helpers + presentUi). See tool-routing.ts.
+  const turnToolGroups = resolveActiveToolGroups({
+    message: latestMessageText,
+    intent,
+    activeCandidateId: candidateId,
+    mentionedCandidateIds,
+    activeAutomation: automationContext,
+    recentToolNames: recentToolNames(rawMessages),
+  });
+  const [workspaceKnowledge, assistantName] = await Promise.all([
+    getWorkspaceKnowledge(
+      workspaceId,
+      context.organization.name,
+      workspaceKnowledgeDetailFor({
+        message: latestMessageText,
+        activeGroups: turnToolGroups,
+      }),
+    ),
+    // Branding is cosmetic: a read failure falls back to the default name.
+    getAssistantBranding(workspaceId)
+      .then((branding) => branding.assistantName)
+      .catch(() => undefined),
+  ]);
   // Identity redaction for what the model sees (tool results and earlier turns'
   // results). The raw results still stream to the UI and persist.
   const redaction: ToolResultRedactionContext = {
@@ -408,7 +477,12 @@ export async function POST(req: Request) {
     config.provider,
   );
 
-  const modelTools = withToolResultRedaction(tools, redaction);
+  // Cap read results before they reach the model, then redact. Redaction wraps
+  // the compaction hook, so it always sees (and scrubs) the full result first.
+  const modelTools = withToolResultRedaction(
+    withCompactToolOutputs(tools, UNCOMPACTED_TOOL_RESULTS),
+    redaction,
+  );
 
   if (process.env.NODE_ENV !== "production") {
     // Fails loudly in dev/CI, never in prod, if a newly added tool forgot to
@@ -417,25 +491,24 @@ export async function POST(req: Request) {
     assertToolRoutingCoversAllTools(Object.keys(tools));
   }
 
-  // Tool routing gateway (Phase 6, AI10): with ~77 permission-filtered tools
-  // and a bounded step budget, handing the model every schema on every turn wastes
-  // tokens and increases tool-selection error. `tools` above stays the full,
-  // permission-filtered set — required so `validateUIMessages` below can
-  // still validate any tool call from earlier turns in this same
-  // conversation. `activeTools` narrows only which of those tools the model
-  // may actually invoke in the FIRST step; `prepareStep` widens back to
-  // everything from the second step on, so a multi-category task never gets
-  // stuck because the initial guess was too narrow.
-  const initialToolGroups = resolveActiveToolGroups({
-    message: latestMessageText,
-    intent,
-    activeCandidateId: candidateId,
-    mentionedCandidateIds,
-    activeAutomation: automationContext,
-  });
-  const initialActiveTools = selectActiveToolNames(
+  // Tool routing gateway (Phase 6, AI10). `tools` above stays the full,
+  // permission-filtered set so `validateUIMessages` can still validate tool
+  // calls from earlier turns. `activeTools` narrows what the model is offered
+  // and is the SAME on every step of the turn: the full catalog is ~35k tokens
+  // of schemas, and re-sending it on every step dominated the prompt. A stable
+  // list also keeps the cached prompt prefix (tools → system) byte-identical
+  // between steps.
+  // Read-only turns ("summarize X") also skip every write schema.
+  const turnActiveTools = selectActiveToolNames(
     Object.keys(tools),
-    initialToolGroups,
+    turnToolGroups,
+    {
+      includeWrites: turnNeedsWriteTools({
+        message: latestMessageText,
+        intent,
+        activeAutomation: automationContext,
+      }),
+    },
   ) as Array<keyof typeof tools> | undefined;
 
   let messages: HarlyChatMessage[];
@@ -480,38 +553,86 @@ export async function POST(req: Request) {
     );
   }
 
+  const systemPrompt = buildHarlySystemPromptParts({
+    // Per workspace, like the rest of the cached core (workspace memory).
+    assistantName,
+    workspaceName: context.organization.name,
+    userName: context.user.name,
+    role: context.role,
+    activeCandidateId: candidateId,
+    mentionedCandidateIds,
+    activeSurface: surfaceForPrompt(surfaceContext, redaction.anonymize),
+    workspaceKnowledge,
+    productKnowledge: getHarlyProductBrief(),
+    intent,
+    activeGroups: turnToolGroups,
+    today: new Intl.DateTimeFormat("en-US", {
+      weekday: "long",
+      year: "numeric",
+      month: "long",
+      day: "numeric",
+    }).format(new Date()),
+    timeZone,
+    activeAutomation: automationContext,
+  });
+  const turnContext = withDemoSystemNote(systemPrompt.context, demo);
+
+  const modelMessages = await convertToModelMessages(
+    compactHistoryForModel(
+      withoutReplayedReasoning(withRedactedToolErrors(messages, redaction)),
+    ),
+    { tools: toolsForModelHistory(modelTools, redaction) },
+  );
+
+  const tokenDebug = isTokenDebugEnabled();
+  const tokenLogger = tokenDebug
+    ? getServerLogger().child({ component: "ai-token-debug" })
+    : null;
+  let toolDefinitionsSize: Promise<ToolDefinitionsSize> | null = null;
+
   const result = streamText({
     model: getModel(config),
-    system: withDemoSystemNote(buildHarlySystemPrompt({
-      workspaceName: context.organization.name,
-      userName: context.user.name,
-      role: context.role,
-      activeCandidateId: candidateId,
-      mentionedCandidateIds,
-      activeSurface: surfaceForPrompt(surfaceContext, redaction.anonymize),
-      workspaceKnowledge,
-      productKnowledge: getHarlyCoreProductContext(),
-      intent,
-      today: new Intl.DateTimeFormat("en-US", {
-        weekday: "long",
-        year: "numeric",
-        month: "long",
-        day: "numeric",
-      }).format(new Date()),
-      timeZone,
-      activeAutomation: automationContext,
-    }), demo),
-    messages: await convertToModelMessages(withoutReplayedReasoning(withRedactedToolErrors(messages, redaction)), {
-      tools: toolsForModelHistory(modelTools, redaction),
-    }),
+    // Stable core first (cache breakpoint: Anthropic renders tools → system,
+    // so this caches the tool definitions and the core together), per-turn
+    // context (date, user, surface, mentions, routing hint) last.
+    system: [
+      {
+        role: "system",
+        content: systemPrompt.core,
+        providerOptions: ANTHROPIC_CACHE_BREAKPOINT,
+      },
+      { role: "system", content: turnContext },
+    ],
+    messages: modelMessages,
     tools: modelTools,
-    activeTools: initialActiveTools,
-    prepareStep: ({ stepNumber }) => {
-      if (shouldWidenForStep(stepNumber)) {
-        // From the second step on, drop the narrowing: the model already
-        // spent a step calling tools, so re-restricting it now only risks
-        // blocking a legitimate multi-category task for no real benefit.
-        return { activeTools: undefined };
+    activeTools: turnActiveTools,
+    // Anthropic automatic caching: a rolling breakpoint on the last block, so
+    // step N+1 of a turn (and the next turn) reads step N's prefix from cache.
+    providerOptions: ANTHROPIC_CACHE_BREAKPOINT,
+    prepareStep: async ({ stepNumber, messages: stepMessages }) => {
+      if (tokenLogger) {
+        toolDefinitionsSize ??= measureToolDefinitions(
+          modelTools as Record<string, unknown>,
+          (turnActiveTools as string[] | undefined) ?? undefined,
+        );
+        tokenLogger.info(
+          {
+            workspaceId,
+            intent,
+            groups: [...turnToolGroups],
+            ...buildPromptTokenBreakdown({
+              step: stepNumber,
+              systemSections: {
+                ...systemPromptSections("core", systemPrompt.core),
+                ...systemPromptSections("context", turnContext),
+              },
+              tools: await toolDefinitionsSize,
+              messages: stepMessages,
+              historyCount: modelMessages.length,
+            }),
+          },
+          "ai prompt breakdown",
+        );
       }
       return {};
     },
@@ -580,6 +701,16 @@ export async function POST(req: Request) {
         promptTokens: usage.inputTokens ?? 0,
         completionTokens: usage.outputTokens ?? 0,
       });
+      tokenLogger?.info(
+        {
+          workspaceId,
+          promptTokens: usage.inputTokens ?? 0,
+          cacheReadTokens: usage.inputTokenDetails?.cacheReadTokens ?? 0,
+          cacheWriteTokens: usage.inputTokenDetails?.cacheWriteTokens ?? 0,
+          completionTokens: usage.outputTokens ?? 0,
+        },
+        "ai prompt usage",
+      );
     })
     .catch(() => {});
 

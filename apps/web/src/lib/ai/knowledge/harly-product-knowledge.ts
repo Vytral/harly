@@ -346,3 +346,18 @@ export function getHarlyCoreProductContext(): string {
     .map((entry) => `${entry.title}: ${entry.content}`)
     .join("\n");
 }
+
+/**
+ * The chat agent's inline product brief: identity and the hard boundaries the
+ * model must never get wrong, in ~700 characters. Everything else (detailed
+ * how-to, integrations, automations, governance) is retrieved on demand with
+ * the `harlyProductKnowledge` tool instead of being inlined on every step of
+ * every turn (the full core context above is ~3.3k characters).
+ */
+export function getHarlyProductBrief(): string {
+  return [
+    "Harly: self-hostable, open-source applicant tracking system (Vytral). Harly AI explains hiring evidence and proposes confirmed actions; it is not a generic recruiting chatbot and never makes final hiring decisions.",
+    "No native LinkedIn Jobs publishing or LinkedIn applicant sync. Integration availability is separate from product capability. Compliance tooling, not legal advice.",
+    "Anything else about the product: call harlyProductKnowledge.",
+  ].join("\n");
+}
