@@ -50,10 +50,10 @@ export function DemoEnterForm({ siteKey, style }: { siteKey: string; style: stri
         {submitting ? (
           <>
             <Spinner />
-            Preparing your sandbox…
+            Entering the demo…
           </>
         ) : verified ? (
-          "Create my sandbox"
+          "Enter the demo"
         ) : (
           <>
             <Spinner />

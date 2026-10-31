@@ -123,10 +123,10 @@ After a deployment, a restart, or an alert, run these from the installation dire
 npx @harly/cli doctor
 docker compose ps
 docker compose logs --tail=100 scheduler
-docker compose exec -T scheduler node /app/runtime.mjs doctor
+docker compose exec -T scheduler node /app/runtime.mjs doctor --strict
 ```
 
-The last command reports freshness per job plus email and webhook queue counts.
+The last command reports freshness per job plus email and webhook queue counts. `--strict` makes a stale job or a stuck queue exit non-zero; without it (as the container healthcheck runs it) only readiness, the database, migrations and the scheduler heartbeat do.
 
 <Warning>
   Do not manually invoke cron URLs or put `CRON_SECRET` in a URL. If a job is stale, first confirm app readiness, then restart only the scheduler with `docker compose restart scheduler`.
@@ -229,7 +229,7 @@ extension is added later the trigram indexes are not created retroactively.
 
 ### Scheduler doctor reports a stale job
 
-**Symptom:** `docker compose exec -T scheduler node /app/runtime.mjs doctor` shows a job past its staleness window.
+**Symptom:** `docker compose exec -T scheduler node /app/runtime.mjs doctor --strict` shows a job past its staleness window.
 **Cause:** the scheduler container restarted, hung, or the instance was suspended longer than `HARLY_SCHEDULER_STALE_AFTER_SECONDS`.
 **Solution:** confirm app readiness first, then `docker compose restart scheduler`. Do not invoke cron routes manually.
 
