@@ -42,7 +42,6 @@ import {
 } from "@/components/ui/icons/brands";
 import {
   CheckIcon,
-  EyeSlashDuotoneIcon,
   GlobeIcon,
   KeyDuotoneIcon,
   LightningIcon,
@@ -51,7 +50,6 @@ import {
   RobotDuotoneIcon,
   SearchIcon,
   SpinnerIcon,
-  UsersThreeDuotoneIcon,
 } from "@/components/ui/icons/phosphor";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -62,6 +60,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { SettingRow, SettingRows } from "@/components/ui/setting-row";
 import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
 
@@ -156,7 +155,7 @@ export function AiSettingsCard({
                     </Button>
                   )}
                   {status.hasApiKey ? (
-                    <label className="flex items-center gap-2 rounded-lg border bg-card px-3 py-2 text-sm">
+                    <label className="flex h-9 items-center gap-2 rounded-[var(--radius-btn)] border border-mist-border bg-pure-snow px-3 text-sm">
                       <Switch
                         checked={status.enabled}
                         disabled={togglePending}
@@ -345,34 +344,33 @@ function AutoScoreFeatureCard({
   }
 
   return (
-    <Card className="gap-0 p-5">
-      <div className="flex items-start justify-between gap-3">
-        <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-muted/70 text-foreground/80">
-          <LightningIcon className="size-5" />
-        </span>
-        <Switch
-          checked={optimistic}
-          onCheckedChange={toggle}
-          disabled={disabled || pending}
-          aria-label="Auto-score applications"
-          className="mt-0.5"
-        />
-      </div>
-      <h3 className="mt-3.5 text-sm font-semibold tracking-tight">
-        Auto-score applications
-      </h3>
-      <p className="mt-1 text-sm text-muted-foreground">
+    <Card className="gap-0 p-0">
+      <SettingRow
+        title={<>Auto-score applications</>}
+        description={
+          <>
         Score each new application automatically as it arrives. No manual
         trigger needed. Requires AI to be enabled.
-      </p>
+          </>
+        }
+        control={
+          <Switch
+          checked={optimistic}
+              onCheckedChange={toggle}
+              disabled={disabled || pending}
+              aria-label="Auto-score applications"
+          />
+        }
+      >
       {disabled && status.hasApiKey && !status.enabled ? (
-        <p className="mt-2 text-xs text-clay">Enable AI above to activate.</p>
-      ) : null}
-      {!status.hasApiKey ? (
-        <p className="mt-2 text-xs text-muted-foreground">
-          Configure a provider to unlock.
-        </p>
-      ) : null}
+            <p className="text-[12.5px] text-warning-clay">Enable AI above to activate.</p>
+          ) : null}
+          {!status.hasApiKey ? (
+            <p className="text-[12.5px] text-soft-ink">
+              Configure a provider to unlock.
+            </p>
+          ) : null}
+      </SettingRow>
     </Card>
   );
 }
@@ -407,34 +405,33 @@ function DuplicateCheckFeatureCard({
   }
 
   return (
-    <Card className="gap-0 p-5">
-      <div className="flex items-start justify-between gap-3">
-        <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-muted/70 text-foreground/80">
-          <UsersThreeDuotoneIcon className="size-5" />
-        </span>
-        <Switch
-          checked={optimistic}
-          onCheckedChange={toggle}
-          disabled={disabled || pending}
-          aria-label="Duplicate detection"
-          className="mt-0.5"
-        />
-      </div>
-      <h3 className="mt-3.5 text-sm font-semibold tracking-tight">
-        Duplicate detection
-      </h3>
-      <p className="mt-1 text-sm text-muted-foreground">
+    <Card className="gap-0 p-0">
+      <SettingRow
+        title={<>Duplicate detection</>}
+        description={
+          <>
         Automatically flag potential duplicate candidates when a new application
         arrives, and let you verify with AI from any candidate profile.
-      </p>
+          </>
+        }
+        control={
+          <Switch
+          checked={optimistic}
+              onCheckedChange={toggle}
+              disabled={disabled || pending}
+              aria-label="Duplicate detection"
+          />
+        }
+      >
       {disabled && status.hasApiKey && !status.enabled ? (
-        <p className="mt-2 text-xs text-clay">Enable AI above to activate.</p>
-      ) : null}
-      {!status.hasApiKey ? (
-        <p className="mt-2 text-xs text-muted-foreground">
-          Configure a provider to unlock.
-        </p>
-      ) : null}
+            <p className="text-[12.5px] text-warning-clay">Enable AI above to activate.</p>
+          ) : null}
+          {!status.hasApiKey ? (
+            <p className="text-[12.5px] text-soft-ink">
+              Configure a provider to unlock.
+            </p>
+          ) : null}
+      </SettingRow>
     </Card>
   );
 }
@@ -471,23 +468,11 @@ function ResumeAnonymizationFeatureCard({
   }
 
   return (
-    <Card className="gap-0 p-5">
-      <div className="flex items-start justify-between gap-3">
-        <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-muted/70 text-foreground/80">
-          <EyeSlashDuotoneIcon className="size-5" />
-        </span>
-        <Switch
-          checked={optimistic}
-          onCheckedChange={toggle}
-          disabled={disabled || pending}
-          aria-label="Resume anonymization"
-          className="mt-0.5"
-        />
-      </div>
-      <h3 className="mt-3.5 text-sm font-semibold tracking-tight">
-        Resume anonymization
-      </h3>
-      <p className="mt-1 text-sm text-muted-foreground">
+    <Card className="gap-0 p-0">
+      <SettingRow
+        title={<>Resume anonymization</>}
+        description={
+          <>
         Hides identifying details on candidate profiles on screen, and removes
         them from what is sent to your AI provider for scoring, matching,
         interview note summaries, and the results of chat assistant tools. In
@@ -499,7 +484,17 @@ function ResumeAnonymizationFeatureCard({
         It does not change stored records, and it cannot remove a name that is
         not in the candidate record, such as a nickname that appears only in a
         resume.
-      </p>
+          </>
+        }
+        control={
+          <Switch
+          checked={optimistic}
+              onCheckedChange={toggle}
+              disabled={disabled || pending}
+              aria-label="Resume anonymization"
+          />
+        }
+      />
     </Card>
   );
 }
@@ -809,15 +804,14 @@ export function AiSettingsForm({ status }: { status: WorkspaceAiStatus }) {
           )}
         </div>
 
-        <div className="flex items-center justify-between rounded-lg border px-3 py-2.5">
-          <div>
-            <p className="text-sm font-medium">Enable AI</p>
-            <p className="text-xs text-muted-foreground">
-              When off, Harly uses heuristics only.
-            </p>
-          </div>
-          <Switch checked={enabled} onCheckedChange={setEnabled} />
-        </div>
+        <SettingRows className="rounded-[var(--radius-inner)] border border-hairline">
+          <SettingRow
+            title="Enable AI"
+            htmlFor="ai-enabled"
+            description="When off, Harly uses heuristics only."
+            control={<Switch id="ai-enabled" checked={enabled} onCheckedChange={setEnabled} />}
+          />
+        </SettingRows>
 
         {/* Test connection + inline result. Success is a clear green banner,
             not just a transient toast. */}
@@ -866,8 +860,8 @@ export function AiSettingsForm({ status }: { status: WorkspaceAiStatus }) {
         </div>
 
         {/* Save is inline at the end — scroll to it, no floating bar. */}
-        <div className="flex items-center justify-end gap-2 border-t pt-5">
-          <Button asChild variant="ghost">
+        <div className="flex items-center justify-end gap-2 border-t border-hairline pt-5">
+          <Button asChild variant="outline">
             <Link href={"/settings/ai" as Route}>Cancel</Link>
           </Button>
           <Button onClick={save} disabled={saving || !modelId.trim()}>

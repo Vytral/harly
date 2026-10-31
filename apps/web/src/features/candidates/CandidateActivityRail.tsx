@@ -40,12 +40,13 @@ export function CandidateActivityRail({ activity }: { activity: ActivityItem[] }
   const [open, setOpen] = useState(true);
 
   return (
-    <aside className="lg:sticky lg:top-20 lg:self-start">
+    <aside>
       <div className="rounded-[var(--radius-card)] bg-card shadow-[var(--shadow-card)]">
         <button
           type="button"
           onClick={() => setOpen((value) => !value)}
-          className="flex w-full items-center justify-between gap-2 px-5 py-4 text-left"
+          aria-expanded={open}
+          className="flex w-full items-center justify-between gap-2 rounded-[var(--radius-card)] px-5 py-4 text-left outline-none transition-colors duration-150 focus-visible:ring-[3px] focus-visible:ring-ring/50"
         >
           <span className="flex items-center gap-2">
             <PulseIcon className="size-4 text-near-ink" />
@@ -58,7 +59,7 @@ export function CandidateActivityRail({ activity }: { activity: ActivityItem[] }
           </span>
           <ChevronDown
             className={cn(
-              "size-4 text-muted-foreground transition-transform duration-200 ease-out",
+              "size-4 text-muted-foreground transition-transform duration-150 ease-out",
               open ? "" : "-rotate-90",
             )}
           />
@@ -66,7 +67,7 @@ export function CandidateActivityRail({ activity }: { activity: ActivityItem[] }
 
         <div
           className={cn(
-            "overflow-hidden transition-all duration-200 ease-out",
+            "overflow-hidden transition-all duration-150 ease-out",
             open ? "max-h-[70vh] opacity-100" : "max-h-0 opacity-0",
           )}
         >

@@ -17,13 +17,8 @@ type CandidatePoolButtonProps = {
   className?: string;
 };
 
-export function CandidatePoolButton({
-  candidateId,
-  inPool: initialInPool,
-  size = "sm",
-  variant = "outline",
-  className,
-}: CandidatePoolButtonProps) {
+/** Shared add/remove-from-pool logic, used by the button and the ⋯ menu item. */
+export function useCandidatePool(candidateId: string, initialInPool: boolean) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [inPool, setInPool] = useState(initialInPool);
@@ -44,6 +39,21 @@ export function CandidatePoolButton({
       (router as { refresh?: () => void }).refresh?.();
     });
   }
+
+  return { inPool, isPending, toggle };
+}
+
+export function CandidatePoolButton({
+  candidateId,
+  inPool: initialInPool,
+  size = "sm",
+  variant = "outline",
+  className,
+}: CandidatePoolButtonProps) {
+  const { inPool, isPending, toggle } = useCandidatePool(
+    candidateId,
+    initialInPool,
+  );
 
   return (
     <Button

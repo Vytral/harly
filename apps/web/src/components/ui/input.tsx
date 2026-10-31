@@ -2,15 +2,18 @@ import * as React from "react"
 
 import { cn } from "@/lib/utils"
 
+/** Shared field chrome: also used by Textarea and SelectTrigger so all controls match. */
+export const fieldControlClassName =
+  "w-full min-w-0 rounded-[var(--radius-btn)] border border-mist-border bg-pure-snow px-3 text-sm text-near-ink transition-[color,box-shadow,border-color,background-color] duration-150 ease-out outline-none placeholder:text-quiet-mist selection:bg-primary selection:text-primary-foreground hover:border-quiet-mist/70 focus-visible:border-near-ink focus-visible:ring-[3px] focus-visible:ring-near-ink/10 aria-invalid:border-danger-rust aria-invalid:ring-[3px] aria-invalid:ring-danger-rust/15 disabled:cursor-not-allowed disabled:border-mist-border disabled:bg-card-inset disabled:text-quiet-mist disabled:hover:border-mist-border"
+
 function Input({ className, type, ...props }: React.ComponentProps<"input">) {
   return (
     <input
       type={type}
       data-slot="input"
       className={cn(
-        "h-10 w-full min-w-0 rounded-full border border-input bg-card px-3.5 py-1 text-base transition-[color,box-shadow,border-color] outline-none selection:bg-primary selection:text-primary-foreground file:inline-flex file:h-7 file:border-0 file:bg-transparent file:text-sm file:font-medium file:text-foreground placeholder:text-muted-foreground hover:border-ring/40 disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50 md:text-sm dark:bg-input/30",
-        "focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/30",
-        "aria-invalid:border-destructive aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40",
+        fieldControlClassName,
+        "h-9 py-1 file:inline-flex file:h-6 file:border-0 file:bg-transparent file:text-sm file:font-medium file:text-near-ink",
         className
       )}
       {...props}

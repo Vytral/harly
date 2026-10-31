@@ -33,6 +33,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { SettingRow } from "@/components/ui/setting-row";
 import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
 
@@ -128,7 +129,7 @@ export function OutlookConnectPanel({
                   <GearSixIcon className="size-4" />
                   {open ? "Hide settings" : "Manage"}
                 </Button>
-                <label className="flex items-center gap-2 rounded-lg border bg-card px-3 py-2 text-sm">
+                <label className="flex h-9 items-center gap-2 rounded-[var(--radius-btn)] border border-mist-border bg-pure-snow px-3 text-sm">
                   <Switch
                     checked={status.enabled}
                     disabled={togglePending}
@@ -475,15 +476,13 @@ function OutlookConfigForm({
           </div>
         </div>
 
-        <div className="flex items-center justify-between rounded-lg border px-3 py-2.5">
-          <div>
-            <p className="text-sm font-medium">Enable</p>
-            <p className="text-xs text-muted-foreground">
-              When off, no notifications are sent.
-            </p>
-          </div>
-          <Switch checked={enabled} onCheckedChange={setEnabled} />
-        </div>
+        <SettingRow
+          htmlFor="outlookconnectpanel-switch-1"
+          className="rounded-[var(--radius-inner)] border border-hairline px-4 py-3"
+          title={<>Enable</>}
+          description={<>When off, no notifications are sent.</>}
+          control={<Switch id="outlookconnectpanel-switch-1" checked={enabled} onCheckedChange={setEnabled} />}
+        />
       </div>
 
       <div className="mt-6 flex items-center justify-between gap-3 border-t pt-4">

@@ -52,18 +52,18 @@ export function CandidateTags({
   }
 
   return (
-    <div className="flex flex-wrap items-center gap-1.5">
+    <div className="flex flex-wrap items-center gap-2">
       {tags.map((tag) => (
         <span
           key={tag.id}
-          className="inline-flex items-center gap-1 rounded-full bg-accent px-2.5 py-0.5 text-xs font-medium text-accent-foreground"
+          className="inline-flex h-6 items-center gap-1 rounded-full bg-accent px-2.5 text-xs font-medium text-accent-foreground"
         >
           {tag.label}
           <button
             type="button"
             onClick={() => remove(tag.id)}
             disabled={isPending}
-            className="text-sage-ink/60 transition-colors hover:text-sage-ink"
+            className="rounded-full text-sage-ink/60 outline-none transition-colors duration-150 hover:text-sage-ink focus-visible:ring-2 focus-visible:ring-ring"
             aria-label={`Remove ${tag.label}`}
           >
             <X className="size-3" />
@@ -92,7 +92,7 @@ export function CandidateTags({
         <button
           type="button"
           onClick={() => setAdding(true)}
-          className="inline-flex items-center gap-1 rounded-full border border-dashed px-2.5 py-0.5 text-xs font-medium text-muted-foreground transition-colors hover:border-ring/40 hover:text-foreground"
+          className="inline-flex h-6 items-center gap-1 rounded-full border border-dashed px-2.5 text-xs font-medium text-muted-foreground outline-none transition-colors duration-150 hover:border-ring/40 hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50"
         >
           <Plus className="size-3" />
           Tag

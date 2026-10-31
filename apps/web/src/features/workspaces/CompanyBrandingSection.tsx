@@ -25,6 +25,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { SettingRow } from "@/components/ui/setting-row";
 import { Switch } from "@/components/ui/switch";
 import {
   Select,
@@ -392,23 +393,27 @@ export function CompanyBrandingSection({
             />
           </div>
 
-          <label className="flex items-start justify-between gap-4 rounded-[var(--radius-inner)] bg-card-inset px-4 py-3.5">
-            <span>
-              <span className="block text-sm font-medium text-foreground">
-                Remove Harly branding from emails
-              </span>
-              <span className="mt-0.5 block text-xs text-muted-foreground">
+          <SettingRow
+            htmlFor="branding-hide-harly"
+            descriptionId="branding-hide-harly-desc"
+            className="rounded-[var(--radius-inner)] border border-hairline px-4 py-3"
+            title="Remove Harly branding from emails"
+            description={
+              <>
                 Hides the &quot;Powered by Harly&quot; footer credit on invite,
                 notification and candidate emails.
-              </span>
-            </span>
-            <Switch
-              checked={hideHarlyBranding}
-              onCheckedChange={setHideHarlyBranding}
-              disabled={!canEdit || savingBranding}
-              aria-label="Remove Harly branding from emails"
-            />
-          </label>
+              </>
+            }
+            control={
+              <Switch
+                id="branding-hide-harly"
+                aria-describedby="branding-hide-harly-desc"
+                checked={hideHarlyBranding}
+                onCheckedChange={setHideHarlyBranding}
+                disabled={!canEdit || savingBranding}
+              />
+            }
+          />
 
           <div className="flex justify-end border-t pt-6">
             <Button type="submit" disabled={!canEdit || savingBranding}>

@@ -6,7 +6,8 @@ import { toast } from "@/lib/notification-island/toast";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { FormField } from "@/components/ui/Form";
+import { SettingRow, SettingRows } from "@/components/ui/setting-row";
 import { Switch } from "@/components/ui/switch";
 import { SectionHeader, StatusPill } from "@/features/workspaces/settings-ui";
 import { ShieldCheckDuotoneIcon } from "@/components/ui/icons/phosphor";
@@ -63,13 +64,31 @@ export function AdvancedSecurityCard({
         badge={<StatusPill tone={settings.ipAllowlist.length || settings.allowedDomains.length ? "on" : "neutral"}>{settings.ipAllowlist.length || settings.allowedDomains.length ? "Restricted" : "Open"}</StatusPill>}
       />
       <div className="grid gap-4 md:grid-cols-2">
-        <div className="space-y-2"><Label htmlFor="security-ips">Allowed IPs / CIDRs</Label><Input id="security-ips" value={ips} onChange={(event) => setIps(event.target.value)} placeholder="203.0.113.10, 10.0.0.0/8" disabled={!isOwner} /><p className="text-xs text-muted-foreground">Comma-separated. Empty means any IP.</p></div>
-        <div className="space-y-2"><Label htmlFor="security-domains">Allowed email domains</Label><Input id="security-domains" value={domains} onChange={(event) => setDomains(event.target.value)} placeholder="acme.com, subsidiary.acme.com" disabled={!isOwner} /><p className="text-xs text-muted-foreground">Used for workspace identity and SSO policy.</p></div>
-        <div className="space-y-2"><Label htmlFor="security-reauth">Reauthentication window (minutes)</Label><Input id="security-reauth" type="number" min={5} max={60} value={reauthMinutes} onChange={(event) => setReauthMinutes(event.target.value)} disabled={!isOwner} /></div>
-        <div className="flex items-center justify-between rounded-xl border p-3"><div><p className="text-sm font-medium">Suspicious session detection</p><p className="text-xs text-muted-foreground">Flag simultaneous IP and browser-family changes.</p></div><Switch checked={risk} onCheckedChange={setRisk} disabled={!isOwner} /></div>
-        <div className="flex items-center justify-between rounded-xl border p-3 md:col-span-2"><div><p className="text-sm font-medium">Require passkey</p><p className="text-xs text-muted-foreground">Future-ready policy: members must register a passkey before access.</p></div><Switch checked={requirePasskey} onCheckedChange={setRequirePasskey} disabled={!isOwner} /></div>
+        <FormField label="Allowed IPs / CIDRs" htmlFor="security-ips" hint="Comma-separated. Empty means any IP.">
+          <Input id="security-ips" value={ips} onChange={(event) => setIps(event.target.value)} placeholder="203.0.113.10, 10.0.0.0/8" disabled={!isOwner} />
+        </FormField>
+        <FormField label="Allowed email domains" htmlFor="security-domains" hint="Used for workspace identity and SSO policy.">
+          <Input id="security-domains" value={domains} onChange={(event) => setDomains(event.target.value)} placeholder="acme.com, subsidiary.acme.com" disabled={!isOwner} />
+        </FormField>
+        <FormField label="Reauthentication window (minutes)" htmlFor="security-reauth">
+          <Input id="security-reauth" type="number" min={5} max={60} value={reauthMinutes} onChange={(event) => setReauthMinutes(event.target.value)} disabled={!isOwner} />
+        </FormField>
       </div>
-      {isOwner ? <Button onClick={save} disabled={pending}>{pending ? "Saving…" : "Save security policy"}</Button> : <p className="text-xs text-muted-foreground">Only workspace owners can change these controls.</p>}
+      <SettingRows className="-mx-6 border-t border-hairline [&>[data-slot=setting-row]]:px-6">
+        <SettingRow
+          title="Suspicious session detection"
+          description="Flag simultaneous IP and browser-family changes."
+          htmlFor="security-risk"
+          control={<Switch id="security-risk" checked={risk} onCheckedChange={setRisk} disabled={!isOwner} />}
+        />
+        <SettingRow
+          title="Require passkey"
+          description="Future-ready policy: members must register a passkey before access."
+          htmlFor="security-passkey"
+          control={<Switch id="security-passkey" checked={requirePasskey} onCheckedChange={setRequirePasskey} disabled={!isOwner} />}
+        />
+      </SettingRows>
+      {isOwner ? <Button onClick={save} disabled={pending}>{pending ? "Saving…" : "Save security policy"}</Button> : <p className="text-[12.5px] text-soft-ink">Only workspace owners can change these controls.</p>}
     </Card>
   );
 }

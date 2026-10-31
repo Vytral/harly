@@ -37,6 +37,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { SettingRow } from "@/components/ui/setting-row";
 import { Switch } from "@/components/ui/switch";
 
 const PROVIDER_LABEL: Record<EmailProviderId, string> = {
@@ -115,7 +116,7 @@ export function EmailSettingsCard({
                     </Button>
                   )}
                   {isConfigured ? (
-                    <label className="flex items-center gap-2 rounded-lg border bg-card px-3 py-2 text-sm">
+                    <label className="flex h-9 items-center gap-2 rounded-[var(--radius-btn)] border border-mist-border bg-pure-snow px-3 text-sm">
                       <Switch
                         checked={status.enabled}
                         disabled={togglePending}
@@ -347,27 +348,23 @@ export function EmailSettingsForm({ status }: {
               />
             </div>
 
-            <div className="flex items-center justify-between rounded-lg border px-3 py-2.5">
-              <div>
-                <p className="text-sm font-medium">Use TLS</p>
-                <p className="text-xs text-muted-foreground">
-                  Enable for port 465. Leave off for 587/25 (STARTTLS).
-                </p>
-              </div>
-              <Switch checked={smtpSecure} onCheckedChange={setSmtpSecure} />
-            </div>
+            <SettingRow
+              htmlFor="emailsettingscard-switch-1"
+              className="rounded-[var(--radius-inner)] border border-hairline px-4 py-3"
+              title={<>Use TLS</>}
+              description={<>Enable for port 465. Leave off for 587/25 (STARTTLS).</>}
+              control={<Switch id="emailsettingscard-switch-1" checked={smtpSecure} onCheckedChange={setSmtpSecure} />}
+            />
           </>
         )}
 
-        <div className="flex items-center justify-between rounded-lg border px-3 py-2.5">
-          <div>
-            <p className="text-sm font-medium">Enable</p>
-            <p className="text-xs text-muted-foreground">
-              When off, Harly sends from its shared address instead.
-            </p>
-          </div>
-          <Switch checked={enabled} onCheckedChange={setEnabled} />
-        </div>
+        <SettingRow
+          htmlFor="emailsettingscard-switch-2"
+          className="rounded-[var(--radius-inner)] border border-hairline px-4 py-3"
+          title={<>Enable</>}
+          description={<>When off, Harly sends from its shared address instead.</>}
+          control={<Switch id="emailsettingscard-switch-2" checked={enabled} onCheckedChange={setEnabled} />}
+        />
 
         <Button
           type="button"

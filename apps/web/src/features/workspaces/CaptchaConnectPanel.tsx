@@ -35,6 +35,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { SettingRow } from "@/components/ui/setting-row";
 import { Switch } from "@/components/ui/switch";
 
 type Logo = ComponentType<{ className?: string }>;
@@ -154,7 +155,7 @@ export function CaptchaConnectPanel({
                 {configured ? (open ? "Hide settings" : "Manage") : "Connect"}
               </Button>
               {configured ? (
-                <label className="flex items-center gap-2 rounded-lg border bg-card px-3 py-2 text-sm">
+                <label className="flex h-9 items-center gap-2 rounded-[var(--radius-btn)] border border-mist-border bg-pure-snow px-3 text-sm">
                   <Switch
                     checked={isActive}
                     disabled={togglePending}
@@ -331,16 +332,14 @@ function CaptchaConnectForm({
           <p className="text-xs text-muted-foreground">{meta.secretHint}</p>
         </div>
 
-        <div className="flex items-center justify-between rounded-lg border px-3 py-2.5">
-          <div>
-            <p className="text-sm font-medium">Enable {meta.name}</p>
-            <p className="text-xs text-muted-foreground">
-              Turns on this CAPTCHA and switches off any other. When off, the
-              application form skips bot verification.
-            </p>
-          </div>
-          <Switch checked={enabled} onCheckedChange={setEnabled} />
-        </div>
+        <SettingRow
+          htmlFor="captchaconnectpanel-switch-1"
+          className="rounded-[var(--radius-inner)] border border-hairline px-4 py-3"
+          title={<>Enable {meta.name}</>}
+          description={<>Turns on this CAPTCHA and switches off any other. When off, the
+              application form skips bot verification.</>}
+          control={<Switch id="captchaconnectpanel-switch-1" checked={enabled} onCheckedChange={setEnabled} />}
+        />
       </div>
 
       <div className="mt-6 flex items-center justify-between gap-3 border-t pt-4">

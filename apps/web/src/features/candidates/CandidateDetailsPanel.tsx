@@ -297,7 +297,7 @@ export function CandidateDetailsPanel({
         className="flex w-full items-center justify-between gap-3 px-5 py-4 text-left transition-colors hover:bg-card-inset/60"
         aria-expanded={open}
       >
-        <span className="text-[15px] font-semibold tracking-[-0.01em]">Details</span>
+        <span className="text-[15px] font-semibold tracking-[-0.01em]">Profile</span>
         {open ? (
           <ChevronUp className="size-4 text-muted-foreground" strokeWidth={1.8} />
         ) : (

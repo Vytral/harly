@@ -73,12 +73,13 @@ export function CandidateStickyHeader({
   return (
     <div ref={wrapperRef}>
       <div
-        className="fixed top-0 z-40 h-14 transition-all duration-300"
+        className="fixed top-0 z-40 h-12 transition-all duration-150"
         style={rect ? { left: rect.left, width: rect.width } : { left: 0, width: 0 }}
         aria-hidden={!pinned}
+        inert={!pinned}
       >
         <div
-          className="flex h-14 items-center gap-3 overflow-hidden border-b border-hairline bg-warm-paper/85 px-3 backdrop-blur-md supports-[backdrop-filter]:bg-warm-paper/70 transition-[opacity,transform] duration-300 sm:px-4"
+          className="flex h-12 items-center gap-3 overflow-hidden border-b border-hairline bg-card/90 px-3 backdrop-blur-md supports-[backdrop-filter]:bg-card/75 transition-[opacity,transform] duration-150 sm:px-4"
           style={{
             opacity: pinned ? 1 : 0,
             transform: pinned ? "translateY(0)" : "translateY(-100%)",

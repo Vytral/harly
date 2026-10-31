@@ -58,6 +58,7 @@ export function Force2FACard({
         action={
           isOwner ? (
             <Switch
+              id="force-2fa"
               checked={enabled}
               onCheckedChange={handleToggle}
               disabled={isPending}
@@ -68,7 +69,7 @@ export function Force2FACard({
       />
 
       {!isOwner && (
-        <p className="text-xs text-muted-foreground">
+        <p className="text-[12.5px] text-soft-ink">
           Only workspace owners can change this setting.
         </p>
       )}
