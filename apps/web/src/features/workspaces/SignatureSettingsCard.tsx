@@ -29,6 +29,8 @@ type Settings = {
   signatureTimelineEnabled: boolean;
   signatureSecurityMode: string;
   signatureExpirationDays: number;
+  signatureReminderCadenceDays: number;
+  signatureMaxReminders: number;
 };
 
 type SavedSignature =
@@ -58,7 +60,7 @@ const TOGGLES: Array<{
   {
     key: "signatureTimelineEnabled",
     title: "Signing timeline",
-    description: "Show the audit timeline (viewed, verified, signed) on signed documents.",
+    description: "Show a readable timeline on each document: who was invited, opened the link, verified, consented, signed, declined or was reminded.",
   },
 ];
 
@@ -72,7 +74,16 @@ export function SignatureSettingsCard({ settings }: { settings: Settings }) {
     setValue((current) => ({ ...current, [key]: !current[key] }));
   }
 
+  function setNumber(key: "signatureExpirationDays" | "signatureReminderCadenceDays" | "signatureMaxReminders", raw: string) {
+    // Keep an empty box empty while typing instead of snapping it to 0.
+    setValue((current) => ({ ...current, [key]: raw === "" ? (Number.NaN as number) : Number(raw) }));
+  }
+
   function save() {
+    const { signatureExpirationDays: days, signatureReminderCadenceDays: cadence, signatureMaxReminders: max } = value;
+    if (!Number.isInteger(days) || days < 3 || days > 365) return void toast.error("Link lifetime must be between 3 and 365 days.");
+    if (!Number.isInteger(cadence) || cadence < 0 || cadence > 30) return void toast.error("Reminder interval must be between 0 and 30 days.");
+    if (!Number.isInteger(max) || max < 0 || max > 10) return void toast.error("Maximum reminders must be between 0 and 10.");
     startTransition(async () => {
       const result = await saveSignatureSettings(value);
       if (!result.ok) toast.error(result.error);
@@ -132,23 +143,54 @@ export function SignatureSettingsCard({ settings }: { settings: Settings }) {
           <SettingRow
             htmlFor="signature-expiration"
             descriptionId="signature-expiration-desc"
-            title="Remote link expiration (days)"
-            description="Default is 30 days. Maximum is 365 days."
+            title="Link lifetime (days)"
+            description="Each signer's clock starts when they are invited, not when the document is sent. 3 to 365 days."
             control={
               <Input
                 id="signature-expiration"
                 aria-describedby="signature-expiration-desc"
                 className="w-24"
                 type="number"
-                min={1}
+                min={3}
                 max={365}
-                value={value.signatureExpirationDays}
-                onChange={(event) =>
-                  setValue((current) => ({
-                    ...current,
-                    signatureExpirationDays: Number(event.target.value),
-                  }))
-                }
+                value={Number.isNaN(value.signatureExpirationDays) ? "" : value.signatureExpirationDays}
+                onChange={(event) => setNumber("signatureExpirationDays", event.target.value)}
+              />
+            }
+          />
+          <SettingRow
+            htmlFor="signature-reminder-cadence"
+            descriptionId="signature-reminder-cadence-desc"
+            title="Remind signers every (days)"
+            description="Counted from when the current signer was invited. 0 turns automatic reminders off. Earlier links keep working."
+            control={
+              <Input
+                id="signature-reminder-cadence"
+                aria-describedby="signature-reminder-cadence-desc"
+                className="w-24"
+                type="number"
+                min={0}
+                max={30}
+                value={Number.isNaN(value.signatureReminderCadenceDays) ? "" : value.signatureReminderCadenceDays}
+                onChange={(event) => setNumber("signatureReminderCadenceDays", event.target.value)}
+              />
+            }
+          />
+          <SettingRow
+            htmlFor="signature-max-reminders"
+            descriptionId="signature-max-reminders-desc"
+            title="Maximum automatic reminders"
+            description="Per signer. Manual reminders from the document do not count toward this."
+            control={
+              <Input
+                id="signature-max-reminders"
+                aria-describedby="signature-max-reminders-desc"
+                className="w-24"
+                type="number"
+                min={0}
+                max={10}
+                value={Number.isNaN(value.signatureMaxReminders) ? "" : value.signatureMaxReminders}
+                onChange={(event) => setNumber("signatureMaxReminders", event.target.value)}
               />
             }
           />
@@ -180,6 +222,7 @@ function SavedSignaturesCard() {
   }, []);
 
   function remove(id: string) {
+    if (!window.confirm("Remove this saved signature? You can save it again while signing.")) return;
     void deleteSavedSignature({ id }).then((result) => {
       if (!result.ok) {
         toast.error(result.error ?? "Could not delete the signature.");
@@ -207,7 +250,7 @@ function SavedSignaturesCard() {
             {Array.from({ length: 4 }).map((_, index) => (
               <div
                 key={index}
-                className="h-20 animate-pulse rounded-lg bg-muted"
+                className="h-20 animate-pulse rounded-[var(--radius-inner)] bg-card-inset"
               />
             ))}
           </div>
@@ -220,7 +263,7 @@ function SavedSignaturesCard() {
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
             {signatures.map((signature) => (
               <div key={signature.id} className="group relative">
-                <div className="flex h-20 items-center justify-center rounded-lg border border-input bg-white p-2">
+                <div className="flex h-20 items-center justify-center rounded-[var(--radius-inner)] border border-hairline bg-white p-2">
                   {signature.kind === "vector" ? (
                     <SavedVectorThumb vectorData={signature.vectorData} />
                   ) : (
@@ -235,7 +278,7 @@ function SavedSignaturesCard() {
                   type="button"
                   aria-label="Delete saved signature"
                   onClick={() => remove(signature.id)}
-                  className="absolute -right-1.5 -top-1.5 flex size-6 items-center justify-center rounded-full border bg-card text-muted-foreground opacity-0 shadow-xs transition-opacity hover:text-destructive group-hover:opacity-100"
+                  className="absolute -right-1.5 -top-1.5 flex size-6 items-center justify-center rounded-full border bg-card text-muted-foreground shadow-xs transition-opacity hover:text-destructive sm:opacity-0 sm:group-hover:opacity-100 sm:focus-visible:opacity-100"
                 >
                   <Trash2 className="size-3.5" />
                 </button>

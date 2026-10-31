@@ -14,13 +14,15 @@ const schema = z.object({
   signatureOtpEnabled: z.boolean(),
   signatureTimelineEnabled: z.boolean(),
   signatureSecurityMode: z.enum(["link_only", "email_otp", "sso"]),
-  signatureExpirationDays: z.number().int().min(1).max(365),
+  signatureExpirationDays: z.number().int().min(3).max(365),
+  signatureReminderCadenceDays: z.number().int().min(0).max(30),
+  signatureMaxReminders: z.number().int().min(0).max(10),
 });
 
 export async function saveSignatureSettings(input: unknown) {
   const context = await requirePermission("settings:edit");
   const parsed = schema.safeParse(input);
-  if (!parsed.success) return { ok: false, error: "Invalid signature settings." };
+  if (!parsed.success) return { ok: false, error: "Check the numbers: links last 3 to 365 days, reminders every 0 to 30 days (0 is off), at most 10 per signer." };
   if (parsed.data.signatureSecurityMode === "sso") return { ok: false, error: "SSO signing is reserved for a future release." };
   const data = { ...parsed.data, vectorSignaturesEnabled: true, signatureSecurityMode: parsed.data.signatureOtpEnabled ? "email_otp" : parsed.data.signatureSecurityMode, updatedAt: new Date() };
   await db.insert(workspaceSettings).values({ organizationId: context.organization.id, ...data }).onConflictDoUpdate({ target: workspaceSettings.organizationId, set: data });

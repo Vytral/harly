@@ -7,7 +7,7 @@ import { usePdfPageRenderer } from "@/features/documents/usePdfPageRenderer";
 
 export type FillableField = {
   id: string;
-  type: "signature" | "text";
+  type: "signature" | "text" | "date";
   page: number;
   x: number;
   y: number;
@@ -27,7 +27,14 @@ type Props = {
   textValues: Record<string, string>;
   onTextValueChange: (fieldId: string, value: string) => void;
   maxPageWidth?: number;
+  /** Tapping an empty or filled signature box (opens the pad on phones). */
+  onSignatureFieldClick?: (fieldId: string) => void;
+  /** Reports the id of the text field being edited, for the progress bar. */
+  onFieldFocus?: (fieldId: string) => void;
 };
+
+/** Minimum comfortable touch height for an inline text field, in CSS px. */
+const MIN_TEXT_FIELD_PX = 32;
 
 /**
  * Candidate-facing fill-only renderer — the recruiter already placed every
@@ -44,6 +51,8 @@ export function PdfFieldFiller({
   textValues,
   onTextValueChange,
   maxPageWidth = 720,
+  onSignatureFieldClick,
+  onFieldFocus,
 }: Props) {
   const rootRef = useRef<HTMLDivElement>(null);
   const { pages, error } = usePdfPageRenderer(fileUrl, maxPageWidth, rootRef);
@@ -67,7 +76,7 @@ export function PdfFieldFiller({
           {fields
             .filter((field) => field.page === page.number)
             .map((field) => {
-              const isText = field.type === "text";
+              const isText = field.type === "text" || field.type === "date";
               const style = {
                 left: `${field.x * 100}%`,
                 top: `${field.y * 100}%`,
@@ -75,25 +84,38 @@ export function PdfFieldFiller({
                 height: `${field.h * 100}%`,
               };
               if (isText) {
+                const filled = (textValues[field.id] ?? "").trim().length > 0;
                 return (
                   <input
                     key={field.id}
-                    type="text"
+                    type={field.type === "date" ? "date" : "text"}
+                    data-field-id={field.id}
+                    aria-label={field.label?.trim() || "Text field"}
                     value={textValues[field.id] ?? ""}
                     onChange={(event) => onTextValueChange(field.id, event.target.value)}
-                    placeholder={field.label?.trim() || "Type here"}
+                    onFocus={() => onFieldFocus?.(field.id)}
+                    placeholder={field.label?.trim() || (field.type === "date" ? "Date" : "Type here")}
                     required={field.required}
-                    tabIndex={field.order + 1}
                     maxLength={200}
-                    className="absolute z-10 rounded-sm border-2 border-dashed border-info bg-info/5 px-2 text-sm text-foreground outline-none focus:bg-info/15"
-                    style={style}
+                    autoCapitalize="sentences"
+                    // 16px keeps iOS from zooming the page on focus; the box
+                    // grows downward when the PDF box is shorter than 32px.
+                    className={`absolute z-10 rounded-sm border-2 border-dashed px-2 text-base text-near-ink outline-none transition-colors focus:bg-chartreuse-signal/25 focus:ring-2 focus:ring-near-ink/20 ${filled ? "border-success/60 bg-success/5" : field.required ? "border-warning bg-warning/5" : "border-hairline bg-pure-snow/60"}`}
+                    style={{ ...style, height: `max(${field.h * 100}%, ${MIN_TEXT_FIELD_PX}px)` }}
                   />
                 );
               }
+              const interactive = Boolean(onSignatureFieldClick);
               return (
-                <div
+                <button
                   key={field.id}
-                  className="absolute z-10 rounded-sm border-2 border-dashed border-primary/60 bg-accent/20"
+                  type="button"
+                  data-field-id={field.id}
+                  disabled={!interactive}
+                  aria-label={hasSignature ? "Change your signature" : "Add your signature"}
+                  onClick={() => onSignatureFieldClick?.(field.id)}
+                  // The ::before widens the tap target past the visual box.
+                  className={`absolute z-10 rounded-sm border-2 border-dashed before:absolute before:-inset-2 before:content-[''] ${hasSignature ? "border-success/60 bg-pure-snow/40" : "border-near-ink bg-chartreuse-signal/30"} ${interactive ? "cursor-pointer active:scale-[0.99]" : "cursor-default"}`}
                   style={style}
                 >
                   {hasSignature ? (
@@ -104,11 +126,11 @@ export function PdfFieldFiller({
                       draggable={false}
                     />
                   ) : (
-                    <div className="flex h-full w-full items-center justify-center text-center text-[11px] text-muted-foreground">
-                      Signature required
-                    </div>
+                    <span className="flex h-full w-full items-center justify-center text-center text-[11px] font-medium leading-tight text-near-ink">
+                      Tap to sign
+                    </span>
                   )}
-                </div>
+                </button>
               );
             })}
         </div>

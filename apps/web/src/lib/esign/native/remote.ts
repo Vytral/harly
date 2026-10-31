@@ -11,9 +11,11 @@ import {
   documents,
   emailOutbox,
   nativeSignatureOtpChallenges,
+  organization,
   signatureEnvelopes,
   signatureEvents,
   signatureRecipients,
+  user as authUser,
   workspaceSettings,
 } from "@harly/db";
 
@@ -28,10 +30,14 @@ import { storage } from "@/lib/storage";
 import { assertNativeSignablePdf } from "./bake";
 import { isSignableNativeFieldsSnapshot } from "./fields";
 import { workingDocumentKey } from "./working-pdf";
+import { buildInvitationPayload } from "./notices";
+import { DAY_MS, linkLifetimeDays } from "./link-lifetime";
+
+export { linkLifetimeDays, MIN_EXPIRATION_DAYS, MAX_EXPIRATION_DAYS } from "./link-lifetime";
 
 const tokenSchema = z.string().regex(/^[A-Za-z0-9_-]{32,128}$/);
-const DEFAULT_EXPIRATION_DAYS = 30;
 const OTP_TTL_MS = 10 * 60_000;
+const OTP_RESEND_COOLDOWN_MS = 30_000;
 const MAX_OTP_ATTEMPTS = 5;
 const verificationCookie = "harly_native_sign_verified";
 
@@ -65,10 +71,10 @@ export function nativeSignatureCookieValue(recipientId: string, challengeId: str
   return signedVerification(recipientId, challengeId);
 }
 
-export async function isNativeSignatureCookieVerified(value: string | undefined, recipientId: string) {
+export async function isNativeSignatureCookieVerified(value: string | undefined, recipientId: string, options: { allowConsumed?: boolean } = {}) {
   if (!value || !verifyNativeSignatureCookie(value, recipientId)) return false;
   const [, challengeId] = value.split(".");
-  const [challenge] = await db.select({ id: nativeSignatureOtpChallenges.id }).from(nativeSignatureOtpChallenges).where(and(eq(nativeSignatureOtpChallenges.id, challengeId), eq(nativeSignatureOtpChallenges.recipientId, recipientId), gt(nativeSignatureOtpChallenges.expiresAt, new Date()), isNull(nativeSignatureOtpChallenges.consumedAt), isNotNull(nativeSignatureOtpChallenges.verifiedAt))).limit(1);
+  const [challenge] = await db.select({ id: nativeSignatureOtpChallenges.id }).from(nativeSignatureOtpChallenges).where(and(eq(nativeSignatureOtpChallenges.id, challengeId), eq(nativeSignatureOtpChallenges.recipientId, recipientId), gt(nativeSignatureOtpChallenges.expiresAt, new Date()), options.allowConsumed ? undefined : isNull(nativeSignatureOtpChallenges.consumedAt), isNotNull(nativeSignatureOtpChallenges.verifiedAt))).limit(1);
   return Boolean(challenge);
 }
 
@@ -87,15 +93,40 @@ export type NativeSigningTarget = {
   expiresAt: Date;
 };
 
-export async function resolveNativeSigningToken(rawToken: string): Promise<NativeSigningTarget | null> {
+export type NativeSigningState = "active" | "signed" | "declined" | "voided" | "expired" | "unavailable";
+
+export type NativeSigningContext = {
+  company: { name: string; logoUrl: string | null; hideHarlyBranding: boolean };
+  sender: { name: string | null; email: string | null };
+  message: string | null;
+  voidReason: string | null;
+  declinedReason: string | null;
+  signedAt: Date | null;
+  envelopeCompleted: boolean;
+};
+
+export type NativeSigningInspection =
+  | { state: "unavailable" }
+  | { state: Exclude<NativeSigningState, "unavailable">; target: NativeSigningTarget; context: NativeSigningContext };
+
+/**
+ * Resolve a bearer token to the signer's state. Unlike
+ * `resolveNativeSigningToken`, this also explains links that are no longer
+ * usable (signed, declined, voided, expired) so the signer sees an honest page.
+ * Earlier reminder links keep working until the signer finishes.
+ */
+export async function inspectNativeSigningToken(rawToken: string): Promise<NativeSigningInspection> {
   const parsed = tokenSchema.safeParse(rawToken);
-  if (!parsed.success) return null;
+  if (!parsed.success) return { state: "unavailable" };
+  const tokenHash = hash(parsed.data);
   const [row] = await db.select({
     workspaceId: signatureRecipients.workspaceId,
     envelopeId: signatureRecipients.envelopeId,
     recipientId: signatureRecipients.id,
-    documentId: documents.id,
-    documentName: documents.name,
+    documentId: signatureEnvelopes.documentId,
+    envelopeDocumentName: signatureEnvelopes.documentName,
+    liveDocumentId: documents.id,
+    liveDocumentName: documents.name,
     email: signatureRecipients.email,
     name: signatureRecipients.name,
     routingOrder: signatureRecipients.routingOrder,
@@ -103,20 +134,96 @@ export async function resolveNativeSigningToken(rawToken: string): Promise<Nativ
     documentStatus: documents.status,
     documentSignatureStatus: documents.signatureStatus,
     recipientStatus: signatureRecipients.status,
+    recipientSignedAt: signatureRecipients.signedAt,
+    declinedReason: signatureRecipients.declinedReason,
     envelopeStatus: signatureEnvelopes.status,
+    envelopeMessage: signatureEnvelopes.message,
+    voidReason: signatureEnvelopes.voidReason,
     expiresAt: signatureRecipients.linkExpiresAt,
     securityMode: workspaceSettings.signatureSecurityMode,
+    companyName: organization.name,
+    companyLogo: organization.logo,
+    hideHarlyBranding: workspaceSettings.hideHarlyBranding,
+    senderName: authUser.name,
+    senderEmail: authUser.email,
   }).from(signatureRecipients)
     .innerJoin(signatureEnvelopes, eq(signatureEnvelopes.id, signatureRecipients.envelopeId))
-    .innerJoin(documents, eq(documents.signatureEnvelopeRefId, signatureEnvelopes.id))
+    .leftJoin(documents, eq(documents.signatureEnvelopeRefId, signatureEnvelopes.id))
     .innerJoin(workspaceSettings, eq(workspaceSettings.organizationId, signatureRecipients.workspaceId))
-    .where(and(eq(signatureRecipients.providerRecipientId, `native-token:${hash(parsed.data)}`), eq(signatureRecipients.workspaceId, signatureEnvelopes.workspaceId)))
+    .innerJoin(organization, eq(organization.id, signatureRecipients.workspaceId))
+    .leftJoin(authUser, eq(authUser.id, signatureEnvelopes.createdById))
+    .where(and(
+      eq(signatureRecipients.workspaceId, signatureEnvelopes.workspaceId),
+      or(
+        eq(signatureRecipients.providerRecipientId, `native-token:${tokenHash}`),
+        sql`${tokenHash} = ANY(${signatureRecipients.previousTokenHashes})`,
+      ),
+    ))
     .limit(1);
-  if (!row || row.recipientStatus !== "sent" || row.envelopeStatus === "voided" || row.envelopeStatus === "completed" || row.documentStatus !== "active" || row.documentSignatureStatus !== "pending") return null;
-  if (!row.expiresAt || row.expiresAt <= new Date()) return null;
+  if (!row) return { state: "unavailable" };
+  const documentId = row.liveDocumentId ?? row.documentId;
+  const documentName = row.liveDocumentName ?? row.envelopeDocumentName;
+  if (!documentId || !documentName) return { state: "unavailable" };
+
   const signerRows = await db.select({ id: signatureRecipients.id }).from(signatureRecipients).where(and(eq(signatureRecipients.envelopeId, row.envelopeId), eq(signatureRecipients.workspaceId, row.workspaceId), eq(signatureRecipients.role, "signer")));
-  const workingKey = await workingDocumentKey(db, row.workspaceId, row.envelopeId);
-  return { ...row, storageKey: workingKey ?? row.storageKey, signerCount: signerRows.length, securityMode: row.securityMode as NativeSigningTarget["securityMode"], expiresAt: row.expiresAt };
+  const workingKey = row.liveDocumentId ? await workingDocumentKey(db, row.workspaceId, row.envelopeId) : null;
+  const now = new Date();
+  const expiresAt = row.expiresAt ?? new Date(0);
+  const target: NativeSigningTarget = {
+    workspaceId: row.workspaceId,
+    envelopeId: row.envelopeId,
+    recipientId: row.recipientId,
+    documentId,
+    documentName,
+    email: row.email,
+    name: row.name,
+    routingOrder: row.routingOrder,
+    storageKey: workingKey ?? row.storageKey ?? "",
+    signerCount: signerRows.length,
+    securityMode: row.securityMode as NativeSigningTarget["securityMode"],
+    expiresAt,
+  };
+  const context: NativeSigningContext = {
+    company: { name: row.companyName, logoUrl: row.companyLogo ?? null, hideHarlyBranding: row.hideHarlyBranding ?? false },
+    sender: { name: row.senderName ?? null, email: row.senderEmail ?? null },
+    message: row.envelopeMessage ?? null,
+    voidReason: row.voidReason ?? null,
+    declinedReason: row.declinedReason ?? null,
+    signedAt: row.recipientSignedAt ?? null,
+    envelopeCompleted: row.envelopeStatus === "completed",
+  };
+  const done = (state: Exclude<NativeSigningState, "unavailable">): NativeSigningInspection => ({ state, target, context });
+
+  if (row.recipientStatus === "signed") return done("signed");
+  if (row.recipientStatus === "declined" || row.envelopeStatus === "declined") return done("declined");
+  if (row.recipientStatus === "voided" || row.envelopeStatus === "voided") return done("voided");
+  if (row.recipientStatus === "expired" || row.envelopeStatus === "expired") return done("expired");
+  if (row.recipientStatus !== "sent") return { state: "unavailable" };
+  if (row.envelopeStatus === "completed") return done("signed");
+  if (!row.liveDocumentId || row.documentStatus !== "active" || row.documentSignatureStatus !== "pending") return { state: "unavailable" };
+  if (!row.expiresAt || row.expiresAt <= now) return done("expired");
+  return done("active");
+}
+
+export async function resolveNativeSigningToken(rawToken: string): Promise<NativeSigningTarget | null> {
+  const inspected = await inspectNativeSigningToken(rawToken);
+  return inspected.state === "active" ? inspected.target : null;
+}
+
+/** Record the first time a signer opens their link (timeline + "opened" state). */
+export async function markNativeLinkViewed(target: NativeSigningTarget) {
+  const now = new Date();
+  const [updated] = await db.update(signatureRecipients).set({ viewedAt: now }).where(and(eq(signatureRecipients.id, target.recipientId), isNull(signatureRecipients.viewedAt))).returning({ id: signatureRecipients.id });
+  if (!updated) return;
+  await db.insert(signatureEvents).values({
+    workspaceId: target.workspaceId,
+    envelopeId: target.envelopeId,
+    eventKey: `native:${target.envelopeId}:link_opened:${target.recipientId}`,
+    eventType: "link_opened",
+    generatedAt: now,
+    payload: { recipientId: target.recipientId, routingOrder: target.routingOrder },
+    processedAt: now,
+  }).onConflictDoNothing();
 }
 
 export async function createNativeSigningLink(input: {
@@ -130,6 +237,8 @@ export async function createNativeSigningLink(input: {
   recipients?: Array<{ email: string; name: string }>;
   subject?: string;
   message?: string | null;
+  /** Link lifetime in days, counted from when each signer is invited. */
+  expirationDays?: number;
   /** Workflow effect identity; retries reuse the existing envelope. */
   effectKey?: string;
   /** Workflow run identity for durable event loop prevention. */
@@ -184,7 +293,7 @@ export async function createNativeSigningLink(input: {
   const [document] = await database.select({ id: documents.id, name: documents.name, storageKey: documents.storageKey, mimeType: documents.mimeType, status: documents.status, signatureStatus: documents.signatureStatus, fieldsSnapshot: documents.fieldsSnapshot })
     .from(documents).where(and(eq(documents.id, input.documentId), eq(documents.workspaceId, input.workspaceId))).limit(1);
   if (!document) return { ok: false as const, error: "Document not found." };
-  if (document.status !== "active" || document.signatureStatus !== "unsigned" || document.mimeType !== "application/pdf") return { ok: false as const, error: "This document is not available for remote signing." };
+  if (document.status !== "active" || !["unsigned", "declined", "expired"].includes(document.signatureStatus) || document.mimeType !== "application/pdf") return { ok: false as const, error: "This document is not available for remote signing." };
   const fields = Array.isArray(document.fieldsSnapshot) ? document.fieldsSnapshot : [];
   if (!isSignableNativeFieldsSnapshot(fields)) return { ok: false as const, error: "Place at least one required signature field before sending." };
   const hasSignatureFieldFor = (recipientIndex: number) => fields.some((field) => field.type === "signature" && field.required !== false && (field.recipientIndex ?? 0) === recipientIndex);
@@ -197,16 +306,21 @@ export async function createNativeSigningLink(input: {
 
   const rawToken = randomBytes(32).toString("base64url");
   const tokenHash = hash(rawToken);
-  const expiresAt = new Date(Date.now() + Math.max(1, Math.min(settings.expirationDays || DEFAULT_EXPIRATION_DAYS, 365)) * 86_400_000);
+  const lifetimeDays = linkLifetimeDays(input.expirationDays, settings.expirationDays);
+  const invitedAt = new Date();
+  // Each signer's clock starts when THEY are invited; this is signer 1's.
+  const expiresAt = new Date(invitedAt.getTime() + lifetimeDays * DAY_MS);
+  const [actor] = await database.select({ name: authUser.name }).from(authUser).where(eq(authUser.id, input.actorId)).limit(1);
+  const senderName = actor?.name ?? null;
   const providerEnvelopeId = `native:${randomBytes(16).toString("hex")}`;
   const signingTokenId = `native-token:${tokenHash}`;
   // Fail before changing document state if the workspace cannot protect the
   // bearer token that will be placed in the email outbox.
   const encryptedToken = encryptSecret(rawToken);
   const created = await database.transaction(async (tx) => {
-    const [envelope] = await tx.insert(signatureEnvelopes).values({ workspaceId: input.workspaceId, provider: "native", providerEnvelopeId, kind: "document", status: "sent", subject: input.subject?.trim() || document.name, createdById: input.actorId, workflowEffectId: input.effectKey ?? null, sentAt: new Date() }).returning({ id: signatureEnvelopes.id });
+    const [envelope] = await tx.insert(signatureEnvelopes).values({ workspaceId: input.workspaceId, provider: "native", providerEnvelopeId, kind: "document", status: "sent", subject: input.subject?.trim() || document.name, message: input.message?.trim() || null, expirationDays: input.expirationDays ?? null, documentId: input.documentId, documentName: document.name, createdById: input.actorId, workflowEffectId: input.effectKey ?? null, sentAt: invitedAt }).returning({ id: signatureEnvelopes.id });
     if (!envelope) throw new Error("Could not create signing envelope.");
-    const createdRecipients = await tx.insert(signatureRecipients).values(recipients.map((recipient, index) => ({ workspaceId: input.workspaceId, envelopeId: envelope.id, providerRecipientId: index === 0 ? signingTokenId : `native-pending:${index}:${randomUUID()}`, role: "signer", email: recipient.email, name: recipient.name, routingOrder: index + 1, status: index === 0 ? "sent" : "created", linkExpiresAt: expiresAt }))).returning({ id: signatureRecipients.id, routingOrder: signatureRecipients.routingOrder });
+    const createdRecipients = await tx.insert(signatureRecipients).values(recipients.map((recipient, index) => ({ workspaceId: input.workspaceId, envelopeId: envelope.id, providerRecipientId: index === 0 ? signingTokenId : `native-pending:${index}:${randomUUID()}`, role: "signer", email: recipient.email, name: recipient.name, routingOrder: index + 1, status: index === 0 ? "sent" : "created", linkExpiresAt: index === 0 ? expiresAt : null, invitedAt: index === 0 ? invitedAt : null }))).returning({ id: signatureRecipients.id, routingOrder: signatureRecipients.routingOrder });
     const firstRecipient = createdRecipients.find((recipient) => recipient.routingOrder === 1);
     if (!firstRecipient) throw new Error("Could not create signing recipient.");
     await tx.update(documents).set({ signatureStatus: "pending", signatureProvider: "native", signatureEnvelopeId: providerEnvelopeId, signatureEnvelopeRefId: envelope.id, signatureUrl: null, expiresAt, updatedAt: new Date() }).where(and(eq(documents.id, input.documentId), eq(documents.workspaceId, input.workspaceId)));
@@ -216,13 +330,19 @@ export async function createNativeSigningLink(input: {
       workspaceId: input.workspaceId,
       kind: "native.signature.invitation",
       payload: {
+        ...buildInvitationPayload({
+          rawToken,
+          recipientEmail: recipients[0].email,
+          recipientName: recipients[0].name,
+          documentName: document.name,
+          subject: input.subject?.trim() || null,
+          message: input.message,
+          expiresAt,
+          senderName,
+          signerOrder: 1,
+          signerCount: recipients.length,
+        }),
         token: encryptedToken,
-        recipientEmail: recipients[0].email,
-        recipientName: recipients[0].name,
-        documentName: document.name,
-        subject: input.subject?.trim() || `Please sign: ${document.name}`,
-        message: input.message?.trim() || "Please review and sign this document.",
-        expiresAt: expiresAt.toISOString(),
       },
       dedupeKey: `native-signature:${envelope.id}:${firstRecipient.id}`,
       actorId: input.actorId,
@@ -315,11 +435,88 @@ export async function rotateNativePortalSigningLink(input: {
   };
 }
 
+type ReminderTarget = {
+  workspaceId: string;
+  recipientId: string;
+  envelopeId: string;
+  documentName: string;
+  recipientEmail: string;
+  recipientName: string;
+  routingOrder: number;
+  signerCount: number;
+  linkExpiresAt: Date;
+  reminderCount: number;
+  subject: string | null;
+  message: string | null;
+  senderName: string | null;
+};
+
 /**
- * Send at most one durable reminder per recipient per 24 hours. Native links
- * are bearer capabilities and Harly stores only their hashes, so a reminder
- * rotates the token and persists the encrypted plaintext only in the email
- * outbox. The event insert is the concurrency gate for two cron replicas.
+ * Issue a fresh link for a reminder and queue the email. The previous link
+ * stays valid (its hash moves to `previous_token_hashes`) so an older email
+ * never leads to a dead end. Runs inside the caller's transaction.
+ */
+async function queueReminder(
+  tx: Parameters<Parameters<typeof db.transaction>[0]>[0],
+  candidate: ReminderTarget,
+  input: { now: Date; eventKey: string; manual: boolean; actorId?: string },
+) {
+  const rawToken = randomBytes(32).toString("base64url");
+  const reminderNumber = candidate.reminderCount + (input.manual ? 0 : 1);
+  const [event] = await tx.insert(signatureEvents).values({
+    workspaceId: candidate.workspaceId,
+    envelopeId: candidate.envelopeId,
+    eventKey: input.eventKey,
+    eventType: "reminder_sent",
+    generatedAt: input.now,
+    payload: { recipientId: candidate.recipientId, reminderNumber, manual: input.manual, actorId: input.actorId ?? null },
+    processedAt: input.now,
+  }).onConflictDoNothing({ target: [signatureEvents.workspaceId, signatureEvents.eventKey] }).returning({ id: signatureEvents.id });
+  if (!event) return null;
+
+  const [rotated] = await tx.update(signatureRecipients).set({
+    providerRecipientId: `native-token:${hash(rawToken)}`,
+    previousTokenHashes: sql`array_append(${signatureRecipients.previousTokenHashes}, replace(${signatureRecipients.providerRecipientId}, 'native-token:', ''))`,
+    ...(input.manual ? {} : { reminderCount: sql`${signatureRecipients.reminderCount} + 1` }),
+    lastReminderAt: input.now,
+    updatedAt: input.now,
+  }).where(and(
+    eq(signatureRecipients.id, candidate.recipientId),
+    eq(signatureRecipients.workspaceId, candidate.workspaceId),
+    eq(signatureRecipients.status, "sent"),
+  )).returning({ id: signatureRecipients.id });
+  if (!rotated) throw new Error("Signing recipient changed while issuing reminder.");
+
+  const [outbox] = await tx.insert(emailOutbox).values({
+    workspaceId: candidate.workspaceId,
+    kind: "native.signature.invitation",
+    payload: buildInvitationPayload({
+      rawToken,
+      recipientEmail: candidate.recipientEmail,
+      recipientName: candidate.recipientName,
+      documentName: candidate.documentName,
+      subject: candidate.subject,
+      message: candidate.message,
+      expiresAt: candidate.linkExpiresAt,
+      senderName: candidate.senderName,
+      signerOrder: candidate.routingOrder,
+      signerCount: candidate.signerCount,
+      reminder: true,
+      reminderNumber,
+    }),
+    dedupeKey: input.eventKey,
+    actorId: input.actorId ?? null,
+  }).returning({ id: emailOutbox.id });
+  if (!outbox) throw new Error("Could not queue native signature reminder.");
+  return outbox.id;
+}
+
+/**
+ * Automatic reminders. Cadence and cap come from workspace settings
+ * (`signatureReminderCadenceDays`, `signatureMaxReminders`). The clock is the
+ * CURRENT signer's last reminder, or when they were invited, never the
+ * envelope's send time. The event key embeds the reminder number, so two cron
+ * replicas cannot send the same reminder twice.
  */
 export async function sendNativeSignatureReminders(input: {
   workspaceId?: string;
@@ -327,7 +524,7 @@ export async function sendNativeSignatureReminders(input: {
   limit?: number;
 } = {}): Promise<{ sent: number; skipped: number }> {
   const now = input.now ?? new Date();
-  const reminderCutoff = new Date(now.getTime() - 24 * 60 * 60_000);
+  const nowIso = now.toISOString();
   const candidates = await db
     .select({
       workspaceId: signatureRecipients.workspaceId,
@@ -336,12 +533,18 @@ export async function sendNativeSignatureReminders(input: {
       documentName: documents.name,
       recipientEmail: signatureRecipients.email,
       recipientName: signatureRecipients.name,
+      routingOrder: signatureRecipients.routingOrder,
       linkExpiresAt: signatureRecipients.linkExpiresAt,
-      envelopeSentAt: signatureEnvelopes.sentAt,
+      reminderCount: signatureRecipients.reminderCount,
+      subject: signatureEnvelopes.subject,
+      message: signatureEnvelopes.message,
+      senderName: authUser.name,
     })
     .from(signatureRecipients)
     .innerJoin(signatureEnvelopes, eq(signatureEnvelopes.id, signatureRecipients.envelopeId))
     .innerJoin(documents, eq(documents.signatureEnvelopeRefId, signatureEnvelopes.id))
+    .innerJoin(workspaceSettings, eq(workspaceSettings.organizationId, signatureRecipients.workspaceId))
+    .leftJoin(authUser, eq(authUser.id, signatureEnvelopes.createdById))
     .where(and(
       input.workspaceId ? eq(signatureRecipients.workspaceId, input.workspaceId) : undefined,
       eq(signatureRecipients.role, "signer"),
@@ -349,7 +552,9 @@ export async function sendNativeSignatureReminders(input: {
       eq(signatureEnvelopes.status, "sent"),
       eq(documents.status, "active"),
       eq(documents.signatureStatus, "pending"),
-      lt(signatureEnvelopes.sentAt, reminderCutoff),
+      gt(workspaceSettings.signatureReminderCadenceDays, 0),
+      sql`${signatureRecipients.reminderCount} < ${workspaceSettings.signatureMaxReminders}`,
+      sql`coalesce(${signatureRecipients.lastReminderAt}, ${signatureRecipients.invitedAt}, ${signatureEnvelopes.sentAt}) <= ${nowIso}::timestamptz - make_interval(days => ${workspaceSettings.signatureReminderCadenceDays})`,
       gt(signatureRecipients.linkExpiresAt, now),
     ))
     .limit(Math.max(1, Math.min(input.limit ?? 100, 500)));
@@ -357,67 +562,107 @@ export async function sendNativeSignatureReminders(input: {
   let sent = 0;
   let skipped = 0;
   for (const candidate of candidates) {
-    if (!candidate.envelopeSentAt || !candidate.linkExpiresAt) {
+    if (!candidate.linkExpiresAt) {
       skipped += 1;
       continue;
     }
-    const expiresAt = candidate.linkExpiresAt;
-    const rawToken = randomBytes(32).toString("base64url");
-    const encryptedToken = encryptSecret(rawToken);
-    const dayBucket = Math.floor(now.getTime() / (24 * 60 * 60_000));
-    const eventKey = `native:${candidate.envelopeId}:reminder:${candidate.recipientId}:${dayBucket}`;
-    const created = await db.transaction(async (tx) => {
-      const [event] = await tx.insert(signatureEvents).values({
-        workspaceId: candidate.workspaceId,
-        envelopeId: candidate.envelopeId,
-        eventKey,
-        eventType: "reminder_sent",
-        generatedAt: now,
-        payload: { recipientId: candidate.recipientId, dayBucket },
-        processedAt: now,
-      }).onConflictDoNothing({ target: [signatureEvents.workspaceId, signatureEvents.eventKey] }).returning({ id: signatureEvents.id });
-      if (!event) return null;
-
-      const [rotated] = await tx.update(signatureRecipients).set({
-        providerRecipientId: `native-token:${hash(rawToken)}`,
-        updatedAt: now,
-      }).where(and(
-        eq(signatureRecipients.id, candidate.recipientId),
-        eq(signatureRecipients.workspaceId, candidate.workspaceId),
-        eq(signatureRecipients.status, "sent"),
-      )).returning({ id: signatureRecipients.id });
-      if (!rotated) throw new Error("Signing recipient changed while issuing reminder.");
-
-      const [outbox] = await tx.insert(emailOutbox).values({
-        workspaceId: candidate.workspaceId,
-        kind: "native.signature.invitation",
-        payload: {
-          token: encryptedToken,
-          recipientEmail: candidate.recipientEmail,
-          recipientName: candidate.recipientName,
-          documentName: candidate.documentName,
-          subject: `Reminder: please sign ${candidate.documentName}`,
-          message: "This is a reminder to review and sign the document. Your previous signing link has been replaced with this secure link.",
-          expiresAt: expiresAt.toISOString(),
-        },
-        dedupeKey: eventKey,
-      }).returning({ id: emailOutbox.id });
-      if (!outbox) throw new Error("Could not queue native signature reminder.");
-      return outbox.id;
-    });
-    if (!created) {
+    const signerCount = await countSigners(candidate.workspaceId, candidate.envelopeId);
+    const eventKey = `native:${candidate.envelopeId}:reminder:${candidate.recipientId}:${candidate.reminderCount + 1}`;
+    const outboxId = await db.transaction((tx) =>
+      queueReminder(tx, { ...candidate, linkExpiresAt: candidate.linkExpiresAt!, signerCount }, { now, eventKey, manual: false }),
+    );
+    if (!outboxId) {
       skipped += 1;
       continue;
     }
-    await processEmailOutbox({ ids: [created], workspaceId: candidate.workspaceId });
+    await processEmailOutbox({ ids: [outboxId], workspaceId: candidate.workspaceId });
     sent += 1;
   }
   return { sent, skipped };
 }
 
+async function countSigners(workspaceId: string, envelopeId: string) {
+  const rows = await db.select({ id: signatureRecipients.id }).from(signatureRecipients).where(and(eq(signatureRecipients.envelopeId, envelopeId), eq(signatureRecipients.workspaceId, workspaceId), eq(signatureRecipients.role, "signer")));
+  return Math.max(1, rows.length);
+}
+
+/** Hard ceiling on reminders (automatic + manual) per signer. */
+const MAX_TOTAL_REMINDERS = 10;
+const MANUAL_REMINDER_MIN_GAP_MS = 60 * 60_000;
+
+/**
+ * Manual "Remind now" for a document whose native signature is in flight.
+ * Issues a fresh link but keeps every earlier link working (hashes are the only
+ * thing stored, so the old plaintext cannot be re-sent). Reminds whoever is
+ * currently expected to sign unless `recipientId` is given. Does not count against the
+ * automatic cap, but is throttled to one per hour per signer. The documents
+ * UI calls this from a server action after its own permission check.
+ */
+export async function remindNativeSigner(input: {
+  workspaceId: string;
+  documentId: string;
+  actorId: string;
+  /** Specific signer; defaults to whoever is currently expected to sign. */
+  recipientId?: string;
+  now?: Date;
+}): Promise<{ ok: true; recipientName: string; recipientEmail: string } | { ok: false; error: string }> {
+  const now = input.now ?? new Date();
+  const [target] = await db
+    .select({
+      workspaceId: signatureRecipients.workspaceId,
+      recipientId: signatureRecipients.id,
+      envelopeId: signatureEnvelopes.id,
+      documentName: documents.name,
+      recipientEmail: signatureRecipients.email,
+      recipientName: signatureRecipients.name,
+      routingOrder: signatureRecipients.routingOrder,
+      linkExpiresAt: signatureRecipients.linkExpiresAt,
+      reminderCount: signatureRecipients.reminderCount,
+      lastReminderAt: signatureRecipients.lastReminderAt,
+      subject: signatureEnvelopes.subject,
+      message: signatureEnvelopes.message,
+      senderName: authUser.name,
+    })
+    .from(documents)
+    .innerJoin(signatureEnvelopes, eq(signatureEnvelopes.id, documents.signatureEnvelopeRefId))
+    .innerJoin(signatureRecipients, eq(signatureRecipients.envelopeId, signatureEnvelopes.id))
+    .leftJoin(authUser, eq(authUser.id, signatureEnvelopes.createdById))
+    .where(and(
+      eq(documents.id, input.documentId),
+      eq(documents.workspaceId, input.workspaceId),
+      eq(documents.signatureStatus, "pending"),
+      eq(signatureEnvelopes.provider, "native"),
+      eq(signatureEnvelopes.status, "sent"),
+      eq(signatureRecipients.workspaceId, input.workspaceId),
+      eq(signatureRecipients.role, "signer"),
+      eq(signatureRecipients.status, "sent"),
+      input.recipientId ? eq(signatureRecipients.id, input.recipientId) : undefined,
+    ))
+    .limit(1);
+  if (!target) return { ok: false, error: "No one is currently waiting to sign this document." };
+  const sentBefore = await db.select({ payload: signatureEvents.payload }).from(signatureEvents).where(and(eq(signatureEvents.envelopeId, target.envelopeId), eq(signatureEvents.eventType, "reminder_sent")));
+  if (sentBefore.filter((row) => (row.payload as { recipientId?: string } | null)?.recipientId === target.recipientId).length >= MAX_TOTAL_REMINDERS) {
+    return { ok: false, error: `${target.recipientName} has already been reminded ${MAX_TOTAL_REMINDERS} times. Contact them another way or void and re-send.` };
+  }
+  if (!target.linkExpiresAt || target.linkExpiresAt <= now) return { ok: false, error: "This signer's link has expired. Void the request and send it again." };
+  if (target.lastReminderAt && now.getTime() - target.lastReminderAt.getTime() < MANUAL_REMINDER_MIN_GAP_MS) {
+    return { ok: false, error: `A reminder was sent to ${target.recipientName} less than an hour ago.` };
+  }
+  const signerCount = await countSigners(input.workspaceId, target.envelopeId);
+  const eventKey = `native:${target.envelopeId}:reminder:${target.recipientId}:manual:${now.getTime()}`;
+  const outboxId = await db.transaction((tx) =>
+    queueReminder(tx, { ...target, linkExpiresAt: target.linkExpiresAt!, signerCount }, { now, eventKey, manual: true, actorId: input.actorId }),
+  );
+  if (!outboxId) return { ok: false, error: "A reminder is already being sent." };
+  await processEmailOutbox({ ids: [outboxId], workspaceId: input.workspaceId });
+  return { ok: true, recipientName: target.recipientName, recipientEmail: target.recipientEmail };
+}
+
 export async function requestNativeOtp(target: NativeSigningTarget) {
   if (target.securityMode !== "email_otp") return { ok: false as const, error: "OTP is not required for this signing link." };
   await purgeExpiredSignatureData({ workspaceId: target.workspaceId });
+  const [recent] = await db.select({ createdAt: nativeSignatureOtpChallenges.createdAt }).from(nativeSignatureOtpChallenges).where(and(eq(nativeSignatureOtpChallenges.recipientId, target.recipientId), gt(nativeSignatureOtpChallenges.createdAt, new Date(Date.now() - OTP_RESEND_COOLDOWN_MS)))).limit(1);
+  if (recent) return { ok: false as const, error: "A code was just sent. Wait a moment before asking for another.", retryAfterSeconds: OTP_RESEND_COOLDOWN_MS / 1000 };
   const code = String(randomInt(100000, 1_000_000));
   // Protect the code before creating a challenge. A missing encryption key
   // must not leave an unverifiable challenge in the database.
@@ -483,8 +728,26 @@ export async function verifyNativeOtp(target: NativeSigningTarget, challengeId: 
       )
       .returning({ id: nativeSignatureOtpChallenges.id });
     if (!verified) return { ok: false as const, error: "Invalid or expired verification code." };
+    await tx.insert(signatureEvents).values({
+      workspaceId: target.workspaceId,
+      envelopeId: target.envelopeId,
+      eventKey: `native:${target.envelopeId}:otp_verified:${challenge.id}`,
+      eventType: "otp_verified",
+      generatedAt: new Date(),
+      payload: { recipientId: target.recipientId },
+      processedAt: new Date(),
+    }).onConflictDoNothing();
     return { ok: true as const, cookieValue: nativeSignatureCookieValue(target.recipientId, challenge.id) };
   });
 }
 
 export const nativeSignCookieName = verificationCookie;
+/** How long a verified email code keeps the document unlocked. */
+export const NATIVE_OTP_SESSION_SECONDS = OTP_TTL_MS / 1000;
+
+/** Mask an address for display: j***@example.com */
+export function maskEmail(email: string) {
+  const [local = "", domain = ""] = email.split("@");
+  if (!domain) return "your email";
+  return `${local.slice(0, 1)}***@${domain}`;
+}

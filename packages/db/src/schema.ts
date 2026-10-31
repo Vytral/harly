@@ -986,6 +986,15 @@ export const workspaceSettings = pgTable("workspace_settings", {
   signatureExpirationDays: integer("signature_expiration_days")
     .default(30)
     .notNull(),
+  // Reminder cadence for native signing links, measured from the moment the
+  // CURRENT signer was invited. 0 turns automatic reminders off.
+  signatureReminderCadenceDays: integer("signature_reminder_cadence_days")
+    .default(3)
+    .notNull(),
+  // Maximum automatic reminders per signer (manual reminders do not count).
+  signatureMaxReminders: integer("signature_max_reminders")
+    .default(3)
+    .notNull(),
   // Offer delivery channel: "email" (default) or "esign" (collect signature via
   // embedded signing inside the candidate portal, email notifies instead).
   offerSignatureChannel: text("offer_signature_channel")
@@ -2132,7 +2141,7 @@ export const signatureFields = pgTable(
     documentId: uuid("document_id")
       .notNull()
       .references(() => documents.id, { onDelete: "cascade" }),
-    type: text("type").notNull(), // "signature" | "text"
+    type: text("type").notNull(), // "signature" | "text" | "date"
     page: integer("page").notNull(),
     x: doublePrecision("x").notNull(),
     y: doublePrecision("y").notNull(),
@@ -2153,7 +2162,7 @@ export const signatureFields = pgTable(
     ),
     check(
       "signature_fields_type_check",
-      sql`${table.type} in ('signature', 'text')`,
+      sql`${table.type} in ('signature', 'text', 'date')`,
     ),
     check(
       "signature_fields_geometry_check",
@@ -2651,6 +2660,17 @@ export const signatureEnvelopes = pgTable(
     // keeps the audit trail self-contained on the envelope even if the
     // document's snapshot is later overwritten by a new send cycle.
     fieldsSnapshot: jsonb("fields_snapshot"),
+    // Sender message shown on the signer page and in the invitation email.
+    message: text("message"),
+    // Per-send link lifetime (days, counted from when each signer is invited).
+    // Null falls back to the workspace default.
+    expirationDays: integer("expiration_days"),
+    voidReason: text("void_reason"),
+    // The document this envelope was created for. Kept on the envelope (no FK)
+    // so voided/declined/expired links can still name the document after the
+    // document has been reset for a new send.
+    documentId: uuid("document_id"),
+    documentName: text("document_name"),
     ...timestamps(),
   },
   (table) => [
@@ -2704,12 +2724,32 @@ export const signatureRecipients = pgTable(
     signedAt: timestamp("signed_at", { withTimezone: true }),
     declinedAt: timestamp("declined_at", { withTimezone: true }),
     declinedReason: text("declined_reason"),
+    // When this signer's link was issued (expiry and reminders count from here).
+    invitedAt: timestamp("invited_at", { withTimezone: true }),
+    // First time the signer opened their link.
+    viewedAt: timestamp("viewed_at", { withTimezone: true }),
+    // Server-stamped e-sign consent (never client supplied) and the version of
+    // the disclosure text that was shown.
+    consentAt: timestamp("consent_at", { withTimezone: true }),
+    consentVersion: text("consent_version"),
+    reminderCount: integer("reminder_count").default(0).notNull(),
+    lastReminderAt: timestamp("last_reminder_at", { withTimezone: true }),
+    // Hashes of earlier links for this signer. Reminders issue a fresh link
+    // but earlier emails keep working until the signer finishes or it expires.
+    previousTokenHashes: text("previous_token_hashes")
+      .array()
+      .default(sql`'{}'::text[]`)
+      .notNull(),
     ...timestamps(),
   },
   (table) => [
     uniqueIndex("signature_recipients_envelope_provider_id_idx").on(
       table.envelopeId,
       table.providerRecipientId,
+    ),
+    index("signature_recipients_previous_tokens_idx").using(
+      "gin",
+      table.previousTokenHashes,
     ),
     index("signature_recipients_workspace_envelope_idx").on(
       table.workspaceId,

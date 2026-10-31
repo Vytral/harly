@@ -34,7 +34,11 @@ import {
   offerExtendedSubject,
   OfferWithdrawn,
   offerWithdrawnSubject,
+  SignatureInvitation,
+  signatureInvitationSubject,
+  SignatureNotice,
 } from "@harly/emails";
+import { buildNativeNotice, formatNoticeDate, type NativeNoticePayload } from "@/lib/esign/native/notice-content";
 
 import {
   renderActiveEmailTemplate,
@@ -548,6 +552,8 @@ async function deliverRowOnce(
         return await deliverOfferWithdrawn(row, database);
       case "native.signature.invitation":
         return await deliverNativeSignatureInvitation(row, database);
+      case "native.signature.notice":
+        return await deliverNativeSignatureNotice(row, database);
       case "native.signature.otp":
         return await deliverNativeSignatureOtp(row, database);
       case "report.scheduled":
@@ -663,31 +669,110 @@ async function deliverScheduledReport(row: OutboxRow, database: typeof db = db):
   return true;
 }
 
+function nativeBrandingProps(branding: Awaited<ReturnType<typeof getWorkspaceEmailBranding>>) {
+  return {
+    companyName: branding.name || "Harly",
+    companyLogoUrl: branding.logoUrl ?? undefined,
+    hideBranding: branding.hideBranding,
+    accentColor: branding.primaryColor ?? undefined,
+    socialLinks: branding.socialLinks,
+  };
+}
+
 async function deliverNativeSignatureInvitation(row: OutboxRow, database: typeof db = db): Promise<boolean> {
-  const payload = row.payload as { token?: { ciphertext: string; iv: string; tag: string }; recipientEmail?: string; recipientName?: string; documentName?: string; subject?: string; message?: string; expiresAt?: string } | null;
+  const payload = row.payload as {
+    token?: { ciphertext: string; iv: string; tag: string };
+    recipientEmail?: string;
+    recipientName?: string;
+    documentName?: string;
+    subject?: string;
+    message?: string;
+    expiresAt?: string;
+    senderName?: string;
+    signerOrder?: number;
+    signerCount?: number;
+    reminder?: boolean;
+  } | null;
   if (!payload?.token || !payload.recipientEmail || !payload.documentName) {
     await markFailed(row.id, "Invalid native signature invitation payload.", database);
     return false;
   }
   const token = decryptSecret(payload.token);
   const link = `${appBaseUrl()}/sign/${token}`;
+  const branding = await getWorkspaceEmailBranding(row.workspaceId);
+  const brand = nativeBrandingProps(branding);
+  const reminder = payload.reminder === true;
   const delivered = await sendRecorded(
     row,
     database,
     {
       to: payload.recipientEmail,
-      subject: payload.subject ?? `Please sign: ${payload.documentName}`,
-      react: createElement("div", null,
-        createElement("p", null, `Hello ${payload.recipientName ?? "there"},`),
-        createElement("p", null, payload.message ?? "Please review and sign this document."),
-        createElement("p", null, createElement("a", { href: link }, "Review and sign document")),
-        createElement("p", null, `This link expires on ${payload.expiresAt ?? "the configured date"}.`),
-      ),
+      subject: reminder
+        ? signatureInvitationSubject({ companyName: brand.companyName, documentName: payload.documentName, reminder: true })
+        : payload.subject || signatureInvitationSubject({ companyName: brand.companyName, documentName: payload.documentName }),
+      react: createElement(SignatureInvitation, {
+        ...brand,
+        recipientName: payload.recipientName ?? "there",
+        documentName: payload.documentName,
+        requestedBy: payload.senderName,
+        message: reminder ? undefined : payload.message,
+        expiresOn: payload.expiresAt ? formatNoticeDate(payload.expiresAt) || payload.expiresAt : "the date shown on the signing page",
+        signerPosition: payload.signerOrder && payload.signerCount ? { order: payload.signerOrder, total: payload.signerCount } : undefined,
+        signUrl: link,
+        reminder,
+      }),
       ...deliveryOptions(row),
     },
     row.actorId,
   );
   if (!delivered) { await markFailed(row.id, "Email provider did not accept the native signature invitation.", database); return false; }
+  await markSent(row.id, delivered, database);
+  return true;
+}
+
+async function deliverNativeSignatureNotice(row: OutboxRow, database: typeof db = db): Promise<boolean> {
+  const payload = row.payload as (NativeNoticePayload & { token?: { ciphertext: string; iv: string; tag: string } }) | null;
+  if (!payload?.recipientEmail || !payload.event || !payload.documentName) {
+    await markFailed(row.id, "Invalid native signature notice payload.", database);
+    return false;
+  }
+  const branding = await getWorkspaceEmailBranding(row.workspaceId);
+  const brand = nativeBrandingProps(branding);
+  const content = buildNativeNotice(payload, brand.companyName);
+  let cta: { label: string; url: string } | undefined;
+  if (content.cta) {
+    if (payload.token) cta = { label: content.cta.label, url: `${appBaseUrl()}/sign/${decryptSecret(payload.token)}` };
+    else if (payload.documentUrl) cta = { label: content.cta.label, url: `${appBaseUrl()}${payload.documentUrl}` };
+  }
+  const attachments: Array<{ filename: string; content: Buffer; contentType: string }> = [];
+  for (const attachment of payload.attachments ?? []) {
+    try {
+      attachments.push({ filename: attachment.filename, content: await storage.read(attachment.key), contentType: attachment.contentType });
+    } catch (error) {
+      log.warn({ error, outboxRowId: row.id }, "native signature notice attachment could not be read; sending without it");
+    }
+  }
+  const delivered = await sendRecorded(
+    row,
+    database,
+    {
+      to: payload.recipientEmail,
+      subject: content.subject,
+      react: createElement(SignatureNotice, {
+        ...brand,
+        recipientName: payload.recipientName ?? "there",
+        heading: content.heading,
+        paragraphs: content.paragraphs,
+        rows: content.rows,
+        cta,
+        footnote: content.footnote,
+      }),
+      ...(attachments.length ? { attachments } : {}),
+      ...deliveryOptions(row),
+    },
+    row.actorId,
+  );
+  if (!delivered) { await markFailed(row.id, "Email provider did not accept the native signature notice.", database); return false; }
   await markSent(row.id, delivered, database);
   return true;
 }

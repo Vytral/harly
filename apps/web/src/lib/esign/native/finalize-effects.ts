@@ -24,6 +24,8 @@ export async function finalizeNativeSignatureEffects(input: {
   actorId: string | null;
   complete: boolean;
   nextOutboxId: string | null;
+  /** Signed-copy / receipt emails to deliver once the transaction has committed. */
+  noticeOutboxIds?: string[];
   documentTargetContext: Record<string, unknown>;
   documentSignatureEvent: PersistedDomainEvent;
   applicationHiredEvent: PersistedDomainEvent | null;
@@ -42,6 +44,14 @@ export async function finalizeNativeSignatureEffects(input: {
   if (input.nextOutboxId) {
     await deliver("next_signer_email", () => processEmailOutbox({
       ids: [input.nextOutboxId!],
+      workspaceId: input.workspaceId,
+      database: input.database,
+    }));
+  }
+
+  if (input.noticeOutboxIds?.length) {
+    await deliver("signature_notices", () => processEmailOutbox({
+      ids: input.noticeOutboxIds!,
       workspaceId: input.workspaceId,
       database: input.database,
     }));

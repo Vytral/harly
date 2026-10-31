@@ -28,7 +28,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     target.securityMode === "email_otp" &&
     !(await isNativeSignatureCookieVerified(request.cookies.get(nativeSignCookieName)?.value, target.recipientId))
   ) {
-    return NextResponse.json({ error: "Verify the email code before viewing this document." }, { status: 403 });
+    return NextResponse.json({ error: "Verify the email code before viewing this document.", code: "otp_required" }, { status: 403 });
   }
 
   const [row] = await db

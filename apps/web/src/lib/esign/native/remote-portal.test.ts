@@ -24,6 +24,8 @@ vi.mock("@harly/db", () => ({
   signatureRecipients: {},
   signatureArtifacts: {},
   offers: {},
+  organization: {},
+  user: {},
   workspaceSettings: {},
 }));
 vi.mock("@/lib/storage", () => ({
@@ -144,7 +146,11 @@ describe("rotateNativePortalSigningLink", () => {
       recipientEmail: "ada@example.test",
       recipientName: "Ada Lovelace",
       linkExpiresAt: expiresAt,
-      envelopeSentAt: new Date("2026-09-07T12:00:00.000Z"),
+      routingOrder: 1,
+      reminderCount: 0,
+      subject: null,
+      message: null,
+      senderName: "Sam",
     }]));
     tx.insert
       .mockReturnValueOnce(query([{ id: "reminder-event-1" }]))
@@ -175,7 +181,11 @@ describe("rotateNativePortalSigningLink", () => {
       recipientEmail: "ada@example.test",
       recipientName: "Ada Lovelace",
       linkExpiresAt: new Date("2026-10-09T12:00:00.000Z"),
-      envelopeSentAt: new Date("2026-09-07T12:00:00.000Z"),
+      routingOrder: 1,
+      reminderCount: 0,
+      subject: null,
+      message: null,
+      senderName: "Sam",
     }]));
     mocks.transaction.mockImplementation(async (callback: (value: typeof tx) => unknown) => callback(tx));
 
@@ -186,6 +196,16 @@ describe("rotateNativePortalSigningLink", () => {
     });
     expect(tx.update).not.toHaveBeenCalled();
     expect(mocks.processEmailOutbox).not.toHaveBeenCalled();
+  });
+});
+
+describe("link lifetime", () => {
+  it("never goes below the minimum window or above a year", async () => {
+    const { linkLifetimeDays } = await import("./link-lifetime");
+    expect(linkLifetimeDays(null, 1)).toBe(3);
+    expect(linkLifetimeDays(null, 30)).toBe(30);
+    expect(linkLifetimeDays(10, 30)).toBe(10);
+    expect(linkLifetimeDays(null, 9999)).toBe(365);
   });
 });
 

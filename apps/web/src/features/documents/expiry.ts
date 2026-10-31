@@ -2,6 +2,9 @@ import "server-only";
 
 import { and, eq, sql } from "drizzle-orm";
 
+import { processEmailOutbox } from "@/lib/email/outbox-processor";
+import { insertNativeNotice, loadEnvelopeSender, loadEnvelopeSigners } from "@/lib/esign/native/notices";
+
 import {
   activityEvents,
   db,
@@ -37,6 +40,7 @@ export async function expireOverdueDocuments(database: typeof db = db): Promise<
   expired: number;
   documents: Array<{ workspaceId: string; documentId: string }>;
 }> {
+  const noticeOutboxIds: Array<{ workspaceId: string; id: string }> = [];
   const rows = await database.transaction(async (tx) => {
     const rows = (await tx.execute(sql`
     with due as (
@@ -88,8 +92,7 @@ export async function expireOverdueDocuments(database: typeof db = db): Promise<
         const [envelope] = await tx
           .update(signatureEnvelopes)
           .set({
-            status: "voided",
-            voidedAt: now,
+            status: "expired",
             lastEventAt: now,
             lastEventKey: `native:${doc.signatureEnvelopeRefId}:expired`,
             updatedAt: now,
@@ -100,6 +103,19 @@ export async function expireOverdueDocuments(database: typeof db = db): Promise<
           ))
           .returning({ id: signatureEnvelopes.id });
         if (envelope) {
+          // Tell the signer whose link lapsed (and the sender) what happened.
+          const signers = await loadEnvelopeSigners(tx, doc.workspaceId, doc.signatureEnvelopeRefId);
+          const sender = await loadEnvelopeSender(tx, doc.workspaceId, doc.signatureEnvelopeRefId);
+          const signedBefore = signers.filter((row) => row.status === "signed").map((row) => ({ name: row.name, signedAt: row.signedAt?.toISOString() ?? null }));
+          for (const signer of signers.filter((row) => row.status === "sent")) {
+            const base = { workspaceId: doc.workspaceId, envelopeId: doc.signatureEnvelopeRefId, recipientKey: signer.id };
+            const toSigner = await insertNativeNotice(tx, { ...base, payload: { event: "expired", audience: "signer", recipientEmail: signer.email, recipientName: signer.name, documentName: doc.name, signedBefore } });
+            if (toSigner) noticeOutboxIds.push({ workspaceId: doc.workspaceId, id: toSigner });
+            if (sender?.email) {
+              const toSender = await insertNativeNotice(tx, { ...base, recipientKey: `${sender.id}:${signer.id}`, payload: { event: "expired", audience: "sender", recipientEmail: sender.email, recipientName: sender.name, documentName: doc.name, actorName: signer.name, signedBefore } });
+              if (toSender) noticeOutboxIds.push({ workspaceId: doc.workspaceId, id: toSender });
+            }
+          }
           await tx
             .update(signatureRecipients)
             .set({ status: "expired", updatedAt: now })
@@ -147,6 +163,10 @@ export async function expireOverdueDocuments(database: typeof db = db): Promise<
   });
 
   if (rows.length === 0) return { expired: 0, documents: [] };
+
+  for (const notice of noticeOutboxIds) {
+    await processEmailOutbox({ ids: [notice.id], workspaceId: notice.workspaceId }).catch(() => undefined);
+  }
 
   return {
     expired: rows.length,
