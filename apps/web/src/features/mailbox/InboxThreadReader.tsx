@@ -63,14 +63,14 @@ function AttachmentDownload({ attachment }: { attachment: InboxMessage["attachme
   }
 
   return (
-    <div className="flex items-center gap-2 rounded-lg border border-border/70 bg-muted/30 px-3 py-2 text-xs">
+    <div className="flex items-center gap-2 rounded-[var(--radius-inner)] bg-card-inset px-3 py-2 text-xs">
       {renderAttachmentIcon(attachment.contentType)}
       <span className="min-w-0 flex-1 truncate font-medium" title={attachment.filename}>{attachment.filename}</span>
       <span className="shrink-0 text-muted-foreground">{formatSize(attachment.size)}</span>
       <button
         type="button"
         onClick={download}
-        className="flex size-7 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+        className="flex size-7 shrink-0 items-center justify-center rounded-full text-soft-ink transition-colors hover:bg-row-wash hover:text-near-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
         aria-label={`Download ${attachment.filename}`}
       >
         <Download className="size-4" />
@@ -92,7 +92,7 @@ function ThreadMessage({ message, expanded, onToggle, isLast }: { message: Inbox
   const bodyId = `thread-message-${message.id}`;
 
   return (
-    <article className={cn("px-1", !isLast && "border-b border-border/50")}>
+    <article className={cn("px-1", !isLast && "border-b border-hairline")}>
       <button
         type="button"
         onClick={onToggle}
@@ -177,7 +177,7 @@ export function InboxThreadReader({
 
   return (
     <section className="flex h-full min-h-0 flex-col bg-background duration-200 animate-in fade-in" aria-label="Conversation">
-      <header className="flex items-start justify-between gap-3 border-b border-border/70 px-5 py-3.5">
+      <header className="flex items-start justify-between gap-3 border-b border-hairline px-5 py-3.5">
         <div className="flex min-w-0 items-start gap-3">
           {onBack ? (
             <Button variant="ghost" size="icon-sm" className="-ml-2 mt-0.5 shrink-0" aria-label="Back to conversations" title="Back to conversations" onClick={onBack}>
@@ -237,7 +237,7 @@ export function InboxThreadReader({
       </div>
 
       {!canReply && !hideSendingNotice ? (
-        <div className="shrink-0 border-t border-border/70 bg-muted/20 px-5 py-3.5">
+        <div className="shrink-0 border-t border-hairline bg-card-inset/60 px-5 py-3.5">
           <div className="flex items-start gap-3">
             <EnvelopeSimpleDuotoneIcon className="mt-0.5 size-5 shrink-0 text-muted-foreground" />
             <div className="min-w-0 text-sm">

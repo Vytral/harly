@@ -183,7 +183,7 @@ export function TrendChart({ series }: { series: TrendSeries[] }) {
                 stroke="var(--hairline)"
                 strokeDasharray={g === 0 ? undefined : "3 6"}
               />
-              <text x={padL - 8} y={y(g) + 4} textAnchor="end" className="fill-soft-ink text-[10px] tabular-nums">
+              <text x={padL - 8} y={y(g) + 4} textAnchor="end" className="fill-soft-ink text-[11px] tabular-nums">
                 {Math.round(g)}
               </text>
             </g>
@@ -245,7 +245,7 @@ export function TrendChart({ series }: { series: TrendSeries[] }) {
 
           {labels.map((label, i) =>
             i % 2 === 0 || i === n - 1 ? (
-              <text key={`lbl-${i}`} x={x(i)} y={H - 8} textAnchor="middle" className="fill-soft-ink text-[10px]">
+              <text key={`lbl-${i}`} x={x(i)} y={H - 8} textAnchor="middle" className="fill-soft-ink text-[11px]">
                 {label}
               </text>
             ) : null,
@@ -403,14 +403,14 @@ export function SourceBars({ sources }: { sources: SourceDatum[] }) {
                 <span>{fmt.format(row.candidates)} applications</span>
                 <span>{fmt.format(row.hires)} hired</span>
               </span>
-              <span className="relative h-5 overflow-hidden rounded-lg bg-warm-paper">
+              <span className="relative h-5 overflow-hidden rounded-lg bg-card-inset">
                 <span
                   className="absolute inset-y-0 left-0 rounded-lg transition-[width] duration-300"
-                  style={{ width: `${Math.max((row.candidates / maxC) * 100, 4)}%`, backgroundColor: "var(--chart-1)", opacity: 0.18 }}
+                  style={{ width: `${Math.max((row.candidates / maxC) * 100, 4)}%`, backgroundColor: "var(--chart-2)", opacity: 0.25 }}
                 />
                 <span
                   className="absolute inset-y-0 left-0 rounded-lg transition-[width] duration-300"
-                  style={{ width: `${Math.max((row.hires / maxC) * 100, row.hires > 0 ? 3 : 0)}%`, backgroundColor: "var(--chart-1)" }}
+                  style={{ width: `${Math.max((row.hires / maxC) * 100, row.hires > 0 ? 3 : 0)}%`, backgroundColor: "var(--chart-2)" }}
                 />
               </span>
             </span>

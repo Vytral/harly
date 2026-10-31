@@ -94,7 +94,7 @@ export function AddCandidateDrawer({
       }}
     >
       <SheetTrigger asChild>
-        <Button variant="outline" size="sm" className="h-11 rounded-lg">
+        <Button>
           <UserPlus className="size-4" />
           Add candidate
         </Button>

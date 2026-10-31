@@ -9,13 +9,7 @@ import { toast } from "@/lib/notification-island/toast";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { FilterPill } from "@/components/ui/FilterPill";
 import { PageTitle } from "@/components/dashboard/PageTitleContext";
 import { deleteTask, updateTask } from "./actions";
 import { CreateTaskDialog } from "./CreateTaskDialog";
@@ -39,10 +33,10 @@ const NEXT_STATUS: Record<TaskStatus, TaskStatus> = {
 
 function SummaryChip({ count, label, tone }: { count: number; label: string; tone: string }) {
   return (
-    <span className="inline-flex items-center gap-1.5 rounded-full border bg-card px-2.5 py-1 text-xs font-medium">
+    <span className="inline-flex items-center gap-1.5 rounded-full bg-pure-snow px-2.5 py-1 text-xs font-medium shadow-[var(--shadow-card)]">
       <span className={cn("size-1.5 rounded-full", tone)} />
       <span className="tabular-nums">{count}</span>
-      <span className="text-muted-foreground">{label}</span>
+      <span className="text-soft-ink">{label}</span>
     </span>
   );
 }
@@ -197,79 +191,60 @@ export function TasksView({
     <div className="space-y-5">
       <PageTitle title="Tasks" />
 
-      <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
-        <div className="relative sm:w-60">
-          <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+      <div className="flex flex-wrap items-center gap-2">
+        <div className="relative w-full sm:w-60">
+          <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-quiet-mist" />
           <Input
             type="search"
             aria-label="Search tasks"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Search tasks…"
-            className="w-full pl-9"
+            className="w-full rounded-full pl-9"
           />
         </div>
 
-        <Select value={assignee} onValueChange={setAssignee}>
-          <SelectTrigger aria-label="Filter by assignee" className="w-full sm:w-44">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All assignees</SelectItem>
-            {members.map((m) => (
-              <SelectItem key={m.id} value={m.id}>
-                {m.name}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-
-        <Select value={priority} onValueChange={setPriority}>
-          <SelectTrigger aria-label="Filter by priority" className="w-full sm:w-36">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All priorities</SelectItem>
-            {TASK_PRIORITIES.map((p) => (
-              <SelectItem key={p} value={p}>
-                {TASK_PRIORITY_LABELS[p]}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-
-        <Select value={status} onValueChange={setStatus}>
-          <SelectTrigger aria-label="Filter by status" className="w-full sm:w-36">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All statuses</SelectItem>
-            {TASK_STATUSES.map((item) => (
-              <SelectItem key={item} value={item}>{TASK_STATUS_LABELS[item]}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-
-        <Select value={due} onValueChange={setDue}>
-          <SelectTrigger aria-label="Filter by due date" className="w-full sm:w-36">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All due dates</SelectItem>
-            <SelectItem value="due">With due date</SelectItem>
-            <SelectItem value="overdue">Overdue</SelectItem>
-            <SelectItem value="no_due">No due date</SelectItem>
-          </SelectContent>
-        </Select>
+        <FilterPill
+          label="Assignee"
+          value={assignee}
+          onChange={setAssignee}
+          options={members.map((m) => m.id)}
+          labelMap={{ all: "All", ...Object.fromEntries(members.map((m) => [m.id, m.name])) }}
+          allValue="all"
+        />
+        <FilterPill
+          label="Priority"
+          value={priority}
+          onChange={setPriority}
+          options={["all", ...TASK_PRIORITIES]}
+          labelMap={{ all: "All", ...TASK_PRIORITY_LABELS }}
+          allValue="all"
+        />
+        <FilterPill
+          label="Status"
+          value={status}
+          onChange={setStatus}
+          options={["all", ...TASK_STATUSES]}
+          labelMap={{ all: "All", ...TASK_STATUS_LABELS }}
+          allValue="all"
+        />
+        <FilterPill
+          label="Due"
+          value={due}
+          onChange={setDue}
+          options={["all", "due", "overdue", "no_due"]}
+          labelMap={{ all: "All", due: "With due date", overdue: "Overdue", no_due: "No due date" }}
+          allValue="all"
+        />
 
         <div className="flex items-center gap-1.5 sm:ml-auto">
           <SummaryChip count={summary.open} label="open" tone="bg-slate-info" />
           <SummaryChip count={summary.overdue} label="overdue" tone="bg-rust" />
-          <SummaryChip count={summary.done} label="done" tone="bg-primary" />
+          <SummaryChip count={summary.done} label="done" tone="bg-success-olive" />
         </div>
 
         <div className="flex items-center gap-2">
-          <div className="inline-flex rounded-full border bg-card p-0.5">
+          <div className="inline-flex rounded-full bg-soft-kraft p-0.5">
             {([
               { key: "list", icon: List, label: "List view" },
               { key: "board", icon: KanbanSquare, label: "Board view" },
@@ -282,7 +257,7 @@ export function TasksView({
                 aria-pressed={view === key}
                 className={cn(
                   "rounded-full p-1.5 transition",
-                  view === key ? "bg-muted text-foreground" : "text-muted-foreground hover:text-foreground",
+                  view === key ? "bg-pure-snow text-near-ink" : "text-soft-ink hover:text-near-ink",
                 )}
               >
                 <Icon className="size-4" />
@@ -290,13 +265,12 @@ export function TasksView({
             ))}
           </div>
           <Button
-            size="sm"
             onClick={() => {
               setCreateStatus("pending");
               setCreateOpen(true);
             }}
           >
-            <Plus className="mr-1.5 size-4" />
+            <Plus className="size-4" />
             New task
           </Button>
         </div>

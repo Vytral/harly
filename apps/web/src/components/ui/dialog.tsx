@@ -8,7 +8,7 @@ import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 
 /**
- * Modal anatomy (Deel-inspired): ink/40 scrim with a whisper of blur, a white
+ * Modal anatomy (Deel-inspired): ink/30 scrim (no blur), a white
  * 16px card with no border, floating shadow, 24px padding and 20px rhythm.
  * Enter is fade + scale 0.97 -> 1 over 180ms, exit 140ms; reduced motion
  * collapses both to an instant swap. AlertDialog shares these constants so the
@@ -25,7 +25,7 @@ export const dialogSizeClasses: Record<DialogSize, string> = {
 }
 
 export const dialogOverlayClasses =
-  "fixed inset-0 z-50 bg-ink/40 backdrop-blur-[2px] data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:duration-[180ms] data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:duration-[140ms] motion-reduce:animate-none motion-reduce:duration-0"
+  "fixed inset-0 z-50 bg-ink/30 data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:duration-[180ms] data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:duration-[140ms] motion-reduce:animate-none motion-reduce:duration-0"
 
 export const dialogContentClasses =
   "fixed top-[50%] left-[50%] z-50 grid max-h-[85dvh] w-full max-w-[calc(100%-2rem)] translate-x-[-50%] translate-y-[-50%] content-start gap-5 overflow-y-auto rounded-[var(--radius-card)] bg-pure-snow p-6 text-near-ink shadow-[var(--shadow-float)] outline-none ease-out data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-[0.97] data-[state=open]:duration-[180ms] data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-[0.97] data-[state=closed]:duration-[140ms] motion-reduce:animate-none motion-reduce:duration-0"

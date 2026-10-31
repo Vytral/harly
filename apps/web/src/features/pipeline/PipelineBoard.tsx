@@ -60,6 +60,7 @@ import type {
 import { StageColumn } from "@/features/pipeline/StageColumn";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
   DropdownMenu,
@@ -485,7 +486,7 @@ export function PipelineBoard({
   const filterBar = (
     <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
       <div className="relative">
-        <SearchIcon className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+        <SearchIcon className="pointer-events-none absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-soft-ink" />
         <Input
           type="search"
           aria-label="Search candidates"
@@ -495,7 +496,7 @@ export function PipelineBoard({
             setSelectedIds(new Set());
           }}
           placeholder="Search candidates…"
-          className="w-full pl-9 sm:w-48"
+          className="h-9 w-full rounded-full border-transparent bg-card-inset pl-9 shadow-none sm:w-56"
         />
       </div>
       <Select
@@ -505,7 +506,7 @@ export function PipelineBoard({
           setSelectedIds(new Set());
         }}
       >
-        <SelectTrigger className="w-full sm:w-36" aria-label="Filter by status">
+        <SelectTrigger className="h-9 w-full rounded-full border-transparent bg-soft-kraft shadow-none hover:bg-row-wash sm:w-36" aria-label="Filter by status">
           <SelectValue />
         </SelectTrigger>
         <SelectContent>
@@ -516,7 +517,7 @@ export function PipelineBoard({
           <SelectItem value="withdrawn">Withdrawn</SelectItem>
         </SelectContent>
       </Select>
-      <label className="hidden items-center gap-2 rounded-md border bg-muted/40 px-3 py-1.5 text-sm font-medium text-muted-foreground sm:flex">
+      <label className="hidden items-center gap-2 h-9 rounded-full bg-soft-kraft px-3.5 text-[13px] font-medium text-soft-ink sm:flex">
         <Checkbox
           checked={hideEmptyColumns}
           onCheckedChange={(checked) => setHideEmptyColumns(checked === true)}
@@ -527,7 +528,7 @@ export function PipelineBoard({
   );
 
   const bulkBar = selectedApplications.length > 0 ? (
-    <div className="flex flex-col gap-3 rounded-xl border bg-accent/40 p-3 sm:flex-row sm:items-center sm:justify-between">
+    <div className="flex flex-col gap-3 rounded-[var(--radius-inner)] bg-lime-wash p-3 sm:flex-row sm:items-center sm:justify-between">
       <Badge variant="secondary" className="w-fit">
         {selectedApplications.length} selected
       </Badge>
@@ -587,7 +588,7 @@ export function PipelineBoard({
   ) : null;
 
   return (
-    <div className="space-y-3">
+    <Card className="gap-3 p-4">
       {filterBar}
       {bulkBar}
 
@@ -600,7 +601,7 @@ export function PipelineBoard({
         <div
           role="alert"
           aria-live="assertive"
-          className="rounded-xl border border-destructive/30 bg-destructive/5 p-3 text-sm font-medium text-destructive"
+          className="rounded-[var(--radius-inner)] bg-destructive/10 p-3 text-sm font-medium text-destructive"
         >
           {error}
         </div>
@@ -618,7 +619,7 @@ export function PipelineBoard({
                 <span className="flex items-center gap-2">
                   <span
                     className="size-2 shrink-0 rounded-full"
-                    style={{ backgroundColor: stage.color ?? "#a1a1aa" }}
+                    style={{ backgroundColor: stage.color ?? "var(--quiet-mist)" }}
                   />
                   {stage.name}
                   <span className="text-muted-foreground">
@@ -647,7 +648,7 @@ export function PipelineBoard({
             />
           ) : null}
           {mobileAll.length === 0 ? (
-            <div className="flex items-center justify-center rounded-[var(--radius-md)] bg-warm-paper p-8 text-center text-[13px] text-soft-ink">
+            <div className="flex items-center justify-center rounded-[var(--radius-inner)] bg-card-inset p-8 text-center text-[13px] text-soft-ink">
               No candidates in this stage
             </div>
           ) : null}
@@ -667,7 +668,7 @@ export function PipelineBoard({
         >
           {/* 17rem, not 15: a name plus the fit note plus the stage age has to
               fit on one line, or every card truncates its own meta. */}
-          <div className="group/board grid grid-flow-col auto-cols-[minmax(17rem,1fr)] gap-2 overflow-x-auto overscroll-x-contain pb-2">
+          <div className="group/board grid grid-flow-col auto-cols-[minmax(17rem,1fr)] gap-3 overflow-x-auto overscroll-x-contain">
             {visibleStages.map((stage, index) => {
               const stageApplications = filteredColumns.get(stage.id) ?? [];
               const limit = limits[stage.id] ?? CARD_PAGE_SIZE;
@@ -699,6 +700,6 @@ export function PipelineBoard({
           </DragOverlay>
         </DndContext>
       </div>
-    </div>
+    </Card>
   );
 }

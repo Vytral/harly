@@ -91,9 +91,9 @@ export function InboxActionsPanel({
   }
 
   return (
-    <aside className="flex h-full min-h-0 flex-col overflow-y-auto bg-muted/15" aria-label="Conversation context">
+    <aside className="flex h-full min-h-0 flex-col overflow-y-auto" aria-label="Conversation context">
       <div className="space-y-5 px-5 py-5">
-        <section className="rounded-lg border border-border/70 bg-background p-3.5">
+        <section className="rounded-[var(--radius-inner)] bg-pure-snow p-3.5 shadow-[var(--shadow-card)]">
           <div className="flex items-start gap-3">
             <UserAvatar name={thread.candidateName ?? thread.participantEmail ?? "Unknown sender"} src={thread.candidateAvatarUrl} size="md" className="shrink-0" />
             <div className="min-w-0 flex-1">
@@ -103,7 +103,7 @@ export function InboxActionsPanel({
             </div>
           </div>
           {thread.candidateId && thread.candidateName ? (
-            <Link href={`/dashboard/candidates/${thread.candidateId}`} className="mt-3 block text-xs font-semibold text-foreground underline underline-offset-4 hover:text-primary">
+            <Link href={`/dashboard/candidates/${thread.candidateId}`} className="mt-3 block text-xs font-semibold text-foreground underline underline-offset-4 hover:text-soft-ink">
               Open candidate profile
             </Link>
           ) : (
@@ -152,14 +152,14 @@ export function InboxActionsPanel({
           </div>
         </section>
 
-        <section className="border-t border-border/70 pt-4" aria-labelledby={`${idPrefix}-ai-heading`}>
+        <section className="border-t border-hairline pt-4" aria-labelledby={`${idPrefix}-ai-heading`}>
           <div className="mb-3 flex items-center justify-between gap-2">
             <h3 id={`${idPrefix}-ai-heading`} className="text-[11px] font-semibold uppercase tracking-[0.09em] text-muted-foreground">Harly AI</h3>
             <span className="text-[11px] text-muted-foreground">Review before using</span>
           </div>
           <div className="space-y-2">
             <Button className="w-full justify-start" size="sm" variant="outline" disabled={aiPending} onClick={() => runAi(onSummarize, (result) => setAiSummary(result.summary ?? null))}>
-              <SparkleFillIcon className="size-4 text-primary" />
+              <SparkleFillIcon className="size-4 text-success-olive" />
               {aiPending ? "Working…" : "Summarize conversation"}
             </Button>
             {thread.transport === "imap" ? (
@@ -171,7 +171,7 @@ export function InboxActionsPanel({
           </div>
           {aiError ? <p role="alert" className="mt-2 text-xs leading-5 text-destructive">{aiError}</p> : null}
           {aiSummary ? (
-            <div className="mt-3 space-y-2 rounded-lg border border-border/70 bg-background p-3 text-xs leading-5">
+            <div className="mt-3 space-y-2 rounded-[var(--radius-inner)] bg-lime-wash p-3 text-xs leading-5">
               <p><span className="font-semibold">Summary:</span> {aiSummary.summary}</p>
               <p><span className="font-semibold">Latest intent:</span> {aiSummary.lastIntent}</p>
               <p><span className="font-semibold">Next step:</span> {aiSummary.nextStep}</p>
@@ -181,7 +181,7 @@ export function InboxActionsPanel({
         </section>
 
         {thread.source === "mailbox" ? (
-          <section className="border-t border-border/70 pt-4">
+          <section className="border-t border-hairline pt-4">
             <h3 className="text-[11px] font-semibold uppercase tracking-[0.09em] text-muted-foreground">Thread actions</h3>
             <div className="mt-2 space-y-1">
               <Button className="w-full justify-start" size="sm" variant="ghost" disabled={isPending} onClick={onArchive}><TrayIcon className="size-4" /> Archive thread</Button>

@@ -29,7 +29,6 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { RelativeTime } from "@/lib/date-hydration";
 import { cn } from "@/lib/utils";
 
@@ -148,8 +147,8 @@ export function InboxList({ items }: { items: NotificationItem[] }) {
 
   if (items.length === 0) {
     return (
-      <div className="flex flex-col items-center gap-2 rounded-xl border border-dashed px-6 py-16 text-center">
-        <span className="flex size-10 items-center justify-center rounded-xl bg-muted text-muted-foreground">
+      <div className="flex flex-col items-center gap-2 rounded-[var(--radius-card)] bg-card px-6 py-16 text-center shadow-[var(--shadow-card)]">
+        <span className="flex size-10 items-center justify-center rounded-[var(--radius-inner)] bg-card-inset text-soft-ink">
           <svg
             xmlns="http://www.w3.org/2000/svg"
             width="20"
@@ -166,7 +165,7 @@ export function InboxList({ items }: { items: NotificationItem[] }) {
           </svg>
         </span>
         <p className="text-sm font-medium">You&apos;re all caught up</p>
-        <p className="max-w-sm text-sm text-muted-foreground">
+        <p className="max-w-sm text-sm text-soft-ink">
           Mentions and updates from your team will land here.
         </p>
       </div>
@@ -176,14 +175,31 @@ export function InboxList({ items }: { items: NotificationItem[] }) {
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between gap-3">
-        <Tabs value={filter} onValueChange={(v) => setFilter(v as Filter)}>
-          <TabsList>
-            <TabsTrigger value="all">All</TabsTrigger>
-            <TabsTrigger value="unread">
-              Unread{unread > 0 ? ` (${unread})` : ""}
-            </TabsTrigger>
-          </TabsList>
-        </Tabs>
+        <div role="tablist" aria-label="Filter notifications" className="flex items-center gap-1.5">
+          {(
+            [
+              ["all", "All", items.length],
+              ["unread", "Unread", unread],
+            ] as const
+          ).map(([value, label, count]) => (
+            <button
+              key={value}
+              type="button"
+              role="tab"
+              aria-selected={filter === value}
+              onClick={() => setFilter(value)}
+              className={cn(
+                "inline-flex h-8 items-center gap-1.5 rounded-full px-3.5 text-[13px] font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-near-ink",
+                filter === value
+                  ? "bg-near-ink text-pure-snow"
+                  : "bg-soft-kraft text-soft-ink hover:bg-row-wash hover:text-near-ink",
+              )}
+            >
+              {label}
+              {count > 0 ? <span className="tabular-nums opacity-70">{count}</span> : null}
+            </button>
+          ))}
+        </div>
 
         <div className="flex items-center gap-2">
           {unread > 0 ? (
@@ -216,21 +232,20 @@ export function InboxList({ items }: { items: NotificationItem[] }) {
       ) : null}
 
       {visible.length === 0 ? (
-        <div className="flex flex-col items-center gap-2 rounded-xl border border-dashed px-6 py-12 text-center">
+        <div className="flex flex-col items-center gap-2 rounded-[var(--radius-card)] bg-card px-6 py-12 text-center shadow-[var(--shadow-card)]">
           <p className="text-sm font-medium">No unread notifications</p>
-          <p className="text-sm text-muted-foreground">
+          <p className="text-sm text-soft-ink">
             Switch to &ldquo;All&rdquo; to see past notifications.
           </p>
         </div>
       ) : (
-        <div className="overflow-hidden rounded-xl border bg-card">
-          {visible.map((item, index) => (
+        <div className="overflow-hidden rounded-[var(--radius-card)] bg-card p-2 shadow-[var(--shadow-card)]">
+          {visible.map((item) => (
             <div
               key={item.id}
               className={cn(
-                "group flex w-full items-start gap-3 px-4 py-3.5 transition-colors",
-                index > 0 && "border-t border-border/70",
-                !item.read && "bg-primary/[0.03]",
+                "group flex w-full items-start gap-3 rounded-[var(--radius-inner)] px-3 py-3 transition-colors hover:bg-row-wash/60",
+                !item.read && "bg-lime-wash/50",
               )}
             >
               <button
@@ -256,23 +271,23 @@ export function InboxList({ items }: { items: NotificationItem[] }) {
                     <span
                       className={cn(
                         "truncate text-sm",
-                        item.read ? "text-muted-foreground" : "font-medium",
+                        item.read ? "text-soft-ink" : "font-medium text-near-ink",
                       )}
                     >
                       {item.title}
                     </span>
                     {!item.read ? (
-                      <span className="size-2 shrink-0 rounded-full bg-primary" />
+                      <span aria-label="Unread" className="size-2 shrink-0 rounded-full bg-chartreuse-signal ring-1 ring-success-olive/30" />
                     ) : null}
                   </span>
                   {item.body ? (
-                    <span className="mt-0.5 line-clamp-2 block text-sm text-muted-foreground">
+                    <span className="mt-0.5 line-clamp-2 block text-sm text-soft-ink">
                       {item.body}
                     </span>
                   ) : null}
-                  <span className="mt-1 block text-xs text-muted-foreground">
+                  <span className="mt-1 block text-xs text-soft-ink">
                     {item.actorName ? (
-                      <span className="font-medium text-foreground/70">
+                      <span className="font-medium text-near-ink/70">
                         {item.actorName}
                       </span>
                     ) : null}

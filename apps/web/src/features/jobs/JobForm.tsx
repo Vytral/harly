@@ -36,7 +36,9 @@ import { JobLivePreview, type PreviewJobDraft } from "./JobLivePreview";
 import { FocusModeShell } from "@/components/focus-mode/FocusModeShell";
 import { useUnsavedChangesGuard } from "@/components/focus-mode/useUnsavedChangesGuard";
 import { UnsavedChangesDialog } from "@/components/focus-mode/UnsavedChangesDialog";
+import { ArrowLeft, ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import type { CareerPageConfig } from "@/features/career-page/config";
 import type { WorkspaceBoardBranding } from "@/features/workspaces/board";
@@ -224,6 +226,7 @@ export function JobForm({
   const { confirmDiscard, discardDialogProps } = useUnsavedChangesGuard(dirty);
 
   const [flashSection, setFlashSection] = useState<SectionKey | null>(null);
+  const [activeSection, setActiveSection] = useState<SectionKey>(SECTIONS[0].key);
   const [reviewInView, setReviewInView] = useState(job?.status === "open");
   const reviewSectionRef = useRef<HTMLDivElement>(null);
 
@@ -394,6 +397,13 @@ export function JobForm({
     }
   }, []);
 
+  const activeIndex = SECTIONS.findIndex((s) => s.key === activeSection);
+  const previousSection = activeIndex > 0 ? SECTIONS[activeIndex - 1].key : null;
+  const nextSection =
+    activeIndex >= 0 && activeIndex < SECTIONS.length - 1
+      ? SECTIONS[activeIndex + 1].key
+      : null;
+
   const primaryActions = (
     <>
       <Button
@@ -453,6 +463,9 @@ export function JobForm({
         <JobEditorRail
           sections={RAIL_SECTIONS}
           scrollRootRef={scrollRef}
+          active={activeSection}
+          onActiveChange={(key) => setActiveSection(key as SectionKey)}
+          onSelect={(key) => jumpToSection(key as SectionKey)}
           secondaryActions={railActions}
         />
 
@@ -471,7 +484,7 @@ export function JobForm({
             content in normal flow instead; short drafts get a small gap
             before it rather than a forced full-viewport stretch.
           */}
-          <div className="flex flex-col px-6 py-8">
+          <div className="flex flex-col px-6 pb-8 pt-6">
             <div className="space-y-10">
               {SECTIONS.map((s) => (
                 <section
@@ -479,20 +492,20 @@ export function JobForm({
                   id={s.key}
                   className={cn(
                     "scroll-mt-6 rounded-2xl transition-colors duration-300",
-                    flashSection === s.key && "bg-destructive/5",
+                    flashSection === s.key && "bg-destructive/10",
                   )}
                 >
                   <header className="mb-4 px-1">
-                    <h2 className="font-display text-lg font-semibold tracking-tight text-foreground">
+                    <h2 className="font-display text-[20px] tracking-tight text-near-ink">
                       {s.label}
                     </h2>
-                    <p className="mt-1 text-sm text-muted-foreground">
+                    <p className="mt-1 text-[13.5px] text-soft-ink">
                       {s.blurb}
                     </p>
                   </header>
 
                   {s.key === "essentials" ? (
-                    <div className="rounded-2xl border border-border/70 bg-card p-5">
+                    <Card className="p-5">
                       <EssentialsSection
                         job={job}
                         departments={departments}
@@ -503,7 +516,7 @@ export function JobForm({
                         workplace={workplace}
                         setWorkplace={setWorkplace}
                       />
-                    </div>
+                    </Card>
                   ) : null}
 
                   {s.key === "description" ? (
@@ -523,22 +536,22 @@ export function JobForm({
                   ) : null}
 
                   {s.key === "compensation" ? (
-                    <div className="rounded-2xl border border-border/70 bg-card p-5">
+                    <Card className="p-5">
                       <CompensationSection job={job} />
-                    </div>
+                    </Card>
                   ) : null}
 
                   {s.key === "application" ? (
-                    <div className="rounded-2xl border border-border/70 bg-card p-5">
+                    <Card className="p-5">
                       <ApplicationSection
                         applicationConfig={applicationConfig}
                         aiContext={{ title, description, keywords }}
                       />
-                    </div>
+                    </Card>
                   ) : null}
 
                   {s.key === "advanced" ? (
-                    <div className="rounded-2xl border border-border/70 bg-card p-5">
+                    <Card className="p-5">
                       <AdvancedSection
                         job={job}
                         workplace={workplace}
@@ -547,7 +560,7 @@ export function JobForm({
                         photos={photos}
                         setPhotos={setPhotos}
                       />
-                    </div>
+                    </Card>
                   ) : null}
 
                   {s.key === "review" ? (
@@ -569,9 +582,28 @@ export function JobForm({
               ))}
             </div>
 
-            <div className="mt-10 flex items-center justify-end gap-2 border-t border-border/60 pt-6">
-              {primaryActions}
-            </div>
+          </div>
+
+          {/* Sticky wizard bar: Back (ghost) and Continue (ink) walk the steps;
+              the last step swaps Continue for the real submit actions. */}
+          <div className="sticky bottom-0 z-10 mt-auto flex items-center justify-between gap-2 border-t border-hairline bg-pure-snow/90 px-6 py-3 backdrop-blur-sm">
+            <Button
+              type="button"
+              variant="ghost"
+              onClick={() => previousSection && jumpToSection(previousSection)}
+              disabled={!previousSection}
+            >
+              <ArrowLeft className="size-4" />
+              Back
+            </Button>
+            {nextSection ? (
+              <Button type="button" onClick={() => jumpToSection(nextSection)}>
+                Continue
+                <ArrowRight className="size-4" />
+              </Button>
+            ) : (
+              <div className="flex items-center gap-2">{primaryActions}</div>
+            )}
           </div>
         </div>
 

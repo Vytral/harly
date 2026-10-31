@@ -366,7 +366,7 @@ export function ImportCandidatesDrawer({
       }}
     >
       <SheetTrigger asChild>
-        <Button variant="outline" size="sm" className="h-11 rounded-lg">
+        <Button variant="outline">
           <Upload className="size-4" />
           Import candidates
         </Button>

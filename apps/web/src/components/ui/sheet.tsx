@@ -80,7 +80,7 @@ function SheetOverlay({
     return (
       <DrawerPrimitive.Overlay
         data-slot="sheet-overlay"
-        className={cn("fixed inset-0 z-50 bg-ink/40 backdrop-blur-[2px]", className)}
+        className={cn("fixed inset-0 z-50 bg-ink/30", className)}
         {...props}
       />
     )
@@ -90,7 +90,7 @@ function SheetOverlay({
     <SheetPrimitive.Overlay
       data-slot="sheet-overlay"
       className={cn(
-        "fixed inset-0 z-50 bg-ink/40 backdrop-blur-[2px] data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:animate-in data-[state=open]:fade-in-0 motion-reduce:animate-none",
+        "fixed inset-0 z-50 bg-ink/30 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:animate-in data-[state=open]:fade-in-0 motion-reduce:animate-none",
         className
       )}
       {...props}

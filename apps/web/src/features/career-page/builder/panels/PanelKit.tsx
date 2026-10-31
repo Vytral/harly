@@ -33,7 +33,7 @@ export function Section({
 }) {
   const [open, setOpen] = useState(Boolean(defaultOpen));
   return (
-    <div className="overflow-hidden rounded-xl border border-border">
+    <div className="overflow-hidden rounded-[var(--radius-card)] bg-card shadow-[var(--shadow-card)]">
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
@@ -55,7 +55,7 @@ export function Section({
         )}
       >
         <div className="overflow-hidden">
-          <div className="space-y-4 border-t border-border px-4 pb-4 pt-4">{children}</div>
+          <div className="space-y-4 border-t border-hairline px-4 pb-4 pt-4">{children}</div>
         </div>
       </div>
     </div>
@@ -73,7 +73,7 @@ export function Segmented<T extends string>({
   onChange: (v: T) => void;
 }) {
   return (
-    <div className="inline-flex w-full rounded-lg border border-border bg-kraft/40 p-1">
+    <div className="inline-flex w-full rounded-full bg-soft-kraft p-1">
       {options.map((opt) => {
         const active = value === opt.value;
         return (
@@ -82,7 +82,7 @@ export function Segmented<T extends string>({
             type="button"
             onClick={() => onChange(opt.value)}
             className={cn(
-              "flex flex-1 items-center justify-center gap-1.5 rounded-md px-3 py-2 text-sm font-medium transition-all duration-150",
+              "flex flex-1 items-center justify-center gap-1.5 rounded-full px-3 py-2 text-sm font-medium transition-all duration-150",
               active
                 ? "bg-paper-raised text-foreground shadow-sm"
                 : "text-ink-soft hover:text-foreground",

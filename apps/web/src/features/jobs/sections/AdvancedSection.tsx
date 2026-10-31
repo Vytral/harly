@@ -168,7 +168,7 @@ export function AdvancedSection({
 
       {/* Office (conditional) */}
       {showOffice ? (
-        <div className="space-y-4 rounded-xl border bg-muted/20 p-4">
+        <div className="space-y-4 rounded-[var(--radius-inner)] bg-card-inset p-4">
           <FieldBox
             label="Office address"
             htmlFor="officeAddress"

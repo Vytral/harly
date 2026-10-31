@@ -1,5 +1,3 @@
-import Link from "next/link";
-import type { Route } from "next";
 import { Trash2, Users } from "lucide-react";
 
 import { EmptyState } from "@/components/ui/empty-state";
@@ -20,6 +18,7 @@ import {
   type CandidateApplicationStatus,
   type CandidateDirectoryFilters,
 } from "@/features/candidates/data";
+import { DirectoryTabs, PageTitleRow } from "@/features/candidates/directory-chrome";
 import { TrashCandidateActions } from "@/features/candidates/TrashCandidateActions";
 import { AddCandidateDrawer } from "@/features/candidates/AddCandidateDrawer";
 import { listEmailTemplates } from "@/features/email-templates/data";
@@ -31,7 +30,6 @@ import { can, getRolePolicy, requirePagePermission } from "@/features/workspaces
 import { candidateAvatarFallbackSrcs } from "@/lib/candidate-avatar";
 import { getWorkspaceGravatarEnabled } from "@/lib/gravatar";
 import { formatRelative, formatShort } from "@/lib/date";
-import { cn } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
 
@@ -144,27 +142,43 @@ const initialImportSource: ImportSource | undefined =
     };
   });
 
+  const importJobsProp = jobOptions.map((job) => ({ id: job.id, title: job.title }));
+
   return (
-    <div className="space-y-5">
-      <div className="flex w-fit items-center gap-1 rounded-lg border bg-card p-1 text-sm">
-        <Tab href="/dashboard/candidates" active={!isTrash}>
-          All
-          <span className="ml-1.5 tabular-nums text-muted-foreground">{directory.total}</span>
-        </Tab>
-        <Tab href="/dashboard/candidates?view=trash" active={isTrash}>
-          <Trash2 className="size-3.5" />
-          Trash
-          <span className="ml-1.5 tabular-nums text-muted-foreground">{trashed.length}</span>
-        </Tab>
-      </div>
+    <div className="space-y-6">
+      <PageTitleRow title="Candidates">
+        <ImportCandidatesDrawer jobs={importJobsProp} initialSource={initialImportSource} />
+        {canCreateCandidates ? (
+          <AddCandidateDrawer
+            workspaceId={workspaceContext.organization.id}
+            jobs={importJobsProp}
+            members={members}
+            currentUserId={workspaceContext.user.id}
+          />
+        ) : null}
+      </PageTitleRow>
+
+      <DirectoryTabs
+        label="Candidate views"
+        items={[
+          { href: "/dashboard/candidates", label: "All", count: directory.total, active: !isTrash },
+          {
+            href: "/dashboard/candidates?view=trash",
+            label: "Trash",
+            count: trashed.length,
+            icon: <Trash2 className="size-3.5" aria-hidden />,
+            active: isTrash,
+          },
+        ]}
+      />
 
       {isTrash ? (
         trashed.length > 0 ? (
-          <Card className="gap-0 divide-y divide-border/60 overflow-hidden py-0">
+          <Card className="gap-0 divide-y divide-hairline overflow-hidden py-0">
             {trashed.map((candidate) => (
               <div
                 key={candidate.id}
-                className="flex items-center justify-between gap-3 px-4 py-3.5 sm:px-5"
+                className="flex min-h-[60px] items-center justify-between gap-3 px-5 py-3"
               >
                 <span className="flex min-w-0 items-center gap-3">
                   <UserAvatar
@@ -174,10 +188,10 @@ const initialImportSource: ImportSource | undefined =
                     size="lg"
                   />
                   <span className="min-w-0">
-                    <span className="block truncate font-medium text-muted-foreground">
+                    <span className="block truncate text-[14.5px] font-medium text-soft-ink">
                       {candidate.fullName}
                     </span>
-                    <span className="mt-0.5 block truncate text-xs text-muted-foreground">
+                    <span className="mt-0.5 block truncate text-[13px] text-soft-ink">
                       Deleted {formatRelative(candidate.deletedAt)}
                     </span>
                   </span>
@@ -197,27 +211,24 @@ const initialImportSource: ImportSource | undefined =
           />
         )
       ) : rows.length === 0 ? (
-        <div className="space-y-4">
-          <EmptyState
-            icon={Users}
-            title="No candidates yet"
-            description="Share your public job board or import candidates from another ATS."
-          />
-          <div className="flex flex-wrap justify-center gap-2">
-            {canCreateCandidates ? (
+        <EmptyState
+          icon={Users}
+          title="No candidates yet"
+          description="Share your public job board or import candidates from another ATS."
+          action={
+            canCreateCandidates ? (
               <AddCandidateDrawer
                 workspaceId={workspaceContext.organization.id}
-                jobs={jobOptions.map((job) => ({ id: job.id, title: job.title }))}
+                jobs={importJobsProp}
                 members={members}
                 currentUserId={workspaceContext.user.id}
               />
-            ) : null}
-            <ImportCandidatesDrawer
-              jobs={jobOptions.map((job) => ({ id: job.id, title: job.title }))}
-              initialSource={initialImportSource}
-            />
-          </div>
-        </div>
+            ) : undefined
+          }
+          secondaryAction={
+            <ImportCandidatesDrawer jobs={importJobsProp} initialSource={initialImportSource} />
+          }
+        />
       ) : (
         <CandidatesTable
           key={JSON.stringify(directoryFilters)}
@@ -226,43 +237,8 @@ const initialImportSource: ImportSource | undefined =
           filterOptions={facets}
           initialFilters={{ query: q ?? "", dept: dept ?? "__all__", role: role ?? "__all__", stage: stage ?? "__all__", status: candidateStatus ?? "__all__", source: source ?? "__all__", tag: tag ?? "__all__", sort: candidateSort }}
           emailTemplates={emailTemplates}
-          importJobs={jobOptions.map((job) => ({ id: job.id, title: job.title }))}
-          initialImportSource={initialImportSource}
-          manualCandidate={
-            canCreateCandidates
-              ? {
-                  workspaceId: workspaceContext.organization.id,
-                  members,
-                  currentUserId: workspaceContext.user.id,
-                }
-              : undefined
-          }
         />
       )}
     </div>
-  );
-}
-
-function Tab({
-  href,
-  active,
-  children,
-}: {
-  href: string;
-  active: boolean;
-  children: React.ReactNode;
-}) {
-  return (
-    <Link
-      href={href as Route}
-      className={cn(
-        "flex items-center gap-1 rounded-md px-3 py-1.5 font-medium transition",
-        active
-          ? "bg-primary/10 text-primary"
-          : "text-muted-foreground hover:bg-accent hover:text-foreground",
-      )}
-    >
-      {children}
-    </Link>
   );
 }

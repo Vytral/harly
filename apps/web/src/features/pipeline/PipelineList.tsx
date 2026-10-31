@@ -26,6 +26,7 @@ import { ApplicationStatusBadge } from "@/components/ui/StatusBadge";
 import { PipelineSpine } from "@/components/ui/PipelineSpine";
 import { UserAvatar } from "@/components/ui/UserAvatar";
 import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
   DropdownMenu,
@@ -161,47 +162,49 @@ export function PipelineList({
   }
 
   return (
-    <div className="space-y-4">
-      {/* Toolbar */}
-      <div className="flex flex-wrap items-center gap-3">
-        <div className="relative ml-auto w-full max-w-xs">
-          <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+    <Card className="gap-0 py-0">
+      {/* Toolbar: pill stage tabs + search */}
+      <div className="flex flex-wrap items-center gap-3 px-4 py-4 sm:px-5">
+        <div
+          role="tablist"
+          aria-label="Filter by stage"
+          className="flex min-w-0 flex-1 items-center gap-1.5 overflow-x-auto"
+        >
+          <StageTab
+            label="All"
+            count={applications.length}
+            active={activeStage === ALL}
+            onClick={() => setActiveStage(ALL)}
+          />
+          {stages
+            .slice()
+            .sort((a, b) => a.order - b.order)
+            .map((stage) => (
+              <StageTab
+                key={stage.id}
+                label={stage.name}
+                count={counts.get(stage.id) ?? 0}
+                active={activeStage === stage.id}
+                onClick={() => setActiveStage(stage.id)}
+              />
+            ))}
+        </div>
+        <div className="relative w-full sm:w-64">
+          <Search aria-hidden className="absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-soft-ink" />
           <Input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Search candidates…"
             aria-label="Search candidates"
-            className="h-9 pl-9"
+            className="h-9 rounded-full border-transparent bg-card-inset pl-9 shadow-none"
           />
         </div>
       </div>
 
-      {/* Stage tabs */}
-      <div className="flex items-center gap-1 overflow-x-auto rounded-xl border border-border/70 bg-card p-1">
-        <StageTab
-          label="All"
-          count={applications.length}
-          active={activeStage === ALL}
-          onClick={() => setActiveStage(ALL)}
-        />
-        {stages
-          .slice()
-          .sort((a, b) => a.order - b.order)
-          .map((stage) => (
-            <StageTab
-              key={stage.id}
-              label={stage.name}
-              count={counts.get(stage.id) ?? 0}
-              active={activeStage === stage.id}
-              onClick={() => setActiveStage(stage.id)}
-            />
-          ))}
-      </div>
-
       {/* Bulk bar */}
       {selectedIds.length > 0 ? (
-        <div className="flex flex-wrap items-center gap-2 rounded-xl border border-primary/25 bg-accent/40 px-3 py-2 duration-200 animate-in fade-in slide-in-from-top-1">
-          <span className="text-sm font-medium">{selectedIds.length} selected</span>
+        <div className="mx-4 mb-3 flex flex-wrap items-center gap-2 rounded-[var(--radius-inner)] bg-lime-wash px-3 py-2 duration-200 animate-in fade-in slide-in-from-top-1 sm:mx-5">
+          <span className="text-sm font-medium text-near-ink">{selectedIds.length} selected</span>
           <div className="ml-auto flex flex-wrap gap-2">
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
@@ -223,7 +226,7 @@ export function PipelineList({
               </DropdownMenuContent>
             </DropdownMenu>
             <Button size="sm" variant="outline" disabled={isPending} onClick={() => setStatus("hired")}>
-              <CheckCircle2 className="size-4 text-primary" />
+              <CheckCircle2 className="size-4 text-success-olive" />
               Hire
             </Button>
             <Button size="sm" variant="outline" disabled={isPending} onClick={() => setStatus("rejected")}>
@@ -242,22 +245,22 @@ export function PipelineList({
       ) : null}
 
       {/* Rows */}
-      <div className="overflow-hidden rounded-2xl border border-border/70 bg-card">
-        <div className="flex items-center gap-3 border-b border-border/60 px-4 py-2.5">
+      <div className="overflow-hidden rounded-b-[var(--radius-card)]">
+        <div className="flex items-center gap-3 border-y border-hairline px-4 py-2.5 sm:px-5">
           <Checkbox
             id={selectAllId}
             checked={allVisibleSelected}
             onCheckedChange={toggleAll}
             aria-label={`Select all visible candidates (${filtered.length})`}
           />
-          <label htmlFor={selectAllId} className="text-xs font-medium text-muted-foreground">
+          <label htmlFor={selectAllId} className="text-[12.5px] font-medium text-soft-ink">
             Select all visible candidates ({filtered.length})
           </label>
-          <span className="ml-auto hidden text-xs font-medium uppercase tracking-wide text-muted-foreground sm:block">
+          <span className="type-col-head ml-auto hidden uppercase sm:block">
             Stage
           </span>
         </div>
-        <div className="divide-y divide-border/60">
+        <div className="divide-y divide-hairline">
           {filtered.map((a) => {
             const fullName = `${a.candidateFirstName} ${a.candidateLastName}`;
             const isSelected = selected.has(a.id);
@@ -278,7 +281,7 @@ export function PipelineList({
                     router.push(`/dashboard/candidates/${a.candidateId}`);
                   }
                 }}
-                className="group grid cursor-pointer grid-cols-[auto_minmax(0,1fr)] items-center gap-x-3 gap-y-2 px-4 py-3.5 transition-colors hover:bg-muted/40 data-[state=selected]:bg-accent/40 sm:grid-cols-[auto_minmax(0,1.4fr)_minmax(0,1fr)_auto]"
+                className="group grid cursor-pointer grid-cols-[auto_minmax(0,1fr)] items-center gap-x-3 gap-y-2 px-4 py-3.5 transition-colors hover:bg-row-wash/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-near-ink data-[state=selected]:bg-lime-wash sm:px-5 sm:grid-cols-[auto_minmax(0,1.4fr)_minmax(0,1fr)_auto]"
               >
                 <div onClick={(e) => e.stopPropagation()}>
                   <Checkbox
@@ -299,17 +302,17 @@ export function PipelineList({
                     size="sm"
                   />
                   <div className="min-w-0">
-                    <p className="truncate font-medium text-foreground group-hover:text-primary">
+                    <p className="truncate font-medium text-near-ink">
                       {fullName}
                     </p>
-                    <p className="truncate text-xs text-muted-foreground">
+                    <p className="truncate text-xs text-soft-ink">
                       {a.candidateEmail}
                       {a.source ? ` · via ${a.source}` : ""}
                     </p>
                   </div>
                 </Link>
                 <div className="col-start-2 min-w-0 sm:col-auto">
-                  <p className="text-xs font-medium text-foreground">{stageName}</p>
+                  <p className="text-xs font-medium text-near-ink">{stageName}</p>
                   <PipelineSpine
                     current={stageName}
                     currentId={a.currentStageId}
@@ -317,7 +320,7 @@ export function PipelineList({
                     stages={orderedSpineStages}
                     className="mt-1.5 max-w-40"
                   />
-                  <p className="mt-1 text-xs text-muted-foreground">
+                  <p className="mt-1 text-xs text-soft-ink">
                     Applied <ShortDate value={a.appliedAt} />
                   </p>
                 </div>
@@ -329,15 +332,15 @@ export function PipelineList({
           })}
           {filtered.length === 0 ? (
             <div className="flex flex-col items-center gap-2 px-6 py-14 text-center">
-              <Search className="size-5 text-muted-foreground" />
-              <p className="text-sm text-muted-foreground">
+              <Search className="size-5 text-quiet-mist" />
+              <p className="text-sm text-soft-ink">
                 No candidates in this view.
               </p>
             </div>
           ) : null}
         </div>
       </div>
-    </div>
+    </Card>
   );
 }
 
@@ -355,19 +358,21 @@ function StageTab({
   return (
     <button
       type="button"
+      role="tab"
+      aria-selected={active}
       onClick={onClick}
       className={cn(
-        "flex shrink-0 items-center gap-2 rounded-lg px-3 py-1.5 text-sm font-medium transition-colors",
+        "flex h-9 shrink-0 items-center gap-2 rounded-full px-3.5 text-[13px] font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-near-ink",
         active
-          ? "bg-accent text-accent-foreground"
-          : "text-muted-foreground hover:bg-muted hover:text-foreground",
+          ? "bg-near-ink text-pure-snow"
+          : "bg-soft-kraft text-soft-ink hover:bg-row-wash hover:text-near-ink",
       )}
     >
       {label}
       <span
         className={cn(
-          "rounded-full px-1.5 text-xs tabular-nums",
-          active ? "bg-primary/15 text-primary" : "bg-muted text-muted-foreground",
+          "min-w-5 rounded-full px-1.5 text-center text-[11px] tabular-nums",
+          active ? "bg-pure-snow/20 text-pure-snow" : "bg-pure-snow text-soft-ink",
         )}
       >
         {count}

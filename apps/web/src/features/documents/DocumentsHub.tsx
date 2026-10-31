@@ -20,6 +20,9 @@ import { toast } from "@/lib/notification-island/toast";
 
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Card } from "@/components/ui/card";
+import { FilterPill } from "@/components/ui/FilterPill";
+import { StatTile } from "@/components/ui/stat-tile";
 import { Input } from "@/components/ui/input";
 import { UserAvatar } from "@/components/ui/UserAvatar";
 import { DocumentsWorkspaceTabs } from "./DocumentsWorkspaceTabs";
@@ -48,21 +51,18 @@ import {
 function Stat({
   label,
   value,
-  tone = "text-foreground",
+  tone = "text-near-ink",
 }: {
   label: string;
   value: number;
   tone?: string;
 }) {
   return (
-    <div className="border-l border-border/70 pl-4 first:border-l-0 first:pl-0">
-      <p
-        className={`font-display text-2xl font-semibold tracking-tight ${tone}`}
-      >
-        {value}
-      </p>
-      <p className="mt-0.5 text-xs text-muted-foreground">{label}</p>
-    </div>
+    <StatTile
+      label={label}
+      value={<span className={tone}>{value}</span>}
+      muted={value === 0}
+    />
   );
 }
 
@@ -75,15 +75,15 @@ function EmptyState({
 }) {
   return (
     <div className="flex min-h-64 flex-col items-center justify-center gap-1.5 px-6 py-14 text-center">
-      <span className="mb-3 flex size-12 items-center justify-center rounded-xl bg-accent text-accent-foreground">
+      <span className="mb-3 flex size-12 items-center justify-center rounded-[var(--radius-btn)] bg-lime-wash text-sage-ink">
         <FolderCog className="size-5" />
       </span>
-      <p className="text-base font-semibold">
+      <p className="text-[15px] font-semibold text-near-ink">
         {data.documents.length === 0
           ? "Your document library is empty"
           : "No documents match these filters"}
       </p>
-      <p className="max-w-sm text-sm leading-6 text-muted-foreground">
+      <p className="max-w-sm text-sm leading-6 text-soft-ink">
         {data.documents.length === 0
           ? "Drag files anywhere on this page, or upload one to start building a shared, auditable source of truth for your hiring team."
           : "Try a broader search or clear one of the filters."}
@@ -110,22 +110,14 @@ function FilterSelect({
   options: Array<[string, string]>;
 }) {
   return (
-    <label className="relative flex shrink-0 items-center">
-      <span className="sr-only">{label}</span>
-      <select
-        value={value}
-        onChange={(event) => onChange(event.target.value)}
-        className="h-10 min-w-[8.5rem] appearance-none rounded-full border border-input bg-background px-4 pr-8 text-sm outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring"
-      >
-        <option value="all">{label}: All</option>
-        {options.map(([optionValue, optionLabel]) => (
-          <option key={optionValue} value={optionValue}>
-            {optionLabel}
-          </option>
-        ))}
-      </select>
-      <ChevronDown className="pointer-events-none absolute right-2.5 size-3.5 text-muted-foreground" />
-    </label>
+    <FilterPill
+      label={label}
+      value={value}
+      onChange={onChange}
+      options={["all", ...options.map(([id]) => id)]}
+      labelMap={{ all: "All", ...Object.fromEntries(options) }}
+      allValue="all"
+    />
   );
 }
 
@@ -348,8 +340,8 @@ export function DocumentsHub({
       }}
     >
       {pageDragging ? (
-        <div className="pointer-events-none absolute inset-0 z-30 flex items-center justify-center rounded-2xl border-2 border-dashed border-primary bg-accent/40 backdrop-blur-[1px]">
-          <div className="flex flex-col items-center gap-2 text-primary">
+        <div className="pointer-events-none absolute inset-0 z-30 flex items-center justify-center rounded-[var(--radius-card)] border-2 border-dashed border-near-ink bg-lime-wash/80 backdrop-blur-[1px]">
+          <div className="flex flex-col items-center gap-2 text-near-ink">
             <Upload className="size-8" />
             <p className="text-sm font-semibold">
               Drop files to upload to the workspace library
@@ -362,12 +354,12 @@ export function DocumentsHub({
         canReadDocuments
         canManageTemplates={canManageTemplates}
       />
-      <header className="flex flex-col gap-4 border-b border-border/70 pb-5 duration-500 animate-in fade-in slide-in-from-bottom-1 md:flex-row md:items-end md:justify-between">
+      <header className="flex flex-col gap-4 duration-500 animate-in fade-in slide-in-from-bottom-1 md:flex-row md:items-end md:justify-between">
         <div>
-          <h1 className="font-display text-2xl font-semibold tracking-tight">
+          <h1 className="font-display text-[28px] leading-tight text-near-ink">
             Documents
           </h1>
-          <p className="mt-1 max-w-xl text-sm leading-6 text-muted-foreground">
+          <p className="mt-1 max-w-xl text-sm leading-6 text-soft-ink">
             A secure home for the files that move candidates, offers, and hiring
             decisions forward.
           </p>
@@ -389,47 +381,47 @@ export function DocumentsHub({
         </div>
       </header>
       {candidateFilterName ? (
-        <div className="flex items-center gap-2 rounded-full border border-primary/25 bg-primary/[0.04] px-3 py-1.5 text-xs font-medium text-foreground">
+        <div className="flex items-center gap-2 rounded-full bg-lime-wash px-3 py-1.5 text-xs font-medium text-near-ink">
           Showing documents for {candidateFilterName}
           <button
             type="button"
             onClick={clearCandidateFilter}
             aria-label="Clear candidate filter"
-            className="rounded-full p-0.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+            className="rounded-full p-0.5 text-soft-ink transition-colors hover:bg-muted hover:text-near-ink"
           >
             <X className="size-3.5" />
           </button>
         </div>
       ) : null}
-      <section className="flex flex-wrap gap-x-8 gap-y-4 border-b border-border/70 pb-5 duration-500 animate-in fade-in slide-in-from-bottom-2">
-        <Stat label="Active documents" value={active} tone="text-primary" />
+      <Card className="grid grid-cols-2 gap-3 p-4 duration-500 animate-in fade-in slide-in-from-bottom-2 sm:grid-cols-3 lg:grid-cols-5">
+        <Stat label="Active documents" value={active} />
         <Stat label="Archived" value={archived} />
-        <Stat label="Pending signature" value={pending} tone="text-warning" />
-        <Stat label="Expired" value={expired} tone="text-destructive" />
+        <Stat label="Pending signature" value={pending} tone="text-warning-clay" />
+        <Stat label="Expired" value={expired} tone="text-danger-rust" />
         <Stat label="Assigned to me" value={assigned} />
-      </section>
-      <nav className="flex gap-1 border-b border-border/70" aria-label="Document sections">
+      </Card>
+      <nav className="flex gap-1 border-b border-hairline" aria-label="Document sections">
         {(["active", "archived"] as const).map((value) => (
           <button
             key={value}
             type="button"
             aria-current={section === value ? "page" : undefined}
             onClick={() => { setSection(value); clearSelection(); }}
-            className={`border-b-2 px-3 py-2 text-sm font-medium transition-colors ${section === value ? "border-primary text-foreground" : "border-transparent text-muted-foreground hover:text-foreground"}`}
+            className={`border-b-2 px-3 py-2 text-sm font-medium transition-colors ${section === value ? "border-near-ink text-near-ink" : "border-transparent text-soft-ink hover:text-near-ink"}`}
           >
-            {value === "active" ? "Active documents" : "Archived"} <span className="ml-1 text-xs text-muted-foreground">{value === "active" ? active : archived}</span>
+            {value === "active" ? "Active documents" : "Archived"} <span className="ml-1 rounded-full bg-soft-kraft px-1.5 text-[11px] tabular-nums text-soft-ink">{value === "active" ? active : archived}</span>
           </button>
         ))}
       </nav>
       <section className="space-y-3 duration-500 animate-in fade-in slide-in-from-bottom-2">
         <div className="flex flex-col gap-2 lg:flex-row">
           <div className="relative min-w-0 flex-1">
-            <Search className="pointer-events-none absolute left-4 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+            <Search className="pointer-events-none absolute left-4 top-1/2 size-4 -translate-y-1/2 text-soft-ink" />
             <Input
               value={query}
               onChange={(event) => setQuery(event.target.value)}
               placeholder="Search documents, owners, or original names"
-              className="h-10 rounded-full pl-10"
+              className="h-9 rounded-full pl-10"
             />
           </div>
           <FilterSelect
@@ -460,13 +452,13 @@ export function DocumentsHub({
               ["job", "Job"],
             ]}
           />
-          <div className="flex shrink-0 items-center gap-0.5 rounded-full bg-muted p-1">
+          <div className="flex shrink-0 items-center gap-0.5 rounded-full bg-soft-kraft p-1">
             <button
               type="button"
               aria-label="List view"
               aria-pressed={view === "list"}
               onClick={() => setView("list")}
-              className={`flex size-8 items-center justify-center rounded-full transition-colors ${view === "list" ? "bg-card text-foreground shadow-xs" : "text-muted-foreground hover:text-foreground"}`}
+              className={`flex size-8 items-center justify-center rounded-full transition-colors ${view === "list" ? "bg-pure-snow text-near-ink" : "text-soft-ink hover:text-near-ink"}`}
             >
               <List className="size-4" />
             </button>
@@ -475,19 +467,19 @@ export function DocumentsHub({
               aria-label="Grid view"
               aria-pressed={view === "grid"}
               onClick={() => setView("grid")}
-              className={`flex size-8 items-center justify-center rounded-full transition-colors ${view === "grid" ? "bg-card text-foreground shadow-xs" : "text-muted-foreground hover:text-foreground"}`}
+              className={`flex size-8 items-center justify-center rounded-full transition-colors ${view === "grid" ? "bg-pure-snow text-near-ink" : "text-soft-ink hover:text-near-ink"}`}
             >
               <LayoutGrid className="size-4" />
             </button>
           </div>
         </div>
-        <p className="text-xs text-muted-foreground">
+        <p className="text-xs text-soft-ink">
           {filtered.length} of {data.documents.length} document
           {data.documents.length === 1 ? "" : "s"}
         </p>
       </section>
       {data.canManage && selectedInView.length > 0 ? (
-        <section className="flex flex-wrap items-center gap-2 rounded-xl border border-primary/25 bg-accent/40 px-4 py-2.5 animate-in fade-in slide-in-from-top-1">
+        <section className="flex flex-wrap items-center gap-2 rounded-[var(--radius-card)] bg-lime-wash px-4 py-2.5 animate-in fade-in slide-in-from-top-1">
           <span className="text-sm font-medium">
             {selectedInView.length} selected
           </span>
@@ -529,7 +521,7 @@ export function DocumentsHub({
               Restore
             </Button>
             <label className="flex items-center gap-1.5 text-sm">
-              <FolderCog className="size-4 text-muted-foreground" />
+              <FolderCog className="size-4 text-soft-ink" />
               <select
                 defaultValue=""
                 disabled={section === "archived"}
@@ -546,7 +538,7 @@ export function DocumentsHub({
                   );
                   event.target.value = "";
                 }}
-                className="h-8 rounded-md border border-input bg-background px-2 text-sm"
+                className="h-8 rounded-[var(--radius-btn)] bg-pure-snow px-2 text-sm shadow-[var(--shadow-card)]"
               >
                 <option value="" disabled>
                   Set category…
@@ -575,8 +567,8 @@ export function DocumentsHub({
         </section>
       ) : null}
       {view === "list" ? (
-        <section className="overflow-hidden rounded-xl border border-border/70 bg-card duration-500 animate-in fade-in slide-in-from-bottom-3">
-          <div className="hidden grid-cols-[2.5rem_minmax(15rem,2fr)_7rem_9rem_9rem_8rem] gap-4 border-b bg-muted/25 px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground md:grid">
+        <section className="overflow-hidden rounded-[var(--radius-card)] bg-card shadow-[var(--shadow-card)] duration-500 animate-in fade-in slide-in-from-bottom-3">
+          <div className="hidden grid-cols-[2.5rem_minmax(15rem,2fr)_7rem_9rem_9rem_8rem] gap-4 border-b border-hairline px-4 py-3 text-[11px] font-medium uppercase tracking-wide text-soft-ink md:grid">
             {data.canManage ? (
               <span className="flex items-center">
                 <Checkbox
@@ -597,7 +589,7 @@ export function DocumentsHub({
           {filtered.length === 0 ? (
             <EmptyState data={data} onUpload={() => setUploadOpen(true)} />
           ) : (
-            <div className="divide-y divide-border/60">
+            <div className="divide-y divide-hairline">
               {filtered.map((document) => {
                 const Icon = iconForDocument(document.mimeType);
                 const statusMeta =
@@ -610,7 +602,7 @@ export function DocumentsHub({
                 return (
                   <div
                     key={document.id}
-                    className={`grid grid-cols-1 gap-2 px-4 py-3 transition-colors hover:bg-accent/30 md:grid-cols-[2.5rem_minmax(15rem,2fr)_7rem_9rem_9rem_8rem] md:items-center md:gap-4 ${isSelected ? "bg-accent/40" : ""}`}
+                    className={`grid grid-cols-1 gap-2 px-4 py-3 transition-colors hover:bg-row-wash md:grid-cols-[2.5rem_minmax(15rem,2fr)_7rem_9rem_9rem_8rem] md:items-center md:gap-4 ${isSelected ? "bg-lime-wash" : ""}`}
                   >
                     {data.canManage ? (
                       <span
@@ -631,14 +623,14 @@ export function DocumentsHub({
                       onClick={() => router.push(`/dashboard/documents/${document.id}` as Route)}
                       className="flex min-w-0 items-center gap-3 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
                     >
-                      <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-muted text-muted-foreground">
+                      <span className="flex size-9 shrink-0 items-center justify-center rounded-[var(--radius-btn)] border border-hairline bg-pure-snow text-near-ink">
                         <Icon className="size-4" />
                       </span>
                       <span className="min-w-0">
                         <span className="block truncate text-sm font-medium">
                           {document.name}
                         </span>
-                        <span className="mt-0.5 block truncate text-xs text-muted-foreground">
+                        <span className="mt-0.5 block truncate text-xs text-soft-ink">
                           {formatDocumentSize(document.sizeBytes)} ·{" "}
                           <StatusPill className={statusMeta.className}>
                             {statusMeta.label}
@@ -649,13 +641,13 @@ export function DocumentsHub({
                         </span>
                       </span>
                     </button>
-                    <span className="hidden text-xs text-muted-foreground md:block">
+                    <span className="hidden text-xs text-soft-ink md:block">
                       {documentTypeLabel(document.mimeType)}
                     </span>
-                    <span className="hidden truncate text-xs text-muted-foreground md:block">
+                    <span className="hidden truncate text-xs text-soft-ink md:block">
                       {document.associationLabels.join(" · ")}
                     </span>
-                    <span className="hidden items-center gap-2 truncate text-xs text-muted-foreground md:flex">
+                    <span className="hidden items-center gap-2 truncate text-xs text-soft-ink md:flex">
                       {document.ownerId ? (
                         <>
                           <UserAvatar
@@ -670,7 +662,7 @@ export function DocumentsHub({
                         "Workspace"
                       )}
                     </span>
-                    <span className="hidden text-xs text-muted-foreground md:block">
+                    <span className="hidden text-xs text-soft-ink md:block">
                       {formatDate(document.updatedAt)}
                     </span>
                   </div>
@@ -680,7 +672,7 @@ export function DocumentsHub({
           )}
         </section>
       ) : filtered.length === 0 ? (
-        <section className="overflow-hidden rounded-xl border border-border/70 bg-card duration-500 animate-in fade-in slide-in-from-bottom-3">
+        <section className="overflow-hidden rounded-[var(--radius-card)] bg-card shadow-[var(--shadow-card)] duration-500 animate-in fade-in slide-in-from-bottom-3">
           <EmptyState data={data} onUpload={() => setUploadOpen(true)} />
         </section>
       ) : (
@@ -697,7 +689,7 @@ export function DocumentsHub({
             return (
               <div
                 key={document.id}
-                className={`group relative flex flex-col rounded-xl border bg-card p-4 transition-colors hover:border-primary/40 ${isSelected ? "border-primary/60 ring-1 ring-primary/30" : "border-border/70"}`}
+                className={`group relative flex flex-col rounded-[var(--radius-card)] bg-card p-4 shadow-[var(--shadow-card)] transition-colors hover:bg-row-wash ${isSelected ? "ring-2 ring-near-ink" : ""}`}
               >
                 {data.canManage ? (
                   <span
@@ -716,13 +708,13 @@ export function DocumentsHub({
                   onClick={() => router.push(`/dashboard/documents/${document.id}` as Route)}
                   className="flex flex-1 flex-col text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 >
-                  <span className="flex size-10 items-center justify-center rounded-lg bg-accent text-primary">
+                  <span className="flex size-10 items-center justify-center rounded-[var(--radius-btn)] bg-lime-wash text-sage-ink">
                     <Icon className="size-5" />
                   </span>
                   <span className="mt-3 line-clamp-2 text-sm font-medium">
                     {document.name}
                   </span>
-                  <span className="mt-1 text-xs text-muted-foreground">
+                  <span className="mt-1 text-xs text-soft-ink">
                     {documentTypeLabel(document.mimeType)} ·{" "}
                     {formatDocumentSize(document.sizeBytes)}
                   </span>

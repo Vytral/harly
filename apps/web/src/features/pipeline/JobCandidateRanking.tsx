@@ -15,9 +15,9 @@ import { UserAvatar } from "@/components/ui/UserAvatar";
 import { cn } from "@/lib/utils";
 
 const RECOMMENDATION_META = {
-  strong_yes: { label: "Strong yes", className: "bg-primary/10 text-primary" },
-  yes: { label: "Yes", className: "bg-primary/10 text-primary" },
-  maybe: { label: "Maybe", className: "bg-clay/15 text-clay" },
+  strong_yes: { label: "Strong yes", className: "bg-sage-wash text-success-olive" },
+  yes: { label: "Yes", className: "bg-sage-wash text-success-olive" },
+  maybe: { label: "Maybe", className: "bg-warning/10 text-warning" },
   no: { label: "No", className: "bg-destructive/10 text-destructive" },
 } as const;
 
@@ -32,8 +32,8 @@ function needsEvaluation(application: PipelineApplication) {
 }
 
 function scoreTone(score: number) {
-  if (score >= 60) return "text-primary";
-  if (score >= 40) return "text-clay";
+  if (score >= 60) return "text-success-olive";
+  if (score >= 40) return "text-warning-clay";
   return "text-destructive";
 }
 
@@ -131,7 +131,7 @@ export function JobCandidateRanking({
   if (activeApplications.length === 0) return null;
 
   return (
-    <Card className="border-hairline bg-pure-snow">
+    <Card className="bg-lime-wash/70 py-4 dark:bg-card">
       <CardContent className="space-y-3">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="min-w-0">
@@ -185,7 +185,7 @@ export function JobCandidateRanking({
         </button>
 
         {showOrder ? (
-          <div className="divide-y divide-border/60 overflow-hidden rounded-lg border bg-card">
+          <div className="divide-y divide-hairline overflow-hidden rounded-[var(--radius-inner)] bg-pure-snow">
             {activeApplications.map((application) => {
               const recommendation = application.aiRecommendation;
               const meta = recommendation
@@ -196,9 +196,9 @@ export function JobCandidateRanking({
               return (
                 <div
                   key={application.id}
-                  className="flex items-center gap-3 px-3 py-3 transition-colors hover:bg-muted/40 sm:px-4"
+                  className="flex items-center gap-3 px-3 py-3 transition-colors hover:bg-row-wash/60 sm:px-4"
                 >
-                  <span className="w-5 shrink-0 text-center text-xs font-semibold tabular-nums text-muted-foreground">
+                  <span className="w-5 shrink-0 text-center text-xs font-semibold tabular-nums text-soft-ink">
                     {hasEvaluation ? scoredRankById.get(application.id) : "–"}
                   </span>
                   <Link
@@ -215,7 +215,7 @@ export function JobCandidateRanking({
                       <span className="block truncate text-sm font-medium">
                         {application.candidateFirstName} {application.candidateLastName}
                       </span>
-                      <span className="block truncate text-xs text-muted-foreground">
+                      <span className="block truncate text-xs text-soft-ink">
                         {application.candidateHeadline ??
                           stageNameById.get(application.currentStageId) ??
                           application.candidateEmail}
@@ -224,7 +224,7 @@ export function JobCandidateRanking({
                   </Link>
 
                   {application.aiSummary ? (
-                    <p className="hidden max-w-md flex-1 truncate text-xs text-muted-foreground lg:block">
+                    <p className="hidden max-w-md flex-1 truncate text-xs text-soft-ink lg:block">
                       {application.aiSummary}
                     </p>
                   ) : null}

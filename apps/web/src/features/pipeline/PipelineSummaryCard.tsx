@@ -25,7 +25,7 @@ export async function PipelineSummaryCard({ jobId }: { jobId: string }) {
     summary.byRecommendation.strong_yes + summary.byRecommendation.yes;
 
   return (
-    <div className="flex flex-wrap items-center gap-x-6 gap-y-2 px-1">
+    <div className="flex flex-wrap items-center gap-2">
       <Stat label="active" value={summary.totalActive} />
       {topFits > 0 ? <Stat label="rated a good fit" value={topFits} /> : null}
       {summary.unscored > 0 ? (
@@ -54,10 +54,17 @@ function Stat({
   muted?: boolean;
 }) {
   return (
-    <span className="flex items-baseline gap-1.5">
+    <span className="flex items-center gap-2 rounded-full bg-pure-snow py-1.5 pl-3 pr-3.5 shadow-[var(--shadow-card)]">
+      <span
+        aria-hidden="true"
+        className={cn(
+          "size-1.5 rounded-full",
+          warning ? "bg-warning-clay" : muted ? "bg-quiet-mist" : "bg-chartreuse-signal",
+        )}
+      />
       <span
         className={cn(
-          "tabular text-[15px] font-medium",
+          "tabular-nums text-[14px] font-semibold",
           warning
             ? "text-warning-clay"
             : muted

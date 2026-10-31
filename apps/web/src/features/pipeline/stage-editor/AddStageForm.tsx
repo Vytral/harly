@@ -59,7 +59,7 @@ export function AddStageForm({
   }
 
   return (
-    <form onSubmit={submit} className="space-y-3 rounded-xl border border-dashed p-4" noValidate>
+    <form onSubmit={submit} className="space-y-3 rounded-[var(--radius-inner)] bg-card-inset p-4" noValidate>
       <div>
         <h3 className="text-sm font-medium text-foreground">Add a stage</h3>
         <p className="text-xs text-muted-foreground">New stages start as custom steps unless you pick a kind.</p>

@@ -31,12 +31,10 @@ import { bulkDecisionConfirmCopy } from "@/features/pipeline/confirmation";
 import { toSafeCsv } from "@/lib/csv";
 import { BulkEmailDrawer } from "@/features/candidates/BulkEmailDrawer";
 import type { EmailTemplateOption } from "@/features/candidates/EmailDrawer";
-import {
-  ImportCandidatesDrawer,
-  type ImportJobOption,
-  type ImportSource,
+import type {
+  ImportJobOption,
+  ImportSource,
 } from "@/features/candidates/import/ImportCandidatesDrawer";
-import { AddCandidateDrawer } from "@/features/candidates/AddCandidateDrawer";
 import { ReferralBadge } from "@/features/candidates/referrals/ReferralBadge";
 import type { WorkspaceMemberOption } from "@/features/jobs/hiring-team-data";
 import { ApplicationStatusBadge } from "@/components/ui/StatusBadge";
@@ -52,8 +50,22 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Input } from "@/components/ui/input";
-import { FilterPill, FILTER_ALL } from "@/components/ui/FilterPill";
+import { StatusPill } from "@/components/ui/status-pill";
+import { FILTER_ALL } from "@/components/ui/FilterPill";
+import {
+  BulkAction,
+  BulkActionBar,
+  DirectoryCard,
+  FilterBar,
+  FilterChip,
+  FilterCountButton,
+  SearchPill,
+  TotalLine,
+  dirTable,
+  dirTd,
+  dirTh,
+  dirTr,
+} from "@/features/candidates/directory-chrome";
 import { BookmarkSimpleIcon } from "@/components/ui/icons/phosphor";
 import { cn } from "@/lib/utils";
 
@@ -143,9 +155,6 @@ export function CandidatesTable({
   initialFilters,
   filterOptions,
   emailTemplates = [],
-  importJobs = [],
-  initialImportSource,
-  manualCandidate,
 }: {
   rows: CandidateRow[];
   pageInfo?: { page: number; pageSize: number; total: number; hasNextPage: boolean };
@@ -167,6 +176,7 @@ export function CandidatesTable({
     sort: string;
   };
   emailTemplates?: EmailTemplateOption[];
+  /** Rendered by the page title row now; accepted for call-site compatibility. */
   importJobs?: ImportJobOption[];
   initialImportSource?: ImportSource;
   manualCandidate?: {
@@ -475,437 +485,324 @@ export function CandidatesTable({
     });
   }
 
+  const total = pageInfo?.total ?? filtered.length;
+  const activeFilterCount = [dept, role, stage, status, source, tag].filter(
+    (v) => v !== FILTER_ALL,
+  ).length;
+
   return (
-    <div className="space-y-4">
-      {/* Search */}
-      <div className="flex flex-wrap items-center gap-2">
-        <div className="relative min-w-0 basis-full sm:flex-1 sm:basis-0">
-          <Search aria-hidden className="absolute left-4 top-1/2 size-4.5 -translate-y-1/2 text-muted-foreground" />
-          <Input
+    <>
+      <DirectoryCard>
+        <FilterBar>
+          <SearchPill
             value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") navigateWithFilter("q", query.trim());
+            onChange={setQuery}
+            onSubmit={() => navigateWithFilter("q", query.trim())}
+            placeholder="Search candidates"
+            label="Search candidates by name, email, role or location"
+          />
+          <FilterCountButton count={activeFilterCount} onClear={clearFilters} />
+          <FilterChip
+            label="Department"
+            value={dept}
+            onChange={(value) => { setDept(value); navigateWithFilter("dept", value); }}
+            options={departments}
+          />
+          <FilterChip
+            label="Job"
+            value={role}
+            onChange={(value) => { setRole(value); navigateWithFilter("role", value); }}
+            options={roles}
+          />
+          <FilterChip
+            label="Stage"
+            value={stage}
+            onChange={(value) => { setStage(value); navigateWithFilter("stage", value); }}
+            options={stages}
+          />
+          <FilterChip
+            label="Status"
+            value={status}
+            onChange={(value) => { setStatus(value); navigateWithFilter("status", value); }}
+            options={["active", "hired", "rejected", "withdrawn"]}
+            labelMap={{
+              active: "Active",
+              hired: "Hired",
+              rejected: "Rejected",
+              withdrawn: "Withdrawn",
             }}
-            placeholder="Search candidates by name, email, role or location…"
-            aria-label="Search candidates"
-            className="h-11 rounded-full pl-11"
           />
-        </div>
-        <Button
-          variant="outline"
-          className="h-11 shrink-0 rounded-lg"
-          onClick={exportCsv}
-        >
-          <Download className="size-4" />
-          <span className="hidden sm:inline">
-            {selectedCount > 0
-              ? `Export selected (${selectedCount})`
-              : "Export CSV"}
-          </span>
-          <span className="sm:hidden">
-            {selectedCount > 0 ? `(${selectedCount})` : "CSV"}
-          </span>
-        </Button>
-        {manualCandidate ? (
-          <AddCandidateDrawer
-            workspaceId={manualCandidate.workspaceId}
-            jobs={importJobs}
-            members={manualCandidate.members}
-            currentUserId={manualCandidate.currentUserId}
-          />
-        ) : null}
-        <ImportCandidatesDrawer
-          jobs={importJobs}
-          initialSource={initialImportSource}
-        />
-      </div>
-
-      {/* Filter pills */}
-      <div className="flex flex-wrap items-center gap-2">
-        <FilterPill
-          label="Department"
-          value={dept}
-          onChange={(value) => { setDept(value); navigateWithFilter("dept", value); }}
-          options={departments}
-        />
-        <FilterPill
-          label="Job"
-          value={role}
-          onChange={(value) => { setRole(value); navigateWithFilter("role", value); }}
-          options={roles}
-        />
-        <FilterPill
-          label="Stage"
-          value={stage}
-          onChange={(value) => { setStage(value); navigateWithFilter("stage", value); }}
-          options={stages}
-        />
-        <FilterPill
-          label="Status"
-          value={status}
-          onChange={(value) => { setStatus(value); navigateWithFilter("status", value); }}
-          options={["active", "hired", "rejected", "withdrawn"]}
-          labelMap={{
-            active: "Active",
-            hired: "Hired",
-            rejected: "Rejected",
-            withdrawn: "Withdrawn",
-          }}
-        />
-        {sources.length > 0 ? (
-          <FilterPill
-            label="Source"
-            value={source}
-            onChange={(value) => { setSource(value); navigateWithFilter("source", value); }}
-            options={sources}
-          />
-        ) : null}
-        {tagOptions.length > 0 ? (
-          <FilterPill
-            label="Tag"
-            value={tag}
-            onChange={(value) => { setTag(value); navigateWithFilter("tag", value); }}
-            options={tagOptions}
-          />
-        ) : null}
-        <FilterPill
-          label="Sort"
-          value={sortKey}
-          onChange={(v) => { setSortKey(v as SortKey); navigateWithFilter("sort", v); }}
-          options={["recent", "oldest", "modified", "name"]}
-          labelMap={{
-            recent: "Most recent",
-            oldest: "Oldest",
-            modified: "Last modified",
-            name: "Name A–Z",
-          }}
-          allValue="recent"
-        />
-        {filtersActive ? (
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={clearFilters}
-            className="rounded-full text-muted-foreground"
-          >
-            Clear
-          </Button>
-        ) : null}
-        <p className="ml-auto text-sm text-muted-foreground">
-          <span className="font-semibold tabular-nums text-foreground">
-            {pageInfo?.total ?? filtered.length}
-          </span>{" "}
-          {(pageInfo?.total ?? filtered.length) === 1
-            ? "candidate"
-            : "candidates"}
-        </p>
-      </div>
-
-      {pageInfo && (pageInfo.page > 1 || pageInfo.hasNextPage) ? (
-        <div className="flex items-center justify-between border-t pt-3 text-sm text-muted-foreground">
-          <span>Page {pageInfo.page} · {pageInfo.total.toLocaleString()} candidates</span>
-          <div className="flex gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={pageInfo.page <= 1 || isPending}
-              onClick={() => navigateWithFilter("page", String(pageInfo.page - 1))}
-            >Previous</Button>
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={!pageInfo.hasNextPage || isPending}
-              onClick={() => navigateWithFilter("page", String(pageInfo.page + 1))}
-            >Next</Button>
-          </div>
-        </div>
-      ) : null}
-
-      {/* Bulk bar */}
-      {selectedCount > 0 ? (
-        <div className="flex flex-wrap items-center gap-2 rounded-xl border border-primary/25 bg-accent/40 px-3 py-2 duration-200 animate-in fade-in slide-in-from-top-1">
-          <span className="text-sm font-medium">{selectedCount} selected</span>
-          <div className="ml-auto flex flex-wrap gap-2">
-            <Button
-              size="sm"
-              variant="outline"
-              disabled={isPending}
-              onClick={() => setBulkEmailOpen(true)}
-            >
-              <Mail className="size-4" />
-              Email
-            </Button>
-            <Button
-              size="sm"
-              variant="outline"
-              disabled={isPending}
-              onClick={() => runBulk("hired")}
-            >
-              <CheckCircle2 className="size-4 text-primary" />
-              Mark hired
-            </Button>
-            <Button
-              size="sm"
-              variant="outline"
-              disabled={isPending}
-              onClick={() => runBulk("rejected")}
-            >
-              <XCircle className="size-4 text-destructive" />
-              Reject
-            </Button>
-            <Button
-              size="sm"
-              variant="outline"
-              disabled={isPending}
-              onClick={() => runBulk("active")}
-            >
-              <RotateCcw className="size-4" />
-              Reactivate
-            </Button>
-            <Button
-              size="sm"
-              variant="outline"
-              disabled={isPending}
-              className="text-destructive hover:text-destructive"
-              onClick={runBulkDelete}
-            >
-              <Trash2 className="size-4" />
-              Delete
-            </Button>
-            <Button
-              size="sm"
-              variant="ghost"
-              onClick={() => setSelected(new Set())}
-            >
-              Clear
-            </Button>
-          </div>
-        </div>
-      ) : null}
-
-      {/* Candidate list */}
-      <div>
-        <div className="min-w-0">
-          {/* Column headers , aligned to the row grid */}
-          <div className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-x-3 px-4 pb-2 sm:grid-cols-[auto_minmax(0,1.4fr)_minmax(0,1fr)_7rem_2.25rem]">
-            <Checkbox
-              checked={allVisibleSelected}
-              onCheckedChange={toggleAll}
-              aria-label="Select all"
+          {sources.length > 0 ? (
+            <FilterChip
+              label="Source"
+              value={source}
+              onChange={(value) => { setSource(value); navigateWithFilter("source", value); }}
+              options={sources}
             />
-            <span className="text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
-              Candidate
-            </span>
-            <span className="hidden text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground sm:block">
-              Pipeline
-            </span>
-            <span className="hidden text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground sm:block">
-              Status
-            </span>
-            <span aria-hidden className="hidden sm:block" />
-          </div>
+          ) : null}
+          {tagOptions.length > 0 ? (
+            <FilterChip
+              label="Tag"
+              value={tag}
+              onChange={(value) => { setTag(value); navigateWithFilter("tag", value); }}
+              options={tagOptions}
+            />
+          ) : null}
+          <FilterChip
+            label="Sort"
+            showValue
+            value={sortKey}
+            onChange={(v) => { setSortKey(v as SortKey); navigateWithFilter("sort", v); }}
+            options={["recent", "oldest", "modified", "name"]}
+            labelMap={{
+              recent: "Most recent",
+              oldest: "Oldest",
+              modified: "Last modified",
+              name: "Name A–Z",
+            }}
+            allValue="recent"
+          />
+          <Button
+            variant="soft"
+            className="ml-auto h-9 rounded-full"
+            onClick={exportCsv}
+            disabled={isPending}
+          >
+            <Download className="size-4" />
+            {selectedCount > 0 ? `Export selected (${selectedCount})` : "Export CSV"}
+          </Button>
+        </FilterBar>
 
-          <div>
-            {filtered.map((row) => {
-              const isSelected = selected.has(row.id);
-              return (
-                <div
-                  key={row.id}
-                  data-state={isSelected ? "selected" : undefined}
-                  className={cn(
-                    "group grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-x-3 gap-y-2.5 rounded-xl border-b border-border/40 px-4 py-4 transition-all sm:grid-cols-[auto_minmax(0,1.4fr)_minmax(0,1fr)_7rem_2.25rem]",
-                    isSelected
-                      ? "border-transparent bg-card shadow-[0_1px_3px_rgba(28,25,23,0.08),0_0_0_1px_rgba(28,25,23,0.04)]"
-                      : "hover:bg-muted/40",
-                  )}
-                >
-                  <div>
-                    <Checkbox
-                      checked={isSelected}
-                      onCheckedChange={() => toggleOne(row.id)}
-                      aria-label={`Select ${row.fullName}`}
-                    />
-                  </div>
-
-                  {/* Identity */}
-                  <Link
-                    href={`/dashboard/candidates/${row.id}` as Route}
-                    className="flex min-w-0 items-center gap-3 rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                  >
-                    <UserAvatar
-                      name={row.fullName}
-                      src={row.avatarUrl}
-                      fallbackSrcs={row.avatarFallbackSrcs}
-                      size="lg"
-                    />
-                    <div className="min-w-0">
-                      <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5">
-                        <p className="truncate font-medium text-foreground group-hover:text-primary">
-                          {row.fullName}
-                        </p>
-                        {row.department ? (
-                          <span
-                            className={cn(
-                              "rounded-md px-1.5 py-0.5 text-[11px] font-semibold",
-                              departmentChipClass(row.department),
-                            )}
-                          >
-                            {row.department}
-                          </span>
-                        ) : null}
-                        {row.inPool ? (
-                          <span className="inline-flex items-center gap-1 rounded-full bg-warning-clay/10 px-1.5 py-0.5 text-[11px] font-semibold text-warning-clay">
-                            <BookmarkSimpleIcon className="size-3 fill-current" />
-                            In Pool
-                          </span>
-                        ) : null}
-                        {row.isReferred ? (
-                          <ReferralBadge featured={row.isFeaturedReferral} />
-                        ) : null}
-                        {row.hasOpenPrivacyRequest ? (
-                          <span
-                            title="Has a pending privacy request awaiting review"
-                            className="inline-flex items-center gap-1 rounded-full bg-clay/10 px-1.5 py-0.5 text-[11px] font-semibold text-clay"
-                          >
-                            <ShieldAlert className="size-3" />
-                            Privacy request
-                          </span>
-                        ) : null}
-                      </div>
-                      <p className="truncate text-sm text-muted-foreground">
-                        {[row.role, row.location].filter(Boolean).join(" · ") ||
-                          row.email}
-                      </p>
-                      {row.tags.length > 0 ? (
-                        <div className="mt-1 flex flex-wrap items-center gap-1.5 text-[11px]">
-                          {row.tags.slice(0, 3).map((t) => (
-                            <span
-                              key={t}
-                              className="rounded-full bg-accent px-2 py-0.5 font-medium text-accent-foreground"
-                            >
-                              {t}
-                            </span>
-                          ))}
-                          {row.tags.length > 3 ? (
-                            <span className="text-muted-foreground">
-                              +{row.tags.length - 3}
-                            </span>
-                          ) : null}
-                        </div>
-                      ) : null}
-                    </div>
-                  </Link>
-
-                  {/* Pipeline */}
-                  <div className="col-start-2 min-w-0 sm:col-auto">
-                    {row.stage ? (
-                      <>
-                        <p className="text-xs font-medium text-foreground">
-                          {row.stage}
-                        </p>
-                        <PipelineSpine
-                          current={row.stage}
-                          className="mt-1.5 max-w-40"
-                        />
-                        {row.appliedLabel ? (
-                          <p className="mt-1.5 text-xs text-muted-foreground">
-                            {row.appliedLabel}
-                          </p>
-                        ) : null}
-                      </>
-                    ) : (
-                      <p className="text-xs text-muted-foreground">
-                        No application
-                      </p>
-                    )}
-                  </div>
-
-                  {/* Status */}
-                  <div className="col-start-2 sm:col-auto">
-                    {row.status ? (
-                      <ApplicationStatusBadge status={row.status} />
-                    ) : null}
-                  </div>
-
-                  {/* Row actions */}
-                  <div
-                    className="col-start-3 row-start-1 sm:col-auto sm:row-auto"
-                  >
-                    <RowActions
-                      row={row}
-                      disabled={isPending}
-                      onView={() =>
-                        router.push(`/dashboard/candidates/${row.id}`)
-                      }
-                      onStatus={(next) => runRowStatus(row, next)}
-                      onDelete={() => runDelete(row)}
-                      onTogglePool={() => runTogglePool(row)}
-                    />
-                  </div>
-                </div>
-              );
-            })}
-
-            {/*
-              Two different situations that used to share one message. A new
-              workspace with no candidates was being told its filters were
-              wrong, which is both untrue and unhelpful.
-            */}
-            {filtered.length === 0 ? (
-              filtersActive ? (
-                <EmptyState
-                  variant="filtered"
-                  icon={Search}
-                  title="Nobody matches these filters"
-                  description="Widen the search, or clear the filters to see everyone again."
-                  action={
-                    <Button variant="outline" size="sm" onClick={clearFilters}>
-                      Clear filters
-                    </Button>
-                  }
-                />
-              ) : (
-                <EmptyState
-                  icon={Users}
-                  title="No candidates yet"
-                  description="They arrive when someone applies through your career page, or you add one by hand."
-                />
-              )
-            ) : null}
-          </div>
-        </div>
-
-        <BulkEmailDrawer
-          open={bulkEmailOpen}
-          onOpenChange={setBulkEmailOpen}
-          candidateIds={filtered
-            .filter((r) => selected.has(r.id))
-            .map((r) => r.id)}
-          templates={emailTemplates}
-          onSent={() => setSelected(new Set())}
+        <TotalLine
+          total={total}
+          noun="candidate"
+          trailing={
+            pageInfo && (pageInfo.page > 1 || pageInfo.hasNextPage) ? (
+              <div className="flex items-center gap-2">
+                <span className="hidden tabular-nums sm:inline">Page {pageInfo.page}</span>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="rounded-full"
+                  disabled={pageInfo.page <= 1 || isPending}
+                  onClick={() => navigateWithFilter("page", String(pageInfo.page - 1))}
+                >Previous</Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="rounded-full"
+                  disabled={!pageInfo.hasNextPage || isPending}
+                  onClick={() => navigateWithFilter("page", String(pageInfo.page + 1))}
+                >Next</Button>
+              </div>
+            ) : null
+          }
         />
-      </div>
-    </div>
+
+        {filtered.length > 0 ? (
+          <div className="overflow-x-auto">
+            <table className={dirTable}>
+              <thead>
+                <tr>
+                  <th scope="col" className={cn(dirTh, "w-12")}>
+                    <Checkbox
+                      checked={allVisibleSelected}
+                      onCheckedChange={toggleAll}
+                      aria-label="Select all"
+                    />
+                  </th>
+                  <th scope="col" className={dirTh}>Candidate</th>
+                  <th scope="col" className={cn(dirTh, "hidden md:table-cell")}>Department</th>
+                  <th scope="col" className={cn(dirTh, "hidden md:table-cell")}>Stage</th>
+                  <th scope="col" className={cn(dirTh, "hidden lg:table-cell")}>Applied</th>
+                  <th scope="col" className={dirTh}>Status</th>
+                  <th scope="col" className={cn(dirTh, "w-14")}>
+                    <span className="sr-only">Actions</span>
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {filtered.map((row) => {
+                  const isSelected = selected.has(row.id);
+                  return (
+                    <tr
+                      key={row.id}
+                      data-state={isSelected ? "selected" : undefined}
+                      className={dirTr}
+                    >
+                      <td className={dirTd}>
+                        <Checkbox
+                          checked={isSelected}
+                          onCheckedChange={() => toggleOne(row.id)}
+                          aria-label={`Select ${row.fullName}`}
+                        />
+                      </td>
+
+                      <td className={cn(dirTd, "max-w-[360px] py-2")}>
+                        <Link
+                          href={`/dashboard/candidates/${row.id}` as Route}
+                          className="flex min-w-0 items-center gap-3 rounded-md outline-none focus-visible:ring-2 focus-visible:ring-near-ink"
+                        >
+                          <UserAvatar
+                            name={row.fullName}
+                            src={row.avatarUrl}
+                            fallbackSrcs={row.avatarFallbackSrcs}
+                            size="lg"
+                          />
+                          <div className="min-w-0">
+                            <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5">
+                              <p className="truncate text-[14.5px] font-medium text-near-ink group-hover/row:underline">
+                                {row.fullName}
+                              </p>
+                              {row.inPool ? (
+                                <StatusPill tone="warning" size="sm" icon={BookmarkSimpleIcon}>
+                                  In Pool
+                                </StatusPill>
+                              ) : null}
+                              {row.isReferred ? (
+                                <ReferralBadge featured={row.isFeaturedReferral} />
+                              ) : null}
+                              {row.hasOpenPrivacyRequest ? (
+                                <span title="Has a pending privacy request awaiting review">
+                                  <StatusPill tone="warning" size="sm" icon={ShieldAlert}>
+                                    Privacy request
+                                  </StatusPill>
+                                </span>
+                              ) : null}
+                            </div>
+                            <p className="truncate text-[13px] text-soft-ink">
+                              {[row.role, row.location].filter(Boolean).join(" · ") ||
+                                row.email}
+                            </p>
+                            {row.tags.length > 0 ? (
+                              <div className="mt-1 flex flex-wrap items-center gap-1.5 text-[11px]">
+                                {row.tags.slice(0, 3).map((t) => (
+                                  <span
+                                    key={t}
+                                    className="rounded-full bg-card-inset px-2 py-0.5 font-medium text-soft-ink"
+                                  >
+                                    {t}
+                                  </span>
+                                ))}
+                                {row.tags.length > 3 ? (
+                                  <span className="text-soft-ink">
+                                    +{row.tags.length - 3}
+                                  </span>
+                                ) : null}
+                              </div>
+                            ) : null}
+                          </div>
+                        </Link>
+                      </td>
+
+                      <td className={cn(dirTd, "hidden text-near-ink md:table-cell")}>
+                        {row.department ?? <span className="text-quiet-mist">None</span>}
+                      </td>
+
+                      <td className={cn(dirTd, "hidden md:table-cell")}>
+                        {row.stage ? (
+                          <>
+                            <p className="text-[13px] font-medium text-near-ink">
+                              {row.stage}
+                            </p>
+                            <PipelineSpine
+                              current={row.stage}
+                              className="mt-1.5 max-w-40"
+                            />
+                          </>
+                        ) : (
+                          <span className="text-[13px] text-quiet-mist">
+                            No application
+                          </span>
+                        )}
+                      </td>
+
+                      <td className={cn(dirTd, "hidden whitespace-nowrap text-[13px] text-soft-ink lg:table-cell")}>
+                        {row.appliedLabel ?? <span className="text-quiet-mist">None</span>}
+                      </td>
+
+                      <td className={dirTd}>
+                        {row.status ? (
+                          <ApplicationStatusBadge status={row.status} />
+                        ) : (
+                          <span className="text-quiet-mist">None</span>
+                        )}
+                      </td>
+
+                      <td className={dirTd}>
+                        <RowActions
+                          row={row}
+                          disabled={isPending}
+                          onView={() =>
+                            router.push(`/dashboard/candidates/${row.id}`)
+                          }
+                          onStatus={(next) => runRowStatus(row, next)}
+                          onDelete={() => runDelete(row)}
+                          onTogglePool={() => runTogglePool(row)}
+                        />
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        ) : filtersActive ? (
+          <EmptyState
+            variant="filtered"
+            icon={Search}
+            title="Nobody matches these filters"
+            description="Widen the search, or clear the filters to see everyone again."
+            action={
+              <Button variant="outline" size="sm" onClick={clearFilters}>
+                Clear filters
+              </Button>
+            }
+          />
+        ) : (
+          <EmptyState
+            icon={Users}
+            title="No candidates yet"
+            description="They arrive when someone applies through your career page, or you add one by hand."
+            className="rounded-none border-0 bg-transparent"
+          />
+        )}
+      </DirectoryCard>
+
+      <BulkActionBar count={selectedCount} onClear={() => setSelected(new Set())}>
+        <BulkAction disabled={isPending} onClick={() => setBulkEmailOpen(true)}>
+          <Mail />
+          Email
+        </BulkAction>
+        <BulkAction disabled={isPending} onClick={() => runBulk("hired")}>
+          <CheckCircle2 />
+          Mark hired
+        </BulkAction>
+        <BulkAction disabled={isPending} onClick={() => runBulk("rejected")}>
+          <XCircle />
+          Reject
+        </BulkAction>
+        <BulkAction disabled={isPending} onClick={() => runBulk("active")}>
+          <RotateCcw />
+          Reactivate
+        </BulkAction>
+        <BulkAction danger disabled={isPending} onClick={runBulkDelete}>
+          <Trash2 />
+          Delete
+        </BulkAction>
+      </BulkActionBar>
+
+      <BulkEmailDrawer
+        open={bulkEmailOpen}
+        onOpenChange={setBulkEmailOpen}
+        candidateIds={filtered
+          .filter((r) => selected.has(r.id))
+          .map((r) => r.id)}
+        templates={emailTemplates}
+        onSent={() => setSelected(new Set())}
+      />
+    </>
   );
-}
-
-// Stable accent per department so the chip color is consistent across rows.
-const DEPARTMENT_CHIP_CLASSES = [
-  "bg-primary/10 text-primary",
-  "bg-clay/15 text-clay",
-  "bg-slate-info/15 text-slate-info",
-  "bg-accent text-accent-foreground",
-];
-
-function departmentChipClass(department: string) {
-  let hash = 0;
-  for (let i = 0; i < department.length; i++) {
-    hash = (hash * 31 + department.charCodeAt(i)) | 0;
-  }
-  return DEPARTMENT_CHIP_CLASSES[
-    Math.abs(hash) % DEPARTMENT_CHIP_CLASSES.length
-  ];
 }
 
 function RowActions({
@@ -929,7 +826,7 @@ function RowActions({
         <Button
           variant="ghost"
           size="icon"
-          className="size-8 text-muted-foreground"
+          className="size-8 text-soft-ink"
           aria-label={`Actions for ${row.fullName}`}
           disabled={disabled}
         >

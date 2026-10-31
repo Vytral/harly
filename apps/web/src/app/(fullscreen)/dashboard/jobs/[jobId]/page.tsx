@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { updateJobAction } from "@/features/jobs/actions";
 import {
   getDashboardJob,
+  listJobsWithStats,
   listWorkspaceDepartments,
 } from "@/features/jobs/data";
 import { getCareerPageData } from "@/features/career-page/data";
@@ -14,6 +15,8 @@ import {
   listWorkspaceMembers,
 } from "@/features/jobs/hiring-team-data";
 import { JobForm } from "@/features/jobs/JobForm";
+import { JobHiringProgress } from "@/features/jobs/JobHiringProgress";
+import { JobPublishedDialog } from "@/features/jobs/JobPublishedDialog";
 import { JobActionsMenu } from "@/features/jobs/JobActionsMenu";
 import { JobShareButton } from "@/features/jobs/JobShareButton";
 import { JobStatusActions } from "@/features/jobs/JobStatusActions";
@@ -30,13 +33,16 @@ type DashboardJobPageProps = {
   params: Promise<{
     jobId: string;
   }>;
+  searchParams?: Promise<{ published?: string }>;
 };
 
 export default async function DashboardJobPage({
   params,
+  searchParams,
 }: DashboardJobPageProps) {
   await requirePagePermission("jobs:view");
   const { jobId } = await params;
+  const justPublished = (await searchParams)?.published === "1";
   // Resolve the job first. getDashboardJob applies the caller's job scope, so a
   // job outside it is not found and nothing job-specific (such as its hiring
   // team) is loaded for it.
@@ -45,7 +51,7 @@ export default async function DashboardJobPage({
     notFound();
   }
   const { organization: workspace } = await getWorkspaceContext();
-  const [departments, hiringTeam, workspaceMembers, aiStatus, candidatePoolCount, careerPageData, canEditJobs] =
+  const [departments, hiringTeam, workspaceMembers, aiStatus, candidatePoolCount, careerPageData, canEditJobs, allJobStats] =
     await Promise.all([
       listWorkspaceDepartments(),
       listJobHiringTeam(jobId),
@@ -54,7 +60,9 @@ export default async function DashboardJobPage({
       countCandidatePool(workspace.id),
       getCareerPageData(workspace.slug),
       can("jobs:edit"),
+      listJobsWithStats(),
     ]);
+  const stats = allJobStats.find((row) => row.id === jobId);
 
   const { job } = result;
   const appUrl = getHarlyPublicOrigin();
@@ -62,6 +70,8 @@ export default async function DashboardJobPage({
   const publicUrl = `${appUrl}/board/${workspace.slug}/jobs/${job.slug}`;
 
   return (
+    <>
+    {justPublished ? <JobPublishedDialog jobTitle={job.title} /> : null}
     <JobForm
       action={updateJobAction}
       job={job}
@@ -80,6 +90,14 @@ export default async function DashboardJobPage({
       }
       railActions={
         <>
+          {stats ? (
+            <JobHiringProgress
+              jobId={job.id}
+              applicants={stats.applicants}
+              active={stats.activeApplicants}
+              newThisWeek={stats.newApplicants}
+            />
+          ) : null}
           <Button asChild variant="outline" size="sm" className="w-full justify-start">
             <a href={`/jobs/${job.slug}`} target="_blank" rel="noreferrer">
               <ExternalLink className="size-4" />
@@ -103,5 +121,6 @@ export default async function DashboardJobPage({
         </>
       }
     />
+    </>
   );
 }

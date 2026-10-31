@@ -86,7 +86,7 @@ export function ArchiveStageDialog({
         ) : null}
 
         {plan?.mode === "blocked" ? (
-          <p className="flex items-start gap-2 rounded-xl bg-muted px-3 py-2.5 text-sm text-foreground">
+          <p className="flex items-start gap-2 rounded-[var(--radius-inner)] bg-card-inset px-3 py-2.5 text-sm text-foreground">
             <AlertTriangle className="mt-0.5 size-4 shrink-0 text-warning" aria-hidden="true" />
             <span>{plan.reason}</span>
           </p>

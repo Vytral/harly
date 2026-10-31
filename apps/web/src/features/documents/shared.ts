@@ -11,16 +11,16 @@ export const DOCUMENT_MIME_LABELS: Record<string, string> = {
 };
 
 export const DOCUMENT_STATUS_META = {
-  active: { label: "Active", className: "bg-primary/10 text-primary" },
-  archived: { label: "Archived", className: "bg-muted text-muted-foreground" },
+  active: { label: "Active", className: "bg-lime-wash text-sage-ink" },
+  archived: { label: "Archived", className: "bg-soft-kraft text-soft-ink" },
 } as const;
 
 export const SIGNATURE_STATUS_META = {
-  unsigned: { label: "Not signed", className: "bg-muted text-muted-foreground" },
-  pending: { label: "Pending signature", className: "bg-warning/10 text-warning" },
-  signed: { label: "Signed", className: "bg-primary/10 text-primary" },
-  declined: { label: "Declined", className: "bg-destructive/10 text-destructive" },
-  expired: { label: "Expired", className: "bg-destructive/10 text-destructive" },
+  unsigned: { label: "Not signed", className: "bg-soft-kraft text-soft-ink" },
+  pending: { label: "Pending signature", className: "bg-warning-clay/10 text-warning-clay" },
+  signed: { label: "Signed", className: "bg-lime-wash text-sage-ink" },
+  declined: { label: "Declined", className: "bg-danger-rust/10 text-danger-rust" },
+  expired: { label: "Expired", className: "bg-danger-rust/10 text-danger-rust" },
 } as const;
 
 export type DocumentStatus = keyof typeof DOCUMENT_STATUS_META;

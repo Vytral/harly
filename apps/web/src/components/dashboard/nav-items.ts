@@ -82,7 +82,6 @@ export const primaryNav: NavItem[] = [
       },
       {
         label: "Jobs",
-        shellTitle: true,
         href: "/dashboard/jobs",
         icon: Briefcase,
         requiredPermission: "jobs:view",

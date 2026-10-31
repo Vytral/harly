@@ -13,7 +13,7 @@ export function DocumentsWorkspaceTabs({
   return (
     <nav
       aria-label="Documents workspace"
-      className="flex w-fit gap-1 rounded-lg border border-border bg-muted/40 p-1"
+      className="flex w-fit gap-1 rounded-full bg-soft-kraft p-1"
     >
       {canReadDocuments ? (
         <Link
@@ -21,8 +21,8 @@ export function DocumentsWorkspaceTabs({
           aria-current={active === "files" ? "page" : undefined}
           className={
             active === "files"
-              ? "rounded-md bg-background px-3 py-1.5 text-sm font-medium text-foreground shadow-sm"
-              : "rounded-md px-3 py-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground"
+              ? "rounded-full bg-pure-snow px-3.5 py-1.5 text-sm font-medium text-near-ink"
+              : "rounded-full px-3.5 py-1.5 text-sm text-soft-ink transition-colors hover:text-near-ink"
           }
         >
           Files
@@ -34,8 +34,8 @@ export function DocumentsWorkspaceTabs({
           aria-current={active === "templates" ? "page" : undefined}
           className={
             active === "templates"
-              ? "rounded-md bg-background px-3 py-1.5 text-sm font-medium text-foreground shadow-sm"
-              : "rounded-md px-3 py-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground"
+              ? "rounded-full bg-pure-snow px-3.5 py-1.5 text-sm font-medium text-near-ink"
+              : "rounded-full px-3.5 py-1.5 text-sm text-soft-ink transition-colors hover:text-near-ink"
           }
         >
           Workflow templates

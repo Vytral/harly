@@ -79,7 +79,7 @@ export function BuilderTopBar({
             className={cn(
               "font-cal inline-flex items-center gap-2 rounded-full border px-4 py-1.5 text-sm font-semibold transition-all duration-150",
               dropdownOpen
-                ? "border-pine/30 bg-sage/70 text-foreground"
+                ? "border-transparent bg-lime-wash text-near-ink"
                 : "border-border bg-kraft/60 text-ink-soft hover:bg-kraft hover:text-foreground",
             )}
           >
@@ -94,7 +94,7 @@ export function BuilderTopBar({
           </button>
 
           {dropdownOpen && (
-            <div className="absolute left-1/2 top-full z-50 mt-2 w-64 -translate-x-1/2 origin-top rounded-xl border bg-paper-raised p-1.5 shadow-lg animate-in fade-in slide-in-from-top-2 duration-150">
+            <div className="absolute left-1/2 top-full z-50 mt-2 w-64 -translate-x-1/2 origin-top rounded-[var(--radius-card)] bg-pure-snow p-1.5 shadow-[var(--shadow-float)] animate-in fade-in slide-in-from-top-2 duration-150">
               {careerTemplates.map((t) => {
                 const tmpl = TEMPLATE_META[t];
                 const isActive = activeTemplate === t;
@@ -108,9 +108,9 @@ export function BuilderTopBar({
                     }}
                     disabled={!tmpl.ready}
                     className={cn(
-                      "flex w-full flex-col rounded-lg px-3 py-2 text-left transition-colors duration-100",
+                      "flex w-full flex-col rounded-[var(--radius-inner)] px-3 py-2 text-left transition-colors duration-100",
                       isActive
-                        ? "bg-sage/60 text-foreground"
+                        ? "bg-lime-wash text-near-ink"
                         : "text-ink-soft hover:bg-kraft hover:text-foreground",
                       !tmpl.ready && "cursor-not-allowed opacity-40",
                     )}
@@ -135,7 +135,7 @@ export function BuilderTopBar({
             href={boardUrl}
             target="_blank"
             rel="noopener noreferrer"
-            className="inline-flex items-center gap-1.5 rounded-lg border border-transparent px-2.5 py-1.5 text-sm font-medium text-ink-soft transition-colors hover:border-border hover:bg-kraft hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-pine/30"
+            className="inline-flex items-center gap-1.5 rounded-[var(--radius-btn)] border border-transparent px-2.5 py-1.5 text-sm font-medium text-ink-soft transition-colors hover:border-border hover:bg-kraft hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-pine/30"
           >
             <EyeIcon className="size-4" />
             <span className="hidden sm:inline">View live</span>
@@ -145,7 +145,7 @@ export function BuilderTopBar({
             onClick={onSave}
             disabled={saving || !dirty}
             className={cn(
-              "inline-flex items-center gap-1.5 rounded-lg px-3.5 py-1.5 text-sm font-medium transition-all duration-150",
+              "inline-flex items-center gap-1.5 rounded-[var(--radius-btn)] px-3.5 py-1.5 text-sm font-medium transition-all duration-150",
               dirty && !saving
                 ? "bg-pine text-primary-foreground hover:bg-pine-strong active:scale-[0.97]"
                 : "bg-kraft text-ink-soft",

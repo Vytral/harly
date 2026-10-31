@@ -24,6 +24,7 @@ import {
   TEMPLATE_VARIABLES,
 } from "@/features/email-templates/interpolate";
 import {
+  CaretRightIcon,
   FileTextIcon,
   PlusIcon,
   SearchIcon,
@@ -34,7 +35,9 @@ import {
 import { DrawerLayout } from "@/features/candidates/DrawerLayout";
 import { RichTextEditor } from "@/components/ui/RichTextEditor";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
+import { Callout } from "@/components/ui/callout";
+import { Card } from "@/components/ui/card";
+import { FilterPill } from "@/components/ui/FilterPill";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -64,13 +67,15 @@ const TEMPLATE_TYPE_LABELS: Record<TemplateType, string> = {
 };
 
 const TEMPLATE_TYPE_COLORS: Record<TemplateType, string> = {
-  general: "bg-muted text-muted-foreground",
-  interview_invite: "bg-blue-50 text-blue-700 dark:bg-blue-950 dark:text-blue-300",
-  rejection: "bg-red-50 text-red-700 dark:bg-red-950 dark:text-red-300",
-  offer: "bg-green-50 text-green-700 dark:bg-green-950 dark:text-green-300",
-  screening: "bg-amber-50 text-amber-700 dark:bg-amber-950 dark:text-amber-300",
-  stage_change: "bg-violet-50 text-violet-700 dark:bg-violet-950 dark:text-violet-300",
+  general: "bg-soft-kraft text-soft-ink",
+  interview_invite: "bg-status-quiet text-status-quiet-ink",
+  rejection: "bg-danger-rust/10 text-danger-rust",
+  offer: "bg-lime-wash text-sage-ink",
+  screening: "bg-warning-clay/10 text-warning-clay",
+  stage_change: "bg-sage-wash text-sage-ink",
 };
+
+const TYPE_CHIP = "w-fit rounded-full px-2 py-0.5 text-[11px] font-semibold";
 
 /** Types with a matching system auto-email , these can be "activated" to override the default. */
 const ACTIVATABLE_TYPES = new Set<TemplateType>(SYSTEM_TEMPLATE_TYPES);
@@ -281,123 +286,108 @@ export function TemplatesManager({
     return html.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
   }
 
+  const typeOptions = Object.keys(TEMPLATE_TYPE_LABELS) as TemplateType[];
+
+  function renderStarter(starter: (typeof STARTER_TEMPLATES)[number]) {
+    return (
+      <button
+        key={starter.name}
+        type="button"
+        onClick={() => openNew(starter)}
+        className="group flex w-full items-center gap-3 rounded-[var(--radius-inner)] px-3 py-3 text-left transition-colors hover:bg-row-wash focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-near-ink"
+      >
+        <span className="grid size-9 shrink-0 place-items-center rounded-[var(--radius-btn)] border border-hairline bg-pure-snow text-near-ink">
+          <FileTextIcon className="size-4" />
+        </span>
+        <span className="min-w-0 flex-1">
+          <span className="flex flex-wrap items-center gap-2">
+            <span className="text-sm font-semibold text-near-ink">{starter.name}</span>
+            <span className={cn(TYPE_CHIP, TEMPLATE_TYPE_COLORS[starter.type])}>
+              {TEMPLATE_TYPE_LABELS[starter.type]}
+            </span>
+          </span>
+          <span className="mt-0.5 block truncate text-[13px] text-soft-ink">{starter.subject}</span>
+        </span>
+        <CaretRightIcon className="size-4 shrink-0 text-quiet-mist transition-transform group-hover:translate-x-0.5" />
+      </button>
+    );
+  }
+
   return (
     <div className="space-y-4">
       {/* Header */}
-      <div className="flex items-center justify-between gap-3">
-        <p className="text-sm text-muted-foreground">
-          {templates.length === 0
-            ? "No templates yet."
-            : `${templates.length} template${templates.length === 1 ? "" : "s"}.`}
-        </p>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex flex-wrap items-center gap-2">
+          {templates.length > 0 && (
+            <>
+              <div className="relative w-full sm:w-64">
+                <SearchIcon className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-quiet-mist" />
+                <Input
+                  aria-label="Search templates"
+                  placeholder="Search templates…"
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  className="rounded-full pl-9"
+                />
+              </div>
+              <FilterPill
+                label="Type"
+                value={filterType}
+                onChange={(v) => setFilterType(v as TemplateType | "all")}
+                options={["all", ...typeOptions]}
+                labelMap={{ all: "All", ...TEMPLATE_TYPE_LABELS }}
+                allValue="all"
+              />
+            </>
+          )}
+        </div>
         <div className="flex items-center gap-2">
           {templates.length > 0 ? (
-            <Button size="sm" variant="outline" onClick={() => setShowStarters((visible) => !visible)}>
+            <Button variant="outline" onClick={() => setShowStarters((visible) => !visible)}>
               {showStarters ? "Hide starters" : "Use a starter"}
             </Button>
           ) : null}
-          <Button size="sm" onClick={() => openNew()}>
+          <Button onClick={() => openNew()}>
             <PlusIcon className="size-4" />
             New template
           </Button>
         </div>
       </div>
 
-      <p className="text-xs text-muted-foreground">
+      <Callout tone="info">
         Automatic templates can replace Harly&apos;s event emails when activated. Review the preview before activating; general and screening templates are for manual outreach.
-      </p>
-
-      {/* Search + type filter */}
-      {templates.length > 0 && (
-        <div className="flex gap-2">
-          <div className="relative flex-1">
-            <SearchIcon className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              placeholder="Search templates…"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="pl-9"
-            />
-          </div>
-          <Select value={filterType} onValueChange={(v) => setFilterType(v as TemplateType | "all")}>
-            <SelectTrigger className="w-36">
-              <SelectValue placeholder="All types" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All types</SelectItem>
-              {(Object.keys(TEMPLATE_TYPE_LABELS) as TemplateType[]).map((t) => (
-                <SelectItem key={t} value={t}>{TEMPLATE_TYPE_LABELS[t]}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-      )}
+      </Callout>
 
       {templates.length > 0 && showStarters ? (
-        <div className="rounded-xl border border-dashed p-4">
-          <div className="mb-3">
-            <p className="text-sm font-medium">Start from a template</p>
-            <p className="text-xs text-muted-foreground">Choose a starting point, then customize it for your workspace.</p>
+        <Card className="gap-2 p-4">
+          <div className="px-2">
+            <p className="text-[15px] font-semibold tracking-[-0.01em] text-near-ink">Start from a template</p>
+            <p className="text-[13px] text-soft-ink">Choose a starting point, then customize it for your workspace.</p>
           </div>
-          <div className="grid gap-3 sm:grid-cols-2">
-            {STARTER_TEMPLATES.map((starter) => (
-              <button
-                key={starter.name}
-                type="button"
-                onClick={() => openNew(starter)}
-                className="group rounded-lg border border-dashed p-3 text-left transition hover:border-primary/40 hover:bg-accent/50"
-              >
-                <div className="mb-2 flex flex-wrap items-center gap-1.5">
-                  <span className={cn("rounded-md px-2 py-0.5 text-[11px] font-semibold", TEMPLATE_TYPE_COLORS[starter.type])}>
-                    {TEMPLATE_TYPE_LABELS[starter.type]}
-                  </span>
-                  <span className="text-[11px] text-muted-foreground">
-                    {isAutomaticTemplateType(starter.type) ? "Automatic" : "Manual only"}
-                  </span>
-                </div>
-                <p className="text-sm font-medium group-hover:text-primary">{starter.name}</p>
-                <p className="mt-0.5 truncate text-xs text-muted-foreground">{starter.subject}</p>
-              </button>
-            ))}
+          <div className="space-y-0.5">
+            {STARTER_TEMPLATES.map(renderStarter)}
           </div>
-        </div>
+        </Card>
       ) : null}
 
       {/* Empty state */}
       {templates.length === 0 ? (
         <div className="space-y-4">
-          <div className="flex flex-col items-center gap-2 rounded-xl border border-dashed px-6 py-10 text-center">
-            <span className="flex size-10 items-center justify-center rounded-xl bg-muted text-muted-foreground">
+          <div className="flex items-center gap-4 rounded-[var(--radius-card)] bg-lime-wash px-5 py-5">
+            <span className="grid size-11 shrink-0 place-items-center rounded-[var(--radius-btn)] bg-pure-snow text-near-ink">
               <FileTextIcon className="size-5" />
             </span>
-            <p className="text-sm font-medium">Write once, send often</p>
-            <p className="max-w-sm text-sm text-muted-foreground">
-              Start from a starter template or create your own with variables like{" "}
-              <code className="rounded bg-muted px-1 py-0.5 text-xs">{"{{candidate_first_name}}"}</code>.
-            </p>
+            <div className="min-w-0">
+              <p className="text-[15px] font-semibold tracking-[-0.01em] text-near-ink">Write once, send often</p>
+              <p className="mt-0.5 text-sm text-soft-ink">
+                Start from a starter template or create your own with variables like{" "}
+                <code className="rounded bg-pure-snow px-1 py-0.5 text-xs">{"{{candidate_first_name}}"}</code>.
+              </p>
+            </div>
           </div>
-          {/* Starter template cards */}
-          <div className="grid gap-3 sm:grid-cols-2">
-            {STARTER_TEMPLATES.map((t) => (
-              <button
-                key={t.name}
-                type="button"
-                onClick={() => openNew(t)}
-                className="group rounded-xl border border-dashed p-4 text-left transition hover:border-primary/40 hover:bg-accent/50"
-              >
-                <div className="mb-2 flex items-center gap-2">
-                  <span className={cn("rounded-md px-2 py-0.5 text-[11px] font-semibold", TEMPLATE_TYPE_COLORS[t.type])}>
-                    {TEMPLATE_TYPE_LABELS[t.type]}
-                  </span>
-                  <span className="text-[11px] text-muted-foreground">
-                    {isAutomaticTemplateType(t.type) ? "Automatic" : "Manual only"}
-                  </span>
-                </div>
-                <p className="text-sm font-medium group-hover:text-primary">{t.name}</p>
-                <p className="mt-0.5 text-xs text-muted-foreground">{t.subject}</p>
-              </button>
-            ))}
-          </div>
+          <Card className="gap-1 p-3">
+            {STARTER_TEMPLATES.map(renderStarter)}
+          </Card>
         </div>
       ) : filteredTemplates.length === 0 ? (
         <EmptyState
@@ -407,83 +397,83 @@ export function TemplatesManager({
           description="Try another stage or category, or search by the template's name."
         />
       ) : (
-        <div className="grid gap-3 sm:grid-cols-2">
+        <Card className="gap-0 divide-y divide-hairline overflow-hidden py-0">
           {filteredTemplates.map((template) => (
-            <Card key={template.id} className={cn(template.isActive && "border-primary/40")}>
-              <CardContent className="space-y-2">
-                <div className="flex items-start justify-between gap-2">
-                  <div className="flex min-w-0 flex-col gap-1">
-                    <p className="truncate font-semibold">{template.name}</p>
-                    <div className="flex flex-wrap items-center gap-1.5">
-                      <span className={cn("w-fit rounded-md px-2 py-0.5 text-[11px] font-semibold", TEMPLATE_TYPE_COLORS[template.type])}>
-                        {TEMPLATE_TYPE_LABELS[template.type]}
-                      </span>
-                      <span className="text-[11px] text-muted-foreground">
-                        {isAutomaticTemplateType(template.type) ? "Automatic" : "Manual only"}
-                      </span>
-                      {template.isActive ? (
-                        <span className="inline-flex w-fit items-center gap-1 rounded-md bg-success/10 px-2 py-0.5 text-[11px] font-semibold text-success">
-                          <StarFillIcon className="size-2.5" />
-                          Active
-                        </span>
-                      ) : null}
-                    </div>
-                  </div>
-                  <div className="flex shrink-0 gap-1">
-                    {ACTIVATABLE_TYPES.has(template.type) ? (
-                      <Button
-                        size="icon"
-                        variant="ghost"
-                        className={cn("size-8", template.isActive ? "text-success" : "text-muted-foreground")}
-                        aria-label={
-                          template.isActive
-                            ? `Stop using "${template.name}" for auto-emails`
-                            : `Use "${template.name}" for every ${TEMPLATE_TYPE_LABELS[template.type].toLowerCase()} email`
-                        }
-                        title={
-                          template.isActive
-                            ? "Active. Used for this workspace's auto-emails"
-                            : "Use for this workspace's auto-emails"
-                        }
-                        disabled={isPending}
-                        onClick={() => toggleActive(template)}
-                      >
-                        {template.isActive ? (
-                          <StarFillIcon className="size-4" />
-                        ) : (
-                          <StarIcon className="size-4" />
-                        )}
-                      </Button>
-                    ) : null}
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      disabled={isPending}
-                      onClick={() => openEdit(template)}
-                    >
-                      Edit
-                    </Button>
-                    <Button
-                      size="icon"
-                      variant="ghost"
-                      className="size-8 text-muted-foreground hover:text-destructive"
-                      aria-label={`Delete ${template.name}`}
-                      disabled={isPending}
-                      onClick={() => remove(template)}
-                    >
-                      <TrashIcon className="size-4" />
-                    </Button>
-                  </div>
-                </div>
-                <p className="truncate text-sm font-medium text-foreground/80">{template.subject}</p>
-                <p className="line-clamp-2 text-sm text-muted-foreground">{stripHtml(template.body)}</p>
-                <p className="text-xs text-muted-foreground">
+            <div
+              key={template.id}
+              className="group flex items-start gap-3 px-4 py-4 transition-colors hover:bg-row-wash"
+            >
+              <span className="mt-0.5 grid size-9 shrink-0 place-items-center rounded-[var(--radius-btn)] border border-hairline bg-pure-snow text-near-ink">
+                <FileTextIcon className="size-4" />
+              </span>
+              <button
+                type="button"
+                disabled={isPending}
+                onClick={() => openEdit(template)}
+                className="min-w-0 flex-1 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-near-ink"
+              >
+                <span className="flex flex-wrap items-center gap-2">
+                  <span className="truncate text-sm font-semibold text-near-ink">{template.name}</span>
+                  <span className={cn(TYPE_CHIP, TEMPLATE_TYPE_COLORS[template.type])}>
+                    {TEMPLATE_TYPE_LABELS[template.type]}
+                  </span>
+                  <span className="text-[11px] text-soft-ink">
+                    {isAutomaticTemplateType(template.type) ? "Automatic" : "Manual only"}
+                  </span>
+                  {template.isActive ? (
+                    <span className="inline-flex w-fit items-center gap-1.5 rounded-full bg-lime-wash px-2 py-0.5 text-[11px] font-semibold text-sage-ink">
+                      <span aria-hidden className="size-1.5 rounded-full bg-success-olive" />
+                      Active
+                    </span>
+                  ) : null}
+                </span>
+                <span className="mt-1 block truncate text-[13px] font-medium text-near-ink/80">{template.subject}</span>
+                <span className="mt-0.5 line-clamp-1 text-[13px] text-soft-ink">{stripHtml(template.body)}</span>
+                <span className="mt-1 block text-xs text-quiet-mist">
                   Updated <RelativeTime value={template.updatedAt} />
-                </p>
-              </CardContent>
-            </Card>
+                </span>
+              </button>
+              <div className="flex shrink-0 items-center gap-1">
+                {ACTIVATABLE_TYPES.has(template.type) ? (
+                  <Button
+                    size="icon"
+                    variant="ghost"
+                    className={cn("size-8", template.isActive ? "text-success-olive" : "text-soft-ink")}
+                    aria-label={
+                      template.isActive
+                        ? `Stop using "${template.name}" for auto-emails`
+                        : `Use "${template.name}" for every ${TEMPLATE_TYPE_LABELS[template.type].toLowerCase()} email`
+                    }
+                    title={
+                      template.isActive
+                        ? "Active. Used for this workspace's auto-emails"
+                        : "Use for this workspace's auto-emails"
+                    }
+                    disabled={isPending}
+                    onClick={() => toggleActive(template)}
+                  >
+                    {template.isActive ? (
+                      <StarFillIcon className="size-4" />
+                    ) : (
+                      <StarIcon className="size-4" />
+                    )}
+                  </Button>
+                ) : null}
+                <Button
+                  size="icon"
+                  variant="ghost"
+                  className="size-8 text-soft-ink hover:text-danger-rust"
+                  aria-label={`Delete ${template.name}`}
+                  disabled={isPending}
+                  onClick={() => remove(template)}
+                >
+                  <TrashIcon className="size-4" />
+                </Button>
+                <CaretRightIcon aria-hidden className="size-4 text-quiet-mist" />
+              </div>
+            </div>
           ))}
-        </div>
+        </Card>
       )}
 
       {/* Editor sheet */}
@@ -578,13 +568,13 @@ export function TemplatesManager({
             <div className="space-y-2">
               <div className="flex items-center justify-between">
                 <Label>Body</Label>
-                <div className="flex rounded-md border border-border/60 p-0.5">
+                <div className="flex rounded-full bg-soft-kraft p-0.5">
                   <button
                     type="button"
                     onClick={() => setTab("edit")}
                     className={cn(
-                      "rounded px-2.5 py-0.5 text-xs font-medium transition",
-                      tab === "edit" ? "bg-foreground text-background" : "text-muted-foreground hover:text-foreground",
+                      "rounded-full px-2.5 py-0.5 text-xs font-medium transition",
+                      tab === "edit" ? "bg-pure-snow text-near-ink" : "text-soft-ink hover:text-near-ink",
                     )}
                   >
                     Edit
@@ -593,8 +583,8 @@ export function TemplatesManager({
                     type="button"
                     onClick={() => setTab("preview")}
                     className={cn(
-                      "rounded px-2.5 py-0.5 text-xs font-medium transition",
-                      tab === "preview" ? "bg-foreground text-background" : "text-muted-foreground hover:text-foreground",
+                      "rounded-full px-2.5 py-0.5 text-xs font-medium transition",
+                      tab === "preview" ? "bg-pure-snow text-near-ink" : "text-soft-ink hover:text-near-ink",
                     )}
                   >
                     Preview
@@ -624,7 +614,7 @@ export function TemplatesManager({
                               key={variable.key}
                               type="button"
                               onClick={() => editorRef.current?.insertText(`{{${variable.key}}}`)}
-                              className="cursor-pointer rounded-[6px] bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground transition hover:bg-accent hover:text-accent-foreground"
+                              className="cursor-pointer rounded-full bg-card-inset px-2.5 py-0.5 text-xs font-medium text-soft-ink transition hover:bg-row-wash hover:text-near-ink"
                               title={variable.label}
                             >
                               {`{{${variable.key}}}`}
@@ -636,7 +626,7 @@ export function TemplatesManager({
                   </div>
 
                   {unknownVariables.length > 0 && (
-                    <p className="text-xs text-amber-600 dark:text-amber-400">
+                    <p className="text-xs text-warning-clay">
                       Unknown variable{unknownVariables.length > 1 ? "s" : ""}:{" "}
                       {unknownVariables.map((v) => `{{${v}}}`).join(", ")}, will be sent as-is.
                     </p>
@@ -644,7 +634,7 @@ export function TemplatesManager({
                 </>
               ) : (
                 /* Preview panel */
-                <div className="rounded-xl border bg-white p-5 shadow-sm dark:bg-zinc-950">
+                <div className="rounded-[var(--radius-card)] bg-pure-snow p-5 shadow-[var(--shadow-card)]">
                   {subject.trim() && (
                     <p className="mb-4 border-b border-border/50 pb-3 text-[13px] font-semibold text-foreground">
                       {interpolateTemplate(subject, previewValues)}

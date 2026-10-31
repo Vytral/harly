@@ -153,7 +153,7 @@ export function DescriptionSection({
 
   return (
     <section data-section="description">
-      <div className="rounded-2xl border border-border/70 bg-card">
+      <div className="rounded-[var(--radius-card)] bg-card shadow-[var(--shadow-card)]">
         <div className="flex items-center justify-between border-b px-5 py-3">
           <p className="text-sm font-semibold">Description</p>
           <div className="flex items-center gap-2">
@@ -206,7 +206,7 @@ export function DescriptionSection({
           </div>
 
           {sections.map((section) => (
-            <div key={section.id} className="rounded-xl border bg-muted/20 p-4">
+            <div key={section.id} className="rounded-[var(--radius-inner)] bg-card-inset p-4">
               <div className="mb-2 flex items-center gap-2">
                 <Input
                   value={section.title}

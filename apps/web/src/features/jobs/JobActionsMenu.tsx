@@ -80,7 +80,7 @@ export function JobActionsMenu({
         <Button
           variant="ghost"
           size="icon"
-          className="size-8 text-muted-foreground data-[state=open]:bg-accent"
+          className="size-8 rounded-full text-soft-ink data-[state=open]:bg-row-wash"
           aria-label="Job actions"
           disabled={isPending}
           onClick={(event) => event.stopPropagation()}

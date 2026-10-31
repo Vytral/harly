@@ -34,10 +34,10 @@ export function PipelineJobSelect({
       <DropdownMenuTrigger asChild>
         <Button
           variant="outline"
-          className="h-auto w-full min-w-0 max-w-sm justify-between gap-2 py-2"
+          className="h-auto w-full min-w-0 max-w-sm justify-between gap-2 rounded-full py-1.5 pl-1.5 pr-3 shadow-none"
         >
           <span className="flex min-w-0 items-center gap-2">
-            <span className="flex size-7 shrink-0 items-center justify-center rounded-md bg-muted text-muted-foreground">
+            <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-card-inset text-soft-ink">
               <Briefcase className="size-4" />
             </span>
             <span className="truncate font-medium">{selected?.title}</span>
@@ -52,7 +52,7 @@ export function PipelineJobSelect({
         align="start"
         className="w-(--radix-dropdown-menu-trigger-width) min-w-72"
       >
-        <DropdownMenuLabel className="text-xs text-muted-foreground">
+        <DropdownMenuLabel className="text-xs text-soft-ink">
           Switch job
         </DropdownMenuLabel>
         {jobs.map((job) => (

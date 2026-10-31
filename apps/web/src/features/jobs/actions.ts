@@ -108,7 +108,12 @@ export async function createJobAction(formData: FormData) {
   }
 
   revalidatePath("/dashboard/jobs");
-  redirect(`/dashboard/jobs/${job.id}`);
+  // A published job lands on its detail page with the success dialog flag.
+  redirect(
+    formData.get("intent") !== "draft"
+      ? `/dashboard/jobs/${job.id}?published=1`
+      : `/dashboard/jobs/${job.id}`,
+  );
 }
 
 export async function updateJobAction(formData: FormData) {

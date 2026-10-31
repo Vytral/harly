@@ -1,10 +1,12 @@
 import Link from "next/link";
 import type { Route } from "next";
-import { Briefcase, Plus, TrendingUp, Trash2, Users } from "lucide-react";
+import { Briefcase, Plus, Trash2 } from "lucide-react";
 
 import { EmptyState } from "@/components/ui/empty-state";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { StatTile } from "@/components/ui/stat-tile";
+import { StatusPill } from "@/components/ui/status-pill";
 import {
   listJobsWithStats,
   listTrashedJobs,
@@ -21,9 +23,6 @@ type JobsPageProps = {
   searchParams: Promise<{ view?: string }>;
 };
 
-const tileClass =
-  "rounded-2xl border border-border/70 bg-card p-4 shadow-[0_1px_2px_rgba(28,27,22,0.04)]";
-
 export default async function DashboardJobsPage({ searchParams }: JobsPageProps) {
   await requirePagePermission("jobs:view");
   const { view } = await searchParams;
@@ -36,51 +35,79 @@ export default async function DashboardJobsPage({ searchParams }: JobsPageProps)
 
   const openRoles = jobs.filter((j) => j.status === "open").length;
   const draftRoles = jobs.filter((j) => j.status === "draft").length;
+  const closedRoles = jobs.filter((j) => j.status === "closed").length;
   const totalApplicants = jobs.reduce((sum, j) => sum + j.applicants, 0);
   const newApplicants = jobs.reduce((sum, j) => sum + j.newApplicants, 0);
 
   return (
     <div className="space-y-5">
-      {!isTrash && jobs.length > 0 ? (
-        <section className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-          <div className="duration-500 animate-in fade-in slide-in-from-bottom-2">
-            <StatTile label="Open roles" value={openRoles} hint={`${draftRoles} draft`} icon={Briefcase} />
-          </div>
-          <div className="delay-75 duration-500 animate-in fade-in slide-in-from-bottom-2 fill-mode-backwards">
-            <StatTile label="Applicants" value={totalApplicants} hint="across all roles" icon={Users} />
-          </div>
-          <div className="delay-150 duration-500 animate-in fade-in slide-in-from-bottom-2 fill-mode-backwards">
-            <StatTile label="New this week" value={newApplicants} hint="applied in 7d" icon={TrendingUp} accent />
-          </div>
-          <div className="delay-200 duration-500 animate-in fade-in slide-in-from-bottom-2 fill-mode-backwards">
-            <StatTile label="Total roles" value={jobs.length} hint={`${draftRoles} not published`} icon={Briefcase} />
-          </div>
-        </section>
-      ) : null}
-
-      <div className="flex items-center justify-between gap-3">
-        <div className="flex w-fit items-center gap-1 rounded-lg border bg-card p-1 text-sm">
-          <Tab href="/dashboard/jobs" active={!isTrash}>
-            Active
-            <span className="ml-1.5 tabular-nums text-muted-foreground">{jobs.length}</span>
-          </Tab>
-          <Tab href="/dashboard/jobs?view=trash" active={isTrash}>
-            <Trash2 className="size-3.5" />
-            Trash
-            <span className="ml-1.5 tabular-nums text-muted-foreground">{trashed.length}</span>
-          </Tab>
-        </div>
-        <Button asChild size="sm">
+      {/* Title row. Rendered here (not by the shell) because it carries the
+          page action; the Jobs nav item's shellTitle flag must be off. */}
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h1 className="font-display text-[28px] leading-9 tracking-tight text-near-ink">
+          Jobs
+        </h1>
+        <Button asChild>
           <Link href="/dashboard/jobs/new">
             <Plus className="size-4" />
-            New job
+            Create job
           </Link>
         </Button>
       </div>
 
+      {!isTrash && jobs.length > 0 ? (
+        <Card className="p-3">
+          <section
+            aria-label="Jobs overview"
+            className="grid grid-cols-2 gap-2 lg:grid-cols-4"
+          >
+            <StatTile
+              label={<StatusPill tone="neutral">Draft</StatusPill>}
+              value={draftRoles}
+              muted={draftRoles === 0}
+              hint="not published"
+            />
+            <StatTile
+              label={<StatusPill tone="success">Open</StatusPill>}
+              value={openRoles}
+              muted={openRoles === 0}
+              hint="accepting applicants"
+            />
+            <StatTile
+              label={<StatusPill tone="warning">Closed</StatusPill>}
+              value={closedRoles}
+              muted={closedRoles === 0}
+              hint="no longer hiring"
+            />
+            <StatTile
+              label={<StatusPill tone="accent">Candidates</StatusPill>}
+              value={totalApplicants}
+              muted={totalApplicants === 0}
+              hint={newApplicants > 0 ? `${newApplicants} new this week` : "across all roles"}
+            />
+          </section>
+        </Card>
+      ) : null}
+
+      <div
+        role="tablist"
+        aria-label="Jobs view"
+        className="flex w-fit items-center gap-1.5"
+      >
+        <Tab href="/dashboard/jobs" active={!isTrash}>
+          Active
+          <span className="tabular-nums opacity-70">{jobs.length}</span>
+        </Tab>
+        <Tab href="/dashboard/jobs?view=trash" active={isTrash}>
+          <Trash2 className="size-3.5" />
+          Trash
+          <span className="tabular-nums opacity-70">{trashed.length}</span>
+        </Tab>
+      </div>
+
       {isTrash ? (
         trashed.length > 0 ? (
-          <Card className="gap-0 divide-y divide-border/60 overflow-hidden py-0">
+          <Card className="gap-0 divide-y divide-hairline overflow-hidden py-0">
             {trashed.map((job) => (
               <div key={job.id} className="flex items-center justify-between gap-3 px-4 py-3.5 sm:px-5">
                 <JobIdentity title={job.title} department={job.department} location={job.location} deletedAt={job.deletedAt} muted />
@@ -109,44 +136,6 @@ export default async function DashboardJobsPage({ searchParams }: JobsPageProps)
   );
 }
 
-function StatTile({
-  label,
-  value,
-  hint,
-  icon: Icon,
-  accent,
-}: {
-  label: string;
-  value: number;
-  hint: string;
-  icon: typeof Briefcase;
-  accent?: boolean;
-}) {
-  return (
-    <div
-      className={cn(
-        tileClass,
-        "transition-all duration-300 ease-out hover:-translate-y-0.5 hover:shadow-md",
-        accent && "border-primary/25 bg-accent/40",
-      )}
-    >
-      <div className="flex items-center justify-between">
-        <span className="text-xs font-medium text-muted-foreground">{label}</span>
-        <span
-          className={cn(
-            "flex size-8 items-center justify-center rounded-lg transition-colors duration-200",
-            accent ? "bg-primary/10 text-primary" : "bg-muted text-muted-foreground",
-          )}
-        >
-          <Icon className="size-4" strokeWidth={1.8} />
-        </span>
-      </div>
-      <p className="mt-2 text-2xl font-semibold tabular-nums tracking-tight">{value}</p>
-      <p className="mt-0.5 text-xs text-muted-foreground">{hint}</p>
-    </div>
-  );
-}
-
 function Tab({
   href,
   active,
@@ -159,11 +148,13 @@ function Tab({
   return (
     <Link
       href={href as Route}
+      role="tab"
+      aria-selected={active}
       className={cn(
-        "flex items-center gap-1 rounded-md px-3 py-1.5 font-medium transition",
+        "flex h-8 items-center gap-1.5 rounded-full px-3.5 text-[13px] font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-near-ink",
         active
-          ? "bg-primary/10 text-primary"
-          : "text-muted-foreground hover:bg-accent hover:text-foreground",
+          ? "bg-near-ink text-pure-snow"
+          : "bg-soft-kraft text-soft-ink hover:bg-row-wash hover:text-near-ink",
       )}
     >
       {children}

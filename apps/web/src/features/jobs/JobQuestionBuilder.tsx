@@ -163,17 +163,17 @@ export function JobQuestionBuilder({ initialQuestions, aiContext }: JobQuestionB
       {/* AI suggestions panel */}
       {suggestions.length > 0 ? (
         <div
-          className="rounded-xl border border-primary/20 bg-primary/5 p-3.5 space-y-2.5"
+          className="rounded-[var(--radius-inner)] bg-lime-wash p-3.5 space-y-2.5"
           style={{ animation: "fadeUp 200ms cubic-bezier(0.23,1,0.32,1) both" }}
         >
           <div className="flex items-center justify-between gap-2">
-            <p className="text-[12px] font-semibold uppercase tracking-wide text-primary/70">
+            <p className="text-[12px] font-semibold uppercase tracking-wide text-success-olive">
               AI suggestions, click to add
             </p>
             <button
               type="button"
               onClick={addAllSuggestions}
-              className="text-[12px] font-medium text-primary underline-offset-2 hover:underline"
+              className="text-[12px] font-medium text-near-ink underline-offset-2 hover:underline"
             >
               Add all
             </button>
@@ -189,10 +189,10 @@ export function JobQuestionBuilder({ initialQuestions, aiContext }: JobQuestionB
                 }}
                 className={cn(
                   "group flex w-full items-start gap-2.5 rounded-lg border bg-background px-3 py-2.5 text-left",
-                  "transition-all duration-150 hover:border-primary/30 hover:bg-primary/5 active:scale-[0.99]",
+                  "transition-all duration-150 hover:border-mist-border hover:bg-pure-snow active:scale-[0.99]",
                 )}
               >
-                <Plus className="mt-0.5 size-3.5 shrink-0 text-primary opacity-0 transition-opacity group-hover:opacity-100" />
+                <Plus className="mt-0.5 size-3.5 shrink-0 text-near-ink opacity-0 transition-opacity group-hover:opacity-100" />
                 <div className="min-w-0">
                   <p className="text-sm font-medium leading-snug">{s.label}</p>
                   <p className="mt-0.5 truncate text-xs text-muted-foreground">{s.placeholder}</p>
@@ -204,13 +204,13 @@ export function JobQuestionBuilder({ initialQuestions, aiContext }: JobQuestionB
       ) : null}
 
       {questions.length === 0 ? (
-        <p className="rounded-lg border border-dashed bg-muted/40 p-4 text-sm text-muted-foreground">
+        <p className="rounded-[var(--radius-inner)] bg-card-inset p-4 text-sm text-soft-ink">
           No custom questions. Candidates only see the default application fields.
         </p>
       ) : null}
 
       {questions.map((question, index) => (
-        <div key={`${question.id}-${index}`} className="space-y-3 rounded-lg border bg-muted/30 p-4">
+        <div key={`${question.id}-${index}`} className="space-y-3 rounded-[var(--radius-inner)] bg-card-inset p-4">
           <div className="grid gap-3 md:grid-cols-[1fr_180px]">
             <FieldBox
               label={

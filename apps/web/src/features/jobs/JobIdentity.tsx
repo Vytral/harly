@@ -18,21 +18,21 @@ export function JobIdentity({
 }) {
   return (
     <span className="flex items-center gap-3">
-      <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-muted text-muted-foreground">
+      <span className="flex size-9 shrink-0 items-center justify-center rounded-[var(--radius-inner)] bg-card-inset text-soft-ink">
         <Briefcase className="size-4" />
       </span>
       <span className="min-w-0">
         <span
           className={cn(
-            "block truncate font-medium",
+            "block truncate text-[14.5px] font-medium",
             muted
-              ? "text-muted-foreground"
-              : "text-foreground group-hover:text-primary",
+              ? "text-soft-ink"
+              : "text-near-ink group-hover:underline group-hover:underline-offset-4",
           )}
         >
           {title}
         </span>
-        <span className="mt-0.5 flex items-center gap-1 truncate text-xs text-muted-foreground">
+        <span className="mt-0.5 flex items-center gap-1 truncate text-xs text-soft-ink">
           {deletedAt ? (
             <>Deleted {formatRelative(deletedAt)}</>
           ) : location ? (

@@ -67,7 +67,7 @@ function ConnectionStrip({ status }: { status: InboxMailboxStatus }) {
   return (
     <div
       role={conflict ? "alert" : "status"}
-      className="flex items-center gap-2.5 border-b border-warning/25 bg-warning/[0.06] px-4 py-2 text-xs"
+      className="mx-4 mb-3 flex items-center gap-2.5 rounded-[var(--radius-inner)] bg-warning/10 px-4 py-2.5 text-xs"
     >
       <WarningCircleIcon className="size-4 shrink-0 text-warning" />
       <p className="min-w-0 flex-1 truncate">
@@ -76,7 +76,7 @@ function ConnectionStrip({ status }: { status: InboxMailboxStatus }) {
       </p>
       <Link
         href="/settings/email/replies"
-        className="shrink-0 font-semibold text-foreground underline underline-offset-4 hover:text-primary"
+        className="shrink-0 font-semibold text-foreground underline underline-offset-4 hover:text-soft-ink"
       >
         Email settings
       </Link>
@@ -115,29 +115,29 @@ function InboxCommandBar({
         aria-selected={isActive}
         onClick={() => onFilterChange(value)}
         className={cn(
-          "inline-flex shrink-0 items-center gap-1.5 rounded-md px-2.5 py-1 text-xs font-medium transition-colors duration-150 active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 motion-reduce:active:scale-100",
-          isActive ? "bg-primary text-primary-foreground shadow-sm" : "text-muted-foreground hover:bg-muted hover:text-foreground",
+          "inline-flex h-8 shrink-0 items-center gap-1.5 rounded-full px-3.5 text-[13px] font-medium transition-colors duration-150 active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-near-ink motion-reduce:active:scale-100",
+          isActive ? "bg-near-ink text-pure-snow" : "bg-soft-kraft text-soft-ink hover:bg-row-wash hover:text-near-ink",
         )}
       >
         {filterLabel(value)}
         {count > 0 ? (
-          <span className={cn("tabular-nums", isActive ? "text-primary-foreground/70" : "text-muted-foreground/60")}>{count}</span>
+          <span className={cn("tabular-nums", isActive ? "text-pure-snow/70" : "text-quiet-mist")}>{count}</span>
         ) : null}
       </button>
     );
   };
 
   return (
-    <header className="flex h-12 items-center gap-3 border-b border-border/70 pl-3 pr-4">
+    <header className="flex min-h-14 items-center gap-3 border-b border-hairline px-4 py-2.5">
       <label className="relative flex w-full shrink-0 items-center lg:w-[328px]">
         <span className="sr-only">Search conversations</span>
-        <SearchIcon className="pointer-events-none absolute left-2.5 size-4 text-muted-foreground" />
+        <SearchIcon className="pointer-events-none absolute left-3.5 size-4 text-soft-ink" />
         <input
           ref={searchRef}
           value={query}
           onChange={(event) => onQueryChange(event.target.value)}
           placeholder="Search mail"
-          className="h-9 w-full rounded-md border border-transparent bg-muted/50 pl-8 pr-3 text-sm outline-none transition-[border-color,background-color] placeholder:text-muted-foreground/70 hover:bg-muted focus:border-ring focus:bg-background focus:ring-2 focus:ring-ring/20"
+          className="h-9 w-full rounded-full border border-transparent bg-card-inset pl-9 pr-3 text-sm outline-none transition-[border-color,background-color] placeholder:text-quiet-mist hover:bg-row-wash focus:border-near-ink focus:bg-pure-snow"
         />
       </label>
 
@@ -148,8 +148,8 @@ function InboxCommandBar({
             <button
               type="button"
               className={cn(
-                "inline-flex shrink-0 items-center gap-1 rounded-md px-2.5 py-1 text-xs font-medium transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50",
-                moreActive ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted hover:text-foreground",
+                "inline-flex h-8 shrink-0 items-center gap-1 rounded-full px-3.5 text-[13px] font-medium transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-near-ink",
+                moreActive ? "bg-near-ink text-pure-snow" : "bg-soft-kraft text-soft-ink hover:bg-row-wash hover:text-near-ink",
               )}
             >
               {moreActive ? filterLabel(filter) : "More"}
@@ -167,7 +167,7 @@ function InboxCommandBar({
                   onClick={() => onFilterChange(value)}
                   className={cn(
                     "flex w-full items-center justify-between gap-2 rounded-md px-2.5 py-1.5 text-sm transition-colors",
-                    isActive ? "bg-accent text-accent-foreground" : "hover:bg-muted",
+                    isActive ? "bg-lime-wash text-near-ink" : "hover:bg-row-wash",
                   )}
                 >
                   {filterLabel(value)}
@@ -194,7 +194,7 @@ function InboxEmptyState({ status, filter, demoMode = false }: { status: InboxMa
     return (
       <div className="flex min-h-0 flex-1 items-center justify-center px-6 py-12">
         <div className="max-w-md text-center">
-          <span className="mx-auto flex size-11 items-center justify-center rounded-xl bg-muted text-muted-foreground">
+          <span className="mx-auto flex size-11 items-center justify-center rounded-[var(--radius-inner)] bg-card-inset text-soft-ink">
             <EnvelopeIcon className="size-5" />
           </span>
           <h2 className="mt-4 text-base font-semibold">No conversations in this view</h2>
@@ -211,7 +211,7 @@ function InboxEmptyState({ status, filter, demoMode = false }: { status: InboxMa
     return (
       <div className="flex min-h-0 flex-1 items-center justify-center px-6 py-12">
         <div className="max-w-lg text-center">
-          <span className="mx-auto flex size-11 items-center justify-center rounded-xl bg-warning/10 text-warning">
+          <span className="mx-auto flex size-11 items-center justify-center rounded-[var(--radius-inner)] bg-warning/10 text-warning">
             <EnvelopeIcon className="size-5" />
           </span>
           <h2 className="mt-4 text-base font-semibold">Connect incoming email to start receiving replies</h2>
@@ -228,7 +228,7 @@ function InboxEmptyState({ status, filter, demoMode = false }: { status: InboxMa
     <div className="flex min-h-0 flex-1 items-center justify-center overflow-y-auto px-6 py-12">
       <div className="w-full max-w-xl">
         <div className="text-center">
-          <span className="mx-auto flex size-11 items-center justify-center rounded-xl bg-primary/10 text-primary">
+          <span className="mx-auto flex size-11 items-center justify-center rounded-[var(--radius-inner)] bg-lime-wash text-success-olive">
             <CheckCircleIcon className="size-5" />
           </span>
           <h2 className="mt-4 text-lg font-semibold tracking-[-0.02em]">Your inbox is ready</h2>
@@ -241,8 +241,8 @@ function InboxEmptyState({ status, filter, demoMode = false }: { status: InboxMa
             ["2", "Candidate replies", "Their reply goes to your Harly address."],
             ["3", "Review here", "The conversation appears in this Inbox."],
           ].map(([step, title, description]) => (
-            <div key={step} className="rounded-lg border border-border/70 bg-muted/20 px-4 py-3.5 text-left">
-              <span className="font-mono text-xs font-semibold text-primary">{step}</span>
+            <div key={step} className="rounded-[var(--radius-inner)] bg-card-inset px-4 py-3.5 text-left">
+              <span className="font-mono text-xs font-semibold text-success-olive">{step}</span>
               <p className="mt-2 text-sm font-semibold">{title}</p>
               <p className="mt-1 text-xs leading-5 text-muted-foreground">{description}</p>
             </div>
@@ -478,7 +478,7 @@ export function RecruitingInbox({
   ) : null;
 
   return (
-    <div className="-mx-4 -mb-6 -mt-2 flex h-[calc(100%+2rem)] min-h-0 flex-col overflow-hidden border-t border-border/70 duration-300 animate-in fade-in md:-mx-6 lg:-mx-8 lg:-mb-8 lg:-mt-3 lg:h-[calc(100%+2.75rem)]">
+    <div className="flex h-[calc(100dvh-15rem)] min-h-[34rem] min-w-0 flex-col overflow-hidden rounded-[var(--radius-card)] bg-card shadow-[var(--shadow-card)] duration-300 animate-in fade-in">
       <div aria-live="polite" className="sr-only">{announcement}</div>
       <InboxCommandBar
         filter={filter}
@@ -496,11 +496,11 @@ export function RecruitingInbox({
         <InboxEmptyState status={mailboxStatus} filter={filter} demoMode={demoMode} />
       ) : (
         <div className="relative flex min-h-0 flex-1 overflow-hidden">
-          <div className={cn("min-h-0 shrink-0 border-r border-border/70 bg-card", mobileView === "people" ? "block w-full lg:w-[280px]" : "hidden lg:block lg:w-[280px]")}>
+          <div className={cn("min-h-0 shrink-0 border-r border-hairline bg-card", mobileView === "people" ? "block w-full lg:w-[280px]" : "hidden lg:block lg:w-[280px]")}>
             <InboxPeopleList people={people} selectedKey={activePersonKey} query={query} onSelect={handleSelectPerson} />
           </div>
 
-          <div className={cn("min-h-0 min-w-0 flex-1 bg-background", mobileView === "people" ? "hidden lg:block" : "block")}>
+          <div className={cn("min-h-0 min-w-0 flex-1 bg-card", mobileView === "people" ? "hidden lg:block" : "block")}>
             {thread ? (
               <InboxThreadReader
                 key={`${thread.id}-${suggestedReply?.threadId === thread.id ? suggestedReply.body : ""}`}
@@ -526,17 +526,17 @@ export function RecruitingInbox({
             )}
           </div>
 
-          <aside className="hidden min-h-0 shrink-0 border-l border-border/70 bg-muted/15 lg:block lg:w-[300px] xl:w-[320px]" aria-label="Candidate details and actions">
+          <aside className="hidden min-h-0 shrink-0 border-l border-hairline bg-card-inset/50 lg:block lg:w-[300px] xl:w-[320px]" aria-label="Candidate details and actions">
             {actionsPanel}
           </aside>
         </div>
       )}
 
       {hasMore ? (
-        <div className="flex shrink-0 justify-center border-t border-border/70 py-2.5">
+        <div className="flex shrink-0 justify-center border-t border-hairline py-2.5">
           <button
             type="button"
-            className="rounded-md border border-border bg-card px-4 py-1.5 text-sm font-medium transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+            className="rounded-full bg-soft-kraft px-4 py-1.5 text-[13px] font-medium transition-colors hover:bg-row-wash focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-near-ink"
             onClick={() => { const params = new URLSearchParams(window.location.search); params.set("page", String((page ?? 0) + 1)); params.delete("thread"); router.push(`/dashboard/inbox?${params.toString()}`); }}
           >
             Load more conversations

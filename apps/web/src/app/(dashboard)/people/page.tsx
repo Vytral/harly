@@ -1,6 +1,7 @@
 import { UserRound } from "lucide-react";
 
 import { EmptyState } from "@/components/ui/empty-state";
+import { PageTitleRow } from "@/features/candidates/directory-chrome";
 import { listPeopleAction } from "@/features/people/actions";
 import { PeopleTable, type PersonListRow } from "@/features/people/PeopleTable";
 import { requirePagePermission } from "@/features/workspaces/permissions-server";
@@ -23,13 +24,11 @@ export default async function PeoplePage() {
   }));
 
   return (
-    <div className="space-y-5">
-      <div>
-        <h1 className="text-xl font-semibold tracking-tight">People</h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Everyone on the team, with contact details, specialties, and availability.
-        </p>
-      </div>
+    <div className="space-y-6">
+      <PageTitleRow
+        title="Team"
+        description="Everyone on the team, with contact details, specialties, and availability."
+      />
 
       {people.length === 0 ? (
         <EmptyState

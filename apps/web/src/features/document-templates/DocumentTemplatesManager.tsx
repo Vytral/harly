@@ -5,10 +5,10 @@ import Link from "next/link";
 import type { Route } from "next";
 import { useRouter } from "next/navigation";
 import { useTransition } from "react";
-import { FileText, Plus, Archive, Pencil } from "lucide-react";
+import { FileText, Plus, Archive, Pencil, ChevronRight } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
+import { Card } from "@/components/ui/card";
 import { toast } from "@/lib/notification-island/toast";
 import { DocumentsWorkspaceTabs } from "@/features/documents/DocumentsWorkspaceTabs";
 
@@ -59,7 +59,7 @@ export function DocumentTemplatesManager({
   }
 
   return (
-    <main className="mx-auto w-full max-w-6xl space-y-8 px-5 py-8 sm:px-8 lg:px-10">
+    <main className="mx-auto w-full max-w-6xl space-y-6 px-5 py-8 sm:px-8 lg:px-10">
       <DocumentsWorkspaceTabs
         active="templates"
         canReadDocuments={canReadDocuments}
@@ -67,8 +67,8 @@ export function DocumentTemplatesManager({
       />
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Workflow document templates</h1>
-          <p className="mt-1 max-w-2xl text-sm leading-6 text-muted-foreground">
+          <h1 className="font-display text-[28px] leading-tight text-near-ink">Workflow document templates</h1>
+          <p className="mt-1 max-w-2xl text-sm leading-6 text-soft-ink">
             Reusable, variable-filled documents for automation workflows. Published workflows keep their own content snapshot, while generated PDFs appear in your document library.
           </p>
         </div>
@@ -78,44 +78,47 @@ export function DocumentTemplatesManager({
       </div>
 
       {active.length === 0 ? (
-        <div className="flex flex-col items-center rounded-2xl border border-dashed px-6 py-16 text-center">
-          <span className="flex size-12 items-center justify-center rounded-xl bg-muted text-muted-foreground"><FileText className="size-6" /></span>
-          <h2 className="mt-4 text-base font-semibold">Create your first reusable document</h2>
-          <p className="mt-1 max-w-md text-sm text-muted-foreground">Use it for offers, agreements, onboarding packets or any PDF you want Harly to generate and send for signature.</p>
+        <div className="flex flex-col items-center rounded-[var(--radius-card)] bg-lime-wash px-6 py-14 text-center">
+          <span className="grid size-12 place-items-center rounded-[var(--radius-btn)] bg-pure-snow text-near-ink"><FileText className="size-6" /></span>
+          <h2 className="mt-4 text-[15px] font-semibold tracking-[-0.01em] text-near-ink">Create your first reusable document</h2>
+          <p className="mt-1 max-w-md text-sm text-soft-ink">Use it for offers, agreements, onboarding packets or any PDF you want Harly to generate and send for signature.</p>
           <Button asChild className="mt-5"><Link href={"/dashboard/documents/templates/new" as Route}><Plus className="size-4" /> Create template</Link></Button>
         </div>
       ) : (
-        <div className="grid gap-4 md:grid-cols-2">
+        <Card className="gap-0 divide-y divide-hairline overflow-hidden py-0">
           {active.map((template) => (
-            <Card key={template.id}>
-              <CardContent className="space-y-3">
-                <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <p className="truncate font-semibold">{template.name}</p>
-                    <p className="mt-1 truncate text-sm text-muted-foreground">{template.title}</p>
-                  </div>
-                  <div className="flex shrink-0 gap-1">
-                    <Button size="icon" variant="ghost" asChild aria-label={`Edit ${template.name}`}>
-                      <Link href={`/dashboard/documents/templates/${template.id}` as Route}><Pencil className="size-4" /></Link>
-                    </Button>
-                    <Button size="icon" variant="ghost" disabled={pending} onClick={() => archive(template)} aria-label={`Archive ${template.name}`}>
-                      <Archive className="size-4" />
-                    </Button>
-                  </div>
-                </div>
-                <p className="line-clamp-3 text-sm leading-6 text-muted-foreground">{previewBody(template.body)}</p>
-                <p className="text-[11px] text-muted-foreground">Updated {template.updatedAt.toLocaleDateString()}</p>
-              </CardContent>
-            </Card>
+            <div key={template.id} className="group flex items-center gap-3 px-4 py-4 transition-colors hover:bg-row-wash">
+              <span className="grid size-9 shrink-0 place-items-center rounded-[var(--radius-btn)] border border-hairline bg-pure-snow text-near-ink">
+                <FileText className="size-4" />
+              </span>
+              <Link
+                href={`/dashboard/documents/templates/${template.id}` as Route}
+                className="min-w-0 flex-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-near-ink"
+              >
+                <p className="truncate text-sm font-semibold text-near-ink">{template.name}</p>
+                <p className="mt-0.5 truncate text-[13px] text-soft-ink">{template.title}</p>
+                <p className="mt-0.5 line-clamp-1 text-[13px] text-soft-ink">{previewBody(template.body)}</p>
+                <p className="mt-1 text-xs text-quiet-mist">Updated {template.updatedAt.toLocaleDateString()}</p>
+              </Link>
+              <div className="flex shrink-0 items-center gap-1">
+                <Button size="icon" variant="ghost" asChild aria-label={`Edit ${template.name}`}>
+                  <Link href={`/dashboard/documents/templates/${template.id}` as Route}><Pencil className="size-4" /></Link>
+                </Button>
+                <Button size="icon" variant="ghost" disabled={pending} onClick={() => archive(template)} aria-label={`Archive ${template.name}`}>
+                  <Archive className="size-4" />
+                </Button>
+                <ChevronRight aria-hidden className="size-4 text-quiet-mist" />
+              </div>
+            </div>
           ))}
-        </div>
+        </Card>
       )}
 
       {archived.length > 0 ? (
-        <details className="rounded-xl border p-4">
-          <summary className="cursor-pointer text-sm font-medium">Archived templates ({archived.length})</summary>
+        <details className="rounded-[var(--radius-card)] bg-card p-4 shadow-[var(--shadow-card)]">
+          <summary className="cursor-pointer text-sm font-medium text-near-ink">Archived templates ({archived.length})</summary>
           <div className="mt-4 space-y-2">
-            {archived.map((template) => <p key={template.id} className="text-sm text-muted-foreground">{template.name} · archived</p>)}
+            {archived.map((template) => <p key={template.id} className="text-sm text-soft-ink">{template.name} · archived</p>)}
           </div>
         </details>
       ) : null}

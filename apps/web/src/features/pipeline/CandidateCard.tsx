@@ -158,13 +158,13 @@ export function CandidateCard({
         }
       }}
       className={cn(
-        // A person in a column, not a mini-card: flat snow, hairline, row-wash
-        // hover. No shadow, no coloured left accent bar, no scale-on-press.
-        "group cursor-pointer rounded-[var(--radius-md)] border bg-pure-snow px-2.5 py-2.5 transition-colors",
+        // White card on the inset lane: card shadow, 1px lift on hover.
+        "group cursor-pointer rounded-[var(--radius-inner)] bg-pure-snow px-3 py-3 shadow-[var(--shadow-card)] transition-[transform,box-shadow,background-color] duration-150",
+        "hover:-translate-y-px hover:shadow-[var(--shadow-soft),var(--shadow-card)] motion-reduce:hover:translate-y-0",
         "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-near-ink",
         selected
-          ? "border-near-ink/20 bg-row-wash"
-          : "border-hairline hover:bg-row-wash",
+          ? "bg-lime-wash shadow-[inset_0_0_0_1.5px_var(--near-ink)]"
+          : null,
         isDragging && "opacity-40",
         pending && "opacity-70",
       )}
@@ -216,7 +216,7 @@ export function CandidateCard({
                   <TooltipTrigger asChild>
                     <span
                       aria-label="Featured referral"
-                      className="inline-flex shrink-0 items-center text-amber-600"
+                      className="inline-flex shrink-0 items-center text-warning-clay"
                     >
                       <Star className="size-3 fill-current" />
                     </span>
@@ -258,7 +258,7 @@ export function CandidateCardOverlay({ application }: CandidateCardOverlayProps)
   const fullName = `${application.candidateFirstName} ${application.candidateLastName}`;
 
   return (
-    <article className="w-56 cursor-grabbing rounded-[var(--radius-md)] border border-mist-border bg-pure-snow px-2.5 py-2.5 shadow-[var(--shadow-float)] lg:w-64">
+    <article className="w-56 cursor-grabbing rounded-[var(--radius-inner)] bg-pure-snow px-3 py-3 shadow-[var(--shadow-float)] lg:w-64">
       <div className="flex items-center gap-2.5">
         <UserAvatar
           name={fullName}

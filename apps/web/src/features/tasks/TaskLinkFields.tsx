@@ -36,7 +36,7 @@ const NONE = "none";
 
 function FieldLabel({ icon: Icon, children, htmlFor }: { icon: typeof User; children: React.ReactNode; htmlFor: string }) {
   return (
-    <Label htmlFor={htmlFor} className="mb-1.5 block text-xs font-medium text-muted-foreground">
+    <Label htmlFor={htmlFor} className="mb-1.5 block text-[12.5px] font-medium text-soft-ink">
       <Icon className="mr-1 inline size-3" aria-hidden="true" />
       {children}
     </Label>
@@ -66,7 +66,7 @@ export function TaskLinkFields({
 
   return (
     <div className="space-y-3 rounded-lg border border-border/60 bg-muted/20 p-3">
-      <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
+      <div className="flex items-center gap-2 text-[12.5px] font-medium text-soft-ink">
         <Link2 className="size-3.5" aria-hidden="true" />
         Recruiting context
       </div>
