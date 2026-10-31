@@ -302,6 +302,8 @@
     min-height: 100%;
     background: var(--background);
     scroll-behavior: smooth;
+    /* Reserve the scrollbar lane so the header doesn't shift between short and long pages. */
+    scrollbar-gutter: stable;
   }
   body {
     min-height: 100vh;

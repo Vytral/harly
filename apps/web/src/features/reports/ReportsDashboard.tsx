@@ -14,7 +14,6 @@ import {
   Hourglass,
   Info,
   LineChart,
-  Minus,
   Target,
   TrendingUp,
   Users,
@@ -88,19 +87,9 @@ function EmptyPanel({ icon: Icon, text, action }: { icon: IconComponent; text: s
   );
 }
 
-/** A delta badge. `null` means there is nothing to compare, shown as a dash. */
+/** A delta badge. `null` means there is nothing to compare: show nothing. */
 function DeltaBadge({ value, invert = false }: { value: number | null; invert?: boolean }) {
-  if (value == null) {
-    return (
-      <span
-        className="inline-flex items-center gap-0.5 rounded-full bg-soft-kraft px-2 py-0.5 text-xs font-medium text-soft-ink tabular-nums"
-        aria-label="No prior period to compare"
-      >
-        <Minus className="size-3" />
-        —
-      </span>
-    );
-  }
+  if (value == null) return null;
   const positive = invert ? value <= 0 : value >= 0;
   const Icon = positive ? ArrowUpRight : ArrowDownRight;
   const shown = invert ? -value : value;

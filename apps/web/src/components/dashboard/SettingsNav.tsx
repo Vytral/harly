@@ -205,3 +205,33 @@ export function SettingsNav({ deniedHrefs }: { deniedHrefs: string[] }) {
     </div>
   );
 }
+
+function isSectionActive(pathname: string, section: SettingsSection) {
+  return section.exact
+    ? pathname === section.href
+    : pathname === section.href || pathname.startsWith(`${section.href}/`);
+}
+
+/**
+ * Visible page title for the active settings section (Deel frame 41/43: the
+ * section name sits above its cards, with its hint as a quiet subline).
+ */
+export function SettingsSectionHeading() {
+  const pathname = usePathname();
+  const section = groups
+    .flatMap((group) => group.sections)
+    .filter((candidate) => isSectionActive(pathname, candidate))
+    .sort((a, b) => b.href.length - a.href.length)[0];
+  // Detail pages below a section (e.g. one integration) bring their own title.
+  if (section && pathname !== section.href) return null;
+  return (
+    <div className="mb-5">
+      <h1 className="font-display text-[28px] leading-tight text-near-ink">
+        {section?.label ?? "Settings"}
+      </h1>
+      {section ? (
+        <p className="mt-1 text-[14px] text-soft-ink">{section.hint}</p>
+      ) : null}
+    </div>
+  );
+}

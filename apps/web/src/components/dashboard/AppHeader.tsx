@@ -295,7 +295,7 @@ function ActivePillBackdrop() {
       layoutId="header-active-pill"
       aria-hidden="true"
       transition={reduceMotion ? { duration: 0 } : spring.pill}
-      className="absolute inset-0 rounded-full bg-pure-snow shadow-[var(--shadow-card)]"
+      className="absolute inset-0 rounded-full bg-pure-snow shadow-[var(--shadow-card)] dark:bg-soft-kraft"
     />
   );
 }

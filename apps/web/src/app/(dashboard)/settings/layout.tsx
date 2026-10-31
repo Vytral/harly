@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 
-import { SettingsNav } from "@/components/dashboard/SettingsNav";
+import { SettingsNav, SettingsSectionHeading } from "@/components/dashboard/SettingsNav";
 import { getCurrentPermissions } from "@/features/workspaces/permissions-server";
 import { SETTINGS_SECTION_PERMISSION } from "@/features/workspaces/permissions";
 
@@ -26,11 +26,13 @@ export default async function SettingsLayout({
 
   return (
     <div className="grid gap-6 lg:grid-cols-[288px_minmax(0,1fr)] xl:gap-8">
-      <h1 className="sr-only">Settings</h1>
       <aside className="lg:sticky lg:top-24 lg:max-h-[calc(100dvh-7rem)] lg:self-start">
         <SettingsNav deniedHrefs={deniedHrefs} />
       </aside>
-      <div className="min-w-0">{children}</div>
+      <div className="min-w-0">
+        <SettingsSectionHeading />
+        {children}
+      </div>
     </div>
   );
 }

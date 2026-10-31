@@ -184,7 +184,6 @@ export default async function CandidateDetailPage({
     )
   ).filter((candidateRow): candidateRow is (typeof allCandidates)[number] => Boolean(candidateRow));
 
-  const isHired = applications.some((application) => application.status === "hired");
   const [calStatus, aiStatus, esignStatus, workspaceContext, canManageDsar, canDeleteCandidates, canCollaborate, canEditCandidates] = await Promise.all([
     getWorkspaceCalStatus(workspaceId),
     getWorkspaceAiStatus(workspaceId),
@@ -487,10 +486,9 @@ export default async function CandidateDetailPage({
                 </div>
               </div>
 
-              {/* Actions , grouped with clear hierarchy, delete isolated */}
-              <div
-                className={`w-full min-w-0 lg:pl-2${isHired ? " lg:pl-[76px]" : ""}`}
-              >
+              {/* Decision strip: the stage's advance + reject on the left, the
+                  rare record actions on the right, set apart by a hairline. */}
+              <div className="w-full min-w-0 border-t border-hairline pt-4">
                 <CandidateActionBar
                   candidate={actionCandidate}
                   name={fullName}

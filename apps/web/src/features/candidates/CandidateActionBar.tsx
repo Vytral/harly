@@ -1,6 +1,7 @@
 "use client";
 
-import { useConfirm } from "@/components/ui/confirm-dialog";
+import { Slot } from "radix-ui";
+import { ConfirmDialog, useConfirm } from "@/components/ui/confirm-dialog";
 import type { ComponentType } from "react";
 import { useState, useTransition } from "react";
 
@@ -52,7 +53,6 @@ import {
   Dialog,
   DialogContent,
   DialogDescription,
-  DialogFooter,
   DialogHeader,
   DialogTitle,
   DialogTrigger,
@@ -333,65 +333,45 @@ function DeleteCandidateButton({
 }: {
   candidateId: string;
   name: string;
-  trigger?: React.ReactNode;
+  trigger?: React.ReactElement;
 }) {
   const router = useRouter();
-  const [isPending, startTransition] = useTransition();
   const [confirmOpen, setConfirmOpen] = useState(false);
 
-  function deleteCandidate() {
-    startTransition(async () => {
-      const result = await trashCandidateAction(candidateId);
-      if (!result.success) {
-        toast.error(result.error ?? "Could not delete candidate.");
-        return;
-      }
-      setConfirmOpen(false);
-      toast.success(`${name} moved to trash.`);
-      router.push("/dashboard/candidates");
-    });
+  async function deleteCandidate() {
+    const result = await trashCandidateAction(candidateId);
+    if (!result.success) {
+      toast.error(result.error ?? "Could not delete candidate.");
+      throw new Error("trash failed");
+    }
+    toast.success(`${name} moved to trash.`);
+    router.push("/dashboard/candidates");
   }
 
+  const triggerNode = trigger ?? (
+    <Button
+      size="sm"
+      variant="outline"
+      className="text-destructive hover:text-destructive"
+    >
+      <Trash2 className="size-4" />
+      Delete
+    </Button>
+  );
+
   return (
-    <Dialog open={confirmOpen} onOpenChange={setConfirmOpen}>
-      <DialogTrigger asChild>
-        {trigger ?? (
-          <Button
-            size="sm"
-            variant="outline"
-            className="text-destructive hover:text-destructive"
-          >
-            <Trash2 className="size-4" />
-            Delete
-          </Button>
-        )}
-      </DialogTrigger>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>Delete candidate?</DialogTitle>
-          <DialogDescription>
-            {name} will be moved to the trash. You can restore them later, or
-            delete permanently from the Trash tab on the candidates list.
-          </DialogDescription>
-        </DialogHeader>
-        <DialogFooter>
-          <Button
-            variant="outline"
-            onClick={() => setConfirmOpen(false)}
-            disabled={isPending}
-          >
-            Cancel
-          </Button>
-          <Button
-            variant="destructive"
-            onClick={deleteCandidate}
-            disabled={isPending}
-          >
-            {isPending ? "Deleting…" : "Delete candidate"}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+    <>
+      <Slot.Root onClick={() => setConfirmOpen(true)}>{triggerNode}</Slot.Root>
+      <ConfirmDialog
+        open={confirmOpen}
+        onOpenChange={setConfirmOpen}
+        tone="destructive"
+        title={`Delete ${name}?`}
+        description="They will move to the trash. You can restore them later, or delete them permanently from the Trash tab."
+        confirmLabel="Move to trash"
+        onConfirm={deleteCandidate}
+      />
+    </>
   );
 }
 

@@ -125,7 +125,12 @@ export function FilterBar({
     <div
       role="group"
       aria-label="Filters"
-      className={cn("flex flex-wrap items-center gap-2 px-5 py-4", className)}
+      className={cn(
+        "relative flex flex-wrap items-center gap-2 px-5 py-4",
+        // Phones: one swipeable row instead of four stacked rows of chips.
+        "scrollbar-hide max-sm:flex-nowrap max-sm:overflow-x-auto max-sm:[&>*]:shrink-0",
+        className,
+      )}
     >
       {children}
     </div>
