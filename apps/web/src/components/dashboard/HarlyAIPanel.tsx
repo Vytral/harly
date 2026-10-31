@@ -2770,7 +2770,12 @@ function HarlyChat({
                 );
               }
 
-              const fullText = textParts.join("");
+              // Each agent step streams its own text part (before and after a
+              // tool call); keep them as separate paragraphs, not "a.B".
+              const fullText = textParts
+                .map((part) => part.trim())
+                .filter(Boolean)
+                .join("\n\n");
               const textEl = fullText.trim() ? (
                 <Markdown
                   key="text-body"
