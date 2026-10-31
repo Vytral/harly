@@ -15,7 +15,7 @@ import {
 } from "@/components/ui/select";
 import { SparkleFillIcon, PaperPlaneDuotoneIcon } from "@/components/ui/icons/phosphor";
 import { resolveUnknownMailDeliveryAction } from "@/features/mailbox/actions";
-import { cn } from "@/lib/utils";
+import { cn, randomId } from "@/lib/utils";
 
 const defaultResolveUnknown = (idempotencyKey: string) =>
   resolveUnknownMailDeliveryAction({ idempotencyKey });
@@ -133,7 +133,7 @@ export function MailComposer({
   const [error, setError] = useState<string | null>(null);
   const [note, setNote] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
-  const idempotencyKeyRef = useRef(crypto.randomUUID());
+  const idempotencyKeyRef = useRef(randomId());
   // Set when the provider outcome of `unknownKey` could not be confirmed. The
   // same key is never re-sent silently; the user chooses the next step.
   const [unknownKey, setUnknownKey] = useState<string | null>(null);
@@ -217,7 +217,7 @@ export function MailComposer({
         setAttachments([]);
         setUnknownKey(null);
         setConfirmResend(false);
-        idempotencyKeyRef.current = crypto.randomUUID();
+        idempotencyKeyRef.current = randomId();
         setNote(result.note ?? null);
       } else if (result.code === "delivery_unknown") {
         setUnknownKey(idempotencyKey);
@@ -247,7 +247,7 @@ export function MailComposer({
         setHtml("");
         loadBody("");
         setAttachments([]);
-        idempotencyKeyRef.current = crypto.randomUUID();
+        idempotencyKeyRef.current = randomId();
         setNote("Marked as sent.");
       } else {
         setError(result.error ?? "Could not update this message.");
@@ -259,7 +259,7 @@ export function MailComposer({
 
   async function sendAnotherCopy() {
     // The user explicitly chose a new send, so it gets a new key.
-    idempotencyKeyRef.current = crypto.randomUUID();
+    idempotencyKeyRef.current = randomId();
     await submit(idempotencyKeyRef.current);
   }
 

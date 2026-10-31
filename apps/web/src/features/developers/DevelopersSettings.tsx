@@ -47,7 +47,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { cn } from "@/lib/utils";
+import { cn, copyText } from "@/lib/utils";
 
 /** Human-readable labels for API scopes , raw scope strings surface in a tooltip. */
 const SCOPE_LABELS: Record<string, string> = {
@@ -147,7 +147,7 @@ export function DevelopersSettings(props: {
 }
 
 function copy(value: string) {
-  navigator.clipboard.writeText(value).then(
+  copyText(value).then(
     () => toast.success("Copied"),
     () => toast.error("Could not copy"),
   );

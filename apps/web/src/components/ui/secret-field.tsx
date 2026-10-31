@@ -4,7 +4,7 @@ import * as React from "react"
 import { CheckIcon, CopyIcon, EyeIcon, EyeOffIcon } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
-import { cn } from "@/lib/utils"
+import { cn, copyText } from "@/lib/utils"
 
 /**
  * Monospace masked secret (API key, webhook secret, SMTP password) with
@@ -45,7 +45,7 @@ function SecretField({
 
   async function copy() {
     try {
-      await navigator.clipboard.writeText(value)
+      await copyText(value)
     } catch {
       return
     }

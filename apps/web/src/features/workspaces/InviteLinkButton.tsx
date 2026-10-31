@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "@/lib/notification-island/toast";
+import { copyText } from "@/lib/utils";
 
 import {
   disableInviteLinkAction,
@@ -121,7 +122,7 @@ export function InviteLinkButton({
 
   function copy() {
     if (!url) return;
-    void navigator.clipboard.writeText(url);
+    void copyText(url);
     setCopied(true);
     setTimeout(() => setCopied(false), 1500);
   }

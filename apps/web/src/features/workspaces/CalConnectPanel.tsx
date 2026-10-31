@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "@/lib/notification-island/toast";
+import { copyText } from "@/lib/utils";
 
 import {
   disableCalAction,
@@ -279,7 +280,7 @@ function CalConnectForm({
 
   function copyWebhook() {
     if (!webhookUrl) return;
-    void navigator.clipboard.writeText(webhookUrl);
+    void copyText(webhookUrl);
     toast.success("Webhook URL copied");
   }
 

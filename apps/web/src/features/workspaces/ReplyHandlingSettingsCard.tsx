@@ -5,6 +5,7 @@ import type { Route } from "next";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "@/lib/notification-island/toast";
+import { copyText } from "@/lib/utils";
 
 import {
   disableInboundEmailAction,
@@ -691,7 +692,7 @@ function ThreadedReplyFields({
               variant="outline"
               size="icon"
               onClick={() => {
-                void navigator.clipboard.writeText(webhookUrl);
+                void copyText(webhookUrl);
                 toast.success("Webhook URL copied");
               }}
               aria-label="Copy webhook URL"

@@ -10,6 +10,7 @@ import {
   Trash2,
 } from "lucide-react";
 import { toast } from "@/lib/notification-island/toast";
+import { copyText } from "@/lib/utils";
 
 import { restoreJobAction, trashJobAction } from "./actions";
 import { Button } from "@/components/ui/button";
@@ -45,7 +46,7 @@ export function JobActionsMenu({
   }
 
   function copyLink() {
-    void navigator.clipboard.writeText(publicUrl());
+    void copyText(publicUrl());
     toast.success("Public link copied.");
   }
 

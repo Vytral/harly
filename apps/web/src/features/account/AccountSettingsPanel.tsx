@@ -55,7 +55,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { cn } from "@/lib/utils";
+import { cn, copyText } from "@/lib/utils";
 import { revokeMySessionAction, revokeOtherMySessionsAction, type SessionDevice } from "@/features/security/session-actions";
 
 const WEEKDAYS: (keyof WeeklyAvailability)[] = [
@@ -628,7 +628,7 @@ export function AccountSettingsPanel({
 
   async function copyUserId() {
     try {
-      await navigator.clipboard.writeText(user.id);
+      await copyText(user.id);
       toast.success("Account ID copied.");
     } catch {
       // silent

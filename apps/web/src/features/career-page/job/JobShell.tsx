@@ -5,7 +5,7 @@ import Link from "next/link";
 import type { Route } from "next";
 import { ArrowLeft, Briefcase, Building2, Check, Link2, MapPin, Wallet } from "lucide-react";
 
-import { cn } from "@/lib/utils";
+import { cn, copyText } from "@/lib/utils";
 import { formatEmploymentType, formatWorkplaceType } from "@/lib/format";
 import type { WorkspaceBoardBranding } from "@/features/workspaces/board";
 
@@ -401,7 +401,7 @@ function JoinJobContent({
       // Always share the job details (overview) URL — never the apply form,
       // even when the candidate is currently on the Application tab.
       const detailsUrl = new URL(overviewHref, window.location.origin).href;
-      await navigator.clipboard.writeText(detailsUrl);
+      await copyText(detailsUrl);
       setCopied(true);
       setTimeout(() => setCopied(false), 1600);
     } catch {

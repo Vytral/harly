@@ -19,7 +19,7 @@ import {
   MessageSquare,
 } from "lucide-react";
 
-import { cn } from "@/lib/utils";
+import { cn, randomId } from "@/lib/utils";
 import { useMotionSafe } from "@/lib/motion";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -3145,9 +3145,7 @@ type HarlyAIPanelProps = {
 };
 
 function freshId(): string {
-  return typeof crypto !== "undefined" && crypto.randomUUID
-    ? crypto.randomUUID()
-    : `c-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  return randomId();
 }
 
 export function HarlyAIPanel({

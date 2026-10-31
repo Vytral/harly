@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { AnimatePresence, motion } from "motion/react";
 import { QRCodeSVG } from "qrcode.react";
 import { toast } from "@/lib/notification-island/toast";
+import { copyText } from "@/lib/utils";
 
 import { authClient } from "@harly/auth/client";
 import { SectionHeader, StatusPill } from "@/features/workspaces/settings-ui";
@@ -95,7 +96,7 @@ export function TwoFactorCard({ enabled }: { enabled: boolean }) {
   }
 
   function copyBackupCodes() {
-    navigator.clipboard.writeText(backupCodes.join("\n"));
+    copyText(backupCodes.join("\n"));
     toast.success("Backup codes copied");
   }
 

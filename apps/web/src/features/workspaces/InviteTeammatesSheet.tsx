@@ -43,7 +43,7 @@ import {
   SheetTrigger,
 } from "@/components/ui/sheet";
 import { Textarea } from "@/components/ui/textarea";
-import { cn } from "@/lib/utils";
+import { cn, randomId } from "@/lib/utils";
 
 export type AssignableRole = { key: string; name: string };
 
@@ -60,7 +60,7 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const bulkInitial: BulkInviteResult = { success: false };
 
 function newRow(role: string): InviteRow {
-  return { id: crypto.randomUUID(), email: "", role };
+  return { id: randomId(), email: "", role };
 }
 
 /**
@@ -154,7 +154,7 @@ export function InviteTeammatesSheet({
       const email = raw.trim().toLowerCase();
       if (!email || existing.has(email)) continue;
       existing.add(email);
-      fresh.push({ id: crypto.randomUUID(), email, role });
+      fresh.push({ id: randomId(), email, role });
     }
     if (!fresh.length) return;
     setRows((prev) => {
@@ -212,7 +212,7 @@ export function InviteTeammatesSheet({
     const toAdd = fresh.filter((f) => !existing.has(f.email));
     setRows((prev) => {
       const base = prev.length === 1 && !prev[0].email.trim() ? [] : prev;
-      return [...base, ...toAdd.map((f) => ({ id: crypto.randomUUID(), ...f }))];
+      return [...base, ...toAdd.map((f) => ({ id: randomId(), ...f }))];
     });
     toast.success(`Imported ${toAdd.length} from CSV`);
   }

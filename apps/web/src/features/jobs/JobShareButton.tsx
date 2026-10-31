@@ -17,7 +17,7 @@ import {
   LinkIcon,
 } from "@/components/ui/icons/phosphor";
 import { LinkedinLogo } from "@/components/ui/icons/brands";
-import { cn } from "@/lib/utils";
+import { cn, copyText } from "@/lib/utils";
 
 type JobShareButtonProps = {
   /** Public job posting URL. */
@@ -48,7 +48,7 @@ export function JobShareButton({
   const [embedCopied, setEmbedCopied] = useState(false);
 
   async function copyUrl() {
-    await navigator.clipboard.writeText(url);
+    await copyText(url);
     setCopied(true);
     toast.success("Public link copied to clipboard.");
     window.setTimeout(() => setCopied(false), 1800);
@@ -62,7 +62,7 @@ export function JobShareButton({
 
   async function copyEmbed() {
     if (!embedSnippet) return;
-    await navigator.clipboard.writeText(embedSnippet);
+    await copyText(embedSnippet);
     setEmbedCopied(true);
     toast.success("Embed snippet copied.");
     window.setTimeout(() => setEmbedCopied(false), 1800);

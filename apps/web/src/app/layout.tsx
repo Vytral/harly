@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import localFont from "next/font/local";
 import { GeistMono } from "geist/font/mono";
 
+import Script from "next/script";
 import { ThemeProvider } from "@/components/ThemeProvider";
 import { ConfirmProvider } from "@/components/ui/confirm-dialog";
 import { Toaster } from "@/components/ui/sonner";
@@ -52,7 +53,11 @@ export default function RootLayout({
     >
       <head>
         {/* Applies the stored theme before first paint; see lib/theme-bootstrap.ts. */}
-        <script dangerouslySetInnerHTML={{ __html: themeBootstrapScript() }} />
+        <Script
+          id="theme-bootstrap"
+          strategy="beforeInteractive"
+          dangerouslySetInnerHTML={{ __html: themeBootstrapScript() }}
+        />
         <link rel="preconnect" href="https://lh3.googleusercontent.com" />
         <link rel="dns-prefetch" href="https://lh3.googleusercontent.com" />
       </head>

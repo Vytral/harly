@@ -91,7 +91,7 @@ import { Sheet, SheetClose, SheetTrigger } from "@/components/ui/sheet";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { DrawerLayout } from "@/features/candidates/DrawerLayout";
 import { UserAvatar } from "@/components/ui/UserAvatar";
-import { cn } from "@/lib/utils";
+import { cn, copyText } from "@/lib/utils";
 import { listMemberSessionsAction, revokeMemberSessionAction, type SessionDevice } from "@/features/security/session-actions";
 
 export type AssignableRole = { key: string; name: string };
@@ -1287,7 +1287,7 @@ function CreateMemberForm({
     setForm((prev) => ({ ...prev, [key]: value }));
 
   function copyPassword() {
-    navigator.clipboard.writeText(form.password);
+    copyText(form.password);
     toast.success("Password copied");
   }
 
