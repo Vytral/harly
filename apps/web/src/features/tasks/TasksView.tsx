@@ -1,8 +1,8 @@
 "use client";
 
 import { useConfirm } from "@/components/ui/confirm-dialog";
-import { useCallback, useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { KanbanSquare, List, Plus, Search } from "lucide-react";
 import { toast } from "@/lib/notification-island/toast";
 
@@ -18,6 +18,15 @@ import { TaskBoard } from "./TaskBoard";
 import { TaskList } from "./TaskList";
 import { type TaskHandlers } from "./task-ui";
 import { taskDueState, type TaskItem, type TaskStatus } from "./shared";
+import {
+  FILTER_ALL,
+  matchesDue,
+  matchesStatus,
+  OPEN_STATUSES,
+  parseTaskFilters,
+  withTaskFilter,
+  type TaskFilters,
+} from "./url-filters";
 import { TASK_PRIORITIES, TASK_PRIORITY_LABELS, TASK_STATUSES, TASK_STATUS_LABELS } from "./shared";
 import type { TaskContextOptions } from "./TaskLinkFields";
 import { useOpenFromQuery } from "@/components/dashboard/use-open-from-query";
@@ -46,9 +55,12 @@ export function TasksView({
   tasks: initialTasks,
   members,
   contextOptions,
+  currentUserId,
 }: {
   tasks: TaskItem[];
   members: Member[];
+  /** The viewer, so `?owner=me` can be resolved. */
+  currentUserId: string;
   counts: Record<string, number>;
   contextOptions: TaskContextOptions;
 }) {
@@ -63,13 +75,44 @@ export function TasksView({
   // `?new=1` (header "+" menu) opens the create sheet on arrival.
   const [createOpen, setCreateOpen] = useOpenFromQuery("new");
   const [createStatus, setCreateStatus] = useState<TaskStatus>("pending");
-  const [editingTask, setEditingTask] = useState<TaskItem | null>(null);
+  const searchParams = useSearchParams();
+  // `?task=<id>` (Home's task rows) opens that task for editing on arrival.
+  const taskParam = searchParams.get("task");
+  const [editingTask, setEditingTask] = useState<TaskItem | null>(
+    () => initialTasks.find((t) => t.id === taskParam) ?? null,
+  );
+  const [seenTaskParam, setSeenTaskParam] = useState(taskParam);
+  if (taskParam !== seenTaskParam) {
+    setSeenTaskParam(taskParam);
+    const requested = initialTasks.find((t) => t.id === taskParam);
+    if (requested) setEditingTask(requested);
+  }
   const [query, setQuery] = useState("");
-  const [assignee, setAssignee] = useState("all");
-  const [priority, setPriority] = useState("all");
-  const [status, setStatus] = useState("all");
-  const [due, setDue] = useState("all");
   const router = useRouter();
+
+  // Filters live in the URL (single source of truth), so a link lands on a
+  // filtered list and a reload keeps it. Writes use the History API, which
+  // Next syncs into useSearchParams without re-fetching the page.
+  const { assignee, priority, status, due } = useMemo(
+    () => parseTaskFilters(searchParams, currentUserId),
+    [searchParams, currentUserId],
+  );
+  const setFilter = useCallback(
+    (key: keyof TaskFilters, value: string) => {
+      const next = withTaskFilter(new URLSearchParams(window.location.search), key, value, currentUserId);
+      const qs = next.toString();
+      window.history.replaceState(null, "", qs ? `?${qs}` : window.location.pathname);
+    },
+    [currentUserId],
+  );
+
+  useEffect(() => {
+    if (!taskParam) return;
+    const next = new URLSearchParams(window.location.search);
+    next.delete("task");
+    const qs = next.toString();
+    window.history.replaceState(null, "", qs ? `?${qs}` : window.location.pathname);
+  }, [taskParam]);
   const confirm = useConfirm();
 
   const tasks = useMemo(
@@ -161,13 +204,10 @@ export function TasksView({
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     return tasks.filter((t) => {
-      if (assignee !== "all" && t.ownerId !== assignee) return false;
-      if (priority !== "all" && t.priority !== priority) return false;
-      if (status !== "all" && t.status !== status) return false;
-      const dueState = taskDueState(t.dueDate);
-      if (due === "due" && !dueState) return false;
-      if (due === "overdue" && dueState !== "overdue") return false;
-      if (due === "no_due" && t.dueDate) return false;
+      if (assignee !== FILTER_ALL && t.ownerId !== assignee) return false;
+      if (priority !== FILTER_ALL && t.priority !== priority) return false;
+      if (!matchesStatus(t, status)) return false;
+      if (!matchesDue(t, due)) return false;
       if (!q) return true;
       return [t.title, t.candidateName, t.jobTitle, t.ownerName]
         .filter(Boolean)
@@ -209,15 +249,15 @@ export function TasksView({
         <FilterPill
           label="Assignee"
           value={assignee}
-          onChange={setAssignee}
-          options={members.map((m) => m.id)}
+          onChange={(v) => setFilter("assignee", v)}
+          options={["all", ...members.map((m) => m.id)]}
           labelMap={{ all: "All", ...Object.fromEntries(members.map((m) => [m.id, m.name])) }}
           allValue="all"
         />
         <FilterPill
           label="Priority"
           value={priority}
-          onChange={setPriority}
+          onChange={(v) => setFilter("priority", v)}
           options={["all", ...TASK_PRIORITIES]}
           labelMap={{ all: "All", ...TASK_PRIORITY_LABELS }}
           allValue="all"
@@ -225,17 +265,24 @@ export function TasksView({
         <FilterPill
           label="Status"
           value={status}
-          onChange={setStatus}
-          options={["all", ...TASK_STATUSES]}
-          labelMap={{ all: "All", ...TASK_STATUS_LABELS }}
+          onChange={(v) => setFilter("status", v)}
+          options={["all", OPEN_STATUSES, ...TASK_STATUSES]}
+          labelMap={{ all: "All", [OPEN_STATUSES]: "Open", ...TASK_STATUS_LABELS }}
           allValue="all"
         />
         <FilterPill
           label="Due"
           value={due}
-          onChange={setDue}
-          options={["all", "due", "overdue", "no_due"]}
-          labelMap={{ all: "All", due: "With due date", overdue: "Overdue", no_due: "No due date" }}
+          onChange={(v) => setFilter("due", v)}
+          options={["all", "overdue,today", "overdue", "today", "due", "no_due"]}
+          labelMap={{
+            all: "All",
+            "overdue,today": "Overdue or today",
+            overdue: "Overdue",
+            today: "Due today",
+            due: "With due date",
+            no_due: "No due date",
+          }}
           allValue="all"
         />
 
@@ -284,10 +331,10 @@ export function TasksView({
           handlers={handlers}
           filtersActive={
             query.trim() !== "" ||
-            assignee !== "all" ||
-            priority !== "all" ||
-            status !== "all" ||
-            due !== "all"
+            assignee !== FILTER_ALL ||
+            priority !== FILTER_ALL ||
+            status !== FILTER_ALL ||
+            due !== FILTER_ALL
           }
         />
       ) : (

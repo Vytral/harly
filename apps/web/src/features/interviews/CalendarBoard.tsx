@@ -62,12 +62,15 @@ function buildMonthGrid(monthStart: Date): Date[] {
 }
 
 export function CalendarBoard({
+  focusDate,
   monthParam,
   monthLabel,
   interviews,
   jobOptions,
   interviewerOptions,
 }: {
+  /** `YYYY-MM-DD` to open on (from `?date=`): that day starts selected. */
+  focusDate: string | null;
   monthParam: string;
   monthLabel: string;
   interviews: UpcomingInterviewItem[];
@@ -79,7 +82,11 @@ export function CalendarBoard({
   const [jobFilter, setJobFilter] = useState("all");
   const [interviewerFilter, setInterviewerFilter] = useState("all");
   const [typeFilter, setTypeFilter] = useState("all");
-  const [selectedDay, setSelectedDay] = useState<string | null>(null);
+  const [selectedDay, setSelectedDay] = useState<string | null>(() => {
+    if (!focusDate) return null;
+    const [y, m, d] = focusDate.split("-").map(Number);
+    return dayKey(new Date(y, m - 1, d));
+  });
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const detailRef = useRef<HTMLDivElement | null>(null);
 

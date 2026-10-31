@@ -220,7 +220,7 @@ function ChecklistRowView({
         ) : null}
       </div>
       <Link
-        href={(isPipeline ? "/dashboard/candidates" : item.href) as Route}
+        href={(isPipeline ? "/dashboard/candidates?import=csv" : item.href) as Route}
         className="group inline-flex shrink-0 items-center gap-1 rounded-lg px-2.5 py-1.5 text-sm font-medium text-primary transition-all hover:gap-1.5"
       >
         {isPipeline ? "Import CSV" : item.ctaLabel}

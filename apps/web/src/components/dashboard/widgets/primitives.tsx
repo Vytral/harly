@@ -127,13 +127,3 @@ export function TileRow({
     </Link>
   );
 }
-
-/** Due / aging state → Badge variant. Carries urgency through colour. */
-export const dueVariant: Record<
-  "overdue" | "today" | "soon",
-  "danger" | "warning" | "neutral"
-> = {
-  overdue: "danger",
-  today: "warning",
-  soon: "neutral",
-};

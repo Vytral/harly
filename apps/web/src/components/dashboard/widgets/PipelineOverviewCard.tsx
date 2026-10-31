@@ -1,3 +1,5 @@
+import Link from "next/link";
+import type { Route } from "next";
 import { GitBranch } from "lucide-react";
 
 import type { PipelineOverview } from "@/features/dashboard/widgets";
@@ -25,12 +27,20 @@ export function PipelineOverviewCard({
   data: PipelineOverview;
   className?: string;
 }) {
+  // The pipeline page reads `?job=`; keep the job chosen here when leaving.
+  const pipelineHref = (
+    data.selected ? `/dashboard/pipeline?job=${data.selected.id}` : "/dashboard/pipeline"
+  ) as Route;
+  // The pipeline page has no per-stage filter, so a stage opens the same job as
+  // a board, where its column sits.
+  const boardHref = `${pipelineHref}&view=board` as Route;
+
   return (
     <Tile className={className}>
       <TileHeader
         icon={GitBranch}
         title="Pipeline overview"
-        action={<TileLink href="/dashboard/pipeline">View pipeline</TileLink>}
+        action={<TileLink href={pipelineHref}>View pipeline</TileLink>}
       />
       <div className="flex flex-1 flex-col gap-4 px-5 pb-5 pt-4">
         {data.selected ? (
@@ -57,7 +67,11 @@ export function PipelineOverviewCard({
             {/* Stage counts */}
             <div className="grid grid-cols-5 gap-2">
               {data.stages.map((stage, i) => (
-                <div key={stage.name} className="min-w-0">
+                <Link
+                  key={stage.name}
+                  href={boardHref}
+                  className="min-w-0 rounded-[var(--radius-md)] transition-colors hover:bg-row-wash focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-near-ink"
+                >
                   <div className="flex items-center gap-1.5">
                     <span className={`size-1.5 shrink-0 rounded-full ${laneColor(i)}`} />
                     <span className="truncate text-xs text-soft-ink">
@@ -67,7 +81,7 @@ export function PipelineOverviewCard({
                   <p className="font-display mt-1 text-[24px] leading-none tabular-nums text-near-ink">
                     {stage.count}
                   </p>
-                </div>
+                </Link>
               ))}
             </div>
 

@@ -1182,30 +1182,19 @@ function buildReadTools(ctx: HarlyToolContext) {
         "List active candidates waiting on a review/decision, with how long they've waited. Use for 'who needs review', 'who's stuck', 'what should I look at'.",
       inputSchema: z.object({}),
       execute: async () => {
-        const rows = await getCandidatesNeedingReview();
+        const review = await getCandidatesNeedingReview();
         return {
-          count: rows.length,
-          candidates: rows.map(
-            (r: {
-              id: string;
-              candidateId: string;
-              name: string;
-              avatarUrl: string | null;
-              job: string;
-              stage: string;
-              action: string;
-              ageDays: number;
-            }) => ({
-              applicationId: r.id,
-              candidateId: r.candidateId,
-              name: r.name,
-              avatarUrl: r.avatarUrl,
-              job: r.job,
-              stage: r.stage,
-              action: r.action,
-              waitingDays: r.ageDays,
-            }),
-          ),
+          count: review.total,
+          candidates: review.items.map((r) => ({
+            applicationId: r.applicationId,
+            candidateId: r.candidateId,
+            name: r.name,
+            avatarUrl: r.avatarUrl,
+            job: r.job,
+            stage: r.stage,
+            action: r.action,
+            waitingDays: r.ageDays,
+          })),
         };
       },
     }),
@@ -1216,7 +1205,7 @@ function buildReadTools(ctx: HarlyToolContext) {
         "Create a compact proactive hiring brief for the workspace: candidates waiting longest for review, jobs at risk, interviews today, and task status counts. Use for 'catch me up', 'what needs attention?', 'give me my hiring brief', or at the start of a work session. This is read-only and returns the highest-signal next actions.",
       inputSchema: z.object({}),
       execute: async () => {
-        const [reviewRows, riskJobs, todayInterviews, taskCounts] =
+        const [review, riskJobs, todayInterviews, taskCounts] =
           await Promise.all([
             getCandidatesNeedingReview(),
             getJobsAtRisk(),
@@ -1225,8 +1214,8 @@ function buildReadTools(ctx: HarlyToolContext) {
           ]);
 
         return {
-          candidatesToReview: reviewRows.map((row) => ({
-            applicationId: row.id,
+          candidatesToReview: review.items.map((row) => ({
+            applicationId: row.applicationId,
             candidateId: row.candidateId,
             name: row.name,
             job: row.job,
@@ -1235,7 +1224,7 @@ function buildReadTools(ctx: HarlyToolContext) {
             waitingDays: row.ageDays,
           })),
           jobsAtRisk: riskJobs,
-          interviewsToday: todayInterviews.map((interview) => ({
+          interviewsToday: todayInterviews.items.map((interview) => ({
             interviewId: interview.id,
             candidate: interview.candidate,
             job: interview.job,
@@ -2092,10 +2081,10 @@ function buildReadTools(ctx: HarlyToolContext) {
         "List interviews scheduled for today, with candidate, job, type, time, and interviewer. Use for 'what's on today', 'today's interviews'.",
       inputSchema: z.object({}),
       execute: async () => {
-        const rows = await getTodayInterviews();
+        const today = await getTodayInterviews();
         return {
-          count: rows.length,
-          interviews: rows.map((r) => ({
+          count: today.total,
+          interviews: today.items.map((r) => ({
             id: r.id,
             candidate: r.candidate,
             job: r.job,
@@ -2214,13 +2203,13 @@ function buildReadTools(ctx: HarlyToolContext) {
     inbox: tool({
       strict: true,
       description:
-        "Get the recruiter's action inbox: derived to-dos (feedback due, interviews to schedule, screens, approvals) with urgency. Use for 'what needs my attention', 'what should I do next'.",
+        "Get decisions waiting on the recruiter that are not candidate reviews (job descriptions awaiting approval). For pending reviews use candidatesNeedingReview. Use for 'what needs my attention', 'what should I do next'.",
       inputSchema: z.object({}),
       execute: async () => {
-        const items = await getInbox();
+        const inbox = await getInbox();
         return {
-          count: items.length,
-          items: items.slice(0, 20),
+          count: inbox.total,
+          items: inbox.items,
         };
       },
     }),
