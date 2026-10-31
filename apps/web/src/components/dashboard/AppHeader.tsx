@@ -253,6 +253,7 @@ export function AppHeader({
         {subNavItems && activeGroup ? (
           <SubNav
             label={activeGroup.item.label}
+            icon={activeGroup.item.icon}
             items={subNavItems}
             pathname={pathname}
             counts={counts}

@@ -8,27 +8,37 @@ import { cn } from "@/lib/utils";
 import { isNavActive, type NavItem } from "@/components/dashboard/nav-items";
 
 /**
- * Secondary navigation under the header pills: icon + label links for the
- * active group (Deel's "People / Org chart / Time off" row). Active item takes
- * a soft ink-tinted fill, so it reads on the lime wash in light and dark.
- * Scrolls horizontally on narrow screens instead of wrapping.
+ * Secondary navigation under the header pills: the section's name on the left
+ * and its icon + label links centred under the pills (Deel's "People / Org
+ * chart / Time off" row). Active item takes a soft ink-tinted fill, so it reads
+ * on the lime wash in light and dark. On phones the title drops and the links
+ * scroll horizontally instead of wrapping.
  */
 export function SubNav({
   label,
+  icon: SectionIcon,
   items,
   pathname,
   counts,
 }: {
   label: string;
+  icon?: NavItem["icon"];
   items: NavItem[];
   pathname: string;
   counts: Record<string, number>;
 }) {
   const reduceMotion = useReducedMotion();
   return (
+    <div className="grid h-12 grid-cols-[minmax(0,1fr)] items-center px-3 md:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] md:gap-4 md:px-5">
+      <p className="hidden min-w-0 items-center gap-2 truncate text-[15px] font-semibold tracking-[-0.01em] text-near-ink md:flex">
+        {SectionIcon ? (
+          <SectionIcon className="size-4 shrink-0 text-soft-ink" strokeWidth={1.8} />
+        ) : null}
+        {label}
+      </p>
     <nav
       aria-label={`${label} sections`}
-      className="scrollbar-hide flex h-12 items-center gap-1 overflow-x-auto px-3 md:px-5"
+      className="scrollbar-hide flex min-w-0 items-center gap-1 overflow-x-auto"
     >
       {/* One group per section so the pill never flies between sections. */}
       <LayoutGroup id={`subnav-${label}`}>
@@ -69,5 +79,8 @@ export function SubNav({
       })}
       </LayoutGroup>
     </nav>
+      {/* Mirrors the title column so the links sit on the true centre line. */}
+      <span aria-hidden="true" className="hidden md:block" />
+    </div>
   );
 }

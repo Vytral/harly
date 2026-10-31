@@ -37,6 +37,10 @@ export function CandidateStickyHeader({
     setStickyBarVisible(pinned);
   }, [pinned, setStickyBarVisible]);
 
+  // Leaving the page while pinned must hand the header back; otherwise the
+  // next route inherits a collapsed, click-through app header.
+  useEffect(() => () => setStickyBarVisible(false), [setStickyBarVisible]);
+
   useEffect(() => {
     const sentinel = sentinelRef.current;
     if (!sentinel) return;

@@ -24,14 +24,16 @@ export default async function SettingsLayout({
     )
     .map(([href]) => href);
 
+  // The section title spans both columns so the nav card and the content cards
+  // share one top edge; the nav then pins just under the 64px app header.
   return (
-    <div className="grid gap-6 lg:grid-cols-[288px_minmax(0,1fr)] xl:gap-8">
-      <aside className="lg:sticky lg:top-24 lg:max-h-[calc(100dvh-7rem)] lg:self-start">
-        <SettingsNav deniedHrefs={deniedHrefs} />
-      </aside>
-      <div className="min-w-0">
-        <SettingsSectionHeading />
-        {children}
+    <div>
+      <SettingsSectionHeading />
+      <div className="grid gap-6 lg:grid-cols-[288px_minmax(0,1fr)] xl:gap-8">
+        <aside className="lg:sticky lg:top-[88px] lg:max-h-[calc(100dvh-112px)] lg:self-start">
+          <SettingsNav deniedHrefs={deniedHrefs} />
+        </aside>
+        <div className="min-w-0">{children}</div>
       </div>
     </div>
   );
