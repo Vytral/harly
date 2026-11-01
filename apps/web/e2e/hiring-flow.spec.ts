@@ -219,9 +219,12 @@ test.describe("candidate-to-hire native signing flow", () => {
     await expect(
       placementDialog.getByRole("heading", { name: "Place signature fields" }),
     ).toBeVisible();
-    await expect(placementDialog.getByText(/1 field placed\./i)).toBeVisible({
-      timeout: 30_000,
-    });
+    // The PDF preview seeds one signature field once it loads.
+    await expect(
+      placementDialog
+        .getByRole("region", { name: "Fields" })
+        .getByRole("button", { name: "Remove field 1", exact: true }),
+    ).toBeVisible({ timeout: 30_000 });
     await placementDialog
       .getByRole("button", { name: "Send offer", exact: true })
       .click();

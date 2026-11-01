@@ -297,8 +297,9 @@ test.describe("automations builder", () => {
         page.getByText("All paths tested · 100%", { exact: true }),
       ).toBeVisible();
 
+      // The confirm button is labelled with the action itself.
       const confirm = page.getByRole("button", {
-        name: "Confirm: Apply automation proposal",
+        name: "Apply automation proposal",
         exact: true,
       });
       await expect(confirm).toBeEnabled();

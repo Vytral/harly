@@ -152,19 +152,21 @@ test("document expiry is recovered by cron and a later v2 scheduler tick", async
     const authorization = {
       Authorization: `Bearer ${E2E_CRON_SECRET}`,
     };
-    const initialSchedulerTick = await page.request.post(
-      `${E2E_BASE_URL}/api/cron/automations`,
-      { headers: authorization },
-    );
-    expect(initialSchedulerTick.ok()).toBe(true);
+    // Earlier specs can leave queued runs ahead of this one in a tick's batch,
+    // so keep ticking until this run reaches its wait.
     await expect
       .poll(async () => {
+        const tick = await page.request.post(
+          `${E2E_BASE_URL}/api/cron/automations`,
+          { headers: authorization },
+        );
+        expect(tick.ok()).toBe(true);
         const [run] = await db
           .select({ status: workflowRuns.logicalStatus })
           .from(workflowRuns)
           .where(eq(workflowRuns.id, runId));
         return run?.status;
-      })
+      }, { timeout: 30_000 })
       .toBe("waiting");
 
     const expiryTick = await page.request.post(
