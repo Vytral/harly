@@ -2628,11 +2628,12 @@ async function restore() {
   // Never destroy a deployment without first proving that its present state is
   // recoverable. This also makes an accidental restore reversible.
   process.stdout.write("Creating a safety backup of the current deployment…\n");
-  await backup(directory);
+  // Writers stay stopped from the safety backup until the restore finishes, so
+  // nothing is accepted that neither snapshot holds.
+  await backup(directory, true, false);
   process.stdout.write("Safety backup saved. Preparing restore…\n");
-  // The safety backup restarts dependencies. Stop the one-shot migration
-  // service too: otherwise it can race pg_restore and recreate tables while
-  // the database is being restored.
+  // Stop the one-shot migration service too: otherwise it can race pg_restore
+  // and recreate tables while the database is being restored.
   compose(directory, ["stop", "app", "scheduler", "migrate"], {
     allowFailure: true,
   });
@@ -2840,21 +2841,27 @@ async function upgrade(explicitDirectory?: string) {
     compose(directory, ["up", "-d", "app", "scheduler"], { allowFailure: true });
   const envPath = path.join(directory, ".env");
   const configPath = path.join(directory, "harly.config.json");
-  const originalEnv = await readFile(envPath, "utf8");
   const setImage = (contents: string, image: string, version: string) =>
     contents
       .replace(/^HARLY_IMAGE=.*$/m, `HARLY_IMAGE=${envLine(image)}`)
       .replace(/^HARLY_VERSION=.*$/m, `HARLY_VERSION=${envLine(version)}`);
 
-  // The transient write uses the resolved target label rather than a
-  // placeholder: if the process dies between here and the post-pull write,
-  // `.env` still names a real version instead of the literal "current".
-  await atomicWrite(
-    envPath,
-    setImage(originalEnv, requestedImage, envVersion(targetIdentity)),
-    0o600,
-  );
+  // Everything between the backup and the first migration is undoable: any
+  // failure here (a full disk, a failed pull) puts the previous .env back and
+  // starts the previous release again, since nothing has touched the schema.
+  let originalEnv: string | null = null;
+  let deployedImage = requestedImage;
+  let deployedIdentity: ReturnType<typeof describeImage>;
   try {
+    originalEnv = await readFile(envPath, "utf8");
+    // The transient write uses the resolved target label rather than a
+    // placeholder: if the process dies between here and the post-pull write,
+    // `.env` still names a real version instead of the literal "current".
+    await atomicWrite(
+      envPath,
+      setImage(originalEnv, requestedImage, envVersion(targetIdentity)),
+      0o600,
+    );
     await pullWithProgress(
       directory,
       ["app", "migrate", "scheduler"],
@@ -2862,43 +2869,54 @@ async function upgrade(explicitDirectory?: string) {
       phase(2, "Downloading container images"),
       phase(2, "Container images downloaded"),
     );
+
+    const inspected = run(
+      "docker",
+      [
+        "image",
+        "inspect",
+        requestedImage,
+        "--format",
+        '{{join .RepoDigests "\\n"}}',
+      ],
+      { allowFailure: true },
+    );
+    const repository = requestedImage.split("@")[0]!.replace(/:[^/:]+$/, "");
+    const repoDigests = String(inspected.stdout ?? "").split(/\s+/);
+    // The stable channel publishes a digest: the tag that was pulled must be
+    // exactly that image (for a multi-arch release, its index digest), or a
+    // moved tag would be migrated onto. This runs before any migration.
+    const manifestDigest = `${repository}@${release.digest}`;
+    if (requestedImage === releaseTagImage(release) && !repoDigests.includes(manifestDigest)) {
+      throw new CliError(
+        `The image downloaded for ${release.version} is not the one the release manifest publishes (${release.digest}). Nothing was migrated; the previous release is running again.`,
+        1,
+      );
+    }
+    const digest = repoDigests.includes(manifestDigest)
+      ? manifestDigest
+      : repoDigests.find((value) => value.startsWith(`${repository}@sha256:`));
+    deployedImage = digest ?? requestedImage;
+    // HARLY_VERSION is what the running app reports at /api/health/live and in
+    // the OpenAPI document. Recording a 12-character digest fragment there made
+    // every deployment look unversioned; the resolved release name is both
+    // truthful and legible. `requestedImage` carries the tag the operator asked
+    // for, which the digest-pinned `deployedImage` no longer shows.
+    deployedIdentity = describeImage(
+      digest ? requestedImage : deployedImage,
+      release,
+    );
+    await atomicWrite(
+      envPath,
+      setImage(await readFile(envPath, "utf8"), deployedImage, envVersion(deployedIdentity)),
+      0o600,
+    );
   } catch (error) {
-    await atomicWrite(envPath, originalEnv, 0o600);
+    if (originalEnv !== null)
+      await atomicWrite(envPath, originalEnv, 0o600).catch(() => undefined);
     restartPrevious();
     throw error;
   }
-
-  const inspected = run(
-    "docker",
-    [
-      "image",
-      "inspect",
-      requestedImage,
-      "--format",
-      '{{join .RepoDigests "\\n"}}',
-    ],
-    { allowFailure: true },
-  );
-  const repository = requestedImage.split("@")[0]!.replace(/:[^/:]+$/, "");
-  const digest = String(inspected.stdout ?? "")
-    .split(/\s+/)
-    .find((value) => value.startsWith(`${repository}@sha256:`));
-  const deployedImage = digest ?? requestedImage;
-  // HARLY_VERSION is what the running app reports at /api/health/live and in
-  // the OpenAPI document. Recording a 12-character digest fragment there made
-  // every deployment look unversioned; the resolved release name is both
-  // truthful and legible. `requestedImage` carries the tag the operator asked
-  // for, which the digest-pinned `deployedImage` no longer shows.
-  const deployedIdentity = describeImage(
-    digest ? requestedImage : deployedImage,
-    release,
-  );
-  const deployedVersion = envVersion(deployedIdentity);
-  await atomicWrite(
-    envPath,
-    setImage(await readFile(envPath, "utf8"), deployedImage, deployedVersion),
-    0o600,
-  );
   const markTargetConfigured = async () => {
     config.requestedImage = requestedImage;
     config.image = deployedImage;

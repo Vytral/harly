@@ -36,7 +36,11 @@
   channel, so a release published mid-update is never installed in its place.
 - `harly update` keeps `app` and `scheduler` stopped from the rollback backup
   until the new release starts, so a rollback never discards work accepted in
-  between. If the download fails, the previous release starts again.
+  between. If anything fails before migrations start, `.env` is put back and
+  the previous release starts again. `harly restore` likewise keeps them
+  stopped from its safety backup until the restore finishes.
+- `harly update` refuses a pulled release tag whose digest differs from the
+  one the release manifest publishes, before running any migration.
 
 ### Global install
 
