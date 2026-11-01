@@ -1,0 +1,121 @@
+---
+title: "Connect AI agents (MCP)"
+description: "Let Claude, ChatGPT, Cursor and other AI clients work in Harly through the Model Context Protocol, with your own permissions, a consent screen, and a full audit trail."
+---
+
+Harly runs a remote [Model Context Protocol](https://modelcontextprotocol.io) (MCP)
+server. An AI client that supports remote MCP servers can search candidates,
+move people through the pipeline, draft and send email, schedule interviews,
+read reports and more, from inside the assistant you already use.
+
+The server is part of the app. There is nothing extra to install or run, and it
+is available at `https://<your Harly URL>/mcp`.
+
+<Note>
+  An AI client never gets more access than the person who connects it. Every
+  tool call runs as that person, with their role, their scoped permissions and
+  their workspace, through the same checks the web app uses. Changing someone's
+  role changes what their connected agents can do immediately.
+</Note>
+
+## Connect a client
+
+<Steps>
+  <Step title="Copy the server URL">
+    Open **Settings → AI agents (MCP)**. The page shows your server URL and a short
+    guide for each client.
+  </Step>
+  <Step title="Add Harly to your client">
+    Add a custom or remote MCP server and paste the URL. Choose OAuth as the
+    sign-in method if the client asks.
+  </Step>
+  <Step title="Sign in and approve">
+    Harly opens a consent screen in your browser. It names the client, shows
+    where it will send you back to, and lists what it asks to do in plain
+    language. Read and write access are separate for each area. Approve only
+    what you need.
+  </Step>
+</Steps>
+
+| Client | How to add Harly |
+| --- | --- |
+| Claude | **Settings → Connectors → Add custom connector**. Name it Harly and paste the URL. On Team and Enterprise plans an Owner adds the connector once, then each person signs in. |
+| ChatGPT | **Settings → Connectors**, turn on developer mode under **Advanced**, choose **Create**, paste the URL and pick OAuth. |
+| Claude Code | `claude mcp add --transport http harly https://<your Harly URL>/mcp`, then run `/mcp` and choose Harly to sign in. |
+| Cursor | Add `{ "mcpServers": { "harly": { "url": "https://<your Harly URL>/mcp" } } }` to `~/.cursor/mcp.json`, then sign in from **Cursor Settings → MCP**. |
+| VS Code | Add the URL to `.vscode/mcp.json`, or run **MCP: Add Server** and choose HTTP. |
+| Others | Any client that supports remote MCP over streamable HTTP with OAuth works. |
+
+Your Harly URL must be reachable from the AI client and served over HTTPS.
+Clients run by an AI provider (Claude, ChatGPT) connect from the provider's
+servers, so an installation that is only reachable on a private network cannot
+use them. Local clients such as Claude Code and Cursor can reach private hosts.
+
+## What agents can do
+
+The tools cover the whole product, grouped by area, and each group needs its
+own scope:
+
+| Area | Examples |
+| --- | --- |
+| Candidates and pipeline | Search, create and update candidates, notes, tags, talent pools, move or reject applications, AI evaluation |
+| Jobs | Create, edit and publish jobs, stages, application form, hiring team, approvals |
+| Messages | Read the inbox, draft or send email, send bulk email, templates, delivery log |
+| Interviews | Find availability, schedule, reschedule, interview briefs and summaries |
+| Offers | Create, send, withdraw and record decisions |
+| Documents | Upload, request from candidates, generate from a template, send for signature |
+| Tasks, reports, automations, settings | Tasks, hiring reports, workflows and their runs, selected workspace settings |
+
+Tools that change data or reach outside Harly (sending email, rejecting a
+candidate, sending an offer) are marked as such. Most clients ask you to
+confirm them before they run, which is the safest way to use an agent. If you
+are unsure, grant read scopes only.
+
+## Permissions
+
+Two permissions control MCP. They appear under **AI agents (MCP)** when you
+edit a role in **Settings → Roles**.
+
+| Permission | What it allows | Default roles |
+| --- | --- | --- |
+| `mcp:use` | Connect an AI client and act with your own permissions | Owner, admin, recruiter, hiring manager |
+| `mcp:manage` | Turn MCP on or off for the workspace, choose which clients may connect, see and revoke anyone's connection | Owner, admin |
+
+Custom roles saved before this release inherit `mcp:use` if they were based on
+the recruiter or hiring manager role. Roles saved afterwards take exactly the
+permissions the admin chose. Remove `mcp:use` from a role to stop its members
+connecting agents, and any existing connection stops working at the next call.
+
+## Workspace controls
+
+People with `mcp:manage` can open **Settings → AI agents (MCP)** to:
+
+- **Turn MCP off** for the whole workspace. Connected agents stop working immediately.
+- **Choose which clients may connect.** The default accepts any client. Restricting it to known clients (Claude, ChatGPT, Gemini, Cursor, VS Code, Windsurf and others, recognised by their sign-in redirect) refuses everything else.
+- **Allow or block self-registration** of new clients.
+- **See every connection**, with the person, the client, its scopes and when it was last used, and **revoke** any of them.
+
+Everyone with `mcp:use` sees and can revoke their own connections.
+
+## Security model
+
+- **OAuth 2.1 with PKCE.** Clients register themselves automatically (dynamic client registration) or identify with a client metadata document. Redirects must be HTTPS, a private-use app scheme, or loopback.
+- **Short-lived tokens.** Access tokens last 15 minutes. Refresh tokens rotate on every use and expire after 30 days idle. A connection ends 90 days after approval whatever happens, and the person has to approve again. Tokens are stored only as hashes, and a token is valid only for the `/mcp` endpoint of your installation.
+- **Scopes you approve.** A token carries only the scopes granted on the consent screen, and a tool needs both its scope and the person's current role permission.
+- **Audit trail.** Every tool call is written to the workspace audit log with the person, the client and the tool.
+- **Rate limits.** 120 calls per minute for each person and client, of which 30 may change data, plus a limit on failed token checks per IP. Very large results are truncated.
+
+## Operator notes
+
+- **Reverse proxy.** `/mcp` can answer with a server-sent event stream, so it must not be compressed or buffered. The bundled `Caddyfile` already handles this. With nginx set `proxy_buffering off;` and `gzip off;` for `/mcp`; with Cloudflare, do not challenge or strip `Authorization` on `/mcp`, `/oauth/*` or `/.well-known/*`, and do not put bot rules in front of them, or clients cannot sign in.
+- **Discovery.** Clients find the sign-in endpoints at `/.well-known/oauth-protected-resource/mcp` and `/.well-known/oauth-authorization-server`. All three paths, `/mcp`, `/oauth/*` and `/.well-known/*`, must be reachable without a Harly session cookie.
+- **Public URL.** The issuer and audience are `HARLY_URL`, never the request Host header. Set it to the exact origin users reach.
+- **Browser-based clients.** Native clients send no `Origin` header. A browser client such as MCP Inspector is answered only from your own origin and loopback. To allow another origin, set `MCP_ALLOWED_ORIGINS` to a comma-separated list, for example `MCP_ALLOWED_ORIGINS=https://inspector.example.com`.
+- **Demo mode.** MCP is not available in the public demo sandbox.
+
+## Troubleshooting
+
+- **The client says it cannot reach the server.** Open the URL in a browser. A `401` with a `WWW-Authenticate` header is correct and means the server is up. Anything else usually points at the proxy or `HARLY_URL`.
+- **The sign-in page refuses the client.** The workspace may allow known clients only, or have switched off self-registration. Ask someone with `mcp:manage`.
+- **A tool is missing or says access denied.** The connection lacks the scope, or your role lacks the permission. Reconnect with broader scopes, or ask an admin to change your role.
+- **The agent stopped working after weeks.** The connection reached its 90-day limit. Remove it and connect again.

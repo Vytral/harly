@@ -178,6 +178,65 @@ It seeds known rows and an uploaded object, backs them up, drops the entire data
   This harness refuses to run without `HARLY_DESTRUCTIVE_OK=1` because it wipes the database it points at. Never aim it at production.
 </Warning>
 
+## Update from the app
+
+Workspace owners can update Harly from **Settings → Updates** instead of a terminal, and can let Harly install releases automatically outside working hours. Only owners see the page, and every action is checked on the server.
+
+The web container never pulls images or restarts itself, and the Docker socket is never mounted into it. The app only records a request; a small **host updater** that runs on your server next to `compose.yaml` carries it out.
+
+```text
+Settings → Updates   →  update request (database + audit log)
+                              ↑ poll every 60 s            ↓ progress and result
+                        harly updater run  (on the host, systemd service)
+                              └─ harly update: backup → pull pinned digest → migrate → restart → health check
+                                 on failure: restore the pre-update backup and the previous version
+```
+
+### Turn it on
+
+The updater ships in the CLI. On the server, as a user that can run `docker compose` (run the command with `sudo` to install the service directly):
+
+```bash
+npm install -g @harly/cli
+harly updater install-service /path/to/installation   # writes and starts a systemd unit
+harly updater status /path/to/installation
+```
+
+No extra configuration is needed. The updater reads `CRON_SECRET` from the installation's `.env` and derives its own token from it (an HMAC with a fixed context), so the cron secret itself is never sent and a leaked cron request cannot pose as the updater. It talks to the app on the loopback port that `compose.yaml` publishes, so the token never leaves the host.
+
+Without systemd, run `harly updater run` under any supervisor, or run `harly updater run --once` from cron every minute. `--url` overrides the app address and `--interval` the poll period (15 to 3600 seconds).
+
+Settings → Updates shows whether the updater has checked in. **Update now** stays disabled until it has.
+
+### What an update does
+
+1. The updater re-reads the stable release channel and refuses any version that is not the one the channel names, so a request can never make it install an arbitrary tag. The image is the digest pinned in `release-manifest.json`.
+2. It runs `harly update`: a rollback archive in `backups/`, the pinned image is pulled, the database is migrated, services are recreated, and health checks must pass. Harly is unavailable for a few minutes while the app restarts.
+3. If the update fails before anything changed, nothing is touched. If it fails afterwards, the updater puts the previous image pins back in `.env` and `harly.config.json`, restores the pre-update backup, and reports **Rolled back**. If even that fails, the page names the archive to restore by hand with `harly restore <archive> --force`.
+
+The page shows the running and latest stable versions, a link to the release notes, when the channel was last checked, and the outcome of recent updates with the updater's log.
+
+### Install automatically outside working hours
+
+Turn on **Install updates automatically outside working hours** and choose:
+
+- **Which releases**: patch only (`0.2.4` to `0.2.5`), or patch and minor (`0.2.4` to `0.3.0`). Major releases and pre-releases are never installed automatically.
+- **Window**: days, a start and end hour, and a time zone. The default is Monday to Friday, 02:00 to 05:00, in the workspace time zone. The end hour is exclusive and a window may cross midnight; a Friday 22:00 to 05:00 window includes Saturday morning.
+
+The check happens when the updater polls, so an update starts within a minute of the window opening. A version that failed or was rolled back is not retried automatically; an owner has to start it. Every request, outcome and settings change is written to the audit log.
+
+### Privacy and air-gapped hosts
+
+Checking for updates fetches the public `release-manifest.json` (and the release notes from GitHub) from the app server. Nothing about your installation is sent. Set `HARLY_RELEASE_MANIFEST_URL` to a mirror, or `HARLY_DISABLE_UPDATE_CHECK=true` to stop the app from contacting the release channel at all; `harly update` on the host keeps working.
+
+Both variables go in the installation's `.env`. New installations pass them to the app container; on an older `compose.yaml`, add `HARLY_RELEASE_MANIFEST_URL: ${HARLY_RELEASE_MANIFEST_URL:-}` and `HARLY_DISABLE_UPDATE_CHECK: ${HARLY_DISABLE_UPDATE_CHECK:-false}` to the shared `environment` block. The updater on the host reads `HARLY_RELEASE_MANIFEST_URL` from its own environment.
+
+### Troubleshooting
+
+- **"The server updater is not running"**: `harly updater status`, then `journalctl -u harly-updater -f`.
+- **The page says the update failed or the updater stopped reporting**: run `harly doctor`; the pre-update archive is in `backups/`.
+- **The request stays "Waiting for the updater"**: it is withdrawn after 24 hours, or cancel it from the page.
+
 ## Development database
 
 Repository contributors use a separate development Compose file, not the production stack:

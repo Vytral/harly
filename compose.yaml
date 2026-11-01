@@ -41,6 +41,13 @@ x-harly-env: &harly-env
   TURNSTILE_SECRET_KEY: ${TURNSTILE_SECRET_KEY:-}
   HARLY_CACHE_MAX_MB: ${HARLY_CACHE_MAX_MB:-512}
   HARLY_CACHE_MAX_AGE_DAYS: ${HARLY_CACHE_MAX_AGE_DAYS:-7}
+  # Settings → Updates reads the public release channel. Point it at a mirror, or
+  # set HARLY_DISABLE_UPDATE_CHECK=true on an air-gapped host.
+  HARLY_RELEASE_MANIFEST_URL: ${HARLY_RELEASE_MANIFEST_URL:-}
+  HARLY_DISABLE_UPDATE_CHECK: ${HARLY_DISABLE_UPDATE_CHECK:-false}
+  # Extra browser origins allowed to call /mcp (comma separated). Empty by default:
+  # only the public origin and loopback are answered.
+  MCP_ALLOWED_ORIGINS: ${MCP_ALLOWED_ORIGINS:-}
   # DocuSeal (self-hosted e-signature). Optional global fallback for single-tenant
   # installs; per-workspace URL + token entered in Settings → Integrations override
   # these. When the bundled `docuseal` service is used, DOCUSEAL_URL is http://docuseal:3000.
@@ -162,7 +169,7 @@ services:
   # the instance URL (http://docuseal:3000 from the app network, or your public
   # URL), into Harly → Settings → Integrations → DocuSeal.
   docuseal:
-    image: docuseal/docuseal:latest
+    image: docuseal/docuseal:${HARLY_DOCUSEAL_VERSION:-3.3.4}
     profiles: ["esign"]
     restart: unless-stopped
     mem_limit: ${HARLY_DOCUSEAL_MEMORY:-1024m}

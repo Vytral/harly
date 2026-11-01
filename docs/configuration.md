@@ -93,6 +93,45 @@ It never retries an outcome that may already have reached the provider. Email,
 SMTP, and webhook delivery are at-least-once; provider idempotency and durable
 queue keys reduce duplicate delivery after crashes.
 
+## Updates and AI agents
+
+All optional, with safe defaults.
+
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `HARLY_RELEASE_MANIFEST_URL` | the public `release-manifest.json` on GitHub | Where Settings → Updates and the host updater read the stable release channel. Point it at a mirror. |
+| `HARLY_DISABLE_UPDATE_CHECK` | `false` | `true` stops the app contacting the release channel (air-gapped hosts). `harly update` keeps working. |
+| `HARLY_UPDATER_INTERVAL` | `60` | Host updater only: seconds between polls (15 to 3600). Read from the updater's environment. |
+| `MCP_ALLOWED_ORIGINS` | empty | Extra browser origins (comma separated) allowed to call `/mcp`. Empty answers only the public origin and loopback. |
+
+The in-app updater needs the host service installed with
+`harly updater install-service`; see
+[Update from the app](../apps/docs/self-hosting/operations.mdx#update-from-the-app).
+The MCP server is documented in
+[Connect AI agents (MCP)](../apps/docs/developers/mcp.mdx) and
+[ADR-007](decisions/ADR-007-mcp-server-architecture.md). `/mcp` is a streaming
+endpoint: a reverse proxy must not compress or buffer it (the bundled Caddyfile
+already does not).
+
+## Pinning third-party images
+
+The Compose stack pulls `postgres:16-bookworm` and `caddy:2.10-alpine` by
+floating tag, and the optional e-signature profile pulls
+`docuseal/docuseal` at the version in `HARLY_DOCUSEAL_VERSION` (default
+`3.3.4`; set it to upgrade DocuSeal deliberately). The Harly image itself is
+always pinned by `HARLY_IMAGE`. For fully reproducible deployments, pin the
+others by digest:
+
+```bash
+docker buildx imagetools inspect postgres:16-bookworm | head -3   # note the Digest
+docker buildx imagetools inspect caddy:2.10-alpine | head -3
+```
+
+Then replace the `image:` lines in `compose.yaml` with
+`postgres:16-bookworm@sha256:<digest>` and `caddy:2.10-alpine@sha256:<digest>`.
+Review and bump the digests on your own schedule, since a pinned image does not
+receive security rebuilds.
+
 ## Access control and identity
 
 Workspace roles, scoped permissions, MFA, OIDC/SAML, SCIM provisioning, and the
