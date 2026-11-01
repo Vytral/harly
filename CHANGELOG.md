@@ -153,6 +153,20 @@ existing installation. All migrations are additive.
   access. Its token is derived from `CRON_SECRET` and never leaves the host.
 - Signing links and OTP verification were hardened (server-stamped consent,
   rotated tokens remembered, per-signer expiry).
+- With local storage, `/uploads/*` serves only public images and logos.
+  Signed PDFs, offer letters, saved signatures, documents and resumes were
+  reachable by URL alone; they now go only through their permission-checked
+  routes.
+- The realtime stream sends event names only, so members no longer receive
+  candidate data outside their role.
+- Candidate portal sign-in with Google or LinkedIn requires a verified email.
+- The login page redirects only to same-origin paths after sign-in.
+- Mailbox attachment downloads respect the member's thread scope.
+- The SSRF guard also blocks private addresses written as NAT64 or 6to4.
+- Anonymous JSON endpoints cap the request body size, and the metrics token
+  is compared in constant time.
+- Interview sync retries run only on the server and are no longer exposed as
+  server actions.
 - Dependency overrides for `tar`, `follow-redirects`, `brace-expansion` and
   `fast-copy`.
 
@@ -175,8 +189,12 @@ restoring a backup.
   must add them to their `compose.yaml` to use them; see the upgrade notes.
 - The optional DocuSeal service is pinned to `3.3.4` (`HARLY_DOCUSEAL_VERSION`)
   instead of `latest`. `THIRD_PARTY_NOTICES.md` lists weak-copyleft dependencies.
-- The `Caddyfile` limits request bodies to 30 MB and no longer compresses or buffers `/mcp`. Installations that
-  keep their own proxy configuration must do the same.
+- The `Caddyfile` limits request bodies to 30 MB and no longer compresses or
+  buffers `/mcp`. Installations that keep their own proxy configuration must
+  do the same.
+- With local storage, links that pointed straight at a document, offer letter
+  or signature under `/uploads/` stop working. Use the links Harly shows in the
+  app instead.
 
 ## [0.2.4]
 
