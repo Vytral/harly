@@ -2496,6 +2496,9 @@ async function deploymentDatabase(directory: string) {
 async function backup(
   explicitDirectory?: string,
   print = true,
+  // An update keeps app and scheduler stopped after the backup, so nothing is
+  // written that a rollback to this archive would silently discard.
+  restartWriters = true,
 ): Promise<string> {
   const directory = path.resolve(explicitDirectory ?? positionals[0] ?? ".");
   const config = await readConfig(directory);
@@ -2512,6 +2515,7 @@ async function backup(
   const outputDirectory = path.join(directory, "backups");
   await mkdir(outputDirectory, { recursive: true });
   compose(directory, ["stop", "app", "scheduler"], { allowFailure: true });
+  let written = false;
   try {
     const dump = compose(
       directory,
@@ -2565,6 +2569,7 @@ async function backup(
     // updates. It is intentionally dependency-free, but not a replacement for
     // an off-host disaster-recovery backup.
     if (!encrypt) {
+      written = true;
       if (print) process.stdout.write(`${archive}\n`);
       return archive;
     }
@@ -2572,12 +2577,15 @@ async function backup(
     run("age", ["-r", recipient!, "-o", encrypted, archive]);
     await chmod(encrypted, 0o600);
     await rm(archive, { force: true });
+    written = true;
     if (print) process.stdout.write(`${encrypted}\n`);
     return encrypted;
   } finally {
-    compose(directory, ["up", "-d", "app", "scheduler"], {
-      allowFailure: true,
-    });
+    // A failed backup always brings the writers back: nothing was updated.
+    if (restartWriters || !written)
+      compose(directory, ["up", "-d", "app", "scheduler"], {
+        allowFailure: true,
+      });
     await rm(temp, { recursive: true, force: true });
   }
 }
@@ -2808,7 +2816,7 @@ async function upgrade(explicitDirectory?: string) {
     const step = p.spinner(spinnerStyle);
     step.start(phase(1, "Writing a rollback point"));
     try {
-      archive = await backup(directory, false);
+      archive = await backup(directory, false, false);
     } catch (error) {
       step.stop(phase(1, "Rollback point failed"));
       throw error;
@@ -2823,9 +2831,13 @@ async function upgrade(explicitDirectory?: string) {
       )}`,
     );
   } else {
-    archive = await backup(directory, false);
+    archive = await backup(directory, false, false);
     process.stdout.write(`${archive}\n`);
   }
+  // From here app and scheduler stay stopped until phase 4 starts the new
+  // release, or a failure below brings the previous one back.
+  const restartPrevious = () =>
+    compose(directory, ["up", "-d", "app", "scheduler"], { allowFailure: true });
   const envPath = path.join(directory, ".env");
   const configPath = path.join(directory, "harly.config.json");
   const originalEnv = await readFile(envPath, "utf8");
@@ -2852,6 +2864,7 @@ async function upgrade(explicitDirectory?: string) {
     );
   } catch (error) {
     await atomicWrite(envPath, originalEnv, 0o600);
+    restartPrevious();
     throw error;
   }
 

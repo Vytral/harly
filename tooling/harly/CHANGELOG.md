@@ -32,6 +32,11 @@
   pre-update backup if the update fails after changing the install, and reports
   the outcome. It authenticates with a token derived from `CRON_SECRET`.
   `--once` and `--interval <seconds>` are new options.
+- The updater installs the exact image digest it verified against the stable
+  channel, so a release published mid-update is never installed in its place.
+- `harly update` keeps `app` and `scheduler` stopped from the rollback backup
+  until the new release starts, so a rollback never discards work accepted in
+  between. If the download fails, the previous release starts again.
 
 ### Global install
 

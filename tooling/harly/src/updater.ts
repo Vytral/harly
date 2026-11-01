@@ -107,7 +107,11 @@ export type UpdateDeps = {
   /** The stable release as the channel names it right now; null when unreachable. */
   fetchStableRelease: () => Promise<HarlyRelease | null>;
   /** Runs `harly update` for this installation. */
-  runUpdate: (onLine: (line: string) => void) => Promise<{ code: number; output: string }>;
+  /** Installs exactly `image` (`repository@sha256:…`), the release verified against the channel. */
+  runUpdate: (
+    image: string,
+    onLine: (line: string) => void,
+  ) => Promise<{ code: number; output: string }>;
   /** Runs `harly restore <archive> --force` for this installation. */
   runRestore: (archive: string) => Promise<{ code: number; output: string }>;
   now: () => number;
@@ -195,7 +199,9 @@ export async function performUpdate(
   //    migrates, recreates the services and waits for healthchecks.
   await deps.report("running", `Backing up, then updating to ${request.targetVersion}.`);
   let lastProgress = 0;
-  const result = await deps.runUpdate((line) => {
+  // Pass the verified digest: a bare `harly update` would read the channel
+  // again and could install a release published since the check above.
+  const result = await deps.runUpdate(`${release.image}@${release.digest}`, (line) => {
     const trimmed = line.trim();
     if (!trimmed || deps.now() - lastProgress < 15_000) return;
     lastProgress = deps.now();
@@ -451,8 +457,12 @@ export async function runUpdater(
           report: (status, message, logTail) =>
             reportWithRetry(settings, claim.id, status, message, logTail),
           fetchStableRelease: () => fetchStableRelease(settings.manifestUrl),
-          runUpdate: (onLine) =>
-            runSelf(["update", settings.directory, "--yes", "--non-interactive"], settings.directory, onLine),
+          runUpdate: (image, onLine) =>
+            runSelf(
+              ["update", settings.directory, "--to", image, "--yes", "--non-interactive"],
+              settings.directory,
+              onLine,
+            ),
           runRestore: (archive) =>
             runSelf(
               ["restore", archive, settings.directory, "--force", "--non-interactive"],

@@ -105,6 +105,13 @@ test("a successful update is reported as succeeded and leaves no journal", async
   await assert.rejects(readFile(path.join(directory, ".harly-updater.json")));
 });
 
+test("installs exactly the verified release digest, not whatever the channel serves later", async () => {
+  const { deps } = await fixture();
+  let installed = null;
+  await performUpdate(request, deps({ runUpdate: async (image) => ((installed = image), { code: 0, output: "" }) }));
+  assert.equal(installed, `${stable.image}@${stable.digest}`);
+});
+
 test("refuses a version the stable channel does not name, without touching anything", async () => {
   const { directory, reports, deps } = await fixture();
   let ran = false;
