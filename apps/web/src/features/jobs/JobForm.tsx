@@ -484,7 +484,7 @@ export function JobForm({
             content in normal flow instead; short drafts get a small gap
             before it rather than a forced full-viewport stretch.
           */}
-          <div className="flex flex-col px-6 pb-8 pt-6">
+          <div className="flex flex-col px-4 pb-8 pt-6 sm:px-6">
             <div className="space-y-10">
               {SECTIONS.map((s) => (
                 <section
@@ -586,7 +586,7 @@ export function JobForm({
 
           {/* Sticky wizard bar: Back (ghost) and Continue (ink) walk the steps;
               the last step swaps Continue for the real submit actions. */}
-          <div className="sticky bottom-0 z-10 mt-auto flex items-center justify-between gap-2 border-t border-hairline bg-pure-snow/90 px-6 py-3 backdrop-blur-sm">
+          <div className="sticky bottom-0 z-10 mt-auto flex items-center flex-wrap justify-between gap-2 border-t border-hairline bg-pure-snow/90 px-4 py-3 backdrop-blur-sm sm:px-6">
             <Button
               type="button"
               variant="ghost"
@@ -602,7 +602,7 @@ export function JobForm({
                 <ArrowRight className="size-4" />
               </Button>
             ) : (
-              <div className="flex items-center gap-2">{primaryActions}</div>
+              <div className="flex flex-wrap items-center justify-end gap-2">{primaryActions}</div>
             )}
           </div>
         </div>

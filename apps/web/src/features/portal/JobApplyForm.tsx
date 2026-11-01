@@ -240,7 +240,7 @@ export function JobApplyForm({
                     rows={4}
                     minLength={q.minLength ?? undefined}
                     className={cn(
-                      "w-full rounded-lg border border-border bg-card px-3.5 py-2.5 text-sm text-foreground",
+                      "w-full rounded-lg border border-border bg-card px-3.5 py-2.5 text-base sm:text-sm text-foreground",
                       "placeholder:text-muted-foreground",
                       "outline-none focus:ring-2 focus:ring-ring focus:border-transparent",
                       "transition-colors resize-none",
@@ -295,7 +295,7 @@ export function JobApplyForm({
                     value={answers[q.key] ?? ""}
                     onChange={(e) => setAnswer(q.key, e.target.value)}
                     required={q.required}
-                    className={cn("h-10 w-full rounded-lg border border-border bg-card px-3.5 text-sm text-foreground", "outline-none focus:ring-2 focus:ring-ring focus:border-transparent")}
+                    className={cn("h-10 w-full rounded-lg border border-border bg-card px-3.5 text-base sm:text-sm text-foreground", "outline-none focus:ring-2 focus:ring-ring focus:border-transparent")}
                   >
                     <option value="">Select an option</option>
                     {(Array.isArray(q.options) ? q.options : []).filter((option): option is string => typeof option === "string").map((option) => (
@@ -312,7 +312,7 @@ export function JobApplyForm({
                     required={q.required}
                     minLength={q.minLength ?? undefined}
                     className={cn(
-                      "h-10 w-full rounded-lg border border-border bg-card px-3.5 text-sm text-foreground",
+                      "h-10 w-full rounded-lg border border-border bg-card px-3.5 text-base sm:text-sm text-foreground",
                       "placeholder:text-muted-foreground",
                       "outline-none focus:ring-2 focus:ring-ring focus:border-transparent",
                       "transition-colors",

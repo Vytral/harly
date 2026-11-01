@@ -60,7 +60,7 @@ export function SetupClaimForm() {
             setError(null);
           }}
           placeholder="Paste your one-time token"
-          className="mt-2 w-full border-0 border-b border-input bg-transparent pb-2.5 font-mono text-sm text-foreground outline-none transition placeholder:font-sans placeholder:text-muted-foreground focus:border-ring disabled:opacity-60"
+          className="mt-2 w-full border-0 border-b border-input bg-transparent pb-2.5 font-mono text-base sm:text-sm text-foreground outline-none transition placeholder:font-sans placeholder:text-muted-foreground focus:border-ring disabled:opacity-60"
           required
         />
       </div>

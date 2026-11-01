@@ -438,7 +438,7 @@ export function ReportsDashboard({ data, canViewCandidates = false, canViewJobs 
         initial={shouldReduceMotion ? false : { opacity: 0, y: 12 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.35, ease: EASE_OUT, delay: 0.2 }}
-        className="grid gap-4 xl:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]"
+        className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]"
       >
         <Tile className="gap-5 p-5">
           <CardHead

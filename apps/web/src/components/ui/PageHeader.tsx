@@ -27,14 +27,14 @@ export function PageHeader({
         className,
       )}
     >
-      <div className="space-y-1.5">
+      <div className="min-w-0 space-y-1.5">
         {eyebrow ? (
           <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
             {eyebrow}
           </p>
         ) : null}
         <div className="flex flex-wrap items-center gap-2.5">
-          <h1 className="text-2xl font-semibold tracking-tight text-foreground">
+          <h1 className="min-w-0 text-balance break-words text-2xl font-semibold tracking-tight text-foreground">
             {title}
           </h1>
           {titleBadge}

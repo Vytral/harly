@@ -179,7 +179,7 @@ export function PlayfulTemplate({
               </dl>
               <a
                 href="#positions"
-                className="mt-6 block rounded-xl bg-zinc-900 px-4 py-2.5 text-center text-sm font-medium text-white transition-transform duration-150 active:scale-[0.98] dark:bg-zinc-100 dark:text-zinc-900"
+                className="mt-6 block rounded-xl bg-zinc-900 px-4 py-2.5 text-center text-sm font-medium text-white transition-transform duration-150 active:scale-[0.98] motion-reduce:transition-none dark:bg-zinc-100 dark:text-zinc-900"
               >
                 See open positions
               </a>
@@ -211,7 +211,7 @@ export function PlayfulTemplate({
                   style={{ animationDelay: `${i * 80}ms` }}
                 >
                   <div
-                    className="relative aspect-square overflow-hidden rounded-3xl transition-transform duration-300 ease-out group-hover:-translate-y-1"
+                    className="relative aspect-square overflow-hidden rounded-3xl transition-transform duration-300 ease-out motion-reduce:transition-none [@media(hover:hover)]:group-hover:-translate-y-1"
                     style={{ backgroundColor: art.bg }}
                   >
                     <span
@@ -317,7 +317,7 @@ export function PlayfulTemplate({
                   href={workspace.websiteUrl}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="rounded-xl px-5 py-2.5 text-sm font-semibold text-white transition-transform duration-150 active:scale-[0.98]"
+                  className="rounded-xl px-5 py-2.5 text-sm font-semibold text-white transition-transform duration-150 active:scale-[0.98] motion-reduce:transition-none"
                   style={{ backgroundColor: ctaColor }}
                 >
                   Get in touch

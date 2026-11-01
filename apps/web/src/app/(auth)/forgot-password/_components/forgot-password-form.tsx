@@ -79,7 +79,7 @@ export function ForgotPasswordForm() {
             setError(null);
           }}
           placeholder="you@company.com"
-          className="auth-field mt-2 w-full border-0 border-b border-input bg-transparent pb-2.5 text-sm text-foreground outline-none transition-colors placeholder:text-muted-foreground focus:border-ring"
+          className="auth-field mt-2 w-full border-0 border-b border-input bg-transparent pb-2.5 text-base md:text-sm text-foreground outline-none transition-colors placeholder:text-muted-foreground focus:border-ring"
         />
       </div>
 

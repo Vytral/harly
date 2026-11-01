@@ -116,7 +116,7 @@ export function OnboardingShell({
 
   return (
     <div className="w-full max-w-4xl overflow-hidden rounded-3xl border border-border/70 bg-card shadow-[0_1px_3px_rgba(31,41,38,0.04),0_18px_44px_-16px_rgba(31,41,38,0.16)]">
-      <div className="grid lg:grid-cols-[256px_minmax(0,1fr)]">
+      <div className="grid grid-cols-1 lg:grid-cols-[256px_minmax(0,1fr)]">
         {/* Left, vertical progress rail */}
         <aside className="hidden flex-col border-r border-border/70 bg-muted/30 p-7 lg:flex">
           <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
@@ -129,7 +129,7 @@ export function OnboardingShell({
         </aside>
 
         {/* Right, focused step */}
-        <div className={cn("flex flex-col p-8 lg:p-12", minHeight)}>
+        <div className={cn("flex flex-col p-5 sm:p-8 lg:p-12", minHeight)}>
           {/* Mobile progress (rail hidden < lg) */}
           <div className="mb-7 flex items-center gap-1.5 lg:hidden">
             {steps.map((s, i) => (
@@ -169,7 +169,7 @@ export function OnboardingShell({
           </div>
 
           {/* Footer */}
-          <div className="mt-10 flex items-center justify-end gap-1.5 border-t border-border/60 pt-5">
+          <div className="mt-8 flex flex-wrap items-center justify-end gap-1.5 border-t border-border/60 pt-5">
             {navHint ? (
               <p className="text-xs text-muted-foreground">{navHint}</p>
             ) : (

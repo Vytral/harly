@@ -30,11 +30,18 @@ import { formatCompensation } from "@/features/career-page/job/jobMeta";
  * Rules: surfaces come from the redesign tokens (`--warm-paper`, `--pure-snow`,
  * `--near-ink`, `--soft-ink`, `--hairline`), which ThemeWrapper's `.light` /
  * `.dark` class flips, so the page follows `theme.mode` like every other
- * template. The accent is rationed: the eyebrow dot, active filters, the
- * step numbers and portrait tints, and the CTA band button. Every section is
- * optional and renders only with real content. Nothing loops or animates on
- * load, and every image box has fixed dimensions, so there is no layout shift.
+ * template. Editorial structure: left-aligned hero, ink rules instead of
+ * boxes, one large number per stat, plain text counts (no pills). The accent
+ * is rationed: active filters, step numbers, portrait tints and the CTA band
+ * button. Every section is optional and renders only with real content.
+ * Motion is limited to a short job-row entrance, hover/press feedback, and is
+ * off under `prefers-reduced-motion`. Every image box has fixed dimensions.
  */
+
+/** Section opener: a solid ink rule with the label sitting under it. */
+const sectionRule = "border-t border-near-ink pt-5";
+const rowEnter =
+  "motion-safe:animate-in motion-safe:fade-in motion-safe:slide-in-from-bottom-1 motion-safe:duration-300 motion-safe:fill-mode-backwards";
 
 const ANY = "";
 
@@ -253,12 +260,12 @@ export function ShowcaseTemplate({
             <a
               href="#positions"
               className={cn(
-                "inline-flex h-9 shrink-0 items-center gap-1.5 rounded-full border border-hairline bg-pure-snow px-4 text-sm font-medium transition-colors hover:border-near-ink/30",
+                "inline-flex h-9 shrink-0 items-center gap-1.5 rounded-md px-2 text-sm font-medium underline decoration-hairline decoration-2 underline-offset-[6px] transition-colors hover:decoration-near-ink",
                 focusRing,
               )}
             >
               Open roles
-              <span className="font-mono text-xs tabular-nums text-soft-ink">{jobs.length}</span>
+              <span className="tabular-nums text-soft-ink">{jobs.length}</span>
             </a>
           )}
         </div>
@@ -266,40 +273,24 @@ export function ShowcaseTemplate({
 
       <main>
         {/* ── Hero ───────────────────────────────────────────────────────── */}
-        <section aria-labelledby={`${uid}-hero`} className="relative -mt-16 overflow-hidden pt-16 sm:-mt-20 sm:pt-20">
-          {/* Dotted paper: a CSS dot grid in the ink colour, faded at the edges. */}
-          <div
-            aria-hidden
-            className="pointer-events-none absolute inset-0 dark:opacity-50"
-            style={{
-              backgroundImage:
-                "radial-gradient(circle, color-mix(in srgb, var(--near-ink) 18%, transparent) 1px, transparent 1.4px)",
-              backgroundSize: "22px 22px",
-              backgroundPosition: "center top",
-              maskImage: "radial-gradient(ellipse 70% 75% at 50% 35%, #000 35%, transparent 100%)",
-              WebkitMaskImage: "radial-gradient(ellipse 70% 75% at 50% 35%, #000 35%, transparent 100%)",
-            }}
-          />
-          <div className="relative mx-auto max-w-5xl px-4 pb-20 pt-14 text-center sm:px-6 sm:pb-28 sm:pt-20">
-            <p className="inline-flex max-w-full items-center gap-2 rounded-full border border-hairline bg-pure-snow px-3.5 py-1.5 font-mono text-[11px] font-medium uppercase tracking-[0.14em] text-soft-ink shadow-[0_1px_2px_rgb(0_0_0/0.04)]">
-              <span className="size-1.5 shrink-0 rounded-full" style={{ backgroundColor: accent }} aria-hidden />
-              <span className="truncate">
-                {eyebrowLabel}
-                {jobs.length > 0 && (
-                  <>
-                    <span aria-hidden> · </span>
-                    <span className="sr-only">, </span>
-                    <span className="tabular-nums">{plural(jobs.length, "open role", "open roles")}</span>
-                  </>
-                )}
-              </span>
+        <section aria-labelledby={`${uid}-hero`} className="relative -mt-16 pt-16 sm:-mt-20 sm:pt-20">
+          <div className="relative mx-auto max-w-6xl px-4 pb-20 pt-12 sm:px-6 sm:pb-28 sm:pt-20">
+            <p className="text-[15px] font-medium text-soft-ink">
+              {eyebrowLabel}
+              {jobs.length > 0 && (
+                <>
+                  <span aria-hidden> / </span>
+                  <span className="sr-only">, </span>
+                  <span className="tabular-nums">{plural(jobs.length, "open role", "open roles")}</span>
+                </>
+              )}
             </p>
 
             {/* Always visible: the hero is built around it, so Showcase ignores
                 `showHeadline` (pages saved with it off would look empty). */}
             <h1
               id={`${uid}-hero`}
-              className="mx-auto mt-7 max-w-4xl text-[clamp(2.5rem,7vw,4.75rem)] font-semibold leading-[1.02] tracking-[-0.035em] [text-wrap:balance]"
+              className="mt-6 max-w-4xl text-[clamp(2.75rem,8vw,6rem)] font-semibold leading-[0.98] tracking-[-0.045em] [text-wrap:balance]"
             >
               {words.map((word, i) => (
                 <Fragment key={i}>
@@ -328,16 +319,16 @@ export function ShowcaseTemplate({
             </h1>
 
             {subhead && (
-              <p className="mx-auto mt-6 max-w-xl text-lg leading-relaxed text-soft-ink [text-wrap:pretty] sm:text-xl">
+              <p className="mt-8 max-w-xl text-lg leading-relaxed text-soft-ink [text-wrap:pretty] sm:text-xl">
                 {subhead}
               </p>
             )}
 
-            <div className="mt-9 flex flex-col items-center justify-center gap-3 sm:flex-row sm:gap-6">
+            <div className="mt-10 flex flex-col items-start gap-3 sm:flex-row sm:items-center sm:gap-6">
               <a
                 href="#positions"
                 className={cn(
-                  "inline-flex h-12 items-center gap-2 rounded-full bg-near-ink px-6 text-[15px] font-medium text-pure-snow transition-transform duration-150 ease-out hover:-translate-y-px active:translate-y-0 motion-reduce:transition-none",
+                  "inline-flex h-12 items-center gap-2 rounded-full bg-near-ink px-6 text-[15px] font-medium text-pure-snow transition-transform duration-150 ease-out hover:-translate-y-px active:scale-[0.97] motion-reduce:transition-none",
                   focusRing,
                 )}
               >
@@ -367,7 +358,7 @@ export function ShowcaseTemplate({
             </h2>
             <dl
               className={cn(
-                "grid grid-cols-2 gap-3 sm:gap-4",
+                "grid grid-cols-2 border-t border-near-ink",
                 stats.length === 3 ? "lg:grid-cols-3" : stats.length >= 4 ? "lg:grid-cols-4" : null,
               )}
             >
@@ -375,8 +366,10 @@ export function ShowcaseTemplate({
                 <div
                   key={`${s.label}-${i}`}
                   className={cn(
-                    "flex flex-col-reverse justify-between gap-6 border border-hairline bg-pure-snow p-5 sm:p-6",
-                    card,
+                    "flex flex-col-reverse justify-between gap-10 border-b border-hairline py-6 pr-4 sm:py-8",
+                    i % 2 === 1 && "pl-4 sm:pl-0",
+                    "lg:border-b-0 lg:pl-6 lg:first:pl-0",
+                    i > 0 && "lg:border-l lg:border-hairline",
                     stats.length === 3 && i === 2 && "col-span-2 lg:col-span-1",
                   )}
                 >
@@ -384,7 +377,7 @@ export function ShowcaseTemplate({
                     <CareerIcon name={s.icon} className="size-3.5 shrink-0" />
                     {s.label}
                   </dt>
-                  <dd className="text-4xl font-semibold tracking-[-0.03em] tabular-nums sm:text-5xl [overflow-wrap:anywhere]">
+                  <dd className="text-5xl font-semibold leading-none tracking-[-0.045em] tabular-nums sm:text-6xl [overflow-wrap:anywhere]">
                     {s.value}
                   </dd>
                 </div>
@@ -400,14 +393,12 @@ export function ShowcaseTemplate({
             aria-labelledby={`${uid}-culture`}
             className="mx-auto max-w-6xl scroll-mt-6 px-4 pt-24 sm:px-6 sm:pt-32"
           >
-            <div className="grid gap-10 lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)] lg:gap-16">
+            <div className={cn("grid gap-10 lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)] lg:gap-16", sectionRule)}>
               <div>
-                <p className="font-mono text-[11px] font-medium uppercase tracking-[0.14em] text-soft-ink">
-                  Life at {name}
-                </p>
+                <p className="text-sm font-medium text-soft-ink">Life at {name}</p>
                 <h2
                   id={`${uid}-culture`}
-                  className="mt-3 text-3xl font-semibold leading-tight tracking-[-0.025em] [text-wrap:balance] sm:text-4xl"
+                  className="mt-4 text-3xl font-semibold leading-[1.05] tracking-[-0.035em] [text-wrap:balance] sm:text-5xl"
                 >
                   {benefits.length > 0 ? config.values.title || "Why you'll like it here" : `About ${name}`}
                 </h2>
@@ -419,21 +410,16 @@ export function ShowcaseTemplate({
               </div>
 
               {benefits.length > 0 && (
-                <ul className="grid gap-3 sm:grid-cols-2 sm:gap-4">
+                <ul className="grid gap-x-8 sm:grid-cols-2">
                   {benefits.map((b, i) => {
                     const icon = careerIcon(b.art) ? b.art : FALLBACK_BENEFIT_ICONS[i % FALLBACK_BENEFIT_ICONS.length];
                     return (
                       <li
                         key={`${b.title}-${i}`}
-                        className={cn("border border-hairline bg-pure-snow p-6", card)}
+                        className="border-t border-hairline py-6"
                       >
-                        <span
-                          className={cn("flex size-10 items-center justify-center border border-hairline bg-warm-paper", inner)}
-                          aria-hidden
-                        >
-                          <CareerIcon name={icon} className="size-[18px]" />
-                        </span>
-                        <h3 className="mt-5 font-semibold tracking-tight [overflow-wrap:anywhere]">{b.title}</h3>
+                        <CareerIcon name={icon} className="size-5 text-soft-ink" />
+                        <h3 className="mt-4 text-lg font-semibold tracking-tight [overflow-wrap:anywhere]">{b.title}</h3>
                         {b.body?.trim() && (
                           <p className="mt-1.5 text-[15px] leading-relaxed text-soft-ink [overflow-wrap:anywhere]">
                             {b.body}
@@ -486,15 +472,15 @@ export function ShowcaseTemplate({
           aria-labelledby={`${uid}-jobs`}
           className="mx-auto max-w-6xl scroll-mt-6 px-4 pt-24 sm:px-6 sm:pt-32"
         >
-          <div className="flex flex-wrap items-end justify-between gap-3">
+          <div className={cn("flex flex-wrap items-end justify-between gap-3", sectionRule)}>
             <h2
               id={`${uid}-jobs`}
-              className="text-3xl font-semibold tracking-[-0.025em] sm:text-4xl"
+              className="text-3xl font-semibold tracking-[-0.035em] sm:text-5xl"
             >
               {config.positions.title || "Open roles"}
             </h2>
             {jobs.length > 0 && (
-              <p className="font-mono text-xs uppercase tracking-[0.14em] text-soft-ink" aria-live="polite">
+              <p className="text-sm tabular-nums text-soft-ink" aria-live="polite">
                 {filtersActive
                   ? `${filtered.length} of ${plural(jobs.length, "role", "roles")}`
                   : plural(jobs.length, "role", "roles")}
@@ -526,18 +512,18 @@ export function ShowcaseTemplate({
               {/* Department overview: jump links with counts (3+ departments). */}
               {allDepartments.length >= 3 && !filtersActive && (
                 <nav aria-label="Departments" className="mt-6">
-                  <ul className="flex flex-wrap gap-2">
+                  <ul className="flex flex-wrap gap-x-4 gap-y-1">
                     {allDepartments.map(([dept, count]) => (
                       <li key={dept}>
                         <a
                           href={`#${groupId(dept)}`}
                           className={cn(
-                            "inline-flex h-9 items-center gap-2 rounded-full border border-hairline bg-pure-snow px-3.5 text-sm transition-colors hover:border-near-ink/30",
+                            "inline-flex h-9 items-center gap-1.5 rounded-md px-1 text-sm underline decoration-hairline decoration-2 underline-offset-[6px] transition-colors hover:decoration-near-ink",
                             focusRing,
                           )}
                         >
                           {dept}
-                          <span className="font-mono text-xs tabular-nums text-soft-ink">{count}</span>
+                          <span className="text-xs tabular-nums text-soft-ink">{count}</span>
                         </a>
                       </li>
                     ))}
@@ -625,7 +611,7 @@ export function ShowcaseTemplate({
                       type="button"
                       onClick={clearFilters}
                       className={cn(
-                        "mt-5 inline-flex h-10 items-center rounded-full border border-hairline px-5 text-sm font-medium transition-colors hover:border-near-ink/30",
+                        "mt-5 inline-flex h-10 items-center rounded-full border border-hairline px-5 text-sm font-medium transition-[border-color,transform] duration-150 hover:border-near-ink/30 active:scale-[0.97] motion-reduce:transition-none",
                         focusRing,
                       )}
                     >
@@ -646,27 +632,28 @@ export function ShowcaseTemplate({
                           className="flex items-center gap-2 px-2 pb-2 text-sm font-semibold tracking-tight sm:px-3"
                         >
                           {dept}
-                          <span
-                            className="rounded-full px-2 py-0.5 font-mono text-[11px] font-medium tabular-nums"
-                            style={{ backgroundColor: pal.tintBg, color: pal.ink }}
-                          >
+                          <span className="text-xs font-normal tabular-nums text-soft-ink">
                             <span className="sr-only">(</span>
                             {list.length}
                             <span className="sr-only"> {list.length === 1 ? "role" : "roles"})</span>
                           </span>
                         </h3>
                         <ul>
-                          {list.map((job) => {
+                          {list.map((job, rowIdx) => {
                             const salary = formatCompensation(job);
                             const meta = [locationOf(job), formatEmploymentType(job.employmentType), salary].filter(
                               (v): v is string => Boolean(v),
                             );
                             return (
-                              <li key={job.id}>
+                              <li
+                                key={job.id}
+                                className={rowEnter}
+                                style={{ animationDelay: `${Math.min(rowIdx, 8) * 30}ms` }}
+                              >
                                 <Link
                                   href={`${boardRoot}/jobs/${job.slug}` as Route}
                                   className={cn(
-                                    "group flex items-center gap-4 px-2 py-3 transition-colors hover:bg-warm-paper sm:px-3",
+                                    "group flex items-center gap-4 px-2 py-3 transition-[background-color,transform] duration-150 hover:bg-warm-paper active:scale-[0.995] motion-reduce:transition-none sm:px-3",
                                     inner,
                                     focusRing,
                                   )}
@@ -684,12 +671,11 @@ export function ShowcaseTemplate({
                                       ))}
                                     </span>
                                   </span>
-                                  <span
+                                  <ArrowUpRight
                                     aria-hidden
-                                    className="hidden h-8 shrink-0 items-center gap-1 rounded-full border border-hairline px-3 text-sm font-medium transition-colors group-hover:border-near-ink group-hover:bg-near-ink group-hover:text-pure-snow sm:inline-flex"
-                                  >
-                                    View
-                                  </span>
+                                    className="hidden size-4 shrink-0 -translate-x-1 text-near-ink opacity-0 transition-[transform,opacity] duration-200 ease-out group-hover:translate-x-0 group-hover:opacity-100 motion-reduce:transition-none sm:block"
+                                    strokeWidth={1.8}
+                                  />
                                   <ChevronRight
                                     aria-hidden
                                     className="size-4 shrink-0 text-soft-ink sm:hidden"
@@ -712,7 +698,7 @@ export function ShowcaseTemplate({
         {/* ── Voices ─────────────────────────────────────────────────────── */}
         {testimonials.length > 0 && (
           <section aria-labelledby={`${uid}-voices`} className="mx-auto max-w-6xl px-4 pt-24 sm:px-6 sm:pt-32">
-            <h2 id={`${uid}-voices`} className="text-3xl font-semibold tracking-[-0.025em] sm:text-4xl">
+            <h2 id={`${uid}-voices`} className="text-3xl font-semibold tracking-[-0.035em] sm:text-5xl">
               {config.testimonials.title || "From the team"}
             </h2>
             <ul className="mt-8 grid gap-3 sm:gap-4 md:grid-cols-2">
@@ -779,7 +765,7 @@ export function ShowcaseTemplate({
         {/* ── FAQ ────────────────────────────────────────────────────────── */}
         {faqItems.length > 0 && (
           <section aria-labelledby={`${uid}-faq`} className="mx-auto max-w-3xl px-4 pt-24 sm:px-6 sm:pt-32">
-            <h2 id={`${uid}-faq`} className="mb-8 text-3xl font-semibold tracking-[-0.025em] sm:text-4xl">
+            <h2 id={`${uid}-faq`} className="mb-8 text-3xl font-semibold tracking-[-0.035em] sm:text-5xl">
               {config.faq.title || "Questions"}
             </h2>
             <CareerFaq items={faqItems} accent={pal.ink} />
@@ -818,7 +804,7 @@ export function ShowcaseTemplate({
                 <a
                   href={ctaHref}
                   {...(/^https?:/i.test(ctaHref) ? { target: "_blank", rel: "noopener noreferrer" } : {})}
-                  className="relative mt-8 inline-flex h-12 items-center gap-2 rounded-full px-6 text-[15px] font-medium outline-none transition-transform duration-150 ease-out hover:-translate-y-px focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white motion-reduce:transition-none"
+                  className="relative mt-8 inline-flex h-12 items-center gap-2 rounded-full px-6 text-[15px] font-medium outline-none transition-transform duration-150 ease-out hover:-translate-y-px active:scale-[0.97] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white motion-reduce:transition-none"
                   style={{ backgroundColor: ctaFill, color: readableInk(ctaFill) }}
                 >
                   {config.cta.buttonText || "Get in touch"}

@@ -135,7 +135,7 @@ export const TEMPLATE_CAPABILITIES: Record<CareerTemplate, TemplateCapabilities>
   ashby: {
     label: "Ashby",
     blurb: "Structured, sidebar filters",
-    swatch: { bg: "#f7f7f5", accent: "#18181b", ink: "#e2e2dd" },
+    swatch: { bg: "#eef2fb", accent: "#4f5bd5", ink: "#cfd7ee" },
     headline: true,
     subhead: true,
     showHeadline: true,
@@ -167,7 +167,7 @@ export const TEMPLATE_CAPABILITIES: Record<CareerTemplate, TemplateCapabilities>
   join: {
     label: "Join",
     blurb: "Company profile tabs, job-board style",
-    swatch: { bg: "#ffffff", accent: "#18181b", ink: "#e4e4e7" },
+    swatch: { bg: "#ecf8f4", accent: "#0f9b7a", ink: "#c3e6db" },
     headline: true,
     subhead: true,
     showHeadline: true,
@@ -200,7 +200,7 @@ export const TEMPLATE_CAPABILITIES: Record<CareerTemplate, TemplateCapabilities>
   showcase: {
     label: "Showcase",
     blurb: "Editorial hero, stats, benefits, filterable jobs",
-    swatch: { bg: "#f5f5f4", accent: "#B8F04A", ink: "#e7e5e4" },
+    swatch: { bg: "#f6f9ea", accent: "#a6e22e", ink: "#dbe6bd" },
     headline: true,
     subhead: true,
     showHeadline: false,

@@ -174,7 +174,7 @@ export function InboxList({ items }: { items: NotificationItem[] }) {
 
   return (
     <div className="space-y-3">
-      <div className="flex items-center justify-between gap-3">
+      <div className="flex flex-wrap items-center justify-between gap-2 sm:gap-3">
         <div role="tablist" aria-label="Filter notifications" className="flex items-center gap-1.5">
           {(
             [
@@ -302,7 +302,7 @@ export function InboxList({ items }: { items: NotificationItem[] }) {
                   <Button
                     size="icon"
                     variant="ghost"
-                    className="size-8 shrink-0 opacity-0 transition-opacity group-hover:opacity-100 data-[state=open]:opacity-100"
+                    className="size-8 shrink-0 max-md:opacity-100 opacity-0 transition-opacity group-hover:opacity-100 data-[state=open]:opacity-100"
                   >
                     <EllipsisVertical className="size-4" />
                     <span className="sr-only">Actions</span>

@@ -197,7 +197,7 @@ export function OfferDrawer({
             </div>
           ) : null}
 
-          <div className="grid grid-cols-[1fr_6rem_7.5rem] gap-2">
+          <div className="grid grid-cols-[minmax(0,1fr)_5rem] gap-2 sm:grid-cols-[minmax(0,1fr)_6rem_7.5rem] [&>:nth-child(3)]:col-span-2 sm:[&>:nth-child(3)]:col-span-1">
             <div className="space-y-2">
               <Label htmlFor="offer-salary">Salary</Label>
               <Input

@@ -446,7 +446,7 @@ export function DocumentDetailView({
         </Callout>
       ) : null}
 
-      <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_22rem] lg:grid-rows-[auto_1fr]">
+      <div className="grid grid-cols-1 gap-5 lg:grid-cols-[minmax(0,1fr)_22rem] lg:grid-rows-[auto_1fr]">
         <div className="lg:col-start-2 lg:row-start-1">
           <SignatureStatusCard
             data={data}

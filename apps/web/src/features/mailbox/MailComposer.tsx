@@ -287,7 +287,7 @@ export function MailComposer({
         <span className="min-w-0 flex-1 truncate rounded-full bg-card-inset px-2.5 py-1 font-medium text-near-ink">{to}</span>
         {templates.length ? (
           <Select value="" onValueChange={applyTemplate}>
-            <SelectTrigger size="sm" className="w-40 shrink-0" aria-label="Insert a template"><SelectValue placeholder="Templates" /></SelectTrigger>
+            <SelectTrigger size="sm" className="w-32 shrink-0 sm:w-40" aria-label="Insert a template"><SelectValue placeholder="Templates" /></SelectTrigger>
             <SelectContent>
               {templates.map((template) => <SelectItem key={template.id} value={template.id}>{template.name}</SelectItem>)}
             </SelectContent>

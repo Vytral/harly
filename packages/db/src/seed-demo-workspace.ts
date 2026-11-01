@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { mkdir, writeFile, rm } from "node:fs/promises";
 import path from "node:path";
 
@@ -5,6 +6,7 @@ import { eq } from "drizzle-orm";
 import type postgres from "postgres";
 
 import { createDatabaseClient, schema } from "./index";
+import { SYNTRIX_NDA_PDF_BASE64, SYNTRIX_OFFER_LETTER_PDF_BASE64 } from "./seed-demo-documents";
 import { buildResumeLines, linesToPdf } from "./fake-resumes";
 import { DEFAULT_PIPELINE_STAGES, defaultStageRows } from "./stage-kind";
 
@@ -64,7 +66,7 @@ const DEMO_CAREER_PAGE_CONFIG = {
     overlayTo: null,
     overlayFrom: null,
     logoPosition: "center",
-    showHeadline: false,
+    showHeadline: true,
     bannerEnabled: true,
     ctaButtonText: "View jobs",
     bannerLogoDark: null,
@@ -1437,6 +1439,53 @@ export async function seedDemoWorkspace(options: SeedDemoOptions): Promise<SeedD
         createdAt: iv.status === "completed" ? iv.when : daysAgo(1 + (iv.c % 3)),
       });
       interviewCount++;
+    }
+
+    // ── Documents ready to sign (Offer-stage candidate) ──
+    // Key shape matches isWorkspaceStorageKey(workspaceId, key, "documents"); the
+    // LocalAdapter reads it from <uploads root>/<key>, and the workspace uploads
+    // dir is purged on every reseed so the blobs never outlive their rows.
+    const SIGNABLE_DOCS = [
+      { name: "Syntrix LLC — NDA", originalName: "Syntrix_LLC_NDA_TEST.pdf", slug: "syntrix-nda", base64: SYNTRIX_NDA_PDF_BASE64 },
+      { name: "Syntrix LLC — Offer letter", originalName: "Syntrix_LLC_Offer_Letter_TEST.pdf", slug: "syntrix-offer-letter", base64: SYNTRIX_OFFER_LETTER_PDF_BASE64 },
+    ];
+    for (const doc of SIGNABLE_DOCS) {
+      const bytes = Buffer.from(doc.base64, "base64");
+      const checksum = createHash("sha256").update(bytes).digest("hex");
+      const storageKey = `workspaces/${workspaceId}/documents/seed-${doc.slug}/${doc.originalName}`;
+      const absolute = path.join(webUploadsRoot, storageKey);
+      await mkdir(path.dirname(absolute), { recursive: true });
+      await writeFile(absolute, bytes);
+      const [document] = await db
+        .insert(schema.documents)
+        .values({
+          workspaceId,
+          name: doc.name,
+          originalName: doc.originalName,
+          mimeType: "application/pdf",
+          sizeBytes: bytes.byteLength,
+          checksum,
+          storageKey,
+          ownerId: user.id,
+          createdById: user.id,
+        })
+        .returning({ id: schema.documents.id });
+      await db.insert(schema.documentVersions).values({
+        workspaceId,
+        documentId: document.id,
+        versionNumber: 1,
+        storageKey,
+        sizeBytes: bytes.byteLength,
+        checksum,
+        uploadedById: user.id,
+      });
+      await db.insert(schema.documentAssociations).values({
+        workspaceId,
+        documentId: document.id,
+        targetType: "candidate",
+        targetId: candidateIds[0], // Ava Thompson, Offer stage
+        createdById: user.id,
+      });
     }
 
     // ── Tasks ──

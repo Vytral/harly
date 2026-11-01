@@ -41,7 +41,7 @@ export function InboxNewThreadSheet({
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent side="bottom" className="mx-auto max-h-[90vh] w-full overflow-y-auto sm:max-w-2xl sm:rounded-t-xl">
+      <SheetContent side="bottom" className="mx-auto max-h-[90dvh] w-full overflow-y-auto sm:max-w-2xl sm:rounded-t-xl">
         <SheetHeader>
           <SheetTitle>{recipient ? `New email to ${recipient.name}` : "New email"}</SheetTitle>
           <SheetDescription className="sr-only">Start a new conversation with a candidate.</SheetDescription>

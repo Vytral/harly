@@ -83,7 +83,7 @@ function SettingRow({
           align === "center" ? "sm:items-center" : "sm:items-start",
         )}
       >
-        <div className="flex min-w-0 flex-1 items-start gap-3">
+        <div className="flex min-w-0 flex-1 items-start gap-3 [overflow-wrap:anywhere]">
         {icon ? (
           <span
             aria-hidden="true"
@@ -108,7 +108,7 @@ function SettingRow({
         </div>
         </div>
         {control ? (
-          <div className="flex shrink-0 items-center gap-2 sm:justify-end">{control}</div>
+          <div className="flex min-w-0 max-w-full flex-wrap items-center gap-2 sm:shrink-0 sm:flex-nowrap sm:justify-end">{control}</div>
         ) : null}
       </div>
       {React.Children.toArray(children).length > 0 ? (

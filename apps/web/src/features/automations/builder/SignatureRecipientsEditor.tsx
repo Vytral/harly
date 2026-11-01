@@ -78,7 +78,7 @@ export function SignatureRecipientsEditor({
               <TrashIcon className="size-3.5" />
             </button>
           </div>
-          <div className="grid gap-1.5 sm:grid-cols-2">
+          <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-2">
             <input
               aria-label={`Signer ${index + 1} name`}
               value={recipient.name}

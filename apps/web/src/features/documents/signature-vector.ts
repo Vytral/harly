@@ -114,6 +114,12 @@ async function defaultExtractor(): Promise<VectorExtractor> {
 export async function serverVectorExtractor(): Promise<VectorExtractor> {
   // Non-literal specifier so the client bundle does not pull this Node build.
   // Turbopack otherwise rewrites its import.meta.url to file:/// and Firefox blocks it.
+  // The legacy build still runs `new DOMMatrix()` at module top-level and
+  // polyfills it only from @napi-rs/canvas, which the image does not ship.
+  // SignatureExtractor never uses it, so an inert stub is enough to load.
+  if (!("DOMMatrix" in globalThis)) {
+    (globalThis as Record<string, unknown>).DOMMatrix = class DOMMatrix {};
+  }
   const specifier = ["pdfjs-dist", "legacy/build/pdf.mjs"].join("/");
   const m = await import(/* webpackIgnore: true */ specifier);
   return (m as unknown as { SignatureExtractor: VectorExtractor }).SignatureExtractor;

@@ -379,7 +379,7 @@ export function LoginForm({
               value={email}
               onChange={(e) => { setEmail(e.target.value); setError(null); }}
               placeholder="you@company.com"
-              className="auth-field mt-2 w-full border-0 border-b border-input bg-transparent pb-2.5 text-sm text-foreground outline-none transition-colors placeholder:text-muted-foreground focus:border-ring"
+              className="auth-field mt-2 w-full border-0 border-b border-input bg-transparent pb-2.5 text-base md:text-sm text-foreground outline-none transition-colors placeholder:text-muted-foreground focus:border-ring"
             />
           </div>
 
@@ -407,7 +407,7 @@ export function LoginForm({
                 value={password}
                 onChange={(e) => { setPassword(e.target.value); setError(null); }}
                 placeholder="Your password"
-                className="auth-field w-full border-0 border-b border-input bg-transparent pb-2.5 pr-10 text-sm text-foreground outline-none transition-colors placeholder:text-muted-foreground focus:border-ring"
+                className="auth-field w-full border-0 border-b border-input bg-transparent pb-2.5 pr-10 text-base md:text-sm text-foreground outline-none transition-colors placeholder:text-muted-foreground focus:border-ring"
               />
               <button
                 type="button"
@@ -448,7 +448,7 @@ export function LoginForm({
               value={email}
               onChange={(e) => { setEmail(e.target.value); setError(null); }}
               placeholder="you@company.com"
-              className="auth-field mt-2 w-full border-0 border-b border-input bg-transparent pb-2.5 text-sm text-foreground outline-none transition-colors placeholder:text-muted-foreground focus:border-ring"
+              className="auth-field mt-2 w-full border-0 border-b border-input bg-transparent pb-2.5 text-base md:text-sm text-foreground outline-none transition-colors placeholder:text-muted-foreground focus:border-ring"
             />
             <p className="mt-2 text-xs text-muted-foreground">
               Sign in with your organization&apos;s single sign-on.
@@ -509,7 +509,7 @@ export function LoginForm({
                     required
                     value={legacyPasskeyEmail}
                     onChange={(event) => setLegacyPasskeyEmail(event.target.value)}
-                    className="auth-field w-full border-0 border-b border-input bg-transparent pb-2 text-sm text-foreground outline-none focus:border-ring"
+                    className="auth-field w-full border-0 border-b border-input bg-transparent pb-2 text-base md:text-sm text-foreground outline-none focus:border-ring"
                   />
                   <p className="text-xs text-muted-foreground">
                     This is for passkeys registered before discoverable sign-in was required.

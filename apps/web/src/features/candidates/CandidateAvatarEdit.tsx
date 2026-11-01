@@ -182,7 +182,7 @@ export function CandidateAvatarEdit({
       {/* Photo preview dialog */}
       {displaySrc ? (
         <Dialog open={viewOpen} onOpenChange={setViewOpen}>
-          <DialogContent className="max-w-sm p-2">
+          <DialogContent className="max-w-[min(24rem,calc(100%-2rem))] p-2">
             <DialogTitle className="sr-only">{name}</DialogTitle>
             <DialogDescription className="sr-only">Photo of {name}</DialogDescription>
             {/* eslint-disable-next-line @next/next/no-img-element */}

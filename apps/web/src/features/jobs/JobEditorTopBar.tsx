@@ -63,7 +63,7 @@ export function JobEditorTopBar({
                   <ChevronDown className="size-3.5 shrink-0 text-muted-foreground" />
                 </button>
               </PopoverTrigger>
-              <PopoverContent align="center" className="w-64 space-y-1.5">
+              <PopoverContent align="center" className="w-64 max-w-[calc(100vw-2rem)] space-y-1.5">
                 {railActions}
               </PopoverContent>
             </Popover>

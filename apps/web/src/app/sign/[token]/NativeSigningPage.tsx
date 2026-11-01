@@ -324,7 +324,7 @@ export function NativeSigningPage({ token }: { token: string }) {
         {otpCard}
 
         {unlockedOnce ? (
-          <div className={`grid gap-5 lg:grid-cols-[minmax(0,1fr)_360px] ${needsOtp ? "hidden" : ""}`}>
+          <div className={`grid grid-cols-[minmax(0,1fr)] gap-5 lg:grid-cols-[minmax(0,1fr)_360px] ${needsOtp ? "hidden" : ""}`}>
             <div className="min-h-0 rounded-[var(--radius-card)] bg-card-inset p-2 sm:p-4">
               {fieldsError ? (
                 <div className="space-y-3 p-6 text-center" role="alert">

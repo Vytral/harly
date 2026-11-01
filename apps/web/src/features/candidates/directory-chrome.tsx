@@ -71,16 +71,16 @@ export function DirectoryTabs({
   label: string;
 }) {
   return (
-    <nav aria-label={label} className="flex gap-6 border-b border-hairline">
+    <nav aria-label={label} className="scrollbar-hide flex gap-6 border-b border-hairline max-sm:overflow-x-auto">
       {items.map((item) => (
         <Link
           key={item.href}
           href={item.href as Route}
           aria-current={item.active ? "page" : undefined}
           className={cn(
-            "relative -mb-px flex items-center gap-1.5 rounded-sm pb-3 text-[14px] font-medium outline-none transition-colors",
+            "relative -mb-px flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-sm pb-3 max-sm:mb-0 text-[14px] font-medium outline-none transition-colors",
             "focus-visible:ring-2 focus-visible:ring-near-ink focus-visible:ring-offset-2 focus-visible:ring-offset-background",
-            "after:absolute after:inset-x-0 after:-bottom-px after:h-0.5 after:rounded-full after:transition-colors",
+            "after:absolute after:inset-x-0 after:-bottom-px max-sm:after:bottom-0 after:h-0.5 after:rounded-full after:transition-colors",
             item.active
               ? "text-near-ink after:bg-near-ink"
               : "text-soft-ink after:bg-transparent hover:text-near-ink",
@@ -199,7 +199,7 @@ export function SearchPill({
         }}
         placeholder={placeholder}
         aria-label={label}
-        className="h-9 rounded-full border-mist-border bg-card pl-10 text-[13px] shadow-none"
+        className="h-9 rounded-full border-mist-border bg-card pl-10 text-base shadow-none sm:text-[13px]"
       />
     </div>
   );

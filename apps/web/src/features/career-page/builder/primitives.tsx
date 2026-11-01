@@ -636,7 +636,7 @@ export function IconSelect({
               onChange={(e) => setQuery(e.target.value)}
               placeholder="Search icons"
               aria-label="Search icons"
-              className="w-full bg-transparent text-sm text-near-ink outline-none placeholder:text-quiet-mist"
+              className="w-full bg-transparent text-base sm:text-sm text-near-ink outline-none placeholder:text-quiet-mist"
             />
           </div>
           <div className="mt-2 grid max-h-48 grid-cols-6 gap-1 overflow-y-auto">

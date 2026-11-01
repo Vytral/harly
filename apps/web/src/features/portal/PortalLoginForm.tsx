@@ -174,7 +174,7 @@ export function PortalLoginForm({
           autoComplete="email"
           className={cn(
             "h-11 w-full rounded-xl border border-border",
-            "bg-card px-3.5 text-sm text-foreground",
+            "bg-card px-3.5 text-base sm:text-sm text-foreground",
             "placeholder:text-muted-foreground",
             "outline-none focus:ring-2 focus:ring-ring focus:border-transparent",
             "transition-shadow",

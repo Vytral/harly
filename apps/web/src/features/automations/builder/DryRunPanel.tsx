@@ -889,7 +889,7 @@ function FixtureEditor({
         </div>
       </div>
       {value?.status === "succeeded" ? (
-        <div className="mt-3 grid gap-2 md:grid-cols-[minmax(0,1fr)_180px]">
+        <div className="mt-3 grid grid-cols-1 gap-2 md:grid-cols-[minmax(0,1fr)_180px]">
           <label className="block">
             <span className="mb-1 block text-[11px] font-medium text-soft-ink">
               Result payload (JSON)
@@ -923,7 +923,7 @@ function FixtureEditor({
           </label>
         </div>
       ) : value ? (
-        <div className="mt-3 grid gap-2 md:grid-cols-[minmax(0,1fr)_auto]">
+        <div className="mt-3 grid grid-cols-1 gap-2 md:grid-cols-[minmax(0,1fr)_auto]">
           <label className="block">
             <span className="mb-1 block text-[11px] font-medium text-soft-ink">
               {value.status === "failed" ? "Error code" : "Uncertainty code"}

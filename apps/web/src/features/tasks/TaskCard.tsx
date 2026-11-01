@@ -45,7 +45,7 @@ export function TaskMenu({ task, handlers }: { task: TaskItem; handlers: TaskHan
           type="button"
           aria-label="Task actions"
           onPointerDown={(e) => e.stopPropagation()}
-          className="rounded-md p-1 text-muted-foreground opacity-0 transition hover:bg-muted hover:text-foreground focus-visible:opacity-100 group-hover:opacity-100"
+          className="rounded-md p-1 text-muted-foreground max-md:opacity-100 opacity-0 transition hover:bg-muted hover:text-foreground focus-visible:opacity-100 group-hover:opacity-100"
         >
           <MoreHorizontal className="size-4" />
         </button>
@@ -173,7 +173,7 @@ export function TaskCardView({
         </p>
 
         {withHandle && (
-          <GripVertical className="mt-0.5 size-4 shrink-0 text-muted-foreground/40 opacity-0 transition group-hover:opacity-100" />
+          <GripVertical className="mt-0.5 size-4 shrink-0 text-muted-foreground/40 max-md:opacity-100 opacity-0 transition group-hover:opacity-100" />
         )}
         {handlers && <TaskMenu task={task} handlers={handlers} />}
       </div>
