@@ -19,6 +19,8 @@ type Props = {
   onChange?: (html: string) => void;
   /** Expose a ref-like handle so parents can insert text at the cursor. */
   editorRef?: React.RefObject<EditorHandle | null>;
+  /** Focus the editor (cursor at the end) as soon as it mounts. */
+  autoFocus?: boolean;
 };
 
 export function RichTextEditor({
@@ -28,6 +30,7 @@ export function RichTextEditor({
   minHeight = "8rem",
   onChange,
   editorRef,
+  autoFocus = false,
 }: Props) {
   const initial = defaultValue && defaultValue !== "<p></p>" ? defaultValue : "";
   const hiddenRef = useRef<HTMLInputElement>(null);
@@ -46,6 +49,7 @@ export function RichTextEditor({
     ],
     content: initial,
     immediatelyRender: false,
+    autofocus: autoFocus ? "end" : false,
     editorProps: {
       attributes: { style: `min-height: ${minHeight}` },
     },

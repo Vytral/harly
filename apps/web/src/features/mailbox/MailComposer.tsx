@@ -98,6 +98,8 @@ export function MailComposer({
   disabled = false,
   footerNote,
   onCancel,
+  autoFocus = false,
+  editorMinHeight = "7rem",
 }: {
   to: string;
   defaultSubject?: string;
@@ -122,6 +124,9 @@ export function MailComposer({
   disabled?: boolean;
   footerNote?: string;
   onCancel?: () => void;
+  /** Focus the message body on mount (inline reply opened from the thread). */
+  autoFocus?: boolean;
+  editorMinHeight?: string;
 }) {
   const [subject, setSubject] = useState(defaultSubject);
   const [html, setHtml] = useState(() => normalizeBody(defaultBody));
@@ -263,14 +268,26 @@ export function MailComposer({
     await submit(idempotencyKeyRef.current);
   }
 
+  function handleKeyDown(event: React.KeyboardEvent<HTMLDivElement>) {
+    // Cmd/Ctrl+Enter sends, Escape closes an empty composer. Both are scoped to
+    // this composer, so they never fire from elsewhere on the page.
+    if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) {
+      event.preventDefault();
+      void handleSend();
+    } else if (event.key === "Escape" && !text && !attachments.length && onCancel && !event.defaultPrevented) {
+      event.stopPropagation();
+      onCancel();
+    }
+  }
+
   return (
-    <div className="flex flex-col gap-2.5">
-      <div className="flex items-center gap-1.5 text-[13px]">
-        <span className="w-8 shrink-0 text-muted-foreground">To</span>
-        <span className="min-w-0 flex-1 truncate font-medium text-foreground">{to}</span>
+    <div className="flex flex-col gap-2.5" onKeyDown={handleKeyDown}>
+      <div className="flex items-center gap-2 text-[13px]">
+        <span className="w-8 shrink-0 text-soft-ink">To</span>
+        <span className="min-w-0 flex-1 truncate rounded-full bg-card-inset px-2.5 py-1 font-medium text-near-ink">{to}</span>
         {templates.length ? (
-          <Select onValueChange={applyTemplate}>
-            <SelectTrigger size="sm" className="w-40 shrink-0"><SelectValue placeholder="Template" /></SelectTrigger>
+          <Select value="" onValueChange={applyTemplate}>
+            <SelectTrigger size="sm" className="w-40 shrink-0" aria-label="Insert a template"><SelectValue placeholder="Templates" /></SelectTrigger>
             <SelectContent>
               {templates.map((template) => <SelectItem key={template.id} value={template.id}>{template.name}</SelectItem>)}
             </SelectContent>
@@ -292,12 +309,12 @@ export function MailComposer({
         </div>
       ) : null}
 
-      <RichTextEditor key={editorKey} defaultValue={editorInitial} placeholder={placeholder} minHeight="7rem" onChange={setHtml} />
+      <RichTextEditor key={editorKey} defaultValue={editorInitial} placeholder={placeholder} minHeight={editorMinHeight} onChange={setHtml} autoFocus={autoFocus} />
 
       {attachments.length ? (
         <ul className="flex flex-wrap gap-1.5">
           {attachments.map((file) => (
-            <li key={file.id} className="flex items-center gap-1.5 rounded-md border border-border/70 bg-muted/40 py-1 pl-2 pr-1 text-xs">
+            <li key={file.id} className="flex items-center gap-1.5 rounded-full bg-card-inset py-1 pl-2.5 pr-1 text-xs">
               <Paperclip className="size-3.5 shrink-0 text-muted-foreground" />
               <span className="max-w-40 truncate font-medium" title={file.filename}>{file.filename}</span>
               <span className="text-muted-foreground">{formatSize(file.size)}</span>
@@ -341,7 +358,7 @@ export function MailComposer({
       {error ? <p role="alert" className="text-sm text-destructive">{error}</p> : null}
       {note ? <p role="status" className="text-sm text-muted-foreground">{note}</p> : null}
 
-      <div className="flex items-center gap-2">
+      <div className="flex flex-wrap items-center gap-2">
         <input ref={fileRef} type="file" multiple hidden onChange={(event) => void addFiles(event.target.files)} />
         <Button type="button" variant="ghost" size="icon-sm" onClick={() => fileRef.current?.click()} disabled={sending} aria-label="Attach files">
           <Paperclip className="size-4" />
@@ -354,6 +371,7 @@ export function MailComposer({
         ) : null}
         <div className="ml-auto flex items-center gap-2">
           {footerNote ? <span className="text-[11px] text-muted-foreground">{footerNote}</span> : null}
+          <span className="hidden text-[11px] text-quiet-mist sm:inline">⌘↵ to send</span>
           {onCancel ? (
             <Button type="button" variant="ghost" size="sm" onClick={onCancel} disabled={sending}>Cancel</Button>
           ) : null}

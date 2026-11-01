@@ -39,3 +39,25 @@ export function matchesInboxFilter(thread: InboxThread, filter: InboxFilter, cur
       return thread.status === "archived";
   }
 }
+
+/** Filters shown as tabs; the rest live behind "More". "Sent" has no server filter yet. */
+export const PRIMARY_INBOX_FILTERS: InboxFilter[] = ["all", "unread", "needs-reply", "assigned-to-me", "candidates", "archived"];
+export const MORE_INBOX_FILTERS: InboxFilter[] = ["replies", "unassigned", "assigned"];
+
+export function inboxFilterLabel(value: InboxFilter) {
+  return inboxFilters.find(([key]) => key === value)?.[1] ?? "All";
+}
+
+/** Display name for whoever the thread is with. */
+export function threadPersonName(thread: Pick<InboxThread, "candidateName" | "participantEmail">) {
+  return thread.candidateName ?? thread.participantEmail ?? "Unknown sender";
+}
+
+/** Plain-text search over what the list already holds (subject, person, messages). */
+export function threadMatchesQuery(thread: InboxThread, query: string) {
+  const needle = query.trim().toLocaleLowerCase();
+  if (!needle) return true;
+  return [thread.subject, thread.participantEmail, thread.candidateName, thread.jobTitle, thread.preview, thread.searchText].some(
+    (value) => (value ?? "").toLocaleLowerCase().includes(needle),
+  );
+}

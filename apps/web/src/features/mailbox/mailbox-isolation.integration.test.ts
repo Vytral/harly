@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 
 const context = vi.hoisted(() => ({
@@ -249,6 +249,14 @@ integration("Inbox tenant and active-job isolation", () => {
         workspaceId: context.workspaceId,
       }),
     ).resolves.toMatchObject({ filename: "active.pdf" });
+    // A role-scope predicate that hides the thread hides its attachments too.
+    await expect(
+      getWorkspaceMailboxAttachment({
+        attachmentId: activeAttachmentId,
+        workspaceId: context.workspaceId,
+        threadScope: sql`false`,
+      }),
+    ).resolves.toBeNull();
     await expect(
       getWorkspaceMailboxAttachment({
         attachmentId: deletedAttachmentId,

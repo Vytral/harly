@@ -141,11 +141,18 @@ describe("shouldHandleKeyEvent", () => {
 
 describe("catalog", () => {
   it("has no duplicate bindings and no binding that is a prefix of another", () => {
-    const keys = Object.values(SHORTCUTS).map((s) => s.keys);
-    expect(new Set(keys).size).toBe(keys.length);
-    for (const a of keys) {
-      for (const b of keys) {
-        if (a !== b) expect(b.startsWith(`${a} `)).toBe(false);
+    // Page-scoped groups are never mounted together, so they may reuse a key
+    // (j/k move through a list on both the candidate page and the inbox).
+    const pageGroups = new Set<string>(["Candidate page", "Inbox"]);
+    const defs = Object.values(SHORTCUTS);
+    const scopes = ["global", ...pageGroups];
+    for (const scope of scopes) {
+      const keys = defs.filter((s) => s.group === scope || !pageGroups.has(s.group)).map((s) => s.keys);
+      expect(new Set(keys).size).toBe(keys.length);
+      for (const a of keys) {
+        for (const b of keys) {
+          if (a !== b) expect(b.startsWith(`${a} `)).toBe(false);
+        }
       }
     }
   });

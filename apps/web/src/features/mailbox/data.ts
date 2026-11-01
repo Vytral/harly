@@ -120,7 +120,7 @@ export function normalizeInboxFilter(value: string | undefined): InboxFilter {
  * unassigned thread is never exposed to a scoped role. Unrestricted actors get
  * no predicate and see every thread, as before.
  */
-function mailThreadScopeSql(actor: WorkspaceSearchActor): SQL | undefined {
+export function mailThreadScopeSql(actor: WorkspaceSearchActor): SQL | undefined {
   if (isUnrestrictedScope(actor.scope)) return undefined;
   const scopedJob = jobScopeSql(actor);
   const applicationInScope = sql`exists (select 1 from ${applications} inner join ${jobs} on ${jobs.id} = ${applications.jobId} where ${applications.id} = ${mailThreads.applicationId} and ${applications.workspaceId} = ${actor.workspaceId} and ${jobs.workspaceId} = ${actor.workspaceId} and ${jobs.deletedAt} is null and ${scopedJob})`;
@@ -132,6 +132,35 @@ function mailThreadScopeSql(actor: WorkspaceSearchActor): SQL | undefined {
     ),
     and(isNull(mailThreads.candidateId), eq(mailThreads.ownerId, actor.userId)),
   );
+}
+
+/**
+ * The status/filter predicates behind each Inbox tab. Shared with the MCP
+ * inbox tools so a tab and its tool always agree on what a filter means.
+ * Expects the candidate join (`candidates`) to be present in the query.
+ */
+export function inboxFilterConditions(filter: InboxFilter, currentUserId: string): Array<SQL | undefined> {
+  return [
+    filter === "archived"
+      ? eq(mailThreads.status, "archived")
+      : filter === "unassigned"
+        ? and(eq(mailThreads.status, "open"), isNull(candidates.id))
+        : eq(mailThreads.status, "open"),
+    filter === "unread" ? sql`${mailThreads.unreadCount} > 0` : undefined,
+    filter === "candidates" ? isNotNull(candidates.id) : undefined,
+    filter === "assigned" || filter === "assigned-to-me" ? isNotNull(mailThreads.ownerId) : undefined,
+    filter === "assigned-to-me" ? eq(mailThreads.ownerId, currentUserId) : undefined,
+    filter === "replies"
+      ? sql`exists (select 1 from mail_messages reply where reply.thread_id = ${mailThreads.id} and reply.direction = 'inbound')`
+      : undefined,
+    filter === "needs-reply"
+      ? sql`(
+        select mm.direction from mail_messages mm
+        where mm.thread_id = ${mailThreads.id}
+        order by mm.received_at desc limit 1
+      ) = 'inbound'`
+      : undefined,
+  ];
 }
 
 export async function getInboxData(input: {
@@ -165,25 +194,7 @@ export async function getInboxData(input: {
   const threadWhere = and(
     eq(mailThreads.workspaceId, organization.id),
     activeCandidateLink,
-    filter === "archived"
-      ? eq(mailThreads.status, "archived")
-      : filter === "unassigned"
-        ? and(eq(mailThreads.status, "open"), isNull(candidates.id))
-        : eq(mailThreads.status, "open"),
-    filter === "unread" ? sql`${mailThreads.unreadCount} > 0` : undefined,
-    filter === "candidates" ? isNotNull(candidates.id) : undefined,
-    filter === "assigned" || filter === "assigned-to-me" ? isNotNull(mailThreads.ownerId) : undefined,
-    filter === "assigned-to-me" ? eq(mailThreads.ownerId, currentUser.id) : undefined,
-    filter === "replies"
-      ? sql`exists (select 1 from mail_messages reply where reply.thread_id = ${mailThreads.id} and reply.direction = 'inbound')`
-      : undefined,
-    filter === "needs-reply"
-      ? sql`(
-        select mm.direction from mail_messages mm
-        where mm.thread_id = ${mailThreads.id}
-        order by mm.received_at desc limit 1
-      ) = 'inbound'`
-      : undefined,
+    ...inboxFilterConditions(filter, currentUser.id),
   );
 
   const [threadRows, memberRows, candidateRows, applicationRows, mailboxRows, inboundStatus, sender] = await Promise.all([

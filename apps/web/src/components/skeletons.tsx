@@ -646,63 +646,60 @@ export function AtAGlanceSkeleton({ className }: { className?: string }) {
   );
 }
 
-/** Inbox workspace card: command bar, people pane, thread pane, side pane. */
+/** Inbox workspace card: conversation list, reader, side pane (mirrors RecruitingInbox). */
 export function InboxSkeleton() {
-  const pills = ["w-14", "w-24", "w-[4.5rem]", "w-28", "w-[5.5rem]", "w-[4.5rem]"];
+  const pills = ["w-12", "w-[4.5rem]", "w-24", "w-28", "w-[5.5rem]"];
   return (
     <SkeletonRegion>
       <div className="flex h-[calc(100dvh-15rem)] min-h-[34rem] min-w-0 flex-col overflow-hidden rounded-[var(--radius-card)] bg-card shadow-[var(--shadow-card)]">
-        {/* Command bar: search, filter pills (sm+), refresh. */}
-        <div className="flex min-h-14 items-center gap-3 border-b border-hairline px-4 py-2.5">
-          <Skeleton className="h-9 w-full shrink-0 rounded-full lg:w-[328px]" />
-          <div className="ml-auto hidden items-center gap-1 sm:flex">
-            {pills.map((width, i) => (
-              <Skeleton key={i} className={cn("h-8 shrink-0 rounded-full", width)} />
-            ))}
-          </div>
-          <Skeleton className="size-8 shrink-0 rounded-[var(--radius-btn)]" />
-        </div>
-
         <div className="relative flex min-h-0 flex-1 overflow-hidden">
-          {/* People pane: full width on phones, 280px on lg. */}
-          <div className="min-h-0 w-full shrink-0 border-r border-hairline bg-card lg:w-[280px]">
-            <div className="flex items-center justify-between gap-2 border-b border-hairline px-4 py-2.5">
-              <Skeleton className="h-3 w-16" />
-              <Skeleton className="h-3 w-4" />
+          {/* Conversation list: search, filter pills, rows. Full width on phones. */}
+          <div className="min-h-0 w-full shrink-0 border-r border-hairline bg-card lg:w-[340px] xl:w-[360px]">
+            <div className="space-y-2.5 border-b border-hairline px-3 py-3">
+              <div className="flex items-center gap-1.5">
+                <Skeleton className="h-9 flex-1 rounded-full" />
+                <Skeleton className="size-8 shrink-0 rounded-[var(--radius-btn)]" />
+              </div>
+              <div className="flex items-center gap-1.5 overflow-hidden">
+                {pills.map((width, i) => (
+                  <Skeleton key={i} className={cn("h-8 shrink-0 rounded-full", width)} />
+                ))}
+              </div>
             </div>
             <ul className="px-2 py-1">
-              {Array.from({ length: 8 }).map((_, i) => (
-                <li key={i} className="flex items-center gap-3 rounded-[var(--radius-md)] px-3 py-2.5">
+              {Array.from({ length: 6 }).map((_, i) => (
+                <li key={i} className="flex items-start gap-3 rounded-[var(--radius-inner)] px-3 py-3">
                   <Skeleton className="size-9 shrink-0 rounded-full" />
                   <div className="min-w-0 flex-1 space-y-1.5">
                     <Skeleton className="h-3.5 w-32" />
                     <Skeleton className="h-3 w-44 max-w-full" />
+                    <Skeleton className="h-3 w-24" />
                   </div>
                 </li>
               ))}
             </ul>
           </div>
 
-          {/* Thread / conversation pane. */}
+          {/* Reader. */}
           <div className="hidden min-h-0 min-w-0 flex-1 bg-card lg:block">
-            <div className="border-b border-hairline px-5 py-3.5">
-              <Skeleton className="h-4 w-36" />
-              <Skeleton className="mt-2 h-3 w-28" />
+            <div className="flex items-center gap-3 border-b border-hairline px-5 py-3.5">
+              <Skeleton className="size-9 rounded-full" />
+              <div className="space-y-2">
+                <Skeleton className="h-4 w-48" />
+                <Skeleton className="h-3 w-32" />
+              </div>
             </div>
-            <div className="space-y-5 px-5 py-4">
-              {Array.from({ length: 5 }).map((_, i) => (
-                <div key={i} className="space-y-2">
-                  <Skeleton className="h-3 w-48" />
-                  <Skeleton className="h-3 w-full max-w-[22rem]" />
-                </div>
-              ))}
+            <div className="space-y-4 px-5 py-5">
+              <Skeleton className="h-16 w-[70%] rounded-[var(--radius-card)]" />
+              <Skeleton className="ml-auto h-12 w-[55%] rounded-[var(--radius-card)]" />
+              <Skeleton className="h-20 w-[75%] rounded-[var(--radius-card)]" />
             </div>
           </div>
 
           {/* Side pane: candidate details and actions. */}
-          <aside className="hidden min-h-0 shrink-0 border-l border-hairline bg-card-inset/50 p-4 lg:block lg:w-[300px] xl:w-[320px]">
+          <aside className="hidden min-h-0 w-[300px] shrink-0 border-l border-hairline bg-card-inset/50 p-4 xl:block">
             <div className="space-y-3">
-              <Skeleton className="h-24 w-full rounded-[var(--radius-inner)]" />
+              <Skeleton className="h-32 w-full rounded-[var(--radius-card)]" />
               <Skeleton className="h-9 w-full rounded-[var(--radius-btn)]" />
               <Skeleton className="h-9 w-full rounded-[var(--radius-btn)]" />
             </div>

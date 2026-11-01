@@ -4,7 +4,7 @@
  * list, so what is documented and what is bound can never drift apart.
  */
 
-export type ShortcutGroup = "General" | "Go to" | "Candidate page";
+export type ShortcutGroup = "General" | "Go to" | "Candidate page" | "Inbox";
 
 export type ShortcutDef = {
   /** Space-separated sequence, matched on KeyboardEvent.key ("g h", "?"). */
@@ -31,11 +31,16 @@ export const SHORTCUTS = {
   "candidate.reject": { keys: "r", label: "Reject candidate", group: "Candidate page" },
   "candidate.evaluate": { keys: "e", label: "Evaluate", group: "Candidate page" },
   "candidate.schedule": { keys: "s", label: "Schedule an interview", group: "Candidate page" },
+
+  "inbox.next": { keys: "j", label: "Next conversation", group: "Inbox" },
+  "inbox.prev": { keys: "k", label: "Previous conversation", group: "Inbox" },
+  "inbox.reply": { keys: "r", label: "Reply to the open conversation", group: "Inbox" },
+  "inbox.archive": { keys: "e", label: "Archive the open conversation", group: "Inbox" },
 } as const satisfies Record<string, ShortcutDef>;
 
 export type ShortcutId = keyof typeof SHORTCUTS;
 
-export const GROUP_ORDER: readonly ShortcutGroup[] = ["General", "Go to", "Candidate page"];
+export const GROUP_ORDER: readonly ShortcutGroup[] = ["General", "Go to", "Candidate page", "Inbox"];
 
 /** Reserved by the app; a catalog entry must never reuse these. */
 export const RESERVED_CHORDS = ["⌘K", "⌘J"] as const;

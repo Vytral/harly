@@ -1,26 +1,40 @@
 "use client";
 
-import { useMemo, useRef, useState, useTransition } from "react";
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore, useTransition } from "react";
 import Link from "next/link";
+import type { Route } from "next";
 import { useRouter } from "next/navigation";
 
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { EnvelopeIcon } from "@/components/ui/icons/settings";
 import {
   ArrowsClockwiseIcon,
   CaretDownIcon,
   CheckCircleIcon,
+  PlusIcon,
   SearchIcon,
   WarningCircleIcon,
 } from "@/components/ui/icons/phosphor";
+import { Kbd, useShortcut } from "@/components/dashboard/shortcuts";
+import { isOverlayOpen } from "@/components/dashboard/shortcuts/useShortcut";
+import { shouldHandleKeyEvent } from "@/components/dashboard/shortcuts/matcher";
+import { toast } from "@/lib/notification-island/toast";
 import { cn } from "@/lib/utils";
 import { InboxConversationList } from "@/features/mailbox/InboxConversationList";
-import { InboxNewThreadSheet } from "@/features/mailbox/InboxNewThreadSheet";
-import { InboxPeopleList, type InboxPerson } from "@/features/mailbox/InboxPeopleList";
+import { InboxNewThreadSheet, type InboxPerson } from "@/features/mailbox/InboxNewThreadSheet";
 import { InboxThreadReader } from "@/features/mailbox/InboxThreadReader";
 import { InboxActionsPanel } from "@/features/mailbox/InboxActionsPanel";
-import { inboxFilters, matchesInboxFilter } from "@/features/mailbox/inbox-filters";
+import {
+  MORE_INBOX_FILTERS,
+  PRIMARY_INBOX_FILTERS,
+  inboxFilterLabel,
+  matchesInboxFilter,
+  threadMatchesQuery,
+  threadPersonName,
+} from "@/features/mailbox/inbox-filters";
+import { buildInboxTemplates, type InboxTemplateSource } from "@/features/mailbox/inbox-templates";
 import type { InboxApplication, InboxCandidate, InboxFilter, InboxMailboxStatus, InboxMember, InboxMessage, InboxThread } from "@/features/mailbox/data";
 import {
   createCandidateFromMailboxThreadAction,
@@ -34,178 +48,135 @@ import {
   updateMailboxThreadAction,
 } from "@/features/mailbox/actions";
 
-const PRIMARY_FILTERS: InboxFilter[] = ["all", "needs-reply", "unread", "assigned-to-me", "archived"];
-const MORE_FILTERS: InboxFilter[] = ["replies", "unassigned", "candidates", "assigned"];
+const isDesktop = () => typeof window !== "undefined" && window.matchMedia("(min-width: 1024px)").matches;
 
-function filterLabel(value: InboxFilter) {
-  return inboxFilters.find(([key]) => key === value)?.[1] ?? "All";
+function inboxUrl(mutate: (params: URLSearchParams) => void): Route {
+  const params = new URLSearchParams(window.location.search);
+  mutate(params);
+  const query = params.toString();
+  return (query ? `/dashboard/inbox?${query}` : "/dashboard/inbox") as Route;
 }
 
-function normalizeSearch(value: string) {
-  return value.trim().toLocaleLowerCase();
-}
-
-function personKey(thread: InboxThread) {
-  if (thread.candidateId) return `candidate:${thread.candidateId}`;
-  if (thread.participantEmail) return `email:${thread.participantEmail.trim().toLocaleLowerCase()}`;
-  return `thread:${thread.id}`;
-}
-
-function personName(thread: InboxThread) {
-  return thread.candidateName ?? thread.participantEmail ?? "Unknown sender";
-}
-
-function ConnectionStrip({ status }: { status: InboxMailboxStatus }) {
+function ConnectionStrip({ status, onRetry, retrying }: { status: InboxMailboxStatus; onRetry: () => void; retrying: boolean }) {
   const conflict = status.route === "conflict";
+  const connected = status.enabled && status.configured && !conflict;
+  const syncFailed = connected && Boolean(status.lastError);
   const title = conflict
     ? "Two incoming email routes are enabled"
-    : "Incoming email is not connected yet";
+    : syncFailed
+      ? "The last mailbox sync failed"
+      : "Incoming email is not connected yet";
   const description = conflict
     ? "A shared mailbox and a webhook are both on. Choose one to avoid duplicate conversations."
-    : "Connect a shared mailbox or threaded replies so candidate messages land here.";
+    : syncFailed
+      ? "New replies may be missing. Try again, or check the mailbox in Email settings."
+      : "Connect a shared mailbox or threaded replies so candidate messages land here.";
 
   return (
     <div
-      role={conflict ? "alert" : "status"}
-      className="mx-4 mb-3 flex items-center gap-2.5 rounded-[var(--radius-inner)] bg-warning/10 px-4 py-2.5 text-xs"
+      role={conflict || syncFailed ? "alert" : "status"}
+      className="mx-3 mt-3 flex shrink-0 items-center gap-2.5 rounded-[var(--radius-inner)] bg-warning/10 px-4 py-2.5 text-xs"
     >
       <WarningCircleIcon className="size-4 shrink-0 text-warning" />
-      <p className="min-w-0 flex-1 truncate">
+      <p className="min-w-0 flex-1 sm:truncate">
         <span className="font-semibold text-foreground">{title}.</span>{" "}
         <span className="text-muted-foreground">{description}</span>
       </p>
-      <Link
-        href="/settings/email/replies"
-        className="shrink-0 font-semibold text-foreground underline underline-offset-4 hover:text-soft-ink"
-      >
+      {syncFailed ? (
+        <button type="button" onClick={onRetry} disabled={retrying} className="shrink-0 font-semibold text-foreground underline underline-offset-4 hover:text-soft-ink disabled:opacity-50">
+          {retrying ? "Retrying…" : "Retry"}
+        </button>
+      ) : null}
+      <Link href="/settings/email/replies" className="shrink-0 font-semibold text-foreground underline underline-offset-4 hover:text-soft-ink">
         Email settings
       </Link>
     </div>
   );
 }
 
-function InboxCommandBar({
+const pillBase = "inline-flex h-8 shrink-0 items-center gap-1.5 rounded-full px-3.5 text-[13px] font-medium transition-colors duration-150 active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-near-ink motion-reduce:active:scale-100";
+const pillOn = "bg-near-ink text-pure-snow";
+const pillOff = "bg-soft-kraft text-soft-ink hover:bg-row-wash hover:text-near-ink";
+
+function FilterTabs({
   filter,
-  counts,
-  query,
-  onQueryChange,
-  onFilterChange,
-  syncing,
-  onRefresh,
-  searchRef,
+  activeCount,
+  hasMore,
+  unreadTotal,
+  onChange,
 }: {
   filter: InboxFilter;
-  counts: Record<InboxFilter, number>;
-  query: string;
-  onQueryChange: (value: string) => void;
-  onFilterChange: (filter: InboxFilter) => void;
-  syncing: boolean;
-  onRefresh: () => void;
-  searchRef: React.RefObject<HTMLInputElement | null>;
+  activeCount: number;
+  hasMore: boolean;
+  unreadTotal: number | null;
+  onChange: (filter: InboxFilter) => void;
 }) {
-  const moreActive = MORE_FILTERS.includes(filter);
+  const moreActive = MORE_INBOX_FILTERS.includes(filter);
+  const [moreOpen, setMoreOpen] = useState(false);
 
-  const FilterButton = ({ value }: { value: InboxFilter }) => {
-    const isActive = filter === value;
-    const count = counts[value] ?? 0;
-    return (
-      <button
-        type="button"
-        role="tab"
-        aria-selected={isActive}
-        onClick={() => onFilterChange(value)}
-        className={cn(
-          "inline-flex h-8 shrink-0 items-center gap-1.5 rounded-full px-3.5 text-[13px] font-medium transition-colors duration-150 active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-near-ink motion-reduce:active:scale-100",
-          isActive ? "bg-near-ink text-pure-snow" : "bg-soft-kraft text-soft-ink hover:bg-row-wash hover:text-near-ink",
-        )}
-      >
-        {filterLabel(value)}
-        {count > 0 ? (
-          <span className={cn("tabular-nums", isActive ? "text-pure-snow/70" : "text-quiet-mist")}>{count}</span>
-        ) : null}
-      </button>
-    );
-  };
+  // Only the active view's count is known (the server returns one view at a
+  // time); unread has its own total. Showing a count on every tab would lie.
+  function countFor(value: InboxFilter) {
+    if (value === "unread" && unreadTotal !== null) return unreadTotal;
+    if (value === filter) return activeCount;
+    return 0;
+  }
 
   return (
-    <header className="flex min-h-14 items-center gap-3 border-b border-hairline px-4 py-2.5">
-      <label className="relative flex w-full shrink-0 items-center lg:w-[328px]">
-        <span className="sr-only">Search conversations</span>
-        <SearchIcon className="pointer-events-none absolute left-3.5 size-4 text-soft-ink" />
-        <input
-          ref={searchRef}
-          value={query}
-          onChange={(event) => onQueryChange(event.target.value)}
-          placeholder="Search mail"
-          className="h-9 w-full rounded-full border border-transparent bg-card-inset pl-9 pr-3 text-sm outline-none transition-[border-color,background-color] placeholder:text-quiet-mist hover:bg-row-wash focus:border-near-ink focus:bg-pure-snow"
-        />
-      </label>
-
-      <nav role="tablist" aria-label="Inbox filters" className="ml-auto hidden min-w-0 items-center gap-1 overflow-x-auto sm:flex [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-        {PRIMARY_FILTERS.map((value) => <FilterButton key={value} value={value} />)}
-        <Popover>
-          <PopoverTrigger asChild>
+    <nav
+      role="tablist"
+      aria-label="Inbox filters"
+      className="-mx-3 flex items-center gap-1.5 overflow-x-auto px-3 pb-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+    >
+      {PRIMARY_INBOX_FILTERS.map((value) => {
+        const active = filter === value;
+        const count = countFor(value);
+        return (
+          <button
+            key={value}
+            type="button"
+            role="tab"
+            aria-selected={active}
+            aria-controls="inbox-conversations"
+            onClick={() => onChange(value)}
+            className={cn(pillBase, active ? pillOn : pillOff)}
+          >
+            {inboxFilterLabel(value)}
+            {count > 0 ? (
+              <span className={cn("tabular-nums", active ? "text-pure-snow/70" : value === "unread" ? "font-semibold text-near-ink" : "text-quiet-mist")}>
+                {count}
+                {active && hasMore && value === filter ? "+" : ""}
+              </span>
+            ) : null}
+          </button>
+        );
+      })}
+      <Popover open={moreOpen} onOpenChange={setMoreOpen}>
+        <PopoverTrigger asChild>
+          <button type="button" className={cn(pillBase, "gap-1", moreActive ? pillOn : pillOff)} aria-label="More filters">
+            {moreActive ? inboxFilterLabel(filter) : "More"}
+            <CaretDownIcon className="size-3" />
+          </button>
+        </PopoverTrigger>
+        <PopoverContent align="start" className="w-48 p-1">
+          {MORE_INBOX_FILTERS.map((value) => (
             <button
+              key={value}
               type="button"
-              className={cn(
-                "inline-flex h-8 shrink-0 items-center gap-1 rounded-full px-3.5 text-[13px] font-medium transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-near-ink",
-                moreActive ? "bg-near-ink text-pure-snow" : "bg-soft-kraft text-soft-ink hover:bg-row-wash hover:text-near-ink",
-              )}
+              onClick={() => { setMoreOpen(false); onChange(value); }}
+              className={cn("flex w-full items-center justify-between gap-2 rounded-md px-2.5 py-1.5 text-sm transition-colors", filter === value ? "bg-lime-wash text-near-ink" : "hover:bg-row-wash")}
             >
-              {moreActive ? filterLabel(filter) : "More"}
-              <CaretDownIcon className="size-3" />
+              {inboxFilterLabel(value)}
             </button>
-          </PopoverTrigger>
-          <PopoverContent align="end" className="w-48 p-1">
-            {MORE_FILTERS.map((value) => {
-              const isActive = filter === value;
-              const count = counts[value] ?? 0;
-              return (
-                <button
-                  key={value}
-                  type="button"
-                  onClick={() => onFilterChange(value)}
-                  className={cn(
-                    "flex w-full items-center justify-between gap-2 rounded-md px-2.5 py-1.5 text-sm transition-colors",
-                    isActive ? "bg-lime-wash text-near-ink" : "hover:bg-row-wash",
-                  )}
-                >
-                  {filterLabel(value)}
-                  {count > 0 ? <span className="tabular-nums text-xs text-muted-foreground">{count}</span> : null}
-                </button>
-              );
-            })}
-          </PopoverContent>
-        </Popover>
-      </nav>
-
-      <Button type="button" variant="ghost" size="icon-sm" className="shrink-0 active:scale-[0.97] motion-reduce:active:scale-100" onClick={onRefresh} disabled={syncing} aria-label="Check for new messages" title="Check for new messages">
-        <ArrowsClockwiseIcon className={cn("size-4", syncing && "animate-spin motion-reduce:animate-none")} />
-      </Button>
-    </header>
+          ))}
+        </PopoverContent>
+      </Popover>
+    </nav>
   );
 }
 
-function InboxEmptyState({ status, filter, demoMode = false }: { status: InboxMailboxStatus; filter: InboxFilter; demoMode?: boolean }) {
-  const isFiltered = filter !== "all";
+function InboxEmptyState({ status, demoMode = false }: { status: InboxMailboxStatus; demoMode?: boolean }) {
   const isConnected = demoMode || (status.enabled && status.configured && status.route !== "conflict");
-
-  if (isFiltered) {
-    return (
-      <div className="flex min-h-0 flex-1 items-center justify-center px-6 py-12">
-        <div className="max-w-md text-center">
-          <span className="mx-auto flex size-11 items-center justify-center rounded-[var(--radius-inner)] bg-card-inset text-soft-ink">
-            <EnvelopeIcon className="size-5" />
-          </span>
-          <h2 className="mt-4 text-base font-semibold">No conversations in this view</h2>
-          <p className="mt-2 text-sm leading-6 text-muted-foreground">This filter is empty right now. Switch back to All to see every conversation.</p>
-          <Button asChild className="mt-5" size="sm">
-            <Link href="/dashboard/inbox">View all conversations</Link>
-          </Button>
-        </div>
-      </div>
-    );
-  }
 
   if (!isConnected) {
     return (
@@ -234,7 +205,6 @@ function InboxEmptyState({ status, filter, demoMode = false }: { status: InboxMa
           <h2 className="mt-4 text-lg font-semibold tracking-[-0.02em]">Your inbox is ready</h2>
           <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-muted-foreground">No candidate has replied yet. When they reply to a Harly email, the message appears here automatically.</p>
         </div>
-
         <div className="mt-8 grid gap-3 sm:grid-cols-3">
           {[
             ["1", "Send an email", "Contact a candidate from Harly."],
@@ -248,11 +218,37 @@ function InboxEmptyState({ status, filter, demoMode = false }: { status: InboxMa
             </div>
           ))}
         </div>
-
       </div>
     </div>
   );
 }
+
+function ReaderPlaceholder() {
+  return (
+    <div className="flex h-full flex-col items-center justify-center px-6 text-center">
+      <span className="flex size-12 items-center justify-center rounded-[var(--radius-inner)] bg-card-inset text-soft-ink">
+        <EnvelopeIcon className="size-5" />
+      </span>
+      <h2 className="mt-4 text-sm font-semibold">Select a conversation</h2>
+      <p className="mt-1.5 max-w-xs text-xs leading-5 text-soft-ink">Pick one from the list to read it and reply.</p>
+      <dl className="mt-5 grid grid-cols-[auto_auto] items-center gap-x-3 gap-y-2 text-xs text-soft-ink">
+        {[
+          ["J / K", "Next, previous"],
+          ["R", "Reply"],
+          ["E", "Archive"],
+          ["/", "Search"],
+        ].map(([key, label]) => (
+          <div key={key} className="contents">
+            <dt className="justify-self-end"><Kbd>{key}</Kbd></dt>
+            <dd className="justify-self-start">{label}</dd>
+          </div>
+        ))}
+      </dl>
+    </div>
+  );
+}
+
+const noopSubscribe = () => () => {};
 
 export function RecruitingInbox({
   threads,
@@ -266,6 +262,10 @@ export function RecruitingInbox({
   applications,
   mailboxStatus,
   currentUserId,
+  unreadTotal = null,
+  templates = [],
+  companyName = "",
+  senderName = "",
   demoMode = false,
 }: {
   threads: InboxThread[];
@@ -279,272 +279,440 @@ export function RecruitingInbox({
   applications: InboxApplication[];
   mailboxStatus: InboxMailboxStatus;
   currentUserId: string;
+  /** Workspace-wide unread conversations, independent of the active filter. */
+  unreadTotal?: number | null;
+  templates?: InboxTemplateSource[];
+  companyName?: string;
+  senderName?: string;
   /** Public demo: email is intentionally unwired, so hide "not connected" setup nudges. */
   demoMode?: boolean;
 }) {
   const router = useRouter();
   const [filter, setFilter] = useState<InboxFilter>(initialFilter ?? "all");
   const [query, setQuery] = useState("");
-  const [selectedPersonKey, setSelectedPersonKey] = useState<string | undefined>(() => {
-    const initialThread = initialThreadId ? threads.find((item) => item.id === initialThreadId) : threads[0];
-    return initialThread ? personKey(initialThread) : undefined;
-  });
   const [activeThreadId, setActiveThreadId] = useState<string | undefined>(initialThreadId ?? Object.keys(messages)[0]);
-  const [mobileView, setMobileView] = useState<"people" | "conversations" | "thread">(initialThreadId ? "thread" : "people");
-  const [newThreadOpen, setNewThreadOpen] = useState(false);
+  const [mobileView, setMobileView] = useState<"list" | "thread">(initialThreadId ? "thread" : "list");
+  const [newThread, setNewThread] = useState<"closed" | "person" | "pick">("closed");
+  const [contextOpen, setContextOpen] = useState(false);
+  const [composerThreadId, setComposerThreadId] = useState<string | null>(null);
   const [announcement, setAnnouncement] = useState("");
   const [syncing, setSyncing] = useState(false);
   const [suggestedReply, setSuggestedReply] = useState<{ threadId: string; body: string } | null>(null);
+  // Optimistic read state: thread id -> unread count at the time it was opened.
+  // A later message raises unreadCount above it, so the dot comes back.
+  const [readAt, setReadAt] = useState<Record<string, number>>({});
   const [pending, startTransition] = useTransition();
+  const [navPending, startNav] = useTransition();
   const searchRef = useRef<HTMLInputElement>(null);
+  const autoReadRef = useRef<Set<string>>(new Set());
 
   // The URL (initialFilter/initialThreadId) is the source of truth; local
-  // state only needs to resync when those props actually change, not on
-  // every re-render. Adjusting state during render , guarded by tracking the
-  // previous prop value , avoids the extra commit an effect-based sync would
-  // cause (https://react.dev/reference/react/useState#storing-information-from-previous-renders).
+  // state resyncs when those props change (back/forward), by adjusting state
+  // during render instead of an effect.
   const [prevInitialFilter, setPrevInitialFilter] = useState(initialFilter);
   if (initialFilter !== prevInitialFilter) {
     setPrevInitialFilter(initialFilter);
     setFilter(initialFilter ?? "all");
   }
-
   const [prevInitialThreadId, setPrevInitialThreadId] = useState(initialThreadId);
   if (initialThreadId !== prevInitialThreadId) {
     setPrevInitialThreadId(initialThreadId);
     if (initialThreadId) {
-      const initialThread = threads.find((item) => item.id === initialThreadId);
       setActiveThreadId(initialThreadId);
-      setSelectedPersonKey(initialThread ? personKey(initialThread) : undefined);
       setMobileView("thread");
+    } else {
+      setMobileView("list");
     }
   }
 
+  // Locale/timezone formatting only after hydration, so server markup matches.
+  const lastSyncedLabel = useSyncExternalStore(
+    noopSubscribe,
+    () => (mailboxStatus.lastSyncedAt ? new Date(mailboxStatus.lastSyncedAt).toLocaleString() : null),
+    () => null,
+  );
   const connectionActive = mailboxStatus.enabled && mailboxStatus.configured && mailboxStatus.route !== "conflict";
-  const showConnectionStrip = !demoMode && !connectionActive && threads.length > 0;
+  const showConnectionStrip = !demoMode && (!connectionActive || Boolean(mailboxStatus.lastError)) && (threads.length > 0 || Boolean(mailboxStatus.lastError));
 
-  const counts = useMemo(() => {
-    const record = {} as Record<InboxFilter, number>;
-    for (const [value] of inboxFilters) record[value] = threads.filter((item) => matchesInboxFilter(item, value, currentUserId)).length;
-    return record;
-  }, [threads, currentUserId]);
+  // Resolve the open thread: the requested one when present, else the one the
+  // server preloaded messages for (it opens on the newest conversation).
+  const effectiveId = activeThreadId && threads.some((item) => item.id === activeThreadId) ? activeThreadId : Object.keys(messages).find((id) => threads.some((item) => item.id === id));
+  const thread = effectiveId ? threads.find((item) => item.id === effectiveId) : undefined;
 
-  const normalizedQuery = normalizeSearch(query);
-  const searched = useMemo(() => {
-    const byFilter = threads.filter((item) => matchesInboxFilter(item, filter, currentUserId));
-    if (!normalizedQuery) return byFilter;
-    return byFilter.filter((item) =>
-      [item.subject, item.participantEmail, item.candidateName, item.preview, item.searchText]
-        .filter(Boolean)
-        .some((value) => normalizeSearch(value ?? "").includes(normalizedQuery)),
-    );
-  }, [threads, filter, normalizedQuery, currentUserId]);
+  const isUnread = (item: InboxThread) => item.unreadCount > 0 && item.unreadCount > (readAt[item.id] ?? 0);
 
-  const people = useMemo(() => {
-    const grouped = new Map<string, InboxPerson>();
-    for (const item of searched) {
-      const key = personKey(item);
-      const current = grouped.get(key);
-      if (current) {
-        current.threadCount += 1;
-        current.unreadCount += item.unreadCount;
-        if (new Date(item.lastMessageAt).getTime() > new Date(current.lastMessageAt).getTime()) current.lastMessageAt = item.lastMessageAt;
-        continue;
-      }
-      grouped.set(key, {
-        key,
-        candidateId: item.candidateId,
-        name: personName(item),
-        email: item.participantEmail,
-        avatarUrl: item.candidateAvatarUrl,
-        threadCount: 1,
-        unreadCount: item.unreadCount,
-        lastMessageAt: item.lastMessageAt,
-      });
-    }
-    return [...grouped.values()].sort((left, right) => {
-      const unreadSort = Number(right.unreadCount > 0) - Number(left.unreadCount > 0);
-      return unreadSort || new Date(right.lastMessageAt).getTime() - new Date(left.lastMessageAt).getTime();
-    });
-  }, [searched]);
-
-  const thread = activeThreadId ? threads.find((item) => item.id === activeThreadId) : undefined;
-  const activePersonKey = thread ? personKey(thread) : people.some((item) => item.key === selectedPersonKey) ? selectedPersonKey : people[0]?.key;
-  const personThreads = activePersonKey ? searched.filter((item) => personKey(item) === activePersonKey) : [];
+  // The open conversation stays listed even when it no longer matches (e.g. it
+  // just left Unread by being read), so the list never swaps under the reader.
+  const searched = useMemo(
+    () => threads.filter((item) => item.id === effectiveId || (matchesInboxFilter(item, filter, currentUserId) && threadMatchesQuery(item, query))),
+    [threads, filter, query, currentUserId, effectiveId],
+  );
+  const messagesReady = thread ? messages[thread.id] !== undefined : false;
   const threadMessages = thread ? (messages[thread.id] ?? []) : [];
 
-  async function runAction<T extends { ok: boolean; error?: string }>(fn: () => Promise<T>, success: string) {
+  const composerTemplates = useMemo(() => {
+    if (!thread) return [];
+    const [first = "", ...rest] = (thread.candidateName ?? "").split(" ");
+    return buildInboxTemplates(templates, {
+      candidate_first_name: first,
+      candidate_last_name: rest.join(" "),
+      candidate_full_name: thread.candidateName ?? "",
+      job_title: thread.jobTitle ?? "",
+      stage_name: thread.applicationStageName ?? "",
+      company_name: companyName,
+      sender_name: senderName,
+    });
+  }, [thread, templates, companyName, senderName]);
+
+  async function runAction<T extends { ok: boolean; error?: string }>(fn: () => Promise<T>, success: string, { quiet = false }: { quiet?: boolean } = {}) {
     try {
       const result = await fn();
       if (result.ok) {
-        setAnnouncement(success);
+        if (!quiet) setAnnouncement(success);
         router.refresh();
-      } else setAnnouncement(result.error ?? "Action failed.");
+      } else {
+        const message = result.error ?? "Action failed.";
+        setAnnouncement(message);
+        toast.error(message);
+      }
       return result;
     } catch {
       const result = { ok: false, error: "You do not have permission to change this thread." } as T;
       setAnnouncement(result.error ?? "Action failed.");
+      toast.error(result.error ?? "Action failed.");
       return result;
     }
   }
 
-  function handleMarkRead(target: InboxThread) {
-    startTransition(() => { void runAction(() => markInboxThreadReadAction({ threadId: target.id, source: target.source }), `Marked “${target.subject}” as read.`); });
+  function markRead(target: InboxThread, { quiet = false }: { quiet?: boolean } = {}) {
+    setReadAt((current) => ({ ...current, [target.id]: target.unreadCount }));
+    startTransition(() => { void runAction(() => markInboxThreadReadAction({ threadId: target.id, source: target.source }), `Marked “${target.subject}” as read.`, { quiet }); });
   }
 
-  function handleSelectPerson(person: InboxPerson) {
-    // Most people have a single conversation; skip the one-row list and open it.
-    const onlyThreads = searched.filter((item) => personKey(item) === person.key);
-    if (onlyThreads.length === 1) {
-      handleSelectThread(onlyThreads[0]);
-      return;
-    }
-    setSelectedPersonKey(person.key);
-    setActiveThreadId(undefined);
-    setMobileView("conversations");
-    const params = new URLSearchParams(window.location.search);
-    params.delete("thread");
-    router.push(`/dashboard/inbox?${params.toString()}`);
-  }
+  // A conversation that is on screen counts as read, including the one the
+  // server preloads when nothing was chosen. On phones the list is what shows.
+  useEffect(() => {
+    if (!thread || !messagesReady || !isUnread(thread) || autoReadRef.current.has(thread.id)) return;
+    if (!isDesktop() && mobileView !== "thread") return;
+    autoReadRef.current.add(thread.id);
+    // Server only: the dot clears when the refresh lands, so no state is set here.
+    const target = thread;
+    startTransition(() => { void runAction(() => markInboxThreadReadAction({ threadId: target.id, source: target.source }), "", { quiet: true }); });
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- runAction/isUnread read the latest render's state
+  }, [thread, messagesReady, mobileView]);
 
-  function handleSelectThread(target: InboxThread) {
-    setSelectedPersonKey(personKey(target));
+  function selectThread(target: InboxThread, { replace = false }: { replace?: boolean } = {}) {
     setActiveThreadId(target.id);
     setMobileView("thread");
-    const params = new URLSearchParams(window.location.search);
-    params.set("thread", target.id);
-    router.push(`/dashboard/inbox?${params.toString()}`);
-    if (target.unreadCount) {
-      startTransition(() => { void runAction(() => markInboxThreadReadAction({ threadId: target.id, source: target.source }), `Marked “${target.subject}” as read.`); });
+    setComposerThreadId(null);
+    const url = inboxUrl((params) => params.set("thread", target.id));
+    startNav(() => {
+      if (replace) router.replace(url, { scroll: false });
+      else router.push(url, { scroll: false });
+    });
+    if (isUnread(target)) {
+      autoReadRef.current.add(target.id);
+      markRead(target, { quiet: true });
     }
   }
 
-  function handleBackToThreads() {
-    setActiveThreadId(undefined);
-    setMobileView("conversations");
-    const params = new URLSearchParams(window.location.search);
-    params.delete("thread");
-    router.push(`/dashboard/inbox?${params.toString()}`);
+  function step(delta: 1 | -1) {
+    if (!searched.length) return;
+    const index = searched.findIndex((item) => item.id === effectiveId);
+    const target = index < 0 ? searched[0] : searched[index + delta];
+    if (target) selectThread(target, { replace: true });
   }
 
-  function handleNewThreadSent(newThreadId: string) {
-    setNewThreadOpen(false);
-    setActiveThreadId(newThreadId);
-    setMobileView("thread");
-    const params = new URLSearchParams(window.location.search);
-    params.set("thread", newThreadId);
-    router.push(`/dashboard/inbox?${params.toString()}`);
-    router.refresh();
+  function clearSelection() {
+    setActiveThreadId(undefined);
+    setMobileView("list");
+    startNav(() => router.replace(inboxUrl((params) => params.delete("thread")), { scroll: false }));
   }
+
+  function toggleArchive(target: InboxThread) {
+    const archiving = target.status !== "archived";
+    const index = searched.findIndex((item) => item.id === target.id);
+    const next = searched[index + 1] ?? searched[index - 1];
+    startTransition(() => {
+      void (async () => {
+        const result = await runAction(
+          () => updateMailboxThreadAction({ threadId: target.id, status: archiving ? "archived" : "open" }),
+          archiving ? "Conversation archived." : "Moved back to inbox.",
+          { quiet: true },
+        );
+        if (!result.ok) return;
+        toast(archiving ? "Conversation archived" : "Moved back to inbox", {
+          action: archiving
+            ? { label: "Undo", onClick: () => { void runAction(() => updateMailboxThreadAction({ threadId: target.id, status: "open" }), "Archive undone.", { quiet: true }); } }
+            : undefined,
+        });
+        if (target.id !== effectiveId) return;
+        // Move on like a mail client: the next conversation on desktop, the list on phones.
+        if (next && isDesktop()) selectThread(next, { replace: true });
+        else clearSelection();
+      })();
+    });
+  }
+
+  function openReply() {
+    if (thread) setComposerThreadId(thread.id);
+  }
+
+  const canReplyHere = Boolean(thread && mailboxStatus.canReply && thread.participantEmail);
+  useShortcut("inbox.next", () => step(1));
+  useShortcut("inbox.prev", () => step(-1));
+  useShortcut("inbox.reply", openReply, { enabled: canReplyHere });
+  useShortcut("inbox.archive", () => { if (thread) toggleArchive(thread); }, { enabled: Boolean(thread) && thread?.status !== "spam" });
+
+  // "/" focuses search here instead of opening the command menu. Registered in
+  // the capture phase so it wins over the global binding while Inbox is open.
+  useEffect(() => {
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key !== "/" || !shouldHandleKeyEvent(event, isOverlayOpen())) return;
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      searchRef.current?.focus();
+      searchRef.current?.select();
+    }
+    document.addEventListener("keydown", onKeyDown, true);
+    return () => document.removeEventListener("keydown", onKeyDown, true);
+  }, []);
 
   async function retrySync() {
     setSyncing(true);
     const result = await retryMailboxSyncAction().catch(() => ({ ok: false as const, error: "You do not have permission to sync the mailbox." }));
-    setAnnouncement(result.ok ? `Sync complete. Imported ${"imported" in result ? result.imported : 0} messages; skipped ${"skipped" in result ? result.skipped : 0} duplicates.` : result.error ?? "Sync failed.");
+    const message = result.ok ? `Sync complete. Imported ${"imported" in result ? result.imported : 0} messages; skipped ${"skipped" in result ? result.skipped : 0} duplicates.` : result.error ?? "Sync failed.";
+    setAnnouncement(message);
+    if (result.ok) toast.success("Mailbox synced");
+    else toast.error(message);
     setSyncing(false);
     router.refresh();
   }
 
   function handleRefresh() {
     if (mailboxStatus.route === "mailbox" && mailboxStatus.enabled) void retrySync();
-    else router.refresh();
+    else startNav(() => router.refresh());
   }
 
   function handleFilterChange(next: InboxFilter) {
     setFilter(next);
     setActiveThreadId(undefined);
-    setMobileView("people");
-    router.push(`/dashboard/inbox?filter=${next}`);
+    setMobileView("list");
+    startNav(() => router.push((next === "all" ? "/dashboard/inbox" : `/dashboard/inbox?filter=${next}`) as Route));
   }
 
-  const contextThread = thread ?? personThreads[0];
-  const contextPerson = people.find((item) => item.key === activePersonKey);
-  const actionsPanel = contextThread ? (
+  function handleNewThreadSent(newThreadId: string) {
+    setNewThread("closed");
+    setActiveThreadId(newThreadId);
+    setMobileView("thread");
+    toast.success("Email sent");
+    startNav(() => router.push(inboxUrl((params) => params.set("thread", newThreadId)), { scroll: false }));
+    router.refresh();
+  }
+
+  const contextPerson: InboxPerson | undefined = thread?.participantEmail
+    ? { candidateId: thread.candidateId, name: threadPersonName(thread), email: thread.participantEmail }
+    : undefined;
+  const newThreadTemplates = useMemo(() => {
+    const name = newThread === "person" && contextPerson ? contextPerson.name : "";
+    const [first = "", ...rest] = name.split(" ");
+    return buildInboxTemplates(templates, { candidate_first_name: first, candidate_last_name: rest.join(" "), candidate_full_name: name, company_name: companyName, sender_name: senderName });
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- recipient name is the only varying input
+  }, [templates, companyName, senderName, newThread, contextPerson?.name]);
+
+  const actionsPanel = thread ? (
     <InboxActionsPanel
-      thread={contextThread}
+      key={thread.id}
+      thread={thread}
       members={members}
       candidates={candidates}
       applications={applications}
       isPending={pending}
-      onAssign={(ownerId) => runAction(() => updateMailboxThreadAction({ threadId: contextThread.id, ownerId }), ownerId ? "Thread assigned." : "Thread unassigned.")}
-      onCandidateChange={(candidateId) => runAction(() => linkMailboxThreadToCandidateAction({ threadId: contextThread.id, candidateId }), candidateId ? "Candidate linked." : "Candidate unlinked.")}
-      onApplicationChange={(applicationId) => runAction(() => linkMailboxThreadToApplicationAction({ threadId: contextThread.id, applicationId: applicationId ?? null }), applicationId ? "Application linked." : "Application unlinked.")}
-      onCreateCandidate={() => { startTransition(() => { void runAction(() => createCandidateFromMailboxThreadAction({ threadId: contextThread.id }), "Candidate created from this thread."); }); }}
-      onArchive={() => { startTransition(() => { void runAction(() => updateMailboxThreadAction({ threadId: contextThread.id, status: "archived" }), "Thread archived."); }); }}
-      onMarkSpam={() => { startTransition(() => { void runAction(() => updateMailboxThreadAction({ threadId: contextThread.id, status: "spam" }), "Thread marked as spam."); }); }}
-      onSummarize={() => summarizeMailboxThreadAction({ threadId: contextThread.id })}
-      onSuggestReply={() => suggestMailboxReplyAction({ threadId: contextThread.id }).then((result) => { if (result.ok && result.draft) setSuggestedReply({ threadId: contextThread.id, body: result.draft.body }); return result; })}
+      onAssign={(ownerId) => runAction(() => updateMailboxThreadAction({ threadId: thread.id, ownerId }), ownerId ? "Thread assigned." : "Thread unassigned.")}
+      onCandidateChange={(candidateId) => runAction(() => linkMailboxThreadToCandidateAction({ threadId: thread.id, candidateId }), candidateId ? "Candidate linked." : "Candidate unlinked.")}
+      onApplicationChange={(applicationId) => runAction(() => linkMailboxThreadToApplicationAction({ threadId: thread.id, applicationId: applicationId ?? null }), applicationId ? "Application linked." : "Application unlinked.")}
+      onCreateCandidate={() => { startTransition(() => { void runAction(() => createCandidateFromMailboxThreadAction({ threadId: thread.id }), "Candidate created from this thread."); }); }}
+      onArchive={() => toggleArchive(thread)}
+      onMarkSpam={() => { startTransition(() => { void runAction(() => updateMailboxThreadAction({ threadId: thread.id, status: "spam" }), "Thread marked as spam.").then((result) => { if (result.ok) clearSelection(); }); }); }}
+      onNewEmail={contextPerson ? () => { setContextOpen(false); setNewThread("person"); } : undefined}
+      onSummarize={() => summarizeMailboxThreadAction({ threadId: thread.id })}
+      onSuggestReply={() => suggestMailboxReplyAction({ threadId: thread.id }).then((result) => { if (result.ok && result.draft) { setSuggestedReply({ threadId: thread.id, body: result.draft.body }); setContextOpen(false); setComposerThreadId(thread.id); } return result; })}
     />
   ) : null;
 
+  const fullEmpty = !threads.length && filter === "all";
+  const listLabel = inboxFilterLabel(filter);
+
   return (
-    <div className="flex h-[calc(100dvh-15rem)] min-h-[34rem] min-w-0 flex-col overflow-hidden rounded-[var(--radius-card)] bg-card shadow-[var(--shadow-card)] duration-300 animate-in fade-in">
+    <div className="flex h-[calc(100dvh-15rem)] min-h-[34rem] min-w-0 flex-col overflow-hidden rounded-[var(--radius-card)] bg-card shadow-[var(--shadow-card)] duration-300 animate-in fade-in-0 motion-reduce:animate-none">
       <div aria-live="polite" className="sr-only">{announcement}</div>
-      <InboxCommandBar
-        filter={filter}
-        counts={counts}
-        query={query}
-        onQueryChange={setQuery}
-        onFilterChange={handleFilterChange}
-        syncing={syncing}
-        onRefresh={handleRefresh}
-        searchRef={searchRef}
-      />
-      {showConnectionStrip ? <ConnectionStrip status={mailboxStatus} /> : null}
 
-      {!threads.length ? (
-        <InboxEmptyState status={mailboxStatus} filter={filter} demoMode={demoMode} />
+      {fullEmpty ? (
+        <InboxEmptyState status={mailboxStatus} demoMode={demoMode} />
       ) : (
-        <div className="relative flex min-h-0 flex-1 overflow-hidden">
-          <div className={cn("min-h-0 shrink-0 border-r border-hairline bg-card", mobileView === "people" ? "block w-full lg:w-[280px]" : "hidden lg:block lg:w-[280px]")}>
-            <InboxPeopleList people={people} selectedKey={activePersonKey} query={query} onSelect={handleSelectPerson} />
-          </div>
+        <>
+          {showConnectionStrip ? <ConnectionStrip status={mailboxStatus} onRetry={handleRefresh} retrying={syncing} /> : null}
+          <div className="relative flex min-h-0 flex-1 overflow-hidden">
+            {/* Conversations */}
+            <section
+              aria-label="Conversations"
+              id="inbox-conversations"
+              className={cn(
+                "min-h-0 shrink-0 flex-col border-r border-hairline bg-card lg:w-[340px] xl:w-[360px]",
+                mobileView === "list" ? "flex w-full" : "hidden lg:flex",
+              )}
+            >
+              <div className="shrink-0 space-y-2.5 border-b border-hairline px-3 py-3">
+                <div className="flex items-center gap-1.5">
+                  <label className="relative flex min-w-0 flex-1 items-center">
+                    <span className="sr-only">Search conversations</span>
+                    <SearchIcon className="pointer-events-none absolute left-3.5 size-4 text-soft-ink" />
+                    <input
+                      ref={searchRef}
+                      type="search"
+                      value={query}
+                      onChange={(event) => setQuery(event.target.value)}
+                      onKeyDown={(event) => {
+                        if (event.key === "Escape") {
+                          event.stopPropagation();
+                          if (query) setQuery("");
+                          else event.currentTarget.blur();
+                        } else if (event.key === "ArrowDown" && searched[0]) {
+                          event.preventDefault();
+                          selectThread(searched.find((item) => item.id === effectiveId) ?? searched[0], { replace: true });
+                          event.currentTarget.blur();
+                        }
+                      }}
+                      placeholder="Search conversations"
+                      aria-keyshortcuts="/"
+                      className="h-9 w-full rounded-full border border-transparent bg-card-inset pl-9 pr-9 text-sm outline-none transition-[border-color,background-color] placeholder:text-quiet-mist hover:bg-row-wash focus:border-near-ink focus:bg-pure-snow [&::-webkit-search-cancel-button]:hidden dark:focus:bg-card"
+                    />
+                    {query ? null : <Kbd className="pointer-events-none absolute right-2.5 hidden h-5 min-w-5 text-[11px] lg:inline-flex">/</Kbd>}
+                    {query ? (
+                      <button type="button" onClick={() => { setQuery(""); searchRef.current?.focus(); }} className="absolute right-2 flex size-6 items-center justify-center rounded-full text-soft-ink hover:bg-row-wash focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-near-ink" aria-label="Clear search">
+                        <span aria-hidden="true" className="text-base leading-none">×</span>
+                      </button>
+                    ) : null}
+                  </label>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon-sm"
+                    className="shrink-0 active:scale-[0.97] motion-reduce:active:scale-100"
+                    onClick={handleRefresh}
+                    disabled={syncing}
+                    aria-label="Check for new messages"
+                    title={lastSyncedLabel ? `Check for new messages · last synced ${lastSyncedLabel}` : "Check for new messages"}
+                  >
+                    <ArrowsClockwiseIcon className={cn("size-4", syncing && "animate-spin motion-reduce:animate-none")} />
+                  </Button>
+                  {candidates.length && mailboxStatus.canReply ? (
+                    <Button type="button" size="icon-sm" className="shrink-0 active:scale-[0.97] motion-reduce:active:scale-100" onClick={() => setNewThread("pick")} aria-label="New email" title="New email">
+                      <PlusIcon className="size-4" />
+                    </Button>
+                  ) : null}
+                </div>
+                <FilterTabs filter={filter} activeCount={searched.length} hasMore={hasMore} unreadTotal={unreadTotal} onChange={handleFilterChange} />
+              </div>
 
-          <div className={cn("min-h-0 min-w-0 flex-1 bg-card", mobileView === "people" ? "hidden lg:block" : "block")}>
-            {thread ? (
-              <InboxThreadReader
-                key={`${thread.id}-${suggestedReply?.threadId === thread.id ? suggestedReply.body : ""}`}
-                thread={thread}
-                messages={threadMessages}
-                isPending={pending}
-                canReply={mailboxStatus.canReply}
-                hideSendingNotice={demoMode}
-                suggestedReply={suggestedReply?.threadId === thread.id ? suggestedReply.body : null}
-                onBack={handleBackToThreads}
-                onMarkRead={handleMarkRead}
-                onSendReply={(payload) => replyMailboxThreadAction({ threadId: thread.id, body: payload.body, html: payload.html, subject: payload.subject, idempotencyKey: payload.idempotencyKey, attachments: payload.attachments.map((file) => ({ filename: file.filename, contentType: file.contentType, base64: file.base64 })) }).then((result) => { if (result.ok) { setAnnouncement(result.sentCopySaved === false ? "Reply sent, but the copy could not be saved in Sent." : "Reply sent."); router.refresh(); } return result; })}
-                actionsSlot={actionsPanel}
-              />
-            ) : (
               <InboxConversationList
-                person={contextPerson}
-                threads={personThreads}
+                threads={searched}
+                selectedId={effectiveId}
+                unreadFor={isUnread}
+                filterLabel={listLabel}
                 query={query}
-                onSelect={handleSelectThread}
-                onNewThread={contextPerson?.email ? () => setNewThreadOpen(true) : undefined}
+                loading={navPending}
+                onSelect={(item) => selectThread(item)}
+                onClearSearch={() => { setQuery(""); searchRef.current?.focus(); }}
+                onClearFilter={filter !== "all" ? () => handleFilterChange("all") : undefined}
+                footer={
+                  hasMore ? (
+                    <div className="flex justify-center px-3 py-3">
+                      <button
+                        type="button"
+                        disabled={navPending}
+                        className="rounded-full bg-soft-kraft px-4 py-1.5 text-[13px] font-medium transition-colors hover:bg-row-wash focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-near-ink disabled:opacity-60"
+                        onClick={() => startNav(() => router.push(inboxUrl((params) => params.set("page", String((page ?? 0) + 1))), { scroll: false }))}
+                      >
+                        {navPending ? "Loading…" : "Load more conversations"}
+                      </button>
+                    </div>
+                  ) : null
+                }
               />
-            )}
-          </div>
+            </section>
 
-          <aside className="hidden min-h-0 shrink-0 border-l border-hairline bg-card-inset/50 lg:block lg:w-[300px] xl:w-[320px]" aria-label="Candidate details and actions">
-            {actionsPanel}
-          </aside>
-        </div>
+            {/* Reader */}
+            <div className={cn("min-h-0 min-w-0 flex-1 bg-card", mobileView === "thread" ? "block" : "hidden lg:block")}>
+              {thread ? (
+                <InboxThreadReader
+                  key={thread.id}
+                  thread={thread}
+                  messages={threadMessages}
+                  messagesReady={messagesReady}
+                  unread={isUnread(thread)}
+                  isPending={pending}
+                  canReply={mailboxStatus.canReply}
+                  hideSendingNotice={demoMode}
+                  composerOpen={composerThreadId === thread.id}
+                  templates={composerTemplates}
+                  onComposerOpenChange={(open) => setComposerThreadId(open ? thread.id : null)}
+                  suggestedReply={suggestedReply?.threadId === thread.id ? suggestedReply.body : null}
+                  onBack={() => setMobileView("list")}
+                  onMarkRead={(target) => markRead(target)}
+                  onToggleArchive={toggleArchive}
+                  onOpenContext={() => setContextOpen(true)}
+                  onSendReply={(payload) =>
+                    replyMailboxThreadAction({
+                      threadId: thread.id,
+                      body: payload.body,
+                      html: payload.html,
+                      subject: payload.subject,
+                      idempotencyKey: payload.idempotencyKey,
+                      attachments: payload.attachments.map((file) => ({ filename: file.filename, contentType: file.contentType, base64: file.base64 })),
+                    }).then((result) => {
+                      if (result.ok) {
+                        const message = result.sentCopySaved === false ? "Reply sent, but the copy could not be saved in Sent." : "Reply sent.";
+                        setAnnouncement(message);
+                        if (result.sentCopySaved === false) toast.warning(message);
+                        else toast.success("Reply sent");
+                        router.refresh();
+                      }
+                      return result;
+                    })
+                  }
+                />
+              ) : (
+                <ReaderPlaceholder />
+              )}
+            </div>
+
+            {/* Context: a third pane on wide screens, a sheet below that. */}
+            <aside className="hidden min-h-0 w-[300px] shrink-0 border-l border-hairline bg-card-inset/50 xl:block" aria-label="Candidate details and actions">
+              {actionsPanel}
+            </aside>
+          </div>
+        </>
       )}
 
-      {hasMore ? (
-        <div className="flex shrink-0 justify-center border-t border-hairline py-2.5">
-          <button
-            type="button"
-            className="rounded-full bg-soft-kraft px-4 py-1.5 text-[13px] font-medium transition-colors hover:bg-row-wash focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-near-ink"
-            onClick={() => { const params = new URLSearchParams(window.location.search); params.set("page", String((page ?? 0) + 1)); params.delete("thread"); router.push(`/dashboard/inbox?${params.toString()}`); }}
-          >
-            Load more conversations
-          </button>
-        </div>
-      ) : null}
+      <Sheet open={contextOpen} onOpenChange={setContextOpen}>
+        <SheetContent side="right" className="w-full max-w-sm overflow-hidden p-0 sm:max-w-sm xl:hidden">
+          <SheetHeader className="sr-only">
+            <SheetTitle>Conversation details</SheetTitle>
+            <SheetDescription>Candidate, routing and actions for this conversation.</SheetDescription>
+          </SheetHeader>
+          {contextOpen ? actionsPanel : null}
+        </SheetContent>
+      </Sheet>
 
-      <InboxNewThreadSheet person={contextPerson} open={newThreadOpen} onOpenChange={setNewThreadOpen} onSent={handleNewThreadSent} />
+      <InboxNewThreadSheet
+        person={newThread === "person" ? contextPerson : undefined}
+        candidates={candidates}
+        templates={newThreadTemplates}
+        open={newThread !== "closed"}
+        onOpenChange={(open) => { if (!open) setNewThread("closed"); }}
+        onSent={handleNewThreadSent}
+      />
     </div>
   );
 }
