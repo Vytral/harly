@@ -41,15 +41,18 @@ function withCors(response: Response, origin: string | null, allowed: boolean): 
   return response;
 }
 
-async function readJsonBody(request: Request): Promise<{ ok: true; body: unknown } | { ok: false; response: Response }> {
+async function readJsonBody(
+  request: Request,
+): Promise<{ ok: true; body: unknown; bytes: Buffer } | { ok: false; response: Response }> {
   const length = Number(request.headers.get("content-length") ?? "0");
   if (Number.isFinite(length) && length > MAX_REQUEST_BYTES) {
     return { ok: false, response: jsonResponse(413, { error: "payload_too_large" }) };
   }
   // Count bytes while streaming and stop at the cap, so a body without a
-  // Content-Length is never buffered past MAX_REQUEST_BYTES. The clone leaves
-  // the original stream for the transport.
-  const reader = request.clone().body?.getReader();
+  // Content-Length is never buffered past MAX_REQUEST_BYTES. This reads the
+  // original stream (a tee'd clone would wait on the unread branch); the
+  // transport gets a request rebuilt from these bytes.
+  const reader = request.body?.getReader();
   const chunks: Uint8Array[] = [];
   let size = 0;
   if (reader) {
@@ -64,12 +67,13 @@ async function readJsonBody(request: Request): Promise<{ ok: true; body: unknown
       chunks.push(value);
     }
   }
-  const text = Buffer.concat(chunks).toString("utf8");
-  if (!text) return { ok: true, body: undefined };
+  const bytes = Buffer.concat(chunks);
+  const text = bytes.toString("utf8");
+  if (!text) return { ok: true, body: undefined, bytes };
   try {
-    return { ok: true, body: JSON.parse(text) };
+    return { ok: true, body: JSON.parse(text), bytes };
   } catch {
-    return { ok: true, body: undefined };
+    return { ok: true, body: undefined, bytes };
   }
 }
 
@@ -200,7 +204,7 @@ export async function handleMcpRequest(request: Request): Promise<Response> {
 
   try {
     const response = await runAsMcpActor(actor, () =>
-      handler.fetch(request, {
+      handler.fetch(new Request(request.url, { method: request.method, headers: request.headers, body: new Uint8Array(parsed.bytes) }), {
         authInfo: { token: "", clientId: actor.clientId, scopes: [...actor.scopes] },
         parsedBody: parsed.body,
       }),

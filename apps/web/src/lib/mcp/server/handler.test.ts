@@ -186,6 +186,31 @@ describe("authentication", () => {
     const response = await handleMcpRequest(rpc(INIT, { origin: "https://evil.example" }));
     expect(response.status).toBe(403);
   });
+
+  it("answers 413 for a streamed body past the cap without a Content-Length", async () => {
+    const chunk = new Uint8Array(1024 * 1024);
+    let sent = 0;
+    const body = new ReadableStream<Uint8Array>({
+      pull(controller) {
+        // Never ends on its own: only cancelling the read stops it.
+        sent += chunk.byteLength;
+        controller.enqueue(chunk);
+      },
+    });
+    const request = new Request("https://harly.test/mcp", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        accept: "application/json, text/event-stream",
+        authorization: "Bearer hmat_good",
+      },
+      body,
+      duplex: "half",
+    } as RequestInit);
+    const response = await handleMcpRequest(request);
+    expect(response.status).toBe(413);
+    expect(sent).toBeLessThanOrEqual(10 * 1024 * 1024);
+  });
 });
 
 describe("initialize and tools/list", () => {

@@ -44,12 +44,25 @@ const workspaceInfo = defineMcpTool({
 
 const CANDIDATE_PATH = /\/dashboard\/candidates\/([^/?#]+)/;
 
+/**
+ * The OAuth scope each search group needs. The tool itself only requires
+ * candidates:read, so a token granted that alone must not read jobs, tasks or
+ * teammates through search; role scope still applies on top of this.
+ */
+const SEARCH_GROUP_SCOPE: Record<string, string> = {
+  jobs: "jobs:read",
+  candidates: "candidates:read",
+  applications: "candidates:read",
+  tasks: "tasks:read",
+  people: "settings:read",
+};
+
 const workspaceSearch = defineMcpTool({
   name: "workspace_search",
   title: "Search the workspace",
   description:
     "Search jobs, candidates, applications, tasks and teammates by name, email, title or keyword in one call; the same search as the command palette in Harly. " +
-    "Use it to turn a name the user mentions into ids: jobs[].id is a jobId, candidates[].id a candidateId, applications[].applicationId an applicationId (with its candidateId). Only groups the user is allowed to see are returned, and only records inside their role's scope. " +
+    "Use it to turn a name the user mentions into ids: jobs[].id is a jobId, candidates[].id a candidateId, applications[].applicationId an applicationId (with its candidateId). Only groups the user is allowed to see and this connection's OAuth scopes cover are returned, and only records inside their role's scope. " +
     "Returns up to limitPerGroup hits per group, each with a url to the record in Harly, and hasMore flags. For long candidate lists use the dedicated candidate search tool instead.",
   group: "workspace",
   scope: "candidates:read",
@@ -60,12 +73,16 @@ const workspaceSearch = defineMcpTool({
     limitPerGroup: z.number().int().min(1).max(25).default(8).describe("Maximum hits per group (jobs, candidates, applications, tasks, people). Default 8."),
   }),
   async run(input, ctx) {
+    const grantedScopes = getMcpActor()?.scopes ?? [];
     const actor = await resolveSearchActor();
     const results = await searchWorkspaceForActor(actor, input.query, { limitPerGroup: input.limitPerGroup });
     const groups: Record<string, unknown[]> = {};
     const hasMore: Record<string, boolean> = {};
     for (const [group, value] of Object.entries(results.groups)) {
       if (!value) continue;
+      const required = SEARCH_GROUP_SCOPE[group];
+      // An unmapped group is withheld rather than exposed by default.
+      if (!required || !grantedScopes.includes(required)) continue;
       hasMore[group] = value.hasMore;
       groups[group] = value.hits.map((hit) => {
         const base = {
