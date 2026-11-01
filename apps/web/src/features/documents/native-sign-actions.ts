@@ -119,7 +119,8 @@ export async function signDocumentNatively(input: unknown): Promise<NativeSignRe
   });
   if (!access || access.level !== "manage") return { ok: false, error: "You cannot sign this document." };
   if (access.document.status !== "active") return { ok: false, error: "Archived documents cannot be signed." };
-  if (access.document.signatureStatus !== "unsigned") return { ok: false, error: "This document already has a signature workflow." };
+  // A declined or expired request can be edited and sent again.
+  if (!["unsigned", "declined", "expired"].includes(access.document.signatureStatus)) return { ok: false, error: "This document already has a signature workflow." };
   if (access.document.mimeType !== "application/pdf") return { ok: false, error: "Native signing requires a PDF document." };
 
   try {
@@ -170,23 +171,23 @@ export async function getNativeSignatureSettings() {
 export async function sendDocumentForNativeSignature(input: unknown) {
   let context: Awaited<ReturnType<typeof requirePermission>>;
   try { context = await requirePermission("documents:manage"); } catch { return { ok: false, error: "You do not have permission to send documents for signing." }; }
-  const parsed = z.object({ documentId: z.uuid(), recipientEmail: z.email().optional(), recipientName: z.string().trim().min(1).max(200).optional(), recipients: z.array(recipientSchema).min(1).max(10).optional(), subject: z.string().trim().max(255).optional(), message: z.string().trim().max(4000).nullable().optional() }).safeParse(input);
+  const parsed = z.object({ documentId: z.uuid(), recipientEmail: z.email().optional(), recipientName: z.string().trim().min(1).max(200).optional(), recipients: z.array(recipientSchema).min(1).max(10).optional(), subject: z.string().trim().max(255).optional(), message: z.string().trim().max(4000).nullable().optional(), expirationDays: z.number().int().min(3).max(365).optional() }).safeParse(input);
   if (!parsed.success) return { ok: false, error: "Invalid recipient details." };
   const access = await resolveDocumentAccessInScope({ documentId: parsed.data.documentId, workspaceId: context.organization.id, userId: context.user.id, roleKey: context.roleKey });
   if (!access || access.level !== "manage") return { ok: false, error: "You cannot send this document for signing." };
   if (access.document.status !== "active") return { ok: false, error: "Archived documents cannot be sent for signing." };
-  if (access.document.signatureStatus !== "unsigned") return { ok: false, error: "This document already has a signature workflow." };
+  if (!["unsigned", "declined", "expired"].includes(access.document.signatureStatus)) return { ok: false, error: "This document already has a signature workflow." };
   const recipients = parsed.data.recipients?.length
     ? parsed.data.recipients
     : parsed.data.recipientEmail && parsed.data.recipientName
       ? [{ email: parsed.data.recipientEmail, name: parsed.data.recipientName }]
       : [];
   if (recipients.length === 0) return { ok: false, error: "Add at least one signing recipient." };
-  return createNativeSigningLink({ workspaceId: context.organization.id, documentId: parsed.data.documentId, actorId: context.user.id, recipients, subject: parsed.data.subject, message: parsed.data.message });
+  return createNativeSigningLink({ workspaceId: context.organization.id, documentId: parsed.data.documentId, actorId: context.user.id, recipients, subject: parsed.data.subject, message: parsed.data.message, expirationDays: parsed.data.expirationDays });
 }
 
 const draftFieldSchema = z.object({
-  type: z.enum(["signature", "text"]),
+  type: z.enum(["signature", "text", "date"]),
   page: z.number().int().positive(),
   x: z.number().min(0).max(1),
   y: z.number().min(0).max(1),
@@ -226,6 +227,7 @@ export async function saveDocumentSignatureFieldsAndSend(input: unknown) {
     recipients: z.array(recipientSchema).min(1).max(10).optional(),
     subject: z.string().trim().max(255).optional(),
     message: z.string().trim().max(4000).nullable().optional(),
+    expirationDays: z.number().int().min(3).max(365).optional(),
   }).safeParse(input);
   if (!parsed.success) return { ok: false, error: "Invalid recipient or field details." };
   const recipients = parsed.data.recipients?.length
@@ -255,7 +257,7 @@ export async function saveDocumentSignatureFieldsAndSend(input: unknown) {
         .where(and(eq(documents.id, parsed.data.documentId), eq(documents.workspaceId, context.organization.id)))
         .for("update")
         .limit(1);
-      if (!locked || locked.signatureStatus !== "unsigned") {
+      if (!locked || !["unsigned", "declined", "expired"].includes(locked.signatureStatus)) {
         throw new Error("This document already has a signature workflow.");
       }
 
@@ -305,5 +307,5 @@ export async function saveDocumentSignatureFieldsAndSend(input: unknown) {
     return { ok: false, error: error instanceof Error ? error.message : "Could not save the field placement." };
   }
 
-  return createNativeSigningLink({ workspaceId: context.organization.id, documentId: parsed.data.documentId, actorId: context.user.id, recipients, subject: parsed.data.subject, message: parsed.data.message });
+  return createNativeSigningLink({ workspaceId: context.organization.id, documentId: parsed.data.documentId, actorId: context.user.id, recipients, subject: parsed.data.subject, message: parsed.data.message, expirationDays: parsed.data.expirationDays });
 }

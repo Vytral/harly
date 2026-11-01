@@ -11,6 +11,7 @@ type ActivityItem = {
   id: string;
   type: string;
   label: string;
+  detail?: string | null;
   actorName: string | null;
   createdAt: string;
 };
@@ -25,10 +26,10 @@ const DOT_STYLES: Record<string, string> = {
   "file.uploaded": "bg-muted-foreground",
   "evaluation.ai_generated": "bg-primary",
   "candidate.updated": "bg-muted-foreground",
-  "interview.scheduled": "bg-indigo-500",
+  "interview.scheduled": "bg-status-quiet-ink",
   "interview.canceled": "bg-destructive",
-  "interview.completed": "bg-emerald-500",
-  "interview.rescheduled": "bg-amber-500",
+  "interview.completed": "bg-success-olive",
+  "interview.rescheduled": "bg-warning-clay",
 };
 
 /**
@@ -40,16 +41,17 @@ export function CandidateActivityRail({ activity }: { activity: ActivityItem[] }
   const [open, setOpen] = useState(true);
 
   return (
-    <aside className="lg:sticky lg:top-20 lg:self-start">
-      <div className="rounded-lg border border-border/60 bg-background/92 shadow-sm shadow-black/[0.02] backdrop-blur-sm">
+    <aside>
+      <div className="rounded-[var(--radius-card)] bg-card shadow-[var(--shadow-card)]">
         <button
           type="button"
           onClick={() => setOpen((value) => !value)}
-          className="flex w-full items-center justify-between gap-2 px-4 py-3 text-left"
+          aria-expanded={open}
+          className="flex w-full items-center justify-between gap-2 rounded-[var(--radius-card)] px-5 py-4 text-left outline-none transition-colors duration-150 focus-visible:ring-[3px] focus-visible:ring-ring/50"
         >
           <span className="flex items-center gap-2">
-            <PulseIcon className="size-4 text-primary" />
-            <span className="text-sm font-semibold">Activity</span>
+            <PulseIcon className="size-4 text-near-ink" />
+            <span className="text-[15px] font-semibold tracking-[-0.01em]">Activity</span>
             {activity.length > 0 ? (
               <span className="rounded-full bg-muted px-1.5 text-xs font-medium tabular-nums text-muted-foreground">
                 {activity.length}
@@ -58,7 +60,7 @@ export function CandidateActivityRail({ activity }: { activity: ActivityItem[] }
           </span>
           <ChevronDown
             className={cn(
-              "size-4 text-muted-foreground transition-transform duration-200 ease-out",
+              "size-4 text-muted-foreground transition-transform duration-150 ease-out",
               open ? "" : "-rotate-90",
             )}
           />
@@ -66,11 +68,11 @@ export function CandidateActivityRail({ activity }: { activity: ActivityItem[] }
 
         <div
           className={cn(
-            "overflow-hidden transition-all duration-200 ease-out",
+            "overflow-hidden transition-all duration-150 ease-out",
             open ? "max-h-[70vh] opacity-100" : "max-h-0 opacity-0",
           )}
         >
-          <div className="border-t border-border/60 bg-background px-4 py-3">
+          <div className="border-t border-hairline px-4 py-3">
             {activity.length === 0 ? (
               <div className="flex flex-col items-center gap-2 py-8 text-center">
                 <span className="flex size-10 items-center justify-center rounded-xl bg-muted text-muted-foreground">
@@ -98,6 +100,14 @@ export function CandidateActivityRail({ activity }: { activity: ActivityItem[] }
                     </div>
                     <div className="pb-4">
                       <p className="text-sm font-medium leading-snug">{event.label}</p>
+                      {event.detail ? (
+                        <p
+                          className="mt-0.5 line-clamp-2 text-xs text-soft-ink"
+                          title={event.detail}
+                        >
+                          {event.detail}
+                        </p>
+                      ) : null}
                       <p className="mt-0.5 text-xs text-muted-foreground">
                         {event.actorName ? `${event.actorName} · ` : ""}
                         <RelativeTime value={event.createdAt} />

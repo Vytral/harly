@@ -2,10 +2,12 @@
 
 import { useState, useTransition, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
+import { UserPlus } from "lucide-react";
 import { toast } from "@/lib/notification-island/toast";
 
 import { referCandidate } from "@/features/candidates/referrals/actions";
 import type { WorkspaceMemberOption } from "@/features/jobs/hiring-team-data";
+
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
@@ -32,7 +34,10 @@ export function ReferCandidateDrawer({
 }: {
   candidateId: string;
   workspaceId: string;
-  trigger: ReactNode;
+  /** Defaults to the compact "Refer" button. Build custom triggers in a client
+   *  component: an element created in a server component reaches the sheet's
+   *  `asChild` slot as a lazy reference and breaks hydration. */
+  trigger?: ReactNode;
   jobs: { id: string; title: string }[];
   members: WorkspaceMemberOption[];
   currentUserId: string;
@@ -82,7 +87,14 @@ export function ReferCandidateDrawer({
         setOpen(next);
         if (!next) reset();
       }}
-      trigger={trigger}
+      trigger={
+        trigger ?? (
+          <Button type="button" variant="ghost" size="sm" className="h-6 gap-1 px-2 text-xs text-soft-ink">
+            <UserPlus className="size-3.5" />
+            Refer
+          </Button>
+        )
+      }
       title="Refer candidate"
       description="Credit whoever recommended this candidate."
       footer={

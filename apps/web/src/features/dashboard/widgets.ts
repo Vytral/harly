@@ -5,29 +5,29 @@ import { and, asc, count, desc, eq, exists, gte, inArray, isNull, lt, or, sql } 
 
 import {
   applications,
-  applicationStageHistory,
   candidates,
   db,
   effectiveStageKind,
-  effectiveStageKindSql,
   interviews,
   jobs,
   jobStages,
-  scorecards,
-  stageIsAnyKindSql,
   tasks,
   user,
 } from "@harly/db";
 import { getWorkspaceContext } from "@/features/workspaces/context";
-import { candidateAvatarFallbackSrcs } from "@/lib/candidate-avatar";
-import { getWorkspaceGravatarEnabled } from "@/lib/gravatar";
 import {
   getDailySeries,
   getHiresByJob,
   getHiringKpis,
   getWorkspaceTimeZone,
 } from "@/features/reports/canonical";
-import { dayLabel, allTimeWindow, previousWindow, resolveWindow } from "@/features/reports/window";
+import {
+  allTimeWindow,
+  dayLabel,
+  localDateKey,
+  previousWindow,
+  resolveWindow,
+} from "@/features/reports/window";
 import {
   actorHasPermission,
   isUnrestrictedScope,
@@ -36,14 +36,13 @@ import {
   type WorkspaceSearchActor,
 } from "@/features/search/scope";
 import { resolveSearchActor } from "@/features/search/workspace-search";
+import { getNeedsScheduling, getReviewQueue } from "@/features/review/queue";
 import type { Permission } from "@/features/workspaces/permissions";
 import { taskDueState } from "@/features/tasks/shared";
 import { daysSince } from "@/lib/date";
 
 const DAY_MS = 86_400_000;
 const PERF_DAYS = 14;
-/** Review-stage logic keys off stage kind, never the display name. */
-const REVIEW_KINDS = ["screening", "interview"] as const;
 const RISK_WINDOW_DAYS = 30;
 
 /**
@@ -64,8 +63,11 @@ function hasAnyPermission(actor: WorkspaceSearchActor, permissions: readonly Per
 export type DashboardWidgetAccess = {
   reviewCandidates: boolean;
   todayInterviews: boolean;
+  /** Interview-stage candidates that still need an interview booked. */
+  scheduling: boolean;
   pipeline: boolean;
-  inbox: boolean;
+  /** Job descriptions awaiting this actor's approval. */
+  approvals: boolean;
   tasks: boolean;
   /** Canonical hiring metrics are workspace-wide, so only unrestricted actors see them. */
   performance: boolean;
@@ -77,8 +79,9 @@ export const getDashboardWidgetAccess = cache(async (): Promise<DashboardWidgetA
   return {
     reviewCandidates: has("candidates:view"),
     todayInterviews: hasAnyPermission(actor, ["interviews:manage", "interviews:feedback"]),
+    scheduling: has("candidates:view") && has("interviews:manage"),
     pipeline: has("candidates:view"),
-    inbox: has("candidates:view") || has("jobs:approve"),
+    approvals: has("jobs:approve"),
     tasks: has("tasks:read"),
     performance: has("reports:read") && isUnrestrictedScope(actor.scope),
   };
@@ -223,13 +226,23 @@ export const getPipelineOverview = cache(async (jobId?: string) => {
 
 // ── Today's interviews ──────────────────────────────────────────────────────
 
+const TODAY_INTERVIEWS_SHOWN = 8;
+
+/**
+ * Interviews on the workspace's local day. `total` counts every interview of
+ * the day (the calendar lists the same set); `items` is the first few. `date`
+ * is that local day as `YYYY-MM-DD`, ready for `/dashboard/calendars?date=`.
+ */
 export const getTodayInterviews = cache(async () => {
   const { organization: workspace } = await getWorkspaceContext();
   const actor = await widgetActor();
-  if (!hasAnyPermission(actor, ["interviews:manage", "interviews:feedback"])) return [];
+  if (!hasAnyPermission(actor, ["interviews:manage", "interviews:feedback"])) {
+    return { total: 0, items: [], date: null };
+  }
   // "Today" is the workspace's local day, not the server's.
   const timeZone = await getWorkspaceTimeZone(workspace.id);
-  const today = resolveWindow(1, timeZone, new Date());
+  const now = new Date();
+  const today = resolveWindow(1, timeZone, now);
   const start = today.from;
   const end = today.to;
 
@@ -275,118 +288,41 @@ export const getTodayInterviews = cache(async () => {
     )
     .orderBy(asc(interviews.scheduledAt));
 
-  return rows.map((r) => ({
-    id: r.id,
-    scheduledAt: r.scheduledAt,
-    type: r.type,
-    label: r.title ?? interviewTypeLabel(r.type),
-    candidateId: r.candidateId,
-    candidate: `${r.first} ${r.last}`,
-    job: r.jobTitle,
-    interviewer: r.interviewer ?? null,
-    interviewerImage: r.interviewerImage ?? null,
-    gcalEventId: r.gcalEventId,
-  }));
+  return {
+    total: rows.length,
+    date: localDateKey(now, timeZone),
+    items: rows.slice(0, TODAY_INTERVIEWS_SHOWN).map((r) => ({
+      id: r.id,
+      scheduledAt: r.scheduledAt,
+      type: r.type,
+      label: r.title ?? interviewTypeLabel(r.type),
+      candidateId: r.candidateId,
+      candidate: `${r.first} ${r.last}`,
+      job: r.jobTitle,
+      interviewer: r.interviewer ?? null,
+      interviewerImage: r.interviewerImage ?? null,
+      inGoogleCalendar: r.gcalEventId !== null,
+    })),
+  };
 });
 
 // ── Candidates needing review (with aging) ──────────────────────────────────
 
-export const getCandidatesNeedingReview = cache(async () => {
-  const { organization: workspace } = await getWorkspaceContext();
-  const actor = await widgetActor();
-  if (!actorHasPermission(actor, "candidates:view")) return [];
-  const gravatarEnabled = await getWorkspaceGravatarEnabled(workspace.id);
+const REVIEW_SHOWN = 5;
+const SCHEDULING_SHOWN = 4;
 
-  const [rows, enteredRows] = await Promise.all([
-    db
-      .select({
-        applicationId: applications.id,
-        candidateId: candidates.id,
-        first: candidates.firstName,
-        last: candidates.lastName,
-        email: candidates.email,
-        avatarUrl: candidates.avatarUrl,
-        githubUrl: candidates.githubUrl,
-        jobTitle: jobs.title,
-        stageName: jobStages.name,
-        stageKind: effectiveStageKindSql(jobStages),
-        appliedAt: applications.appliedAt,
-        scorecardId: scorecards.id,
-      })
-      .from(applications)
-      .innerJoin(
-        candidates,
-        and(
-        eq(candidates.workspaceId, workspace.id),
-        eq(candidates.id, applications.candidateId),
-        isNull(candidates.deletedAt),
-        ),
-      )
-      .innerJoin(
-        jobs,
-        and(
-          eq(jobs.workspaceId, workspace.id),
-          eq(jobs.id, applications.jobId),
-          isNull(jobs.deletedAt),
-        ),
-      )
-      .innerJoin(
-        jobStages,
-        and(
-          eq(jobStages.workspaceId, workspace.id),
-          eq(jobStages.id, applications.currentStageId),
-          stageIsAnyKindSql(jobStages, REVIEW_KINDS),
-          isNull(jobStages.archivedAt),
-        ),
-      )
-      // A submitted scorecard for the current stage means the review is done.
-      .leftJoin(
-        scorecards,
-        and(
-          eq(scorecards.workspaceId, workspace.id),
-          eq(scorecards.candidateId, applications.candidateId),
-          eq(scorecards.stageName, jobStages.name),
-        ),
-      )
-      .where(
-        and(
-        eq(applications.workspaceId, workspace.id),
-        eq(applications.status, "active"),
-        isNull(candidates.deletedAt),
-        jobScopeSql(actor),
-        ),
-      ),
-    db
-      .select({
-        applicationId: applicationStageHistory.applicationId,
-        at: sql<string>`max(${applicationStageHistory.createdAt})`,
-      })
-      .from(applicationStageHistory)
-      .where(eq(applicationStageHistory.workspaceId, workspace.id))
-      .groupBy(applicationStageHistory.applicationId),
-  ]);
+/**
+ * MY pending reviews (see `@/features/review/queue`): `total` is the real
+ * count, the same one the review queue page lists; `items` is the oldest few.
+ */
+export const getCandidatesNeedingReview = cache(async () =>
+  getReviewQueue(await widgetActor(), { limit: REVIEW_SHOWN }),
+);
 
-  const enteredAt = new Map(enteredRows.map((r) => [r.applicationId, r.at]));
-
-  return rows
-    .filter((r) => r.scorecardId === null)
-    .map((r) => {
-      const since = enteredAt.get(r.applicationId) ?? r.appliedAt;
-      return {
-        id: r.applicationId,
-        candidateId: r.candidateId,
-        name: `${r.first} ${r.last}`,
-        avatarUrl: r.avatarUrl,
-        avatarFallbackSrcs: candidateAvatarFallbackSrcs(r.email, r.githubUrl, { gravatarEnabled }),
-        job: r.jobTitle,
-        stage: r.stageName,
-        action: r.stageKind === "interview" ? "Interview feedback" : "Resume review",
-        ageDays: daysSince(since),
-      };
-    })
-    .sort((a, b) => b.ageDays - a.ageDays)
-    .slice(0, 5);
-});
+/** Interview-stage candidates with no interview scheduled yet. */
+export const getInterviewsToSchedule = cache(async () =>
+  getNeedsScheduling(await widgetActor(), { limit: SCHEDULING_SHOWN }),
+);
 
 // ── Jobs at risk ─────────────────────────────────────────────────────────────
 
@@ -565,186 +501,68 @@ export const getHiringPerformance = cache(async () => {
   };
 });
 
-// ── Inbox (derived from real signals , no tasks table) ──────────────────────
+// ── Decisions waiting (job approvals) ───────────────────────────────────────
 
-type DueState = "overdue" | "today" | "soon";
-type InboxIcon = "feedback" | "schedule" | "screen" | "approve";
+const APPROVALS_SHOWN = 5;
 
+/**
+ * Decisions waiting on the viewer that are not candidate reviews: draft jobs
+ * awaiting approval (`jobs:approve`). Candidate reviews live in the review
+ * queue and scheduling in `getInterviewsToSchedule`, so nothing repeats here.
+ */
 export const getInbox = cache(async () => {
   const { organization: workspace } = await getWorkspaceContext();
   const actor = await widgetActor();
-  const seesCandidates = actorHasPermission(actor, "candidates:view");
-  // Draft-job approvals are an approver's item, so they need jobs:approve.
-  const seesDraftJobs = actorHasPermission(actor, "jobs:approve");
-  if (!seesCandidates && !seesDraftJobs) return [];
+  if (!actorHasPermission(actor, "jobs:approve")) return { total: 0, items: [] };
 
-  const [rows, scorecardKeys, interviewedRows, draftJobs] = await Promise.all([
-    !seesCandidates ? [] : db
-      .select({
-        applicationId: applications.id,
-        candidateId: candidates.id,
-        first: candidates.firstName,
-        last: candidates.lastName,
-        jobTitle: jobs.title,
-        stageName: jobStages.name,
-        stageKind: effectiveStageKindSql(jobStages),
-        appliedAt: applications.appliedAt,
-      })
-      .from(applications)
-      .innerJoin(
-        candidates,
-        and(
-        eq(candidates.workspaceId, workspace.id),
-        eq(candidates.id, applications.candidateId),
-        isNull(candidates.deletedAt),
-        ),
-      )
-      .innerJoin(
-        jobs,
-        and(
-          eq(jobs.workspaceId, workspace.id),
-          eq(jobs.id, applications.jobId),
-          isNull(jobs.deletedAt),
-        ),
-      )
-      .innerJoin(
-        jobStages,
-        and(
-          eq(jobStages.workspaceId, workspace.id),
-          eq(jobStages.id, applications.currentStageId),
-          stageIsAnyKindSql(jobStages, REVIEW_KINDS),
-          isNull(jobStages.archivedAt),
-        ),
-      )
-      .where(
-        and(
-          eq(applications.workspaceId, workspace.id),
-          eq(applications.status, "active"),
-          jobScopeSql(actor),
-        ),
+  const drafts = await db
+    .select({ id: jobs.id, title: jobs.title, createdAt: jobs.createdAt })
+    .from(jobs)
+    .where(
+      and(
+        eq(jobs.workspaceId, workspace.id),
+        eq(jobs.status, "draft"),
+        isNull(jobs.deletedAt),
+        jobScopeSql(actor),
       ),
-    !seesCandidates ? [] : db
-      .select({
-        candidateId: scorecards.candidateId,
-        stageName: scorecards.stageName,
-      })
-      .from(scorecards)
-      .where(eq(scorecards.workspaceId, workspace.id)),
-    !seesCandidates ? [] : db
-      .select({ applicationId: interviews.applicationId })
-      .from(interviews)
-      .where(eq(interviews.workspaceId, workspace.id)),
-    !seesDraftJobs ? [] : db
-      .select({ id: jobs.id, title: jobs.title })
-      .from(jobs)
-      .where(
-        and(
-          eq(jobs.workspaceId, workspace.id),
-          eq(jobs.status, "draft"),
-          isNull(jobs.deletedAt),
-          jobScopeSql(actor),
-        ),
-      ),
-  ]);
+    )
+    .orderBy(asc(jobs.createdAt), asc(jobs.id));
 
-  const reviewed = new Set(
-    scorecardKeys.map((k) => `${k.candidateId}::${k.stageName ?? ""}`),
-  );
-  const interviewed = new Set(interviewedRows.map((r) => r.applicationId));
-
-  type Item = {
-    id: string;
-    icon: InboxIcon;
-    title: string;
-    subtitle: string;
-    due: string;
-    dueState: DueState;
-    href: string;
-    rank: number;
+  return {
+    total: drafts.length,
+    items: drafts.slice(0, APPROVALS_SHOWN).map((job) => ({
+      id: job.id,
+      title: job.title,
+      subtitle: "Job description awaiting approval",
+      ageDays: daysSince(job.createdAt),
+      href: `/dashboard/jobs/${job.id}`,
+    })),
   };
-  const items: Item[] = [];
-
-  for (const a of rows) {
-    const name = `${a.first} ${a.last}`;
-    const href = `/dashboard/candidates/${a.candidateId}`;
-    const aging = daysSince(a.appliedAt);
-    const hasScore = reviewed.has(`${a.candidateId}::${a.stageName}`);
-
-    if (a.stageKind === "interview") {
-      if (!interviewed.has(a.applicationId)) {
-        items.push({
-          id: `${a.applicationId}-schedule`,
-          icon: "schedule",
-          title: `Schedule interview with ${name}`,
-          subtitle: a.jobTitle,
-          due: "Due soon",
-          dueState: "soon",
-          href,
-          rank: 2,
-        });
-      } else if (!hasScore) {
-        items.push({
-          id: `${a.applicationId}-feedback`,
-          icon: "feedback",
-          title: `Review ${name}'s interview`,
-          subtitle: a.jobTitle,
-          due: aging > 5 ? "Overdue" : "Due today",
-          dueState: aging > 5 ? "overdue" : "today",
-          href,
-          rank: aging > 5 ? 0 : 1,
-        });
-      }
-    } else if (a.stageKind === "screening" && !hasScore) {
-      items.push({
-        id: `${a.applicationId}-screen`,
-        icon: "screen",
-        title: `Send feedback for ${name}`,
-        subtitle: a.jobTitle,
-        due: aging > 7 ? "Overdue" : "Due today",
-        dueState: aging > 7 ? "overdue" : "today",
-        href,
-        rank: aging > 7 ? 0 : 1,
-      });
-    }
-  }
-
-  for (const j of draftJobs) {
-    items.push({
-      id: `${j.id}-approve`,
-      icon: "approve",
-      title: "Approve job description",
-      subtitle: j.title,
-      due: "Due soon",
-      dueState: "soon",
-      href: `/dashboard/jobs/${j.id}`,
-      rank: 3,
-    });
-  }
-
-  return items.sort((a, b) => a.rank - b.rank).slice(0, 6);
-});
-
-export const getInboxCount = cache(async () => {
-  const items = await getInbox();
-  return items.length;
 });
 
 export type PipelineOverview = Awaited<ReturnType<typeof getPipelineOverview>>;
-export type TodayInterview = Awaited<ReturnType<typeof getTodayInterviews>>[number];
-export type ReviewCandidate = Awaited<
-  ReturnType<typeof getCandidatesNeedingReview>
->[number];
+export type ReviewCandidates = Awaited<ReturnType<typeof getCandidatesNeedingReview>>;
+export type InterviewsToSchedule = Awaited<ReturnType<typeof getInterviewsToSchedule>>;
+export type TodayInterview = Awaited<ReturnType<typeof getTodayInterviews>>["items"][number];
 export type RiskJob = Awaited<ReturnType<typeof getJobsAtRisk>>[number] & {
   severity: "critical" | "danger" | "warning";
 };
 export type HiringPerformance = Awaited<ReturnType<typeof getHiringPerformance>>;
-export type InboxItem = Awaited<ReturnType<typeof getInbox>>[number];
+export type InboxItem = Awaited<ReturnType<typeof getInbox>>["items"][number];
 
 // ── My tasks (dashboard widget) ─────────────────────────────────────────────
 
+const TASKS_SHOWN = 6;
+
+/**
+ * My open tasks (pending or in progress). `total` counts them all and
+ * `dueNow` the overdue-or-due-today subset: the exact set
+ * `/dashboard/tasks?owner=me&due=overdue,today` lists. `items` is the first few
+ * by priority, then due date.
+ */
 export const getMyDashboardTasks = cache(async () => {
   const actor = await widgetActor();
-  if (!actorHasPermission(actor, "tasks:read")) return [];
+  if (!actorHasPermission(actor, "tasks:read")) return { total: 0, dueNow: 0, items: [] };
   const { organization: workspace, user: currentUser } = await getWorkspaceContext();
   const now = new Date();
 
@@ -796,10 +614,9 @@ export const getMyDashboardTasks = cache(async () => {
         END`,
       ),
       asc(tasks.dueDate),
-    )
-    .limit(6);
+    );
 
-  return rows.map((r) => {
+  const open = rows.map((r) => {
     const dueState = taskDueState(r.dueDate?.toISOString() ?? null, now);
 
     return {
@@ -816,6 +633,12 @@ export const getMyDashboardTasks = cache(async () => {
       candidateId: r.candidateId,
     };
   });
+
+  return {
+    total: open.length,
+    dueNow: open.filter((t) => t.dueState === "overdue" || t.dueState === "today").length,
+    items: open.slice(0, TASKS_SHOWN),
+  };
 });
 
-export type MyDashboardTask = Awaited<ReturnType<typeof getMyDashboardTasks>>[number];
+export type MyDashboardTask = Awaited<ReturnType<typeof getMyDashboardTasks>>["items"][number];

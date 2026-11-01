@@ -10,9 +10,9 @@ import { SectionHeader, StatusPill } from "@/features/workspaces/settings-ui";
 import { PencilIcon } from "@/components/ui/icons/phosphor";
 import { Card, CardContent } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
-import { Button } from "@/components/ui/button";
+import { FormFooter } from "@/components/ui/form-footer";
+import { SettingRow, SettingRows } from "@/components/ui/setting-row";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { saveSignatureSettings } from "./signature-settings-actions";
 import {
   deleteSavedSignature,
@@ -29,6 +29,8 @@ type Settings = {
   signatureTimelineEnabled: boolean;
   signatureSecurityMode: string;
   signatureExpirationDays: number;
+  signatureReminderCadenceDays: number;
+  signatureMaxReminders: number;
 };
 
 type SavedSignature =
@@ -58,23 +60,37 @@ const TOGGLES: Array<{
   {
     key: "signatureTimelineEnabled",
     title: "Signing timeline",
-    description: "Show the audit timeline (viewed, verified, signed) on signed documents.",
+    description: "Show a readable timeline on each document: who was invited, opened the link, verified, consented, signed, declined or was reminded.",
   },
 ];
 
 export function SignatureSettingsCard({ settings }: { settings: Settings }) {
   const [value, setValue] = useState(settings);
+  const [saved, setSaved] = useState(settings);
+  const dirty = JSON.stringify(value) !== JSON.stringify(saved);
   const [pending, startTransition] = useTransition();
 
   function toggle(key: keyof Settings) {
     setValue((current) => ({ ...current, [key]: !current[key] }));
   }
 
+  function setNumber(key: "signatureExpirationDays" | "signatureReminderCadenceDays" | "signatureMaxReminders", raw: string) {
+    // Keep an empty box empty while typing instead of snapping it to 0.
+    setValue((current) => ({ ...current, [key]: raw === "" ? (Number.NaN as number) : Number(raw) }));
+  }
+
   function save() {
+    const { signatureExpirationDays: days, signatureReminderCadenceDays: cadence, signatureMaxReminders: max } = value;
+    if (!Number.isInteger(days) || days < 3 || days > 365) return void toast.error("Link lifetime must be between 3 and 365 days.");
+    if (!Number.isInteger(cadence) || cadence < 0 || cadence > 30) return void toast.error("Reminder interval must be between 0 and 30 days.");
+    if (!Number.isInteger(max) || max < 0 || max > 10) return void toast.error("Maximum reminders must be between 0 and 10.");
     startTransition(async () => {
       const result = await saveSignatureSettings(value);
       if (!result.ok) toast.error(result.error);
-      else toast.success("Signature settings saved");
+      else {
+        setSaved(value);
+        toast.success("Signature settings saved");
+      }
     });
   }
 
@@ -92,68 +108,102 @@ export function SignatureSettingsCard({ settings }: { settings: Settings }) {
           }
         />
 
-        <div className="divide-y divide-border/70 rounded-xl border border-border/70">
+        <SettingRows className="-mx-6 border-t border-hairline [&>[data-slot=setting-row]]:px-6">
           {TOGGLES.map((item) => (
-            <label
+            <SettingRow
               key={item.key}
-              className="flex items-start justify-between gap-4 px-4 py-3.5"
-            >
-              <span>
-                <span className="block text-sm font-medium">{item.title}</span>
-                <span className="mt-0.5 block text-xs leading-5 text-muted-foreground">
-                  {item.description}
-                </span>
-              </span>
-              <Switch
-                checked={value[item.key]}
-                onCheckedChange={() => toggle(item.key)}
-              />
-            </label>
-          ))}
-          <label className="flex items-start justify-between gap-4 px-4 py-3.5">
-            <span>
-              <span className="block text-sm font-medium">
-                Require email OTP for remote signing
-              </span>
-              <span className="mt-0.5 block text-xs leading-5 text-muted-foreground">
-                Recipients must verify a one-time code sent to their email before
-                signing a remote link.
-              </span>
-            </span>
-            <Switch
-              checked={value.signatureOtpEnabled}
-              onCheckedChange={() => toggle("signatureOtpEnabled")}
+              htmlFor={`signature-${item.key}`}
+              descriptionId={`signature-${item.key}-desc`}
+              title={item.title}
+              description={item.description}
+              control={
+                <Switch
+                  id={`signature-${item.key}`}
+                  aria-describedby={`signature-${item.key}-desc`}
+                  checked={value[item.key]}
+                  onCheckedChange={() => toggle(item.key)}
+                />
+              }
             />
-          </label>
-        </div>
-
-        <div className="max-w-xs space-y-2">
-          <Label htmlFor="signature-expiration">
-            Remote link expiration (days)
-          </Label>
-          <Input
-            id="signature-expiration"
-            type="number"
-            min={1}
-            max={365}
-            value={value.signatureExpirationDays}
-            onChange={(event) =>
-              setValue((current) => ({
-                ...current,
-                signatureExpirationDays: Number(event.target.value),
-              }))
+          ))}
+          <SettingRow
+            htmlFor="signature-otp"
+            descriptionId="signature-otp-desc"
+            title="Require email OTP for remote signing"
+            description="Recipients must verify a one-time code sent to their email before signing a remote link."
+            control={
+              <Switch
+                id="signature-otp"
+                aria-describedby="signature-otp-desc"
+                checked={value.signatureOtpEnabled}
+                onCheckedChange={() => toggle("signatureOtpEnabled")}
+              />
             }
           />
-          <p className="text-xs text-muted-foreground">
-            Default is 30 days. Maximum is 365 days.
-          </p>
-        </div>
+          <SettingRow
+            htmlFor="signature-expiration"
+            descriptionId="signature-expiration-desc"
+            title="Link lifetime (days)"
+            description="Each signer's clock starts when they are invited, not when the document is sent. 3 to 365 days."
+            control={
+              <Input
+                id="signature-expiration"
+                aria-describedby="signature-expiration-desc"
+                className="w-24"
+                type="number"
+                min={3}
+                max={365}
+                value={Number.isNaN(value.signatureExpirationDays) ? "" : value.signatureExpirationDays}
+                onChange={(event) => setNumber("signatureExpirationDays", event.target.value)}
+              />
+            }
+          />
+          <SettingRow
+            htmlFor="signature-reminder-cadence"
+            descriptionId="signature-reminder-cadence-desc"
+            title="Remind signers every (days)"
+            description="Counted from when the current signer was invited. 0 turns automatic reminders off. Earlier links keep working."
+            control={
+              <Input
+                id="signature-reminder-cadence"
+                aria-describedby="signature-reminder-cadence-desc"
+                className="w-24"
+                type="number"
+                min={0}
+                max={30}
+                value={Number.isNaN(value.signatureReminderCadenceDays) ? "" : value.signatureReminderCadenceDays}
+                onChange={(event) => setNumber("signatureReminderCadenceDays", event.target.value)}
+              />
+            }
+          />
+          <SettingRow
+            htmlFor="signature-max-reminders"
+            descriptionId="signature-max-reminders-desc"
+            title="Maximum automatic reminders"
+            description="Per signer. Manual reminders from the document do not count toward this."
+            control={
+              <Input
+                id="signature-max-reminders"
+                aria-describedby="signature-max-reminders-desc"
+                className="w-24"
+                type="number"
+                min={0}
+                max={10}
+                value={Number.isNaN(value.signatureMaxReminders) ? "" : value.signatureMaxReminders}
+                onChange={(event) => setNumber("signatureMaxReminders", event.target.value)}
+              />
+            }
+          />
+        </SettingRows>
 
-        <div>
-          <Button onClick={save} disabled={pending}>
-            {pending ? "Saving…" : "Save settings"}
-          </Button>
-        </div>
+        <FormFooter
+          className="-mx-6 -mb-6 border-t"
+          dirty={dirty}
+          saving={pending}
+          saveLabel="Save settings"
+          onDiscard={() => setValue(saved)}
+          onSave={save}
+        />
       </Card>
 
       {value.savedSignaturesEnabled ? <SavedSignaturesCard /> : null}
@@ -172,6 +222,7 @@ function SavedSignaturesCard() {
   }, []);
 
   function remove(id: string) {
+    if (!window.confirm("Remove this saved signature? You can save it again while signing.")) return;
     void deleteSavedSignature({ id }).then((result) => {
       if (!result.ok) {
         toast.error(result.error ?? "Could not delete the signature.");
@@ -199,7 +250,7 @@ function SavedSignaturesCard() {
             {Array.from({ length: 4 }).map((_, index) => (
               <div
                 key={index}
-                className="h-20 animate-pulse rounded-lg bg-muted"
+                className="h-20 animate-pulse rounded-[var(--radius-inner)] bg-card-inset"
               />
             ))}
           </div>
@@ -212,7 +263,7 @@ function SavedSignaturesCard() {
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
             {signatures.map((signature) => (
               <div key={signature.id} className="group relative">
-                <div className="flex h-20 items-center justify-center rounded-lg border border-input bg-white p-2">
+                <div className="flex h-20 items-center justify-center rounded-[var(--radius-inner)] border border-hairline bg-white p-2">
                   {signature.kind === "vector" ? (
                     <SavedVectorThumb vectorData={signature.vectorData} />
                   ) : (
@@ -227,7 +278,7 @@ function SavedSignaturesCard() {
                   type="button"
                   aria-label="Delete saved signature"
                   onClick={() => remove(signature.id)}
-                  className="absolute -right-1.5 -top-1.5 flex size-6 items-center justify-center rounded-full border bg-card text-muted-foreground opacity-0 shadow-xs transition-opacity hover:text-destructive group-hover:opacity-100"
+                  className="absolute -right-1.5 -top-1.5 flex size-6 items-center justify-center rounded-full border bg-card text-muted-foreground shadow-xs transition-opacity hover:text-destructive sm:opacity-0 sm:group-hover:opacity-100 sm:focus-visible:opacity-100"
                 >
                   <Trash2 className="size-3.5" />
                 </button>

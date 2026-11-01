@@ -1,6 +1,7 @@
 import "server-only";
 
 import { and, eq } from "drizzle-orm";
+import { aiEngineVersion, sourceScopedEvaluationFields } from "@/features/evaluations/source-fields";
 
 import {
   activityEvents,
@@ -192,7 +193,10 @@ export async function scheduleAutoScore(
     let result = rulesEvaluation.result;
     if (aiConfig) {
       try {
-        result = await scoreCandidateWithAI(aiConfig, scoreInput);
+        result = await scoreCandidateWithAI(aiConfig, {
+          ...scoreInput,
+          rubricCriteria: publishedRubric?.criteria,
+        });
         source = "ai";
       } catch (aiError) {
         console.warn(
@@ -212,19 +216,18 @@ export async function scheduleAutoScore(
       provider: source === "ai" && aiConfig ? aiConfig.provider : "harly",
       modelId: source === "ai" && aiConfig ? aiConfig.modelId : RULES_EVALUATION_VERSION,
       engine: source === "ai" ? "provider-ai" : "harly-rules",
-      engineVersion: source === "ai" && aiConfig ? aiConfig.modelId : RULES_EVALUATION_VERSION,
+      engineVersion:
+        source === "ai" && aiConfig
+          ? aiEngineVersion(aiConfig.modelId, evaluationMode)
+          : `${RULES_EVALUATION_VERSION}:${evaluationMode}`,
       rubricVersion: rulesEvaluation.rubric.version,
       rubricSnapshot: rulesEvaluation.rubric,
       result,
-      criterionResults: rulesEvaluation.criterionResults,
+      ...sourceScopedEvaluationFields(source, rulesEvaluation, result),
       candidateFactsSnapshot: rulesEvaluation.candidateFacts,
       skillProfilesSnapshot: rulesEvaluation.skillProfiles,
       evaluationMetadataSnapshot: rulesEvaluation.metadata,
-      criterionDetailsSnapshot: rulesEvaluation.criterionAssessments,
       impactHighlightsSnapshot: rulesEvaluation.impactHighlights,
-      evidenceCoverage: rulesEvaluation.evidenceCoverage,
-      confidence: rulesEvaluation.confidence,
-      requiresHumanReview: rulesEvaluation.requiresHumanReview || source === "ai",
       usedResume: resumeText !== null,
       generatedById: null,
       inputFingerprintSource: scoreInput,
@@ -450,7 +453,10 @@ export async function evaluateApplicationForWorkflow(input: {
     let result = rulesEvaluation.result;
     if (aiConfig) {
       try {
-        result = await scoreCandidateWithAI(aiConfig, scoreInput);
+        result = await scoreCandidateWithAI(aiConfig, {
+          ...scoreInput,
+          rubricCriteria: publishedRubric?.criteria,
+        });
         source = "ai";
       } catch (aiError) {
         console.warn(
@@ -473,20 +479,17 @@ export async function evaluateApplicationForWorkflow(input: {
         source === "ai" && aiConfig ? aiConfig.modelId : RULES_EVALUATION_VERSION,
       engine: source === "ai" ? "provider-ai" : "harly-rules",
       engineVersion:
-        source === "ai" && aiConfig ? aiConfig.modelId : RULES_EVALUATION_VERSION,
+        source === "ai" && aiConfig
+          ? aiEngineVersion(aiConfig.modelId, evaluationMode)
+          : `${RULES_EVALUATION_VERSION}:${evaluationMode}`,
       rubricVersion: rulesEvaluation.rubric.version,
       rubricSnapshot: rulesEvaluation.rubric,
       result,
-      criterionResults: rulesEvaluation.criterionResults,
+      ...sourceScopedEvaluationFields(source, rulesEvaluation, result),
       candidateFactsSnapshot: rulesEvaluation.candidateFacts,
       skillProfilesSnapshot: rulesEvaluation.skillProfiles,
       evaluationMetadataSnapshot: rulesEvaluation.metadata,
-      criterionDetailsSnapshot: rulesEvaluation.criterionAssessments,
       impactHighlightsSnapshot: rulesEvaluation.impactHighlights,
-      evidenceCoverage: rulesEvaluation.evidenceCoverage,
-      confidence: rulesEvaluation.confidence,
-      requiresHumanReview:
-        rulesEvaluation.requiresHumanReview || source === "ai",
       usedResume: resumeText !== null,
       generatedById: input.actorUserId ?? null,
       inputFingerprintSource: scoreInput,

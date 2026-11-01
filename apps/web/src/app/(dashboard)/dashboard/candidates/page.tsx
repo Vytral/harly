@@ -1,6 +1,8 @@
-import Link from "next/link";
 import type { Route } from "next";
-import { Trash2, Users } from "lucide-react";
+import Link from "next/link";
+import { ArrowRight, CheckCircle2, ClipboardCheck, Trash2, Users } from "lucide-react";
+
+import { Button } from "@/components/ui/button";
 
 import { EmptyState } from "@/components/ui/empty-state";
 import { Card } from "@/components/ui/card";
@@ -20,18 +22,22 @@ import {
   type CandidateApplicationStatus,
   type CandidateDirectoryFilters,
 } from "@/features/candidates/data";
+import { DirectoryTabs, PageTitleRow } from "@/features/candidates/directory-chrome";
 import { TrashCandidateActions } from "@/features/candidates/TrashCandidateActions";
 import { AddCandidateDrawer } from "@/features/candidates/AddCandidateDrawer";
 import { listEmailTemplates } from "@/features/email-templates/data";
 import { listJobOptions } from "@/features/jobs/data";
 import { listWorkspaceMembers } from "@/features/jobs/hiring-team-data";
 import { isUnrestrictedScope } from "@/features/search/scope";
+import { resolveSearchActor } from "@/features/search/workspace-search";
+import { getReviewQueue } from "@/features/review/queue";
+import { ReviewQueueList } from "@/features/review/ReviewQueueList";
+import { candidateHref, REVIEW_ORIGIN } from "@/features/candidates/origin";
 import { getWorkspaceContext } from "@/features/workspaces/context";
 import { can, getRolePolicy, requirePagePermission } from "@/features/workspaces/permissions-server";
 import { candidateAvatarFallbackSrcs } from "@/lib/candidate-avatar";
 import { getWorkspaceGravatarEnabled } from "@/lib/gravatar";
 import { formatRelative, formatShort } from "@/lib/date";
-import { cn } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
 
@@ -53,13 +59,18 @@ type CandidatesPageProps = {
     tag?: string;
     sort?: string;
     page?: string;
+    /** `review`: the current user's review queue instead of the directory. */
+    queue?: string;
+    /** Set by auto-advance after the last queue item. */
+    done?: string;
   }>;
 };
 
 export default async function CandidatesPage({ searchParams }: CandidatesPageProps) {
   await requirePagePermission("candidates:view");
-  const { view, import: importSource, q, dept, role, stage, status, source, tag, sort, page: pageRaw } = await searchParams;
-  const isTrash = view === "trash";
+  const { view, import: importSource, q, dept, role, stage, status, source, tag, sort, page: pageRaw, queue, done } = await searchParams;
+  const isQueue = queue === "review";
+  const isTrash = !isQueue && view === "trash";
 const initialImportSource: ImportSource | undefined =
     importSource === "csv" ||
     importSource === "greenhouse" ||
@@ -99,14 +110,21 @@ const initialImportSource: ImportSource | undefined =
   const [
     directory,
     facets,
+    reviewQueue,
     trashed,
     emailTemplates,
     jobOptions,
     members,
     canCreateCandidates,
   ] = await Promise.all([
-    listCandidateDirectory(directoryFilters),
-    listCandidateDirectoryFacets(),
+    isQueue
+      ? Promise.resolve({ rows: [], total: 0, page: 1, pageSize: 50, hasNextPage: false })
+      : listCandidateDirectory(directoryFilters),
+    isQueue
+      ? Promise.resolve({ departments: [], roles: [], stages: [], sources: [], tags: [] })
+      : listCandidateDirectoryFacets(),
+    // The same source Home counts, so "Review queue · N" matches it.
+    resolveSearchActor().then((actor) => getReviewQueue(actor)),
     // The trash is not filtered by job scope, so a role limited to specific jobs
     // does not load it (its names and emails cannot be scoped per candidate here).
     isUnrestrictedScope(policy.scope) ? listTrashedCandidates() : Promise.resolve([]),
@@ -144,27 +162,108 @@ const initialImportSource: ImportSource | undefined =
     };
   });
 
-  return (
-    <div className="space-y-5">
-      <div className="flex w-fit items-center gap-1 rounded-lg border bg-card p-1 text-sm">
-        <Tab href="/dashboard/candidates" active={!isTrash}>
-          All
-          <span className="ml-1.5 tabular-nums text-muted-foreground">{directory.total}</span>
-        </Tab>
-        <Tab href="/dashboard/candidates?view=trash" active={isTrash}>
-          <Trash2 className="size-3.5" />
-          Trash
-          <span className="ml-1.5 tabular-nums text-muted-foreground">{trashed.length}</span>
-        </Tab>
-      </div>
+  const QUEUE_LIST_LIMIT = 100;
+  const queueItems = reviewQueue.items.slice(0, QUEUE_LIST_LIMIT);
+  const firstQueueItem = reviewQueue.items[0] ?? null;
 
-      {isTrash ? (
+  const importJobsProp = jobOptions.map((job) => ({ id: job.id, title: job.title }));
+
+  return (
+    <div className="space-y-6">
+      <PageTitleRow
+        title={isQueue ? `Review queue · ${reviewQueue.total}` : "Candidates"}
+        description={
+          isQueue
+            ? "Applications waiting on your review, longest wait first."
+            : undefined
+        }
+      >
+        {isQueue && firstQueueItem ? (
+          <Button asChild>
+            <Link href={candidateHref(firstQueueItem.candidateId, REVIEW_ORIGIN, firstQueueItem.applicationId) as Route}>
+              Start reviewing
+              <ArrowRight className="size-4" />
+            </Link>
+          </Button>
+        ) : null}
+        {isQueue ? null : (
+          <ImportCandidatesDrawer jobs={importJobsProp} initialSource={initialImportSource} />
+        )}
+        {canCreateCandidates && !isQueue ? (
+          <AddCandidateDrawer
+            workspaceId={workspaceContext.organization.id}
+            jobs={importJobsProp}
+            members={members}
+            currentUserId={workspaceContext.user.id}
+          />
+        ) : null}
+      </PageTitleRow>
+
+      <DirectoryTabs
+        label="Candidate views"
+        items={[
+          { href: "/dashboard/candidates", label: "All", count: isQueue ? undefined : directory.total, active: !isTrash && !isQueue },
+          {
+            href: "/dashboard/candidates?queue=review",
+            label: "Review queue",
+            count: reviewQueue.total,
+            icon: <ClipboardCheck className="size-3.5" aria-hidden />,
+            active: isQueue,
+          },
+          {
+            href: "/dashboard/candidates?view=trash",
+            label: "Trash",
+            count: trashed.length,
+            icon: <Trash2 className="size-3.5" aria-hidden />,
+            active: isTrash,
+          },
+        ]}
+      />
+
+      {isQueue ? (
+        reviewQueue.total === 0 ? (
+          <EmptyState
+            icon={CheckCircle2}
+            title="Queue cleared"
+            description="Nothing is waiting on your review. New screening and interview feedback shows up here."
+            action={{ href: "/dashboard", label: "Back to Home" }}
+            secondaryAction={
+              <Button asChild variant="outline" size="sm">
+                <Link href="/dashboard/candidates">All candidates</Link>
+              </Button>
+            }
+          />
+        ) : (
+          <div className="space-y-3">
+            {done === "1" ? (
+              <div
+                role="status"
+                className="flex flex-wrap items-center justify-between gap-3 rounded-[var(--radius-inner)] bg-sage-wash px-4 py-3 text-[14px] text-near-ink"
+              >
+                <span>
+                  You reached the end of the queue. {reviewQueue.total} still{" "}
+                  {reviewQueue.total === 1 ? "waits" : "wait"} on your review.
+                </span>
+                <Link href="/dashboard" className="font-medium underline-offset-4 hover:underline">
+                  Back to Home
+                </Link>
+              </div>
+            ) : null}
+            <ReviewQueueList items={queueItems} />
+            {reviewQueue.items.length > queueItems.length ? (
+              <p className="text-center text-[13px] text-soft-ink">
+                Showing the {queueItems.length} longest-waiting. Start reviewing to walk all {reviewQueue.total}.
+              </p>
+            ) : null}
+          </div>
+        )
+      ) : isTrash ? (
         trashed.length > 0 ? (
-          <Card className="gap-0 divide-y divide-border/60 overflow-hidden py-0">
+          <Card className="gap-0 divide-y divide-hairline overflow-hidden py-0">
             {trashed.map((candidate) => (
               <div
                 key={candidate.id}
-                className="flex items-center justify-between gap-3 px-4 py-3.5 sm:px-5"
+                className="flex min-h-[60px] items-center justify-between gap-3 px-5 py-3"
               >
                 <span className="flex min-w-0 items-center gap-3">
                   <UserAvatar
@@ -174,10 +273,10 @@ const initialImportSource: ImportSource | undefined =
                     size="lg"
                   />
                   <span className="min-w-0">
-                    <span className="block truncate font-medium text-muted-foreground">
+                    <span className="block truncate text-[14.5px] font-medium text-soft-ink">
                       {candidate.fullName}
                     </span>
-                    <span className="mt-0.5 block truncate text-xs text-muted-foreground">
+                    <span className="mt-0.5 block truncate text-[13px] text-soft-ink">
                       Deleted {formatRelative(candidate.deletedAt)}
                     </span>
                   </span>
@@ -197,27 +296,24 @@ const initialImportSource: ImportSource | undefined =
           />
         )
       ) : rows.length === 0 ? (
-        <div className="space-y-4">
-          <EmptyState
-            icon={Users}
-            title="No candidates yet"
-            description="Share your public job board or import candidates from another ATS."
-          />
-          <div className="flex flex-wrap justify-center gap-2">
-            {canCreateCandidates ? (
+        <EmptyState
+          icon={Users}
+          title="No candidates yet"
+          description="Share your public job board or import candidates from another ATS."
+          action={
+            canCreateCandidates ? (
               <AddCandidateDrawer
                 workspaceId={workspaceContext.organization.id}
-                jobs={jobOptions.map((job) => ({ id: job.id, title: job.title }))}
+                jobs={importJobsProp}
                 members={members}
                 currentUserId={workspaceContext.user.id}
               />
-            ) : null}
-            <ImportCandidatesDrawer
-              jobs={jobOptions.map((job) => ({ id: job.id, title: job.title }))}
-              initialSource={initialImportSource}
-            />
-          </div>
-        </div>
+            ) : undefined
+          }
+          secondaryAction={
+            <ImportCandidatesDrawer jobs={importJobsProp} initialSource={initialImportSource} />
+          }
+        />
       ) : (
         <CandidatesTable
           key={JSON.stringify(directoryFilters)}
@@ -226,43 +322,8 @@ const initialImportSource: ImportSource | undefined =
           filterOptions={facets}
           initialFilters={{ query: q ?? "", dept: dept ?? "__all__", role: role ?? "__all__", stage: stage ?? "__all__", status: candidateStatus ?? "__all__", source: source ?? "__all__", tag: tag ?? "__all__", sort: candidateSort }}
           emailTemplates={emailTemplates}
-          importJobs={jobOptions.map((job) => ({ id: job.id, title: job.title }))}
-          initialImportSource={initialImportSource}
-          manualCandidate={
-            canCreateCandidates
-              ? {
-                  workspaceId: workspaceContext.organization.id,
-                  members,
-                  currentUserId: workspaceContext.user.id,
-                }
-              : undefined
-          }
         />
       )}
     </div>
-  );
-}
-
-function Tab({
-  href,
-  active,
-  children,
-}: {
-  href: string;
-  active: boolean;
-  children: React.ReactNode;
-}) {
-  return (
-    <Link
-      href={href as Route}
-      className={cn(
-        "flex items-center gap-1 rounded-md px-3 py-1.5 font-medium transition",
-        active
-          ? "bg-primary/10 text-primary"
-          : "text-muted-foreground hover:bg-accent hover:text-foreground",
-      )}
-    >
-      {children}
-    </Link>
   );
 }

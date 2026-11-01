@@ -1,9 +1,13 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
+import type { Route } from "next";
 import {
   CalendarClock,
   ClipboardCheck,
+  FilePlus2,
+  Folder,
   Mail,
   MessageSquare,
   Plus,
@@ -15,6 +19,7 @@ import { EmailDrawer } from "@/features/candidates/EmailDrawer";
 import { EvaluationDrawer } from "@/features/candidates/EvaluationDrawer";
 import { NoteForm } from "@/features/candidates/NoteForm";
 import { ScheduleDrawer } from "@/features/candidates/ScheduleDrawer";
+import { GenerateDocumentDialog } from "@/features/documents/GenerateDocumentDialog";
 import { OffersPanel } from "@/features/offers/OffersPanel";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -82,6 +87,7 @@ export function CandidateProfileTabs({
   canFulfilErasure = false,
 }: CandidateProfileTabsProps) {
   const [tab, setTab] = useState("profile");
+  const [generateOpen, setGenerateOpen] = useState(false);
   const conversations = groupIntoConversations(messages);
   const jobOptions = applications.map((application) => ({
     id: application.id,
@@ -140,6 +146,32 @@ export function CandidateProfileTabs({
           aiConfigured={aiConfigured}
           variant="condensed"
           onViewDetailsAction={() => setTab("evaluation")}
+        />
+
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-[var(--radius-card)] bg-card px-5 py-4 shadow-[var(--shadow-card)]">
+          <div className="min-w-0">
+            <p className="text-sm font-semibold text-near-ink">Documents</p>
+            <p className="text-[13px] text-soft-ink">
+              Generate an offer letter or agreement from a template, or see everything filed for {candidateName}.
+            </p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Button size="sm" variant="outline" asChild>
+              <Link href={`/dashboard/documents?candidateId=${candidateId}` as Route}>
+                <Folder className="size-4" />
+                View all
+              </Link>
+            </Button>
+            <Button size="sm" onClick={() => setGenerateOpen(true)}>
+              <FilePlus2 className="size-4" />
+              Generate document
+            </Button>
+          </div>
+        </div>
+        <GenerateDocumentDialog
+          open={generateOpen}
+          onOpenChange={setGenerateOpen}
+          candidate={{ id: candidateId, name: candidateName }}
         />
 
         <CandidateDetailsPanel

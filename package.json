@@ -1,7 +1,7 @@
 {
   "name": "harly",
   "private": true,
-  "version": "0.2.4",
+  "version": "0.3.0",
   "description": "Open-source applicant tracking system for modern teams.",
   "license": "MIT",
   "engines": {
@@ -65,13 +65,15 @@
       "nodemailer": "10.1.4",
       "postcss": "8.5.25",
       "sanitize-html": "2.18.1",
-      "tar": "7.5.19",
+      "tar": "7.5.22",
       "vite": "7.3.7",
       "vitest": "4.1.12",
       "source-map-js": "1.2.2",
-      "follow-redirects": "1.16.1",
+      "follow-redirects": "1.16.2",
       "prosemirror-view": "1.42.3",
-      "zod@>=4.0.0 <4.6.6": "4.6.6"
+      "zod@>=4.0.0 <4.6.6": "4.6.6",
+      "brace-expansion@>=4.0.0 <5.0.12": "5.0.12",
+      "fast-copy@>=4.0.0 <4.1.0": "4.3.1"
     },
     "packageExtensions": {
       "drizzle-orm": {

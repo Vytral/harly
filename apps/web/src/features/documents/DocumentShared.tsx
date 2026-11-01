@@ -1,11 +1,21 @@
 "use client";
 
-import { useRef, useState, useTransition } from "react";
+import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { FileArchive, FileImage, FileText, Plus, Upload } from "lucide-react";
+import { FileArchive, FileImage, FileText, Plus } from "lucide-react";
 import { toast } from "@/lib/notification-island/toast";
 
 import { Button } from "@/components/ui/button";
+import { Callout } from "@/components/ui/callout";
+import { Checkbox } from "@/components/ui/checkbox";
+import { DropZone } from "@/components/ui/drop-zone";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import {
   Dialog,
   DialogContent,
@@ -107,8 +117,38 @@ export function formatDate(value: string) {
   }).format(new Date(value));
 }
 
+const ACTIVITY_LABELS: Record<string, string> = {
+  "document.uploaded": "Uploaded",
+  "document.generated": "Generated from a template",
+  "document.version_created": "New version uploaded",
+  "document.viewed": "Viewed",
+  "document.downloaded": "Downloaded",
+  "document.renamed": "Renamed",
+  "document.archived": "Archived",
+  "document.restored": "Restored",
+  "document.deleted": "Deleted",
+  "document.category_changed": "Category changed",
+  "document.assigned": "Assigned",
+  "document.unassigned": "Unassigned",
+  "document.date_set": "Date changed",
+  "document.permissions_changed": "Access rules changed",
+  "document.requested": "Requested from candidate",
+  "document.signature_sent": "Sent for signature",
+  "document.signature_reminded": "Signer reminded",
+  "document.signature_link_copied": "Signing link issued",
+  "document.signature_changed": "Signature status changed",
+  "document.signature_voided": "Signature request voided",
+  "document.legal_hold_placed": "Legal hold placed",
+  "document.legal_hold_released": "Legal hold released",
+  "document.evidence_exported": "Evidence exported",
+  "document.expired": "Expired",
+};
+
 export function formatActivityType(type: string) {
-  return type.replace(/^document\./, "").replaceAll("_", " ");
+  const known = ACTIVITY_LABELS[type];
+  if (known) return known;
+  const plain = type.replace(/^document\./, "").replaceAll("_", " ");
+  return plain.charAt(0).toUpperCase() + plain.slice(1);
 }
 
 /**
@@ -137,34 +177,33 @@ export function UploadDialog({
   open,
   onOpenChange,
   replaceDocument = null,
+  defaultAssociation = null,
 }: {
   data: DocumentHubData;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   replaceDocument?: DocumentListItem | null;
+  /** Pre-select an association (the candidate a filtered hub is scoped to). */
+  defaultAssociation?: { type: "candidate" | "job"; id: string } | null;
 }) {
   const router = useRouter();
-  const fileInput = useRef<HTMLInputElement>(null);
   const [file, setFile] = useState<File | null>(null);
   const [name, setName] = useState("");
   const [categoryId, setCategoryId] = useState("");
   const [associationType, setAssociationType] = useState<
     "workspace" | "candidate" | "job"
-  >("workspace");
-  const [associationId, setAssociationId] = useState("");
+  >(defaultAssociation?.type ?? "workspace");
+  const [associationId, setAssociationId] = useState(defaultAssociation?.id ?? "");
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
-  const [dragging, setDragging] = useState(false);
 
   function reset() {
     setFile(null);
     setName("");
     setCategoryId("");
-    setAssociationType("workspace");
-    setAssociationId("");
+    setAssociationType(defaultAssociation?.type ?? "workspace");
+    setAssociationId(defaultAssociation?.id ?? "");
     setError(null);
-    setDragging(false);
-    if (fileInput.current) fileInput.current.value = "";
   }
 
   function chooseFile(next: File | null) {
@@ -252,44 +291,13 @@ export function UploadDialog({
         <div className="space-y-4 py-2">
           <div className="space-y-2">
             <Label htmlFor="document-file">File</Label>
-            <input
-              ref={fileInput}
+            <DropZone
               id="document-file"
-              type="file"
-              className="sr-only"
               accept=".pdf,.doc,.docx,.png,.jpg,.jpeg,.gif,.webp"
-              onChange={(event) => chooseFile(event.target.files?.[0] ?? null)}
+              title={file?.name ?? "Drag a file here or click to browse"}
+              hint="PDF, DOCX, or image · up to 25 MB"
+              onFiles={([next]) => chooseFile(next ?? null)}
             />
-            <button
-              type="button"
-              onClick={() => fileInput.current?.click()}
-              onDragOver={(event) => {
-                event.preventDefault();
-                setDragging(true);
-              }}
-              onDragLeave={() => setDragging(false)}
-              onDrop={(event) => {
-                event.preventDefault();
-                setDragging(false);
-                chooseFile(event.dataTransfer.files?.[0] ?? null);
-              }}
-              className={`flex w-full items-center gap-3 rounded-xl border border-dashed px-4 py-6 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${dragging ? "border-primary bg-accent/40" : "border-border/90 bg-muted/20 hover:border-primary/50 hover:bg-accent/20"}`}
-            >
-              <span className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-accent text-primary">
-                <Upload className="size-4" />
-              </span>
-              <span className="min-w-0">
-                <span className="block truncate text-sm font-medium">
-                  {file?.name ??
-                    (dragging
-                      ? "Drop to attach"
-                      : "Drag a file here or click to browse")}
-                </span>
-                <span className="mt-0.5 block text-xs text-muted-foreground">
-                  PDF, DOCX, or image · up to 25 MB
-                </span>
-              </span>
-            </button>
           </div>
           {!replaceDocument ? (
             <>
@@ -304,74 +312,68 @@ export function UploadDialog({
               </div>
               <div className="space-y-2">
                 <Label htmlFor="document-category">Category</Label>
-                <select
-                  id="document-category"
-                  value={categoryId}
-                  onChange={(event) => setCategoryId(event.target.value)}
-                  className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                <Select
+                  value={categoryId || "none"}
+                  onValueChange={(value) => setCategoryId(value === "none" ? "" : value)}
                 >
-                  <option value="">No category</option>
-                  {data.categories
-                    .filter((category) => category.active)
-                    .map((category) => (
-                      <option key={category.id} value={category.id}>
-                        {category.name}
-                      </option>
-                    ))}
-                </select>
+                  <SelectTrigger id="document-category" className="w-full">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent position="popper">
+                    <SelectItem value="none">No category</SelectItem>
+                    {data.categories
+                      .filter((category) => category.active)
+                      .map((category) => (
+                        <SelectItem key={category.id} value={category.id}>
+                          {category.name}
+                        </SelectItem>
+                      ))}
+                  </SelectContent>
+                </Select>
               </div>
               <div className="space-y-2">
                 <Label htmlFor="document-association">Associate with</Label>
-                <select
-                  id="document-association"
+                <Select
                   value={associationType}
-                  onChange={(event) => {
-                    const next = event.target.value as
-                      | "workspace"
-                      | "candidate"
-                      | "job";
-                    setAssociationType(next);
+                  onValueChange={(next) => {
+                    setAssociationType(next as "workspace" | "candidate" | "job");
                     setAssociationId("");
                   }}
-                  className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
                 >
-                  <option value="workspace">Workspace library</option>
-                  <option value="candidate">Candidate</option>
-                  <option value="job">Job</option>
-                </select>
+                  <SelectTrigger id="document-association" className="w-full">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent position="popper">
+                    <SelectItem value="workspace">Workspace library</SelectItem>
+                    <SelectItem value="candidate">Candidate</SelectItem>
+                    <SelectItem value="job">Job</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
               {associationType !== "workspace" ? (
                 <div className="space-y-2">
                   <Label htmlFor="document-association-target">
                     Choose {associationType}
                   </Label>
-                  <select
-                    id="document-association-target"
-                    value={associationId}
-                    onChange={(event) => setAssociationId(event.target.value)}
-                    className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
-                  >
-                    <option value="">Select a {associationType}</option>
-                    {data.associationOptions
-                      .filter((option) => option.type === associationType)
-                      .map((option) => (
-                        <option key={option.id} value={option.id}>
-                          {option.label}
-                        </option>
-                      ))}
-                  </select>
+                  <Select value={associationId} onValueChange={setAssociationId}>
+                    <SelectTrigger id="document-association-target" className="w-full">
+                      <SelectValue placeholder={`Select a ${associationType}`} />
+                    </SelectTrigger>
+                    <SelectContent position="popper" className="max-h-64">
+                      {data.associationOptions
+                        .filter((option) => option.type === associationType)
+                        .map((option) => (
+                          <SelectItem key={option.id} value={option.id}>
+                            {option.label}
+                          </SelectItem>
+                        ))}
+                    </SelectContent>
+                  </Select>
                 </div>
               ) : null}
             </>
           ) : null}
-          {error ? (
-            <p
-              className="rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive"
-              role="alert"
-            >
-              {error}
-            </p>
-          ) : null}
+          {error ? <Callout tone="danger">{error}</Callout> : null}
         </div>
         <DialogFooter>
           <Button
@@ -451,22 +453,21 @@ export function AccessDialog({
         </DialogHeader>
         <div className="max-h-[55vh] space-y-5 overflow-y-auto py-2">
           <div>
-            <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+            <p className="mb-2 text-[11px] font-medium uppercase tracking-wide text-soft-ink">
               Roles
             </p>
-            <div className="space-y-1 rounded-lg border">
+            <div className="divide-y divide-hairline overflow-hidden rounded-[var(--radius-inner)] bg-card-inset">
               {[...new Set(data.members.map((member) => member.role))].map(
                 (role) => {
                   const checked = roles.some((rule) => rule.roleKey === role);
                   return (
                     <label
                       key={role}
-                      className="flex cursor-pointer items-center gap-3 px-3 py-2.5 text-sm hover:bg-muted/40"
+                      className="flex cursor-pointer items-center gap-3 px-3 py-2.5 text-sm hover:bg-soft-kraft"
                     >
-                      <input
-                        type="checkbox"
+                      <Checkbox
                         checked={checked}
-                        onChange={() => toggleRole(role)}
+                        onCheckedChange={() => toggleRole(role)}
                       />
                       {role.replace(/[-_]/g, " ")}
                     </label>
@@ -476,10 +477,10 @@ export function AccessDialog({
             </div>
           </div>
           <div>
-            <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+            <p className="mb-2 text-[11px] font-medium uppercase tracking-wide text-soft-ink">
               Specific members
             </p>
-            <div className="space-y-1 rounded-lg border">
+            <div className="divide-y divide-hairline overflow-hidden rounded-[var(--radius-inner)] bg-card-inset">
               {data.members.map((member) => {
                 const checked = members.some(
                   (rule) => rule.userId === member.id,
@@ -487,17 +488,16 @@ export function AccessDialog({
                 return (
                   <label
                     key={member.id}
-                    className="flex cursor-pointer items-center gap-3 px-3 py-2.5 text-sm hover:bg-muted/40"
+                    className="flex cursor-pointer items-center gap-3 px-3 py-2.5 text-sm hover:bg-soft-kraft"
                   >
-                    <input
-                      type="checkbox"
+                    <Checkbox
                       checked={checked}
-                      onChange={() => toggleMember(member.id)}
+                      onCheckedChange={() => toggleMember(member.id)}
                     />
                     <span className="min-w-0 flex-1 truncate">
                       {member.name}
                     </span>
-                    <span className="text-xs text-muted-foreground">
+                    <span className="text-xs text-soft-ink">
                       {member.role}
                     </span>
                   </label>
@@ -505,7 +505,7 @@ export function AccessDialog({
               })}
             </div>
           </div>
-          <p className="text-xs leading-5 text-muted-foreground">
+          <p className="text-xs leading-5 text-soft-ink">
             If no roles or members are selected, the document follows the
             workspace-level Documents permission. Once a rule is added, only
             matching users can open it.
@@ -572,10 +572,10 @@ export function CategoryDialog({
               Add
             </Button>
           </div>
-          {error ? <p className="text-sm text-destructive">{error}</p> : null}
-          <div className="divide-y rounded-lg border">
+          {error ? <Callout tone="danger">{error}</Callout> : null}
+          <div className="divide-y divide-hairline overflow-hidden rounded-[var(--radius-inner)] bg-card-inset">
             {data.categories.length === 0 ? (
-              <p className="px-3 py-5 text-center text-sm text-muted-foreground">
+              <p className="px-3 py-5 text-center text-sm text-soft-ink">
                 No custom categories yet.
               </p>
             ) : (
@@ -612,7 +612,7 @@ function CategoryRow({ category }: { category: DocumentCategoryItem }) {
   }
   return (
     <div className="flex items-center gap-3 px-3 py-2.5">
-      <span className="size-2.5 rounded-full bg-primary" />
+      <span className="size-2.5 rounded-full bg-near-ink" />
       {editing ? (
         <Input
           value={name}

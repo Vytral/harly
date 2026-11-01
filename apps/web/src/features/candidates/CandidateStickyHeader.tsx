@@ -5,6 +5,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Phone } from "lucide-react";
 
 import { useStickyBar } from "@/components/dashboard/StickyBarContext";
+import { Badge } from "@/components/ui/badge";
 import { UserAvatar } from "@/components/ui/UserAvatar";
 
 type CandidateStickyHeaderProps = {
@@ -35,6 +36,10 @@ export function CandidateStickyHeader({
   useEffect(() => {
     setStickyBarVisible(pinned);
   }, [pinned, setStickyBarVisible]);
+
+  // Leaving the page while pinned must hand the header back; otherwise the
+  // next route inherits a collapsed, click-through app header.
+  useEffect(() => () => setStickyBarVisible(false), [setStickyBarVisible]);
 
   useEffect(() => {
     const sentinel = sentinelRef.current;
@@ -68,12 +73,13 @@ export function CandidateStickyHeader({
   return (
     <div ref={wrapperRef}>
       <div
-        className="fixed top-0 z-40 h-14 transition-all duration-300"
+        className="fixed top-0 z-40 h-12 transition-all duration-150"
         style={rect ? { left: rect.left, width: rect.width } : { left: 0, width: 0 }}
         aria-hidden={!pinned}
+        inert={!pinned}
       >
         <div
-          className="flex h-14 items-center gap-3 overflow-hidden rounded-b-xl border border-t-0 border-border/70 bg-background/90 px-3 shadow-md backdrop-blur-md transition-[opacity,transform] duration-300 sm:px-4"
+          className="flex h-12 items-center gap-3 overflow-hidden border-b border-hairline bg-card/90 px-3 backdrop-blur-md supports-[backdrop-filter]:bg-card/75 transition-[opacity,transform] duration-150 sm:px-4"
           style={{
             opacity: pinned ? 1 : 0,
             transform: pinned ? "translateY(0)" : "translateY(-100%)",
@@ -83,16 +89,16 @@ export function CandidateStickyHeader({
             <UserAvatar name={name} src={avatarUrl} fallbackSrcs={fallbackSrcs} size="sm" />
 
             <div className="flex min-w-0 items-center gap-2">
-              <span className="truncate text-sm font-semibold">{name}</span>
+              <span className="truncate text-sm font-semibold text-near-ink">{name}</span>
               {stageName ? (
-                <span className="hidden shrink-0 rounded-full bg-accent px-2 py-0.5 text-xs font-medium text-accent-foreground sm:inline">
+                <Badge variant="info" className="hidden shrink-0 sm:inline-flex">
                   {stageName}
-                </span>
+                </Badge>
               ) : null}
               {phone ? (
                 <a
                   href={`tel:${phone}`}
-                  className="hidden shrink-0 items-center gap-1 text-xs text-muted-foreground hover:text-foreground lg:inline-flex"
+                  className="hidden shrink-0 items-center gap-1 text-xs text-soft-ink hover:text-near-ink lg:inline-flex"
                 >
                   <Phone className="size-3.5" strokeWidth={1.6} />
                   {phone}

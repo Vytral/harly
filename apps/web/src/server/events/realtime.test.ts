@@ -21,4 +21,24 @@ describe("realtime SSE envelope", () => {
     expect(output).toContain('"workspaceId":"workspace-1"');
     expect(output.endsWith("\n\n")).toBe(true);
   });
+
+  it("never leaks domain entities to scope-limited members", () => {
+    const output = formatSseEvent({
+      ...event,
+      eventName: "domain.invalidate",
+      aggregateType: "candidate",
+      aggregateId: "cand-1",
+      actorId: "user-1",
+      payload: {
+        domainEvent: "candidate.updated",
+        candidate: { email: "secret@example.test", phone: "+15550100" },
+      },
+    });
+
+    expect(output).toContain('"domainEvent":"candidate.updated"');
+    expect(output).not.toContain("secret@example.test");
+    expect(output).not.toContain("+15550100");
+    expect(output).not.toContain("cand-1");
+    expect(output).not.toContain("user-1");
+  });
 });

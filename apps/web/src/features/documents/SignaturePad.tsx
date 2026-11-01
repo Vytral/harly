@@ -39,13 +39,16 @@ const TABS = [
 ] as const;
 
 const SIGNATURE_FONT = {
-  fontFamily: '"Segoe Script", "Brush Script MT", cursive',
+  // Windows, macOS and iOS each ship a script face; Android falls back to cursive.
+  fontFamily: '"Segoe Script", "Snell Roundhand", "Apple Chancery", "Brush Script MT", "Lucida Handwriting", cursive',
   fontStyle: "italic",
   fontWeight: "400",
   fontSize: "42px",
 } as const;
 
-const DRAW_SIZE = { width: 700, height: 180 };
+// 5:2. The canvas is displayed with the same aspect ratio, so strokes are never
+// stretched between what the signer draws and what is captured.
+const DRAW_SIZE = { width: 700, height: 280 };
 
 export function SignaturePad({
   onChange,
@@ -398,7 +401,7 @@ export function SignaturePad({
               key={tab.key}
               type="button"
               onClick={() => setMode(tab.key)}
-              className={`rounded-full px-3 py-1.5 text-xs font-medium transition-colors ${
+              className={`min-h-9 rounded-full px-3.5 py-2 text-sm font-medium transition-colors ${
                 mode === tab.key
                   ? "bg-card text-foreground shadow-xs"
                   : "text-muted-foreground hover:text-foreground"
@@ -450,7 +453,7 @@ export function SignaturePad({
                     type="button"
                     aria-label="Delete saved signature"
                     onClick={() => deleteSaved(signature.id)}
-                    className="absolute -right-1.5 -top-1.5 flex size-5 items-center justify-center rounded-full border bg-card text-muted-foreground opacity-0 shadow-xs transition-opacity hover:text-destructive group-hover:opacity-100"
+                    className="absolute -right-1.5 -top-1.5 flex size-5 items-center justify-center rounded-full border bg-card text-muted-foreground shadow-xs transition-opacity hover:text-destructive sm:opacity-0 sm:group-hover:opacity-100 sm:focus-visible:opacity-100"
                   >
                     <Trash2 className="size-3" />
                   </button>
@@ -492,7 +495,7 @@ export function SignaturePad({
             ref={canvasRef}
             width={DRAW_SIZE.width}
             height={DRAW_SIZE.height}
-            className={`h-40 w-full touch-none rounded-lg border bg-white ${mode === "draw" ? "" : "hidden"} ${captureMode ? "cursor-crosshair" : "cursor-pen"}`}
+            className={`aspect-[5/2] h-auto w-full touch-none rounded-lg border bg-white ${mode === "draw" ? "" : "hidden"} ${captureMode ? "cursor-crosshair" : "cursor-pen"}`}
             onPointerDown={start}
             onPointerMove={move}
             onPointerUp={finishDrawing}
@@ -503,7 +506,7 @@ export function SignaturePad({
             <p className="text-xs leading-5 text-muted-foreground">
               {captureMode
                 ? "Capture active. Move across the pad without holding the trackpad. Press Space twice or Escape when you are done."
-                : "Press Space twice to capture movement without holding the trackpad."}
+                : "Draw with your finger, mouse or trackpad. On a keyboard, press Space twice to capture movement without holding the button."}
             </p>
           ) : null}
           {uploadError ? <p className="text-xs text-destructive" role="alert">{uploadError}</p> : null}

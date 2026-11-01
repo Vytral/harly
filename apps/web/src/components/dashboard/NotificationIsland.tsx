@@ -8,51 +8,32 @@ import { TextMorph } from "torph/react";
 import { getIslandState, subscribeIsland, type IslandStatus } from "@/lib/notification-island/store";
 import { cn } from "@/lib/utils";
 
-import { WorkspacePill } from "./WorkspaceSwitcher";
-import type { WorkspaceOption } from "@/features/workspaces/data";
 
 const DEMO_SEEN_KEY = "harly:demo-island-seen";
 const DEMO_MESSAGE =
   "Your private demo sandbox — only you see your changes. It's deleted after a few hours.";
 const DEMO_AUTO_HIDE_MS = 5200;
 
-const STATUS_META: Record<
-  IslandStatus,
-  { icon: typeof Loader2; iconClassName: string; shellClassName: string }
-> = {
-  loading: {
-    icon: Loader2,
-    iconClassName: "animate-spin text-soft-ink",
-    shellClassName: "border-mist-border bg-pure-snow",
-  },
-  success: {
-    icon: Check,
-    iconClassName: "text-sage-ink",
-    shellClassName: "border-chartreuse-signal/50 bg-sage-wash",
-  },
-  error: {
-    icon: AlertTriangle,
-    iconClassName: "text-danger-rust",
-    shellClassName: "border-danger-rust/25 bg-danger-rust/[0.06]",
-  },
+// Same dark pill as the sonner toasts: near-ink fill (flips with the theme),
+// status carried by the icon colour only.
+const STATUS_META: Record<IslandStatus, { icon: typeof Loader2; iconClassName: string }> = {
+  loading: { icon: Loader2, iconClassName: "animate-spin text-pure-snow/80" },
+  success: { icon: Check, iconClassName: "text-chartreuse-signal" },
+  error: { icon: AlertTriangle, iconClassName: "text-danger-rust" },
 };
 
 /**
- * The centered topbar pill, now a Dynamic-Island-style morph target: idle
- * shows the workspace pill (`Syntrix / All`), an active island notification
- * shares its layoutId so the container resizes into place instead of
- * swapping abruptly. See lib/notification-island/toast.ts for the API.
+ * The status island: a dark pill at the bottom centre that renders nothing
+ * while idle and morphs between states (saving… → saved) in place, so a
+ * loading message settles instead of being replaced by a second toast. See
+ * lib/notification-island/toast.ts for the API.
  *
  * In demo mode, the first visit shows a one-time notice here (then persists
  * dismissal) so the full-width banner no longer crowds the real UI.
  */
 export function NotificationIsland({
-  workspace,
-  workspaceOptions,
   demoMode = false,
 }: {
-  workspace: { id: string; name: string; logoUrl: string | null };
-  workspaceOptions: WorkspaceOption[];
   demoMode?: boolean;
 }) {
   const state = useSyncExternalStore(subscribeIsland, getIslandState, getIslandState);
@@ -89,36 +70,39 @@ export function NotificationIsland({
   const showDemo = demoNotice && !item;
 
   return (
-    <motion.div
-      layout
-      layoutId="topbar-command-pill"
-      transition={springTransition}
-      className="flex h-8 max-w-full min-w-0 items-center overflow-hidden rounded-full"
-    >
-      <AnimatePresence mode="popLayout" initial={false}>
+    <div aria-live="polite" role="status">
+      <AnimatePresence initial={false}>
         {item ? (
           <motion.div
-            key={item.status}
-            initial={reduceMotion ? { opacity: 0 } : { opacity: 0, scale: 0.95 }}
-            animate={{ opacity: 1, scale: 1 }}
-            exit={reduceMotion ? { opacity: 0 } : { opacity: 0, scale: 0.97 }}
-            transition={contentTransition}
-            className={cn(
-              "flex h-8 items-center gap-2 rounded-full border px-3",
-              STATUS_META[item.status].shellClassName,
-            )}
+            key="island"
+            layout={!reduceMotion}
+            initial={reduceMotion ? { opacity: 0 } : { opacity: 0, y: 8, scale: 0.96 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={reduceMotion ? { opacity: 0 } : { opacity: 0, y: 6, scale: 0.97 }}
+            transition={springTransition}
+            className="flex h-10 max-w-[min(92vw,420px)] items-center gap-2.5 rounded-full bg-near-ink px-4 text-pure-snow shadow-[var(--shadow-float)]"
           >
-            <StatusIcon status={item.status} />
+            <AnimatePresence mode="popLayout" initial={false}>
+              <motion.span
+                key={item.status}
+                initial={{ opacity: 0, scale: 0.6 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.6 }}
+                transition={contentTransition}
+                className="grid place-items-center"
+              >
+                <StatusIcon status={item.status} />
+              </motion.span>
+            </AnimatePresence>
             <TextMorph
-              key={item.id}
-              className="max-w-[220px] truncate text-[13px] font-medium text-near-ink"
+              className="min-w-0 whitespace-nowrap text-[13.5px] font-medium"
               ease={{ stiffness: 420, damping: 34 }}
               respectReducedMotion
             >
               {item.message}
             </TextMorph>
             {state.replacedCount > 0 ? (
-              <span className="rounded-full bg-near-ink/[0.06] px-1.5 text-[11px] font-semibold tabular-nums text-soft-ink">
+              <span className="rounded-full bg-pure-snow/15 px-1.5 text-[11px] font-semibold tabular-nums">
                 +{state.replacedCount}
               </span>
             ) : null}
@@ -126,37 +110,23 @@ export function NotificationIsland({
         ) : showDemo ? (
           <motion.div
             key="demo-notice"
-            initial={reduceMotion ? { opacity: 0 } : { opacity: 0, scale: 0.95 }}
-            animate={{ opacity: 1, scale: 1 }}
-            exit={reduceMotion ? { opacity: 0 } : { opacity: 0, scale: 0.97 }}
+            initial={reduceMotion ? { opacity: 0 } : { opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={reduceMotion ? { opacity: 0 } : { opacity: 0, y: 6 }}
             transition={contentTransition}
-            className="flex h-8 max-w-[min(92vw,420px)] items-center gap-2 rounded-full border border-chartreuse-signal/50 bg-sage-wash px-3"
-            role="status"
+            className="flex h-10 max-w-[min(92vw,460px)] items-center gap-2.5 rounded-full bg-near-ink px-4 text-pure-snow shadow-[var(--shadow-float)]"
           >
-            <Sparkles className="size-3.5 shrink-0 text-sage-ink" strokeWidth={2} />
-            <span className="truncate text-[12px] font-medium text-sage-ink">
-              {DEMO_MESSAGE}
-            </span>
+            <Sparkles className="size-4 shrink-0 text-chartreuse-signal" strokeWidth={2} />
+            <span className="truncate text-[13px] font-medium">{DEMO_MESSAGE}</span>
           </motion.div>
-        ) : (
-          <motion.div
-            key="idle"
-            initial={reduceMotion ? { opacity: 0 } : { opacity: 0, scale: 0.95 }}
-            animate={{ opacity: 1, scale: 1 }}
-            exit={reduceMotion ? { opacity: 0 } : { opacity: 0, scale: 0.97 }}
-            transition={contentTransition}
-            className="min-w-0 max-w-full"
-          >
-            <WorkspacePill workspace={workspace} workspaceOptions={workspaceOptions} />
-          </motion.div>
-        )}
+        ) : null}
       </AnimatePresence>
-    </motion.div>
+    </div>
   );
 }
 
 function StatusIcon({ status }: { status: IslandStatus }) {
   const meta = STATUS_META[status];
   const Icon = meta.icon;
-  return <Icon className={cn("size-3.5 shrink-0", meta.iconClassName)} strokeWidth={2} />;
+  return <Icon className={cn("size-4 shrink-0", meta.iconClassName)} strokeWidth={2.2} />;
 }

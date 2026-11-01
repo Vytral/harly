@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState, useTransition } from "react";
 import { toast } from "@/lib/notification-island/toast";
 
-import { cn } from "@/lib/utils";
+import { cn, randomId } from "@/lib/utils";
 import { FocusModeShell } from "@/components/focus-mode/FocusModeShell";
 import { FocusModeTopBar } from "@/components/focus-mode/FocusModeTopBar";
 import { useUnsavedChangesGuard } from "@/components/focus-mode/useUnsavedChangesGuard";
@@ -115,11 +115,7 @@ export type BuilderDataProps = {
 };
 
 function newBuilderChatKey(): string {
-  const id =
-    typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
-      ? crypto.randomUUID()
-      : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
-  return `builder:new:${id}`;
+  return `builder:new:${randomId()}`;
 }
 
 function toDraft(w: SerializedWorkflow): WorkflowDraft {

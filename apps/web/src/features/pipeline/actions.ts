@@ -38,6 +38,14 @@ import {
   sendPipelineEmails,
   type PipelineEmail,
 } from "@/features/pipeline/emails";
+import {
+  getRejectionTemplate,
+  resolveRejectionReason,
+} from "@/features/rejection-reasons/data";
+import {
+  rejectionDecisionSchema,
+  type RejectionDecision,
+} from "@/features/rejection-reasons/shared";
 
 type ApplicationStatus = PipelineApplicationStatus;
 
@@ -62,6 +70,12 @@ type UpdateApplicationStatusInput = {
   applicationIds: string[];
   workspaceId: string;
   status: ApplicationStatus;
+  /**
+   * Only read when `status` is "rejected". Omitted by legacy callers (Harly AI
+   * `rejectCandidate`, older clients): the reason defaults to "Other" and the
+   * rejection email is sent with the active template, exactly as before.
+   */
+  rejection?: RejectionDecision;
 };
 
 type UpdateStageEmailSettingsInput = {
@@ -1093,6 +1107,47 @@ export async function updateApplicationStatus(
       };
     }
 
+    // Rejection decision: reason (catalog-validated), internal note, and
+    // whether / with which template the candidate is emailed.
+    let rejectionReason: { code: string; label: string } | null = null;
+    let rejectionNote: string | null = null;
+    let sendRejectionEmail = true;
+    let rejectionTemplateId: string | null | undefined;
+    if (input.status === "rejected") {
+      let decision: RejectionDecision | undefined;
+      if (input.rejection !== undefined) {
+        const parsedDecision = rejectionDecisionSchema.safeParse(input.rejection);
+        if (!parsedDecision.success) {
+          return {
+            success: false,
+            error:
+              parsedDecision.error.issues[0]?.message ??
+              "Invalid rejection details.",
+          };
+        }
+        decision = parsedDecision.data;
+      }
+      rejectionReason = await resolveRejectionReason(
+        input.workspaceId,
+        decision?.reasonCode,
+      );
+      if (!rejectionReason) {
+        return { success: false, error: "Choose a valid rejection reason." };
+      }
+      rejectionNote = decision?.note ?? null;
+      sendRejectionEmail = decision?.sendEmail ?? true;
+      rejectionTemplateId = decision?.templateId;
+      if (sendRejectionEmail && typeof rejectionTemplateId === "string") {
+        const template = await getRejectionTemplate(
+          input.workspaceId,
+          rejectionTemplateId,
+        );
+        if (!template) {
+          return { success: false, error: "That email template is no longer available." };
+        }
+      }
+    }
+
     const [portalSettings] = await db
       .select({
         showApplicationStatus: workspaceSettings.portalShowApplicationStatus,
@@ -1154,6 +1209,23 @@ export async function updateApplicationStatus(
                 status: input.status,
                 currentStageId: targetStageId,
                 updatedAt: now,
+                // A new rejection records why; any other status clears the
+                // previous rejection so a reactivated candidate starts clean.
+                ...(input.status === "rejected"
+                  ? statusChanged
+                    ? {
+                        rejectionReasonCode: rejectionReason?.code ?? null,
+                        rejectionNote,
+                        rejectedById: user.id,
+                        rejectedAt: now,
+                      }
+                    : {}
+                  : {
+                      rejectionReasonCode: null,
+                      rejectionNote: null,
+                      rejectedById: null,
+                      rejectedAt: null,
+                    }),
               })
               .where(
                 and(
@@ -1254,7 +1326,20 @@ export async function updateApplicationStatus(
                 entityType: "application",
                 entityId: application.id,
                 type: `application.${input.status}`,
-                metadata: { status: input.status },
+                metadata:
+                  input.status === "rejected" && rejectionReason
+                    ? {
+                        status: input.status,
+                        reasonCode: rejectionReason.code,
+                        // Snapshot: a later rename keeps history readable.
+                        reasonLabel: rejectionReason.label,
+                        ...(rejectionNote ? { note: rejectionNote } : {}),
+                        emailSent: sendRejectionEmail,
+                        templateId: sendRejectionEmail
+                          ? (rejectionTemplateId ?? null)
+                          : null,
+                      }
+                    : { status: input.status },
               });
 
               if (
@@ -1286,15 +1371,22 @@ export async function updateApplicationStatus(
             }
 
             if (input.status === "rejected" && statusChanged) {
-              collectedEmails.push({
-                type: "rejected",
-                applicationId: application.id,
-                eventId: historyIdByApplication.get(application.id) ?? randomUUID(),
-                candidateEmail: application.candidateEmail,
-                candidateName: `${application.candidateFirstName} ${application.candidateLastName}`,
-                jobTitle: application.jobTitle,
-                workspaceName: application.workspaceName,
-              });
+              // sendEmail=false is a recruiter decision: no rejection email,
+              // whatever the stage or template settings say.
+              if (sendRejectionEmail) {
+                collectedEmails.push({
+                  type: "rejected",
+                  applicationId: application.id,
+                  eventId: historyIdByApplication.get(application.id) ?? randomUUID(),
+                  candidateEmail: application.candidateEmail,
+                  candidateName: `${application.candidateFirstName} ${application.candidateLastName}`,
+                  jobTitle: application.jobTitle,
+                  workspaceName: application.workspaceName,
+                  ...(rejectionTemplateId !== undefined
+                    ? { templateId: rejectionTemplateId }
+                    : {}),
+                });
+              }
             } else if (
               stageChanged &&
               input.status === "active" &&

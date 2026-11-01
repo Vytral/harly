@@ -429,7 +429,7 @@ function buildReadTools(ctx: HarlyToolContext) {
     workspaceCapabilities: tool({
       strict: true,
       description:
-        "Return the product capabilities Harly actually supports, including explicit limitations. Use before answering whether Harly can publish, share, sync, or perform an integration action. Never infer a capability from general recruiting knowledge.",
+        "Product capabilities Harly supports, with explicit limitations. Call before saying whether Harly can publish, share, sync or integrate.",
       inputSchema: z.object({}),
       execute: async () => ({
         capabilities: getHarlyCapabilities(),
@@ -1106,7 +1106,7 @@ function buildReadTools(ctx: HarlyToolContext) {
     userPermissions: tool({
       strict: true,
       description:
-        "Return the current user's effective permissions in this workspace. Use before explaining why an action is unavailable or proposing a write that may require permission. Never expose internal authorization plumbing; summarize permissions in human terms.",
+        "The current user's effective permissions. Call before explaining why an action is unavailable.",
       inputSchema: z.object({}),
       execute: async () => ({
         ...evidence("live effective workspace permissions"),
@@ -1117,7 +1117,7 @@ function buildReadTools(ctx: HarlyToolContext) {
     harlyProductKnowledge: tool({
       strict: true,
       description:
-        "Search versioned Harly product documentation for how the product works, supported workflows, policies, and stable integration limitations. Use for product questions; do not use it as a substitute for live workspace data.",
+        "Search Harly product documentation (workflows, policies, integration limits). Not a substitute for live workspace data.",
       inputSchema: z.object({
         query: z.string().min(1).max(160).describe("The product question."),
       }),
@@ -1130,7 +1130,7 @@ function buildReadTools(ctx: HarlyToolContext) {
     recentAgentActions: tool({
       strict: true,
       description:
-        "List the current user's most recent Harly actions, newest first. Use for 'what did you do', 'what happened', 'undo', 'deshazlo', or 'deshaz lo último'. The receipt id is internal: use it only to call undoAgentAction and never show it to the user.",
+        "The user's most recent Harly actions, newest first, for 'what did you do' or undo. The receipt id is internal: only pass it to undoAgentAction.",
       inputSchema: z.object({
         limit: z
           .number()
@@ -1151,7 +1151,7 @@ function buildReadTools(ctx: HarlyToolContext) {
     reviewPipeline: tool({
       strict: true,
       description:
-        "Get the live hiring pipeline for a job: stage names and how many active candidates sit in each. Omit jobId to use the busiest open job. Use for 'how's my pipeline', funnel, 'where are candidates' questions.",
+        "Live pipeline for a job: active candidates per stage. Omit jobId for the busiest open job.",
       inputSchema: z.object({
         jobId: z
           .string()
@@ -1182,30 +1182,19 @@ function buildReadTools(ctx: HarlyToolContext) {
         "List active candidates waiting on a review/decision, with how long they've waited. Use for 'who needs review', 'who's stuck', 'what should I look at'.",
       inputSchema: z.object({}),
       execute: async () => {
-        const rows = await getCandidatesNeedingReview();
+        const review = await getCandidatesNeedingReview();
         return {
-          count: rows.length,
-          candidates: rows.map(
-            (r: {
-              id: string;
-              candidateId: string;
-              name: string;
-              avatarUrl: string | null;
-              job: string;
-              stage: string;
-              action: string;
-              ageDays: number;
-            }) => ({
-              applicationId: r.id,
-              candidateId: r.candidateId,
-              name: r.name,
-              avatarUrl: r.avatarUrl,
-              job: r.job,
-              stage: r.stage,
-              action: r.action,
-              waitingDays: r.ageDays,
-            }),
-          ),
+          count: review.total,
+          candidates: review.items.map((r) => ({
+            applicationId: r.applicationId,
+            candidateId: r.candidateId,
+            name: r.name,
+            avatarUrl: r.avatarUrl,
+            job: r.job,
+            stage: r.stage,
+            action: r.action,
+            waitingDays: r.ageDays,
+          })),
         };
       },
     }),
@@ -1213,10 +1202,10 @@ function buildReadTools(ctx: HarlyToolContext) {
     hiringBrief: tool({
       strict: true,
       description:
-        "Create a compact proactive hiring brief for the workspace: candidates waiting longest for review, jobs at risk, interviews today, and task status counts. Use for 'catch me up', 'what needs attention?', 'give me my hiring brief', or at the start of a work session. This is read-only and returns the highest-signal next actions.",
+        "Read-only workspace brief: longest-waiting reviews, jobs at risk, today's interviews, task counts. For 'catch me up' / 'what needs attention'.",
       inputSchema: z.object({}),
       execute: async () => {
-        const [reviewRows, riskJobs, todayInterviews, taskCounts] =
+        const [review, riskJobs, todayInterviews, taskCounts] =
           await Promise.all([
             getCandidatesNeedingReview(),
             getJobsAtRisk(),
@@ -1225,8 +1214,8 @@ function buildReadTools(ctx: HarlyToolContext) {
           ]);
 
         return {
-          candidatesToReview: reviewRows.map((row) => ({
-            applicationId: row.id,
+          candidatesToReview: review.items.map((row) => ({
+            applicationId: row.applicationId,
             candidateId: row.candidateId,
             name: row.name,
             job: row.job,
@@ -1235,7 +1224,7 @@ function buildReadTools(ctx: HarlyToolContext) {
             waitingDays: row.ageDays,
           })),
           jobsAtRisk: riskJobs,
-          interviewsToday: todayInterviews.map((interview) => ({
+          interviewsToday: todayInterviews.items.map((interview) => ({
             interviewId: interview.id,
             candidate: interview.candidate,
             job: interview.job,
@@ -1291,7 +1280,7 @@ function buildReadTools(ctx: HarlyToolContext) {
     searchCandidates: tool({
       strict: true,
       description:
-        "Browse candidates and jobs by name, email, or title. Use for discovery or lists. For a named candidate that needs an action or profile, prefer resolveCandidate because it returns resolved/ambiguous/not_found semantics.",
+        "Browse candidates and jobs by name, email or title. For one named candidate prefer resolveCandidate.",
       inputSchema: z.object({
         query: z
           .string()
@@ -1329,7 +1318,7 @@ function buildReadTools(ctx: HarlyToolContext) {
     resolveCandidate: tool({
       strict: true,
       description:
-        "Resolve one human candidate reference into the unique workspace candidate. Handles full/partial names, initials, accents, punctuation, and email. Use before candidateProfile or any candidate write when the user names a person. If ambiguous, show the real alternatives and ask which one; never guess.",
+        "Resolve a named person (full/partial name, accents, email) to one workspace candidate. Call first when the user names someone; if ambiguous, ask which one.",
       inputSchema: z.object({
         query: z
           .string()
@@ -1343,7 +1332,7 @@ function buildReadTools(ctx: HarlyToolContext) {
     resolveApplication: tool({
       strict: true,
       description:
-        "Resolve which application belongs to a candidate. With no job query, select the only active application; with a job query, match the role; with multiple matches, return the real alternatives. Use before scheduling, moving stages, rejecting, scoring, or creating a task linked to 'their role'.",
+        "Pick a candidate's application: the only active one, or the one matching a role phrase; returns alternatives when ambiguous.",
       inputSchema: z.object({
         candidateId: z.string().describe("The resolved candidate id."),
         jobQuery: z
@@ -1366,7 +1355,7 @@ function buildReadTools(ctx: HarlyToolContext) {
     resolveJob: tool({
       strict: true,
       description:
-        "Resolve a named role into the unique workspace job. Handles exact titles, slugs, abbreviations, and partial titles across the complete job set. If ambiguous, return the real role alternatives and ask which one; never guess a job for a write.",
+        "Resolve a named role (title, slug, partial) to one workspace job; returns alternatives when ambiguous.",
       inputSchema: z.object({
         query: z.string().min(1).max(120).describe("The role or job title."),
       }),
@@ -1376,7 +1365,7 @@ function buildReadTools(ctx: HarlyToolContext) {
     connectedIntegrations: tool({
       strict: true,
       description:
-        "Show which workspace integrations are connected and usable right now. Use for questions like 'what integrations do I have connected?', 'is Zoom connected?', or before scheduling an interview. Never claim integrations are inaccessible; this tool returns safe status only, never secrets.",
+        "Which workspace integrations are connected and usable now (safe status only, never secrets).",
       inputSchema: z.object({}),
       execute: async () => {
         const statuses = await getIntegrationStatuses(ctx.workspaceId);
@@ -1543,7 +1532,7 @@ function buildReadTools(ctx: HarlyToolContext) {
     candidateProfile: tool({
       strict: true,
       description:
-        "Get one candidate's full profile: contact info, applications + current stage, tags, scorecards, AI evaluations, and recent notes. Pass null when the user is looking at a candidate profile and use the active candidate. Otherwise resolve candidateId via searchCandidates first. Use for 'tell me about X', 'what's the status of X', or 'what do you think about this candidate'.",
+        "One candidate's profile: contact, applications with stage, tags, scorecards, AI evaluations, recent notes. Pass null for the active candidate; otherwise a resolved candidateId.",
       inputSchema: z.object({
         candidateId: z
           .string()
@@ -1605,7 +1594,7 @@ function buildReadTools(ctx: HarlyToolContext) {
     getCandidateContext: tool({
       strict: true,
       description:
-        "Get the current factual context for one candidate, including applications, roles, stages, scores, and recent evidence. Use after resolving a named candidate and before making claims about their status.",
+        "Factual context for one resolved candidate: applications, stages, scores, recent evidence.",
       inputSchema: z.object({
         candidateId: z
           .string()
@@ -1698,7 +1687,7 @@ function buildReadTools(ctx: HarlyToolContext) {
     reviewCandidate: tool({
       strict: true,
       description:
-        "Produce a complete read of one candidate for a hiring decision. It combines profile, active applications, resume evidence, AI fit evaluation, manual scorecards, notes, strengths, gaps, and missing evidence. Use directly for 'what do you think?', 'review/evaluate this candidate', or 'should I pass them?'. If there are multiple active applications and no applicationId is supplied, return the real roles and ask which one; never score the wrong role.",
+        "Full hiring read of one candidate: applications, resume evidence, AI evaluation, scorecards, notes, gaps, missing evidence. For 'what do you think?' / 'should I pass them?'. With several active roles and no applicationId it returns the roles to ask about.",
       inputSchema: z.object({
         candidateId: z.string().describe("The candidate id."),
         applicationId: z
@@ -1859,7 +1848,7 @@ function buildReadTools(ctx: HarlyToolContext) {
     jobDetail: tool({
       strict: true,
       description:
-        "Get one job's details plus its pipeline stages (with stage ids, in order). REQUIRED before proposing a stage move , read the destination stage id from here. Resolve jobId via searchCandidates or listJobs.",
+        "One job's details and ordered pipeline stages with ids. Required before proposing a stage move.",
       inputSchema: z.object({
         jobId: z.string().describe("The job id."),
       }),
@@ -1920,7 +1909,7 @@ function buildReadTools(ctx: HarlyToolContext) {
     jobContext: tool({
       strict: true,
       description:
-        "Get the factual current context for one workspace job: status, publication state, public URL when actually visible, and pipeline stages. Use this before answering what is happening with a named job or what can be distributed.",
+        "Current context for one job: status, publication state, public URL when visible, stages.",
       inputSchema: z.object({
         jobId: z.string().describe("The resolved workspace job id."),
       }),
@@ -1965,7 +1954,7 @@ function buildReadTools(ctx: HarlyToolContext) {
     jobDistributionOptions: tool({
       strict: true,
       description:
-        "Check the real distribution options for one resolved workspace job. Use for 'where can I publish/share this job?' Return the public link flow only when the job is currently publicly visible; distinguish it from unsupported native external-job publishing.",
+        "Real distribution options for one resolved job; the public link only when the job is publicly visible.",
       inputSchema: z.object({
         jobId: z.string().describe("The resolved workspace job id."),
       }),
@@ -2092,10 +2081,10 @@ function buildReadTools(ctx: HarlyToolContext) {
         "List interviews scheduled for today, with candidate, job, type, time, and interviewer. Use for 'what's on today', 'today's interviews'.",
       inputSchema: z.object({}),
       execute: async () => {
-        const rows = await getTodayInterviews();
+        const today = await getTodayInterviews();
         return {
-          count: rows.length,
-          interviews: rows.map((r) => ({
+          count: today.total,
+          interviews: today.items.map((r) => ({
             id: r.id,
             candidate: r.candidate,
             job: r.job,
@@ -2110,7 +2099,7 @@ function buildReadTools(ctx: HarlyToolContext) {
     listTasks: tool({
       strict: true,
       description:
-        "List workspace tasks, optionally filtered by status. This is a paginated workspace-wide view; it returns the exact total and whether more results remain. Use listMyTasks for the current user's to-dos.",
+        "Workspace-wide tasks, optional status filter, paginated with total. For the user's own to-dos use listMyTasks.",
       inputSchema: z.object({
         status: z
           .enum(["pending", "in_progress", "completed", "canceled"])
@@ -2156,7 +2145,7 @@ function buildReadTools(ctx: HarlyToolContext) {
     listMyTasks: tool({
       strict: true,
       description:
-        "List only tasks assigned to the signed-in user, optionally filtered by status. This filter is enforced on the server. The response is paginated and explicitly reports the total and whether more results remain. Use for 'my tasks', 'my to-dos', or tasks assigned to me.",
+        "Tasks assigned to the signed-in user (server-enforced), optional status filter, paginated with total.",
       inputSchema: z.object({
         status: z
           .enum(["pending", "in_progress", "completed", "canceled"])
@@ -2214,13 +2203,13 @@ function buildReadTools(ctx: HarlyToolContext) {
     inbox: tool({
       strict: true,
       description:
-        "Get the recruiter's action inbox: derived to-dos (feedback due, interviews to schedule, screens, approvals) with urgency. Use for 'what needs my attention', 'what should I do next'.",
+        "Decisions waiting on the recruiter other than candidate reviews (e.g. job descriptions awaiting approval).",
       inputSchema: z.object({}),
       execute: async () => {
-        const items = await getInbox();
+        const inbox = await getInbox();
         return {
-          count: items.length,
-          items: items.slice(0, 20),
+          count: inbox.total,
+          items: inbox.items,
         };
       },
     }),
@@ -2228,7 +2217,7 @@ function buildReadTools(ctx: HarlyToolContext) {
     nextCandidateStage: tool({
       strict: true,
       description:
-        "Resolve the immediate next pipeline stage for a candidate's application. Pass null when the user is looking at a candidate profile and use the active candidate. Use before proposing 'pass this candidate', 'advance them', or 'move them to the next step'. Returns every application so you can ask which role only when there are multiple active applications.",
+        "Next pipeline stage for a candidate's application (null = active candidate); returns every application.",
       inputSchema: z.object({
         candidateId: z
           .string()
@@ -2278,7 +2267,7 @@ function buildReadTools(ctx: HarlyToolContext) {
     candidateNextAction: tool({
       strict: true,
       description:
-        "Resolve a candidate's application and the next valid pipeline stage in one read-only operation. Use for 'pass this candidate', 'advance them', 'move them forward', or 'what happens next?'. If the role is ambiguous, return the real roles; if the pipeline is terminal, explain that no next stage exists. Never propose a stage move from a guessed stage.",
+        "Read-only: a candidate's application plus its next valid stage, for 'pass/advance this candidate'. Returns roles when ambiguous and says when the pipeline is terminal.",
       inputSchema: z.object({
         candidateId: z.string().describe("The resolved candidate id."),
         jobQuery: z
@@ -2301,7 +2290,7 @@ function buildReadTools(ctx: HarlyToolContext) {
     getCandidateScore: tool({
       strict: true,
       description:
-        "Read the latest AI fit evaluation for one application: score, recommendation, summary, strengths, gaps. Requires applicationId (resolve via searchCandidates / candidateProfile / candidatesNeedingReview first).",
+        "Latest AI fit evaluation for one applicationId: score, recommendation, summary, strengths, gaps.",
       inputSchema: z.object({
         applicationId: z.string().describe("The application id."),
       }),
@@ -2401,7 +2390,7 @@ function buildReadTools(ctx: HarlyToolContext) {
     talentPool: tool({
       strict: true,
       description:
-        "Browse the talent pool (candidates kept warm, not tied to an active application) with totals by source, optionally filtered by a search term. Use for 'who's in the talent pool', 'show me sourced candidates', pool size.",
+        "Browse the talent pool with totals by source, optional search term.",
       inputSchema: z.object({
         search: z
           .string()
@@ -2469,7 +2458,7 @@ function buildReadTools(ctx: HarlyToolContext) {
     reportsOverview: tool({
       strict: true,
       description:
-        "Get the recruiting analytics report for the last 30 days, the same numbers as the Reports page: applications received, hires, avg time-to-hire, offer acceptance, the funnel by stage (share of applications received), sources with conversion, and the time-to-hire distribution. Open roles is current, and candidates tracked is all time. Use for deep analytics, 'show me the funnel', 'where do candidates drop off', 'time to hire', 'best sources'.",
+        "Last-30-day recruiting analytics (Reports page): applications, hires, time-to-hire, offer acceptance, funnel by stage, sources, time-to-hire distribution.",
       inputSchema: z.object({}),
       execute: async () => {
         if (await toolRunRestricted(ctx)) {
@@ -2492,7 +2481,7 @@ function buildReadTools(ctx: HarlyToolContext) {
     draftCandidateEmail: tool({
       strict: true,
       description:
-        "Draft an email to a candidate with AI (does NOT send), returns a subject + body. Use only when the user wants to review a draft first. If the user explicitly asks you to send an email and gives the purpose or wording, call sendCandidateEmail directly instead; never turn a confirmed meeting into an availability request.",
+        "Draft (not send) a candidate email: subject + body. Only when the user wants a draft; to send, use sendCandidateEmail.",
       inputSchema: z.object({
         candidateId: z.string().describe("The candidate id."),
         type: z
@@ -2631,7 +2620,7 @@ function buildReadTools(ctx: HarlyToolContext) {
     compareCandidates: tool({
       strict: true,
       description:
-        "Compare two or more candidates side by side using their AI fit scores (score + recommendation + summary each). Use for 'compare X and Y', 'who's the stronger candidate'. Pass the applicationIds (resolve via candidateProfile/candidatesNeedingReview). Only candidates with a generated score are included; generate scores first if missing.",
+        "Compare two or more applications by AI fit score. Only scored applications are included.",
       inputSchema: z.object({
         applicationIds: z
           .array(z.string())

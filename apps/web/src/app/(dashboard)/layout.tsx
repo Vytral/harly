@@ -3,10 +3,10 @@ import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 
 import { HarlyAIProvider } from "@/components/dashboard/HarlyAIWidget";
-import { IconRail } from "@/components/dashboard/IconRail";
+import { AppHeader } from "@/components/dashboard/AppHeader";
 import { PageTitleProvider } from "@/components/dashboard/PageTitleContext";
 import { StickyBarProvider } from "@/components/dashboard/StickyBarContext";
-import { TopBar } from "@/components/dashboard/TopBar";
+import { ShellPageHeading } from "@/components/dashboard/ShellPageHeading";
 import {
   getUnreadNotificationCount,
   listNotifications,
@@ -18,6 +18,7 @@ import { isLiveSandboxWorkspace } from "@/features/demo/sandbox-access";
 
 import { getWorkspaceContext } from "@/features/workspaces/context";
 import { getWorkspaceAiStatus } from "@/lib/ai/config";
+import { getClientAssistantBranding } from "@/lib/ai/assistant-branding";
 import { getCurrentPermissions } from "@/features/workspaces/permissions-server";
 import {
   getSidebarBranding,
@@ -60,6 +61,7 @@ export default async function DashboardLayout({
     roles,
     userPermissions,
     aiStatus,
+    assistantBranding,
     taskDueCount,
     ownProfile,
   ] = await Promise.all([
@@ -71,6 +73,7 @@ export default async function DashboardLayout({
     listWorkspaceRoles(),
     getCurrentPermissions(),
     getWorkspaceAiStatus(organization.id),
+    getClientAssistantBranding(organization.id),
     getMyTasksDueCount(),
     getOwnProfileAction(),
   ]);
@@ -93,48 +96,52 @@ export default async function DashboardLayout({
           aiEnabled={
             aiStatus.enabled && aiStatus.hasApiKey && aiStatus.encryptionReady
           }
+          canConfigureAi={userPermissions.includes("settings:edit") && !demo}
+          assistant={assistantBranding}
         >
           {/*
-          The shell from frame 01: a warm-paper viewport with the icon rail flat
-          on the canvas, and the work sitting inside one rounded snow stage. Not
-          a pile of cards , a single calm window. The outer radius only appears
-          from md up, where there is room for the paper margin to read.
+          Deel-style shell: a sticky lime-washed header (switcher, pill tabs,
+          round actions, sub-nav) over a warm-paper canvas. The page scrolls
+          with the document and the content sits in one centred column.
         */}
-          <div className="flex h-dvh w-full overflow-hidden bg-warm-paper">
-            <IconRail
+          <div className="min-h-dvh w-full shell-glow">
+            <a
+              href="#main-content"
+              className="sr-only focus-visible:not-sr-only focus-visible:fixed focus-visible:left-4 focus-visible:top-4 focus-visible:z-50 focus-visible:rounded-[var(--radius-btn)] focus-visible:bg-near-ink focus-visible:px-3 focus-visible:py-2 focus-visible:text-sm focus-visible:text-pure-snow"
+            >
+              Skip to content
+            </a>
+            <AppHeader
+              user={{
+                name: user.name,
+                email: user.email,
+                image: user.image ?? null,
+                username: ownProfile?.username ?? null,
+              }}
+              role={role}
               workspace={workspace}
+              // Demo: one shared account is a member of the pool workspace(s);
+              // hide the switcher so a visitor can't hop into another one.
+              workspaceOptions={demo ? [] : workspaceOptions}
+              notifications={notifications}
+              unreadNotificationCount={unreadNotificationCount}
+              userPermissions={userPermissions}
               inboxCount={unreadInboxThreadCount}
               taskDueCount={taskDueCount}
-              userPermissions={userPermissions}
               sidebarLogo={sidebarLogo}
               assignableRoles={assignableRoles}
+              demoMode={demo}
             />
-            <div className="flex min-w-0 flex-1 flex-col overflow-hidden bg-pure-snow md:my-2 md:mr-2 md:rounded-[var(--radius-shell)] md:border md:border-hairline">
-              <TopBar
-                user={{
-                  name: user.name,
-                  email: user.email,
-                  image: user.image ?? null,
-                  username: ownProfile?.username ?? null,
-                }}
-                role={role}
-                workspace={workspace}
-                // Demo: one shared account is a member of the pool workspace(s);
-                // hide the switcher so a visitor can't hop into another one.
-                workspaceOptions={demo ? [] : workspaceOptions}
-                notifications={notifications}
-                unreadNotificationCount={unreadNotificationCount}
-                userPermissions={userPermissions}
-                inboxCount={unreadInboxThreadCount}
-                taskDueCount={taskDueCount}
-                demoMode={demo}
-              />
-              <PageTitleProvider>
-                <main className="min-h-0 w-full flex-1 overflow-y-auto px-4 pb-8 pt-2 md:px-7">
-                  {children}
-                </main>
-              </PageTitleProvider>
-            </div>
+            <PageTitleProvider>
+              <main
+                id="main-content"
+                tabIndex={-1}
+                className="mx-auto w-full max-w-[1280px] px-4 pb-12 pt-6 outline-none md:px-6"
+              >
+                <ShellPageHeading />
+                {children}
+              </main>
+            </PageTitleProvider>
           </div>
         </HarlyAIProvider>
       </StickyBarProvider>

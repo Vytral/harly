@@ -1,5 +1,4 @@
 {$HARLY_DOMAIN} {
-  encode zstd gzip
   header {
     Strict-Transport-Security "max-age=31536000; includeSubDomains"
     X-Content-Type-Options "nosniff"
@@ -7,5 +6,24 @@
     Referrer-Policy "strict-origin-when-cross-origin"
     Permissions-Policy "camera=(), microphone=(), geolocation=()"
   }
-  reverse_proxy app:3000
+
+  # Largest accepted request body. Covers the 25 MB document upload with
+  # headroom; the MCP endpoint accepts at most 8 MB.
+  request_body {
+    max_size 30MB
+  }
+
+  # The MCP endpoint can answer with a server-sent event stream. Never compress
+  # or buffer it: flush every write to the client as it arrives.
+  @mcp path /mcp /mcp/*
+  handle @mcp {
+    reverse_proxy app:3000 {
+      flush_interval -1
+    }
+  }
+
+  handle {
+    encode zstd gzip
+    reverse_proxy app:3000
+  }
 }

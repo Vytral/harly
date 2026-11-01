@@ -12,29 +12,36 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { UserAvatar } from "@/components/ui/UserAvatar";
+import { RULES_EVALUATION_VERSION } from "@/lib/evaluation/version";
 import { cn } from "@/lib/utils";
+import { scoreBand } from "@/lib/evaluation/score-band";
 
 const RECOMMENDATION_META = {
-  strong_yes: { label: "Strong yes", className: "bg-primary/10 text-primary" },
-  yes: { label: "Yes", className: "bg-primary/10 text-primary" },
-  maybe: { label: "Maybe", className: "bg-clay/15 text-clay" },
+  strong_yes: { label: "Strong yes", className: "bg-sage-wash text-success-olive" },
+  yes: { label: "Yes", className: "bg-sage-wash text-success-olive" },
+  maybe: { label: "Maybe", className: "bg-warning/10 text-warning" },
   no: { label: "No", className: "bg-destructive/10 text-destructive" },
 } as const;
-
-const CURRENT_RULES_VERSION = "rules-v3";
 
 function needsEvaluation(application: PipelineApplication) {
   return (
     application.aiScore == null ||
     (application.evaluationSource === "rules" &&
-      application.evaluationEngineVersion !== CURRENT_RULES_VERSION)
+      application.evaluationEngineVersion?.split(":")[0] !== RULES_EVALUATION_VERSION)
   );
 }
 
 function scoreTone(score: number) {
-  if (score >= 60) return "text-primary";
-  if (score >= 40) return "text-clay";
-  return "text-destructive";
+  switch (scoreBand(score)) {
+    case "strong":
+      return "text-success-olive";
+    case "good":
+      return "text-[color-mix(in_oklab,var(--success-olive)_70%,var(--warning-clay))]";
+    case "mixed":
+      return "text-warning-clay";
+    default:
+      return "text-destructive";
+  }
 }
 
 type JobCandidateRankingProps = {
@@ -89,6 +96,7 @@ export function JobCandidateRanking({
     setRanking(true);
     let totalSucceeded = 0;
     let totalFailed = 0;
+    let totalFellBack = 0;
     try {
       for (let guard = 0; guard < 100; guard++) {
         const result = await bulkGenerateAiEvaluationsForJobAction({ jobId });
@@ -103,10 +111,17 @@ export function JobCandidateRanking({
 
         totalSucceeded += result.succeeded;
         totalFailed += result.failed;
-        if (result.remaining === 0 || result.succeeded === 0) break;
+        totalFellBack += result.fellBack;
+        // Rules-scored rows still count as "unscored" for AI, so another round
+        // would re-score the same people. Stop and say so instead.
+        if (result.remaining === 0 || result.succeeded === 0 || result.fellBack > 0) break;
       }
 
-      if (totalSucceeded > 0 || totalFailed > 0) {
+      if (totalFellBack > 0) {
+        toast.warning(
+          `${totalFellBack} of ${totalSucceeded} scored with Harly's built-in rules: the AI provider didn't return a usable answer. Try again in a moment.`,
+        );
+      } else if (totalSucceeded > 0 || totalFailed > 0) {
         toast.success(
           `Scored ${totalSucceeded} candidate${totalSucceeded === 1 ? "" : "s"}` +
             (totalFailed > 0 ? ` · ${totalFailed} failed` : ""),
@@ -131,7 +146,7 @@ export function JobCandidateRanking({
   if (activeApplications.length === 0) return null;
 
   return (
-    <Card className="border-hairline bg-pure-snow">
+    <Card className="bg-lime-wash/70 py-4 dark:bg-card">
       <CardContent className="space-y-3">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="min-w-0">
@@ -185,7 +200,7 @@ export function JobCandidateRanking({
         </button>
 
         {showOrder ? (
-          <div className="divide-y divide-border/60 overflow-hidden rounded-lg border bg-card">
+          <div className="divide-y divide-hairline overflow-hidden rounded-[var(--radius-inner)] bg-pure-snow">
             {activeApplications.map((application) => {
               const recommendation = application.aiRecommendation;
               const meta = recommendation
@@ -196,9 +211,9 @@ export function JobCandidateRanking({
               return (
                 <div
                   key={application.id}
-                  className="flex items-center gap-3 px-3 py-3 transition-colors hover:bg-muted/40 sm:px-4"
+                  className="flex items-center gap-3 px-3 py-3 transition-colors hover:bg-row-wash/60 sm:px-4"
                 >
-                  <span className="w-5 shrink-0 text-center text-xs font-semibold tabular-nums text-muted-foreground">
+                  <span className="w-5 shrink-0 text-center text-xs font-semibold tabular-nums text-soft-ink">
                     {hasEvaluation ? scoredRankById.get(application.id) : "–"}
                   </span>
                   <Link
@@ -215,7 +230,7 @@ export function JobCandidateRanking({
                       <span className="block truncate text-sm font-medium">
                         {application.candidateFirstName} {application.candidateLastName}
                       </span>
-                      <span className="block truncate text-xs text-muted-foreground">
+                      <span className="block truncate text-xs text-soft-ink">
                         {application.candidateHeadline ??
                           stageNameById.get(application.currentStageId) ??
                           application.candidateEmail}
@@ -224,7 +239,7 @@ export function JobCandidateRanking({
                   </Link>
 
                   {application.aiSummary ? (
-                    <p className="hidden max-w-md flex-1 truncate text-xs text-muted-foreground lg:block">
+                    <p className="hidden max-w-md flex-1 truncate text-xs text-soft-ink lg:block">
                       {application.aiSummary}
                     </p>
                   ) : null}

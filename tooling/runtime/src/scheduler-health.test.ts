@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  describeSchedulerHeartbeat,
   describeSchedulerRuns,
+  doctorExitOk,
   FRESH_RUN_STATUSES,
   sanitizeRunError,
   shouldRecordSchedulerFallback,
@@ -69,5 +71,39 @@ describe("sanitizeRunError", () => {
 
   it("keeps a short single-line message intact", () => {
     expect(sanitizeRunError("HTTP 500")).toBe("HTTP 500");
+  });
+});
+
+describe("describeSchedulerHeartbeat", () => {
+  const now = Date.parse("2026-07-29T04:00:00.000Z");
+
+  it("passes without a heartbeat file", () => {
+    expect(describeSchedulerHeartbeat(null, now).ok).toBe(true);
+  });
+
+  it("passes on a recent beat and fails on a stale one", () => {
+    expect(describeSchedulerHeartbeat(now - 30_000, now).ok).toBe(true);
+    expect(describeSchedulerHeartbeat(now - 5 * 60_000, now).ok).toBe(false);
+  });
+});
+
+describe("doctorExitOk", () => {
+  const staleJob = [
+    { name: "readiness", ok: true },
+    { name: "scheduler", ok: false },
+    { name: "queues", ok: false },
+  ];
+
+  it("keeps the healthcheck green when only job freshness or queues fail", () => {
+    expect(doctorExitOk(staleJob, false)).toBe(true);
+  });
+
+  it("fails those under strict mode", () => {
+    expect(doctorExitOk(staleJob, true)).toBe(false);
+  });
+
+  it("always fails on a liveness check", () => {
+    expect(doctorExitOk([{ name: "heartbeat", ok: false }], false)).toBe(false);
+    expect(doctorExitOk([{ name: "readiness", ok: false }], false)).toBe(false);
   });
 });

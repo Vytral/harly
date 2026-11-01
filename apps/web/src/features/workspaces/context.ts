@@ -13,7 +13,9 @@ import { db } from "@harly/db";
 import {
   member as authMembers,
   organization as authOrganizations,
+  user as authUsers,
 } from "@harly/db";
+import { getMcpActor, type McpActor } from "@/lib/mcp/actor";
 import {
   normalizeWorkspaceRole,
   type WorkspaceRole,
@@ -120,9 +122,51 @@ async function getFirstMembership(
   return row ? toResolvedMembership(row) : null;
 }
 
+/**
+ * Context for a verified MCP actor (see lib/mcp/actor.ts). The user must still
+ * be an active member of the workspace the token was issued for; a removed or
+ * suspended member resolves to null exactly like a signed-out browser. The
+ * session object is synthetic: it never matches a row in the session table, so
+ * session-management actions cannot be driven through MCP.
+ */
+async function resolveMcpWorkspaceContext(actor: McpActor): Promise<WorkspaceContext | null> {
+  const [resolved, [userRow]] = await Promise.all([
+    getMembershipForOrganization(actor.userId, actor.workspaceId),
+    db.select().from(authUsers).where(eq(authUsers.id, actor.userId)).limit(1),
+  ]);
+  if (!resolved || !userRow) return null;
+  if (isDemoMode() && !(await isLiveSandboxWorkspace(resolved.organization.id))) {
+    return null;
+  }
+  const now = new Date();
+  const role = normalizeWorkspaceRole(resolved.membership.role);
+  const session = {
+    id: `mcp:${actor.grantId}:${actor.requestId}`,
+    token: `mcp:${actor.requestId}`,
+    userId: actor.userId,
+    activeOrganizationId: actor.workspaceId,
+    expiresAt: new Date(now.getTime() + 5 * 60_000),
+    createdAt: now,
+    updatedAt: now,
+    ipAddress: null,
+    userAgent: `mcp:${actor.clientName}`,
+  } as unknown as Session["session"];
+  return {
+    session,
+    user: userRow as unknown as Session["user"],
+    organization: resolved.organization,
+    membership: { id: resolved.membership.id, role },
+    role,
+    roleKey: resolved.membership.role,
+  };
+}
+
 async function resolveWorkspaceContext(
   options: ResolveWorkspaceContextOptions = {},
 ): Promise<WorkspaceContext | null> {
+  const mcpActor = getMcpActor();
+  if (mcpActor) return resolveMcpWorkspaceContext(mcpActor);
+
   const { fallbackToFirstOrganization = true } = options;
   const session = await auth.api.getSession({ headers: await headers() });
 
@@ -172,6 +216,14 @@ export async function getWorkspaceContextOrNull(
 }
 
 export async function getWorkspaceContext() {
+  const mcpActor = getMcpActor();
+  if (mcpActor) {
+    const context = await resolveMcpWorkspaceContext(mcpActor);
+    // No redirects for API callers: the MCP route maps this to an auth error.
+    if (!context) throw new Error("MCP actor is no longer a member of this workspace.");
+    return context;
+  }
+
   const session = await auth.api.getSession({ headers: await headers() });
 
   if (!session) {

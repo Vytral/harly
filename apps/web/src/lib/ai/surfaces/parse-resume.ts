@@ -18,6 +18,45 @@ import {
 import type { ResumeAutofillFields } from "@/features/applications/resume-autofill";
 import type { ResumeEducationItem, ResumeExperienceItem } from "@harly/db";
 import { redactText, type CandidateIdentity } from "@/features/candidates/anonymize";
+import { recordAiUsage } from "@/lib/ai/usage";
+import { truncateAtLine, truncationDiagnostic } from "@/lib/resume/truncate";
+
+/** Input caps (characters). Cuts happen at line boundaries and are reported. */
+export const PARSE_AUTOFILL_MAX_CHARS = 12_000;
+export const PARSE_STRUCTURED_MAX_CHARS = 16_000;
+/** A parse that takes longer than this is abandoned; callers fall back to the heuristic. */
+export const PARSE_TIMEOUT_MS = 60_000;
+/** One retry for transient provider errors; this path can be public and anonymous. */
+export const PARSE_MAX_RETRIES = 1;
+
+export type ParseResumeOptions = {
+  workspaceId?: string;
+  userId?: string;
+  /** Caller cancellation (e.g. request abort); combined with the built-in timeout. */
+  abortSignal?: AbortSignal;
+  /** Receives notes such as input truncation so they can be persisted with the parse. */
+  onDiagnostic?: (message: string) => void;
+};
+
+function parseSignal(caller?: AbortSignal): AbortSignal {
+  const timeout = AbortSignal.timeout(PARSE_TIMEOUT_MS);
+  return caller ? AbortSignal.any([caller, timeout]) : timeout;
+}
+
+function capInput(
+  text: string,
+  maxChars: number,
+  label: string,
+  onDiagnostic?: (message: string) => void,
+): string {
+  const cut = truncateAtLine(text, maxChars);
+  if (cut.truncated) {
+    const message = truncationDiagnostic(label, cut);
+    console.warn(message);
+    onDiagnostic?.(message);
+  }
+  return cut.text;
+}
 
 const SYSTEM_PROMPT =
   "You extract structured candidate information from raw resume text. " +
@@ -31,6 +70,7 @@ export async function parseResumeWithAI(
   config: AiModelConfig & AnonymizationSettings,
   text: string,
   jobKeywords?: string[],
+  options: ParseResumeOptions = {},
 ): Promise<ResumeAutofillFields> {
   // Autofill exists to read the applicant's name and contact details, so it
   // cannot run with identity removed. The caller falls back to the heuristic.
@@ -40,17 +80,31 @@ export async function parseResumeWithAI(
       ? `Prioritize skills relevant to this role: ${jobKeywords.join(", ")}.\n\n`
       : "";
 
-  const { output } = await generateText({
+  // Cap the input so a huge resume can't blow the context window / cost.
+  const input = capInput(text, PARSE_AUTOFILL_MAX_CHARS, "resume autofill input", options.onDiagnostic);
+
+  const result = await generateText({
     model: getModel(config),
     system: SYSTEM_PROMPT,
-    // Cap the input so a huge resume can't blow the context window / cost.
-    prompt: `${keywordHint}Extract the candidate's details from this resume.\n\nResume:\n"""\n${text.slice(0, 12000)}\n"""`,
+    prompt: `${keywordHint}Extract the candidate's details from this resume.\n\nResume:\n"""\n${input}\n"""`,
     output: Output.object({
       schema: resumeExtractionSchema,
       name: "resume_autofill",
       description: "Contact and profile fields extracted from a resume.",
     }),
+    abortSignal: parseSignal(options.abortSignal),
+    maxRetries: PARSE_MAX_RETRIES,
   });
+  recordAiUsage({
+    surface: "parse_resume",
+    provider: config.provider,
+    modelId: config.modelId,
+    workspaceId: options.workspaceId,
+    userId: options.userId,
+    promptTokens: result.usage?.inputTokens ?? 0,
+    completionTokens: result.usage?.outputTokens ?? 0,
+  });
+  const { output } = result;
 
   if (!output) {
     throw new Error("AI returned no structured output for the resume.");
@@ -77,6 +131,8 @@ export type ResumeStructuredResult = {
   experienceYears: number | null;
   experience: ResumeExperienceItem[];
   education: ResumeEducationItem[];
+  /** Notes about the parse, e.g. the input was truncated. */
+  diagnostics: string[];
 };
 
 const STRUCTURED_SYSTEM_PROMPT =
@@ -96,7 +152,7 @@ const STRUCTURED_SYSTEM_PROMPT =
 export async function parseResumeStructured(
   config: AiModelConfig & AnonymizationSettings,
   text: string,
-  options: { identity?: CandidateIdentity } = {},
+  options: { identity?: CandidateIdentity } & ParseResumeOptions = {},
 ): Promise<ResumeStructuredResult> {
   const identity = options.identity ?? {};
   const hasIdentity = Boolean(
@@ -112,16 +168,34 @@ export async function parseResumeStructured(
     anonymize ? redactText(value, identity) : value;
   const resumeText = anonymize ? (redactText(text, identity) ?? "") : text;
 
-  const { output } = await generateText({
+  const diagnostics: string[] = [];
+  const input = capInput(resumeText, PARSE_STRUCTURED_MAX_CHARS, "resume profile input", (message) => {
+    diagnostics.push(message);
+    options.onDiagnostic?.(message);
+  });
+
+  const result = await generateText({
     model: getModel(config),
     system: STRUCTURED_SYSTEM_PROMPT,
-    prompt: `Extract the candidate's structured profile from this résumé.\n\nRésumé:\n"""\n${resumeText.slice(0, 16000)}\n"""`,
+    prompt: `Extract the candidate's structured profile from this résumé.\n\nRésumé:\n"""\n${input}\n"""`,
     output: Output.object({
       schema: resumeStructuredSchema,
       name: "resume_profile",
       description: "A structured candidate profile extracted from a resume.",
     }),
+    abortSignal: parseSignal(options.abortSignal),
+    maxRetries: PARSE_MAX_RETRIES,
   });
+  recordAiUsage({
+    surface: "parse_resume_profile",
+    provider: config.provider,
+    modelId: config.modelId,
+    workspaceId: options.workspaceId,
+    userId: options.userId,
+    promptTokens: result.usage?.inputTokens ?? 0,
+    completionTokens: result.usage?.outputTokens ?? 0,
+  });
+  const { output } = result;
 
   if (!output) {
     throw new Error("AI returned no structured output for the resume.");
@@ -129,6 +203,7 @@ export async function parseResumeStructured(
 
   // Model output is redacted too, as a second line of defence.
   return {
+    diagnostics,
     summary: redact(output.summary),
     skills: output.skills.slice(0, 40).map((skill) => (anonymize ? (redact(skill) ?? "") : skill)),
     experienceYears: output.experienceYears,

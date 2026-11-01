@@ -1,30 +1,16 @@
+import type { Route } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import type { ReactNode } from "react";
-import {
-  ArrowLeft,
-  Briefcase,
-  Building,
-  FileSpreadsheet,
-  Globe,
-  Mail,
-  MapPin,
-  Megaphone,
-  MousePointerClick,
-  Phone,
-  Upload,
-  UserPlus,
-  Users,
-} from "lucide-react";
+import { ArrowLeft, MapPin } from "lucide-react";
 
-import { GithubIcon } from "@/components/ui/icons/GithubIcon";
-import { LinkedinLogo } from "@/components/ui/icons/brands";
-
-import { PipelineSpine } from "@/components/ui/PipelineSpine";
 import { CandidateAvatarEdit } from "@/features/candidates/CandidateAvatarEdit";
 import { Button } from "@/components/ui/button";
+import { ApplicationStatusBadge } from "@/components/ui/StatusBadge";
 import { CandidateActionBar } from "@/features/candidates/CandidateActionBar";
 import { CandidateActivityRail } from "@/features/candidates/CandidateActivityRail";
+import { RejectionReasonTag } from "@/features/rejection-reasons/RejectionReasonTag";
+import { CandidateContactLinks } from "@/features/candidates/CandidateContactLinks";
+import { CandidateSummaryCard } from "@/features/candidates/CandidateSummaryCard";
 import { CandidatePager } from "@/features/candidates/CandidatePager";
 import { CandidateStickyHeader } from "@/features/candidates/CandidateStickyHeader";
 import { CandidateProfileTabs } from "@/features/candidates/CandidateProfileTabs";
@@ -34,7 +20,11 @@ import { CandidateReferrals } from "@/features/candidates/referrals/CandidateRef
 import { ReferCandidateDrawer } from "@/features/candidates/referrals/ReferCandidateDrawer";
 import { DuplicateDetectionCard } from "@/features/candidates/DuplicateDetectionCard";
 import { IdentityShield, Redact, RedactLink } from "@/features/candidates/IdentityShield";
-import { getCandidateProfile, listCandidates, findSuspectDuplicates } from "@/features/candidates/data";
+import { getCandidateProfile, findSuspectDuplicates } from "@/features/candidates/data";
+import { parseCandidateNavigation } from "@/features/candidates/origin";
+import { getCandidatePageNavigation } from "@/features/candidates/queue-neighbors";
+import { CandidateQueueNavigationProvider } from "@/features/candidates/queue-navigation-context";
+import { resolveSearchActor } from "@/features/search/workspace-search";
 import { getNextStage } from "@/features/pipeline/data";
 import { listCandidateInterviews } from "@/features/interviews/data";
 import { listEmailTemplates } from "@/features/email-templates/data";
@@ -56,42 +46,18 @@ import { getWorkspaceGravatarEnabled } from "@/lib/gravatar";
 
 export const dynamic = "force-dynamic";
 
-const SOURCE_LABEL: Record<string, string> = {
-  public_form: "Job board",
-  csv_import: "CSV import",
-  referral: "Referral",
-  linkedin: "LinkedIn",
-  career_page: "Career page",
-  agency: "Agency",
-  direct_apply: "Direct apply",
-  internal: "Internal",
-  email: "Email",
-  event: "Event",
-  manual: "Manual",
-};
-
-const SOURCE_ICON: Record<string, ReactNode> = {
-  public_form: <Briefcase className="size-3.5" />,
-  csv_import: <FileSpreadsheet className="size-3.5" />,
-  referral: <Users className="size-3.5" />,
-  linkedin: <LinkedinLogo className="size-3.5" />,
-  career_page: <Globe className="size-3.5" />,
-  agency: <Building className="size-3.5" />,
-  direct_apply: <MousePointerClick className="size-3.5" />,
-  internal: <UserPlus className="size-3.5" />,
-  email: <Mail className="size-3.5" />,
-  event: <Megaphone className="size-3.5" />,
-  manual: <Upload className="size-3.5" />,
-};
-
 type CandidateDetailPageProps = {
   params: Promise<{ candidateId: string }>;
+  /** Origin context, see `@/features/candidates/origin`. */
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
 };
 
 export default async function CandidateDetailPage({
   params,
+  searchParams,
 }: CandidateDetailPageProps) {
-  const { candidateId } = await params;
+  const [{ candidateId }, rawSearchParams] = await Promise.all([params, searchParams]);
+  const navigationContext = parseCandidateNavigation(rawSearchParams);
 
   try {
     await requireCandidatePermission("candidates:view", candidateId);
@@ -99,10 +65,13 @@ export default async function CandidateDetailPage({
     notFound();
   }
 
-  const [profile, allCandidates, members, jobOptions, candidateInterviews, candidateOffers, emailTemplates, relatedDocuments] =
+  const [profile, navigation, members, jobOptions, candidateInterviews, candidateOffers, emailTemplates, relatedDocuments] =
     await Promise.all([
       getCandidateProfile(candidateId),
-      listCandidates(),
+      // Previous / next follow the origin list with one bounded, scoped query.
+      resolveSearchActor().then((actor) =>
+        getCandidatePageNavigation(actor, navigationContext, candidateId),
+      ),
       listWorkspaceMembers(),
       listJobOptions(),
       listCandidateInterviews(candidateId),
@@ -130,7 +99,7 @@ export default async function CandidateDetailPage({
     privacyRequests,
     referrals,
   } = profile;
-  const applications = (
+  const visibleApplications = (
     await Promise.all(
       candidateApplications.map(async (application) => {
         try {
@@ -142,6 +111,14 @@ export default async function CandidateDetailPage({
       }),
     )
   ).filter((application): application is (typeof candidateApplications)[number] => Boolean(application));
+  // The application the origin row stood for (queue / pipeline) leads, so the
+  // header and the decision bar act on it.
+  const originApplication = navigationContext.applicationId
+    ? visibleApplications.find((application) => application.id === navigationContext.applicationId) ?? null
+    : null;
+  const applications = originApplication
+    ? [originApplication, ...visibleApplications.filter((application) => application !== originApplication)]
+    : visibleApplications;
 
   const visibleApplicationIds = new Set(
     applications.map((application) => application.id),
@@ -169,20 +146,6 @@ export default async function CandidateDetailPage({
     visibleApplicationIds.has(offer.applicationId),
   );
 
-  const scopedCandidates = (
-    await Promise.all(
-      allCandidates.map(async (candidateRow) => {
-        try {
-          await requireCandidatePermission("candidates:view", candidateRow.id);
-          return candidateRow;
-        } catch {
-          return null;
-        }
-      }),
-    )
-  ).filter((candidateRow): candidateRow is (typeof allCandidates)[number] => Boolean(candidateRow));
-
-  const isHired = applications.some((application) => application.status === "hired");
   const [calStatus, aiStatus, esignStatus, workspaceContext, canManageDsar, canDeleteCandidates, canCollaborate, canEditCandidates] = await Promise.all([
     getWorkspaceCalStatus(workspaceId),
     getWorkspaceAiStatus(workspaceId),
@@ -224,31 +187,12 @@ export default async function CandidateDetailPage({
     ),
   ]);
 
-  const railCandidates = scopedCandidates
-    .slice()
-    .sort((a, b) => {
-      const aTime = a.latestApplication?.appliedAt?.getTime() ?? 0;
-      const bTime = b.latestApplication?.appliedAt?.getTime() ?? 0;
-      return bTime - aTime;
-    })
-    .map((c) => ({
-      id: c.id,
-      fullName: c.fullName,
-      email: c.email,
-      avatarUrl: c.avatarUrl ?? null,
-      role: c.latestApplication?.jobTitle ?? null,
-      stage: c.latestApplication?.currentStageName ?? null,
-    }));
-
   const scheduleApplications = applications.map((application) => ({
     applicationId: application.id,
     jobTitle: application.jobTitle,
     currentStageName: application.currentStageName,
     status: application.status,
   }));
-  const activeIndex = railCandidates.findIndex((entry) => entry.id === candidate.id);
-  const prevId = activeIndex > 0 ? railCandidates[activeIndex - 1]?.id ?? null : null;
-  const nextId = activeIndex >= 0 ? railCandidates[activeIndex + 1]?.id ?? null : null;
   const actionCandidate = {
     id: candidate.id,
     workspaceId,
@@ -284,292 +228,226 @@ export default async function CandidateDetailPage({
     createdAt: event.createdAt.toISOString(),
   }));
 
+  const aiConfigured =
+    aiStatus.enabled && aiStatus.hasApiKey && aiStatus.encryptionReady;
+
+  const identity = (
+    <div className="flex min-w-0 items-start gap-4">
+      <CandidateAvatarEdit
+        candidateId={candidate.id}
+        workspaceId={workspaceId}
+        name={fullName}
+        avatarUrl={candidate.avatarUrl ?? null}
+        fallbackSrcs={avatarFallbackSrcs}
+        className="[&_[data-slot=avatar]]:size-[52px]"
+      />
+      <div className="min-w-0 space-y-2">
+        <div>
+          <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1">
+            <h1 className="font-display text-[26px] leading-tight tracking-[-0.01em] text-near-ink">
+              <Redact>{fullName}</Redact>
+            </h1>
+            {latestApplication ? (
+              <ApplicationStatusBadge status={latestApplication.status} />
+            ) : null}
+            {latestApplication?.rejection ? (
+              <RejectionReasonTag rejection={latestApplication.rejection} showStatus={false} />
+            ) : null}
+          </div>
+          {candidate.headline || candidate.location ? (
+            <p className="mt-0.5 flex flex-wrap items-center gap-x-1.5 text-[14px] leading-6 text-soft-ink">
+              {candidate.headline ? <span>{candidate.headline}</span> : null}
+              {candidate.headline && candidate.location ? (
+                <span aria-hidden>·</span>
+              ) : null}
+              {candidate.location ? (
+                <RedactLink
+                  href={`https://maps.google.com/?q=${encodeURIComponent(candidate.location)}`}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex items-center gap-1 rounded transition-colors duration-150 hover:text-near-ink"
+                >
+                  <MapPin className="size-3.5 shrink-0" strokeWidth={1.6} />
+                  {candidate.location}
+                </RedactLink>
+              ) : null}
+            </p>
+          ) : null}
+        </div>
+
+        <CandidateContactLinks
+          email={candidate.email}
+          phone={candidate.phone}
+          linkedinUrl={candidate.linkedinUrl}
+          githubUrl={candidate.githubUrl}
+          websiteUrl={candidate.websiteUrl}
+        />
+
+        <div className="flex flex-wrap items-center gap-2">
+          <CandidateTags
+            candidateId={candidate.id}
+            workspaceId={workspaceId}
+            tags={tags}
+          />
+          {canCollaborate ? (
+            <ReferCandidateDrawer
+              candidateId={candidate.id}
+              workspaceId={workspaceId}
+              jobs={jobOptions.map((job) => ({ id: job.id, title: job.title }))}
+              members={members}
+              currentUserId={workspaceContext.user.id}
+              canAttributeToOthers={canEditCandidates}
+            />
+          ) : null}
+        </div>
+        <CandidateReferrals
+          referrals={referrals}
+          currentUserId={workspaceContext.user.id}
+          canEditCandidates={canEditCandidates}
+        />
+      </div>
+    </div>
+  );
+
+  const actionBarProps = {
+    candidate: actionCandidate,
+    name: fullName,
+    resumeUrl: latestResume?.fileUrl ?? null,
+    resumeFileName: latestResume?.fileName ?? null,
+    resumeFileType: latestResume?.fileType ?? null,
+    stageName: latestApplication?.currentStageName ?? null,
+    applications: scheduleApplications,
+    members,
+    cal: actionCal,
+    move: moveTarget,
+    moveTargets,
+    emailTemplates,
+    emailTemplateValues: actionTemplateValues,
+    inPool,
+    aiConfigured,
+  };
+
+  const queueNavigation = {
+    autoAdvance: navigation.origin.kind === "review",
+    candidateName: fullName,
+    applicationId: originApplication?.id ?? null,
+    nextHref: navigation.next?.href ?? null,
+    nextName: navigation.next?.name ?? null,
+    doneHref: navigation.doneHref,
+  };
+
   return (
+    <CandidateQueueNavigationProvider value={queueNavigation}>
     <div className="space-y-4">
       <div className="flex items-center justify-between gap-3">
         <Button asChild variant="ghost" size="sm" className="-ml-2 w-fit">
-          <Link href="/dashboard/candidates">
+          <Link href={navigation.backHref as Route}>
             <ArrowLeft className="size-4" />
-            Back to candidates
+            {navigation.backLabel}
           </Link>
         </Button>
 
         <CandidatePager
-          prevId={prevId}
-          nextId={nextId}
-          position={activeIndex >= 0 ? activeIndex + 1 : null}
-          total={railCandidates.length}
+          prev={navigation.prev}
+          next={navigation.next}
+          position={navigation.position}
+          total={navigation.total}
+          label={navigation.label}
+          plain={navigation.origin.kind === "candidates" && Object.keys(navigation.origin.filters).length === 0}
         />
       </div>
 
-      <div className="grid items-start gap-5 xl:grid-cols-[minmax(0,1fr)_20rem]">
-
-        <div className="min-w-0 space-y-5">
-          <CandidateStickyHeader
-            name={fullName}
-            avatarUrl={candidate.avatarUrl ?? null}
-            fallbackSrcs={avatarFallbackSrcs}
-            stageName={latestApplication?.currentStageName ?? null}
-            phone={candidate.phone}
-            actions={
-              <CandidateActionBar
-                candidate={actionCandidate}
-                name={fullName}
-                resumeUrl={latestResume?.fileUrl ?? null}
-                resumeFileName={latestResume?.fileName ?? null}
-                resumeFileType={latestResume?.fileType ?? null}
-                stageName={latestApplication?.currentStageName ?? null}
-                applications={scheduleApplications}
-                members={members}
-                cal={actionCal}
-                move={moveTarget}
-                moveTargets={moveTargets}
-                emailTemplates={emailTemplates}
-                emailTemplateValues={actionTemplateValues}
-                inPool={inPool}
-                variant="compact"
-                aiConfigured={aiStatus.enabled && aiStatus.hasApiKey && aiStatus.encryptionReady}
-              />
-            }
-          >
-            {/* Identity header , one cohesive block, no decorative banner */}
-            <IdentityShield anonymize={aiStatus.resumeAnonymization}>
-            <div className="rounded-2xl border border-border/70 bg-card p-5">
-            <div className="flex flex-col gap-4 lg:flex-row lg:flex-wrap lg:items-start lg:justify-between">
-              {/* Identity + contact, all in one column tight to the avatar */}
-              <div className="flex min-w-0 lg:min-w-[400px] flex-1 items-start gap-4">
-                <CandidateAvatarEdit
-                  candidateId={candidate.id}
-                  workspaceId={workspaceId}
-                  name={fullName}
-                  avatarUrl={candidate.avatarUrl ?? null}
-                  fallbackSrcs={avatarFallbackSrcs}
-                />
-                <div className="min-w-0 space-y-2.5">
-                  <div>
-                    <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1">
-                      <h1 className="font-display text-xl font-semibold tracking-tight">
-                        <Redact>{fullName}</Redact>
-                      </h1>
-                      {latestApplication?.source ? (
-                        <span className="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">
-                          {SOURCE_ICON[latestApplication.source] ?? (
-                            <Briefcase className="size-3.5" />
-                          )}
-                          {SOURCE_LABEL[latestApplication.source] ??
-                            latestApplication.source}
-                        </span>
-                      ) : null}
-                    </div>
-                    {candidate.headline ? (
-                      <p className="mt-1 text-sm leading-6 text-muted-foreground">
-                        {candidate.headline}
-                      </p>
-                    ) : null}
-                  </div>
-
-                  {/* Contact + social , one compact inline row */}
-                  <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-sm text-muted-foreground">
-                    <RedactLink
-                      href={`mailto:${candidate.email}`}
-                      className="inline-flex items-center gap-1.5 transition-colors hover:text-foreground"
-                    >
-                      <Mail className="size-4 shrink-0" strokeWidth={1.6} />
-                      {candidate.email}
-                    </RedactLink>
-                    {candidate.phone ? (
-                      <RedactLink
-                        href={`tel:${candidate.phone}`}
-                        className="inline-flex items-center gap-1.5 transition-colors hover:text-foreground"
-                      >
-                        <Phone className="size-4 shrink-0" strokeWidth={1.6} />
-                        {candidate.phone}
-                      </RedactLink>
-                    ) : null}
-                    {candidate.location ? (
-                      <RedactLink
-                        href={`https://maps.google.com/?q=${encodeURIComponent(candidate.location)}`}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="inline-flex items-center gap-1.5 transition-colors hover:text-foreground"
-                      >
-                        <MapPin className="size-4 shrink-0" strokeWidth={1.6} />
-                        {candidate.location}
-                      </RedactLink>
-                    ) : null}
-
-                    {candidate.linkedinUrl ||
-                    candidate.githubUrl ||
-                    candidate.websiteUrl ? (
-                      <span
-                        aria-hidden
-                        className="hidden h-3.5 w-px bg-border sm:block"
-                      />
-                    ) : null}
-
-                    {candidate.linkedinUrl ? (
-                      <RedactLink
-                        href={candidate.linkedinUrl}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="inline-flex items-center gap-1.5 transition-colors hover:text-foreground"
-                      >
-                        <LinkedinLogo className="size-4" />
-                        LinkedIn
-                      </RedactLink>
-                    ) : null}
-                    {candidate.githubUrl ? (
-                      <RedactLink
-                        href={candidate.githubUrl}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="inline-flex items-center gap-1.5 transition-colors hover:text-foreground"
-                      >
-                        <GithubIcon className="size-4" />
-                        GitHub
-                      </RedactLink>
-                    ) : null}
-                    {candidate.websiteUrl ? (
-                      <RedactLink
-                        href={candidate.websiteUrl}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="inline-flex items-center gap-1.5 transition-colors hover:text-foreground"
-                      >
-                        <Globe className="size-4" strokeWidth={1.6} />
-                        Website
-                      </RedactLink>
-                    ) : null}
-                  </div>
-
-                  {/* Pipeline spine , the single, canonical stage indicator */}
-                  {latestApplication?.currentStageName ? (
-                    <PipelineSpine
-                      current={latestApplication.currentStageName}
-                      showLabel
-                      className="max-w-sm pt-0.5"
-                    />
-                  ) : null}
-
-                  <div className="flex flex-wrap items-center gap-2">
-                    <CandidateTags
-                      candidateId={candidate.id}
-                      workspaceId={workspaceId}
-                      tags={tags}
-                    />
-                    {canCollaborate ? (
-                      <ReferCandidateDrawer
-                        candidateId={candidate.id}
-                        workspaceId={workspaceId}
-                        jobs={jobOptions.map((job) => ({ id: job.id, title: job.title }))}
-                        members={members}
-                        currentUserId={workspaceContext.user.id}
-                        canAttributeToOthers={canEditCandidates}
-                        trigger={
-                          <Button type="button" variant="outline" size="sm">
-                            <UserPlus className="size-4" />
-                            Refer
-                          </Button>
-                        }
-                      />
-                    ) : null}
-                  </div>
-                  <CandidateReferrals
-                    referrals={referrals}
-                    currentUserId={workspaceContext.user.id}
-                    canEditCandidates={canEditCandidates}
-                  />
-                </div>
-              </div>
-
-              {/* Actions , grouped with clear hierarchy, delete isolated */}
-              <div
-                className={`w-full min-w-0 lg:pl-2${isHired ? " lg:pl-[76px]" : ""}`}
-              >
-                <CandidateActionBar
-                  candidate={actionCandidate}
-                  name={fullName}
-                  resumeUrl={latestResume?.fileUrl ?? null}
-                  resumeFileName={latestResume?.fileName ?? null}
-                  resumeFileType={latestResume?.fileType ?? null}
-                  stageName={latestApplication?.currentStageName ?? null}
-                  applications={scheduleApplications}
-                  members={members}
-                  cal={actionCal}
-                  move={moveTarget}
-                  moveTargets={moveTargets}
-                  emailTemplates={emailTemplates}
-                  emailTemplateValues={actionTemplateValues}
-                  inPool={inPool}
-                  aiConfigured={aiStatus.enabled && aiStatus.hasApiKey && aiStatus.encryptionReady}
-                />
-              </div>
+      <div className="min-w-0 space-y-5">
+        <CandidateStickyHeader
+          name={fullName}
+          avatarUrl={candidate.avatarUrl ?? null}
+          fallbackSrcs={avatarFallbackSrcs}
+          stageName={latestApplication?.currentStageName ?? null}
+          phone={candidate.phone}
+          actions={<CandidateActionBar {...actionBarProps} variant="compact" />}
+        >
+          <IdentityShield anonymize={aiStatus.resumeAnonymization}>
+            <div className="rounded-[var(--radius-card)] bg-card p-5 shadow-[var(--shadow-card)] sm:p-6">
+              <CandidateActionBar {...actionBarProps} identity={identity} />
             </div>
-          </div>
           </IdentityShield>
-          </CandidateStickyHeader>
+        </CandidateStickyHeader>
 
-          <DuplicateDetectionCard
-            candidateId={candidate.id}
-            suspects={suspectCandidates}
-            aiConfigured={aiStatus.enabled && aiStatus.hasApiKey && aiStatus.encryptionReady}
-          />
+        <div className="grid items-start gap-5 lg:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]">
+          <div className="min-w-0 space-y-5">
+            <DuplicateDetectionCard
+              candidateId={candidate.id}
+              suspects={suspectCandidates}
+              aiConfigured={aiConfigured}
+            />
 
-          <CandidateProfileTabs
-            candidateId={candidate.id}
-            workspaceId={workspaceId}
-            candidateEmail={candidate.email}
-            candidateName={fullName}
-            candidatePhone={candidate.phone}
-            candidateAddress={candidate.address ?? candidate.location}
-            candidateLinkedinUrl={candidate.linkedinUrl}
-            candidateGithubUrl={candidate.githubUrl}
-            candidateWebsiteUrl={candidate.websiteUrl}
-            candidateSummary={candidate.summary}
-            candidateEducationEntries={candidate.educationEntries ?? []}
-            candidateExperienceEntries={candidate.experienceEntries ?? []}
-            stageName={latestApplication?.currentStageName ?? null}
-            applications={applications.map((application) => ({
-              ...application,
-              appliedAt: application.appliedAt.toISOString(),
-            }))}
-            notes={notes}
-            files={files.map((file) => ({
-              ...file,
-              parsedSkills: Array.isArray(file.parsedSkills) ? file.parsedSkills : [],
-              parsedAt: file.parsedAt?.toISOString() ?? null,
-              createdAt: file.createdAt.toISOString(),
-            }))}
-            relatedDocuments={relatedDocuments}
-            activity={serializedActivity}
-            scorecards={scorecards}
-            messages={messages}
-            interviews={interviews}
-            members={members}
-            aiEvaluations={aiEvaluations}
-            scheduleApplications={scheduleApplications}
-            scheduleMembers={members}
-            scheduleCal={{
-              enabled: calStatus.enabled,
-              bookingUrl: calStatus.bookingUrl,
-            }}
-            currentUserId={workspaceContext.user.id}
-            aiConfigured={
-              aiStatus.enabled && aiStatus.hasApiKey && aiStatus.encryptionReady
-            }
-            offers={offers}
-            offerSignatureChannel={esignStatus.offerSignatureChannel}
-            privacyRequests={canManageDsar ? privacyRequests.map((request) => ({
-              ...request,
-              createdAt: request.createdAt.toISOString(),
-              completedAt: request.completedAt?.toISOString() ?? null,
-            })) : []}
-            canFulfilErasure={canManageDsar && canDeleteCandidates}
-          />
+            <CandidateProfileTabs
+              candidateId={candidate.id}
+              workspaceId={workspaceId}
+              candidateEmail={candidate.email}
+              candidateName={fullName}
+              candidatePhone={candidate.phone}
+              candidateAddress={candidate.address ?? candidate.location}
+              candidateLinkedinUrl={candidate.linkedinUrl}
+              candidateGithubUrl={candidate.githubUrl}
+              candidateWebsiteUrl={candidate.websiteUrl}
+              candidateSummary={candidate.summary}
+              candidateEducationEntries={candidate.educationEntries ?? []}
+              candidateExperienceEntries={candidate.experienceEntries ?? []}
+              stageName={latestApplication?.currentStageName ?? null}
+              applications={applications.map((application) => ({
+                ...application,
+                appliedAt: application.appliedAt.toISOString(),
+              }))}
+              notes={notes}
+              files={files.map((file) => ({
+                ...file,
+                parsedSkills: Array.isArray(file.parsedSkills) ? file.parsedSkills : [],
+                parsedAt: file.parsedAt?.toISOString() ?? null,
+                createdAt: file.createdAt.toISOString(),
+              }))}
+              relatedDocuments={relatedDocuments}
+              activity={serializedActivity}
+              scorecards={scorecards}
+              messages={messages}
+              interviews={interviews}
+              members={members}
+              aiEvaluations={aiEvaluations}
+              scheduleApplications={scheduleApplications}
+              scheduleMembers={members}
+              scheduleCal={{
+                enabled: calStatus.enabled,
+                bookingUrl: calStatus.bookingUrl,
+              }}
+              currentUserId={workspaceContext.user.id}
+              aiConfigured={aiConfigured}
+              offers={offers}
+              offerSignatureChannel={esignStatus.offerSignatureChannel}
+              privacyRequests={canManageDsar ? privacyRequests.map((request) => ({
+                ...request,
+                createdAt: request.createdAt.toISOString(),
+                completedAt: request.completedAt?.toISOString() ?? null,
+              })) : []}
+              canFulfilErasure={canManageDsar && canDeleteCandidates}
+            />
+          </div>
+
+          <div className="min-w-0 space-y-5">
+            <CandidateSummaryCard
+              jobTitle={latestApplication?.jobTitle ?? null}
+              stageName={latestApplication?.currentStageName ?? null}
+              source={latestApplication?.source ?? null}
+              appliedAt={latestApplication?.appliedAt.toISOString() ?? null}
+              createdAt={candidate.createdAt.toISOString()}
+              tags={tags}
+              applicationCount={applications.length}
+              rejection={latestApplication?.rejection ?? null}
+            />
+            <CandidateActivityRail activity={serializedActivity} />
+          </div>
         </div>
-
-        <CandidateActivityRail activity={serializedActivity} />
       </div>
     </div>
+    </CandidateQueueNavigationProvider>
   );
 }

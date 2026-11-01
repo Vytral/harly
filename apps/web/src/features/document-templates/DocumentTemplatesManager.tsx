@@ -1,114 +1,250 @@
 "use client";
 
+import { useConfirm } from "@/components/ui/confirm-dialog";
 import Link from "next/link";
 import type { Route } from "next";
 import { useRouter } from "next/navigation";
-import { useTransition } from "react";
-import { FileText, Plus, Archive, Pencil } from "lucide-react";
+import { useState, useTransition } from "react";
+import {
+  Archive,
+  ArchiveRestore,
+  ChevronDown,
+  Copy,
+  FileText,
+  FilePlus2,
+  MoreHorizontal,
+  Pencil,
+  Plus,
+} from "lucide-react";
 
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
+import { Card } from "@/components/ui/card";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { PageHeader } from "@/components/ui/PageHeader";
+import { StatusPill } from "@/components/ui/status-pill";
 import { toast } from "@/lib/notification-island/toast";
 import { DocumentsWorkspaceTabs } from "@/features/documents/DocumentsWorkspaceTabs";
+import { formatDate } from "@/features/documents/DocumentShared";
+import { GenerateDocumentDialog } from "@/features/documents/GenerateDocumentDialog";
 
-import { archiveWorkflowDocumentTemplate } from "./actions";
-import type { WorkflowDocumentTemplateItem } from "./shared";
-
-function previewBody(value: string) {
-  return value
-    .replace(/<br\s*\/?>(\s*)/gi, " ")
-    .replace(/<\/p>/gi, " ")
-    .replace(/<[^>]+>/g, "")
-    .replace(/\s+/g, " ")
-    .trim();
-}
+import {
+  archiveWorkflowDocumentTemplate,
+  duplicateWorkflowDocumentTemplate,
+  restoreWorkflowDocumentTemplate,
+} from "./actions";
+import { TEMPLATE_LIST_GRID, type WorkflowDocumentTemplateItem } from "./shared";
 
 export function DocumentTemplatesManager({
   templates,
+  usage = {},
   canReadDocuments,
+  canGenerate = false,
 }: {
   templates: WorkflowDocumentTemplateItem[];
+  /** Workflows referencing each template id. */
+  usage?: Record<string, number>;
   canReadDocuments: boolean;
+  canGenerate?: boolean;
 }) {
   const router = useRouter();
+  const confirm = useConfirm();
   const [pending, startTransition] = useTransition();
+  const [generateFor, setGenerateFor] = useState<string | null>(null);
   const active = templates.filter((template) => !template.archivedAt);
   const archived = templates.filter((template) => template.archivedAt);
 
-  function archive(template: WorkflowDocumentTemplateItem) {
-    if (!window.confirm(`Archive the “${template.name}” document template? Published workflows keep their snapshot.`)) return;
+  async function archive(template: WorkflowDocumentTemplateItem) {
+    const used = usage[template.id] ?? 0;
+    if (
+      !(await confirm({
+        tone: "warning",
+        title: `Archive the “${template.name}” template?`,
+        description:
+          used > 0
+            ? `${used} workflow${used === 1 ? " uses" : "s use"} this template. Published workflows keep their snapshot, but you can no longer pick it for new steps or manual documents. You can restore it later.`
+            : "Published workflows keep their snapshot. New workflows and manual documents can no longer use it. You can restore it later.",
+        confirmLabel: "Archive template",
+      }))
+    )
+      return;
+    run(() => archiveWorkflowDocumentTemplate({ templateId: template.id }), "Template archived");
+  }
+
+  function run(
+    action: () => Promise<{ success: boolean; error?: string; id?: string }>,
+    success: string,
+    after?: (id: string | undefined) => void,
+  ) {
     startTransition(async () => {
-      const result = await archiveWorkflowDocumentTemplate({ templateId: template.id });
+      const result = await action();
       if (!result.success) {
-        toast.error(result.error ?? "Could not archive the document template.");
+        toast.error(result.error ?? "Something went wrong.");
         return;
       }
-      toast.success("Document template archived.");
+      toast.success(success);
+      after?.(result.id);
       router.refresh();
     });
   }
 
   return (
-    <main className="mx-auto w-full max-w-6xl space-y-8 px-5 py-8 sm:px-8 lg:px-10">
-      <DocumentsWorkspaceTabs
-        active="templates"
-        canReadDocuments={canReadDocuments}
-        canManageTemplates
+    <div className="mx-auto max-w-[1400px] space-y-6">
+      <DocumentsWorkspaceTabs active="templates" canReadDocuments={canReadDocuments} canManageTemplates />
+      <PageHeader
+        title="Document templates"
+        description="Reusable documents with candidate details filled in. Generate one by hand for a candidate, or let a workflow create it automatically. Generated PDFs land in your library."
+        actions={
+          <Button asChild>
+            <Link href={"/dashboard/documents/templates/new" as Route}>
+              <Plus className="size-4" /> New template
+            </Link>
+          </Button>
+        }
       />
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Workflow document templates</h1>
-          <p className="mt-1 max-w-2xl text-sm leading-6 text-muted-foreground">
-            Reusable, variable-filled documents for automation workflows. Published workflows keep their own content snapshot, while generated PDFs appear in your document library.
-          </p>
-        </div>
-        <Button asChild>
-          <Link href={"/dashboard/documents/templates/new" as Route}><Plus className="size-4" /> New workflow template</Link>
-        </Button>
-      </div>
 
       {active.length === 0 ? (
-        <div className="flex flex-col items-center rounded-2xl border border-dashed px-6 py-16 text-center">
-          <span className="flex size-12 items-center justify-center rounded-xl bg-muted text-muted-foreground"><FileText className="size-6" /></span>
-          <h2 className="mt-4 text-base font-semibold">Create your first reusable document</h2>
-          <p className="mt-1 max-w-md text-sm text-muted-foreground">Use it for offers, agreements, onboarding packets or any PDF you want Harly to generate and send for signature.</p>
-          <Button asChild className="mt-5"><Link href={"/dashboard/documents/templates/new" as Route}><Plus className="size-4" /> Create template</Link></Button>
+        <div className="flex flex-col items-center rounded-[var(--radius-card)] bg-lime-wash px-6 py-14 text-center">
+          <span className="grid size-12 place-items-center rounded-[var(--radius-btn)] bg-pure-snow text-near-ink">
+            <FileText className="size-6" />
+          </span>
+          <h2 className="mt-4 text-[15px] font-semibold tracking-[-0.01em] text-near-ink">Create your first reusable document</h2>
+          <p className="mt-1 max-w-md text-sm text-soft-ink">
+            Use it for offers, agreements, onboarding packets or any PDF you want Harly to generate and send for signature.
+          </p>
+          <Button asChild className="mt-5">
+            <Link href={"/dashboard/documents/templates/new" as Route}>
+              <Plus className="size-4" /> Create template
+            </Link>
+          </Button>
         </div>
       ) : (
-        <div className="grid gap-4 md:grid-cols-2">
-          {active.map((template) => (
-            <Card key={template.id}>
-              <CardContent className="space-y-3">
-                <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <p className="truncate font-semibold">{template.name}</p>
-                    <p className="mt-1 truncate text-sm text-muted-foreground">{template.title}</p>
-                  </div>
-                  <div className="flex shrink-0 gap-1">
-                    <Button size="icon" variant="ghost" asChild aria-label={`Edit ${template.name}`}>
-                      <Link href={`/dashboard/documents/templates/${template.id}` as Route}><Pencil className="size-4" /></Link>
-                    </Button>
-                    <Button size="icon" variant="ghost" disabled={pending} onClick={() => archive(template)} aria-label={`Archive ${template.name}`}>
-                      <Archive className="size-4" />
-                    </Button>
-                  </div>
-                </div>
-                <p className="line-clamp-3 text-sm leading-6 text-muted-foreground">{previewBody(template.body)}</p>
-                <p className="text-[11px] text-muted-foreground">Updated {template.updatedAt.toLocaleDateString()}</p>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
+        <Card className="gap-0 overflow-hidden py-0">
+          <div className={`hidden gap-4 border-b border-hairline px-4 py-3 text-[11px] font-medium uppercase tracking-wide text-soft-ink md:grid ${TEMPLATE_LIST_GRID}`}>
+            <span>Name</span>
+            <span>PDF title</span>
+            <span>Used by</span>
+            <span>Updated</span>
+            <span />
+          </div>
+          <ul className="divide-y divide-hairline">
+            {active.map((template) => {
+              const used = usage[template.id] ?? 0;
+              return (
+                <li
+                  key={template.id}
+                  className={`relative grid grid-cols-1 gap-1 px-4 py-3.5 transition-colors hover:bg-row-wash md:items-center md:gap-4 ${TEMPLATE_LIST_GRID}`}
+                >
+                  <Link
+                    href={`/dashboard/documents/templates/${template.id}` as Route}
+                    className="flex min-w-0 items-center gap-3 pr-10 outline-none after:absolute after:inset-0 focus-visible:after:ring-2 focus-visible:after:ring-inset focus-visible:after:ring-near-ink md:pr-0"
+                  >
+                    <span className="grid size-9 shrink-0 place-items-center rounded-[var(--radius-btn)] border border-hairline bg-pure-snow text-near-ink">
+                      <FileText className="size-4" />
+                    </span>
+                    <span className="min-w-0 truncate text-sm font-semibold text-near-ink">{template.name}</span>
+                  </Link>
+                  <span className="truncate pl-12 text-[13px] text-soft-ink md:pl-0">{template.title}</span>
+                  <span>
+                    <span className="pl-12 md:pl-0">
+                      {used > 0 ? (
+                        <StatusPill size="sm" tone="info">
+                          {used} workflow{used === 1 ? "" : "s"}
+                        </StatusPill>
+                      ) : (
+                        <span className="text-xs text-quiet-mist">Not used</span>
+                      )}
+                    </span>
+                  </span>
+                  <span className="pl-12 text-xs text-soft-ink md:pl-0">{formatDate(template.updatedAt.toISOString())}</span>
+                  <span className="absolute top-3 right-3 z-10 md:static">
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button size="icon-sm" variant="ghost" disabled={pending} aria-label={`Actions for ${template.name}`}>
+                          <MoreHorizontal />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end" className="w-48">
+                        {canGenerate ? (
+                          <DropdownMenuItem onSelect={() => setGenerateFor(template.id)}>
+                            <FilePlus2 />
+                            Generate document
+                          </DropdownMenuItem>
+                        ) : null}
+                        <DropdownMenuItem asChild>
+                          <Link href={`/dashboard/documents/templates/${template.id}` as Route}>
+                            <Pencil />
+                            Edit
+                          </Link>
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          onSelect={() =>
+                            run(
+                              () => duplicateWorkflowDocumentTemplate({ templateId: template.id }),
+                              "Template duplicated",
+                              (id) => id && router.push(`/dashboard/documents/templates/${id}` as Route),
+                            )
+                          }
+                        >
+                          <Copy />
+                          Duplicate
+                        </DropdownMenuItem>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem onSelect={() => void archive(template)}>
+                          <Archive />
+                          Archive
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </span>
+                </li>
+              );
+            })}
+          </ul>
+        </Card>
       )}
 
       {archived.length > 0 ? (
-        <details className="rounded-xl border p-4">
-          <summary className="cursor-pointer text-sm font-medium">Archived templates ({archived.length})</summary>
-          <div className="mt-4 space-y-2">
-            {archived.map((template) => <p key={template.id} className="text-sm text-muted-foreground">{template.name} · archived</p>)}
-          </div>
+        <details className="group rounded-[var(--radius-card)] bg-card shadow-[var(--shadow-card)]">
+          <summary className="flex cursor-pointer list-none items-center justify-between px-5 py-4 text-sm font-medium text-near-ink [&::-webkit-details-marker]:hidden">
+            Archived templates ({archived.length})
+            <ChevronDown className="size-4 text-soft-ink transition-transform group-open:rotate-180" />
+          </summary>
+          <ul className="divide-y divide-hairline border-t border-hairline">
+            {archived.map((template) => (
+              <li key={template.id} className="flex items-center justify-between gap-3 px-5 py-3">
+                <div className="min-w-0">
+                  <p className="truncate text-sm text-near-ink">{template.name}</p>
+                  <p className="text-xs text-soft-ink">
+                    Archived {template.archivedAt ? formatDate(template.archivedAt.toISOString()) : ""}
+                  </p>
+                </div>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled={pending}
+                  onClick={() => run(() => restoreWorkflowDocumentTemplate({ templateId: template.id }), "Template restored")}
+                >
+                  <ArchiveRestore />
+                  Restore
+                </Button>
+              </li>
+            ))}
+          </ul>
         </details>
       ) : null}
-    </main>
+
+      <GenerateDocumentDialog
+        key={generateFor ?? "none"}
+        open={generateFor !== null}
+        onOpenChange={(open) => !open && setGenerateFor(null)}
+        defaultTemplateId={generateFor ?? undefined}
+      />
+    </div>
   );
 }

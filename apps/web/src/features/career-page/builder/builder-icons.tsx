@@ -234,3 +234,19 @@ export function SmartphoneIcon(props: IconProps) {
     </svg>
   );
 }
+
+// Newer builder glyphs come straight from lucide (already a dependency) so the
+// set stays consistent with the rest of the app.
+export {
+  Layers as LayersIcon,
+  Palette as PaletteIcon,
+  Globe as GlobeIcon,
+  Tablet as TabletIcon,
+  TriangleAlert as AlertIcon,
+  ExternalLink as ExternalLinkIcon,
+  RotateCcw as ResetIcon,
+  Sparkles as SparklesIcon,
+  Megaphone as MegaphoneIcon,
+  CircleDot as DotIcon,
+  Keyboard as KeyboardIcon,
+} from "lucide-react";

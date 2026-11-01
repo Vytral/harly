@@ -13,6 +13,7 @@ import {
   validateApplicationQuestionAnswers,
 } from "@/lib/validations/applications";
 import { resolvePublicWorkspace } from "@/server/api/public";
+import { readJsonBody } from "@/server/api/body";
 import { clientIp, enforceRateLimit } from "@/server/api/ratelimit";
 import { verifyCaptchaToken } from "@/lib/captcha";
 import { apiOk, corsPreflight, withApi } from "@/server/api/respond";
@@ -40,7 +41,9 @@ export const POST = withApi(
       "applications:write",
     );
 
-    const body = (await request.json().catch(() => null)) as Record<
+    // Anonymous endpoint: cap the body before it is buffered (rich answers,
+    // education and experience entries fit comfortably in 1 MB).
+    const body = (await readJsonBody(request, 1_000_000)) as Record<
       string,
       unknown
     > | null;

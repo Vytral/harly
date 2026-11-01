@@ -93,6 +93,7 @@
           "developers/api-overview",
           "developers/api-authorization",
           "developers/api-reference",
+          "developers/mcp",
           "developers/webhooks",
           "developers/realtime",
           "developers/automations"

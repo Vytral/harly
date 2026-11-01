@@ -8,9 +8,9 @@ import { Tile, TileHeader, TileLink, EmptyHint } from "./primitives";
 
 const severityVariant: Record<
   RiskJob["severity"],
-  "destructive" | "danger" | "warning"
+  "danger" | "warning"
 > = {
-  critical: "destructive",
+  critical: "danger",
   danger: "danger",
   warning: "warning",
 };
@@ -35,18 +35,18 @@ export function JobsAtRisk({
         title="Jobs at risk"
         action={<TileLink href="/dashboard/jobs">View all</TileLink>}
       />
-      <div className="flex flex-1 flex-col px-2 pb-2 pt-1">
+      <div className="flex flex-1 flex-col px-2 pb-3 pt-3">
         {jobs.length > 0 ? (
-          <ul className="flex-1 divide-y divide-border/60">
+          <ul className="flex-1 flex flex-col gap-0.5">
             {jobs.map((job) => (
               <li key={job.id}>
                 <Link
                   href={`/dashboard/jobs/${job.id}` as Route}
-                  className="group flex items-center gap-3 rounded-xl px-3 py-3 transition hover:bg-muted/60"
+                  className="group flex items-center gap-3 rounded-[var(--radius-md)] px-3 py-2.5 transition-colors hover:bg-row-wash"
                 >
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-sm font-medium">{job.title}</p>
-                    <p className="truncate text-xs text-muted-foreground">
+                    <p className="truncate text-xs text-soft-ink">
                       {job.reason}
                     </p>
                   </div>

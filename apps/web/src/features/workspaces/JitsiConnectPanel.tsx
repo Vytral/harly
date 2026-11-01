@@ -31,6 +31,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { SettingRow } from "@/components/ui/setting-row";
 import { Switch } from "@/components/ui/switch";
 
 function JitsiLogo({ className }: { className?: string }) {
@@ -116,7 +117,7 @@ export function JitsiConnectPanel({
                 {isConfigured ? (open ? "Hide settings" : "Manage") : "Connect"}
               </Button>
               {isConfigured ? (
-                <label className="flex items-center gap-2 rounded-lg border bg-card px-3 py-2 text-sm">
+                <label className="flex h-9 items-center gap-2 rounded-[var(--radius-btn)] border border-mist-border bg-pure-snow px-3 text-sm">
                   <Switch
                     checked={status.enabled}
                     disabled={togglePending}
@@ -274,16 +275,14 @@ function JitsiConnectForm({
           </div>
         ) : null}
 
-        <div className="flex items-center justify-between rounded-xl border px-3 py-2.5">
-          <div>
-            <p className="text-sm font-medium">Enable Jitsi</p>
-            <p className="text-xs text-muted-foreground">
-              Used for video interviews when Zoom, Teams and Google Meet are not
-              connected.
-            </p>
-          </div>
-          <Switch checked={enabled} onCheckedChange={setEnabled} />
-        </div>
+        <SettingRow
+          htmlFor="jitsiconnectpanel-switch-1"
+          className="rounded-[var(--radius-inner)] border border-hairline px-4 py-3"
+          title={<>Enable Jitsi</>}
+          description={<>Used for video interviews when Zoom, Teams and Google Meet are not
+              connected.</>}
+          control={<Switch id="jitsiconnectpanel-switch-1" checked={enabled} onCheckedChange={setEnabled} />}
+        />
 
         {test.kind === "error" ? (
           <div className="flex items-start gap-2 rounded-xl border border-clay/30 bg-clay/5 px-3 py-2 text-sm text-clay">

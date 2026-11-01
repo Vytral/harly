@@ -7,7 +7,7 @@ import { cn } from "@/lib/utils"
 const badgeVariants = cva(
   // Status and taxonomy badges are fully pill (DESIGN.md , Status Pill), set in
   // the chrome face at 12px so they hold as labels rather than speech.
-  "font-chrome inline-flex w-fit shrink-0 items-center justify-center gap-1 overflow-hidden rounded-full border border-transparent px-2.5 py-0.5 text-[12px] leading-[18px] whitespace-nowrap transition-[color,box-shadow] focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 aria-invalid:border-destructive aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 [&>svg]:pointer-events-none [&>svg]:size-3",
+  "font-chrome inline-flex w-fit shrink-0 items-center justify-center gap-1.5 overflow-hidden rounded-full border border-transparent px-2.5 py-0.5 text-[12px] leading-[18px] font-medium whitespace-nowrap transition-[color,background-color,box-shadow] duration-150 focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 aria-invalid:border-destructive aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 [&>svg]:pointer-events-none [&>svg]:size-3",
   {
     variants: {
       variant: {
@@ -45,14 +45,31 @@ const badgeVariants = cva(
   }
 )
 
+/** Semantic status variants carry a leading dot unless `dot={false}`. */
+const DOT_VARIANTS = new Set([
+  "success",
+  "warning",
+  "info",
+  "neutral",
+  "danger",
+  "signal",
+])
+
 function Badge({
   className,
   variant = "default",
   asChild = false,
+  dot,
+  children,
   ...props
 }: React.ComponentProps<"span"> &
-  VariantProps<typeof badgeVariants> & { asChild?: boolean }) {
+  VariantProps<typeof badgeVariants> & {
+    asChild?: boolean
+    /** Leading 6px status dot. Defaults on for semantic variants. */
+    dot?: boolean
+  }) {
   const Comp = asChild ? Slot.Root : "span"
+  const showDot = !asChild && (dot ?? DOT_VARIANTS.has(variant ?? ""))
 
   return (
     <Comp
@@ -60,7 +77,12 @@ function Badge({
       data-variant={variant}
       className={cn(badgeVariants({ variant }), className)}
       {...props}
-    />
+    >
+      {showDot ? (
+        <span aria-hidden="true" className="size-1.5 shrink-0 rounded-full bg-current" />
+      ) : null}
+      {children}
+    </Comp>
   )
 }
 

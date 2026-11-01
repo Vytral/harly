@@ -14,6 +14,7 @@ const mocks = vi.hoisted(() => ({
   getCareerPageData: vi.fn(),
   getWorkspaceAiStatus: vi.fn(),
   countCandidatePool: vi.fn(),
+  listJobsWithStats: vi.fn(),
 }));
 
 vi.mock("next/navigation", () => ({ notFound: mocks.notFound }));
@@ -25,6 +26,7 @@ vi.mock("@/features/workspaces/context", () => ({ getWorkspaceContext: mocks.get
 vi.mock("@/features/jobs/data", () => ({
   getDashboardJob: mocks.getDashboardJob,
   listWorkspaceDepartments: mocks.listWorkspaceDepartments,
+  listJobsWithStats: mocks.listJobsWithStats,
 }));
 vi.mock("@/features/jobs/hiring-team-data", () => ({
   listJobHiringTeam: mocks.listJobHiringTeam,
@@ -34,6 +36,8 @@ vi.mock("@/features/career-page/data", () => ({ getCareerPageData: mocks.getCare
 vi.mock("@/lib/ai/config", () => ({ getWorkspaceAiStatus: mocks.getWorkspaceAiStatus }));
 vi.mock("@/features/matching/data", () => ({ countCandidatePool: mocks.countCandidatePool }));
 vi.mock("@/features/jobs/actions", () => ({ updateJobAction: vi.fn() }));
+vi.mock("@/features/jobs/JobHiringProgress", () => ({ JobHiringProgress: () => null }));
+vi.mock("@/features/jobs/JobPublishedDialog", () => ({ JobPublishedDialog: () => null }));
 vi.mock("@/features/jobs/JobForm", () => ({ JobForm: () => null }));
 vi.mock("@/features/jobs/JobActionsMenu", () => ({ JobActionsMenu: () => null }));
 vi.mock("@/features/jobs/JobShareButton", () => ({ JobShareButton: () => null }));
@@ -54,6 +58,7 @@ describe("job detail page (fullscreen)", () => {
     mocks.getCareerPageData.mockResolvedValue(null);
     mocks.getWorkspaceAiStatus.mockResolvedValue({});
     mocks.countCandidatePool.mockResolvedValue(0);
+    mocks.listJobsWithStats.mockResolvedValue([]);
   });
 
   it("returns not found for a job outside the caller's scope without loading its hiring team", async () => {

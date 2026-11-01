@@ -2,7 +2,7 @@
 
 import { useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { FileText } from "lucide-react";
+import { FileText, RefreshCw } from "lucide-react";
 import { toast } from "@/lib/notification-island/toast";
 
 import { generateAiEvaluationAction } from "@/features/candidates/ai-actions";
@@ -23,6 +23,7 @@ import { HarlyAILogoMark } from "@/components/ui/icons/HarlyAILogoMark";
 import { RelativeTime } from "@/lib/date-hydration";
 import { formatModelLabel, type AiProviderId } from "@/lib/ai/providers";
 import { cn } from "@/lib/utils";
+import { scoreBand } from "@/lib/evaluation/score-band";
 
 const PROVIDER_LOGO: Record<
   AiProviderId,
@@ -36,17 +37,33 @@ const PROVIDER_LOGO: Record<
 };
 
 const RECOMMENDATION_META = {
-  strong_yes: { label: "Strong yes", className: "bg-primary/10 text-primary" },
-  yes: { label: "Yes", className: "bg-primary/10 text-primary" },
-  maybe: { label: "Maybe", className: "bg-clay/15 text-clay" },
-  no: { label: "No", className: "bg-destructive/10 text-destructive" },
+  strong_yes: { label: "Strong yes", className: "bg-success-olive/12 text-success-olive" },
+  yes: { label: "Yes", className: "bg-success-olive/10 text-success-olive" },
+  maybe: { label: "Maybe", className: "bg-warning-clay/12 text-warning-clay" },
+  no: { label: "No", className: "bg-danger-rust/10 text-danger-rust" },
 } as const;
 
+/** Colour per shared score band (lib/evaluation/score-band.ts). */
 function scoreTone(score: number | null | undefined) {
   if (score == null) return "text-muted-foreground";
-  if (score >= 60) return "text-primary";
-  if (score >= 40) return "text-clay";
-  return "text-destructive";
+  switch (scoreBand(score)) {
+    case "strong":
+      return "text-success-olive";
+    case "good":
+      return "text-[color-mix(in_oklab,var(--success-olive)_70%,var(--warning-clay))]";
+    case "mixed":
+      return "text-warning-clay";
+    default:
+      return "text-danger-rust";
+  }
+}
+
+/** Soft wash behind the score ring, matching its band. */
+function scoreWash(score: number) {
+  const band = scoreBand(score);
+  if (band === "strong" || band === "good") return "bg-success-olive/10";
+  if (band === "mixed") return "bg-warning-clay/10";
+  return "bg-danger-rust/10";
 }
 
 /** Null / unverified scores render as an em dash — never a misleading red 0. */
@@ -68,7 +85,7 @@ function ScoreRing({ score, compact = false }: { score: number; compact?: boolea
   const circumference = 2 * Math.PI * radius;
   const box = compact ? 48 : 64;
   return (
-    <div className={cn("relative shrink-0", compact ? "size-12" : "size-16")}>
+    <div className={cn("relative shrink-0 rounded-full", scoreWash(score), compact ? "size-12" : "size-16")}>
       <svg viewBox={`0 0 ${box} ${box}`} className={cn("-rotate-90", compact ? "size-12" : "size-16")}>
         <circle
           cx={box / 2}
@@ -107,10 +124,13 @@ function GenerateButton({
   applicationId,
   hasEvaluation,
   aiConfigured,
+  quiet = false,
 }: {
   applicationId: string;
   hasEvaluation: boolean;
   aiConfigured: boolean;
+  /** Footer placement: a small text button instead of the AI call-to-action. */
+  quiet?: boolean;
 }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -124,9 +144,28 @@ function GenerateButton({
         toast.error(result.error);
         return;
       }
-      toast.success(aiConfigured ? "AI evaluation ready" : "Automatic evaluation ready");
+      if (result.aiFellBack) {
+        toast.warning("Scored with Harly's built-in rules: the AI provider didn't return a usable answer.");
+      } else {
+        toast.success(aiConfigured ? "AI evaluation ready" : "Automatic evaluation ready");
+      }
       (router as { refresh?: () => void }).refresh?.();
     });
+  }
+
+  if (quiet) {
+    return (
+      <Button
+        size="sm"
+        variant="ghost"
+        onClick={run}
+        disabled={isPending}
+        className="ml-auto h-7 gap-1.5 px-2 text-xs text-muted-foreground"
+      >
+        <RefreshCw className={cn("size-3.5", isPending && "animate-spin motion-reduce:animate-none")} />
+        {isPending ? "Scoring…" : "Regenerate"}
+      </Button>
+    );
   }
 
   return (
@@ -292,7 +331,6 @@ export function AiScoreCard({
                     </p>
                   </div>
                 </div>
-                    <GenerateButton applicationId={application.id} hasEvaluation aiConfigured={aiConfigured} />
               </div>
 
               {evaluation.criteria.length > 0 ? (
@@ -416,20 +454,14 @@ export function AiScoreCard({
                 <span>
                   Updated <RelativeTime value={evaluation.updatedAt} />
                 </span>
-                {evaluation.evidenceCoverage != null ? (
-                  <span>Evidence {evaluation.evidenceCoverage}%</span>
+                {evaluation.criteria.length > 0 ? (
+                  <span>
+                    {evaluation.criteria.filter((criterion) => criterion.evidence?.trim()).length} of{" "}
+                    {evaluation.criteria.length} criteria backed by evidence
+                  </span>
                 ) : null}
-                {evaluation.requiresHumanReview ? (
-                  <Badge variant="outline" className="font-normal text-clay">
-                    Human review required
-                  </Badge>
-                ) : null}
+                <GenerateButton applicationId={application.id} hasEvaluation aiConfigured={aiConfigured} quiet />
               </div>
-              <p className="text-xs leading-5 text-muted-foreground">
-                {evaluation.source === "rules"
-                  ? "Deterministic evaluation based on structured resume parsing, rule criteria, and verified evidence. Review missing information and apply human discretion."
-                  : "AI guidance only — review the evidence and make the hiring decision yourself. Do not use this score as the sole basis for a decision."}
-              </p>
             </CardContent>
           </Card>
         );

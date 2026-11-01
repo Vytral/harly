@@ -504,7 +504,7 @@ echo "$*" >> "${calls}"
 if [ "$1 $2" = "version --format" ]; then echo 29.0.0; exit 0; fi
 if [ "$1 $2 $3" = "compose version --short" ]; then echo 2.40.0; exit 0; fi
 if [ "$1 $2 $3" = "compose exec -T" ]; then printf 'fake-pg-dump'; exit 0; fi
-if [ "$1 $2" = "image inspect" ]; then echo 'ghcr.io/vytral/harly@sha256:${"a".repeat(64)}'; exit 0; fi
+if [ "$1 $2" = "image inspect" ]; then echo 'ghcr.io/vytral/harly@${stableDigest}'; exit 0; fi
 if [ "$1 $2 $3 $4" = "compose ps --status running" ]; then printf 'postgres\\napp\\nscheduler\\n'; exit 0; fi
 exit 0
 `);
@@ -523,7 +523,68 @@ exit 0
     assert.equal(result.status, 0, result.stderr || result.stdout);
     const updated = JSON.parse(await readFile(path.join(directory, "harly.config.json"), "utf8"));
     assert.equal(updated.requestedImage, "ghcr.io/vytral/harly:0.2.0");
-    assert.equal(updated.image, `ghcr.io/vytral/harly@sha256:${"a".repeat(64)}`);
+    assert.equal(updated.image, `ghcr.io/vytral/harly@${stableDigest}`);
+    // Writers stop for the rollback backup and are not started again until
+    // the new release comes up, so a rollback never drops accepted work.
+    const lines = (await readFile(calls, "utf8")).split("\n");
+    const stopped = lines.findIndex((line) => /compose .*stop app scheduler/.test(line));
+    const released = lines.findIndex((line) => /compose .*up -d --wait/.test(line));
+    assert.ok(stopped >= 0 && released > stopped, lines.join("\n"));
+    assert.equal(
+      lines.slice(stopped, released).some((line) => /compose .*up -d app scheduler/.test(line)),
+      false,
+      lines.join("\n"),
+    );
+  } finally {
+    server.kill();
+    manifest.server.close();
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test("update refuses a pulled tag whose digest differs from the manifest, before migrating", async () => {
+  const directory = await mkdtemp(path.join(os.tmpdir(), "harly-update-mismatch-"));
+  const child = path.join(directory, "nested");
+  const bin = path.join(directory, "bin");
+  const calls = path.join(directory, "docker.calls");
+  const port = await availablePort();
+  const manifest = await manifestServer();
+  await mkdir(bin);
+  await mkdir(child);
+  await writeInstall(directory, "ghcr.io/vytral/harly:0.1.0");
+  const config = JSON.parse(await readFile(path.join(directory, "harly.config.json"), "utf8"));
+  config.publicUrl = `http://127.0.0.1:${port}`;
+  await writeFile(path.join(directory, "harly.config.json"), JSON.stringify(config));
+  await writeFile(path.join(bin, "docker"), `#!/bin/sh
+echo "$*" >> "${calls}"
+if [ "$1 $2" = "version --format" ]; then echo 29.0.0; exit 0; fi
+if [ "$1 $2 $3" = "compose version --short" ]; then echo 2.40.0; exit 0; fi
+if [ "$1 $2 $3" = "compose exec -T" ]; then printf 'fake-pg-dump'; exit 0; fi
+if [ "$1 $2" = "image inspect" ]; then echo 'ghcr.io/vytral/harly@sha256:${"a".repeat(64)}'; exit 0; fi
+if [ "$1 $2 $3 $4" = "compose ps --status running" ]; then printf 'postgres\\napp\\nscheduler\\n'; exit 0; fi
+exit 0
+`);
+  await chmod(path.join(bin, "docker"), 0o755);
+  const server = spawn(process.execPath, ["-e", `require('http').createServer((_,r)=>{r.writeHead(200,{'content-type':'application/json'});r.end('{"status":"ok"}')}).listen(${port},'127.0.0.1')`], { stdio: "ignore" });
+  await new Promise((resolve) => setTimeout(resolve, 150));
+  try {
+    const result = await runCli(["update", "--yes", "--allow-plaintext"], {
+      cwd: child,
+      env: {
+        ...process.env,
+        PATH: `${bin}:${process.env.PATH}`,
+        HARLY_RELEASE_MANIFEST_URL: manifest.url,
+      },
+    });
+    assert.notEqual(result.status, 0, result.stdout);
+    assert.match(`${result.stderr}${result.stdout}`, /not the one the release manifest publishes/);
+    const calls = await readFile(path.join(directory, "docker.calls"), "utf8");
+    assert.doesNotMatch(calls, /run --rm migrate/);
+    // Nothing was migrated, so the previous release is started again.
+    assert.match(calls.slice(calls.lastIndexOf("stop app scheduler")), /up -d app scheduler/);
+    const kept = JSON.parse(await readFile(path.join(directory, "harly.config.json"), "utf8"));
+    assert.equal(kept.image, "ghcr.io/vytral/harly:0.1.0");
+    assert.match(await readFile(path.join(directory, ".env"), "utf8"), /HARLY_IMAGE="?ghcr\.io\/vytral\/harly:0\.1\.0/);
   } finally {
     server.kill();
     manifest.server.close();
@@ -602,6 +663,53 @@ test("update rejects edge and a missing installation", async () => {
     assert.match(result.stderr, /No Harly installation found/);
     await rm(missing, { recursive: true, force: true });
   } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test("restore keeps writers stopped from its safety backup until the restore ends", async () => {
+  const directory = await mkdtemp(path.join(os.tmpdir(), "harly-restore-order-"));
+  const bin = path.join(directory, "bin");
+  const calls = path.join(directory, "docker.calls");
+  const port = await availablePort();
+  await mkdir(bin);
+  await writeInstall(directory, "ghcr.io/vytral/harly:0.2.0");
+  const config = JSON.parse(await readFile(path.join(directory, "harly.config.json"), "utf8"));
+  config.publicUrl = `http://127.0.0.1:${port}`;
+  await writeFile(path.join(directory, "harly.config.json"), JSON.stringify(config));
+  await writeFile(path.join(directory, ".env"), 'HARLY_IMAGE="ghcr.io/vytral/harly:0.2.0"\nHARLY_VERSION="0.2.0"\nPOSTGRES_USER=harly\nPOSTGRES_DB=harly\n', { mode: 0o600 });
+  await writeFile(path.join(bin, "docker"), `#!/bin/sh
+echo "$*" >> "${calls}"
+if [ "$1 $2" = "version --format" ]; then echo 29.0.0; exit 0; fi
+if [ "$1 $2 $3" = "compose version --short" ]; then echo 2.40.0; exit 0; fi
+if [ "$1 $2 $3" = "compose exec -T" ]; then printf 'fake-pg-dump'; exit 0; fi
+if [ "$1 $2 $3 $4" = "compose ps --status running" ]; then printf 'postgres\\napp\\nscheduler\\n'; exit 0; fi
+exit 0
+`);
+  await chmod(path.join(bin, "docker"), 0o755);
+  const server = spawn(process.execPath, ["-e", `require('http').createServer((_,r)=>{r.writeHead(200,{'content-type':'application/json'});r.end('{"status":"ok"}')}).listen(${port},'127.0.0.1')`], { stdio: "ignore" });
+  await new Promise((resolve) => setTimeout(resolve, 150));
+  const env = { ...process.env, PATH: `${bin}:${process.env.PATH}` };
+  try {
+    const made = await runCli(["backup", directory], { cwd: directory, env });
+    assert.equal(made.status, 0, made.stderr || made.stdout);
+    const archive = made.stdout.trim().split("\n").at(-1);
+    await writeFile(calls, "");
+
+    const restored = await runCli(["restore", archive, directory, "--force", "--non-interactive"], { cwd: directory, env });
+    assert.equal(restored.status, 0, restored.stderr || restored.stdout);
+    const lines = (await readFile(calls, "utf8")).split("\n").filter(Boolean);
+    const stopped = lines.findIndex((line) => /compose .*stop app scheduler/.test(line));
+    const restoreRan = lines.findIndex((line) => /pg_restore/.test(line));
+    assert.ok(stopped >= 0 && restoreRan > stopped, lines.join("\n"));
+    assert.equal(
+      lines.slice(stopped, restoreRan).some((line) => /compose .*up -d app scheduler/.test(line)),
+      false,
+      lines.join("\n"),
+    );
+    assert.match(lines.slice(restoreRan).join("\n"), /up -d app scheduler/);
+  } finally {
+    server.kill();
     await rm(directory, { recursive: true, force: true });
   }
 });

@@ -25,8 +25,8 @@ vi.mock("@/lib/portal-auth", () => ({ isPortalEnabled }));
 vi.mock("@/features/career-page/PublicCareerPage", () => ({
   PublicCareerPage: () => null,
 }));
-vi.mock("@/features/demo/DemoStylePreview", () => ({
-  DemoStylePreview: () => null,
+vi.mock("@/features/demo/DemoEntryButton", () => ({
+  DemoEntryButton: () => null,
 }));
 
 import HomePage from "./page";
@@ -41,7 +41,7 @@ describe("public home page", () => {
     resolveSignedInRootRoute.mockResolvedValue("/dashboard");
 
     await expect(
-      HomePage({ searchParams: Promise.resolve({}) }),
+      HomePage(),
     ).rejects.toThrow("redirect:/dashboard");
 
     expect(redirect).toHaveBeenCalledWith("/dashboard");
@@ -68,32 +68,12 @@ describe("public home page", () => {
       config: { template: "minimal" },
     });
 
-    const page = (await HomePage({
-      searchParams: Promise.resolve({}),
-    })) as ReactElement<{ boardRoot: string; jobs: Array<{ slug: string }> }>;
+    const page = (await HomePage()) as ReactElement<{ children: ReactElement<{ boardRoot: string; jobs: Array<{ slug: string }> }>[] }>;
+    const board = page.props.children[0];
 
     expect(redirect).not.toHaveBeenCalled();
     expect(getCareerPageData).toHaveBeenCalledWith("acme");
-    expect(page.props.boardRoot).toBe("");
-    expect(page.props.jobs).toEqual([expect.objectContaining({ slug: "software-engineer" })]);
-  });
-
-  it("renders the style picker landing instead in demo mode", async () => {
-    vi.stubEnv("DEMO_MODE", "true");
-    getPublicWorkspaceSlug.mockResolvedValue("syntrix");
-    isPortalEnabled.mockResolvedValue(false);
-    getCareerPageData.mockResolvedValue({
-      workspace: { id: "workspace-1", slug: "syntrix", name: "Syntrix" },
-      jobs: [],
-      config: { template: "playful" },
-    });
-
-    const page = (await HomePage({
-      searchParams: Promise.resolve({ style: "join" }),
-    })) as ReactElement<{ initialStyle: string; boardRoot?: string }>;
-
-    expect(page.props.initialStyle).toBe("join");
-    expect(page.props.boardRoot).toBeUndefined();
-    vi.unstubAllEnvs();
+    expect(board.props.boardRoot).toBe("");
+    expect(board.props.jobs).toEqual([expect.objectContaining({ slug: "software-engineer" })]);
   });
 });

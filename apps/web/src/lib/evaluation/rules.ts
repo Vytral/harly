@@ -36,7 +36,9 @@ import type {
 export * from "./types";
 
 /** Immutable engine identifier persisted with every evaluation. */
-export const RULES_EVALUATION_VERSION = "rules-v5";
+import { RULES_EVALUATION_VERSION } from "./version";
+
+export { RULES_EVALUATION_VERSION };
 
 /** Version of the deterministic scoring/tiering projection (Audit doc §5.1). Bump on scoring-behavior changes. */
 export const SCORING_VERSION = "scoring-v3";

@@ -39,7 +39,7 @@ export function CareerFooter({
           href="https://github.com/Vytral/harly"
           target="_blank"
           rel="noopener noreferrer"
-          className="group inline-flex items-center gap-2 text-zinc-400 transition-colors hover:text-zinc-700 dark:text-zinc-500 dark:hover:text-zinc-200"
+          className="group inline-flex items-center gap-2 text-soft-ink transition-colors hover:text-near-ink"
         >
           <span className="text-xs font-medium">Powered by</span>
           {/* Black wordmark on light, white on dark , swapped via the .dark class
@@ -48,12 +48,12 @@ export function CareerFooter({
           <img
             src="/harly-full-black.svg"
             alt="Harly"
-            className="h-6 w-auto opacity-70 transition-opacity group-hover:opacity-100 dark:hidden"
+            className="h-6 w-auto opacity-80 transition-opacity group-hover:opacity-100 dark:hidden"
           />
           <img
             src="/harly-full-white.svg"
             alt="Harly"
-            className="hidden h-6 w-auto opacity-70 transition-opacity group-hover:opacity-100 dark:block"
+            className="hidden h-6 w-auto opacity-80 transition-opacity group-hover:opacity-100 dark:block"
           />
           {/* eslint-enable @next/next/no-img-element */}
         </a>
@@ -69,7 +69,7 @@ export function CareerFooter({
                 rel="noopener noreferrer"
                 aria-label={socialLabel(s.platform)}
                 title={socialLabel(s.platform)}
-                className={`flex size-9 items-center justify-center ${iconRounded} border border-zinc-200 text-zinc-500 transition-[transform,color,border-color] duration-200 ease-[cubic-bezier(0.23,1,0.32,1)] hover:-translate-y-0.5 hover:text-zinc-900 active:scale-95 motion-reduce:transition-none dark:border-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-100`}
+                className={`flex size-9 items-center justify-center ${iconRounded} border border-hairline text-soft-ink transition-[transform,color,border-color] duration-200 ease-[cubic-bezier(0.23,1,0.32,1)] hover:-translate-y-0.5 hover:text-near-ink active:scale-95 motion-reduce:transition-none motion-reduce:hover:translate-y-0`}
               >
                 <SocialIcon platform={s.platform} className="size-4" />
               </a>
@@ -79,7 +79,7 @@ export function CareerFooter({
       </div>
 
       {/* Bottom tier: copyright + legal links */}
-      <div className="mt-6 flex flex-col items-center justify-between gap-3 border-t border-zinc-100 pt-6 text-xs text-zinc-400 dark:border-zinc-800/70 dark:text-zinc-500 sm:flex-row">
+      <div className="mt-6 flex flex-col items-center justify-between gap-3 border-t border-hairline pt-6 text-xs text-soft-ink sm:flex-row">
         <p>
           © {year} {workspaceName}
         </p>
@@ -87,7 +87,7 @@ export function CareerFooter({
           {portalEnabled ? (
             <a
               href="/portal"
-              className="transition-colors hover:text-zinc-700 dark:hover:text-zinc-300"
+              className="transition-colors hover:text-near-ink"
             >
               Candidate portal
             </a>
@@ -96,7 +96,7 @@ export function CareerFooter({
             <a
               key={slug}
               href={`${legalBasePath}/${slug}`}
-              className="transition-colors hover:text-zinc-700 dark:hover:text-zinc-300"
+              className="transition-colors hover:text-near-ink"
             >
               {LEGAL_LINK_LABELS[slug] ?? slug}
             </a>

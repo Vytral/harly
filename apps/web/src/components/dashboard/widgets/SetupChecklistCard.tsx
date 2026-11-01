@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import type { Route } from "next";
 import { ArrowRight, Check, ChevronDown, Copy, EyeOff, Rocket, X } from "lucide-react";
 
-import { cn } from "@/lib/utils";
+import { cn, copyText } from "@/lib/utils";
 import { tileClass } from "@/components/dashboard/widgets/primitives";
 import { SetupProgressRing } from "@/components/dashboard/SetupProgressRing";
 import { Button } from "@/components/ui/button";
@@ -220,7 +220,7 @@ function ChecklistRowView({
         ) : null}
       </div>
       <Link
-        href={(isPipeline ? "/dashboard/candidates" : item.href) as Route}
+        href={(isPipeline ? "/dashboard/candidates?import=csv" : item.href) as Route}
         className="group inline-flex shrink-0 items-center gap-1 rounded-lg px-2.5 py-1.5 text-sm font-medium text-primary transition-all hover:gap-1.5"
       >
         {isPipeline ? "Import CSV" : item.ctaLabel}
@@ -277,7 +277,7 @@ function CopyJobLink({ title, url }: { title: string; url: string }) {
 
   async function copy() {
     try {
-      await navigator.clipboard.writeText(url);
+      await copyText(url);
       setCopied(true);
       window.setTimeout(() => setCopied(false), 1500);
     } catch {

@@ -49,8 +49,14 @@ type StageColumnProps = {
  * competing accents across a screen that is meant to be one calm surface.
  */
 function stageDotColor(index: number, total: number) {
-  if (total <= 1) return "#171717";
-  const ramp = ["#171717", "#3d3d3a", "#6a6a67", "#9a9a96", "#c8f560"];
+  if (total <= 1) return "var(--near-ink)";
+  const ramp = [
+    "var(--near-ink)",
+    "color-mix(in srgb, var(--near-ink) 80%, var(--pure-snow))",
+    "var(--soft-ink)",
+    "var(--quiet-mist)",
+    "var(--chartreuse-signal)",
+  ];
   const position = Math.round((index / (total - 1)) * (ramp.length - 1));
   return ramp[Math.min(position, ramp.length - 1)];
 }
@@ -95,22 +101,21 @@ export function StageColumn({
         // The column is a region of paper, not a bordered grey box. Depth is
         // luminance: paper column on the snow stage, and the drop target lights
         // up with the sage wash rather than a coloured border.
-        "flex min-w-0 flex-col rounded-[var(--radius-lg)] transition-colors duration-150",
-        terminal ? "bg-warm-paper/60" : "bg-warm-paper",
-        isOver && "bg-sage-wash",
+        "flex min-w-0 flex-col rounded-[var(--radius-card)] transition-colors duration-150",
+        terminal ? "bg-card-inset/60" : "bg-card-inset",
+        isOver && "bg-lime-wash",
       )}
     >
       <div
         className={cn(
-          "sticky top-0 z-10 rounded-t-[var(--radius-lg)] px-3 pb-2 pt-3 backdrop-blur-sm",
-          terminal ? "bg-warm-paper/80" : "bg-warm-paper/95",
+          "sticky top-0 z-10 rounded-t-[var(--radius-card)] px-3.5 pb-2.5 pt-3.5",
         )}
       >
         <div className="flex items-center justify-between gap-2">
           <div className="flex min-w-0 items-center gap-2">
             <span
               className={cn(
-                "size-2 shrink-0 rounded-full ring-1 ring-border",
+                "size-2 shrink-0 rounded-full",
                 terminal && terminalDotClass(kind),
               )}
               style={terminal ? undefined : { backgroundColor: stageDotColor(index, total) }}
@@ -118,13 +123,13 @@ export function StageColumn({
             />
             <h2
               className={cn(
-                "truncate text-[13px] font-medium",
+                "truncate text-[13.5px] font-semibold",
                 terminal ? "text-soft-ink" : "text-near-ink",
               )}
             >
               {displayName}
             </h2>
-            <span className="font-chrome tabular text-[12px] text-quiet-mist">
+            <span className="font-chrome tabular-nums rounded-full bg-pure-snow px-2 py-0.5 text-[11.5px] leading-none text-soft-ink">
               {totalCount}
             </span>
           </div>
@@ -137,7 +142,7 @@ export function StageColumn({
           <DropdownMenu>
             <DropdownMenuTrigger
               aria-label={`${displayName} settings`}
-              className="flex size-6 shrink-0 items-center justify-center rounded-md text-quiet-mist opacity-0 transition-opacity hover:text-near-ink focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring group-hover/board:opacity-100 data-[state=open]:opacity-100"
+              className="flex size-6 shrink-0 items-center justify-center rounded-full text-quiet-mist opacity-0 transition-opacity hover:text-near-ink focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring group-hover/board:opacity-100 data-[state=open]:opacity-100"
             >
               <svg
                 width="14"
@@ -176,7 +181,7 @@ export function StageColumn({
         items={applications.map((application) => application.id)}
         strategy={verticalListSortingStrategy}
       >
-        <div className="flex max-h-[calc(100vh-15rem)] flex-1 flex-col gap-1.5 overflow-y-auto px-2 pb-2">
+        <div className="flex max-h-[calc(100vh-15rem)] flex-1 flex-col gap-2 overflow-y-auto px-2.5 pb-2.5">
           {applications.map((application) => (
             <CandidateCard
               key={application.id}
@@ -205,7 +210,7 @@ export function StageColumn({
             <div
               className={cn(
                 "flex min-h-16 items-center justify-center rounded-[var(--radius-md)] text-center transition-colors",
-                isOver ? "text-sage-ink" : "text-quiet-mist/70",
+                isOver ? "text-success-olive" : "text-quiet-mist",
               )}
             >
               <span className="font-chrome text-[11px]">

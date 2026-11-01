@@ -1,5 +1,6 @@
 import { getAvailableLoginMethods } from "@/features/auth/login-methods.server";
 import { getAuthBranding } from "@/features/auth/branding.server";
+import { safeRedirectPath } from "@/lib/safe-redirect";
 import { AuthShell, AuthCard } from "../_components/auth-shell";
 import { LoginForm } from "./_components/login-form";
 
@@ -22,7 +23,7 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
         title="Sign in"
         subtitle="Welcome back. Enter your credentials to continue."
       >
-        <LoginForm redirect={redirect} methods={methods} />
+        <LoginForm redirect={safeRedirectPath(redirect)} methods={methods} />
       </AuthCard>
     </AuthShell>
   );

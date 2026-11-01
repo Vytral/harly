@@ -1,3 +1,5 @@
+import Link from "next/link";
+import type { Route } from "next";
 import { GitBranch } from "lucide-react";
 
 import type { PipelineOverview } from "@/features/dashboard/widgets";
@@ -5,21 +7,18 @@ import { Tile, TileHeader, TileLink, EmptyHint } from "./primitives";
 import { PipelineJobSelect } from "./PipelineJobSelect";
 
 /**
- * Funnel lanes, Applied → Hired.
- *
- * Deliberate exception to DESIGN.md's single-accent rule, scoped to this widget
- * only: five stages read as one blur in mono progression, and this card exists
- * specifically to be scanned at a glance. Distinct hues per stage, chosen close
- * in value so no single stage reads as a second brand accent; Hired keeps the
- * chartreuse signal since it's the one genuinely live event in the sequence.
+ * Funnel lanes, Applied to Hired. Token-based (dark-mode safe): quiet neutrals
+ * build toward ink, and Hired is the one live event so it takes the signal.
  */
 const LANE_COLORS = [
-  "#8a8f98", // Applied , stone
-  "#5b8def", // Screening , pine-blue
-  "#e8a33d", // Interview , burnt orange
-  "#a875e0", // Offer , violet
-  "#c8f560", // Hired , chartreuse signal
+  "bg-quiet-mist",
+  "bg-status-quiet-ink",
+  "bg-soft-ink",
+  "bg-near-ink",
+  "bg-chartreuse-signal",
 ];
+
+const laneColor = (i: number) => LANE_COLORS[i % LANE_COLORS.length];
 
 export function PipelineOverviewCard({
   data,
@@ -28,55 +27,61 @@ export function PipelineOverviewCard({
   data: PipelineOverview;
   className?: string;
 }) {
+  // The pipeline page reads `?job=`; keep the job chosen here when leaving.
+  const pipelineHref = (
+    data.selected ? `/dashboard/pipeline?job=${data.selected.id}` : "/dashboard/pipeline"
+  ) as Route;
+  // The pipeline page has no per-stage filter, so a stage opens the same job as
+  // a board, where its column sits.
+  const boardHref = `${pipelineHref}&view=board` as Route;
+
   return (
     <Tile className={className}>
       <TileHeader
         icon={GitBranch}
         title="Pipeline overview"
-        action={<TileLink href="/dashboard/pipeline">View pipeline</TileLink>}
+        action={<TileLink href={pipelineHref}>View pipeline</TileLink>}
       />
-      <div className="flex flex-1 flex-col gap-4 px-5 pb-5 pt-3">
+      <div className="flex flex-1 flex-col gap-4 px-5 pb-5 pt-4">
         {data.selected ? (
           <>
-            <p className="truncate text-sm font-medium">{data.selected.title}</p>
+            <p className="truncate text-[14px] font-medium text-near-ink">{data.selected.title}</p>
 
             {/* Segmented funnel bar */}
-            <div className="flex h-2.5 w-full gap-1 overflow-hidden">
+            <div className="flex h-2 w-full gap-1 overflow-hidden">
               {data.total > 0 ? (
                 data.stages.map((stage, i) =>
                   stage.count > 0 ? (
                     <div
                       key={stage.name}
-                      className="h-full rounded-full"
-                      style={{
-                        width: `${(stage.count / data.total) * 100}%`,
-                        backgroundColor: LANE_COLORS[i % LANE_COLORS.length],
-                      }}
+                      className={`h-full rounded-full ${laneColor(i)}`}
+                      style={{ width: `${(stage.count / data.total) * 100}%` }}
                     />
                   ) : null,
                 )
               ) : (
-                <div className="h-full w-full rounded-full bg-muted" />
+                <div className="h-full w-full rounded-full bg-card-inset" />
               )}
             </div>
 
             {/* Stage counts */}
             <div className="grid grid-cols-5 gap-2">
               {data.stages.map((stage, i) => (
-                <div key={stage.name} className="min-w-0">
+                <Link
+                  key={stage.name}
+                  href={boardHref}
+                  className="min-w-0 rounded-[var(--radius-md)] transition-colors hover:bg-row-wash focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-near-ink"
+                >
                   <div className="flex items-center gap-1.5">
-                    <span
-                      className="size-2 shrink-0 rounded-full"
-                      style={{ backgroundColor: LANE_COLORS[i % LANE_COLORS.length] }}
-                    />
-                    <span className="truncate text-xs text-muted-foreground">
+                    <span className={`size-1.5 shrink-0 rounded-full ${laneColor(i)}`} />
+                    <span className="truncate text-xs text-soft-ink">
                       {stage.name}
                     </span>
                   </div>
-                  <p className="mt-1 text-xl font-semibold tabular-nums">
+                  <p className="font-display mt-1 text-[24px] leading-none tabular-nums text-near-ink">
                     {stage.count}
                   </p>
-                </div>
+                </Link>
               ))}
             </div>
 

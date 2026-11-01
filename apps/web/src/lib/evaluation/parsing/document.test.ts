@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { parseDocumentFacts, parseResumeFacts } from "../ats-parser";
-import { assessTextReadability, fromPlainText } from "./document";
+import { assessTextLegibility, assessTextReadability, fromPlainText } from "./document";
 
 describe("Phase 4 preparation — document provider seam (§6)", () => {
   it("wraps plain text as ordered blocks with stable ids", () => {
@@ -52,6 +52,23 @@ Backend Developer — ShopLine (2019-2022)
     const garbage = "\u0000\u0001\u0002 %%% <<<>>> /// \\\\ {{{}}} ### $$$ ??? @@ ~~~ *** +++ === |||";
     expect(garbage.trim().length).toBeGreaterThanOrEqual(50);
     expect(assessTextReadability(garbage).readable).toBe(false);
+  });
+  it("treats non-Latin scripts as legible (Unicode \\p{L}\\p{N})", () => {
+    const samples = [
+      "Иван Петров\nИнженер-программист\nОпыт работы: Яндекс 2018 — 2022, разработка бэкенда на Python и Go.",
+      "张伟\n高级后端工程师\n工作经历：阿里巴巴 2018 - 2022，负责分布式系统与高并发服务的设计与开发。",
+      "أحمد علي\nمهندس برمجيات\nالخبرة: شركة التقنية 2018 - 2022 تطوير الخدمات الخلفية وقواعد البيانات.",
+      "田中太郎\nバックエンドエンジニア\n職務経歴：株式会社サンプル 2018年から2022年までAPI開発を担当しました。",
+    ];
+    for (const sample of samples) {
+      expect(sample.length).toBeGreaterThanOrEqual(50);
+      expect(assessTextReadability(sample)).toEqual({ readable: true, reasons: [] });
+      expect(assessTextLegibility(sample).readable).toBe(true);
+    }
+  });
+  it("legibility does not enforce a minimum length", () => {
+    expect(assessTextLegibility("Hello world").readable).toBe(true);
+    expect(assessTextReadability("Hello world").readable).toBe(false);
   });
 });
 

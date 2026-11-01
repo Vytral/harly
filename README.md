@@ -46,7 +46,7 @@ automation in one place, without a closed SaaS subscription.
 | Recruiting | Jobs, application questions, candidate pipelines, interviews, offers, tasks, scorecards, talent pools, search, and reports |
 | Candidate experience | Public jobs, career pages, embeddable widgets, candidate portal, SEO metadata, and structured job data |
 | Communication | Inbox, email, templates, calendars, video interviews, and team notifications |
-| Integrations and automation | ATS imports, storage, signatures, REST API, webhooks, automations, and realtime events |
+| Integrations and automation | ATS imports, storage, signatures, REST API, webhooks, automations, realtime events, and an MCP server for AI agents (Claude, ChatGPT, Cursor) |
 | AI assistance | Candidate matching, contextual chat, anonymization, generation, and drafting; optional and human-reviewed |
 | Security and privacy | RBAC, MFA, passkeys, SSO, SCIM, API-key scopes, audit logs, consent, retention, export, and deletion workflows |
 
@@ -221,7 +221,8 @@ legal obligations.
 
 ## License
 
-Harly is licensed under the MIT License.
+Harly is licensed under the MIT License. Dependencies with weak-copyleft licenses are listed in
+[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
 
 The Harly name and logo are trademarks or brand assets of their respective
 owner and are not automatically licensed under the MIT License.

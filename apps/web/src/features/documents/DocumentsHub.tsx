@@ -1,12 +1,18 @@
 "use client";
 
+import { useConfirm } from "@/components/ui/confirm-dialog";
 import { useMemo, useRef, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { Route } from "next";
 import {
   Archive,
   ArchiveRestore,
-  ChevronDown,
+  ArrowDown,
+  ArrowUp,
+  Check,
+  ChevronsUpDown,
+  FileText,
   FolderCog,
   LayoutGrid,
   List,
@@ -18,9 +24,33 @@ import {
 import { toast } from "@/lib/notification-island/toast";
 
 import { Button } from "@/components/ui/button";
+import { Callout } from "@/components/ui/callout";
+import { Card } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command";
+import { DropOverlay } from "@/components/ui/drop-zone";
+import { FilterPill } from "@/components/ui/FilterPill";
 import { Input } from "@/components/ui/input";
+import { PageHeader } from "@/components/ui/PageHeader";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { StatTile } from "@/components/ui/stat-tile";
+import { StatusPill } from "@/components/ui/status-pill";
 import { UserAvatar } from "@/components/ui/UserAvatar";
+import { cn } from "@/lib/utils";
 import { DocumentsWorkspaceTabs } from "./DocumentsWorkspaceTabs";
 import {
   bulkDeleteDocuments,
@@ -29,212 +59,421 @@ import {
 } from "./actions";
 import {
   CategoryDialog,
-  StatusPill,
   UploadDialog,
   formatDate,
   iconForDocument,
   uploadToStorage,
   validateDocumentFile,
 } from "./DocumentShared";
+import { GenerateDocumentDialog } from "./GenerateDocumentDialog";
 import {
-  DOCUMENT_STATUS_META,
+  DOCUMENT_LIST_GRID,
   SIGNATURE_STATUS_META,
+  describeExpiry,
+  documentStateMeta,
   documentTypeLabel,
   formatDocumentSize,
   type DocumentHubData,
+  type DocumentListItem,
 } from "./shared";
 
-function Stat({
-  label,
-  value,
-  tone = "text-foreground",
-}: {
-  label: string;
-  value: number;
-  tone?: string;
-}) {
+/** Which slice of the library the stat tiles are filtering to. */
+export type HubFocus = "active" | "pending" | "expiring" | "lapsed" | "archived";
+type SortKey = "updated" | "name" | "expires";
+type SortDir = "asc" | "desc";
+type Linked = { type: "candidate" | "job"; id: string } | null;
+
+export type DocumentsHubFilters = {
+  candidateId?: string;
+  jobId?: string;
+  focus?: string;
+  q?: string;
+  category?: string;
+  signature?: string;
+  mine?: string;
+  sort?: string;
+};
+
+const DAY = 86_400_000;
+const FOCUSES: HubFocus[] = ["active", "pending", "expiring", "lapsed", "archived"];
+const SORT_LABELS: Record<string, string> = {
+  "updated:desc": "Recently updated",
+  "updated:asc": "Oldest update",
+  "name:asc": "Name A to Z",
+  "name:desc": "Name Z to A",
+  "expires:asc": "Expires soonest",
+};
+
+const TONE_TO_PILL = {
+  neutral: "neutral",
+  success: "success",
+  warning: "warning",
+  danger: "danger",
+} as const;
+
+function matchesFocus(document: DocumentListItem, focus: HubFocus, now: number) {
+  if (focus === "archived") return document.status === "archived";
+  if (document.status !== "active") return false;
+  if (focus === "active") return true;
+  if (focus === "pending") return document.signatureStatus === "pending";
+  const expires = document.expiresAt ? new Date(document.expiresAt).getTime() : null;
+  if (expires === null) return false;
+  if (focus === "expiring") return expires >= now && expires <= now + 30 * DAY;
+  // A completed contract past its date is history, not something to chase.
+  return expires < now && document.signatureStatus !== "signed";
+}
+
+function StateCell({ document }: { document: DocumentListItem }) {
+  const state = documentStateMeta(document);
   return (
-    <div className="border-l border-border/70 pl-4 first:border-l-0 first:pl-0">
-      <p
-        className={`font-display text-2xl font-semibold tracking-tight ${tone}`}
-      >
-        {value}
-      </p>
-      <p className="mt-0.5 text-xs text-muted-foreground">{label}</p>
-    </div>
+    <StatusPill size="sm" tone={TONE_TO_PILL[state.tone]}>
+      {state.label}
+    </StatusPill>
+  );
+}
+
+function ExpiresCell({ document }: { document: DocumentListItem }) {
+  const hint = describeExpiry(document.expiresAt);
+  if (!document.expiresAt || !hint) return <span className="text-quiet-mist">No date</span>;
+  return (
+    <span
+      className={cn(
+        hint.tone === "danger" && document.signatureStatus !== "signed" && "text-danger-rust",
+        hint.tone === "warning" && "text-warning-clay",
+      )}
+      title={hint.days < 0 ? `Passed ${hint.label}` : `Expires ${hint.label}`}
+    >
+      {formatDate(document.expiresAt)}
+    </span>
+  );
+}
+
+function OwnerCell({ document }: { document: DocumentListItem }) {
+  return document.ownerId ? (
+    <>
+      <UserAvatar
+        name={document.ownerName ?? "Workspace"}
+        src={document.ownerImage}
+        size="sm"
+        className="size-5 text-[9px]"
+      />
+      <span className="truncate">{document.ownerName}</span>
+    </>
+  ) : (
+    <span>Workspace</span>
   );
 }
 
 function EmptyState({
   data,
+  filtered,
   onUpload,
+  onGenerate,
+  onClear,
 }: {
   data: DocumentHubData;
+  filtered: boolean;
   onUpload: () => void;
+  onGenerate: () => void;
+  onClear: () => void;
 }) {
+  const empty = data.documents.length === 0;
   return (
     <div className="flex min-h-64 flex-col items-center justify-center gap-1.5 px-6 py-14 text-center">
-      <span className="mb-3 flex size-12 items-center justify-center rounded-xl bg-accent text-accent-foreground">
+      <span className="mb-3 flex size-12 items-center justify-center rounded-[var(--radius-btn)] bg-lime-wash text-sage-ink">
         <FolderCog className="size-5" />
       </span>
-      <p className="text-base font-semibold">
-        {data.documents.length === 0
-          ? "Your document library is empty"
-          : "No documents match these filters"}
+      <p className="text-[15px] font-semibold text-near-ink">
+        {empty ? "Your document library is empty" : "No documents match these filters"}
       </p>
-      <p className="max-w-sm text-sm leading-6 text-muted-foreground">
-        {data.documents.length === 0
-          ? "Drag files anywhere on this page, or upload one to start building a shared, auditable source of truth for your hiring team."
-          : "Try a broader search or clear one of the filters."}
+      <p className="max-w-sm text-sm leading-6 text-soft-ink">
+        {empty
+          ? "Drag files anywhere on this page, upload one, or generate an offer letter or agreement from a template."
+          : "Try a broader search or clear the filters."}
       </p>
-      {data.documents.length === 0 && data.canManage ? (
-        <Button size="sm" className="mt-4" onClick={onUpload}>
-          <Upload className="size-4" />
-          Upload first document
-        </Button>
-      ) : null}
+      <div className="mt-4 flex flex-wrap justify-center gap-2">
+        {empty && data.canManage ? (
+          <>
+            <Button size="sm" onClick={onUpload}>
+              <Upload className="size-4" />
+              Upload first document
+            </Button>
+            <Button size="sm" variant="outline" onClick={onGenerate}>
+              <FileText className="size-4" />
+              Generate from template
+            </Button>
+          </>
+        ) : null}
+        {!empty && filtered ? (
+          <Button size="sm" variant="outline" onClick={onClear}>
+            Clear filters
+          </Button>
+        ) : null}
+      </div>
     </div>
   );
 }
 
-function FilterSelect({
-  label,
+/** Searchable "linked to" picker over candidates and jobs. */
+function LinkedPicker({
+  options,
   value,
   onChange,
-  options,
+}: {
+  options: DocumentHubData["associationOptions"];
+  value: Linked;
+  onChange: (next: Linked) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const current = value
+    ? options.find((option) => option.type === value.type && option.id === value.id)
+    : null;
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          aria-label="Filter by linked candidate or job"
+          className={cn(
+            "inline-flex h-9 items-center gap-1.5 rounded-full border border-transparent bg-soft-kraft px-3.5 text-[13px] outline-none hover:bg-row-wash focus-visible:ring-[3px] focus-visible:ring-near-ink/20",
+            value && "bg-sage-wash",
+          )}
+        >
+          <span className="text-soft-ink">Linked to</span>
+          <span className="max-w-32 truncate font-medium text-near-ink">
+            {current?.label ?? (value ? "Selected" : "Anyone")}
+          </span>
+          <ChevronsUpDown className="size-3.5 text-quiet-mist" />
+        </button>
+      </PopoverTrigger>
+      <PopoverContent align="start" className="w-72 p-0">
+        <Command>
+          <CommandInput placeholder="Search candidates and jobs" />
+          <CommandList>
+            <CommandEmpty>Nothing found.</CommandEmpty>
+            {value ? (
+              <CommandGroup>
+                <CommandItem
+                  onSelect={() => {
+                    onChange(null);
+                    setOpen(false);
+                  }}
+                >
+                  <X className="size-4" />
+                  Clear selection
+                </CommandItem>
+              </CommandGroup>
+            ) : null}
+            {(["candidate", "job"] as const).map((type) => (
+              <CommandGroup key={type} heading={type === "candidate" ? "Candidates" : "Jobs"}>
+                {options
+                  .filter((option) => option.type === type)
+                  .map((option) => (
+                    <CommandItem
+                      key={option.id}
+                      value={`${type} ${option.label} ${option.id}`}
+                      onSelect={() => {
+                        onChange({ type, id: option.id });
+                        setOpen(false);
+                      }}
+                    >
+                      <span className="min-w-0 flex-1 truncate">{option.label}</span>
+                      {value?.id === option.id ? <Check className="size-4" /> : null}
+                    </CommandItem>
+                  ))}
+              </CommandGroup>
+            ))}
+          </CommandList>
+        </Command>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
+function SortHeader({
+  label,
+  sortKey,
+  active,
+  dir,
+  onSort,
 }: {
   label: string;
-  value: string;
-  onChange: (value: string) => void;
-  options: Array<[string, string]>;
+  sortKey: SortKey;
+  active: boolean;
+  dir: SortDir;
+  onSort: (key: SortKey) => void;
 }) {
   return (
-    <label className="relative flex shrink-0 items-center">
-      <span className="sr-only">{label}</span>
-      <select
-        value={value}
-        onChange={(event) => onChange(event.target.value)}
-        className="h-10 min-w-[8.5rem] appearance-none rounded-full border border-input bg-background px-4 pr-8 text-sm outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring"
-      >
-        <option value="all">{label}: All</option>
-        {options.map(([optionValue, optionLabel]) => (
-          <option key={optionValue} value={optionValue}>
-            {optionLabel}
-          </option>
-        ))}
-      </select>
-      <ChevronDown className="pointer-events-none absolute right-2.5 size-3.5 text-muted-foreground" />
-    </label>
+    <button
+      type="button"
+      onClick={() => onSort(sortKey)}
+      className="inline-flex items-center gap-1 text-left uppercase outline-none hover:text-near-ink focus-visible:text-near-ink"
+    >
+      {label}
+      {active ? dir === "asc" ? <ArrowUp className="size-3" /> : <ArrowDown className="size-3" /> : null}
+      {active ? <span className="sr-only">{dir === "asc" ? ", sorted ascending" : ", sorted descending"}</span> : null}
+    </button>
   );
 }
 
 export function DocumentsHub({
   data,
-  initialCandidateId,
+  initialFilters = {},
   canManageTemplates = false,
 }: {
   data: DocumentHubData;
-  initialCandidateId?: string;
+  initialFilters?: DocumentsHubFilters;
   canManageTemplates?: boolean;
 }) {
   const router = useRouter();
-  const [query, setQuery] = useState("");
-  const [category, setCategory] = useState("all");
-  const [section, setSection] = useState<"active" | "archived">("active");
-  const [signature, setSignature] = useState("all");
-  const [association, setAssociation] = useState("all");
-  const [candidateFilter, setCandidateFilter] = useState(initialCandidateId ?? null);
-  const candidateFilterName = candidateFilter
-    ? data.associationOptions.find(
-        (option) => option.type === "candidate" && option.id === candidateFilter,
-      )?.label ?? "this candidate"
-    : null;
-
-  function clearCandidateFilter() {
-    setCandidateFilter(null);
-    router.replace("/dashboard/documents" as Route);
-  }
+  const confirm = useConfirm();
+  const [query, setQuery] = useState(initialFilters.q ?? "");
+  const [category, setCategory] = useState(initialFilters.category ?? "all");
+  const [focus, setFocus] = useState<HubFocus>(
+    FOCUSES.includes(initialFilters.focus as HubFocus) ? (initialFilters.focus as HubFocus) : "active",
+  );
+  const [signature, setSignature] = useState(
+    initialFilters.signature && initialFilters.signature in SIGNATURE_STATUS_META ? initialFilters.signature : "all",
+  );
+  const [mine, setMine] = useState(initialFilters.mine === "1");
+  const [linked, setLinked] = useState<Linked>(
+    initialFilters.candidateId
+      ? { type: "candidate", id: initialFilters.candidateId }
+      : initialFilters.jobId
+        ? { type: "job", id: initialFilters.jobId }
+        : null,
+  );
+  const [sort, setSort] = useState<{ key: SortKey; dir: SortDir }>(() => {
+    const [key, dir] = (initialFilters.sort ?? "").split(":");
+    return key === "name" || key === "expires" || key === "updated"
+      ? { key, dir: dir === "asc" ? "asc" : "desc" }
+      : { key: "updated", dir: "desc" };
+  });
   const [uploadOpen, setUploadOpen] = useState(false);
+  const [generateOpen, setGenerateOpen] = useState(false);
   const [categoriesOpen, setCategoriesOpen] = useState(false);
   const [view, setView] = useState<"list" | "grid">("list");
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [pageDragging, setPageDragging] = useState(false);
-  const [bulkUploading, setBulkUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState<{ done: number; total: number } | null>(null);
   const dragDepth = useRef(0);
+
+  const linkedName = linked
+    ? data.associationOptions.find((option) => option.type === linked.type && option.id === linked.id)?.label ?? null
+    : null;
+
+  // Keep the filters in the URL (shareable, survives refresh) without a server round trip.
+  function syncUrl(next: {
+    focus: HubFocus; q: string; category: string; signature: string; mine: boolean; linked: Linked; sort: { key: SortKey; dir: SortDir };
+  }) {
+    const params = new URLSearchParams();
+    if (next.focus !== "active") params.set("focus", next.focus);
+    if (next.q.trim()) params.set("q", next.q.trim());
+    if (next.category !== "all") params.set("category", next.category);
+    if (next.signature !== "all") params.set("signature", next.signature);
+    if (next.mine) params.set("mine", "1");
+    if (next.linked) params.set(next.linked.type === "candidate" ? "candidateId" : "jobId", next.linked.id);
+    if (next.sort.key !== "updated" || next.sort.dir !== "desc") params.set("sort", `${next.sort.key}:${next.sort.dir}`);
+    const qs = params.toString();
+    window.history.replaceState(null, "", qs ? `?${qs}` : window.location.pathname);
+  }
+  const current = { focus, q: query, category, signature, mine, linked, sort };
+  function update<K extends keyof typeof current>(key: K, value: (typeof current)[K]) {
+    syncUrl({ ...current, [key]: value });
+  }
+
+  const [now] = useState(() => Date.now());
+  const counts = useMemo(() => {
+    const result = {} as Record<HubFocus, number>;
+    for (const key of FOCUSES) result[key] = data.documents.filter((d) => matchesFocus(d, key, now)).length;
+    return result;
+  }, [data.documents, now]);
+
   const filtered = useMemo(() => {
     const needle = query.trim().toLowerCase();
-    return data.documents.filter((document) => {
-      if (document.status !== section) return false;
-      if (candidateFilter && !document.candidateIds.includes(candidateFilter))
-        return false;
+    const rows = data.documents.filter((document) => {
+      if (!matchesFocus(document, focus, now)) return false;
+      if (linked) {
+        const ids = linked.type === "candidate" ? document.candidateIds : document.jobIds;
+        if (!ids.includes(linked.id)) return false;
+      }
       if (
         needle &&
-        !`${document.name} ${document.originalName} ${document.ownerName ?? ""}`
+        !`${document.name} ${document.originalName} ${document.ownerName ?? ""} ${document.associationLabels.join(" ")}`
           .toLowerCase()
           .includes(needle)
       )
         return false;
-      if (category !== "all" && document.category?.id !== category)
-        return false;
-      if (signature !== "all" && document.signatureStatus !== signature)
-        return false;
+      if (category !== "all" && document.category?.id !== category) return false;
+      if (signature !== "all" && document.signatureStatus !== signature) return false;
       if (
-        association !== "all" &&
-        !document.associationLabels.some(
-          (label) => label.toLowerCase() === association,
-        )
+        mine &&
+        document.ownerId !== data.currentUserId &&
+        !document.assignments.some((assignment) => assignment.userId === data.currentUserId)
       )
         return false;
       return true;
     });
-  }, [data.documents, query, category, section, signature, association, candidateFilter]);
-  const active = data.documents.filter(
-    (document) => document.status === "active",
-  ).length;
-  const archived = data.documents.filter(
-    (document) => document.status === "archived",
-  ).length;
-  const pending = data.documents.filter(
-    (document) => document.signatureStatus === "pending",
-  ).length;
-  const expired = data.documents.filter(
-    (document) =>
-      document.signatureStatus === "expired" ||
-      (document.expiresAt && new Date(document.expiresAt) < new Date()),
-  ).length;
-  const assigned = data.documents.filter(
-    (document) =>
-      document.ownerId === data.currentUserId ||
-      document.assignments.some(
-        (assignment) => assignment.userId === data.currentUserId,
-      ),
-  ).length;
+    const sign = sort.dir === "asc" ? 1 : -1;
+    return rows.sort((a, b) => {
+      if (sort.key === "name") return a.name.localeCompare(b.name) * sign;
+      if (sort.key === "expires") {
+        // Documents without a date always sink to the bottom.
+        if (!a.expiresAt && !b.expiresAt) return 0;
+        if (!a.expiresAt) return 1;
+        if (!b.expiresAt) return -1;
+        return (new Date(a.expiresAt).getTime() - new Date(b.expiresAt).getTime()) * sign;
+      }
+      return (new Date(a.updatedAt).getTime() - new Date(b.updatedAt).getTime()) * sign;
+    });
+  }, [data.documents, data.currentUserId, query, category, focus, signature, mine, linked, sort, now]);
+
+  const filtersActive =
+    query.trim() !== "" || category !== "all" || signature !== "all" || mine || linked !== null || focus !== "active";
+  function clearFilters() {
+    setQuery("");
+    setCategory("all");
+    setSignature("all");
+    setMine(false);
+    setLinked(null);
+    setFocus("active");
+    syncUrl({ focus: "active", q: "", category: "all", signature: "all", mine: false, linked: null, sort });
+  }
 
   const filteredIds = filtered.map((document) => document.id);
-  const selectedInView = filteredIds.filter((id) => selectedIds.has(id));
-  const allInViewSelected =
-    filteredIds.length > 0 && selectedInView.length === filteredIds.length;
+  const selectedDocs = filtered.filter((document) => selectedIds.has(document.id));
+  const selectedInView = selectedDocs.map((document) => document.id);
+  const allInViewSelected = filteredIds.length > 0 && selectedInView.length === filteredIds.length;
+  const heldSelected = selectedDocs.filter((document) => document.legalHolds.some((hold) => !hold.releasedAt));
+  const archivableIds = selectedDocs
+    .filter((document) => !heldSelected.includes(document))
+    .map((document) => document.id);
 
   function toggleSelected(id: string) {
-    setSelectedIds((current) => {
-      const next = new Set(current);
+    setSelectedIds((currentIds) => {
+      const next = new Set(currentIds);
       if (next.has(id)) next.delete(id);
       else next.add(id);
       return next;
     });
   }
   function toggleSelectAll() {
-    setSelectedIds((current) => {
+    setSelectedIds((currentIds) => {
       if (allInViewSelected) {
-        const next = new Set(current);
+        const next = new Set(currentIds);
         for (const id of filteredIds) next.delete(id);
         return next;
       }
-      return new Set([...current, ...filteredIds]);
+      return new Set([...currentIds, ...filteredIds]);
     });
   }
   function clearSelection() {
     setSelectedIds(new Set());
+  }
+  function onSort(key: SortKey) {
+    const next = { key, dir: sort.key === key && sort.dir === "asc" ? ("desc" as const) : ("asc" as const) };
+    setSort(next);
+    update("sort", next);
   }
 
   async function uploadFiles(files: File[]) {
@@ -247,14 +486,16 @@ export function DocumentsHub({
       else valid.push(file);
     }
     if (valid.length === 0) {
-      toast.error(
-        "No files could be uploaded. Use PDF, DOCX, or image files up to 25 MB.",
-      );
+      toast.error("No files could be uploaded. Use PDF, DOCX, or image files up to 25 MB.");
       return;
     }
-    setBulkUploading(true);
+    // Files dropped on a filtered view land where that view is looking.
+    const association = linked
+      ? { targetType: linked.type, targetId: linked.id }
+      : { targetType: "workspace" as const, targetId: null };
     let uploaded = 0;
-    for (const file of valid) {
+    setUploadProgress({ done: 0, total: valid.length });
+    for (const [index, file] of valid.entries()) {
       try {
         const { key, checksum } = await uploadToStorage(file);
         const result = await createDocument({
@@ -264,31 +505,26 @@ export function DocumentsHub({
           sizeBytes: file.size,
           checksum,
           storageKey: key,
-          categoryId: null,
-          association: { targetType: "workspace", targetId: null },
+          categoryId: category !== "all" ? category : null,
+          association,
         });
         if (result.ok) uploaded += 1;
         else rejected += 1;
       } catch {
         rejected += 1;
       }
+      setUploadProgress({ done: index + 1, total: valid.length });
     }
-    setBulkUploading(false);
+    setUploadProgress(null);
     if (uploaded > 0)
       toast.success(
-        `${uploaded} document${uploaded === 1 ? "" : "s"} uploaded`,
+        `${uploaded} document${uploaded === 1 ? "" : "s"} uploaded${linkedName ? ` to ${linkedName}` : ""}`,
       );
-    if (rejected > 0)
-      toast.error(
-        `${rejected} file${rejected === 1 ? "" : "s"} could not be uploaded`,
-      );
+    if (rejected > 0) toast.error(`${rejected} file${rejected === 1 ? "" : "s"} could not be uploaded`);
     router.refresh();
   }
 
-  function runBulk(
-    action: () => Promise<{ ok: boolean; error?: string }>,
-    success: string,
-  ) {
+  function runBulk(action: () => Promise<{ ok: boolean; error?: string }>, success: string) {
     void (async () => {
       const result = await action();
       if (!result.ok) {
@@ -301,18 +537,27 @@ export function DocumentsHub({
     })();
   }
 
-  function bulkDelete() {
+  async function bulkDelete() {
     if (
-      !window.confirm(
-        `Permanently delete ${selectedInView.length} document${selectedInView.length === 1 ? "" : "s"}? This cannot be undone.`,
-      )
+      !(await confirm({
+        tone: "destructive",
+        title: `Delete ${selectedInView.length} document${selectedInView.length === 1 ? "" : "s"} permanently?`,
+        description: "They are removed for everyone, along with their version history. This cannot be undone.",
+        confirmLabel: `Delete ${selectedInView.length} document${selectedInView.length === 1 ? "" : "s"}`,
+      }))
     )
       return;
-    runBulk(
-      () => bulkDeleteDocuments({ documentIds: selectedInView }),
-      "Documents deleted",
-    );
+    runBulk(() => bulkDeleteDocuments({ documentIds: selectedInView }), "Documents deleted");
   }
+
+  const inArchive = focus === "archived";
+  const tiles: Array<{ key: HubFocus; label: string; tone?: string }> = [
+    { key: "active", label: "Active" },
+    { key: "pending", label: "Awaiting signature", tone: "text-warning-clay" },
+    { key: "expiring", label: "Expiring in 30 days", tone: "text-warning-clay" },
+    { key: "lapsed", label: "Date passed", tone: "text-danger-rust" },
+    { key: "archived", label: "Archived" },
+  ];
 
   return (
     <div
@@ -342,180 +587,207 @@ export function DocumentsHub({
         void uploadFiles(Array.from(event.dataTransfer.files ?? []));
       }}
     >
-      {pageDragging ? (
-        <div className="pointer-events-none absolute inset-0 z-30 flex items-center justify-center rounded-2xl border-2 border-dashed border-primary bg-accent/40 backdrop-blur-[1px]">
-          <div className="flex flex-col items-center gap-2 text-primary">
-            <Upload className="size-8" />
-            <p className="text-sm font-semibold">
-              Drop files to upload to the workspace library
-            </p>
-          </div>
-        </div>
-      ) : null}
-      <DocumentsWorkspaceTabs
-        active="files"
-        canReadDocuments
-        canManageTemplates={canManageTemplates}
-      />
-      <header className="flex flex-col gap-4 border-b border-border/70 pb-5 duration-500 animate-in fade-in slide-in-from-bottom-1 md:flex-row md:items-end md:justify-between">
-        <div>
-          <h1 className="font-display text-2xl font-semibold tracking-tight">
-            Documents
-          </h1>
-          <p className="mt-1 max-w-xl text-sm leading-6 text-muted-foreground">
-            A secure home for the files that move candidates, offers, and hiring
-            decisions forward.
-          </p>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          <Button variant="outline" onClick={() => setCategoriesOpen(true)}>
-            <FolderCog className="size-4" />
-            Categories
-          </Button>
-          {data.canManage ? (
-            <Button
-              onClick={() => setUploadOpen(true)}
-              disabled={bulkUploading}
-            >
-              <Upload className="size-4" />
-              {bulkUploading ? "Uploading…" : "Upload document"}
+      <DropOverlay active={pageDragging}>
+        Drop files to upload {linkedName ? `to ${linkedName}` : "to the workspace library"}
+      </DropOverlay>
+      <DocumentsWorkspaceTabs active="files" canReadDocuments canManageTemplates={canManageTemplates} />
+      <PageHeader
+        className="duration-500 animate-in fade-in slide-in-from-bottom-1"
+        title="Documents"
+        description="A secure home for the files that move candidates, offers, and hiring decisions forward."
+        actions={
+          <>
+            <Button variant="outline" onClick={() => setCategoriesOpen(true)}>
+              <FolderCog className="size-4" />
+              Categories
             </Button>
-          ) : null}
-        </div>
-      </header>
-      {candidateFilterName ? (
-        <div className="flex items-center gap-2 rounded-full border border-primary/25 bg-primary/[0.04] px-3 py-1.5 text-xs font-medium text-foreground">
-          Showing documents for {candidateFilterName}
-          <button
-            type="button"
-            onClick={clearCandidateFilter}
-            aria-label="Clear candidate filter"
-            className="rounded-full p-0.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-          >
-            <X className="size-3.5" />
-          </button>
-        </div>
+            {data.canManage ? (
+              <>
+                <Button variant="outline" onClick={() => setGenerateOpen(true)}>
+                  <FileText className="size-4" />
+                  Generate document
+                </Button>
+                <Button onClick={() => setUploadOpen(true)} disabled={uploadProgress !== null}>
+                  <Upload className="size-4" />
+                  {uploadProgress ? `Uploading ${uploadProgress.done}/${uploadProgress.total}…` : "Upload document"}
+                </Button>
+              </>
+            ) : null}
+          </>
+        }
+      />
+      {linked ? (
+        <Callout tone="info" className="py-2.5">
+          <span className="flex items-center justify-between gap-3">
+            <span>
+              Showing documents linked to <strong className="font-medium text-near-ink">{linkedName ?? "this " + linked.type}</strong>.
+              Files you drop here are linked to them too.
+            </span>
+            <button
+              type="button"
+              onClick={() => {
+                setLinked(null);
+                update("linked", null);
+              }}
+              aria-label="Clear linked filter"
+              className="rounded-full p-1 text-soft-ink transition-colors hover:bg-soft-kraft hover:text-near-ink"
+            >
+              <X className="size-3.5" />
+            </button>
+          </span>
+        </Callout>
       ) : null}
-      <section className="flex flex-wrap gap-x-8 gap-y-4 border-b border-border/70 pb-5 duration-500 animate-in fade-in slide-in-from-bottom-2">
-        <Stat label="Active documents" value={active} tone="text-primary" />
-        <Stat label="Archived" value={archived} />
-        <Stat label="Pending signature" value={pending} tone="text-warning" />
-        <Stat label="Expired" value={expired} tone="text-destructive" />
-        <Stat label="Assigned to me" value={assigned} />
-      </section>
-      <nav className="flex gap-1 border-b border-border/70" aria-label="Document sections">
-        {(["active", "archived"] as const).map((value) => (
+      <Card className="grid grid-cols-2 gap-3 p-4 duration-500 animate-in fade-in slide-in-from-bottom-2 sm:grid-cols-3 lg:grid-cols-5">
+        {tiles.map((tile) => (
           <button
-            key={value}
+            key={tile.key}
             type="button"
-            aria-current={section === value ? "page" : undefined}
-            onClick={() => { setSection(value); clearSelection(); }}
-            className={`border-b-2 px-3 py-2 text-sm font-medium transition-colors ${section === value ? "border-primary text-foreground" : "border-transparent text-muted-foreground hover:text-foreground"}`}
+            aria-pressed={focus === tile.key}
+            onClick={() => {
+              setFocus(tile.key);
+              clearSelection();
+              update("focus", tile.key);
+            }}
+            className="rounded-[var(--radius-inner)] text-left outline-none focus-visible:ring-[3px] focus-visible:ring-near-ink/20"
           >
-            {value === "active" ? "Active documents" : "Archived"} <span className="ml-1 text-xs text-muted-foreground">{value === "active" ? active : archived}</span>
+            <StatTile
+              className="h-full cursor-pointer hover:bg-soft-kraft data-[selected]:hover:bg-pure-snow"
+              label={tile.label}
+              selected={focus === tile.key}
+              muted={counts[tile.key] === 0}
+              value={<span className={tile.tone}>{counts[tile.key]}</span>}
+            />
           </button>
         ))}
-      </nav>
+      </Card>
       <section className="space-y-3 duration-500 animate-in fade-in slide-in-from-bottom-2">
-        <div className="flex flex-col gap-2 lg:flex-row">
-          <div className="relative min-w-0 flex-1">
-            <Search className="pointer-events-none absolute left-4 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+        <div className="flex flex-col gap-2 lg:flex-row lg:flex-wrap">
+          <div className="relative min-w-0 flex-1 lg:min-w-64">
+            <Search className="pointer-events-none absolute left-4 top-1/2 size-4 -translate-y-1/2 text-soft-ink" />
             <Input
               value={query}
-              onChange={(event) => setQuery(event.target.value)}
+              onChange={(event) => {
+                setQuery(event.target.value);
+                update("q", event.target.value);
+              }}
               placeholder="Search documents, owners, or original names"
-              className="h-10 rounded-full pl-10"
+              aria-label="Search documents"
+              className="h-9 rounded-full pl-10"
             />
           </div>
-          <FilterSelect
-            label="Category"
-            value={category}
-            onChange={setCategory}
-            options={data.categories
-              .filter((item) => item.active)
-              .map((item) => [item.id, item.name])}
-          />
-          <FilterSelect
-            label="Signature"
-            value={signature}
-            onChange={setSignature}
-            options={Object.entries(SIGNATURE_STATUS_META).map(
-              ([key, item]) => [key, item.label],
-            )}
-          />
-          <FilterSelect
-            label="Association"
-            value={association}
-            onChange={setAssociation}
-            options={[
-              ["workspace", "Workspace"],
-              ["candidate", "Candidate"],
-              ["application", "Application"],
-              ["offer", "Offer"],
-              ["job", "Job"],
-            ]}
-          />
-          <div className="flex shrink-0 items-center gap-0.5 rounded-full bg-muted p-1">
-            <button
-              type="button"
-              aria-label="List view"
-              aria-pressed={view === "list"}
-              onClick={() => setView("list")}
-              className={`flex size-8 items-center justify-center rounded-full transition-colors ${view === "list" ? "bg-card text-foreground shadow-xs" : "text-muted-foreground hover:text-foreground"}`}
-            >
-              <List className="size-4" />
-            </button>
-            <button
-              type="button"
-              aria-label="Grid view"
-              aria-pressed={view === "grid"}
-              onClick={() => setView("grid")}
-              className={`flex size-8 items-center justify-center rounded-full transition-colors ${view === "grid" ? "bg-card text-foreground shadow-xs" : "text-muted-foreground hover:text-foreground"}`}
-            >
-              <LayoutGrid className="size-4" />
-            </button>
+          <div className="flex flex-wrap items-center gap-2">
+            <FilterPill
+              label="Category"
+              value={category}
+              onChange={(value) => {
+                setCategory(value);
+                update("category", value);
+              }}
+              options={["all", ...data.categories.filter((item) => item.active).map((item) => item.id)]}
+              labelMap={{ all: "All", ...Object.fromEntries(data.categories.map((item) => [item.id, item.name])) }}
+              allValue="all"
+            />
+            <FilterPill
+              label="Signature"
+              value={signature}
+              onChange={(value) => {
+                setSignature(value);
+                update("signature", value);
+              }}
+              options={["all", ...Object.keys(SIGNATURE_STATUS_META)]}
+              labelMap={{ all: "All", ...Object.fromEntries(Object.entries(SIGNATURE_STATUS_META).map(([key, item]) => [key, item.label])) }}
+              allValue="all"
+            />
+            <FilterPill
+              label="Owner"
+              value={mine ? "mine" : "all"}
+              onChange={(value) => {
+                setMine(value === "mine");
+                update("mine", value === "mine");
+              }}
+              options={["all", "mine"]}
+              labelMap={{ all: "Anyone", mine: "Me" }}
+              allValue="all"
+            />
+            <LinkedPicker
+              options={data.associationOptions}
+              value={linked}
+              onChange={(next) => {
+                setLinked(next);
+                update("linked", next);
+              }}
+            />
+            <FilterPill
+              label="Sort"
+              value={`${sort.key}:${sort.dir}`}
+              onChange={(value) => {
+                const [key, dir] = value.split(":") as [SortKey, SortDir];
+                setSort({ key, dir });
+                update("sort", { key, dir });
+              }}
+              options={Object.keys(SORT_LABELS)}
+              labelMap={SORT_LABELS}
+              allValue="updated:desc"
+            />
+            <div className="flex shrink-0 items-center gap-0.5 rounded-full bg-soft-kraft p-1">
+              {(["list", "grid"] as const).map((mode) => (
+                <button
+                  key={mode}
+                  type="button"
+                  aria-label={mode === "list" ? "List view" : "Grid view"}
+                  aria-pressed={view === mode}
+                  onClick={() => setView(mode)}
+                  className={`flex size-8 items-center justify-center rounded-full transition-colors ${view === mode ? "bg-pure-snow text-near-ink" : "text-soft-ink hover:text-near-ink"}`}
+                >
+                  {mode === "list" ? <List className="size-4" /> : <LayoutGrid className="size-4" />}
+                </button>
+              ))}
+            </div>
           </div>
         </div>
-        <p className="text-xs text-muted-foreground">
-          {filtered.length} of {data.documents.length} document
-          {data.documents.length === 1 ? "" : "s"}
+        <p className="text-xs text-soft-ink" aria-live="polite">
+          {filtered.length} of {data.documents.length} document{data.documents.length === 1 ? "" : "s"}
+          {filtersActive ? (
+            <button type="button" onClick={clearFilters} className="ml-2 font-medium text-near-ink underline underline-offset-2">
+              Clear filters
+            </button>
+          ) : null}
         </p>
       </section>
       {data.canManage && selectedInView.length > 0 ? (
-        <section className="flex flex-wrap items-center gap-2 rounded-xl border border-primary/25 bg-accent/40 px-4 py-2.5 animate-in fade-in slide-in-from-top-1">
+        <section className="flex flex-wrap items-center gap-2 rounded-[var(--radius-card)] bg-lime-wash px-4 py-2.5 animate-in fade-in slide-in-from-top-1">
           <span className="text-sm font-medium">
             {selectedInView.length} selected
+            {heldSelected.length > 0 ? (
+              <span className="ml-2 font-normal text-soft-ink">
+                {heldSelected.length} under legal hold
+              </span>
+            ) : null}
           </span>
           <div className="ml-auto flex flex-wrap items-center gap-2">
             <Button
               size="sm"
               variant="outline"
-              disabled={section === "archived"}
+              disabled={inArchive || archivableIds.length === 0}
               onClick={() =>
                 runBulk(
-                  () =>
-                    bulkSetDocumentStatus({
-                      documentIds: selectedInView,
-                      status: "archived",
-                    }),
-                  "Documents archived",
+                  () => bulkSetDocumentStatus({ documentIds: archivableIds, status: "archived" }),
+                  heldSelected.length > 0
+                    ? `${archivableIds.length} archived, ${heldSelected.length} skipped (legal hold)`
+                    : "Documents archived",
                 )
               }
             >
               <Archive className="size-4" />
-              Archive
+              Archive{heldSelected.length > 0 && archivableIds.length > 0 ? ` ${archivableIds.length}` : ""}
             </Button>
             <Button
               size="sm"
               variant="outline"
-              disabled={section === "active"}
+              disabled={!inArchive}
               onClick={() =>
                 runBulk(
-                  () =>
-                    bulkSetDocumentStatus({
-                      documentIds: selectedInView,
-                      status: "active",
-                    }),
+                  () => bulkSetDocumentStatus({ documentIds: selectedInView, status: "active" }),
                   "Documents restored",
                 )
               }
@@ -523,39 +795,34 @@ export function DocumentsHub({
               <ArchiveRestore className="size-4" />
               Restore
             </Button>
-            <label className="flex items-center gap-1.5 text-sm">
-              <FolderCog className="size-4 text-muted-foreground" />
-              <select
-                defaultValue=""
-                disabled={section === "archived"}
-                onChange={(event) => {
-                  const value = event.target.value;
-                  if (!value) return;
-                  runBulk(
-                    () =>
-                      bulkSetDocumentCategory({
-                        documentIds: selectedInView,
-                        categoryId: value === "none" ? null : value,
-                      }),
-                    "Category updated",
-                  );
-                  event.target.value = "";
-                }}
-                className="h-8 rounded-md border border-input bg-background px-2 text-sm"
-              >
-                <option value="" disabled>
-                  Set category…
-                </option>
-                <option value="none">No category</option>
+            <Select
+              value=""
+              disabled={inArchive}
+              onValueChange={(value) =>
+                runBulk(
+                  () =>
+                    bulkSetDocumentCategory({
+                      documentIds: selectedInView,
+                      categoryId: value === "none" ? null : value,
+                    }),
+                  "Category updated",
+                )
+              }
+            >
+              <SelectTrigger size="sm" className="w-40 rounded-[var(--radius-btn)]" aria-label="Set category">
+                <SelectValue placeholder="Set category…" />
+              </SelectTrigger>
+              <SelectContent position="popper" align="end">
+                <SelectItem value="none">No category</SelectItem>
                 {data.categories
                   .filter((item) => item.active)
                   .map((item) => (
-                    <option key={item.id} value={item.id}>
+                    <SelectItem key={item.id} value={item.id}>
                       {item.name}
-                    </option>
+                    </SelectItem>
                   ))}
-              </select>
-            </label>
+              </SelectContent>
+            </Select>
             {data.canDelete ? (
               <Button size="sm" variant="destructive" onClick={bulkDelete}>
                 <Trash2 className="size-4" />
@@ -570,181 +837,159 @@ export function DocumentsHub({
         </section>
       ) : null}
       {view === "list" ? (
-        <section className="overflow-hidden rounded-xl border border-border/70 bg-card duration-500 animate-in fade-in slide-in-from-bottom-3">
-          <div className="hidden grid-cols-[2.5rem_minmax(15rem,2fr)_7rem_9rem_9rem_8rem] gap-4 border-b bg-muted/25 px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground md:grid">
+        <section className="overflow-hidden rounded-[var(--radius-card)] bg-card shadow-[var(--shadow-card)] duration-500 animate-in fade-in slide-in-from-bottom-3">
+          <div
+            className={`hidden gap-4 border-b border-hairline px-4 py-3 text-[11px] font-medium tracking-wide text-soft-ink md:grid ${DOCUMENT_LIST_GRID}`}
+          >
             {data.canManage ? (
               <span className="flex items-center">
-                <Checkbox
-                  checked={allInViewSelected}
-                  onCheckedChange={toggleSelectAll}
-                  aria-label="Select all"
-                />
+                <Checkbox checked={allInViewSelected} onCheckedChange={toggleSelectAll} aria-label="Select all" />
               </span>
             ) : (
               <span />
             )}
-            <span>Name</span>
-            <span>Type</span>
-            <span>Association</span>
-            <span>Owner</span>
-            <span>Updated</span>
+            <SortHeader label="Name" sortKey="name" active={sort.key === "name"} dir={sort.dir} onSort={onSort} />
+            <span className="uppercase">Status</span>
+            <span className="uppercase">Linked to</span>
+            <span className="uppercase">Owner</span>
+            <SortHeader label="Expires" sortKey="expires" active={sort.key === "expires"} dir={sort.dir} onSort={onSort} />
+            <SortHeader label="Updated" sortKey="updated" active={sort.key === "updated"} dir={sort.dir} onSort={onSort} />
           </div>
           {filtered.length === 0 ? (
-            <EmptyState data={data} onUpload={() => setUploadOpen(true)} />
+            <EmptyState
+              data={data}
+              filtered={filtersActive}
+              onUpload={() => setUploadOpen(true)}
+              onGenerate={() => setGenerateOpen(true)}
+              onClear={clearFilters}
+            />
           ) : (
-            <div className="divide-y divide-border/60">
+            <ul className="divide-y divide-hairline">
               {filtered.map((document) => {
                 const Icon = iconForDocument(document.mimeType);
-                const statusMeta =
-                  DOCUMENT_STATUS_META[document.status] ??
-                  DOCUMENT_STATUS_META.active;
-                const sigMeta =
-                  SIGNATURE_STATUS_META[document.signatureStatus] ??
-                  SIGNATURE_STATUS_META.unsigned;
                 const isSelected = selectedIds.has(document.id);
                 return (
-                  <div
+                  <li
                     key={document.id}
-                    className={`grid grid-cols-1 gap-2 px-4 py-3 transition-colors hover:bg-accent/30 md:grid-cols-[2.5rem_minmax(15rem,2fr)_7rem_9rem_9rem_8rem] md:items-center md:gap-4 ${isSelected ? "bg-accent/40" : ""}`}
+                    className={`relative grid grid-cols-1 gap-2 px-4 py-3 transition-colors hover:bg-row-wash md:items-center md:gap-4 ${DOCUMENT_LIST_GRID} ${isSelected ? "bg-lime-wash" : ""}`}
                   >
                     {data.canManage ? (
-                      <span
-                        className="flex items-center"
-                        onClick={(event) => event.stopPropagation()}
-                      >
-                        <Checkbox
-                          checked={isSelected}
-                          onCheckedChange={() => toggleSelected(document.id)}
-                          aria-label={`Select ${document.name}`}
-                        />
+                      <span className="absolute top-2 right-2 z-10 md:static md:flex md:items-center">
+                        {/* A 44px tap target around the 16px box. */}
+                        <label className="-m-2.5 flex cursor-pointer items-center p-2.5">
+                          <Checkbox
+                            checked={isSelected}
+                            onCheckedChange={() => toggleSelected(document.id)}
+                            aria-label={`Select ${document.name}`}
+                          />
+                        </label>
                       </span>
                     ) : (
                       <span className="hidden md:block" />
                     )}
-                    <button
-                      type="button"
-                      onClick={() => router.push(`/dashboard/documents/${document.id}` as Route)}
-                      className="flex min-w-0 items-center gap-3 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+                    <Link
+                      href={`/dashboard/documents/${document.id}` as Route}
+                      className="flex min-w-0 items-center gap-3 pr-8 outline-none after:absolute after:inset-0 focus-visible:after:ring-2 focus-visible:after:ring-inset focus-visible:after:ring-near-ink md:pr-0"
                     >
-                      <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-muted text-muted-foreground">
+                      <span className="flex size-9 shrink-0 items-center justify-center rounded-[var(--radius-btn)] border border-hairline bg-pure-snow text-near-ink">
                         <Icon className="size-4" />
                       </span>
                       <span className="min-w-0">
-                        <span className="block truncate text-sm font-medium">
-                          {document.name}
-                        </span>
-                        <span className="mt-0.5 block truncate text-xs text-muted-foreground">
-                          {formatDocumentSize(document.sizeBytes)} ·{" "}
-                          <StatusPill className={statusMeta.className}>
-                            {statusMeta.label}
-                          </StatusPill>{" "}
-                          <StatusPill className={sigMeta.className}>
-                            {sigMeta.label}
-                          </StatusPill>
+                        <span className="block truncate text-sm font-medium text-near-ink">{document.name}</span>
+                        <span className="mt-0.5 block truncate text-xs text-soft-ink">
+                          {documentTypeLabel(document.mimeType)} · {formatDocumentSize(document.sizeBytes)}
+                          <span className="md:hidden"> · {formatDate(document.updatedAt)}</span>
                         </span>
                       </span>
-                    </button>
-                    <span className="hidden text-xs text-muted-foreground md:block">
-                      {documentTypeLabel(document.mimeType)}
+                    </Link>
+                    <span className="flex items-center gap-2 pl-12 md:pl-0">
+                      <StateCell document={document} />
+                      <span className="text-xs text-soft-ink md:hidden">
+                        <ExpiresCell document={document} />
+                      </span>
                     </span>
-                    <span className="hidden truncate text-xs text-muted-foreground md:block">
+                    <span className="hidden truncate text-xs text-soft-ink md:block">
                       {document.associationLabels.join(" · ")}
                     </span>
-                    <span className="hidden items-center gap-2 truncate text-xs text-muted-foreground md:flex">
-                      {document.ownerId ? (
-                        <>
-                          <UserAvatar
-                            name={document.ownerName ?? "Workspace"}
-                            src={document.ownerImage}
-                            size="sm"
-                            className="size-5 text-[9px]"
-                          />
-                          <span className="truncate">{document.ownerName}</span>
-                        </>
-                      ) : (
-                        "Workspace"
-                      )}
+                    <span className="hidden items-center gap-2 truncate text-xs text-soft-ink md:flex">
+                      <OwnerCell document={document} />
                     </span>
-                    <span className="hidden text-xs text-muted-foreground md:block">
-                      {formatDate(document.updatedAt)}
+                    <span className="hidden text-xs text-soft-ink md:block">
+                      <ExpiresCell document={document} />
                     </span>
-                  </div>
+                    <span className="hidden text-xs text-soft-ink md:block">{formatDate(document.updatedAt)}</span>
+                  </li>
                 );
               })}
-            </div>
+            </ul>
           )}
         </section>
       ) : filtered.length === 0 ? (
-        <section className="overflow-hidden rounded-xl border border-border/70 bg-card duration-500 animate-in fade-in slide-in-from-bottom-3">
-          <EmptyState data={data} onUpload={() => setUploadOpen(true)} />
+        <section className="overflow-hidden rounded-[var(--radius-card)] bg-card shadow-[var(--shadow-card)] duration-500 animate-in fade-in slide-in-from-bottom-3">
+          <EmptyState
+            data={data}
+            filtered={filtersActive}
+            onUpload={() => setUploadOpen(true)}
+            onGenerate={() => setGenerateOpen(true)}
+            onClear={clearFilters}
+          />
         </section>
       ) : (
         <section className="grid grid-cols-1 gap-3 duration-500 animate-in fade-in slide-in-from-bottom-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
           {filtered.map((document) => {
             const Icon = iconForDocument(document.mimeType);
-            const statusMeta =
-              DOCUMENT_STATUS_META[document.status] ??
-              DOCUMENT_STATUS_META.active;
-            const sigMeta =
-              SIGNATURE_STATUS_META[document.signatureStatus] ??
-              SIGNATURE_STATUS_META.unsigned;
             const isSelected = selectedIds.has(document.id);
             return (
               <div
                 key={document.id}
-                className={`group relative flex flex-col rounded-xl border bg-card p-4 transition-colors hover:border-primary/40 ${isSelected ? "border-primary/60 ring-1 ring-primary/30" : "border-border/70"}`}
+                className={`relative flex flex-col rounded-[var(--radius-card)] bg-card p-4 shadow-[var(--shadow-card)] transition-colors hover:bg-row-wash ${isSelected ? "ring-2 ring-near-ink" : ""}`}
               >
                 {data.canManage ? (
-                  <span
-                    className="absolute right-3 top-3 opacity-0 transition-opacity group-hover:opacity-100 data-[checked=true]:opacity-100"
-                    data-checked={isSelected}
-                  >
-                    <Checkbox
-                      checked={isSelected}
-                      onCheckedChange={() => toggleSelected(document.id)}
-                      aria-label={`Select ${document.name}`}
-                    />
+                  <span className="absolute top-2 right-2 z-10">
+                    <label className="flex cursor-pointer items-center p-2.5">
+                      <Checkbox
+                        checked={isSelected}
+                        onCheckedChange={() => toggleSelected(document.id)}
+                        aria-label={`Select ${document.name}`}
+                      />
+                    </label>
                   </span>
                 ) : null}
-                <button
-                  type="button"
-                  onClick={() => router.push(`/dashboard/documents/${document.id}` as Route)}
-                  className="flex flex-1 flex-col text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                <Link
+                  href={`/dashboard/documents/${document.id}` as Route}
+                  className="flex flex-1 flex-col outline-none after:absolute after:inset-0 after:rounded-[var(--radius-card)] focus-visible:after:ring-2 focus-visible:after:ring-near-ink"
                 >
-                  <span className="flex size-10 items-center justify-center rounded-lg bg-accent text-primary">
+                  <span className="flex size-10 items-center justify-center rounded-[var(--radius-btn)] bg-lime-wash text-sage-ink">
                     <Icon className="size-5" />
                   </span>
-                  <span className="mt-3 line-clamp-2 text-sm font-medium">
-                    {document.name}
+                  <span className="mt-3 line-clamp-2 text-sm font-medium text-near-ink">{document.name}</span>
+                  <span className="mt-1 text-xs text-soft-ink">
+                    {documentTypeLabel(document.mimeType)} · {formatDocumentSize(document.sizeBytes)}
                   </span>
-                  <span className="mt-1 text-xs text-muted-foreground">
-                    {documentTypeLabel(document.mimeType)} ·{" "}
-                    {formatDocumentSize(document.sizeBytes)}
+                  <span className="mt-1 truncate text-xs text-soft-ink">
+                    {document.associationLabels.join(" · ")} · {document.ownerName ?? "Workspace"}
                   </span>
-                  <span className="mt-auto flex flex-wrap gap-1.5 pt-3">
-                    <StatusPill className={statusMeta.className}>
-                      {statusMeta.label}
-                    </StatusPill>
-                    <StatusPill className={sigMeta.className}>
-                      {sigMeta.label}
-                    </StatusPill>
+                  <span className="mt-auto flex flex-wrap items-center gap-x-2 gap-y-1 pt-3">
+                    <StateCell document={document} />
+                    <span className="text-xs text-soft-ink">
+                      {document.expiresAt ? `Expires ${formatDate(document.expiresAt)}` : `Updated ${formatDate(document.updatedAt)}`}
+                    </span>
                   </span>
-                </button>
+                </Link>
               </div>
             );
           })}
         </section>
       )}
       <UploadDialog
+        key={linked ? `${linked.type}:${linked.id}` : "none"}
         data={data}
         open={uploadOpen}
         onOpenChange={setUploadOpen}
+        defaultAssociation={linked}
       />
-      <CategoryDialog
-        data={data}
-        open={categoriesOpen}
-        onOpenChange={setCategoriesOpen}
-      />
+      <GenerateDocumentDialog open={generateOpen} onOpenChange={setGenerateOpen} />
+      <CategoryDialog data={data} open={categoriesOpen} onOpenChange={setCategoriesOpen} />
     </div>
   );
 }

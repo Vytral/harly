@@ -11,7 +11,7 @@ import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Textarea } from "@/components/ui/textarea";
 import { RelativeTime } from "@/lib/date-hydration";
-import { cn } from "@/lib/utils";
+import { cn, randomId } from "@/lib/utils";
 
 type NoteFormProps = {
   candidateId: string;
@@ -159,7 +159,7 @@ export function NoteForm({
       submittedBody.includes(`@${m.name}`),
     );
 
-    const optimisticId = `optimistic-${crypto.randomUUID()}`;
+    const optimisticId = `optimistic-${randomId()}`;
     setBody("");
     setMentions([]);
     setMentionQuery(null);

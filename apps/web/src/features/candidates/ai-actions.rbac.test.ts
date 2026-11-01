@@ -258,7 +258,7 @@ describe("AI evaluation application authorization", () => {
       applicationId: "11111111-1111-4111-8111-111111111111",
     });
 
-    expect(result).toEqual({ success: true });
+    expect(result).toEqual({ success: true, source: "ai", aiFellBack: false });
     expect(mocks.logAiCandidateDecision).toHaveBeenCalledWith(
       expect.objectContaining({
         inputSummary: expect.objectContaining({ skillsCount: 2 }),

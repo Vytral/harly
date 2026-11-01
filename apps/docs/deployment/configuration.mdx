@@ -128,6 +128,20 @@ startup validation error.
 See [integrations overview](/integrations/overview) for provider-specific
 redirect URIs and setup steps.
 
+## Updates and AI agents
+
+All optional, with safe defaults.
+
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `HARLY_RELEASE_MANIFEST_URL` | the public `release-manifest.json` on GitHub | Where **Settings → Updates** and the host updater read the stable release channel. Point it at a mirror. |
+| `HARLY_DISABLE_UPDATE_CHECK` | `false` | Set to `true` on an air-gapped host. The app then never contacts the release channel. `harly update` on the host keeps working. |
+| `HARLY_UPDATER_INTERVAL` | `60` | Host updater only (read from its environment, not the app's): seconds between polls, 15 to 3600. |
+| `MCP_ALLOWED_ORIGINS` | empty | Extra browser origins, comma separated, that may call the [MCP server](/developers/mcp). Empty answers only your own origin and loopback. |
+
+The in-app updater needs the host updater service from the CLI; see
+[Update from the app](/self-hosting/operations#update-from-the-app).
+
 ## Security-sensitive settings
 
 ```dotenv

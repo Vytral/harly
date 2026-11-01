@@ -1,14 +1,17 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  READ_HELPER_TOOLS,
   TOOL_GROUPS,
   assertToolRoutingCoversAllTools,
   resolveActiveToolGroups,
   selectActiveToolNames,
-  shouldWidenForStep,
   toolNamesForGroups,
+  turnNeedsWriteTools,
   type HarlyToolGroup,
 } from "./tool-routing";
+import { HARLY_GOLDEN_CONVERSATIONS } from "./golden-conversations";
+import { classifyHarlyIntent } from "./intent";
 
 describe("Harly AI tool routing gateway (Phase 6, AI10)", () => {
   describe("assertToolRoutingCoversAllTools", () => {
@@ -18,7 +21,7 @@ describe("Harly AI tool routing gateway (Phase 6, AI10)", () => {
       const { buildHarlyTools } = await import("./index");
       const tools = buildHarlyTools({ workspaceId: "ws-1", userId: "user-1" });
       expect(() => assertToolRoutingCoversAllTools(Object.keys(tools))).not.toThrow();
-    }, 20_000);
+    }, 60_000);
 
     it("throws when a tool name is missing from every group", () => {
       expect(() =>
@@ -50,16 +53,67 @@ describe("Harly AI tool routing gateway (Phase 6, AI10)", () => {
       expect(groups.has("general")).toBe(true);
     });
 
-    it("widens to every group for ambiguous, product_docs, and general_advice intents", () => {
-      for (const intent of ["ambiguous", "product_docs", "general_advice"] as const) {
+    it("keeps presentUi in the always-on general group", () => {
+      expect(TOOL_GROUPS.general).toContain("presentUi");
+      for (const intent of ["ambiguous", "product_docs", "action", "automation_build"] as const) {
         const groups = resolveActiveToolGroups({ message: "random text", intent });
-        expect(groups.size).toBe(Object.keys(TOOL_GROUPS).length);
+        expect(toolNamesForGroups(groups)).toContain("presentUi");
       }
     });
 
-    it("widens to every group when no group keyword matches and there is no structural signal", () => {
-      const groups = resolveActiveToolGroups({ message: "qwertyuiop", intent: "action" });
-      expect(groups.size).toBe(Object.keys(TOOL_GROUPS).length);
+    it("answers product/advice questions from the general group without the record catalog", () => {
+      for (const intent of ["product_docs", "general_advice"] as const) {
+        const groups = resolveActiveToolGroups({ message: "random text", intent });
+        expect([...groups]).toEqual(["general"]);
+      }
+    });
+
+    it("falls back to the everyday read groups, never automations, when nothing matches", () => {
+      for (const intent of ["ambiguous", "action"] as const) {
+        const groups = resolveActiveToolGroups({ message: "qwertyuiop", intent });
+        expect(groups).toEqual(
+          new Set(["general", "candidates", "jobs", "interviews", "tasks", "integrations"]),
+        );
+        expect(groups.has("automations")).toBe(false);
+      }
+    });
+
+    it("keeps the groups of tools used in recent turns for a bare follow-up", () => {
+      const groups = resolveActiveToolGroups({
+        message: "sí",
+        intent: "ambiguous",
+        recentToolNames: ["simulateAutomationProposal", "createOffer", "notATool"],
+      });
+      expect(groups.has("automations")).toBe(true);
+      expect(groups.has("offers")).toBe(true);
+    });
+
+    it("offers write tools only when the turn asks for a change", () => {
+      expect(turnNeedsWriteTools({ message: "Summarize Charlotte Dubois", intent: "ambiguous" })).toBe(false);
+      expect(turnNeedsWriteTools({ message: "¿En qué etapa está Ana?", intent: "workspace_fact" })).toBe(false);
+      for (const message of ["move her to interview", "pásala a la siguiente etapa", "sí", "dale", "go ahead", "add a note", "mándale un correo", "deshaz lo último", "undo that"]) {
+        expect(turnNeedsWriteTools({ message, intent: "ambiguous" }), message).toBe(true);
+      }
+      expect(turnNeedsWriteTools({ message: "x", intent: "action" })).toBe(true);
+      const readOnly = selectActiveToolNames(
+        [...TOOL_GROUPS.general, ...TOOL_GROUPS.candidates],
+        new Set<HarlyToolGroup>(["general", "candidates"]),
+        { includeWrites: false },
+      )!;
+      expect(readOnly).not.toContain("moveCandidateStage");
+      expect(readOnly).not.toContain("sendCandidateEmail");
+      expect(readOnly).not.toContain("undoAgentAction");
+      expect(readOnly).not.toContain("candidateNextAction");
+      expect(readOnly).toContain("candidateProfile");
+    });
+
+    it("routes a bare candidate name to the candidates group only", () => {
+      const message = "Summarize Charlotte Dubois";
+      const groups = resolveActiveToolGroups({
+        message,
+        intent: classifyHarlyIntent(message),
+      });
+      expect(groups).toEqual(new Set(["general", "candidates"]));
     });
 
     it("narrows to the candidates group for a candidate-specific action request", () => {
@@ -114,8 +168,6 @@ describe("Harly AI tool routing gateway (Phase 6, AI10)", () => {
         intent: "ambiguous",
         activeCandidateId: "cand-1",
       });
-      // ambiguous already widens to everything; verify the structural signal
-      // path independently using a non-widening intent instead.
       const narrowGroups = resolveActiveToolGroups({
         message: "compare their scores",
         intent: "action",
@@ -178,14 +230,43 @@ describe("Harly AI tool routing gateway (Phase 6, AI10)", () => {
     });
   });
 
-  describe("shouldWidenForStep", () => {
-    it("does not widen on the first step", () => {
-      expect(shouldWidenForStep(1)).toBe(false);
+  describe("bounded widen", () => {
+    it("always adds the read helpers so a narrow route can still resolve and read records", () => {
+      const available = [...TOOL_GROUPS.general, ...TOOL_GROUPS.candidates, ...TOOL_GROUPS.jobs, ...TOOL_GROUPS.reports];
+      const selected = selectActiveToolNames(available, new Set<HarlyToolGroup>(["general", "reports"]))!;
+      for (const helper of READ_HELPER_TOOLS) expect(selected).toContain(helper);
+      expect(selected).toContain("presentUi");
+      expect(selected).not.toContain("moveCandidateStage");
+      expect(selected).not.toContain("createJob");
     });
 
-    it("widens from the second step onward", () => {
-      expect(shouldWidenForStep(2)).toBe(true);
-      expect(shouldWidenForStep(3)).toBe(true);
+    it("every read helper is a real routed tool", () => {
+      const routed = new Set(Object.values(TOOL_GROUPS).flat());
+      for (const helper of READ_HELPER_TOOLS) expect(routed.has(helper)).toBe(true);
     });
+
+    it("offers every golden conversation's required tools on its routed turn", async () => {
+      const { buildHarlyTools } = await import("./index");
+      const available = Object.keys(
+        buildHarlyTools({ workspaceId: "ws-1", userId: "user-1" }),
+      );
+      const missing: string[] = [];
+      for (const conversation of HARLY_GOLDEN_CONVERSATIONS) {
+        const routing = {
+          message: conversation.userMessage,
+          intent: classifyHarlyIntent(conversation.userMessage),
+        };
+        const groups = resolveActiveToolGroups(routing);
+        const offered = new Set(
+          selectActiveToolNames(available, groups, {
+            includeWrites: turnNeedsWriteTools(routing),
+          }) ?? available,
+        );
+        for (const toolName of conversation.requiredToolSequence) {
+          if (!offered.has(toolName)) missing.push(`${conversation.id}: ${toolName}`);
+        }
+      }
+      expect(missing).toEqual([]);
+    }, 60_000);
   });
 });

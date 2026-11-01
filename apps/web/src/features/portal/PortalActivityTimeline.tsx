@@ -1,5 +1,7 @@
 "use client";
 
+import { useSyncExternalStore } from "react";
+
 import { cn } from "@/lib/utils";
 import {
   CheckCircleIcon,
@@ -32,16 +34,16 @@ const ICON_MAP: Record<ActivityItem["type"], React.ComponentType<{ className?: s
 };
 
 const DOT_STYLES: Record<ActivityItem["type"], string> = {
-  applied: "bg-sage text-sage-ink dark:bg-sage dark:text-sage-ink",
-  stage_change: "bg-sage text-sage-ink dark:bg-sage dark:text-sage-ink",
-  interview_scheduled: "bg-pine/15 text-pine dark:bg-pine/25 dark:text-pine",
-  interview_completed: "bg-sage text-sage-ink dark:bg-sage dark:text-sage-ink",
-  offer: "bg-sage text-sage-ink dark:bg-sage dark:text-sage-ink",
-  rejected: "bg-red-50 text-rust dark:bg-red-950 dark:text-rust",
+  applied: "bg-card-inset text-near-ink",
+  stage_change: "bg-card-inset text-near-ink",
+  interview_scheduled: "bg-lime-wash text-near-ink",
+  interview_completed: "bg-sage-wash text-success-olive",
+  offer: "bg-lime text-lime-ink",
+  rejected: "bg-danger-rust/10 text-danger-rust",
 };
 
 function formatShortDate(date: Date): string {
-  return new Intl.DateTimeFormat("en-US", {
+  return new Intl.DateTimeFormat(undefined, {
     month: "short",
     day: "numeric",
   }).format(date);
@@ -65,6 +67,13 @@ function formatRelativeOrAbsolute(date: Date): string {
   return formatShortDate(date);
 }
 
+const noopSubscribe = () => () => {};
+
+/** Relative time depends on the viewer's clock, so it renders after hydration. */
+function When({ date }: { date: Date }) {
+  return useSyncExternalStore(noopSubscribe, () => formatRelativeOrAbsolute(date), () => "");
+}
+
 export function PortalActivityTimeline({
   activities,
   compact = false,
@@ -80,7 +89,7 @@ export function PortalActivityTimeline({
             <div className="size-1.5 shrink-0 rounded-full bg-muted-foreground/40" />
             <span className="text-muted-foreground truncate">{activity.label}</span>
             <span className="ml-auto shrink-0 text-muted-foreground/60">
-              {formatShortDate(activity.timestamp)}
+              <When date={activity.timestamp} />
             </span>
           </div>
         ))}
@@ -100,7 +109,7 @@ export function PortalActivityTimeline({
             <div className="flex flex-col items-center">
               <div
                 className={cn(
-                  "flex size-6 shrink-0 items-center justify-center rounded-full",
+                  "flex size-7 shrink-0 items-center justify-center rounded-full",
                   DOT_STYLES[activity.type],
                 )}
               >
@@ -108,16 +117,16 @@ export function PortalActivityTimeline({
               </div>
               {!isLast && (
                 <div
-                  className="my-0.5 w-px flex-1 bg-border"
+                  className="my-1 w-px flex-1 bg-hairline"
                   style={{ minHeight: 16 }}
                 />
               )}
             </div>
             {/* Content */}
             <div className={cn("pb-4", isLast && "pb-0")}>
-              <p className="text-sm text-foreground">{activity.label}</p>
-              <p className="mt-0.5 text-xs text-muted-foreground">
-                {formatRelativeOrAbsolute(activity.timestamp)}
+              <p className="text-[13.5px] font-medium text-near-ink">{activity.label}</p>
+              <p className="mt-0.5 min-h-4 text-[12px] text-soft-ink">
+                <When date={activity.timestamp} />
               </p>
             </div>
           </div>

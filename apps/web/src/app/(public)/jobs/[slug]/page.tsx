@@ -52,7 +52,12 @@ export default async function JobDetailPage({ params }: JobDetailPageProps) {
       activeTab="overview"
       portalEnabled={portalEnabled}
     >
-      <JobOverviewBody job={job} />
+      <JobOverviewBody
+        job={job}
+        process={config.process}
+        accent={config.theme.accent ?? workspace.primaryColor ?? undefined}
+        rounded={config.theme.rounded}
+      />
     </JobChrome>
   );
 }

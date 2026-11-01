@@ -1,6 +1,6 @@
 export type NativeSnapshotField = {
   id: string;
-  type: "signature" | "text";
+  type: "signature" | "text" | "date";
   page: number;
   x: number;
   y: number;
@@ -23,7 +23,7 @@ function isValidSnapshotField(value: unknown): value is NativeSnapshotField {
   const recipientIndex = field.recipientIndex;
   return (
     typeof field.id === "string" &&
-    (field.type === "signature" || field.type === "text") &&
+    (field.type === "signature" || field.type === "text" || field.type === "date") &&
     Number.isInteger(field.page) &&
     (field.page as number) > 0 &&
     isFiniteNumber(field.x) &&

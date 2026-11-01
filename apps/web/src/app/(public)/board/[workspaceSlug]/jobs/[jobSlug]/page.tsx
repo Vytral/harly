@@ -44,7 +44,12 @@ export default async function BoardJobPage({ params }: Props) {
         />
       ) : null}
       <JobChrome config={config} workspace={workspace} job={job} boardRoot={boardRoot} activeTab="overview" portalEnabled={portalEnabled}>
-        <JobOverviewBody job={job} />
+        <JobOverviewBody
+          job={job}
+          process={config.process}
+          accent={config.theme.accent ?? workspace.primaryColor ?? undefined}
+          rounded={config.theme.rounded}
+        />
       </JobChrome>
     </>
   );

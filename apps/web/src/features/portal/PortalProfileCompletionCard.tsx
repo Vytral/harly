@@ -31,14 +31,14 @@ export function PortalProfileCompletionCard({
     if (dismissed) return null;
 
     return (
-      <div className="flex items-center gap-3 rounded-xl border border-emerald-200 bg-emerald-50/70 px-4 py-3 dark:border-emerald-900 dark:bg-emerald-950/20">
-        <CheckCircleIcon className="size-5 shrink-0 text-emerald-600 dark:text-emerald-400" />
-        <p className="text-sm text-emerald-800 dark:text-emerald-300">
+      <div className="flex items-center gap-3 rounded-2xl border border-hairline bg-sage-wash px-4 py-3">
+        <CheckCircleIcon className="size-5 shrink-0 text-success-olive" />
+        <p className="text-sm text-success-olive">
           Your profile is complete.
         </p>
         <Link
           href="/portal/profile"
-          className="ml-auto shrink-0 text-sm font-medium text-emerald-800 underline-offset-2 hover:underline dark:text-emerald-300"
+          className="ml-auto shrink-0 text-sm font-medium text-success-olive underline-offset-2 hover:underline"
         >
           Review
         </Link>
@@ -49,7 +49,7 @@ export function PortalProfileCompletionCard({
             window.localStorage.setItem(DISMISS_KEY, "1");
             setDismissed(true);
           }}
-          className="shrink-0 rounded-md p-1 text-emerald-700 hover:bg-emerald-100 dark:text-emerald-400 dark:hover:bg-emerald-900/40"
+          className="shrink-0 rounded-md p-1 text-success-olive hover:bg-pure-snow/60"
         >
           <XIcon className="size-4" />
         </button>
@@ -58,9 +58,9 @@ export function PortalProfileCompletionCard({
   }
 
   return (
-    <section className="rounded-xl border border-border bg-card p-5">
+    <section className="rounded-2xl border border-hairline bg-card p-5">
       <div className="flex items-start gap-3">
-        <div className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-muted text-muted-foreground">
+        <div className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-lime-wash text-near-ink">
           <UserCircleIcon className="size-5" />
         </div>
         <div className="min-w-0 flex-1">
@@ -77,7 +77,7 @@ export function PortalProfileCompletionCard({
             future applications.
           </p>
           <div
-            className="mt-3 h-1.5 overflow-hidden rounded-full bg-muted"
+            className="mt-3 h-1.5 overflow-hidden rounded-full bg-card-inset"
             aria-label={`Profile ${completion.percentage}% complete`}
             role="progressbar"
             aria-valuemin={0}
@@ -85,7 +85,7 @@ export function PortalProfileCompletionCard({
             aria-valuenow={completion.percentage}
           >
             <div
-              className="h-full rounded-full bg-pine transition-[width] duration-300"
+              className="animate-segment-fill h-full rounded-full bg-lime"
               style={{ width: `${completion.percentage}%` }}
             />
           </div>

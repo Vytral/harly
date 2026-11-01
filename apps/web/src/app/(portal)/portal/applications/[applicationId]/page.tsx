@@ -9,20 +9,20 @@ import { PORTAL_SESSION_COOKIE, resolvePortalSession } from "@/lib/portal-auth";
 import {
   getPortalApplicationInterviews,
   getPortalApplicationOffer,
-  getPortalJobStages,
+  getPortalOrganizationName,
 } from "@/server/portal-applications";
 import { PortalShell } from "@/features/portal/PortalShellServer";
-import { PortalHorizontalPipeline } from "@/features/portal/PortalHorizontalPipeline";
-import { PortalInterviewCard } from "@/features/portal/PortalInterviewCard";
+import { PortalStageProgress } from "@/features/portal/PortalStageProgress";
+import { PortalInterviewItem } from "@/features/portal/PortalInterviewItem";
+import { listPortalJobStages } from "@/features/portal/applications-data";
+import { portalApplicationProgress, type PortalApplicationStatus } from "@/features/portal/application-progress";
+import { PROGRESS_PILL_TONE } from "@/features/portal/PortalApplicationRow";
+import { StatusPill } from "@/components/ui/status-pill";
 import { PortalOfferSignCard } from "@/features/portal/PortalOfferSignCard";
 import { PortalDocumentRequestsCard } from "@/features/portal/PortalDocumentRequestsCard";
 import { listDocumentRequestsForPortal } from "@/features/documents/requests-data";
-import { PortalStatusBadge } from "@/features/portal/PortalStatusBadge";
-import { PortalEmptyState } from "@/features/portal/PortalEmptyState";
 import { PortalActivityTimeline, type ActivityItem } from "@/features/portal/PortalActivityTimeline";
-import {
-  CalendarBlankIcon,
-} from "@/components/ui/icons/phosphor";
+import { CaretLeftIcon } from "@/components/ui/icons/phosphor";
 import { formatShort } from "@/lib/date";
 import { formatEnumLabel } from "@/lib/format";
 
@@ -119,6 +119,7 @@ export default async function ApplicationDetailPage({
       jobLocation: jobs.location,
       jobWorkplaceType: jobs.workplaceType,
       jobEmploymentType: jobs.employmentType,
+      jobStatus: jobs.status,
     })
     .from(applications)
     .innerJoin(jobs, eq(jobs.id, applications.jobId))
@@ -149,8 +150,20 @@ export default async function ApplicationDetailPage({
     .limit(1);
   const showStatus = settingsRow?.showStatus !== false;
 
-  const stages = await getPortalJobStages(appRow.jobId);
-  const interviewsList = await getPortalApplicationInterviews(appRow.id);
+  const [stagesByJob, interviewsList, orgName] = await Promise.all([
+    showStatus ? listPortalJobStages([appRow.jobId]) : Promise.resolve(new Map()),
+    getPortalApplicationInterviews(appRow.id),
+    getPortalOrganizationName(session.workspaceId),
+  ]);
+  const stages = stagesByJob.get(appRow.jobId) ?? [];
+  const status = appRow.status as PortalApplicationStatus;
+  const progress = portalApplicationProgress({
+    stages,
+    currentStageId: appRow.currentStageId,
+    status,
+    showStages: showStatus,
+    orgName,
+  });
   const activities = synthesizeActivities(appRow, interviewsList);
 
   // E-signature offer, if the recruiter sent one via the e-signature channel.
@@ -181,143 +194,163 @@ export default async function ApplicationDetailPage({
     (i) => i.status === "completed" || (i.status === "scheduled" && i.scheduledAt <= now),
   );
 
+  const details = [
+    { label: "Team", value: appRow.jobDepartment },
+    { label: "Location", value: appRow.jobLocation },
+    {
+      label: "Workplace",
+      value: appRow.jobWorkplaceType ? (WORKPLACE_LABELS[appRow.jobWorkplaceType] ?? appRow.jobWorkplaceType) : null,
+    },
+    {
+      label: "Type",
+      value: appRow.jobEmploymentType ? (EMPLOYMENT_LABELS[appRow.jobEmploymentType] ?? appRow.jobEmploymentType) : null,
+    },
+  ].filter((detail): detail is { label: string; value: string } => Boolean(detail.value));
+  const meta = details.map((detail) => detail.value);
+  const toItem = (iv: (typeof interviewsList)[number]) => ({ ...iv, title: iv.title ?? formatEnumLabel(iv.type) });
+  const company = orgName ?? "The company";
+
   return (
     <PortalShell>
-      <div className="space-y-8">
-        {/* Back link */}
+      <div className="stagger-in space-y-6">
         <Link
-          href="/portal/applications"
-          className="inline-flex items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground"
+          href={"/portal/applications" as Route}
+          className="inline-flex items-center gap-1 rounded-md text-[13px] font-medium text-soft-ink transition-colors hover:text-near-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-near-ink"
         >
-          <svg className="size-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M10.5 19.5 3 12m0 0 7.5-7.5M3 12h18" />
-          </svg>
-          Back to applications
+          <CaretLeftIcon className="size-3.5" />
+          All applications
         </Link>
 
-        {/* Header */}
-        <div className="flex items-start justify-between gap-4">
-          <div>
-            <h1 className="text-2xl font-bold tracking-tight text-foreground">
-              {appRow.jobTitle}
-            </h1>
-            <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-muted-foreground">
-              {appRow.jobDepartment && <span>{appRow.jobDepartment}</span>}
-              {appRow.jobLocation && <span>{appRow.jobLocation}</span>}
-              {appRow.jobWorkplaceType && (
-                <span>{WORKPLACE_LABELS[appRow.jobWorkplaceType] ?? appRow.jobWorkplaceType}</span>
-              )}
-              {appRow.jobEmploymentType && (
-                <span>{EMPLOYMENT_LABELS[appRow.jobEmploymentType] ?? appRow.jobEmploymentType}</span>
-              )}
-            </div>
-            <p className="mt-2 text-sm text-muted-foreground">
-              Applied {formatShort(appRow.appliedAt)}
+        <header className="flex flex-wrap items-start justify-between gap-x-6 gap-y-3">
+          <div className="min-w-0">
+            <h1 className="text-[26px] font-semibold tracking-tight text-near-ink sm:text-[30px]">{appRow.jobTitle}</h1>
+            <p className="mt-1 text-[14px] text-soft-ink">
+              {company}
+              {meta.length > 0 ? ` · ${meta.join(" · ")}` : ""}
             </p>
           </div>
-          <PortalStatusBadge status={appRow.status} />
-        </div>
+          <StatusPill tone={PROGRESS_PILL_TONE[progress.tone]}>{progress.label}</StatusPill>
+        </header>
 
-        {/* E-signature offer — review & sign / pending / accepted / declined */}
-        {esignOffer && (
-          <PortalOfferSignCard
-            applicationId={appRow.id}
-            offer={{
-              id: esignOffer.id,
-              // The query filters status to sent/accepted/declined (inArray);
-              // drizzle still infers the full enum, so narrow here.
-              status: esignOffer.status as "sent" | "accepted" | "declined",
-              title: esignOffer.title,
-              esignSubmissionId: esignOffer.esignSubmissionId,
-              expiresAt: esignOffer.expiresAt,
-            }}
-            isExpired={Boolean(
-              esignOffer.expiresAt && esignOffer.expiresAt <= new Date(),
-            )}
-            signedPending={signedPending}
-          />
-        )}
+        {/* Where it stands: one status card with the plain-language summary. */}
+        <section aria-labelledby="status-title" className="rounded-2xl border border-hairline bg-card p-5 sm:p-6">
+          <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+            <h2 id="status-title" className="text-[20px] font-semibold tracking-tight text-near-ink">
+              {progress.headline}
+            </h2>
+            {progress.step && status === "active" ? (
+              <span className="text-[13px] tabular-nums text-soft-ink">
+                Step {progress.step} of {progress.total}
+              </span>
+            ) : null}
+          </div>
+          <p className="mt-1.5 max-w-2xl text-[14px] leading-6 text-soft-ink">{progress.body}</p>
+          {stages.length > 0 ? (
+            <PortalStageProgress
+              stages={stages}
+              currentStageId={appRow.currentStageId}
+              status={status}
+              className="mt-5"
+            />
+          ) : null}
+        </section>
 
-        {/* Documents the recruiter requested — upload / status per item */}
-        <PortalDocumentRequestsCard requests={documentRequests} />
-
-        {/* Horizontal pipeline */}
-        {showStatus && stages.length > 0 && (
-          <section>
-            <h2 className="mb-4 text-lg font-semibold text-foreground">Interview plan</h2>
-            <div className="rounded-2xl border border-border bg-card p-5 shadow-[0_1px_3px_rgba(0,0,0,0.04)]">
-              <PortalHorizontalPipeline
-                stages={stages}
-                currentStageId={appRow.currentStageId}
-                applicationStatus={appRow.status}
+        <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
+          <div className="min-w-0 space-y-6">
+            {esignOffer && (
+              <PortalOfferSignCard
+                applicationId={appRow.id}
+                offer={{
+                  id: esignOffer.id,
+                  // The query filters status to sent/accepted/declined (inArray);
+                  // drizzle still infers the full enum, so narrow here.
+                  status: esignOffer.status as "sent" | "accepted" | "declined",
+                  title: esignOffer.title,
+                  esignSubmissionId: esignOffer.esignSubmissionId,
+                  expiresAt: esignOffer.expiresAt,
+                }}
+                isExpired={Boolean(esignOffer.expiresAt && esignOffer.expiresAt <= new Date())}
+                signedPending={signedPending}
               />
-            </div>
-          </section>
-        )}
+            )}
 
-        {/* Upcoming interviews */}
-        {upcomingInterviews.length > 0 && (
-          <section>
-            <h2 className="mb-4 text-lg font-semibold text-foreground">Upcoming Interviews</h2>
-            <div className="space-y-3">
-              {upcomingInterviews.map((iv) => (
-                <PortalInterviewCard
-                  key={iv.id}
-                  title={iv.title ?? formatEnumLabel(iv.type)}
-                  scheduledAt={iv.scheduledAt}
-                  durationMins={iv.durationMins}
-                  location={iv.location}
-                  interviewers={[
-                    { name: iv.interviewerName, image: iv.interviewerImage },
-                  ]}
-                  meetingUrl={iv.meetingUrl}
-                />
-              ))}
-            </div>
-          </section>
-        )}
+            {documentRequests.length > 0 ? (
+              <div id="documents" className="scroll-mt-24">
+                <PortalDocumentRequestsCard requests={documentRequests} />
+              </div>
+            ) : null}
 
-        {/* Past interviews */}
-        {pastInterviews.length > 0 && (
-          <section>
-            <h2 className="mb-4 text-lg font-semibold text-foreground">Past Interviews</h2>
-            <div className="space-y-3">
-              {pastInterviews.map((iv) => (
-                <PortalInterviewCard
-                  key={iv.id}
-                  title={iv.title ?? formatEnumLabel(iv.type)}
-                  scheduledAt={iv.scheduledAt}
-                  durationMins={iv.durationMins}
-                  location={iv.location}
-                  interviewers={[
-                    { name: iv.interviewerName, image: iv.interviewerImage },
-                  ]}
-                  meetingUrl={iv.meetingUrl}
-                  compact
-                />
-              ))}
-            </div>
-          </section>
-        )}
+            <section aria-labelledby="interviews-title" className="space-y-3">
+              <h2 id="interviews-title" className="text-[17px] font-semibold text-near-ink">
+                Interviews
+              </h2>
+              {upcomingInterviews.length === 0 && pastInterviews.length === 0 ? (
+                <p className="rounded-2xl border border-dashed border-hairline px-5 py-6 text-[13.5px] leading-5 text-soft-ink">
+                  {status === "active"
+                    ? `Nothing scheduled yet. When ${company} books an interview it shows up here, with a link to join and a one-click calendar invite.`
+                    : "No interviews for this application."}
+                </p>
+              ) : (
+                <div className="space-y-2.5">
+                  {upcomingInterviews.map((iv) => (
+                    <PortalInterviewItem key={iv.id} interview={toItem(iv)} orgName={company} />
+                  ))}
+                  {pastInterviews.length > 0 ? (
+                    <>
+                      {upcomingInterviews.length > 0 ? (
+                        <p className="pt-2 text-[12px] font-semibold uppercase tracking-wider text-soft-ink">Earlier</p>
+                      ) : null}
+                      {pastInterviews.map((iv) => (
+                        <PortalInterviewItem key={iv.id} interview={toItem(iv)} orgName={company} variant="past" />
+                      ))}
+                    </>
+                  ) : null}
+                </div>
+              )}
+            </section>
+          </div>
 
-        {/* No interviews at all */}
-        {interviewsList.length === 0 && (
-          <PortalEmptyState
-            icon={CalendarBlankIcon}
-            title="No interviews scheduled yet"
-            description="Your application is being reviewed. We'll notify you when an interview is booked."
-          />
-        )}
+          <aside className="space-y-4">
+            <section className="rounded-2xl border border-hairline bg-card p-5">
+              <h2 className="text-[13px] font-semibold uppercase tracking-wider text-soft-ink">Details</h2>
+              <dl className="mt-3 space-y-2.5 text-[13.5px]">
+                <div className="flex justify-between gap-4">
+                  <dt className="text-soft-ink">Applied</dt>
+                  <dd className="text-right font-medium text-near-ink">{formatShort(appRow.appliedAt)}</dd>
+                </div>
+                <div className="flex justify-between gap-4">
+                  <dt className="text-soft-ink">Last update</dt>
+                  <dd className="text-right font-medium text-near-ink">{formatShort(appRow.updatedAt)}</dd>
+                </div>
+                {details.map((detail) => (
+                  <div key={detail.label} className="flex justify-between gap-4">
+                    <dt className="text-soft-ink">{detail.label}</dt>
+                    <dd className="truncate text-right font-medium text-near-ink">{detail.value}</dd>
+                  </div>
+                ))}
+              </dl>
+              {appRow.jobStatus === "open" ? (
+                <Link
+                  href={`/portal/jobs/${appRow.jobId}` as Route}
+                  className="mt-4 inline-block text-[13px] font-medium text-near-ink underline-offset-2 hover:underline"
+                >
+                  View job description
+                </Link>
+              ) : null}
+            </section>
 
-        {/* Activity timeline (full mode, all activities) */}
-        {activities.length > 0 && (
-          <section>
-            <h2 className="mb-4 text-lg font-semibold text-foreground">Activity</h2>
-            <div className="rounded-2xl border border-border bg-card p-5 shadow-[0_1px_3px_rgba(0,0,0,0.04)]">
-              <PortalActivityTimeline activities={activities} />
-            </div>
-          </section>
-        )}
+            {activities.length > 0 ? (
+              <section className="rounded-2xl border border-hairline bg-card p-5">
+                <h2 className="mb-4 text-[13px] font-semibold uppercase tracking-wider text-soft-ink">Latest updates</h2>
+                <PortalActivityTimeline activities={activities} />
+              </section>
+            ) : null}
+
+            <p className="px-1 text-[12.5px] leading-5 text-soft-ink">
+              Questions about this application? Reply to any email from {company} and it reaches the hiring team.
+            </p>
+          </aside>
+        </div>
       </div>
     </PortalShell>
   );

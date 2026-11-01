@@ -143,8 +143,8 @@ export function StageRow({
       ref={setNodeRef}
       style={style}
       className={cn(
-        "rounded-xl border bg-card p-3",
-        isDragging && "relative z-10 shadow-md ring-1 ring-ring/30",
+        "rounded-[var(--radius-inner)] bg-card-inset p-3",
+        isDragging && "relative z-10 shadow-[var(--shadow-float)]",
       )}
     >
       <div className="flex items-center gap-2">

@@ -107,13 +107,10 @@ test.describe("candidate-to-hire native signing flow", () => {
       // The database commit precedes the server action's completion and the
       // router refresh. Do not start a stage-specific action against stale
       // server-rendered props while the primary CTA still says "Moving…".
-      const stagePosition =
-        STAGE_IDS.findIndex(
-          (candidateStageId) => candidateStageId === stageId,
-        ) + 1;
       await expect(
-        page.getByRole("img", {
-          name: `Stage: ${stageName} (${stagePosition} of ${STAGE_IDS.length})`,
+        page.getByRole("list", {
+          name: `Pipeline progress: ${stageName}`,
+          exact: true,
         }),
       ).toBeVisible({ timeout: 30_000 });
       await expect(
@@ -222,9 +219,12 @@ test.describe("candidate-to-hire native signing flow", () => {
     await expect(
       placementDialog.getByRole("heading", { name: "Place signature fields" }),
     ).toBeVisible();
-    await expect(placementDialog.getByText(/1 field placed\./i)).toBeVisible({
-      timeout: 30_000,
-    });
+    // The PDF preview seeds one signature field once it loads.
+    await expect(
+      placementDialog
+        .getByRole("region", { name: "Fields" })
+        .getByRole("button", { name: "Remove field 1", exact: true }),
+    ).toBeVisible({ timeout: 30_000 });
     await placementDialog
       .getByRole("button", { name: "Send offer", exact: true })
       .click();

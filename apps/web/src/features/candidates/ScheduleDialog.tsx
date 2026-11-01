@@ -4,6 +4,7 @@ import { useState, useTransition, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { AlertTriangle, Link2, MapPin, Phone, Video } from "lucide-react";
 import { toast } from "@/lib/notification-island/toast";
+import { copyText } from "@/lib/utils";
 
 import { scheduleInterview } from "@/features/interviews/actions";
 import { unshownEmailWarning } from "@/lib/email/delivery-warning";
@@ -180,7 +181,7 @@ export function ScheduleDialog({
       email: candidateEmail,
       metadata: { applicationId, candidateId, workspaceId },
     });
-    void navigator.clipboard.writeText(link);
+    void copyText(link);
     toast.success("Booking link copied. Send it to the candidate");
   }
 

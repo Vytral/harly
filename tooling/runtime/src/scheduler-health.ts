@@ -70,3 +70,49 @@ export function sanitizeRunError(message: string): string {
   return cleaned || "unknown error";
 }
 
+/**
+ * The scheduler touches this file on every tick. It lives on the scheduler
+ * container's /tmp tmpfs, so only that container ever sees it.
+ */
+export const SCHEDULER_HEARTBEAT_FILE = "/tmp/harly-scheduler-heartbeat";
+export const SCHEDULER_HEARTBEAT_INTERVAL_MS = 15_000;
+const SCHEDULER_HEARTBEAT_STALE_MS = 120_000;
+
+/**
+ * Liveness of the scheduler process itself. A missing heartbeat (doctor run
+ * outside the scheduler container, or before the first tick) is not a failure.
+ */
+export function describeSchedulerHeartbeat(
+  lastBeatMs: number | null,
+  now = Date.now(),
+) {
+  if (lastBeatMs === null) return { ok: true, detail: "no heartbeat file" };
+  const ageSeconds = Math.round((now - lastBeatMs) / 1_000);
+  return {
+    ok: now - lastBeatMs <= SCHEDULER_HEARTBEAT_STALE_MS,
+    detail: `last beat ${ageSeconds}s ago`,
+  };
+}
+
+/**
+ * Checks whose failure means the container is broken. Everything else doctor
+ * reports (job freshness, queues) depends on data and integrations: one failing
+ * daily job or a dead-lettered evaluation must not mark the scheduler
+ * container unhealthy and make `docker compose up --wait` (and so every
+ * `harly update`) fail. Those fail only under `doctor --strict`.
+ */
+export const LIVENESS_CHECKS = new Set([
+  "readiness",
+  "database",
+  "migrations",
+  "heartbeat",
+]);
+
+export function doctorExitOk(
+  checks: ReadonlyArray<{ name: string; ok: boolean }>,
+  strict: boolean,
+): boolean {
+  return checks.every(
+    (check) => check.ok || (!strict && !LIVENESS_CHECKS.has(check.name)),
+  );
+}

@@ -33,6 +33,7 @@ import { DrawerLayout } from "@/features/candidates/DrawerLayout";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { CopyCheck, EyeOff, Gauge, ScanText, Wand2 } from "lucide-react";
 import {
   ClaudeLogo,
   GeminiLogo,
@@ -42,16 +43,12 @@ import {
 } from "@/components/ui/icons/brands";
 import {
   CheckIcon,
-  EyeSlashDuotoneIcon,
   GlobeIcon,
   KeyDuotoneIcon,
   LightningIcon,
-  MagicWandDuotoneIcon,
-  ReadCvDuotoneIcon,
   RobotDuotoneIcon,
   SearchIcon,
   SpinnerIcon,
-  UsersThreeDuotoneIcon,
 } from "@/components/ui/icons/phosphor";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -62,6 +59,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { SettingRow, SettingRows } from "@/components/ui/setting-row";
 import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
 
@@ -156,7 +154,7 @@ export function AiSettingsCard({
                     </Button>
                   )}
                   {status.hasApiKey ? (
-                    <label className="flex items-center gap-2 rounded-lg border bg-card px-3 py-2 text-sm">
+                    <label className="flex h-9 items-center gap-2 rounded-[var(--radius-btn)] border border-mist-border bg-pure-snow px-3 text-sm">
                       <Switch
                         checked={status.enabled}
                         disabled={togglePending}
@@ -196,29 +194,29 @@ export function AiSettingsCard({
         </div>
       </Card>
 
-      {/* AI Features section */}
-      <div>
-        <h2 className="mb-3 text-sm font-semibold tracking-tight text-foreground/80">
-          AI Features
-        </h2>
-        <div className="grid gap-3 sm:grid-cols-2">
-          <FeatureCard
-            icon={ReadCvDuotoneIcon}
+      {/* AI features: one card of rows, icon + one line each. */}
+      <Card className="gap-0 py-0">
+        <div className="px-5 pt-5 pb-1">
+          <h2 className="text-[15px] font-semibold tracking-[-0.01em] text-near-ink">
+            AI features
+          </h2>
+        </div>
+        <SettingRows>
+          <FeatureRow
+            icon={<ScanText strokeWidth={1.8} />}
             title="Resume parsing"
-            description="Extract name, contacts, skills, and work history from uploaded CVs into structured candidate profiles automatically on apply."
-            alwaysOn
+            description="Turns uploaded CVs into structured candidate profiles."
           />
-          <FeatureCard
-            icon={MagicWandDuotoneIcon}
+          <FeatureRow
+            icon={<Wand2 strokeWidth={1.8} />}
             title="Job-description drafting"
-            description="Generate first-draft postings from a short brief in the job wizard. Title, keywords, and workplace type are enough to get a full draft."
-            alwaysOn
+            description="Drafts a job posting from a short brief."
           />
           <AutoScoreFeatureCard status={status} canEdit={canEdit} />
           <DuplicateCheckFeatureCard status={status} canEdit={canEdit} />
           <ResumeAnonymizationFeatureCard status={status} canEdit={canEdit} />
-        </div>
-      </div>
+        </SettingRows>
+      </Card>
 
       {/* Supported providers */}
       <Card className="gap-4">
@@ -288,33 +286,38 @@ function EncryptionWarning() {
   );
 }
 
-function FeatureCard({
-  icon: Icon,
+function FeatureRow({
+  icon,
   title,
   description,
-  alwaysOn = false,
 }: {
-  icon: React.ComponentType<{ className?: string }>;
+  icon: React.ReactNode;
   title: string;
   description: string;
-  alwaysOn?: boolean;
 }) {
   return (
-    <Card className="gap-0 p-5">
-      <div className="flex items-start justify-between gap-3">
-        <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-muted/70 text-foreground/80">
-          <Icon className="size-5" />
+    <SettingRow
+      icon={icon}
+      title={title}
+      description={description}
+      control={
+        <span className="rounded-full bg-sage-wash px-2 py-0.5 text-[11.5px] font-medium text-sage-ink">
+          Always on
         </span>
-        {alwaysOn ? (
-          <span className="mt-0.5 rounded-full bg-sage/60 px-2 py-0.5 text-[11px] font-semibold text-pine">
-            Always on
-          </span>
-        ) : null}
-      </div>
-      <h3 className="mt-3.5 text-sm font-semibold tracking-tight">{title}</h3>
-      <p className="mt-1 text-sm text-muted-foreground">{description}</p>
-    </Card>
+      }
+    />
   );
+}
+
+/** Why a model-backed toggle is locked, in one quiet line. */
+function LockedHint({ status }: { status: WorkspaceAiStatus }) {
+  if (!status.hasApiKey) {
+    return <p className="text-[12.5px] text-soft-ink">Connect a provider to turn this on.</p>;
+  }
+  if (!status.enabled) {
+    return <p className="text-[12.5px] text-warning-clay">Enable AI above to turn this on.</p>;
+  }
+  return null;
 }
 
 function AutoScoreFeatureCard({
@@ -345,35 +348,21 @@ function AutoScoreFeatureCard({
   }
 
   return (
-    <Card className="gap-0 p-5">
-      <div className="flex items-start justify-between gap-3">
-        <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-muted/70 text-foreground/80">
-          <LightningIcon className="size-5" />
-        </span>
-        <Switch
+      <SettingRow
+        icon={<Gauge strokeWidth={1.8} />}
+        title="Auto-score applications"
+        description="Scores every new application as it arrives."
+        control={
+          <Switch
           checked={optimistic}
-          onCheckedChange={toggle}
-          disabled={disabled || pending}
-          aria-label="Auto-score applications"
-          className="mt-0.5"
-        />
-      </div>
-      <h3 className="mt-3.5 text-sm font-semibold tracking-tight">
-        Auto-score applications
-      </h3>
-      <p className="mt-1 text-sm text-muted-foreground">
-        Score each new application automatically as it arrives. No manual
-        trigger needed. Requires AI to be enabled.
-      </p>
-      {disabled && status.hasApiKey && !status.enabled ? (
-        <p className="mt-2 text-xs text-clay">Enable AI above to activate.</p>
-      ) : null}
-      {!status.hasApiKey ? (
-        <p className="mt-2 text-xs text-muted-foreground">
-          Configure a provider to unlock.
-        </p>
-      ) : null}
-    </Card>
+              onCheckedChange={toggle}
+              disabled={disabled || pending}
+              aria-label="Auto-score applications"
+          />
+        }
+      >
+        <LockedHint status={status} />
+      </SettingRow>
   );
 }
 
@@ -407,35 +396,21 @@ function DuplicateCheckFeatureCard({
   }
 
   return (
-    <Card className="gap-0 p-5">
-      <div className="flex items-start justify-between gap-3">
-        <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-muted/70 text-foreground/80">
-          <UsersThreeDuotoneIcon className="size-5" />
-        </span>
-        <Switch
+      <SettingRow
+        icon={<CopyCheck strokeWidth={1.8} />}
+        title="Duplicate detection"
+        description="Flags likely duplicate candidates when someone applies."
+        control={
+          <Switch
           checked={optimistic}
-          onCheckedChange={toggle}
-          disabled={disabled || pending}
-          aria-label="Duplicate detection"
-          className="mt-0.5"
-        />
-      </div>
-      <h3 className="mt-3.5 text-sm font-semibold tracking-tight">
-        Duplicate detection
-      </h3>
-      <p className="mt-1 text-sm text-muted-foreground">
-        Automatically flag potential duplicate candidates when a new application
-        arrives, and let you verify with AI from any candidate profile.
-      </p>
-      {disabled && status.hasApiKey && !status.enabled ? (
-        <p className="mt-2 text-xs text-clay">Enable AI above to activate.</p>
-      ) : null}
-      {!status.hasApiKey ? (
-        <p className="mt-2 text-xs text-muted-foreground">
-          Configure a provider to unlock.
-        </p>
-      ) : null}
-    </Card>
+              onCheckedChange={toggle}
+              disabled={disabled || pending}
+              aria-label="Duplicate detection"
+          />
+        }
+      >
+        <LockedHint status={status} />
+      </SettingRow>
   );
 }
 
@@ -471,36 +446,19 @@ function ResumeAnonymizationFeatureCard({
   }
 
   return (
-    <Card className="gap-0 p-5">
-      <div className="flex items-start justify-between gap-3">
-        <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-muted/70 text-foreground/80">
-          <EyeSlashDuotoneIcon className="size-5" />
-        </span>
-        <Switch
+      <SettingRow
+        icon={<EyeOff strokeWidth={1.8} />}
+        title="Resume anonymization"
+        description="Hides candidate identity on screen and from your AI provider. Features that need a name pause while it's on."
+        control={
+          <Switch
           checked={optimistic}
-          onCheckedChange={toggle}
-          disabled={disabled || pending}
-          aria-label="Resume anonymization"
-          className="mt-0.5"
-        />
-      </div>
-      <h3 className="mt-3.5 text-sm font-semibold tracking-tight">
-        Resume anonymization
-      </h3>
-      <p className="mt-1 text-sm text-muted-foreground">
-        Hides identifying details on candidate profiles on screen, and removes
-        them from what is sent to your AI provider for scoring, matching,
-        interview note summaries, and the results of chat assistant tools. In
-        chat, candidates appear as &ldquo;Candidate&rdquo; with a short code, and
-        names you type into a conversation are still sent. Reviewers can reveal identity
-        per candidate on screen. While this is on, duplicate detection, email drafting, mailbox
-        assistance, resume autofill, AI resume summaries, and scorecard comment
-        refinement are paused, because they need to know who the candidate is.
-        It does not change stored records, and it cannot remove a name that is
-        not in the candidate record, such as a nickname that appears only in a
-        resume.
-      </p>
-    </Card>
+              onCheckedChange={toggle}
+              disabled={disabled || pending}
+              aria-label="Resume anonymization"
+          />
+        }
+      />
   );
 }
 
@@ -809,15 +767,14 @@ export function AiSettingsForm({ status }: { status: WorkspaceAiStatus }) {
           )}
         </div>
 
-        <div className="flex items-center justify-between rounded-lg border px-3 py-2.5">
-          <div>
-            <p className="text-sm font-medium">Enable AI</p>
-            <p className="text-xs text-muted-foreground">
-              When off, Harly uses heuristics only.
-            </p>
-          </div>
-          <Switch checked={enabled} onCheckedChange={setEnabled} />
-        </div>
+        <SettingRows className="rounded-[var(--radius-inner)] border border-hairline">
+          <SettingRow
+            title="Enable AI"
+            htmlFor="ai-enabled"
+            description="When off, Harly uses heuristics only."
+            control={<Switch id="ai-enabled" checked={enabled} onCheckedChange={setEnabled} />}
+          />
+        </SettingRows>
 
         {/* Test connection + inline result. Success is a clear green banner,
             not just a transient toast. */}
@@ -866,8 +823,8 @@ export function AiSettingsForm({ status }: { status: WorkspaceAiStatus }) {
         </div>
 
         {/* Save is inline at the end — scroll to it, no floating bar. */}
-        <div className="flex items-center justify-end gap-2 border-t pt-5">
-          <Button asChild variant="ghost">
+        <div className="flex items-center justify-end gap-2 border-t border-hairline pt-5">
+          <Button asChild variant="outline">
             <Link href={"/settings/ai" as Route}>Cancel</Link>
           </Button>
           <Button onClick={save} disabled={saving || !modelId.trim()}>

@@ -104,24 +104,23 @@ describe("score-candidate prompt", () => {
     await scoreCandidateWithAI(ON, scoreInput);
     const prompt = sentPrompt();
     expectNoIdentity(prompt);
-    expect(prompt).toContain("Name: Candidate");
+    expect(prompt).not.toContain("Name:");
     expect(prompt).toContain("Analysis");
     expect(prompt).toContain("Built the first algorithm");
   });
 
-  it("still sends the real name and contacts when anonymization is off", async () => {
+  it("keeps name and location out of the scoring prompt even when anonymization is off", async () => {
     vi.mocked(generateText).mockResolvedValueOnce({ output: scoreOutput, usage } as never);
     await scoreCandidateWithAI(OFF, scoreInput);
     const prompt = sentPrompt();
-    expect(prompt).toContain("Name: Ada Lovelace");
-    expect(prompt).toContain("ada@example.com");
-    expect(prompt).toContain("Lisbon");
+    expect(prompt).not.toContain("Name: Ada Lovelace");
+    expect(prompt).not.toContain("Location:");
   });
 
   it("treats a config without the setting as anonymization off", async () => {
     vi.mocked(generateText).mockResolvedValueOnce({ output: scoreOutput, usage } as never);
     await scoreCandidateWithAI(plain, scoreInput);
-    expect(sentPrompt()).toContain("Name: Ada Lovelace");
+    expect(sentPrompt()).not.toContain("Name: Ada Lovelace");
   });
 });
 

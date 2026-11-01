@@ -1,11 +1,21 @@
 import "server-only";
 
-import { and, eq, ilike, isNull, ne, or, sql } from "drizzle-orm";
+import { type AnyColumn, and, eq, isNull, ne, or, sql } from "drizzle-orm";
 
 import { candidates, db } from "@harly/db";
 
 import { detectDuplicatesWithAI } from "@/lib/ai/surfaces/detect-duplicates";
 import type { AiModelConfig } from "@/lib/ai/providers";
+import {
+  ACCENT_FROM,
+  ACCENT_TO,
+  containsPattern,
+  describeSignals,
+  foldName,
+  normalizeLinkedinUrl,
+  phoneKey,
+  sharedIdentitySignals,
+} from "@/features/candidates/duplicate-signals";
 
 export type DuplicateMatch = {
   candidateId: string;
@@ -31,6 +41,8 @@ export async function detectCandidateDuplicatesForWorkspace(input: {
       firstName: candidates.firstName,
       lastName: candidates.lastName,
       email: candidates.email,
+      phone: candidates.phone,
+      linkedinUrl: candidates.linkedinUrl,
       headline: candidates.headline,
       skills: candidates.skills,
     })
@@ -46,12 +58,31 @@ export async function detectCandidateDuplicatesForWorkspace(input: {
 
   if (!target) return [];
 
+  // Accent-insensitive name match without needing the `unaccent` extension.
+  const foldedColumn = (column: AnyColumn) =>
+    sql`translate(lower(${column}), ${ACCENT_FROM}, ${ACCENT_TO})`;
+  const nameClauses = [
+    { column: candidates.firstName, value: foldName(target.firstName) },
+    { column: candidates.lastName, value: foldName(target.lastName) },
+  ]
+    // An empty value would turn into `%%` and match everyone.
+    .filter((clause) => clause.value.length > 0)
+    .map(
+      (clause) =>
+        sql`${foldedColumn(clause.column)} like ${containsPattern(clause.value)} escape '\\'`,
+    );
+
+  const targetPhoneKey = phoneKey(target.phone);
+  const targetLinkedin = normalizeLinkedinUrl(target.linkedinUrl);
+
   const suspects = await db
     .select({
       id: candidates.id,
       firstName: candidates.firstName,
       lastName: candidates.lastName,
       email: candidates.email,
+      phone: candidates.phone,
+      linkedinUrl: candidates.linkedinUrl,
       headline: candidates.headline,
       skills: candidates.skills,
     })
@@ -62,9 +93,14 @@ export async function detectCandidateDuplicatesForWorkspace(input: {
         ne(candidates.id, input.candidateId),
         isNull(candidates.deletedAt),
         or(
-          ilike(candidates.firstName, `%${target.firstName}%`),
-          ilike(candidates.lastName, `%${target.lastName}%`),
+          ...nameClauses,
           sql`lower(${candidates.email}) = lower(${target.email})`,
+          targetPhoneKey
+            ? sql`right(regexp_replace(coalesce(${candidates.phone}, ''), '\\D', '', 'g'), 9) = ${targetPhoneKey}`
+            : undefined,
+          targetLinkedin
+            ? sql`lower(substring(${candidates.linkedinUrl} from 'linkedin\\.com/(?:in|pub)/([^/?#[:space:]]+)')) = ${targetLinkedin}`
+            : undefined,
         ),
       ),
     )
@@ -92,7 +128,7 @@ export async function detectCandidateDuplicatesForWorkspace(input: {
   const suspectsById = new Map(
     suspects.map((suspect) => [suspect.id, suspect]),
   );
-  return result.matches.flatMap((match) => {
+  const aiMatches = result.matches.flatMap((match) => {
     const suspect = suspectsById.get(match.candidateId);
     if (!suspect) return [];
     return [
@@ -102,7 +138,26 @@ export async function detectCandidateDuplicatesForWorkspace(input: {
         reason: match.reason,
         fullName: `${suspect.firstName} ${suspect.lastName}`,
         email: suspect.email,
+      } satisfies DuplicateMatch,
+    ];
+  });
+
+  // Deterministic identity signals (email / normalized phone / LinkedIn slug)
+  // are stronger than the model's opinion: surface them as high confidence,
+  // and keep the model's match only when it adds a record we have no signal for.
+  const signalMatches: DuplicateMatch[] = suspects.flatMap((suspect) => {
+    const signals = sharedIdentitySignals(target, suspect);
+    if (signals.length === 0) return [];
+    return [
+      {
+        candidateId: suspect.id,
+        confidence: "high" as const,
+        reason: `Shared identity: ${describeSignals(signals)}.`,
+        fullName: `${suspect.firstName} ${suspect.lastName}`,
+        email: suspect.email,
       },
     ];
   });
+  const signalIds = new Set(signalMatches.map((match) => match.candidateId));
+  return [...signalMatches, ...aiMatches.filter((match) => !signalIds.has(match.candidateId))];
 }

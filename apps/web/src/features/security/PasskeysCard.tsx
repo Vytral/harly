@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 import { startRegistration } from "@simplewebauthn/browser";
 import { toast } from "@/lib/notification-island/toast";
 import { formatDistanceToNow } from "date-fns";
+import { randomId } from "@/lib/utils";
 
 import { SectionHeader, StatusPill } from "@/features/workspaces/settings-ui";
 import {
@@ -70,7 +71,7 @@ export function PasskeysCard({
 
         // Refresh list
         const newKey: PasskeyView = {
-          id: crypto.randomUUID(),
+          id: randomId(),
           name: passkeyName || "Passkey",
           deviceType: "singleDevice",
           backedUp: false,
@@ -175,7 +176,7 @@ export function PasskeysCard({
           {passkeyList.map((pk) => (
             <div
               key={pk.id}
-              className="flex items-center justify-between gap-4 rounded-xl border bg-card px-4 py-3"
+              className="flex items-center justify-between gap-4 rounded-[var(--radius-inner)] bg-card-inset px-4 py-3"
             >
               <div className="flex items-center gap-3 min-w-0">
                 <FingerPrintDuotoneIcon className="size-5 shrink-0 text-muted-foreground" />

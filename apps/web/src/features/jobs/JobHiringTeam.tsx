@@ -100,14 +100,14 @@ export function JobHiringTeam({
       }
     >
       {team.length === 0 ? (
-        <p className="rounded-lg border border-dashed px-4 py-6 text-center text-sm text-muted-foreground">
+        <p className="rounded-[var(--radius-inner)] bg-card-inset px-4 py-6 text-center text-sm text-soft-ink">
           No one assigned yet. Add teammates to collaborate on this role.
         </p>
       ) : (
         team.map((member) => (
           <div
             key={member.id}
-            className="flex items-center gap-3 rounded-xl px-2 py-2 transition-colors hover:bg-muted/50"
+            className="flex items-center gap-3 rounded-[var(--radius-inner)] px-2 py-2 transition-colors hover:bg-row-wash/60"
           >
             <UserAvatar name={member.name} src={member.image} size="sm" />
             <div className="min-w-0 flex-1">

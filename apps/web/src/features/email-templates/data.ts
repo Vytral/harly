@@ -108,3 +108,32 @@ export async function renderActiveEmailTemplate(
     bodyHtml: sanitizeTemplateHtml(interpolateTemplate(template.body, values)),
   };
 }
+
+/**
+ * Interpolate + sanitize one specific rejection template, for a rejection
+ * where the recruiter picked the template. Null when it no longer exists or
+ * is not a rejection template of this workspace.
+ */
+export async function renderRejectionTemplateById(
+  workspaceId: string,
+  templateId: string,
+  values: TemplateValues,
+): Promise<{ subject: string; bodyHtml: string } | null> {
+  const [template] = await db
+    .select({ subject: emailTemplates.subject, body: emailTemplates.body })
+    .from(emailTemplates)
+    .where(
+      and(
+        eq(emailTemplates.workspaceId, workspaceId),
+        eq(emailTemplates.id, templateId),
+        eq(emailTemplates.type, "rejection"),
+      ),
+    )
+    .limit(1);
+  if (!template) return null;
+
+  return {
+    subject: interpolateTemplate(template.subject, values),
+    bodyHtml: sanitizeTemplateHtml(interpolateTemplate(template.body, values)),
+  };
+}

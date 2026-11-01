@@ -15,6 +15,7 @@ import {
   offers,
   signatureArtifacts,
   workflowActionEffects,
+  workspaceSettings,
   signatureEnvelopes,
   signatureEvidenceEvents,
   signatureEvents,
@@ -30,6 +31,9 @@ import { encryptSecret } from "@/lib/crypto";
 import { createLogger } from "@/lib/logger";
 import { persistDomainEvent, type PersistedDomainEvent } from "@/server/events/emit";
 import { finalizeNativeSignatureEffects } from "./finalize-effects";
+import { buildInvitationPayload, insertNativeNotice, loadEnvelopeSender } from "./notices";
+import { DAY_MS, linkLifetimeDays } from "./link-lifetime";
+import { ESIGN_CONSENT_VERSION } from "./consent";
 import { isNativeOfferAcceptanceAvailable } from "./fields";
 import { ensureStageOfKind } from "@/features/pipeline/stage-resolver";
 import {
@@ -58,6 +62,7 @@ type FinalizedNativeSignature = {
   documentTargetContext: Record<string, unknown>;
   complete: boolean;
   nextOutboxId: string | null;
+  noticeOutboxIds: string[];
   parentRunId: string | null;
 };
 
@@ -65,7 +70,7 @@ type FinalizedNativeSignature = {
  *  recruiter placed at send time (see the schema comment on that column). */
 type SnapshotField = {
   id: string;
-  type: "signature" | "text";
+  type: "signature" | "text" | "date";
   page: number;
   x: number;
   y: number;
@@ -142,7 +147,7 @@ function resolveFields(input: {
   for (const submittedId of Object.keys(textValues)) {
     const field = byId.get(submittedId);
     if (!field) throw new Error("A submitted field does not belong to this document.");
-    if (field.type !== "text") throw new Error("A submitted value targets a non-text field.");
+    if (field.type !== "text" && field.type !== "date") throw new Error("A submitted value targets a non-text field.");
   }
 
   const fields: FieldPlacement[] = [];
@@ -155,7 +160,7 @@ function resolveFields(input: {
     } else {
       const value = textValues[field.id];
       if (field.required && (value === undefined || value.length === 0)) {
-        throw new Error(`The "${field.label ?? "text"}" field is required.`);
+        throw new Error(`The "${field.label ?? field.type}" field is required.`);
       }
       if (value !== undefined) {
         fields.push({ type: "text", page: field.page, x: field.x, y: field.y, w: field.w, h: field.h, value });
@@ -187,7 +192,11 @@ export async function finalizeNativeSignature(input: {
   /** Legacy path: only consulted when the document has no fieldsSnapshot. */
   placements?: SignaturePlacement[];
   verification: "self_sign" | "link_only" | "email_otp";
+  /** Server-stamped consent time. Never pass a client-supplied value. */
   consentAt?: Date;
+  consentVersion?: string;
+  /** The signer's own link token, so their receipt email can link back to their copy. */
+  signerAccessToken?: string;
   ipAddress?: string | null;
   userAgent?: string | null;
   existingEnvelopeId?: string;
@@ -258,16 +267,16 @@ export async function finalizeNativeSignature(input: {
   const signedDocumentSha256 = sha256(signedBytes);
   const signedAt = new Date();
   const signerRows = input.existingEnvelopeId
-    ? await database.select({ name: signatureRecipients.name, email: signatureRecipients.email, routingOrder: signatureRecipients.routingOrder, status: signatureRecipients.status })
+    ? await database.select({ name: signatureRecipients.name, email: signatureRecipients.email, routingOrder: signatureRecipients.routingOrder, status: signatureRecipients.status, signedAt: signatureRecipients.signedAt })
       .from(signatureRecipients)
       .where(and(eq(signatureRecipients.envelopeId, input.existingEnvelopeId), eq(signatureRecipients.workspaceId, input.workspaceId), eq(signatureRecipients.role, "signer")))
-    : [{ name: input.signerName, email: input.signerEmail, routingOrder: 1, status: "sent" }];
+    : [{ name: input.signerName, email: input.signerEmail, routingOrder: 1, status: "sent", signedAt: null as Date | null }];
   const isPotentiallyFinal = !input.existingEnvelopeId || signerRows.every((row) => row.routingOrder <= signerRoutingOrder);
   const previews = isPotentiallyFinal
     ? await Promise.all(([400, 1200] as const).map(async (width) => { const bytes = await createSignaturePreview({ documentName: document.name, signedAt, signedDocumentSha256, width }); return { width, bytes, checksum: sha256(bytes) }; }))
     : [];
   const certificateBytes = isPotentiallyFinal
-    ? await createCompletionCertificate({ documentName: document.name, signerName: input.signerName, signerEmail: input.signerEmail, signers: signerRows.map((row) => ({ name: row.name, email: row.email, signedAt: row.status === "signed" ? signedAt : null })), signedAt, originalSha256, signedDocumentSha256, previewChecksums: previews.map((p) => ({ label: `Preview ${p.width}px`, sha256: p.checksum })), verification: input.verification })
+    ? await createCompletionCertificate({ documentName: document.name, signerName: input.signerName, signerEmail: input.signerEmail, signers: signerRows.map((row) => ({ name: row.name, email: row.email, signedAt: row.status === "signed" ? row.signedAt : row.routingOrder === signerRoutingOrder ? signedAt : null })), signedAt, consentAt: input.consentAt ?? signedAt, originalSha256, signedDocumentSha256, previewChecksums: previews.map((p) => ({ label: `Preview ${p.width}px`, sha256: p.checksum })), verification: input.verification })
     : null;
   const signedKey = key(input.workspaceId, "signed-document", "pdf");
   const certificateKey = certificateBytes ? key(input.workspaceId, `certificate-v${NATIVE_CERTIFICATE_VERSION}`, "pdf") : null;
@@ -359,18 +368,23 @@ export async function finalizeNativeSignature(input: {
       nativeApplication = application;
     }
 
-    const [locked] = await tx.select({ versionNumber: documentVersions.versionNumber, signatureStatus: documents.signatureStatus }).from(documentVersions).innerJoin(documents, eq(documents.id, documentVersions.documentId)).where(and(eq(documentVersions.documentId, input.documentId), eq(documents.workspaceId, input.workspaceId), eq(documentVersions.isCurrent, true))).for("update").limit(1);
+    // Lock order is documents, then document_versions — the same order a
+    // version replacement takes — so the two can never deadlock.
+    const [lockedDocument] = await tx.select({ signatureStatus: documents.signatureStatus }).from(documents).where(and(eq(documents.id, input.documentId), eq(documents.workspaceId, input.workspaceId))).for("update").limit(1);
+    const [lockedVersion] = lockedDocument ? await tx.select({ versionNumber: documentVersions.versionNumber }).from(documentVersions).where(and(eq(documentVersions.documentId, input.documentId), eq(documentVersions.isCurrent, true))).for("update").limit(1) : [];
+    const locked = lockedDocument && lockedVersion ? { versionNumber: lockedVersion.versionNumber, signatureStatus: lockedDocument.signatureStatus } : undefined;
     if (!locked || locked.signatureStatus !== expectedStatus) throw new Error("The document changed while it was being signed.");
     let providerEnvelopeId = `native:${randomUUID()}`;
     let version: { id: string } | undefined;
     let supersededWorkingKey: string | null = null;
-    let envelope: { id: string; providerEnvelopeId?: string; status?: string } | undefined;
+    let envelope: { id: string; providerEnvelopeId?: string; status?: string; subject?: string | null; message?: string | null; expirationDays?: number | null } | undefined;
     let recipient: { id: string; routingOrder: number; status: string } | undefined;
     let nextOutboxId: string | null = null;
+    const noticeOutboxIds: string[] = [];
     let parentRunId: string | null = null;
     let complete = !input.existingEnvelopeId;
     if (input.existingEnvelopeId && input.existingRecipientId) {
-      const [existing] = await tx.select({ id: signatureEnvelopes.id, providerEnvelopeId: signatureEnvelopes.providerEnvelopeId, workflowEffectId: signatureEnvelopes.workflowEffectId, status: signatureEnvelopes.status }).from(signatureEnvelopes).where(and(eq(signatureEnvelopes.id, input.existingEnvelopeId), eq(signatureEnvelopes.workspaceId, input.workspaceId))).for("update").limit(1);
+      const [existing] = await tx.select({ id: signatureEnvelopes.id, providerEnvelopeId: signatureEnvelopes.providerEnvelopeId, workflowEffectId: signatureEnvelopes.workflowEffectId, status: signatureEnvelopes.status, subject: signatureEnvelopes.subject, message: signatureEnvelopes.message, expirationDays: signatureEnvelopes.expirationDays }).from(signatureEnvelopes).where(and(eq(signatureEnvelopes.id, input.existingEnvelopeId), eq(signatureEnvelopes.workspaceId, input.workspaceId))).for("update").limit(1);
       const existingRecipients = await tx.select({ id: signatureRecipients.id, routingOrder: signatureRecipients.routingOrder, status: signatureRecipients.status, email: signatureRecipients.email, name: signatureRecipients.name, linkExpiresAt: signatureRecipients.linkExpiresAt }).from(signatureRecipients).where(and(eq(signatureRecipients.envelopeId, input.existingEnvelopeId), eq(signatureRecipients.workspaceId, input.workspaceId), eq(signatureRecipients.role, "signer"))).for("update");
       const existingRecipient = existingRecipients.find((row) => row.id === input.existingRecipientId);
       envelope = existing;
@@ -390,19 +404,60 @@ export async function finalizeNativeSignature(input: {
       if (existingRecipients.some((row) => row.routingOrder < recipient!.routingOrder && row.status !== "signed")) throw new Error("The previous signer has not completed this document yet.");
       if (existingRecipients.some((row) => row.routingOrder > recipient!.routingOrder && row.status === "signed")) throw new Error("The signing order state is invalid; a later signer is already marked complete.");
       providerEnvelopeId = envelope.providerEnvelopeId ?? providerEnvelopeId;
-      await tx.update(signatureRecipients).set({ status: "signed", signedAt, updatedAt: signedAt }).where(eq(signatureRecipients.id, recipient.id));
+      await tx.update(signatureRecipients).set({ status: "signed", signedAt, consentAt: input.consentAt ?? null, consentVersion: input.consentAt ? (input.consentVersion ?? ESIGN_CONSENT_VERSION) : null, updatedAt: signedAt }).where(eq(signatureRecipients.id, recipient.id));
       complete = existingRecipients.filter((row) => row.routingOrder > recipient!.routingOrder).every((row) => row.status === "signed");
       if (!complete) {
         const next = existingRecipients.filter((row) => row.routingOrder > recipient!.routingOrder && row.status === "created").sort((a, b) => a.routingOrder - b.routingOrder)[0];
         if (!next) throw new Error("The next signing recipient could not be resolved.");
         const rawToken = randomUUID().replaceAll("-", "") + randomUUID().replaceAll("-", "");
-        const expiresAt = next.linkExpiresAt ?? new Date(Date.now() + 30 * 86_400_000);
-        await tx.update(signatureRecipients).set({ providerRecipientId: `native-token:${sha256(Buffer.from(rawToken))}`, status: "sent", linkExpiresAt: expiresAt, updatedAt: signedAt }).where(eq(signatureRecipients.id, next.id));
+        // The next signer's clock starts now, not at send time, so a slow
+        // earlier signer cannot eat into their window.
+        const [policy] = await tx.select({ days: workspaceSettings.signatureExpirationDays }).from(workspaceSettings).where(eq(workspaceSettings.organizationId, input.workspaceId)).limit(1);
+        const expiresAt = new Date(signedAt.getTime() + linkLifetimeDays(envelope.expirationDays, policy?.days) * DAY_MS);
+        const sender = await loadEnvelopeSender(tx, input.workspaceId, envelope.id);
+        await tx.update(signatureRecipients).set({ providerRecipientId: `native-token:${sha256(Buffer.from(rawToken))}`, status: "sent", linkExpiresAt: expiresAt, invitedAt: signedAt, reminderCount: 0, lastReminderAt: null, updatedAt: signedAt }).where(eq(signatureRecipients.id, next.id));
+        await tx.update(documents).set({ expiresAt }).where(and(eq(documents.id, input.documentId), eq(documents.workspaceId, input.workspaceId)));
         await tx.insert(signatureEvents).values({ workspaceId: input.workspaceId, envelopeId: envelope.id, eventKey: `native:${envelope.id}:invitation_sent:${next.id}`, eventType: "invitation_sent", generatedAt: signedAt, payload: { recipientId: next.id, routingOrder: next.routingOrder }, processedAt: signedAt });
-        const [outbox] = await tx.insert(emailOutbox).values({ workspaceId: input.workspaceId, kind: "native.signature.invitation", payload: { token: encryptSecret(rawToken), recipientEmail: next.email, recipientName: next.name, documentName: document.name, subject: `Please sign: ${document.name}`, message: "The previous signer completed their step. Please review and sign this document.", expiresAt: expiresAt.toISOString() }, dedupeKey: `native-signature:${envelope.id}:${next.id}`, actorId: input.actorId }).returning({ id: emailOutbox.id });
+        const [outbox] = await tx.insert(emailOutbox).values({ workspaceId: input.workspaceId, kind: "native.signature.invitation", payload: buildInvitationPayload({ rawToken, recipientEmail: next.email, recipientName: next.name, documentName: document.name, subject: envelope.subject && envelope.subject !== document.name ? envelope.subject : null, message: envelope.message, expiresAt, senderName: sender?.name ?? null, signerOrder: next.routingOrder, signerCount: existingRecipients.length }), dedupeKey: `native-signature:${envelope.id}:${next.id}`, actorId: input.actorId }).returning({ id: emailOutbox.id });
         nextOutboxId = outbox?.id ?? null;
       }
       await tx.update(signatureEnvelopes).set({ status: complete ? "completed" : "sent", completedAt: complete ? signedAt : null, lastEventAt: signedAt, fieldsSnapshot: document.fieldsSnapshot ?? null }).where(eq(signatureEnvelopes.id, envelope.id));
+      const safeName = document.name.replace(/\.pdf$/i, "").replace(/[^\w .-]+/g, "_").slice(0, 80) || "document";
+      if (complete && certificateKey) {
+        const attachments = [
+          { key: signedKey, filename: `${safeName} (signed).pdf`, contentType: "application/pdf" },
+          { key: certificateKey, filename: `${safeName} (certificate).pdf`, contentType: "application/pdf" },
+        ];
+        const everyone = existingRecipients.map((row) => ({ id: row.id, name: row.name, email: row.email }));
+        for (const person of everyone) {
+          const id = await insertNativeNotice(tx, { workspaceId: input.workspaceId, envelopeId: envelope.id, recipientKey: person.id, payload: { event: "completed", audience: "signer", recipientEmail: person.email, recipientName: person.name, documentName: document.name, attachments } });
+          if (id) noticeOutboxIds.push(id);
+        }
+        const sender = await loadEnvelopeSender(tx, input.workspaceId, envelope.id);
+        if (sender?.email && !everyone.some((person) => person.email.toLowerCase() === sender.email.toLowerCase())) {
+          const id = await insertNativeNotice(tx, { workspaceId: input.workspaceId, envelopeId: envelope.id, recipientKey: sender.id, payload: { event: "completed", audience: "sender", recipientEmail: sender.email, recipientName: sender.name, documentName: document.name, attachments } });
+          if (id) noticeOutboxIds.push(id);
+        }
+      } else if (!complete) {
+        const id = await insertNativeNotice(tx, {
+          workspaceId: input.workspaceId,
+          envelopeId: envelope.id,
+          recipientKey: recipient.id,
+          payload: {
+            event: "receipt",
+            audience: "signer",
+            recipientEmail: existingRecipients.find((row) => row.id === recipient!.id)!.email,
+            recipientName: existingRecipients.find((row) => row.id === recipient!.id)!.name,
+            documentName: document.name,
+            signerCount: existingRecipients.length,
+            signedCount: existingRecipients.filter((row) => row.status === "signed" || row.id === recipient!.id).length,
+            attachments: [{ key: signedKey, filename: `${safeName} (signed so far).pdf`, contentType: "application/pdf" }],
+            hasToken: Boolean(input.signerAccessToken),
+            ...(input.signerAccessToken ? { token: encryptSecret(input.signerAccessToken) } : {}),
+          },
+        });
+        if (id) noticeOutboxIds.push(id);
+      }
     } else {
       const [createdEnvelope] = await tx.insert(signatureEnvelopes).values({ workspaceId: input.workspaceId, provider: "native", providerEnvelopeId, kind: "document", status: "completed", subject: document.name, createdById: input.actorId, sentAt: signedAt, completedAt: signedAt, fieldsSnapshot: document.fieldsSnapshot ?? null }).returning({ id: signatureEnvelopes.id });
       if (createdEnvelope) envelope = createdEnvelope;
@@ -452,7 +507,7 @@ export async function finalizeNativeSignature(input: {
     // Fully-resolved server-side fields, not raw client input — proves what
     // the signer actually saw (snapshot geometry + submitted content).
     await evidence(tx, { workspaceId: input.workspaceId, envelopeId: envelope.id, recipientId: recipient.id, eventType: "signature_placed", payload: { fields } });
-    await evidence(tx, { workspaceId: input.workspaceId, envelopeId: envelope.id, recipientId: recipient.id, eventType: "signature_validated", payload: { originalSha256, consentAt: input.consentAt?.toISOString() ?? null, signatureMode } });
+    await evidence(tx, { workspaceId: input.workspaceId, envelopeId: envelope.id, recipientId: recipient.id, eventType: "signature_validated", payload: { originalSha256, consentAt: input.consentAt?.toISOString() ?? null, consentVersion: input.consentAt ? (input.consentVersion ?? ESIGN_CONSENT_VERSION) : null, signatureMode } });
     await evidence(tx, { workspaceId: input.workspaceId, envelopeId: envelope.id, recipientId: recipient.id, eventType: "baked", payload: { signedDocumentSha256, signatureMode } });
     await evidence(tx, { workspaceId: input.workspaceId, envelopeId: envelope.id, recipientId: recipient.id, eventType: complete ? "completed" : "recipient_signed", payload: { certificateVersion: complete ? NATIVE_CERTIFICATE_VERSION : null, ipAddress: input.ipAddress ?? null, userAgent: input.userAgent ?? null, routingOrder: recipient.routingOrder, signatureMode } });
     await tx.insert(activityEvents).values({ workspaceId: input.workspaceId, actorId: input.actorId, entityType: "document", entityId: input.documentId, type: "document.signature_changed", metadata: { status: complete ? "signed" : "pending", provider: "native", versionNumber: complete ? locked.versionNumber + 1 : locked.versionNumber, routingOrder: recipient.routingOrder } });
@@ -566,6 +621,7 @@ export async function finalizeNativeSignature(input: {
         documentTargetContext,
         complete,
         nextOutboxId,
+        noticeOutboxIds,
         parentRunId,
       };
     });
@@ -598,6 +654,7 @@ export async function finalizeNativeSignature(input: {
     actorId: input.actorId,
     complete: result.complete,
     nextOutboxId: result.nextOutboxId,
+    noticeOutboxIds: result.noticeOutboxIds,
     documentTargetContext: result.documentTargetContext,
     documentSignatureEvent: result.documentSignatureEvent,
     applicationHiredEvent: result.applicationHiredEvent,

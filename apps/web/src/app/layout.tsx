@@ -2,7 +2,9 @@ import type { Metadata } from "next";
 import localFont from "next/font/local";
 import { GeistMono } from "geist/font/mono";
 
+import Script from "next/script";
 import { ThemeProvider } from "@/components/ThemeProvider";
+import { ConfirmProvider } from "@/components/ui/confirm-dialog";
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { CookiePanel } from "@/components/CookieConsentBanner";
@@ -11,29 +13,17 @@ import { themeBootstrapScript } from "@/lib/theme-bootstrap";
 
 import "./globals.css";
 
-// Onest is the only UI family (DESIGN.md, Tokens , Typography). Two faces, a
-// hard role split: the static instances *speak* (body, buttons, names, nav,
-// greetings , display weight is 600 + tight tracking, not another family), the
-// variable face *labels* (pills, statuses, badges, column heads at 11,13px,
-// where a live weight axis buys density without buying size).
-// Self-hosted (F5-04) so the build never reaches fonts.googleapis.com.
-const onest = localFont({
+// Instrument Sans is the UI family: one variable face (wght 400–700) covers
+// body, chrome labels and display. Self-hosted so the build never reaches
+// fonts.googleapis.com.
+const instrumentSans = localFont({
   src: [
-    { path: "./fonts/onest/onest-latin-400-normal.woff2", weight: "400", style: "normal" },
-    { path: "./fonts/onest/onest-latin-500-normal.woff2", weight: "500", style: "normal" },
-    { path: "./fonts/onest/onest-latin-600-normal.woff2", weight: "600", style: "normal" },
+    { path: "./fonts/instrument-sans/instrument-sans-latin-wght-normal.woff2", weight: "400 700", style: "normal" },
+    { path: "./fonts/instrument-sans/instrument-sans-latin-wght-italic.woff2", weight: "400 700", style: "italic" },
   ],
-  variable: "--font-onest",
+  variable: "--font-instrument",
   display: "swap",
   fallback: ["ui-sans-serif", "system-ui", "-apple-system", "Segoe UI", "Roboto", "sans-serif"],
-});
-
-const onestVariable = localFont({
-  src: "./fonts/onest/onest-latin-variable.woff2",
-  variable: "--font-onest-var",
-  weight: "100 900",
-  display: "swap",
-  fallback: ["ui-sans-serif", "system-ui", "sans-serif"],
 });
 
 export const dynamic = "force-dynamic";
@@ -46,6 +36,9 @@ export async function generateMetadata(): Promise<Metadata> {
     icons: {
       icon: "/favicon.svg",
     },
+    // iOS Safari otherwise rewrites phone numbers, dates and addresses into
+    // links before hydration, which breaks it (seen on candidate pages).
+    formatDetection: { telephone: false, date: false, address: false, email: false },
   };
 }
 
@@ -58,12 +51,16 @@ export default function RootLayout({
     <html
       lang="en"
       suppressHydrationWarning
-      className={`${onest.variable} ${onestVariable.variable} ${GeistMono.variable} h-full antialiased`}
+      className={`${instrumentSans.variable} ${GeistMono.variable} h-full antialiased`}
       data-scroll-behavior="smooth"
     >
       <head>
         {/* Applies the stored theme before first paint; see lib/theme-bootstrap.ts. */}
-        <script dangerouslySetInnerHTML={{ __html: themeBootstrapScript() }} />
+        <Script
+          id="theme-bootstrap"
+          strategy="beforeInteractive"
+          dangerouslySetInnerHTML={{ __html: themeBootstrapScript() }}
+        />
         <link rel="preconnect" href="https://lh3.googleusercontent.com" />
         <link rel="dns-prefetch" href="https://lh3.googleusercontent.com" />
       </head>
@@ -74,8 +71,10 @@ export default function RootLayout({
           enableSystem
           disableTransitionOnChange
         >
-          <TooltipProvider delayDuration={200}>{children}</TooltipProvider>
-          <Toaster position="bottom-right" richColors closeButton />
+          <TooltipProvider delayDuration={200}>
+            <ConfirmProvider>{children}</ConfirmProvider>
+          </TooltipProvider>
+          <Toaster position="bottom-center" closeButton />
           <CookiePanel />
         </ThemeProvider>
       </body>

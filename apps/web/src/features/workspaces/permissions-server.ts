@@ -33,6 +33,7 @@ import {
   isBuiltinRole,
   roleIsAllPowerful,
   roleLabel,
+  withLegacyRoleDefaults,
   normalizeRoleScope,
   rolePolicyIsStrictlyBelow,
   unrestrictedRoleScope,
@@ -57,7 +58,10 @@ export async function getRolePermissions(
   }
 
   const [row] = await db
-    .select({ permissions: customRoles.permissions })
+    .select({
+      permissions: customRoles.permissions,
+      updatedAt: customRoles.updatedAt,
+    })
     .from(customRoles)
     .where(
       and(
@@ -71,7 +75,11 @@ export async function getRolePermissions(
     const perms = Array.isArray(row.permissions)
       ? (row.permissions as string[])
       : [];
-    return PERMISSIONS.filter((p) => perms.includes(p));
+    return withLegacyRoleDefaults(
+      roleKey,
+      PERMISSIONS.filter((p) => perms.includes(p)),
+      row.updatedAt,
+    );
   }
 
   if (isBuiltinRole(roleKey)) {
@@ -159,7 +167,11 @@ export async function getRolePolicy(
   }
 
   const [row] = await db
-    .select({ permissions: customRoles.permissions, scope: customRoles.scope })
+    .select({
+      permissions: customRoles.permissions,
+      scope: customRoles.scope,
+      updatedAt: customRoles.updatedAt,
+    })
     .from(customRoles)
     .where(
       and(
@@ -174,8 +186,10 @@ export async function getRolePolicy(
       ? (row.permissions as string[])
       : [];
     return {
-      permissions: PERMISSIONS.filter((permission) =>
-        rawPermissions.includes(permission),
+      permissions: withLegacyRoleDefaults(
+        roleKey,
+        PERMISSIONS.filter((permission) => rawPermissions.includes(permission)),
+        row.updatedAt,
       ),
       scope: normalizeRoleScope(row.scope),
     };
@@ -623,6 +637,7 @@ export async function listWorkspaceRoles(): Promise<WorkspaceRoleSummary[]> {
         name: customRoles.name,
         permissions: customRoles.permissions,
         scope: customRoles.scope,
+        updatedAt: customRoles.updatedAt,
       })
       .from(customRoles)
       .where(eq(customRoles.workspaceId, organization.id))
@@ -664,7 +679,7 @@ export async function listWorkspaceRoles(): Promise<WorkspaceRoleSummary[]> {
         key === "owner"
           ? [...PERMISSIONS]
           : override
-            ? filterPerms(override.permissions)
+            ? withLegacyRoleDefaults(key, filterPerms(override.permissions), override.updatedAt)
             : [...BUILTIN_ROLE_PERMISSIONS[key]],
       scope:
         key === "owner"

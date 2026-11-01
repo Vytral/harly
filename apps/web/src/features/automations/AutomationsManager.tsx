@@ -8,24 +8,17 @@ import { toast } from "@/lib/notification-island/toast";
 
 import { cn } from "@/lib/utils";
 import { RelativeTime } from "@/lib/date-hydration";
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
 import {
-  PencilIcon,
+  CaretRightIcon,
   PlusIcon,
   TrashIcon,
   LightningIcon,
   MagicWandDuotoneIcon,
 } from "@/components/ui/icons/phosphor";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 
 import {
   createWorkflowFromTemplateAction,
@@ -124,7 +117,7 @@ export function AutomationsManager({
   }
 
   return (
-    <div className="mx-auto w-full max-w-5xl px-6 py-10">
+    <div className="w-full">
       <Header
         count={workflows.length}
         onCreate={() => setShowTemplates(true)}
@@ -140,7 +133,7 @@ export function AutomationsManager({
         />
       )}
 
-      <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2">
+      <Card className="mt-6 gap-0 divide-y divide-hairline overflow-hidden py-0">
         {workflows.map((w, i) => (
           <WorkflowCard
             key={w.id}
@@ -152,40 +145,33 @@ export function AutomationsManager({
             disabled={pending}
           />
         ))}
-      </div>
+      </Card>
 
-      <AlertDialog
+      <ConfirmDialog
         open={Boolean(pendingDelete)}
         onOpenChange={(open) => {
           if (!open) setPendingDelete(null);
         }}
-      >
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Delete this automation?</AlertDialogTitle>
-            <AlertDialogDescription>
-              {pendingDelete
-                ? `“${pendingDelete.name}” will be removed. This cannot be undone.`
-                : "This cannot be undone."}
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Keep it</AlertDialogCancel>
-            <AlertDialogAction variant="destructive" onClick={confirmRemove}>
-              Delete
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+        tone="destructive"
+        title="Delete this automation?"
+        description={
+          pendingDelete
+            ? `“${pendingDelete.name}” will stop running and be removed. This cannot be undone.`
+            : "This cannot be undone."
+        }
+        confirmLabel="Delete automation"
+        cancelLabel="Keep it"
+        onConfirm={confirmRemove}
+      />
     </div>
   );
 }
 
 function Header({ count, onCreate }: { count: number; onCreate: () => void }) {
   return (
-    <div className="flex items-end justify-between gap-4">
+    <div className="flex flex-wrap items-end justify-between gap-4">
       <div>
-        <h1 className="font-display text-2xl font-semibold tracking-tight text-near-ink">
+        <h1 className="font-display text-[28px] leading-tight text-near-ink">
           Automations
         </h1>
         <p className="mt-1 text-sm text-soft-ink">
@@ -194,19 +180,14 @@ function Header({ count, onCreate }: { count: number; onCreate: () => void }) {
         </p>
       </div>
       <div className="flex items-center gap-2">
-        <Link
-          href={"/dashboard/automations/new" as Route}
-          className="inline-flex items-center gap-1.5 rounded-full border border-mist-border bg-pure-snow px-4 py-2 text-sm font-medium text-near-ink transition-all hover:bg-soft-kraft active:scale-[0.98]"
-        >
-          <PlusIcon className="size-4" /> Start from scratch
-        </Link>
-        <button
-          type="button"
-          onClick={onCreate}
-          className="inline-flex items-center gap-1.5 rounded-full bg-near-ink px-4 py-2 text-sm font-medium text-primary-foreground transition-all hover:bg-near-ink/90 active:scale-[0.98]"
-        >
+        <Button asChild variant="outline">
+          <Link href={"/dashboard/automations/new" as Route}>
+            <PlusIcon className="size-4" /> Start from scratch
+          </Link>
+        </Button>
+        <Button type="button" onClick={onCreate}>
           <MagicWandDuotoneIcon className="size-4" /> Templates
-        </button>
+        </Button>
       </div>
     </div>
   );
@@ -235,127 +216,119 @@ function WorkflowCard({
   const actionCount = graph ? graphActionCount(graph) : workflow.actions.length;
   const canToggle = workflow.status === "published" || workflow.status === "paused";
 
+  const statusLabel = workflow.hasUnpublishedChanges
+    ? "Edits pending"
+    : workflow.status === "published"
+      ? "On"
+      : workflow.status === "paused"
+        ? "Paused"
+        : "Draft";
+
   return (
     <div
       className={cn(
-        "group flex flex-col rounded-2xl border bg-pure-snow p-5 shadow-xs transition-all",
-        workflow.enabled
-          ? "border-mist-border hover:border-near-ink/20 hover:shadow-sm"
-          : "border-hairline opacity-65",
+        "group flex items-center gap-3 px-4 py-4 transition-colors hover:bg-row-wash",
+        !workflow.enabled && "opacity-70",
       )}
     >
-      <div className="flex items-start justify-between gap-3">
-        <Link
-          href={`/dashboard/automations/${workflow.id}` as Route}
-          className="flex min-w-0 flex-1 items-start gap-3"
-        >
-          <span
-            className={cn(
-              "mt-0.5 inline-flex size-8 shrink-0 items-center justify-center rounded-lg transition-colors",
-              workflow.enabled
-                ? "bg-near-ink text-primary-foreground"
-                : "bg-soft-kraft text-soft-ink",
-            )}
-          >
-            <LightningIcon className="size-4" />
-          </span>
-          <span className="min-w-0">
-            <h3 className="truncate font-display text-base font-semibold text-near-ink">
-              {workflow.name}
-            </h3>
-            <p className="mt-1 line-clamp-2 text-xs leading-relaxed text-soft-ink">
-              {nl}
-            </p>
-          </span>
-        </Link>
-        <Switch
-          checked={workflow.enabled}
-          onCheckedChange={onToggle}
-          disabled={disabled || !canToggle}
-          aria-label={workflow.enabled ? "Disable automation" : "Enable automation"}
-        />
-      </div>
-
-      <div className="mt-4 flex flex-wrap items-center gap-1.5 pl-11">
-        <span className="inline-flex items-center gap-1 rounded-full bg-soft-kraft px-2.5 py-0.5 text-[11px] font-medium text-near-ink">
-          {meta.label}
-        </span>
-        <span className="inline-flex items-center rounded-full bg-soft-kraft px-2.5 py-0.5 text-[11px] font-medium text-soft-ink">
-          {actionCount} {actionCount === 1 ? "action" : "actions"}
-        </span>
+      <Link
+        href={`/dashboard/automations/${workflow.id}` as Route}
+        className="flex min-w-0 flex-1 items-center gap-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-near-ink"
+      >
         <span
           className={cn(
-            "inline-flex items-center rounded-full px-2.5 py-0.5 text-[11px] font-medium",
-            workflow.status === "published"
-              ? "bg-near-ink text-primary-foreground"
-              : "bg-soft-kraft text-soft-ink",
+            "grid size-9 shrink-0 place-items-center rounded-[var(--radius-btn)] border transition-colors",
+            workflow.enabled
+              ? "border-transparent bg-chartreuse-signal text-chartreuse-ink"
+              : "border-hairline bg-pure-snow text-soft-ink",
           )}
         >
-          {workflow.hasUnpublishedChanges
-            ? "Edits pending"
-            : workflow.status === "published"
-              ? "On"
-              : workflow.status === "paused"
-                ? "Paused"
-                : "Draft"}
+          <LightningIcon className="size-4" />
         </span>
-        <span className="ml-auto text-[11px] text-soft-ink">
-          edited <RelativeTime value={workflow.updatedAt} />
+        <span className="min-w-0 flex-1">
+          <span className="flex flex-wrap items-center gap-2">
+            <span className="truncate text-sm font-semibold text-near-ink">{workflow.name}</span>
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-soft-kraft px-2 py-0.5 text-[11px] font-medium text-near-ink">
+              <span
+                aria-hidden
+                className={cn(
+                  "size-1.5 rounded-full",
+                  workflow.status === "published" ? "bg-success-olive" : "bg-quiet-mist",
+                )}
+              />
+              {statusLabel}
+            </span>
+          </span>
+          <span className="mt-0.5 line-clamp-1 block text-[13px] text-soft-ink">{nl}</span>
+          <span className="mt-1 block text-xs text-quiet-mist">
+            {meta.label} · {actionCount} {actionCount === 1 ? "action" : "actions"} · edited{" "}
+            <RelativeTime value={workflow.updatedAt} />
+          </span>
         </span>
-      </div>
-
-      <div className="mt-4 flex items-center justify-between border-t border-hairline pt-3 pl-11">
-        <Link
-          href={`/dashboard/automations/${workflow.id}` as Route}
-          className="inline-flex items-center gap-1.5 text-xs font-medium text-near-ink hover:underline"
-        >
-          <PencilIcon className="size-3.5" /> Edit
-        </Link>
-        <button
-          type="button"
-          onClick={onDelete}
-          disabled={disabled}
-          className="inline-flex items-center gap-1.5 text-xs font-medium text-soft-ink transition-colors hover:text-danger-rust disabled:opacity-50"
-        >
-          <TrashIcon className="size-3.5" /> Delete
-        </button>
-      </div>
+      </Link>
+      <button
+        type="button"
+        onClick={onDelete}
+        disabled={disabled}
+        aria-label={`Delete ${workflow.name}`}
+        className="inline-flex size-8 items-center justify-center rounded-full text-soft-ink transition-colors hover:bg-soft-kraft hover:text-danger-rust focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-near-ink disabled:opacity-50"
+      >
+        <TrashIcon className="size-4" />
+      </button>
+      <Switch
+        checked={workflow.enabled}
+        onCheckedChange={onToggle}
+        disabled={disabled || !canToggle}
+        aria-label={workflow.enabled ? "Disable automation" : "Enable automation"}
+      />
+      <CaretRightIcon aria-hidden className="size-4 shrink-0 text-quiet-mist" />
     </div>
   );
 }
 
 function EmptyState({ onShowTemplates }: { onShowTemplates: () => void }) {
+  const choice =
+    "group flex w-full items-center gap-4 rounded-[var(--radius-card)] bg-card p-4 text-left shadow-[var(--shadow-card)] transition-colors hover:bg-row-wash focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-near-ink";
   return (
-    <div className="mx-auto flex min-h-[60vh] w-full max-w-2xl flex-col items-center justify-center px-6 text-center">
-      <span className="inline-flex size-14 items-center justify-center rounded-2xl bg-near-ink text-primary-foreground shadow-xs">
-        <MagicWandDuotoneIcon className="size-7" />
-      </span>
-      <h2 className="font-display mt-5 text-xl font-semibold text-near-ink">
-        Automate the repetitive hiring work
-      </h2>
-      <p className="mt-2 max-w-md text-sm leading-relaxed text-soft-ink">
-        Write a simple recipe:{" "}
-        <strong className="font-medium text-near-ink">When</strong> a candidate
-        applies or moves stage,{" "}
-        <strong className="font-medium text-near-ink">if</strong> they match a
-        filter, <strong className="font-medium text-near-ink">then</strong> send
-        an email, create a task, or tag the profile.
-      </p>
-      <div className="mt-6 flex items-center gap-3">
-        <Link
-          href={"/dashboard/automations/new" as Route}
-          className="inline-flex items-center gap-1.5 rounded-full border border-mist-border bg-pure-snow px-4 py-2 text-sm font-medium text-near-ink hover:bg-soft-kraft active:scale-[0.98]"
-        >
-          <PlusIcon className="size-4" /> Start from scratch
-        </Link>
-        <button
-          type="button"
-          onClick={onShowTemplates}
-          className="inline-flex items-center gap-1.5 rounded-full bg-near-ink px-4 py-2 text-sm font-medium text-primary-foreground transition-all hover:bg-near-ink/90 active:scale-[0.98]"
-        >
-          <MagicWandDuotoneIcon className="size-4" /> Choose a template
-        </button>
+    <div className="mx-auto w-full max-w-2xl space-y-4 py-6">
+      <div className="flex items-start gap-4 rounded-[var(--radius-card)] bg-lime-wash p-5">
+        <span className="grid size-11 shrink-0 place-items-center rounded-[var(--radius-btn)] bg-pure-snow text-near-ink">
+          <MagicWandDuotoneIcon className="size-5" />
+        </span>
+        <div>
+          <h1 className="font-display text-xl text-near-ink">
+            Automate the repetitive hiring work
+          </h1>
+          <p className="mt-1.5 max-w-md text-sm leading-relaxed text-soft-ink">
+            Write a simple recipe:{" "}
+            <strong className="font-medium text-near-ink">When</strong> a candidate
+            applies or moves stage,{" "}
+            <strong className="font-medium text-near-ink">if</strong> they match a
+            filter, <strong className="font-medium text-near-ink">then</strong> send
+            an email, create a task, or tag the profile.
+          </p>
+        </div>
       </div>
+      <button type="button" onClick={onShowTemplates} className={choice}>
+        <span className="grid size-10 shrink-0 place-items-center rounded-[var(--radius-btn)] border border-hairline bg-pure-snow text-near-ink">
+          <MagicWandDuotoneIcon className="size-5" />
+        </span>
+        <span className="min-w-0 flex-1">
+          <span className="block text-sm font-semibold text-near-ink">Choose a template</span>
+          <span className="mt-0.5 block text-[13px] text-soft-ink">Start from a ready-made recipe and tweak every detail.</span>
+        </span>
+        <CaretRightIcon aria-hidden className="size-4 shrink-0 text-quiet-mist transition-transform group-hover:translate-x-0.5" />
+      </button>
+      <Link href={"/dashboard/automations/new" as Route} className={choice}>
+        <span className="grid size-10 shrink-0 place-items-center rounded-[var(--radius-btn)] border border-hairline bg-pure-snow text-near-ink">
+          <PlusIcon className="size-5" />
+        </span>
+        <span className="min-w-0 flex-1">
+          <span className="block text-sm font-semibold text-near-ink">Start from scratch</span>
+          <span className="mt-0.5 block text-[13px] text-soft-ink">Build your own recipe in the editor.</span>
+        </span>
+        <CaretRightIcon aria-hidden className="size-4 shrink-0 text-quiet-mist transition-transform group-hover:translate-x-0.5" />
+      </Link>
     </div>
   );
 }
@@ -370,47 +343,45 @@ function TemplateGallery({
   pending: boolean;
 }) {
   return (
-    <div className="mt-6 rounded-2xl border border-mist-border bg-pure-snow p-6 shadow-xs">
+    <Card className="mt-6 gap-3 p-5">
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="font-display text-lg font-semibold text-near-ink">
+          <h2 className="text-[15px] font-semibold tracking-[-0.01em] text-near-ink">
             Starter recipes
           </h2>
-          <p className="mt-0.5 text-xs text-soft-ink">
+          <p className="mt-0.5 text-[13px] text-soft-ink">
             Pick one to start. You can change every detail in the editor.
           </p>
         </div>
-        <button
-          type="button"
-          onClick={onClose}
-          className="rounded-lg px-2.5 py-1 text-xs font-medium text-soft-ink hover:bg-soft-kraft hover:text-near-ink"
-        >
+        <Button type="button" variant="soft" size="sm" onClick={onClose}>
           Close
-        </button>
+        </Button>
       </div>
-      <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
+      <div className="grid grid-cols-1 gap-1 sm:grid-cols-2">
         {WORKFLOW_TEMPLATES.map((t) => (
           <button
             key={t.id}
             type="button"
             onClick={() => onPick(t)}
             disabled={pending}
-            className="group flex flex-col rounded-xl border border-mist-border/80 bg-warm-paper p-4 text-left transition-all hover:border-near-ink/20 hover:bg-soft-kraft/40 disabled:opacity-60"
+            className="group flex items-center gap-3 rounded-[var(--radius-inner)] p-3 text-left transition-colors hover:bg-row-wash focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-near-ink disabled:opacity-60"
           >
-            <div className="flex items-center justify-between">
-              <span className="text-[10px] font-medium uppercase tracking-wider text-soft-ink">
+            <span className="grid size-9 shrink-0 place-items-center rounded-[var(--radius-btn)] border border-hairline bg-pure-snow text-near-ink">
+              <LightningIcon className="size-4" />
+            </span>
+            <span className="min-w-0 flex-1">
+              <span className="block text-[11px] font-medium uppercase tracking-wider text-quiet-mist">
                 {t.category}
               </span>
-            </div>
-            <span className="font-display mt-1 text-sm font-semibold text-near-ink">
-              {t.name}
+              <span className="block text-sm font-semibold text-near-ink">{t.name}</span>
+              <span className="mt-0.5 line-clamp-2 block text-[13px] leading-snug text-soft-ink">
+                {t.description}
+              </span>
             </span>
-            <span className="mt-1 text-xs leading-relaxed text-soft-ink">
-              {t.description}
-            </span>
+            <CaretRightIcon aria-hidden className="size-4 shrink-0 text-quiet-mist transition-transform group-hover:translate-x-0.5" />
           </button>
         ))}
       </div>
-    </div>
+    </Card>
   );
 }

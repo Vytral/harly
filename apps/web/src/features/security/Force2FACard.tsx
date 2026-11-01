@@ -58,6 +58,7 @@ export function Force2FACard({
         action={
           isOwner ? (
             <Switch
+              id="force-2fa"
               checked={enabled}
               onCheckedChange={handleToggle}
               disabled={isPending}
@@ -68,13 +69,13 @@ export function Force2FACard({
       />
 
       {!isOwner && (
-        <p className="text-xs text-muted-foreground">
+        <p className="text-[12.5px] text-soft-ink">
           Only workspace owners can change this setting.
         </p>
       )}
 
       {enabled && (
-        <div className="rounded-xl border border-clay/20 bg-clay/5 px-4 py-3 text-sm text-clay">
+        <div className="rounded-xl border border-warning-clay/20 bg-warning-clay/5 px-4 py-3 text-sm text-clay">
           Members without 2FA will be prompted to enable it on their next login.
         </div>
       )}

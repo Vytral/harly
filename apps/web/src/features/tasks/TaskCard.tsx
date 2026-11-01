@@ -4,7 +4,6 @@ import { useDraggable } from "@dnd-kit/core";
 import { CSS } from "@dnd-kit/utilities";
 import {
   Briefcase,
-  Calendar,
   CalendarClock,
   CheckCircle2,
   Circle,
@@ -148,10 +147,9 @@ export function TaskCardView({
 
   return (
     <div
-      style={{ borderLeftColor: prio.spine }}
       className={cn(
-        "group rounded-xl border border-l-[3px] border-border/70 bg-card p-3.5 transition",
-        dragging ? "shadow-lg ring-2 ring-primary/30" : "shadow-[0_1px_2px_rgba(23,23,23,0.04)] hover:border-foreground/15",
+        "group rounded-[var(--radius-inner)] bg-pure-snow p-3.5 transition",
+        dragging ? "shadow-[var(--shadow-float)] ring-2 ring-near-ink/20" : "shadow-[var(--shadow-card)] hover:bg-row-wash",
       )}
     >
       <div className="flex items-start gap-2.5">
@@ -184,8 +182,7 @@ export function TaskCardView({
         <Meta task={task} />
         <div className="flex items-center justify-between gap-2">
           <span className="inline-flex items-center gap-1.5 text-xs">
-            <span className={cn("size-1.5 rounded-full", prio.dot)} />
-            <Calendar className="size-3 text-muted-foreground/50" />
+            <span aria-hidden className={cn("size-1.5 rounded-full", prio.dot)} />
             <RelativeDate iso={task.dueDate} />
           </span>
           <OwnerAvatar name={task.ownerName} image={task.ownerImage} username={task.ownerUsername} />

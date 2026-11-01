@@ -38,7 +38,7 @@ import type {
   CandidateEducationEntryInput,
   CandidateExperienceEntryInput,
 } from "@/lib/validations/applications";
-import { cn, formatFileSize } from "@/lib/utils";
+import { cn, formatFileSize, randomId } from "@/lib/utils";
 import {
   getImageFileValidationError,
   getResumeFileValidationError,
@@ -127,7 +127,7 @@ type EntryFieldErrors = Record<string, Partial<Record<string, string[]>>>;
 
 function createEducationEntry(): EducationEntry {
   return {
-    id: crypto.randomUUID(),
+    id: randomId(),
     school: "",
     degree: undefined,
     field: undefined,
@@ -139,7 +139,7 @@ function createEducationEntry(): EducationEntry {
 
 function createExperienceEntry(): ExperienceEntry {
   return {
-    id: crypto.randomUUID(),
+    id: randomId(),
     company: "",
     title: "",
     startDate: undefined,

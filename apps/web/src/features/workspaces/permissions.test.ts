@@ -3,7 +3,9 @@ import { describe, expect, it } from "vitest";
 import {
   BUILTIN_ROLE_PERMISSIONS,
   PERMISSIONS,
+  PERMISSION_GROUPS,
   SETTINGS_SECTION_PERMISSION,
+  withLegacyRoleDefaults,
   exceedsPrivilege,
   normalizeRoleScope,
   roleLabel,
@@ -55,6 +57,24 @@ describe("workspace permissions", () => {
     expect(BUILTIN_ROLE_PERMISSIONS.hiring_manager).not.toContain("documents:share");
   });
 
+  it("grants MCP use to every recruiting role and MCP management to owner and admin only", () => {
+    expect(BUILTIN_ROLE_PERMISSIONS.owner).toEqual(expect.arrayContaining(["mcp:use", "mcp:manage"]));
+    expect(BUILTIN_ROLE_PERMISSIONS.admin).toEqual(expect.arrayContaining(["mcp:use", "mcp:manage"]));
+    expect(BUILTIN_ROLE_PERMISSIONS.recruiter).toContain("mcp:use");
+    expect(BUILTIN_ROLE_PERMISSIONS.hiring_manager).toContain("mcp:use");
+    expect(BUILTIN_ROLE_PERMISSIONS.recruiter).not.toContain("mcp:manage");
+    expect(BUILTIN_ROLE_PERMISSIONS.hiring_manager).not.toContain("mcp:manage");
+  });
+
+  it("shows both MCP permissions in the role editor", () => {
+    const group = PERMISSION_GROUPS.find((g) => g.label === "AI agents (MCP)");
+    expect(group?.permissions.map((p) => p.key)).toEqual(["mcp:use", "mcp:manage"]);
+  });
+
+  it("gates the AI agents settings page on either MCP permission", () => {
+    expect(SETTINGS_SECTION_PERMISSION["/settings/ai-agents"]).toEqual(["mcp:use", "mcp:manage"]);
+  });
+
   it("maps settings sections to the more granular member and security permissions", () => {
     expect(SETTINGS_SECTION_PERMISSION["/settings/members"]).toBe("members:read");
     expect(SETTINGS_SECTION_PERMISSION["/settings/security"]).toBe("security:manage");
@@ -62,6 +82,30 @@ describe("workspace permissions", () => {
       "settings:edit",
       "dsar:manage",
     ]);
+  });
+});
+
+describe("withLegacyRoleDefaults", () => {
+  const before = "2026-09-01T00:00:00Z";
+  const after = "2026-12-01T00:00:00Z";
+
+  it("adds mcp:use to a recruiter or hiring manager override saved before MCP existed", () => {
+    expect(withLegacyRoleDefaults("recruiter", ["jobs:view"], before)).toEqual(["jobs:view", "mcp:use"]);
+    expect(withLegacyRoleDefaults("hiring_manager", [], new Date(before))).toEqual(["mcp:use"]);
+  });
+
+  it("keeps an override saved after MCP existed exactly as the admin chose", () => {
+    expect(withLegacyRoleDefaults("recruiter", ["jobs:view"], after)).toEqual(["jobs:view"]);
+  });
+
+  it("never grants anything to custom or admin rows", () => {
+    expect(withLegacyRoleDefaults("sourcer", ["jobs:view"], before)).toEqual(["jobs:view"]);
+    expect(withLegacyRoleDefaults("admin", ["jobs:view"], before)).toEqual(["jobs:view"]);
+  });
+
+  it("does not duplicate or guess when the timestamp is unknown", () => {
+    expect(withLegacyRoleDefaults("recruiter", ["mcp:use"], before)).toEqual(["mcp:use"]);
+    expect(withLegacyRoleDefaults("recruiter", [], null)).toEqual([]);
   });
 });
 

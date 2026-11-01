@@ -1140,6 +1140,9 @@ const HANDLERS = {
       input: z.infer<typeof rejectSchema>,
       ctx: { workspaceId: string },
     ): Promise<WriteResult> => {
+      // No `rejection`: the tool contract has no reason/email fields, so the
+      // service records the legacy default reason ("Other") and sends the
+      // rejection email with the active template, as before.
       const res = await updateApplicationStatus({
         applicationIds: [input.applicationId],
         workspaceId: ctx.workspaceId,

@@ -11,6 +11,14 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { FilterPill, FILTER_ALL } from "@/components/ui/FilterPill";
+import {
+  HumanTable,
+  HumanTableHead,
+  Td,
+  Th,
+  Tr,
+} from "@/components/ui/human-table";
+import { ShortDate } from "@/lib/date-hydration";
 import { JobIdentity } from "@/features/jobs/JobIdentity";
 import {
   formatEmploymentType,
@@ -98,8 +106,6 @@ export function JobsTable({ jobs }: { jobs: JobRow[] }) {
     });
   }, [jobs, query, status, dept, employment, workplace, sortKey]);
 
-  const maxApplicants = Math.max(1, ...filtered.map((j) => j.applicants));
-
   const filtersActive =
     status !== FILTER_ALL ||
     dept !== FILTER_ALL ||
@@ -116,21 +122,19 @@ export function JobsTable({ jobs }: { jobs: JobRow[] }) {
   }
 
   return (
-    <div className="space-y-4">
-      {/* Search */}
-      <div className="relative">
-        <Search aria-hidden className="absolute left-4 top-1/2 size-4.5 -translate-y-1/2 text-muted-foreground" />
-        <Input
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          placeholder="Search jobs by title, department or location…"
-          aria-label="Search jobs"
-          className="h-11 rounded-full pl-11"
-        />
-      </div>
-
-      {/* Filter pills */}
-      <div className="flex flex-wrap items-center gap-2">
+    <Card className="gap-0 py-0">
+      {/* Filter bar: search + pill filters */}
+      <div className="flex flex-wrap items-center gap-2 px-4 py-4 sm:px-5">
+        <div className="relative w-full sm:w-64">
+          <Search aria-hidden className="absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-soft-ink" />
+          <Input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Search jobs…"
+            aria-label="Search jobs"
+            className="h-9 rounded-full border-transparent bg-card-inset pl-9 shadow-none"
+          />
+        </div>
         <FilterPill
           label="Status"
           value={status}
@@ -175,103 +179,100 @@ export function JobsTable({ jobs }: { jobs: JobRow[] }) {
             variant="ghost"
             size="sm"
             onClick={clearFilters}
-            className="rounded-full text-muted-foreground"
+            className="rounded-full text-soft-ink"
           >
             Clear
           </Button>
         ) : null}
-        <p className="ml-auto text-sm text-muted-foreground">
-          <span className="font-semibold tabular-nums text-foreground">
-            {filtered.length}
-          </span>{" "}
-          {filtered.length === 1 ? "role" : "roles"}
-        </p>
       </div>
 
-      {/* List */}
-      <Card className="gap-0 divide-y divide-border/60 overflow-hidden py-0">
-        {filtered.map((job) => (
-          <div
-            key={job.id}
-            className="group grid grid-cols-[1fr_auto] items-center gap-x-4 gap-y-3 px-4 py-4 transition-colors hover:bg-muted/40 sm:grid-cols-[minmax(0,1fr)_10rem_9rem_auto] sm:px-5"
-          >
-            <Link
-              href={`/dashboard/jobs/${job.id}` as Route}
-              className="min-w-0"
-            >
-              <JobIdentity
-                title={job.title}
-                department={job.department}
-                location={job.location}
-              />
-            </Link>
+      <p className="border-t border-hairline px-4 py-3 text-[13px] text-soft-ink sm:px-5" aria-live="polite">
+        Total{" "}
+        <span className="font-semibold tabular-nums text-near-ink">{filtered.length}</span>{" "}
+        {filtered.length === 1 ? "item" : "items"}
+      </p>
 
-            <div className="hidden text-xs text-muted-foreground sm:block">
-              {formatEmploymentType(job.employmentType)}
-              <span className="mx-1 text-border">·</span>
-              {formatWorkplaceType(job.workplaceType)}
-            </div>
-
-            {/* Applicants: count + mini bar. The bar's length is volume relative
-                to the busiest role; its solid segment is the share still active
-                in the pipeline (details in the tooltip, not a third text line). */}
-            <div
-              className="hidden min-w-0 sm:block"
-              title={`${job.applicants} ${job.applicants === 1 ? "candidate" : "candidates"}, ${job.activeApplicants} active`}
-            >
-              <div className="flex items-baseline justify-between gap-2">
-                <span className="truncate text-xs text-muted-foreground">
-                  <span className="text-sm font-semibold tabular-nums text-foreground">
-                    {job.applicants}
-                  </span>{" "}
-                  {job.applicants === 1 ? "candidate" : "candidates"}
-                </span>
-                {job.newApplicants > 0 ? (
-                  <span className="shrink-0 text-[0.65rem] font-medium text-primary">
-                    +{job.newApplicants} new
+      {filtered.length > 0 ? (
+        <HumanTable className="px-2 pb-3">
+          <HumanTableHead>
+            <Th>Job title</Th>
+            <Th className="hidden md:table-cell">Created</Th>
+            <Th className="hidden sm:table-cell">Type</Th>
+            <Th>Pending candidates</Th>
+            <Th className="hidden lg:table-cell">Candidates</Th>
+            <Th>Status</Th>
+            <Th srOnly>Actions</Th>
+          </HumanTableHead>
+          <tbody>
+            {filtered.map((job) => (
+              <Tr key={job.id}>
+                <Td className="min-w-56">
+                  <Link
+                    href={`/dashboard/jobs/${job.id}` as Route}
+                    className="group block rounded-[var(--radius-btn)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-near-ink"
+                  >
+                    <JobIdentity
+                      title={job.title}
+                      department={job.department}
+                      location={job.location}
+                    />
+                  </Link>
+                </Td>
+                <Td className="hidden whitespace-nowrap text-[13.5px] text-near-ink md:table-cell">
+                  <ShortDate value={job.createdAt} />
+                </Td>
+                <Td className="hidden whitespace-nowrap text-[13px] text-soft-ink sm:table-cell">
+                  {formatEmploymentType(job.employmentType)}
+                  <span className="mx-1 text-quiet-mist" aria-hidden="true">·</span>
+                  {formatWorkplaceType(job.workplaceType)}
+                </Td>
+                <Td className="whitespace-nowrap">
+                  {job.activeApplicants > 0 ? (
+                    <Link
+                      href={`/dashboard/pipeline?jobId=${job.id}` as Route}
+                      className="text-[13.5px] font-medium text-near-ink underline decoration-hairline decoration-2 underline-offset-4 hover:decoration-near-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-near-ink"
+                    >
+                      Active ({job.activeApplicants})
+                    </Link>
+                  ) : (
+                    <span className="text-[13.5px] text-quiet-mist">None pending</span>
+                  )}
+                  {job.newApplicants > 0 ? (
+                    <span className="ml-2 text-[11.5px] font-medium text-success-olive">
+                      +{job.newApplicants} new
+                    </span>
+                  ) : null}
+                </Td>
+                <Td className="hidden lg:table-cell">
+                  <span
+                    className="inline-flex items-center rounded-full bg-card-inset px-2.5 py-1 text-[12px] font-medium tabular-nums text-near-ink"
+                    title={`${job.applicants} ${job.applicants === 1 ? "candidate" : "candidates"}, ${job.activeApplicants} active`}
+                  >
+                    {job.activeApplicants}/{job.applicants}
+                    <span className="sr-only"> candidates active</span>
                   </span>
-                ) : null}
-              </div>
-              <div
-                className="mt-1.5 h-1.5 w-full overflow-hidden rounded-full bg-muted"
-                role="img"
-                aria-label={`${job.activeApplicants} of ${job.applicants} candidates active`}
-              >
-                <div
-                  className="flex h-full overflow-hidden rounded-full bg-primary/25"
-                  style={{ width: `${(job.applicants / maxApplicants) * 100}%` }}
-                >
-                  <div
-                    className="h-full bg-primary/80"
-                    style={{
-                      width: `${job.applicants > 0 ? (job.activeApplicants / job.applicants) * 100 : 0}%`,
-                    }}
-                  />
-                </div>
-              </div>
-            </div>
-
-            <div className="col-start-2 row-start-1 flex items-center justify-end gap-2 sm:col-auto sm:row-auto">
-              <JobStatusBadge status={job.status} />
-              <JobActionsMenu jobId={job.id} slug={job.slug} />
-            </div>
-          </div>
-        ))}
-
-        {filtered.length === 0 ? (
-          <div className="flex flex-col items-center gap-2 px-6 py-16 text-center">
-            <Search className="size-5 text-muted-foreground" />
-            <p className="text-sm text-muted-foreground">
-              No jobs match your filters.
-            </p>
-            {filtersActive ? (
-              <Button variant="outline" size="sm" onClick={clearFilters}>
-                Clear filters
-              </Button>
-            ) : null}
-          </div>
-        ) : null}
-      </Card>
-    </div>
+                </Td>
+                <Td>
+                  <JobStatusBadge status={job.status} />
+                </Td>
+                <Td className="w-12 text-right">
+                  <JobActionsMenu jobId={job.id} slug={job.slug} />
+                </Td>
+              </Tr>
+            ))}
+          </tbody>
+        </HumanTable>
+      ) : (
+        <div className="flex flex-col items-center gap-2 px-6 py-16 text-center">
+          <Search className="size-5 text-quiet-mist" />
+          <p className="text-sm text-soft-ink">No jobs match your filters.</p>
+          {filtersActive ? (
+            <Button variant="outline" size="sm" onClick={clearFilters}>
+              Clear filters
+            </Button>
+          ) : null}
+        </div>
+      )}
+    </Card>
   );
 }

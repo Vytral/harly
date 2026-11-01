@@ -1,15 +1,6 @@
 "use client";
 
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 
 export function UnsavedChangesDialog({
   open,
@@ -21,21 +12,17 @@ export function UnsavedChangesDialog({
   onCancel: () => void;
 }) {
   return (
-    <AlertDialog open={open} onOpenChange={(next) => !next && onCancel()}>
-      <AlertDialogContent>
-        <AlertDialogHeader>
-          <AlertDialogTitle>Unsaved changes</AlertDialogTitle>
-          <AlertDialogDescription>
-            You have unsaved changes. Leave without saving?
-          </AlertDialogDescription>
-        </AlertDialogHeader>
-        <AlertDialogFooter>
-          <AlertDialogCancel onClick={onCancel}>Keep editing</AlertDialogCancel>
-          <AlertDialogAction variant="destructive" onClick={onConfirm}>
-            Leave without saving
-          </AlertDialogAction>
-        </AlertDialogFooter>
-      </AlertDialogContent>
-    </AlertDialog>
+    <ConfirmDialog
+      open={open}
+      onOpenChange={(next) => !next && onCancel()}
+      tone="warning"
+      title="Leave without saving?"
+      description="You have unsaved changes. If you leave now, they will be lost."
+      confirmLabel="Leave without saving"
+      cancelLabel="Keep editing"
+      // The caller navigates away or closes the editor itself.
+      closeOnConfirm={false}
+      onConfirm={onConfirm}
+    />
   );
 }

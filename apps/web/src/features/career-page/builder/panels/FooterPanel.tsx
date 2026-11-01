@@ -1,14 +1,13 @@
 "use client";
 
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-
 import type { CareerPageConfig, SocialPlatform } from "@/features/career-page/config";
 import { socialPlatforms } from "@/features/career-page/config";
-import { SOCIAL_ICONS } from "@/features/career-page/social-icons";
+import { SocialIcon, socialLabel } from "@/features/career-page/social-icons";
+
 import type { ConfigUpdater } from "../types";
-import { ListEditor, move } from "../primitives";
-import { PanelHeader, Section } from "./PanelKit";
+import { Field, ListEditor, ToggleRow, move } from "../primitives";
+import { Group, PanelHeader } from "./PanelKit";
 
 const LEGAL_SLUG_LABELS: Record<string, string> = {
   "privacy-policy": "Privacy Policy",
@@ -26,17 +25,23 @@ function SocialPlatformSelect({
   onChange: (v: SocialPlatform) => void;
 }) {
   return (
-    <select
-      value={value}
-      onChange={(e) => onChange(e.target.value as SocialPlatform)}
-      className="shrink-0 rounded-lg border bg-background px-2 py-2 text-sm transition-colors hover:border-pine/20 focus:border-pine focus:outline-none focus:ring-2 focus:ring-pine/20"
-    >
-      {socialPlatforms.map((p) => (
-        <option key={p} value={p}>
-          {SOCIAL_ICONS[p]?.label ?? p}
-        </option>
-      ))}
-    </select>
+    <div className="relative inline-flex shrink-0 items-center">
+      <span className="pointer-events-none absolute left-2.5 text-near-ink">
+        <SocialIcon platform={value} className="size-4" />
+      </span>
+      <select
+        value={value}
+        onChange={(e) => onChange(e.target.value as SocialPlatform)}
+        aria-label="Platform"
+        className="h-9 w-32 appearance-none rounded-[var(--radius-btn)] border border-hairline bg-pure-snow pl-8 pr-2 text-[13px] text-near-ink transition-colors hover:border-mist-border focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      >
+        {socialPlatforms.map((p) => (
+          <option key={p} value={p}>
+            {socialLabel(p)}
+          </option>
+        ))}
+      </select>
+    </div>
   );
 }
 
@@ -50,68 +55,70 @@ export function FooterPanel({
   availableLegalPages?: string[];
 }) {
   return (
-    <div className="space-y-6">
-      <PanelHeader title="Footer" subtitle="Social links and legal pages." />
+    <div className="space-y-4">
+      <PanelHeader title="Footer" subtitle="Social profiles and legal pages at the bottom of every page." />
 
-      <Section title="Footer" defaultOpen>
-        {availableLegalPages.length > 0 && (
-          <div className="space-y-1.5">
-            <Label className="text-xs text-ink-soft">Legal links</Label>
-            <p className="text-[11px] text-ink-soft">
-              Select which legal pages appear in the footer.
-            </p>
-            {availableLegalPages.map((slug) => {
-              const label = LEGAL_SLUG_LABELS[slug] ?? slug;
-              const checked = (config.footer.legalLinks ?? []).includes(slug);
-              return (
-                <label key={slug} className="flex cursor-pointer items-center gap-2">
-                  <input
-                    type="checkbox"
-                    checked={checked}
-                    onChange={() =>
-                      update((d) => {
-                        const links = d.footer.legalLinks ?? [];
-                        if (links.includes(slug)) {
-                          d.footer.legalLinks = links.filter((l) => l !== slug);
-                        } else {
-                          d.footer.legalLinks = [...links, slug];
-                        }
-                      })
-                    }
-                    className="size-4 rounded accent-pine"
-                  />
-                  <span className="text-sm text-foreground">{label}</span>
-                </label>
-              );
-            })}
-          </div>
-        )}
+      <Group title="Social links" defaultOpen errorPrefix="footer.socials">
         <ListEditor
-          label="Social links"
+          label="Profiles"
+          itemName="Link"
           items={config.footer.socials}
-          onAdd={() =>
-            update((d) => d.footer.socials.push({ platform: "x", url: "" }))
-          }
-          onRemove={(i) => update((d) => d.footer.socials.splice(i, 1))}
+          max={8}
+          emptyText="Link your LinkedIn, X, GitHub or website."
+          onAdd={() => update((d) => void d.footer.socials.push({ platform: "linkedin", url: "" }))}
+          onRemove={(i) => update((d) => void d.footer.socials.splice(i, 1))}
+          onRestore={(i, item) => update((d) => void d.footer.socials.splice(i, 0, item))}
           onMove={(i, dir) => update((d) => move(d.footer.socials, i, dir))}
           render={(item, i) => (
-            <div className="flex gap-2">
-              <SocialPlatformSelect
-                value={item.platform}
-                onChange={(p) => update((d) => (d.footer.socials[i].platform = p))}
-              />
-              <Input
-                value={item.url}
-                onChange={(e) =>
-                  update((d) => (d.footer.socials[i].url = e.target.value))
-                }
-                placeholder="https://…"
-                className="min-w-0 flex-1"
-              />
-            </div>
+            <Field label={<span className="sr-only">Link {i + 1}</span>} path={`footer.socials.${i}.url`}>
+              {({ id, describedBy, invalid }) => (
+                <div className="flex gap-2">
+                  <SocialPlatformSelect
+                    value={item.platform}
+                    onChange={(p) => update((d) => void (d.footer.socials[i].platform = p))}
+                  />
+                  <Input
+                    id={id}
+                    type="url"
+                    value={item.url}
+                    maxLength={600}
+                    aria-describedby={describedBy}
+                    aria-invalid={invalid || undefined}
+                    onChange={(e) => update((d) => void (d.footer.socials[i].url = e.target.value))}
+                    placeholder="https://…"
+                    className="min-w-0 flex-1"
+                  />
+                </div>
+              )}
+            </Field>
           )}
         />
-      </Section>
+      </Group>
+
+      <Group title="Legal pages" defaultOpen>
+        {availableLegalPages.length === 0 ? (
+          <p className="text-[12px] leading-snug text-soft-ink">
+            No legal pages yet. Write them in Settings → Legal, then link them here.
+          </p>
+        ) : (
+          availableLegalPages.map((slug) => {
+            const checked = (config.footer.legalLinks ?? []).includes(slug);
+            return (
+              <ToggleRow
+                key={slug}
+                label={LEGAL_SLUG_LABELS[slug] ?? slug}
+                checked={checked}
+                onCheckedChange={(next) =>
+                  update((d) => {
+                    const links = (d.footer.legalLinks ?? []).filter((l) => l !== slug);
+                    d.footer.legalLinks = next ? [...links, slug] : links;
+                  })
+                }
+              />
+            );
+          })
+        )}
+      </Group>
     </div>
   );
 }

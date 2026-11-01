@@ -10,6 +10,7 @@ import {
   Trash2,
 } from "lucide-react";
 import { toast } from "@/lib/notification-island/toast";
+import { copyText } from "@/lib/utils";
 
 import { restoreJobAction, trashJobAction } from "./actions";
 import { Button } from "@/components/ui/button";
@@ -45,7 +46,7 @@ export function JobActionsMenu({
   }
 
   function copyLink() {
-    void navigator.clipboard.writeText(publicUrl());
+    void copyText(publicUrl());
     toast.success("Public link copied.");
   }
 
@@ -80,7 +81,7 @@ export function JobActionsMenu({
         <Button
           variant="ghost"
           size="icon"
-          className="size-8 text-muted-foreground data-[state=open]:bg-accent"
+          className="size-8 rounded-full text-soft-ink data-[state=open]:bg-row-wash"
           aria-label="Job actions"
           disabled={isPending}
           onClick={(event) => event.stopPropagation()}

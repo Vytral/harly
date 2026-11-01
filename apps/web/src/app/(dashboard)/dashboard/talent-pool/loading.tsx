@@ -1,15 +1,18 @@
-import { TableSkeleton } from "@/components/skeletons";
-import { Skeleton } from "@/components/ui/skeleton";
+import { DirectoryCardSkeleton, SkeletonRegion } from "@/components/skeletons";
 
+/** Mirrors talent-pool/PoolView: one directory card (filter bar, total, table). The shell draws the title. */
 export default function TalentPoolLoading() {
   return (
-    <div className="space-y-4">
-      <div className="flex items-center gap-3">
-        <Skeleton className="h-10 w-full max-w-sm rounded-lg" />
-        <Skeleton className="h-10 w-28 rounded-full" />
-        <Skeleton className="ml-auto hidden h-4 w-24 sm:block" />
-      </div>
-      <TableSkeleton rows={6} columns={7} showHeader />
-    </div>
+    <SkeletonRegion className="space-y-6">
+      <DirectoryCardSkeleton
+        chips={["w-28"]}
+        columns={[
+          { width: "w-40" },
+          { width: "w-16" },
+          { width: "w-20", pill: true },
+          { width: "w-20" },
+        ]}
+      />
+    </SkeletonRegion>
   );
 }

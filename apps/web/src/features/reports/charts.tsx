@@ -51,7 +51,8 @@ function niceMax(value: number): number {
  * Catmull-Rom → cubic Bezier smoothing. A straight point-to-point join turns
  * a mostly-flat, occasionally-spiky series (typical for monthly hiring
  * counts) into a harsh shark-fin. This keeps the same data but rounds the
- * approach and departure from each point.
+ * approach and departure from each point. Control points are clamped to the
+ * segment's own y-range so a flat run before a spike never dips below zero.
  */
 function smoothPath(points: { x: number; y: number }[]): string {
   if (points.length === 0) return "";
@@ -68,7 +69,10 @@ function smoothPath(points: { x: number; y: number }[]): string {
     const cp1y = p1.y + (p2.y - p0.y) / 6;
     const cp2x = p2.x - (p3.x - p1.x) / 6;
     const cp2y = p2.y - (p3.y - p1.y) / 6;
-    d += ` C ${cp1x} ${cp1y}, ${cp2x} ${cp2y}, ${p2.x} ${p2.y}`;
+    const lo = Math.min(p1.y, p2.y);
+    const hi = Math.max(p1.y, p2.y);
+    const clamp = (y: number) => Math.min(hi, Math.max(lo, y));
+    d += ` C ${cp1x} ${clamp(cp1y)}, ${cp2x} ${clamp(cp2y)}, ${p2.x} ${p2.y}`;
   }
   return d;
 }
@@ -183,7 +187,7 @@ export function TrendChart({ series }: { series: TrendSeries[] }) {
                 stroke="var(--hairline)"
                 strokeDasharray={g === 0 ? undefined : "3 6"}
               />
-              <text x={padL - 8} y={y(g) + 4} textAnchor="end" className="fill-soft-ink text-[10px] tabular-nums">
+              <text x={padL - 8} y={y(g) + 4} textAnchor="end" className="fill-soft-ink text-[11px] tabular-nums">
                 {Math.round(g)}
               </text>
             </g>
@@ -245,7 +249,7 @@ export function TrendChart({ series }: { series: TrendSeries[] }) {
 
           {labels.map((label, i) =>
             i % 2 === 0 || i === n - 1 ? (
-              <text key={`lbl-${i}`} x={x(i)} y={H - 8} textAnchor="middle" className="fill-soft-ink text-[10px]">
+              <text key={`lbl-${i}`} x={x(i)} y={H - 8} textAnchor="middle" className="fill-soft-ink text-[11px]">
                 {label}
               </text>
             ) : null,
@@ -403,14 +407,14 @@ export function SourceBars({ sources }: { sources: SourceDatum[] }) {
                 <span>{fmt.format(row.candidates)} applications</span>
                 <span>{fmt.format(row.hires)} hired</span>
               </span>
-              <span className="relative h-5 overflow-hidden rounded-lg bg-warm-paper">
+              <span className="relative h-5 overflow-hidden rounded-lg bg-card-inset">
                 <span
                   className="absolute inset-y-0 left-0 rounded-lg transition-[width] duration-300"
-                  style={{ width: `${Math.max((row.candidates / maxC) * 100, 4)}%`, backgroundColor: "var(--chart-1)", opacity: 0.18 }}
+                  style={{ width: `${Math.max((row.candidates / maxC) * 100, 4)}%`, backgroundColor: "var(--chart-2)", opacity: 0.25 }}
                 />
                 <span
                   className="absolute inset-y-0 left-0 rounded-lg transition-[width] duration-300"
-                  style={{ width: `${Math.max((row.hires / maxC) * 100, row.hires > 0 ? 3 : 0)}%`, backgroundColor: "var(--chart-1)" }}
+                  style={{ width: `${Math.max((row.hires / maxC) * 100, row.hires > 0 ? 3 : 0)}%`, backgroundColor: "var(--chart-2)" }}
                 />
               </span>
             </span>

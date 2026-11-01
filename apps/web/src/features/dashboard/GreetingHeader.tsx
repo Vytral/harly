@@ -40,27 +40,26 @@ function greeting(hour: number) {
 }
 
 /**
- * Operational, countable, and never cheerful about an empty pipeline. Reads the
- * two numbers a recruiter is actually deciding on at 9:12am.
+ * Operational, countable, and never cheerful about an empty pipeline. Every
+ * number is a real total: the same ones the cards and their destinations show.
  */
 export function buildSubline({
-  waiting,
-  overdue,
+  toReview,
+  waitingOverWeek,
   interviewsToday,
 }: {
-  waiting: number;
-  overdue: number;
+  toReview: number;
+  /** Reviews that have waited more than a week. */
+  waitingOverWeek: number;
   interviewsToday: number;
 }) {
   const parts: string[] = [];
 
-  if (waiting > 0) {
-    parts.push(
-      `${waiting} ${waiting === 1 ? "candidate" : "candidates"} in play`,
-    );
+  if (toReview > 0) {
+    parts.push(`${toReview} ${toReview === 1 ? "candidate" : "candidates"} to review`);
   }
-  if (overdue > 0) {
-    parts.push(`${overdue} waiting over a week`);
+  if (waitingOverWeek > 0) {
+    parts.push(`${waitingOverWeek} waiting over a week`);
   }
   if (interviewsToday > 0) {
     parts.push(

@@ -12,25 +12,22 @@ import {
   Download,
   Funnel,
   Hourglass,
+  Info,
   LineChart,
-  Minus,
   Target,
   TrendingUp,
   Users,
 } from "lucide-react";
 import { motion, useReducedMotion } from "motion/react";
 
-import { Tile, tileClass } from "@/components/dashboard/widgets/primitives";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { Tile } from "@/components/dashboard/widgets/primitives";
+import { FilterPill } from "@/components/ui/FilterPill";
+import { ValueSwap } from "@/components/ui/value-swap";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 import { toSafeCsv } from "@/lib/csv";
 import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
 import {
   FunnelChart,
   Histogram,
@@ -79,7 +76,7 @@ type EmptyPanelAction = { href: Route; label: string };
 
 function EmptyPanel({ icon: Icon, text, action }: { icon: IconComponent; text: string; action?: EmptyPanelAction }) {
   return (
-    <div className="m-3 flex flex-1 flex-col items-center justify-center gap-2 rounded-[var(--radius-md)] border border-dashed border-mist-border px-6 py-10 text-center">
+    <div className="m-3 flex flex-1 flex-col items-center justify-center gap-2 rounded-[var(--radius-inner)] bg-card-inset px-6 py-10 text-center">
       <Icon className="size-5 text-quiet-mist" strokeWidth={1.6} />
       <p className="text-sm text-soft-ink">{text}</p>
       {action ? (
@@ -91,19 +88,9 @@ function EmptyPanel({ icon: Icon, text, action }: { icon: IconComponent; text: s
   );
 }
 
-/** A delta badge. `null` means there is nothing to compare, shown as a dash. */
+/** A delta badge. `null` means there is nothing to compare: show nothing. */
 function DeltaBadge({ value, invert = false }: { value: number | null; invert?: boolean }) {
-  if (value == null) {
-    return (
-      <span
-        className="inline-flex items-center gap-0.5 rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground tabular-nums"
-        aria-label="No prior period to compare"
-      >
-        <Minus className="size-3" />
-        —
-      </span>
-    );
-  }
+  if (value == null) return null;
   const positive = invert ? value <= 0 : value >= 0;
   const Icon = positive ? ArrowUpRight : ArrowDownRight;
   const shown = invert ? -value : value;
@@ -145,16 +132,18 @@ function StatCell({
       initial={shouldReduceMotion ? false : { opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.3, ease: EASE_OUT, delay: index * 0.05 }}
-      className="p-4 sm:p-5"
+      className="rounded-[var(--radius-inner)] bg-card-inset p-4"
     >
       <div className="flex items-center justify-between gap-3">
-        <span className="flex size-8 items-center justify-center rounded-[var(--radius-sm)] bg-warm-paper text-soft-ink">
+        <span className="flex size-8 items-center justify-center rounded-[var(--radius-btn)] bg-pure-snow text-soft-ink">
           <Icon className="size-4" strokeWidth={1.8} />
         </span>
         {delta !== undefined ? <DeltaBadge value={delta} invert={invertDelta} /> : null}
       </div>
       <p className="mt-4 text-xs font-medium text-soft-ink">{label}</p>
-      <p className="mt-1 text-2xl font-semibold tracking-tight tabular-nums text-near-ink">{value}</p>
+      <p className="font-display mt-1 text-[28px] leading-none tabular-nums text-near-ink">
+        <ValueSwap value={value} />
+      </p>
       <p className="mt-1 truncate text-xs text-soft-ink">{hint}</p>
     </motion.div>
   );
@@ -170,17 +159,34 @@ function CardHead({
   subtitle: string;
 }) {
   return (
-    <div className="space-y-0.5">
-      <h2 className="flex items-center gap-2 text-[15px] font-medium text-near-ink">
-        <Icon className="size-4 text-soft-ink" strokeWidth={1.8} />
-        {title}
-      </h2>
-      <p className="text-sm text-soft-ink">{subtitle}</p>
+    <div className="flex items-center gap-2.5">
+      <span className="grid size-8 shrink-0 place-items-center rounded-[var(--radius-btn)] border border-hairline bg-pure-snow">
+        <Icon className="size-4 text-near-ink" strokeWidth={1.8} />
+      </span>
+      <h2 className="text-[15px] font-semibold tracking-[-0.01em] text-near-ink">{title}</h2>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <button
+            type="button"
+            aria-label={`About ${title}`}
+            className="grid size-6 place-items-center rounded-full text-quiet-mist transition-colors hover:text-near-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-near-ink"
+          >
+            <Info className="size-3.5" strokeWidth={1.8} />
+          </button>
+        </TooltipTrigger>
+        <TooltipContent side="top" className="max-w-64">
+          {subtitle}
+        </TooltipContent>
+      </Tooltip>
     </div>
   );
 }
 
-/** Data for screen readers that mirrors a chart, visually hidden. */
+/**
+ * Data for screen readers that mirrors a chart, visually hidden. The wrapper
+ * div carries sr-only: on a <table> itself Firefox paints the <caption>
+ * outside the clip, on top of the chart header.
+ */
 function ChartTable({
   caption,
   headers,
@@ -191,7 +197,8 @@ function ChartTable({
   rows: (string | number)[][];
 }) {
   return (
-    <table className="sr-only">
+    <div className="sr-only">
+    <table>
       <caption>{caption}</caption>
       <thead>
         <tr>
@@ -212,6 +219,7 @@ function ChartTable({
         ))}
       </tbody>
     </table>
+    </div>
   );
 }
 
@@ -359,47 +367,42 @@ export function ReportsDashboard({ data, canViewCandidates = false, canViewJobs 
 
   return (
     <div className="space-y-5">
-      <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+      <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
-          <h1 className="text-xl font-semibold tracking-tight text-near-ink">Reports</h1>
+          <h1 className="font-display text-[28px] leading-tight text-near-ink">Reports</h1>
           <p className="mt-1 text-sm text-soft-ink">
             {`Hiring performance and pipeline health, ${rangeLower}.`}
           </p>
-          <p className="mt-1 text-xs text-soft-ink">{formatDataAsOf(data.generatedAt, data.timeZone)}</p>
         </div>
-        <div className="flex items-center gap-2">
-          <Select
+        <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Report filters">
+          <FilterPill
+            label="Period"
             value={String(comparison.rangeDays)}
-            onValueChange={(v) => router.push(`/dashboard/reports?range=${v}`)}
-          >
-            <SelectTrigger className="h-9 w-auto min-w-40 text-sm">
-              <SelectValue>{rangeLabel}</SelectValue>
-            </SelectTrigger>
-            <SelectContent>
-              {RANGE_OPTIONS.map((o) => (
-                <SelectItem key={o.value} value={o.value}>
-                  {o.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <Button variant="outline" size="sm" onClick={exportReportCsv}>
+            onChange={(v) => router.push(`/dashboard/reports?range=${v}`)}
+            options={RANGE_OPTIONS.map((o) => o.value)}
+            labelMap={Object.fromEntries(RANGE_OPTIONS.map((o) => [o.value, o.label]))}
+            allValue={String(comparison.rangeDays)}
+          />
+          <Button variant="outline" onClick={exportReportCsv}>
             <Download className="size-4" />
             Export CSV
           </Button>
         </div>
       </div>
 
-      <div
-        className={cn(
-          tileClass,
-          "grid grid-cols-1 divide-y divide-hairline sm:grid-cols-2 sm:divide-y-0 sm:divide-x xl:grid-cols-4",
-        )}
-      >
+      <Card className="flex-row items-center gap-2.5 py-3.5 px-5">
+        <Info className="size-4 shrink-0 text-quiet-mist" strokeWidth={1.8} />
+        <p className="text-[13px] text-soft-ink">
+          <span className="font-medium text-near-ink">{`Displaying results from ${rangeLower}`}</span>
+          {` · ${formatDataAsOf(data.generatedAt, data.timeZone)}`}
+        </p>
+      </Card>
+
+      <Card className="grid grid-cols-1 gap-3 p-4 sm:grid-cols-2 xl:grid-cols-4">
         {stats.map((s, i) => (
           <StatCell key={s.label} {...s} index={i} />
         ))}
-      </div>
+      </Card>
 
       <motion.div
         initial={shouldReduceMotion ? false : { opacity: 0, y: 12 }}

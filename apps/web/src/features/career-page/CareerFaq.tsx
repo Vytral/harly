@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useId, useState } from "react";
 
 import { cn } from "@/lib/utils";
 
@@ -21,27 +21,33 @@ export function CareerFaq({
   accent: string;
 }) {
   const [open, setOpen] = useState<number | null>(0);
+  const baseId = useId();
 
   if (items.length === 0) return null;
 
   return (
-    <div className="divide-y divide-zinc-100 border-t border-zinc-100 dark:divide-zinc-800 dark:border-zinc-800">
+    <div className="divide-y divide-hairline border-t border-hairline">
       {items.map((item, i) => {
         const isOpen = open === i;
+        const buttonId = `${baseId}-q${i}`;
+        const panelId = `${baseId}-a${i}`;
         return (
-          <div key={i}>
-            <button
-              type="button"
-              onClick={() => setOpen(isOpen ? null : i)}
-              aria-expanded={isOpen}
-              className="group flex w-full items-center justify-between gap-6 py-5 text-left transition-colors duration-150 hover:bg-zinc-50/80 dark:hover:bg-zinc-800/50 sm:px-2"
-            >
-              <span className="text-lg font-medium tracking-tight text-zinc-900 dark:text-zinc-100">
+          <div key={`${i}-${item.q}`}>
+            <h3>
+              <button
+                type="button"
+                id={buttonId}
+                onClick={() => setOpen(isOpen ? null : i)}
+                aria-expanded={isOpen}
+                aria-controls={panelId}
+                className="group flex w-full items-center justify-between gap-6 py-5 text-left transition-colors duration-150 hover:bg-row-wash sm:px-2"
+              >
+              <span className="text-lg font-medium tracking-tight text-near-ink">
                 {item.q}
               </span>
               <span
                 className="relative flex size-5 shrink-0 items-center justify-center"
-                style={{ color: accent }}
+                style={{ color: `var(--career-accent, ${accent})` }}
                 aria-hidden
               >
                 {/* Plus → minus via a rotating vertical bar. transform-only. */}
@@ -53,8 +59,13 @@ export function CareerFaq({
                   )}
                 />
               </span>
-            </button>
+              </button>
+            </h3>
             <div
+              id={panelId}
+              role="region"
+              aria-labelledby={buttonId}
+              inert={!isOpen}
               className={cn(
                 "grid transition-[grid-template-rows] duration-200 ease-[cubic-bezier(0.23,1,0.32,1)] motion-reduce:transition-none",
                 isOpen ? "grid-rows-[1fr]" : "grid-rows-[0fr]",
@@ -63,7 +74,7 @@ export function CareerFaq({
               <div className="overflow-hidden">
                 <p
                   className={cn(
-                    "max-w-2xl pb-5 text-base leading-relaxed text-zinc-600 transition-opacity duration-200 ease-out motion-reduce:transition-none dark:text-zinc-400 sm:px-2",
+                    "max-w-2xl whitespace-pre-line pb-5 text-base leading-relaxed text-soft-ink transition-opacity duration-200 ease-out motion-reduce:transition-none sm:px-2",
                     isOpen ? "opacity-100" : "opacity-0",
                   )}
                 >

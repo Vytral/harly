@@ -1,18 +1,20 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import Link from "next/link";
-import { desc, eq, and } from "drizzle-orm";
+import { desc, eq, and, inArray, isNull } from "drizzle-orm";
 import type { Route } from "next";
 
-import { db, jobs } from "@harly/db";
+import { applications, db, jobs } from "@harly/db";
 import { PORTAL_SESSION_COOKIE, resolvePortalSession } from "@/lib/portal-auth";
 import { PortalShell } from "@/features/portal/PortalShellServer";
 import {
   MapPinIcon,
   CurrencyDollarIcon,
-  ArrowUpRightIcon,
+  CaretRightIcon,
   BriefcaseIcon,
 } from "@/components/ui/icons/phosphor";
+import { StatusPill } from "@/components/ui/status-pill";
+import { PortalEmptyState } from "@/features/portal/PortalEmptyState";
 
 export const dynamic = "force-dynamic";
 
@@ -20,12 +22,6 @@ const WORKPLACE_LABELS: Record<string, string> = {
   remote: "Remote",
   hybrid: "Hybrid",
   onsite: "On-site",
-};
-
-const WORKPLACE_COLORS: Record<string, string> = {
-  remote: "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-400",
-  hybrid: "bg-violet-50 text-violet-700 dark:bg-violet-950/50 dark:text-violet-400",
-  onsite: "bg-amber-50 text-amber-700 dark:bg-amber-950/50 dark:text-amber-400",
 };
 
 const EMPLOYMENT_LABELS: Record<string, string> = {
@@ -72,9 +68,30 @@ export default async function PortalJobsPage() {
       and(
         eq(jobs.workspaceId, session.workspaceId),
         eq(jobs.status, "open"),
+        isNull(jobs.deletedAt),
       ),
     )
     .orderBy(desc(jobs.publishedAt));
+
+  // Roles this candidate already has an open application for.
+  const appliedRows =
+    openJobs.length > 0
+      ? await db
+          .select({ jobId: applications.jobId, id: applications.id })
+          .from(applications)
+          .where(
+            and(
+              eq(applications.workspaceId, session.workspaceId),
+              eq(applications.candidateId, session.candidateId),
+              inArray(applications.status, ["active", "hired"]),
+              inArray(
+                applications.jobId,
+                openJobs.map((job) => job.id),
+              ),
+            ),
+          )
+      : [];
+  const appliedByJob = new Map(appliedRows.map((row) => [row.jobId, row.id]));
 
   const byDept = openJobs.reduce<Record<string, typeof openJobs>>((acc, job) => {
     const key = job.department ?? "Other";
@@ -86,86 +103,77 @@ export default async function PortalJobsPage() {
 
   return (
     <PortalShell>
-      <div className="space-y-8">
-        <div>
-          <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
-            Open positions
+      <div className="stagger-in mx-auto max-w-3xl space-y-8">
+        <header className="pt-2">
+          <h1 className="text-[28px] font-semibold tracking-tight text-near-ink">Open roles</h1>
+          <p className="mt-1 text-[15px] text-soft-ink">
+            {openJobs.length > 0
+              ? `${openJobs.length} open role${openJobs.length === 1 ? "" : "s"} across ${depts.length} team${depts.length === 1 ? "" : "s"}. Apply with your saved profile.`
+              : "New roles show up here as soon as they open."}
           </p>
-          <h1 className="mt-1 text-2xl font-bold tracking-tight text-foreground">
-            Join our team
-          </h1>
-          {openJobs.length > 0 && (
-            <p className="mt-1.5 text-sm text-muted-foreground">
-              {openJobs.length} open role{openJobs.length === 1 ? "" : "s"} across{" "}
-              {depts.length} department{depts.length === 1 ? "" : "s"}
-            </p>
-          )}
-        </div>
+        </header>
 
         {openJobs.length === 0 ? (
-          <div className="rounded-2xl border border-dashed border-border bg-card p-12 text-center">
-            <BriefcaseIcon className="mx-auto mb-3 size-8 text-muted-foreground/50" />
-            <p className="font-medium text-foreground">No open roles right now</p>
-            <p className="mt-1 text-sm text-muted-foreground">Check back soon for new opportunities.</p>
-          </div>
+          <PortalEmptyState
+            icon={BriefcaseIcon}
+            title="No open roles right now"
+            description="Check back soon. Your profile stays on file, so applying later takes a minute."
+          />
         ) : (
           <div className="space-y-8">
             {depts.map((dept) => (
-              <section key={dept}>
+              <section key={dept} aria-labelledby={`dept-${dept}`}>
                 <div className="mb-3 flex items-center gap-3">
-                  <h2 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
+                  <h2 id={`dept-${dept}`} className="text-[13px] font-semibold uppercase tracking-wider text-soft-ink">
                     {dept}
                   </h2>
-                  <div className="h-px flex-1 bg-border" />
-                  <span className="text-xs text-muted-foreground">{byDept[dept].length}</span>
+                  <div className="h-px flex-1 bg-hairline" />
+                  <span className="text-[12px] tabular-nums text-soft-ink">{byDept[dept].length}</span>
                 </div>
-                <div className="space-y-2.5">
+                <ul className="space-y-2.5">
                   {byDept[dept].map((job) => {
                     const salary = formatSalary(job.salaryMin, job.salaryMax, job.currency, job.salaryPeriod);
+                    const applicationId = appliedByJob.get(job.id);
                     return (
-                      <Link
-                        key={job.id}
-                        href={`/portal/jobs/${job.id}` as Route}
-                        className="group flex items-start justify-between gap-4 rounded-xl border border-border bg-card p-4 shadow-[0_1px_3px_rgba(0,0,0,0.04)] transition-all hover:border-border hover:shadow-md sm:p-5"
-                      >
-                        <div className="min-w-0 flex-1">
-                          <div className="flex items-center gap-2">
-                            <h3 className="truncate text-sm font-semibold text-foreground group-hover:text-muted-foreground transition-colors">
-                              {job.title}
-                            </h3>
-                            <ArrowUpRightIcon className="size-3.5 shrink-0 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100" />
+                      <li key={job.id}>
+                        <Link
+                          href={(applicationId ? `/portal/applications/${applicationId}` : `/portal/jobs/${job.id}`) as Route}
+                          className="group flex items-center gap-4 rounded-2xl border border-hairline bg-card p-4 transition-[border-color,box-shadow,transform] duration-200 hover:border-foreground/15 hover:shadow-[0_2px_12px_rgba(0,0,0,0.05)] focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none active:scale-[0.995] sm:p-5"
+                        >
+                          <div className="min-w-0 flex-1">
+                            <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                              <h3 className="min-w-0 truncate text-[15px] font-semibold text-near-ink">{job.title}</h3>
+                              {applicationId ? (
+                                <StatusPill size="sm" tone="success">
+                                  Applied
+                                </StatusPill>
+                              ) : null}
+                            </div>
+                            <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-[13px] text-soft-ink">
+                              {job.location ? (
+                                <span className="inline-flex items-center gap-1">
+                                  <MapPinIcon className="size-3.5" />
+                                  {job.location}
+                                </span>
+                              ) : null}
+                              {job.workplaceType ? <span>{WORKPLACE_LABELS[job.workplaceType] ?? job.workplaceType}</span> : null}
+                              {job.employmentType ? (
+                                <span>{EMPLOYMENT_LABELS[job.employmentType] ?? job.employmentType}</span>
+                              ) : null}
+                              {salary ? (
+                                <span className="inline-flex items-center gap-1">
+                                  <CurrencyDollarIcon className="size-3.5" />
+                                  {salary}
+                                </span>
+                              ) : null}
+                            </div>
                           </div>
-                          <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
-                            {job.location && (
-                              <span className="flex items-center gap-1">
-                                <MapPinIcon className="size-3" />
-                                {job.location}
-                              </span>
-                            )}
-                            {job.employmentType && (
-                              <span>
-                                {EMPLOYMENT_LABELS[job.employmentType] ?? job.employmentType}
-                              </span>
-                            )}
-                            {salary && (
-                              <span className="flex items-center gap-1">
-                                <CurrencyDollarIcon className="size-3" />
-                                {salary}
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                        <div className="shrink-0">
-                          {job.workplaceType && (
-                            <span className={`rounded-full px-2.5 py-0.5 text-[11px] font-semibold ${WORKPLACE_COLORS[job.workplaceType] ?? "bg-muted text-muted-foreground"}`}>
-                              {WORKPLACE_LABELS[job.workplaceType] ?? job.workplaceType}
-                            </span>
-                          )}
-                        </div>
-                      </Link>
+                          <CaretRightIcon className="size-4 shrink-0 text-soft-ink transition-transform duration-200 group-hover:translate-x-0.5 group-hover:text-near-ink" />
+                        </Link>
+                      </li>
                     );
                   })}
-                </div>
+                </ul>
               </section>
             ))}
           </div>

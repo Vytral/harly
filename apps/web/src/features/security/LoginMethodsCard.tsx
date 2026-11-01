@@ -7,6 +7,8 @@ import { toast } from "@/lib/notification-island/toast";
 import { SectionHeader, StatusPill } from "@/features/workspaces/settings-ui";
 import { SsoDuotoneIcon } from "@/components/ui/icons/phosphor";
 import { Card } from "@/components/ui/card";
+import { FormFooter } from "@/components/ui/form-footer";
+import { SettingRow, SettingRows } from "@/components/ui/setting-row";
 import { Switch } from "@/components/ui/switch";
 import { updateEnabledLoginMethodsAction } from "@/features/security/actions";
 import {
@@ -155,44 +157,44 @@ export function LoginMethodsCard({
       ) : (
         <>
           {!customize ? (
-            <p className="rounded-xl border bg-muted/40 px-4 py-3 text-sm text-muted-foreground">
+            <p className="rounded-[var(--radius-inner)] bg-card-inset px-4 py-3 text-sm text-muted-foreground">
               The login screen automatically shows every method you&apos;ve
               configured. Turn on <span className="font-medium">Customize</span>{" "}
               to restrict staff to a specific set (for example, SSO only).
             </p>
           ) : (
-            <div className="space-y-2">
-              {LOGIN_METHODS.map((method) => {
-                const isConfigured = configuredSet.has(method);
-                const isOn = selected.has(method) && isConfigured;
-                return (
-                  <div
-                    key={method}
-                    className="flex items-center justify-between gap-4 rounded-xl border bg-card px-4 py-3"
-                  >
-                    <div>
-                      <p className="text-sm font-medium">
-                        {METHOD_META[method].label}
-                        {!isConfigured ? (
-                          <span className="ml-2 align-middle">
-                            <StatusPill tone="off">Not configured</StatusPill>
-                          </span>
-                        ) : null}
-                      </p>
-                      <p className="text-xs text-muted-foreground">
-                        {METHOD_META[method].hint}
-                      </p>
-                    </div>
-                    <Switch
-                      checked={isOn}
-                      onCheckedChange={(v) => toggleMethod(method, v)}
-                      disabled={isPending || !isConfigured}
-                      aria-label={`Show ${METHOD_META[method].label} on the login screen`}
+            <div className="space-y-3">
+              <SettingRows className="-mx-6 border-y border-hairline [&>[data-slot=setting-row]]:px-6">
+                {LOGIN_METHODS.map((method) => {
+                  const isConfigured = configuredSet.has(method);
+                  const isOn = selected.has(method) && isConfigured;
+                  return (
+                    <SettingRow
+                      key={method}
+                      title={
+                        <>
+                          {METHOD_META[method].label}
+                          {!isConfigured ? (
+                            <span className="ml-2 align-middle">
+                              <StatusPill tone="off">Not configured</StatusPill>
+                            </span>
+                          ) : null}
+                        </>
+                      }
+                      description={METHOD_META[method].hint}
+                      control={
+                        <Switch
+                          checked={isOn}
+                          onCheckedChange={(v) => toggleMethod(method, v)}
+                          disabled={isPending || !isConfigured}
+                          aria-label={`Show ${METHOD_META[method].label} on the login screen`}
+                        />
+                      }
                     />
-                  </div>
-                );
-              })}
-              <p className="text-xs text-muted-foreground">
+                  );
+                })}
+              </SettingRows>
+              <p className="text-[12.5px] text-soft-ink">
                 A method must be configured before it can be shown. Configure
                 OAuth providers and enterprise SSO above, and email delivery in
                 the email settings.
@@ -200,16 +202,11 @@ export function LoginMethodsCard({
             </div>
           )}
 
-          <div className="flex justify-end">
-            <button
-              type="button"
-              onClick={handleSave}
-              disabled={isPending}
-              className="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition hover:bg-pine-strong disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              {isPending ? "Saving…" : "Save changes"}
-            </button>
-          </div>
+          <FormFooter
+            className="-mx-6 -mb-6"
+            onSave={handleSave}
+            saving={isPending}
+          />
         </>
       )}
     </Card>

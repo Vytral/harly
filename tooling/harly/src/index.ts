@@ -43,17 +43,28 @@ import {
   type HarlyRelease,
 } from "./release.js";
 import { pullWithProgress } from "./pull.js";
-import { isNpxInvocation, offerGlobalCliInstallation } from "./global-cli.js";
+import { updaterCommand, updaterHelp } from "./updater.js";
+import { installGlobalCli, isNpxInvocation, offerGlobalCliInstallation } from "./global-cli.js";
+import { latestCliVersion, newerCliVersion, updateCheckEnabled } from "./cli-update-check.js";
+import { commandNameOf, groupEntries, renderCommandHelp, renderHelp, unknownCommandMessage, type HelpEntry } from "./help.js";
+import { errorHints } from "./hints.js";
+import { describeService, formatAge, latestBackup, parseComposePs, readCertificate } from "./status.js";
 import { atLeast, compose, parseVersion, run } from "./shell.js";
 import {
   accent,
+  command as cmd,
+  errorBlock,
   humanBytes,
   icon,
   ink,
+  nextSteps,
   rows,
+  section,
+  setQuiet,
   showBrand,
   soft,
   spinnerStyle,
+  type Row,
 } from "./theme.js";
 import {
   compareSemver,
@@ -165,12 +176,14 @@ const force = flags.has("--force");
 const yes = flags.has("--yes");
 const json = flags.has("--json");
 const verbose = flags.has("--verbose");
+const quiet = flags.has("--quiet");
+setQuiet(quiet);
 // CI and automated recovery checks must never wait for a terminal prompt,
 // even when their runner allocates a pseudo-TTY.
 const interactive = Boolean(
   !json && !flags.has("--non-interactive") && process.stdin.isTTY && process.stdout.isTTY && !process.env.CI,
 );
-const cliVersion = "0.5.2";
+const cliVersion = "0.6.0";
 const cliCommand = isNpxInvocation() ? "npx @harly/cli" : "harly";
 let jsonResultWritten = false;
 
@@ -382,31 +395,45 @@ function installedReleaseVersion(identity: { label: string }): string | null {
   return compareSemver(label, "0.0.0") === null ? null : label;
 }
 
-const commandHelp: Array<[string, string]> = [
+const commandHelp: HelpEntry[] = [
   ["harly", "Guided menu — install, or manage a detected installation"],
   ["harly check [directory]", "Verify host requirements without installing"],
   ["harly init [directory] [--force] [--dry-run]", "Generate a new installation"],
   ["harly launch [directory] [--yes] [--timeout seconds]", "Pull images and start the services"],
   ["harly resume [directory] [--yes] [--timeout seconds]", "Retry startup using saved installation configuration"],
-  ["harly doctor [directory] [--json] [--fix]", "Check services and public readiness"],
+  ["harly status [directory] [--json]", "Health, version, disk, backup and certificate at a glance"],
+  ["harly doctor [directory] [--json] [--fix]", "Check services and public readiness; --fix offers repairs"],
   ["harly setup-secret [directory]", "Print HARLY_SETUP_SECRET from .env"],
   ["harly backup [directory] [--encrypt]", "Write a private rollback archive"],
   ["harly restore <archive> [directory] --force", "Restore from an archive"],
   ["harly update [directory] [--to version]", "Update the install here to the current stable release"],
+  ...updaterHelp,
   ["harly uninstall [directory] [--remove-data]", "Stop and remove Harly"],
   ["harly deploy <railway|fly|digitalocean>", "Generate a cloud-platform config"],
+  ["harly install-global [--yes]", "Install the CLI globally so you can just type harly"],
 ];
 
-function usage() {
-  const width = Math.max(...commandHelp.map(([command]) => command.length));
-  process.stdout.write(
-    `\n  ${ink("Harly")} ${soft("· self-hosted ATS")}\n\n${commandHelp
-      .map(
-        ([command, description]) =>
-          `  ${accent(command.padEnd(width))}  ${soft(description)}`,
-      )
-      .join("\n")}\n\n  ${soft(`Run ${ink("npx @harly/cli")} with no arguments for the guided experience.`)}\n\n`,
-  );
+/** One line when a newer CLI is published, from a once-a-day cache. Never
+ * shown to scripts, CI, --json or --quiet. */
+async function updateNotice(refresh = false): Promise<string | undefined> {
+  if (quiet || !updateCheckEnabled(process.env, interactive)) return undefined;
+  const latest = newerCliVersion(cliVersion, await latestCliVersion(process.env, { refresh }));
+  if (!latest) return undefined;
+  const how = cliCommand === "harly" ? "npm install -g @harly/cli@latest" : "npx @harly/cli@latest";
+  return `${accent("Update available")} ${soft(`v${cliVersion} → v${latest}`)}  ${soft(`run ${how}`)}`;
+}
+
+/** Overview help, or one command's help when `topic` is given. Returns false
+ * for a topic that is not a command. */
+async function usage(topic?: string): Promise<boolean> {
+  if (topic) {
+    const text = renderCommandHelp(commandHelp, topic);
+    if (!text) return false;
+    process.stdout.write(text);
+    return true;
+  }
+  process.stdout.write(renderHelp(commandHelp, { version: cliVersion, notice: await updateNotice() }));
+  return true;
 }
 
 function unwrapPrompt<T>(value: T | symbol): T {
@@ -1349,6 +1376,9 @@ x-env: &env
   EMAIL_FROM: \${EMAIL_FROM:-}
   HARLY_CACHE_MAX_MB: \${HARLY_CACHE_MAX_MB:-512}
   HARLY_CACHE_MAX_AGE_DAYS: \${HARLY_CACHE_MAX_AGE_DAYS:-7}
+  HARLY_RELEASE_MANIFEST_URL: \${HARLY_RELEASE_MANIFEST_URL:-}
+  HARLY_DISABLE_UPDATE_CHECK: \${HARLY_DISABLE_UPDATE_CHECK:-false}
+  MCP_ALLOWED_ORIGINS: \${MCP_ALLOWED_ORIGINS:-}
 services:
   postgres:
     image: postgres:16-bookworm
@@ -1547,7 +1577,7 @@ async function init() {
       ["compose.yaml", composeTemplate],
       [
         "Caddyfile",
-        "{$HARLY_DOMAIN} {\n  encode zstd gzip\n  reverse_proxy app:3000\n}\n",
+        "{$HARLY_DOMAIN} {\n  request_body {\n    max_size 30MB\n  }\n  @mcp path /mcp /mcp/*\n  handle @mcp {\n    reverse_proxy app:3000 {\n      flush_interval -1\n    }\n  }\n  handle {\n    encode zstd gzip\n    reverse_proxy app:3000\n  }\n}\n",
       ],
       [".env.example", envExampleWithEsign],
       [".gitignore", ".env\nbackups/\n"],
@@ -1656,16 +1686,16 @@ async function init() {
   }
 }
 
-async function offerCliInstallation(directory: string) {
+async function offerCliInstallation(directory: string, quietIfInstalled = false) {
   if (!interactive || !isNpxInvocation()) return;
   const spin = p.spinner(spinnerStyle);
   try {
     await offerGlobalCliInstallation({
-      interactive, version: cliVersion, directory,
+      interactive, version: cliVersion, directory, quiet: quietIfInstalled,
       ui: {
         // Optional installation requires its own answer, even with --yes.
         // Escape declines it without cancelling the completed deployment.
-        confirm: async (message) => (await p.confirm({ message, initialValue: false })) === true,
+        confirm: async (message, initialValue = true) => (await p.confirm({ message, initialValue })) === true,
         start: (message) => spin.start(message),
         stop: (message) => spin.stop(message),
         info: (message) => p.log.info(message),
@@ -2466,6 +2496,9 @@ async function deploymentDatabase(directory: string) {
 async function backup(
   explicitDirectory?: string,
   print = true,
+  // An update keeps app and scheduler stopped after the backup, so nothing is
+  // written that a rollback to this archive would silently discard.
+  restartWriters = true,
 ): Promise<string> {
   const directory = path.resolve(explicitDirectory ?? positionals[0] ?? ".");
   const config = await readConfig(directory);
@@ -2482,6 +2515,7 @@ async function backup(
   const outputDirectory = path.join(directory, "backups");
   await mkdir(outputDirectory, { recursive: true });
   compose(directory, ["stop", "app", "scheduler"], { allowFailure: true });
+  let written = false;
   try {
     const dump = compose(
       directory,
@@ -2535,6 +2569,7 @@ async function backup(
     // updates. It is intentionally dependency-free, but not a replacement for
     // an off-host disaster-recovery backup.
     if (!encrypt) {
+      written = true;
       if (print) process.stdout.write(`${archive}\n`);
       return archive;
     }
@@ -2542,12 +2577,15 @@ async function backup(
     run("age", ["-r", recipient!, "-o", encrypted, archive]);
     await chmod(encrypted, 0o600);
     await rm(archive, { force: true });
+    written = true;
     if (print) process.stdout.write(`${encrypted}\n`);
     return encrypted;
   } finally {
-    compose(directory, ["up", "-d", "app", "scheduler"], {
-      allowFailure: true,
-    });
+    // A failed backup always brings the writers back: nothing was updated.
+    if (restartWriters || !written)
+      compose(directory, ["up", "-d", "app", "scheduler"], {
+        allowFailure: true,
+      });
     await rm(temp, { recursive: true, force: true });
   }
 }
@@ -2590,11 +2628,12 @@ async function restore() {
   // Never destroy a deployment without first proving that its present state is
   // recoverable. This also makes an accidental restore reversible.
   process.stdout.write("Creating a safety backup of the current deployment…\n");
-  await backup(directory);
+  // Writers stay stopped from the safety backup until the restore finishes, so
+  // nothing is accepted that neither snapshot holds.
+  await backup(directory, true, false);
   process.stdout.write("Safety backup saved. Preparing restore…\n");
-  // The safety backup restarts dependencies. Stop the one-shot migration
-  // service too: otherwise it can race pg_restore and recreate tables while
-  // the database is being restored.
+  // Stop the one-shot migration service too: otherwise it can race pg_restore
+  // and recreate tables while the database is being restored.
   compose(directory, ["stop", "app", "scheduler", "migrate"], {
     allowFailure: true,
   });
@@ -2664,7 +2703,7 @@ async function resolveInstallDirectory(explicitDirectory?: string): Promise<stri
   const found = await findInstallation(start);
   if (found) return found.directory;
   throw new CliError(
-    "No Harly installation found here. Run harly update from the install directory, or pass its path.",
+    "No Harly installation found here. Run this from the install directory (the folder with harly.config.json), or pass its path.",
     2,
   );
 }
@@ -2778,7 +2817,7 @@ async function upgrade(explicitDirectory?: string) {
     const step = p.spinner(spinnerStyle);
     step.start(phase(1, "Writing a rollback point"));
     try {
-      archive = await backup(directory, false);
+      archive = await backup(directory, false, false);
     } catch (error) {
       step.stop(phase(1, "Rollback point failed"));
       throw error;
@@ -2793,26 +2832,36 @@ async function upgrade(explicitDirectory?: string) {
       )}`,
     );
   } else {
-    archive = await backup(directory, false);
+    archive = await backup(directory, false, false);
     process.stdout.write(`${archive}\n`);
   }
+  // From here app and scheduler stay stopped until phase 4 starts the new
+  // release, or a failure below brings the previous one back.
+  const restartPrevious = () =>
+    compose(directory, ["up", "-d", "app", "scheduler"], { allowFailure: true });
   const envPath = path.join(directory, ".env");
   const configPath = path.join(directory, "harly.config.json");
-  const originalEnv = await readFile(envPath, "utf8");
   const setImage = (contents: string, image: string, version: string) =>
     contents
       .replace(/^HARLY_IMAGE=.*$/m, `HARLY_IMAGE=${envLine(image)}`)
       .replace(/^HARLY_VERSION=.*$/m, `HARLY_VERSION=${envLine(version)}`);
 
-  // The transient write uses the resolved target label rather than a
-  // placeholder: if the process dies between here and the post-pull write,
-  // `.env` still names a real version instead of the literal "current".
-  await atomicWrite(
-    envPath,
-    setImage(originalEnv, requestedImage, envVersion(targetIdentity)),
-    0o600,
-  );
+  // Everything between the backup and the first migration is undoable: any
+  // failure here (a full disk, a failed pull) puts the previous .env back and
+  // starts the previous release again, since nothing has touched the schema.
+  let originalEnv: string | null = null;
+  let deployedImage = requestedImage;
+  let deployedIdentity: ReturnType<typeof describeImage>;
   try {
+    originalEnv = await readFile(envPath, "utf8");
+    // The transient write uses the resolved target label rather than a
+    // placeholder: if the process dies between here and the post-pull write,
+    // `.env` still names a real version instead of the literal "current".
+    await atomicWrite(
+      envPath,
+      setImage(originalEnv, requestedImage, envVersion(targetIdentity)),
+      0o600,
+    );
     await pullWithProgress(
       directory,
       ["app", "migrate", "scheduler"],
@@ -2820,42 +2869,54 @@ async function upgrade(explicitDirectory?: string) {
       phase(2, "Downloading container images"),
       phase(2, "Container images downloaded"),
     );
+
+    const inspected = run(
+      "docker",
+      [
+        "image",
+        "inspect",
+        requestedImage,
+        "--format",
+        '{{join .RepoDigests "\\n"}}',
+      ],
+      { allowFailure: true },
+    );
+    const repository = requestedImage.split("@")[0]!.replace(/:[^/:]+$/, "");
+    const repoDigests = String(inspected.stdout ?? "").split(/\s+/);
+    // The stable channel publishes a digest: the tag that was pulled must be
+    // exactly that image (for a multi-arch release, its index digest), or a
+    // moved tag would be migrated onto. This runs before any migration.
+    const manifestDigest = `${repository}@${release.digest}`;
+    if (requestedImage === releaseTagImage(release) && !repoDigests.includes(manifestDigest)) {
+      throw new CliError(
+        `The image downloaded for ${release.version} is not the one the release manifest publishes (${release.digest}). Nothing was migrated; the previous release is running again.`,
+        1,
+      );
+    }
+    const digest = repoDigests.includes(manifestDigest)
+      ? manifestDigest
+      : repoDigests.find((value) => value.startsWith(`${repository}@sha256:`));
+    deployedImage = digest ?? requestedImage;
+    // HARLY_VERSION is what the running app reports at /api/health/live and in
+    // the OpenAPI document. Recording a 12-character digest fragment there made
+    // every deployment look unversioned; the resolved release name is both
+    // truthful and legible. `requestedImage` carries the tag the operator asked
+    // for, which the digest-pinned `deployedImage` no longer shows.
+    deployedIdentity = describeImage(
+      digest ? requestedImage : deployedImage,
+      release,
+    );
+    await atomicWrite(
+      envPath,
+      setImage(await readFile(envPath, "utf8"), deployedImage, envVersion(deployedIdentity)),
+      0o600,
+    );
   } catch (error) {
-    await atomicWrite(envPath, originalEnv, 0o600);
+    if (originalEnv !== null)
+      await atomicWrite(envPath, originalEnv, 0o600).catch(() => undefined);
+    restartPrevious();
     throw error;
   }
-
-  const inspected = run(
-    "docker",
-    [
-      "image",
-      "inspect",
-      requestedImage,
-      "--format",
-      '{{join .RepoDigests "\\n"}}',
-    ],
-    { allowFailure: true },
-  );
-  const repository = requestedImage.split("@")[0]!.replace(/:[^/:]+$/, "");
-  const digest = String(inspected.stdout ?? "")
-    .split(/\s+/)
-    .find((value) => value.startsWith(`${repository}@sha256:`));
-  const deployedImage = digest ?? requestedImage;
-  // HARLY_VERSION is what the running app reports at /api/health/live and in
-  // the OpenAPI document. Recording a 12-character digest fragment there made
-  // every deployment look unversioned; the resolved release name is both
-  // truthful and legible. `requestedImage` carries the tag the operator asked
-  // for, which the digest-pinned `deployedImage` no longer shows.
-  const deployedIdentity = describeImage(
-    digest ? requestedImage : deployedImage,
-    release,
-  );
-  const deployedVersion = envVersion(deployedIdentity);
-  await atomicWrite(
-    envPath,
-    setImage(await readFile(envPath, "utf8"), deployedImage, deployedVersion),
-    0o600,
-  );
   const markTargetConfigured = async () => {
     config.requestedImage = requestedImage;
     config.image = deployedImage;
@@ -3378,14 +3439,219 @@ primary_region = "iad"
   p.outro("Configuration ready to deploy. Never commit generated secret files.");
 }
 
+/** Plain-text writer for commands that run without a terminal UI. */
+function plainUi() {
+  return {
+    confirm: async () => false,
+    start: (message: string) => humanOut(`${message}...\n`),
+    stop: (message: string) => humanOut(`${message}\n`),
+    info: (message: string) => humanOut(`${message}\n`),
+    warn: (message: string) => humanOut(`Warning: ${message}\n`),
+  };
+}
+
+async function installGlobal() {
+  if (positionals.length > 0) throw usageError("install-global does not take arguments. Run harly help install-global.");
+  if (interactive) showBrand("Install globally", cliVersion);
+  const spin = interactive ? p.spinner(spinnerStyle) : null;
+  const ui = interactive
+    ? {
+        confirm: async (message: string, initialValue = true) => (await p.confirm({ message, initialValue })) === true,
+        start: (message: string) => spin!.start(message),
+        stop: (message: string) => spin!.stop(message),
+        info: (message: string) => p.log.info(message),
+        warn: (message: string) => p.log.warn(message),
+      }
+    : plainUi();
+  const result = await installGlobalCli({
+    interactive, yes, dryRun: flags.has("--dry-run"), version: cliVersion, directory: process.cwd(), ui,
+  });
+  if (result.status === "needs-confirmation") {
+    throw usageError("install-global installs software on this machine. Pass --yes to confirm, or run it in a terminal.", "MISSING_ARGUMENT");
+  }
+  if (result.status === "failed") {
+    throw new CliError(`Global installation did not complete. Install it yourself with: ${result.npmCommand}`, 1, "REMOTE_OPERATION_FAILED");
+  }
+  if (json) {
+    writeResult(resultOk("install-global", result.status, { ...result, sideEffects: result.status === "installed" || result.status === "updated" }));
+    return;
+  }
+  const lines: Record<string, string> = {
+    "dry-run": `Would run: ${result.npmCommand}. Nothing was installed.`,
+    declined: "Nothing installed. Run harly install-global whenever you want it.",
+    "already-installed": `Harly CLI v${result.installedVersion ?? result.version} is already installed globally.`,
+    installed: `Installed. Type ${cmd("harly")} to open the menu.`,
+    updated: `Updated the global CLI to v${result.version}.`,
+  };
+  const line = lines[result.status];
+  if (line) {
+    if (interactive) p.outro(line);
+    else humanOut(`${line}\n`);
+  }
+}
+
+/** Version row detail: the installed release and whether a newer one exists. */
+function versionStatus(config: HarlyFileConfig, lookup: Awaited<ReturnType<typeof officialRelease>>) {
+  const identity = describeImage(config.requestedImage ?? config.image, lookup.release);
+  const current = identity.label.replace(/^v(?=\d)/, "");
+  const order = lookup.source === "remote" ? compareSemver(current, lookup.release.version) : null;
+  return {
+    identity,
+    latest: lookup.source === "remote" ? lookup.release.version : undefined,
+    updateAvailable: order !== null && order < 0,
+    upToDate: order !== null && order >= 0,
+  };
+}
+
+async function statusCommand(explicitDirectory?: string) {
+  const directory = await resolveInstallDirectory(explicitDirectory);
+  const config = await readConfig(directory);
+  const spin = interactive ? p.spinner(spinnerStyle) : null;
+  if (interactive) showBrand("Status", cliVersion);
+  spin?.start("Checking your installation");
+
+  const started = Date.now();
+  const [lookup, readiness, disk, backupInfo, cliLatest] = await Promise.all([
+    officialRelease(),
+    fetch(`${config.publicUrl}/api/health/ready`, { signal: AbortSignal.timeout(5_000) })
+      .then((response) => ({ ok: response.ok, status: response.status, ms: Date.now() - started }))
+      .catch(() => ({ ok: false, status: 0, ms: Date.now() - started })),
+    freeDiskGb(directory).catch(() => undefined),
+    latestBackup(directory),
+    updateCheckEnabled(process.env, interactive) ? latestCliVersion(process.env, { refresh: true }) : Promise.resolve(undefined),
+  ]);
+  const ps = compose(directory, ["ps", "--all", "--format", "json"], { allowFailure: true });
+  const dockerReachable = ps.status === 0;
+  const services = parseComposePs(String(ps.stdout ?? ""));
+  const publicUrl = new URL(config.publicUrl);
+  const certificate = publicUrl.protocol === "https:" && !isIP(publicUrl.hostname) && publicUrl.hostname !== "localhost"
+    ? await readCertificate(publicUrl.hostname, Number(publicUrl.port) || 443)
+    : null;
+  spin?.stop("Status collected");
+
+  const version = versionStatus(config, lookup);
+  const cliNewer = newerCliVersion(cliVersion, cliLatest);
+  const wanted: Array<[string, string]> = [
+    ["postgres", "Database"],
+    ["app", "Application"],
+    ["scheduler", "Scheduler"],
+    ...(config.proxyMode === "caddy" ? [["caddy", "HTTPS proxy"] as [string, string]] : []),
+  ];
+  const serviceRows = wanted.map(([name, label]) => ({
+    name, label, state: services.find((service) => service.name === name),
+  }));
+  const servicesOk = dockerReachable && serviceRows.every((row) => describeService(row.state).ok);
+  const healthy = servicesOk && readiness.ok;
+  const diskLow = disk !== undefined && disk < Number(process.env.HARLY_REQUIRED_DISK_GB ?? 5);
+  const backupAgeMs = backupInfo ? Date.now() - backupInfo.modified.getTime() : undefined;
+  const backupStale = backupAgeMs !== undefined && backupAgeMs > 7 * 24 * 3600_000;
+  const certSoon = certificate !== null && certificate.daysLeft < 14;
+
+  const steps: string[] = [];
+  if (!healthy) steps.push(`${cmd(`${cliCommand} doctor`)}  find out what is failing`, `${cmd(`${cliCommand} resume`)}  retry startup with the saved configuration`);
+  if (!backupInfo || backupStale) steps.push(`${cmd(`${cliCommand} backup`)}  ${backupInfo ? "the last backup is over a week old" : "no backup exists yet"}`);
+  if (version.updateAvailable) steps.push(`${cmd(`${cliCommand} update`)}  move to v${version.latest}`);
+
+  if (json) {
+    writeResult(resultOk("status", healthy ? "ready" : "degraded", {
+      ok: healthy,
+      directory,
+      url: config.publicUrl,
+      proxyMode: config.proxyMode,
+      storage: config.storage,
+      deployedAt: config.deployedAt,
+      version: {
+        current: version.identity.label, source: version.identity.source,
+        latest: version.latest, updateAvailable: version.updateAvailable,
+      },
+      cli: { version: cliVersion, latest: cliLatest, updateAvailable: cliNewer !== null },
+      docker: { reachable: dockerReachable },
+      services: serviceRows.map((row) => ({
+        name: row.name, state: row.state?.state ?? "missing", health: row.state?.health, ok: describeService(row.state).ok,
+      })),
+      readiness: { ok: readiness.ok, httpStatus: readiness.status || undefined, latencyMs: readiness.ms },
+      disk: disk === undefined ? undefined : { freeGb: Math.round(disk * 10) / 10, low: diskLow },
+      backup: backupInfo ? {
+        file: backupInfo.file, bytes: backupInfo.bytes, modifiedAt: backupInfo.modified.toISOString(),
+        encrypted: backupInfo.encrypted, stale: backupStale,
+      } : null,
+      certificate: certificate ? {
+        validTo: certificate.validTo.toISOString(), daysLeft: certificate.daysLeft,
+        issuer: certificate.issuer, trusted: certificate.trusted,
+      } : null,
+    }));
+    if (!healthy) process.exitCode = 1;
+    return;
+  }
+
+  const instance: Row[] = [
+    {
+      icon: icon.network(), label: "URL", status: readiness.ok ? "ok" : "fail",
+      detail: `${config.publicUrl}  ${readiness.ok ? `answers ready · ${readiness.ms} ms` : readiness.status ? `HTTP ${readiness.status}` : "unreachable"}`,
+    },
+    {
+      icon: icon.image(), label: "Version", status: version.updateAvailable ? "warn" : "ok",
+      detail: `${versionLine(version.identity)}${
+        version.updateAvailable ? `  update available: v${version.latest}` : version.upToDate ? "  latest" : lookup.source === "remote" ? "" : "  latest unknown (offline)"
+      }`,
+    },
+  ];
+  const stack: Row[] = serviceRows.map((row) => {
+    const described = describeService(row.state);
+    return {
+      icon: row.name === "postgres" ? icon.database() : row.name === "caddy" ? icon.proxy() : row.name === "scheduler" ? icon.scheduler() : icon.app(),
+      label: row.label, status: described.ok ? "ok" as const : "fail" as const,
+      detail: dockerReachable ? described.detail : "container state unavailable (is Docker running?)",
+    };
+  });
+  const host: Row[] = [];
+  if (disk !== undefined) host.push({ icon: icon.archive(), label: "Disk", status: diskLow ? "warn" : "ok", detail: `${disk.toFixed(1)} GB free${diskLow ? "  low" : ""}` });
+  host.push(backupInfo
+    ? { icon: icon.archive(), label: "Last backup", status: backupStale ? "warn" : "ok", detail: `${formatAge(backupAgeMs!)} · ${humanBytes(backupInfo.bytes)}${backupInfo.encrypted ? " · encrypted" : ""}` }
+    : { icon: icon.archive(), label: "Last backup", status: "warn", detail: "none yet" });
+  if (certificate) {
+    host.push({
+      icon: icon.proxy(), label: "Certificate",
+      status: !certificate.trusted || certSoon || certificate.daysLeft < 0 ? "warn" : "ok",
+      detail: `${certificate.issuer ?? "issuer unknown"} · ${certificate.daysLeft < 0 ? "expired" : `expires in ${certificate.daysLeft} days`}${certificate.trusted ? "" : " · not trusted from here"}`,
+    });
+  }
+  const facts = rows([
+    { label: "Mode", detail: `${config.proxyMode} proxy · ${config.storage} storage · ${config.resourceProfile} profile` },
+    { label: "Directory", detail: directory },
+    ...(config.deployedAt ? [{ label: "Deployed", detail: formatAge(Date.now() - Date.parse(config.deployedAt)) }] : []),
+    { label: "CLI", detail: `v${cliVersion}${cliNewer ? `  update available: v${cliNewer}` : ""}` },
+  ]);
+  const body = [
+    section("Instance"), ...rows(instance), "",
+    section("Services"), ...rows(stack), "",
+    section("Host"), ...rows(host), "",
+    section("Details"), ...facts,
+  ].join("\n");
+  const verdict = healthy ? "Harly is healthy." : "Harly needs attention.";
+  if (interactive) {
+    p.log.message(body);
+    if (steps.length) p.log.message(nextSteps(steps));
+    if (healthy) p.outro(verdict); else p.log.error(verdict);
+  } else {
+    const indented = body.split("\n").map((line) => (line ? `  ${line}` : line)).join("\n");
+    process.stdout.write(`\n${indented}\n\n  ${healthy ? accent(verdict) : pc.red(verdict)}\n`);
+    if (steps.length && !quiet) process.stdout.write(`\n${nextSteps(steps).split("\n").map((line) => `  ${line}`).join("\n")}\n`);
+    process.stdout.write("\n");
+  }
+  if (!healthy) process.exitCode = 1;
+}
+
 async function menu() {
   const installation = await findInstallation() ?? (interactive ? await defaultInstallation() : null);
   if (!interactive) {
     if (installation) return doctor(installation.directory);
-    usage();
+    await usage();
     return;
   }
-  showBrand(undefined, cliVersion);
+  showBrand(undefined, cliVersion, await updateNotice(true));
+  // Asked once: a decline is remembered, and an existing global install is silent.
+  await offerCliInstallation(process.cwd(), true);
   if (!installation) {
     const choice = unwrapPrompt(
       await p.select({
@@ -3406,11 +3672,17 @@ async function menu() {
             label: "Deploy to a managed cloud",
             hint: "Railway · Fly.io · DigitalOcean",
           },
-          { value: "help", label: "Show advanced commands" },
+          {
+            value: "check",
+            label: "Check this server first",
+            hint: "Docker, disk, RAM and ports — changes nothing",
+          },
+          { value: "help", label: "Show all commands" },
         ],
       }),
     );
     if (choice === "install") return init();
+    if (choice === "check") return harlyCheck();
     if (choice === "resume") {
       const directory = unwrapPrompt(await p.text({
         message: "Installation directory",
@@ -3420,13 +3692,11 @@ async function menu() {
       return resumeInstallation(directory);
     }
     if (choice === "cloud") return cloudSubmenu();
-    usage();
+    await usage();
     return;
   }
-  const identity = describeImage(
-    installation.config.requestedImage ?? installation.config.image,
-    (await officialRelease()).release,
-  );
+  const version = versionStatus(installation.config, await officialRelease());
+  const lastBackup = await latestBackup(installation.directory);
   p.log.message(
     rows([
       {
@@ -3437,7 +3707,12 @@ async function menu() {
       {
         icon: icon.image(),
         label: "Version",
-        detail: versionLine(identity),
+        detail: `${versionLine(version.identity)}${version.updateAvailable ? `  update available: v${version.latest}` : ""}`,
+      },
+      {
+        icon: icon.archive(),
+        label: "Last backup",
+        detail: lastBackup ? formatAge(Date.now() - lastBackup.modified.getTime()) : "none yet",
       },
       {
         icon: icon.config(),
@@ -3450,23 +3725,32 @@ async function menu() {
     await p.select({
       message: "Choose an action",
       options: [
+        { value: "status", label: "Status", hint: "Health, version, disk, backup and certificate" },
+        { value: "update", label: version.updateAvailable ? `Update Harly to v${version.latest}` : "Update Harly", hint: "Back up first, then apply the stable release" },
+        { value: "backup", label: "Create backup", hint: lastBackup ? undefined : "No backup yet" },
         { value: "resume", label: "Start or resume installation", hint: "Reuse saved configuration and retry startup" },
-        { value: "status", label: "Status" },
-        { value: "update", label: "Update Harly" },
-        { value: "backup", label: "Create backup" },
+        { value: "secret", label: "Show setup secret", hint: "Needed for first sign-in" },
         { value: "restore", label: "Restore backup" },
         { value: "uninstall", label: "Stop or uninstall Harly" },
+        { value: "help", label: "Show all commands" },
       ],
     }),
   );
   if (choice === "resume") return resumeInstallation(installation.directory);
-  if (choice === "status") return doctor(installation.directory);
+  if (choice === "status") return statusCommand(installation.directory);
   if (choice === "update") return upgrade(installation.directory);
   if (choice === "backup")
     return backup(installation.directory).then(() => undefined);
+  if (choice === "secret") return setupSecret(installation.directory);
+  if (choice === "help") {
+    await usage();
+    return;
+  }
   if (choice === "restore") {
     p.log.info(
-      "Use `harly restore <archive> --force` for restore. Local rollback archives work without extra dependencies; encrypted `.age` archives are an advanced option.",
+      lastBackup
+        ? `Latest archive: ${lastBackup.file}\nRestore it with: ${cliCommand} restore ${shellQuote(lastBackup.file)} ${shellQuote(installation.directory)} --force\nRestore replaces current data, so take a backup first.`
+        : "Use `harly restore <archive> --force` for restore. Local rollback archives work without extra dependencies; encrypted `.age` archives are an advanced option.",
     );
     return;
   }
@@ -3534,6 +3818,10 @@ async function main() {
       return launch();
     case "resume":
       return resumeInstallation();
+    case "status":
+      return statusCommand();
+    case "install-global":
+      return installGlobal();
     case "doctor":
       return doctor();
     case "setup-secret":
@@ -3545,24 +3833,44 @@ async function main() {
     case "upgrade":
     case "update":
       return upgrade();
+    case "updater": {
+      const result = await updaterCommand({ positionals, flags, values: parsed.values, cliVersion });
+      if (result) writeResult(result);
+      return;
+    }
     case "uninstall":
       return uninstall();
     case "deploy":
       return deploy();
     case "help":
     case "--help":
-    case "-h":
-      if (json) writeResult(resultOk("help", "completed", { commands: commandHelp.map(([name, description]) => ({ name, description })) }));
-      else usage();
+    case "-h": {
+      // `harly help backup` and `harly backup --help` both explain one command.
+      const topic = parsed.command === "help" ? positionals[0] : parsed.command === "menu" ? undefined : parsed.command;
+      if (topic) {
+        const entry = commandHelp.find(([usageLine]) => commandNameOf(usageLine) === (topic === "upgrade" ? "update" : topic));
+        if (!entry) throw usageError(unknownCommandMessage(topic, commandHelp));
+        if (json) writeResult(resultOk("help", "completed", { command: commandNameOf(entry[0]), usage: entry[0], description: entry[1] }));
+        else await usage(topic);
+        return;
+      }
+      if (json) writeResult(resultOk("help", "completed", {
+        commands: commandHelp.map(([name, description]) => ({ name, description })),
+        groups: groupEntries(commandHelp).map((group) => ({
+          title: group.title,
+          commands: group.entries.map(([name, description]) => ({ name, description })),
+        })),
+      }));
+      else await usage();
       return;
+    }
     case "--version":
     case "-v":
       if (json) writeResult(resultOk("version", "completed", { version: cliVersion }));
       else process.stdout.write(`${cliVersion}\n`);
       return;
     default:
-      usage();
-      throw new CliError(`Unknown command: ${command}`, 2);
+      throw usageError(unknownCommandMessage(command, commandHelp));
   }
 }
 
@@ -3578,6 +3886,15 @@ main().then(() => {
   const result = await handleHarlyError(error, { interactive, yes });
   if (result.kind === "abort") {
     const exitCode = result.exitCode;
+    // Plain errors say what failed; this adds what to do next. Errors that
+    // render their own remedy (ports, DNS, disk) are left alone.
+    const plain = !(error instanceof CliError) || Object.getPrototypeOf(error) === CliError.prototype;
+    const failure = error instanceof Error ? error.message : String(error);
+    const hints = plain && !(error instanceof CliError && error.code === "CANCELLED") ? errorHints(failure, command) : [];
+    if (!json && !quiet && hints.length > 0) process.stderr.write(`\n${nextSteps(hints)}\n`);
+    if (!json && verbose && error instanceof Error && !(error instanceof CliError) && error.stack) {
+      process.stderr.write(`\n${soft(error.stack)}\n`);
+    }
     if (json && !jsonResultWritten) {
       const message = error instanceof Error && error.message ? error.message : "Operation failed.";
       const cancelled = error instanceof CliError && error.code === "CANCELLED";
@@ -3592,7 +3909,7 @@ main().then(() => {
             "Delete unused resources manually if the deployment is abandoned.",
           ],
         },
-      } : {}));
+      } : hints.length > 0 ? { next: hints } : {}));
     }
     process.exit(exitCode);
   }

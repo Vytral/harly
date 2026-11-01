@@ -24,6 +24,8 @@ vi.mock("@harly/db", () => ({
   signatureRecipients: {},
   signatureArtifacts: {},
   offers: {},
+  organization: {},
+  user: {},
   workspaceSettings: {},
 }));
 vi.mock("@/lib/storage", () => ({
@@ -144,7 +146,11 @@ describe("rotateNativePortalSigningLink", () => {
       recipientEmail: "ada@example.test",
       recipientName: "Ada Lovelace",
       linkExpiresAt: expiresAt,
-      envelopeSentAt: new Date("2026-09-07T12:00:00.000Z"),
+      routingOrder: 1,
+      reminderCount: 0,
+      subject: null,
+      message: null,
+      senderName: "Sam",
     }]));
     tx.insert
       .mockReturnValueOnce(query([{ id: "reminder-event-1" }]))
@@ -175,7 +181,11 @@ describe("rotateNativePortalSigningLink", () => {
       recipientEmail: "ada@example.test",
       recipientName: "Ada Lovelace",
       linkExpiresAt: new Date("2026-10-09T12:00:00.000Z"),
-      envelopeSentAt: new Date("2026-09-07T12:00:00.000Z"),
+      routingOrder: 1,
+      reminderCount: 0,
+      subject: null,
+      message: null,
+      senderName: "Sam",
     }]));
     mocks.transaction.mockImplementation(async (callback: (value: typeof tx) => unknown) => callback(tx));
 
@@ -186,6 +196,16 @@ describe("rotateNativePortalSigningLink", () => {
     });
     expect(tx.update).not.toHaveBeenCalled();
     expect(mocks.processEmailOutbox).not.toHaveBeenCalled();
+  });
+});
+
+describe("link lifetime", () => {
+  it("never goes below the minimum window or above a year", async () => {
+    const { linkLifetimeDays } = await import("./link-lifetime");
+    expect(linkLifetimeDays(null, 1)).toBe(3);
+    expect(linkLifetimeDays(null, 30)).toBe(30);
+    expect(linkLifetimeDays(10, 30)).toBe(10);
+    expect(linkLifetimeDays(null, 9999)).toBe(365);
   });
 });
 
@@ -204,7 +224,10 @@ describe("createNativeSigningLink database boundary", () => {
 
     let insertCall = 0;
     const tx = {
-      select: vi.fn(() => query([])),
+      select: vi
+        .fn(() => query([]))
+        // The envelope transaction re-reads the document under a row lock.
+        .mockReturnValueOnce(query([{ status: "active", signatureStatus: "unsigned", storageKey: "documents/offer.pdf", fieldsSnapshot: [{ id: "field-1", type: "signature", page: 1, x: 0.1, y: 0.1, w: 0.2, h: 0.05, required: true, recipientIndex: 0 }] }])),
       insert: vi.fn(() => ({
         values: () => {
           insertCall += 1;
@@ -261,5 +284,34 @@ describe("createNativeSigningLink database boundary", () => {
       expect.objectContaining({ document: { id: "document-1" } }),
       expect.objectContaining({ skipDomainEvent: true, eventId: "event-1", database: isolatedDatabase }),
     );
+  });
+  it("creates no envelope when a concurrent send already moved the document on", async () => {
+    const fieldsSnapshot = [{ id: "field-1", type: "signature", page: 1, x: 0.1, y: 0.1, w: 0.2, h: 0.05, required: true, recipientIndex: 0 }];
+    mocks.select
+      .mockReturnValueOnce(query([{ enabled: true, expirationDays: 30, securityMode: "link_only" }]))
+      .mockReturnValueOnce(query([{ id: "document-1", name: "Offer.pdf", storageKey: "documents/offer.pdf", mimeType: "application/pdf", status: "active", signatureStatus: "unsigned", fieldsSnapshot }]));
+    const tx = {
+      // Under the lock, the other request has already opened the workflow.
+      select: vi.fn(() => query([{ status: "active", signatureStatus: "pending", storageKey: "documents/offer.pdf", fieldsSnapshot }])),
+      insert: vi.fn(),
+      update: vi.fn(),
+    };
+    const isolatedDatabase = {
+      select: mocks.select,
+      transaction: vi.fn((callback: (value: typeof tx) => unknown) => callback(tx)),
+    } as unknown as typeof import("@harly/db").db;
+
+    const result = await createNativeSigningLink({
+      database: isolatedDatabase,
+      workspaceId: "workspace-1",
+      documentId: "document-1",
+      actorId: "user-1",
+      recipientEmail: "ada@example.test",
+      recipientName: "Ada Lovelace",
+    });
+
+    expect(result).toEqual({ ok: false, error: expect.stringMatching(/already sent for signature/) });
+    expect(tx.insert).not.toHaveBeenCalled();
+    expect(mocks.processEmailOutbox).not.toHaveBeenCalled();
   });
 });

@@ -28,9 +28,9 @@ export type StatusPillTone =
 export type StatusPillSize = "sm" | "md";
 
 const toneClasses: Record<StatusPillTone, string> = {
-  neutral: "bg-muted text-muted-foreground",
+  neutral: "bg-status-quiet text-status-quiet-ink",
   info: "bg-status-quiet text-status-quiet-ink",
-  success: "bg-success/10 text-success",
+  success: "bg-sage-wash text-success-olive",
   warning: "bg-warning/10 text-warning",
   danger: "bg-destructive/10 text-destructive",
   accent: "bg-accent text-accent-foreground",
@@ -44,14 +44,14 @@ const sizeClasses: Record<StatusPillSize, string> = {
 export function StatusPill({
   tone = "neutral",
   size = "md",
-  dot = false,
+  dot = true,
   icon: Icon,
   children,
   className,
 }: {
   tone?: StatusPillTone;
   size?: StatusPillSize;
-  /** A leading dot in the current text colour. Decorative. */
+  /** Leading 6px dot in the current text colour (on by default, like Badge). Decorative. */
   dot?: boolean;
   /** A leading icon. Decorative: the text carries the meaning. */
   icon?: ComponentType<{ className?: string }>;
@@ -65,14 +65,14 @@ export function StatusPill({
   return (
     <span
       className={cn(
-        "font-chrome inline-flex items-center gap-1.5 whitespace-nowrap rounded-full font-medium leading-none",
+        "font-chrome inline-flex items-center gap-1.5 whitespace-nowrap rounded-full font-medium leading-none transition-colors duration-150",
         sizeClasses[size],
         toneClasses[tone],
         className,
       )}
     >
-      {dot ? (
-        <span aria-hidden="true" className="size-1.5 rounded-full bg-current" />
+      {dot && !Icon ? (
+        <span aria-hidden="true" className="size-1.5 shrink-0 rounded-full bg-current" />
       ) : null}
       {Icon ? <Icon aria-hidden="true" className="size-3" /> : null}
       {children}

@@ -30,142 +30,151 @@ export type NavItem = {
   badge?: NavBadge;
   /** When set, the item is hidden unless the viewer holds this permission. */
   requiredPermission?: Permission | Permission[];
-  /** One short line shown in the More menu. Rail items don't need it. */
+  /** One short line for the More grid (tooltip / aria). */
   hint?: string;
+  /**
+   * The page at exactly this href has no heading of its own, so the shell
+   * renders the label as the page title (see ShellPageHeading).
+   */
+  shellTitle?: boolean;
+  /** Sub-navigation. A parent with children is a group pill, not a page. */
+  children?: NavItem[];
+};
+
+/** A primary pill resolved against the viewer's permissions. */
+export type ResolvedNavGroup = {
+  item: NavItem;
+  /** Where the pill goes: the first permitted child (or the item itself). */
+  href: Route;
+  /** Permitted sub-nav entries; empty for single destinations. */
+  children: NavItem[];
 };
 
 /**
- * PRIMARY NAV , the icon rail. Hard cap: 5 destinations (DESIGN.md).
+ * PRIMARY NAV , the header pills (DESIGN.md , Layout language).
  *
- * A recruiter does not think in modules. They ask: who came in today, who needs
- * me to move or answer them, which role is stuck, and where is that one person
- * whose name I remember. These five answer those. Everything else is a place you
- * *visit*, not a place you live, so it belongs in `moreNav`.
- *
- * Candidates earns a slot because Home does not do its job. Home is a triage
- * cockpit , it shows who needs a decision *today*, which is deliberately not the
- * same as "everyone we have ever talked to". Looking someone up is a daily
- * motion, and burying the directory behind More made it a three-click errand.
- *
- * This is now full. Adding a sixth requires updating DESIGN.md first, and
- * demoting one of these , it is a hard ban, not a guideline.
+ * Pills are *groups*: each carries `children` that become the sub-nav row under
+ * the header. A group pill links to its first permitted child, is hidden when
+ * the viewer may open none of them, and reads as active when any child is.
+ * Home and Reports are single destinations (no children).
  */
 export const primaryNav: NavItem[] = [
   { label: "Home", href: "/dashboard", icon: Home, exact: true },
   {
-    label: "Inbox",
-    href: "/dashboard/inbox",
-    icon: Inbox,
-    badge: "inbox",
-    requiredPermission: "candidates:view",
-  },
-  {
-    label: "Pipeline",
-    href: "/dashboard/pipeline",
-    icon: KanbanSquare,
-    requiredPermission: "candidates:view",
-  },
-  {
-    label: "Candidates",
-    href: "/dashboard/candidates",
-    icon: Users,
-    requiredPermission: "candidates:view",
-  },
-  {
-    label: "Jobs",
+    label: "Hiring",
     href: "/dashboard/jobs",
     icon: Briefcase,
-    requiredPermission: "jobs:view",
+    // Jobs first: it works out of the box. Inbox needs a mailbox connected
+    // first, so it sits last.
+    children: [
+      {
+        label: "Jobs",
+        href: "/dashboard/jobs",
+        icon: Briefcase,
+        requiredPermission: "jobs:view",
+      },
+      {
+        label: "Pipeline",
+        shellTitle: true,
+        href: "/dashboard/pipeline",
+        icon: KanbanSquare,
+        requiredPermission: "candidates:view",
+      },
+      {
+        label: "Inbox",
+        shellTitle: true,
+        href: "/dashboard/inbox",
+        icon: Inbox,
+        badge: "inbox",
+        requiredPermission: "candidates:view",
+      },
+    ],
   },
-];
-
-export type MoreGroup = { label: string; items: NavItem[] };
-
-/**
- * Everything behind More , the 5th rail slot. Grouped so the popover reads as
- * a short index instead of the 14-item warehouse the rail used to be.
- */
-export const moreNav: MoreGroup[] = [
   {
     label: "People",
-    items: [
-      // Candidates was promoted to the rail; only the two surfaces that are
-      // genuinely occasional stay here.
+    href: "/dashboard/candidates",
+    icon: Users,
+    children: [
+      {
+        label: "Candidates",
+        href: "/dashboard/candidates",
+        icon: Users,
+        requiredPermission: "candidates:view",
+      },
       {
         label: "Talent Pool",
+        shellTitle: true,
         href: "/dashboard/talent-pool",
         icon: Bookmark,
         requiredPermission: "candidates:view",
-        hint: "Saved for later",
       },
       {
         label: "Team",
         href: "/people" as Route,
         icon: UserRound,
         requiredPermission: "members:read",
-        hint: "Your colleagues",
       },
     ],
   },
   {
     label: "Work",
-    items: [
+    href: "/dashboard/tasks",
+    icon: ListTodo,
+    children: [
       {
         label: "Tasks",
         href: "/dashboard/tasks",
         icon: ListTodo,
         badge: "tasks",
         requiredPermission: "tasks:read",
-        hint: "Assigned to you",
       },
       {
         label: "Calendar",
+        shellTitle: true,
         href: "/dashboard/calendars",
         icon: CalendarDays,
         requiredPermission: ["interviews:manage", "interviews:feedback"],
-        hint: "Interviews and availability",
-      },
-      {
-        label: "Reports",
-        href: "/dashboard/reports",
-        icon: BarChart3,
-        requiredPermission: "reports:read",
-        hint: "Funnel, sources, time to hire",
       },
     ],
   },
   {
-    label: "Set up",
-    items: [
-      {
-        label: "Career Page",
-        href: "/dashboard/career-page",
-        icon: Globe,
-        requiredPermission: "settings:edit",
-        hint: "Your public job board",
-      },
-      {
-        label: "Templates",
-        href: "/dashboard/templates",
-        icon: FileText,
-        requiredPermission: "templates:manage",
-        hint: "Emails and scorecards",
-      },
-      {
-        label: "Automations",
-        href: "/dashboard/automations" as Route,
-        icon: Workflow,
-        requiredPermission: "automations:manage",
-        hint: "When something happens, do work automatically",
-      },
-      {
-        label: "Documents",
-        href: "/dashboard/documents" as Route,
-        icon: NotebookTabs,
-        requiredPermission: ["documents:read", "templates:manage"],
-        hint: "Files, signatures, workflow templates",
-      },
-    ],
+    label: "Reports",
+    href: "/dashboard/reports",
+    icon: BarChart3,
+    requiredPermission: "reports:read",
+  },
+];
+
+/** The "More" pill: a flat grid of occasional, set-up surfaces. */
+export const moreNav: NavItem[] = [
+  {
+    label: "Career Page",
+    href: "/dashboard/career-page",
+    icon: Globe,
+    requiredPermission: "settings:edit",
+    hint: "Your public job board",
+  },
+  {
+    label: "Templates",
+    shellTitle: true,
+    href: "/dashboard/templates",
+    icon: FileText,
+    requiredPermission: "templates:manage",
+    hint: "Emails and scorecards",
+  },
+  {
+    label: "Automations",
+    href: "/dashboard/automations" as Route,
+    icon: Workflow,
+    requiredPermission: "automations:manage",
+    hint: "Run work automatically",
+  },
+  {
+    label: "Documents",
+    href: "/dashboard/documents" as Route,
+    icon: NotebookTabs,
+    requiredPermission: ["documents:read", "templates:manage"],
+    hint: "Files and signatures",
   },
 ];
 
@@ -177,7 +186,10 @@ export const settingsNav: NavItem = {
   requiredPermission: ["settings:edit", "dsar:manage"],
 };
 
-export function isNavActive(pathname: string, item: NavItem) {
+export function isNavActive(pathname: string, item: NavItem): boolean {
+  if (item.children?.length) {
+    return item.children.some((child) => isNavActive(pathname, child));
+  }
   if (item.exact) return pathname === item.href;
   return pathname === item.href || pathname.startsWith(`${item.href}/`);
 }
@@ -191,11 +203,33 @@ export function hasNavPermission(item: NavItem, permissions: Permission[]) {
     : permissions.includes(item.requiredPermission);
 }
 
-/** Flat list for lookups (command menu, active-section resolution). */
+/**
+ * Primary pills the viewer may use. Groups collapse to their first permitted
+ * child and disappear when none is permitted.
+ */
+export function resolvePrimaryNav(
+  permissions: Permission[],
+): ResolvedNavGroup[] {
+  const groups: ResolvedNavGroup[] = [];
+  for (const item of primaryNav) {
+    if (item.children) {
+      const children = item.children.filter((child) =>
+        hasNavPermission(child, permissions),
+      );
+      if (children.length === 0) continue;
+      groups.push({ item, href: children[0].href, children });
+    } else if (hasNavPermission(item, permissions)) {
+      groups.push({ item, href: item.href, children: [] });
+    }
+  }
+  return groups;
+}
+
+/** Flat list of leaf destinations for lookups (command menu, permission matrix). */
 export function allNavItems(): NavItem[] {
   return [
-    ...primaryNav,
-    ...moreNav.flatMap((group) => group.items),
+    ...primaryNav.flatMap((item) => item.children ?? [item]),
+    ...moreNav,
     settingsNav,
   ];
 }

@@ -39,7 +39,7 @@ function Column({
   return (
     <section className="flex min-w-0 flex-col gap-2.5">
       <div
-        className="flex items-center gap-2 rounded-xl border border-border/60 bg-card px-3 py-2"
+        className="flex items-center gap-2 rounded-[var(--radius-inner)] bg-card-inset px-3 py-2"
         style={{ borderTopColor: STATUS_ACCENT[status], borderTopWidth: 2 }}
       >
         <Icon className={cn("size-4 shrink-0", STATUS_COLOR[status])} strokeWidth={2} />

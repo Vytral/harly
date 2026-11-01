@@ -1,10 +1,11 @@
-import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ArrowLeft } from "lucide-react";
+import { eq } from "drizzle-orm";
+import { db, workspaceSettings } from "@harly/db";
 
-import { Button } from "@/components/ui/button";
 import { DocumentDetailView } from "@/features/documents/DocumentDetailView";
-import { getDocumentHubData } from "@/features/documents/data";
+import { getDocumentDetail } from "@/features/documents/data";
+import { getDocumentSignatureTimeline } from "@/features/documents/native-signature-actions";
+import { getWorkspaceContext } from "@/features/workspaces/context";
 import { requirePagePermission } from "@/features/workspaces/permissions-server";
 
 export const dynamic = "force-dynamic";
@@ -16,19 +17,21 @@ export default async function DocumentDetailPage({
 }) {
   await requirePagePermission("documents:read");
   const { documentId } = await params;
-  const data = await getDocumentHubData();
-  const document = data.documents.find((item) => item.id === documentId);
-  if (!document) notFound();
+  const [bundle, context] = await Promise.all([getDocumentDetail(documentId), getWorkspaceContext()]);
+  if (!bundle) notFound();
+  // Settings > Signature > "Signing timeline" turns on the readable history.
+  const [settings] = await db
+    .select({ timelineEnabled: workspaceSettings.signatureTimelineEnabled })
+    .from(workspaceSettings)
+    .where(eq(workspaceSettings.organizationId, context.organization.id))
+    .limit(1);
+  const signatureTimeline = settings?.timelineEnabled
+    ? await getDocumentSignatureTimeline(documentId)
+    : null;
 
   return (
-    <div className="mx-auto max-w-[1400px] space-y-5 duration-500 animate-in fade-in slide-in-from-bottom-1">
-      <Button asChild variant="ghost" size="sm" className="-ml-2 w-fit">
-        <Link href="/dashboard/documents">
-          <ArrowLeft className="size-4" />
-          Back to documents
-        </Link>
-      </Button>
-      <DocumentDetailView data={data} document={document} />
+    <div className="mx-auto max-w-[1400px]">
+      <DocumentDetailView bundle={bundle} signatureTimeline={signatureTimeline} />
     </div>
   );
 }

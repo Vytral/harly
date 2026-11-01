@@ -35,16 +35,16 @@ export function ReviewSection({
 }) {
   return (
     <div data-section="review" className="space-y-5">
-      <div className="rounded-2xl border border-border/70 bg-card p-5">
+      <div className="rounded-[var(--radius-card)] bg-card p-5 shadow-[var(--shadow-card)]">
         <div className="flex items-start gap-3">
-          <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+          <span className="flex size-9 shrink-0 items-center justify-center rounded-[var(--radius-inner)] bg-lime-wash text-success-olive">
             <CheckCircle2 className="size-4.5" />
           </span>
           <div className="min-w-0">
             <p className="font-display text-[15px] font-semibold tracking-tight">
               {title || "New job"}
             </p>
-            <p className="mt-0.5 text-sm text-muted-foreground">
+            <p className="mt-0.5 text-sm text-soft-ink">
               {WORKPLACE_LABEL[workplace] ?? workplace}
               {job ? " · Ready to save" : ` · Ready to ${submitLabel.toLowerCase()}`}
             </p>
@@ -67,12 +67,12 @@ export function ReviewSection({
           ) : null}
         </>
       ) : (
-        <div className="flex flex-col items-center gap-2 rounded-2xl border border-dashed border-border/70 bg-card p-8 text-center">
-          <span className="flex size-10 items-center justify-center rounded-full bg-muted text-muted-foreground">
+        <div className="flex flex-col items-center gap-2 rounded-[var(--radius-card)] bg-card p-8 text-center shadow-[var(--shadow-card)]">
+          <span className="flex size-10 items-center justify-center rounded-full bg-card-inset text-soft-ink">
             <Rocket className="size-5" />
           </span>
           <p className="text-sm font-medium">Hiring team, AI matching, and live preview unlock after you publish</p>
-          <p className="max-w-sm text-sm text-muted-foreground">
+          <p className="max-w-sm text-sm text-soft-ink">
             Save this job first. You&apos;ll be able to assign a hiring team, rank your candidate pool, and preview
             the public listing right after.
           </p>

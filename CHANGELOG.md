@@ -33,6 +33,170 @@ Before tagging, write the version section below. Use these headings when they
 apply: `Added`, `Changed`, `Fixed`, `Removed`, `Security`. Note migrations and
 anything an operator must do before upgrading.
 
+## [0.3.0]
+
+A feature release: a redesigned product, an MCP server so AI agents can work in
+Harly, an in-app updater, native e-signature and document generation, and a
+rebuilt career page builder. **It contains database migrations
+(`0159`–`0164`) and a few behavior changes.** Read
+[the upgrade notes](docs/release-0.3.0-upgrade-notes.md) before upgrading an
+existing installation. All migrations are additive.
+
+### Added
+
+- **A new look.** A lime and Instrument Sans design system with a pill header,
+  a "+" create menu, redesigned People, Hiring, Work, Reports and More pages,
+  unified dialogs, confirmations and toasts, a candidate header with a decision
+  bar, restrained motion, and loading skeletons that match every redesigned
+  page.
+- **AI agents over MCP.** Harly serves a Model Context Protocol endpoint at
+  `/mcp` with a built-in OAuth 2.1 authorization server (PKCE, dynamic client
+  registration, client metadata documents, short-lived rotating tokens, a
+  consent screen). Claude, ChatGPT, Cursor, VS Code and other clients connect
+  from **Settings → AI agents** and act with the connecting person's own role,
+  scope and permissions through more than 200 tools across candidates, jobs,
+  messages, interviews, offers, documents, tasks, reports, automations and
+  settings. Read and write scopes are separate, every call is audited and rate
+  limited, and a workspace can switch MCP off, restrict it to known clients,
+  and revoke any connection. See [Connect AI agents](apps/docs/developers/mcp.mdx)
+  and [ADR-007](docs/decisions/ADR-007-mcp-server-architecture.md).
+- **`mcp:use` and `mcp:manage` permissions.** `mcp:use` lets a member connect
+  an agent; `mcp:manage` controls the workspace policy and all connections.
+  Owners, admins, recruiters and hiring managers hold `mcp:use` by default;
+  owners and admins hold `mcp:manage`.
+- **Update from the app.** **Settings → Updates** shows the running and latest
+  stable version with release notes, installs an update on request, and can
+  install patch or minor releases automatically inside a window you choose. The
+  web container never gets Docker access: a host updater
+  (`harly updater install-service`) carries out the request, backs up first,
+  and rolls back if the update fails. `HARLY_DISABLE_UPDATE_CHECK` turns the
+  release check off for air-gapped hosts.
+- **Career page builder.** A rebuilt builder with a true-width device preview,
+  an unsaved-changes guard, avatar uploads for gallery and testimonials, CTA
+  and "How we hire" editors, value icons, per-template controls, contrast
+  warnings with a one-click fix, field-level validation, Live and Unpublished
+  states and Cmd+S. New **Showcase** template, and polished existing templates
+  with accessible contrast, sanitized rich text and consistent type. Playful
+  keeps its original look.
+- **Candidate portal redesign.** Applications show a stage progress rail, the
+  next step the candidate needs to take, interviews with add-to-calendar, a
+  clearer activity timeline, empty states and footer.
+- **Recruiting inbox redesign.** A unified conversation list with filters, a
+  thread reader with candidate context, an actions panel, a faster new-thread
+  composer with templates, and a rebuilt mail composer.
+- **Documents and native e-signature.** Generate a document from a template for
+  a candidate; a rebuilt document page with one state-driven primary action,
+  per-signer status (remind, copy link, void with an impact warning, signed
+  copy and certificate), versions with per-version downloads, a readable
+  timeline, and a hub with sorting, status filters and drop-to-upload. The
+  signer experience is branded and works on a phone, with an explicit consent
+  step stamped by the server, decline with a reason, a signed-copy receipt by
+  email, OTP resend, and date fields that default to today. Preparing a
+  document or an offer for signature is one signer-first dialog.
+- **Rejection reasons.** A per-workspace reason catalog (seven defaults),
+  an internal note, and control over whether and how the rejection email is
+  sent, from every reject entry point.
+- **Review queue.** `/dashboard/candidates?queue=review` lists the reviews
+  waiting on you; the candidate pager follows the list you came from and
+  advances automatically in queue mode.
+- **Harly AI.** A redesigned panel, an always-visible launcher, brandable
+  assistant name, rich answer blocks, and keyboard shortcuts.
+- **Command line.** `@harly/cli` **0.6.0**: `harly status`, grouped help,
+  typo suggestions, an opt-in global install, and `harly updater`. See
+  [the CLI changelog](tooling/harly/CHANGELOG.md).
+
+### Changed
+
+- **Harly AI uses far fewer tokens.** Tool routing, a cacheable system prompt
+  and compacted history cut a full turn from about 225,000 to about 27,000
+  prompt tokens in our measurement, with sharper answers: no narration between
+  tool calls, one reply after the last tool.
+- **AI scoring is evidence-backed.** Quotes are verified against the resume and
+  answers and dropped when they cannot be found; a job's candidates share one
+  published rubric; the resume and answers are passed to the model as delimited
+  data; names and locations stay out of the prompt. Scores that the model
+  returns malformed are salvaged instead of falling back to rules, the card says
+  when rules were used, and bulk scoring no longer re-scores the same
+  applications.
+- **Rejecting asks for a reason.** The reject dialog requires one. REST and AI
+  callers that omit it record "Other" and keep sending the email.
+- **E-signature reminders** are measured from the current signer's invite and
+  follow workspace settings (default: every 3 days, at most 3 reminders).
+  Earlier signing links keep working after a re-invite, and a void keeps
+  signatures already given.
+- The Harly AI launcher and notifications share one bottom surface.
+
+### Fixed
+
+- PDF resumes lose no line breaks, so the rules parser finds roles, education
+  and skills again. Cyrillic, CJK and Arabic resumes are legible, file types are
+  checked by content, extraction has a timeout and a page cap, and dates such as
+  `03/2020 - 05/2022` and English, Spanish, Portuguese, French and German month
+  names parse. Duplicate detection ignores accents and uses phone and LinkedIn.
+- AI evaluations keep their own criteria and verified coverage instead of the
+  rules engine's, and the gap count no longer pushes a good score down a band.
+- Pipeline ranking compares the real rules version.
+- iOS format detection no longer breaks hydration on candidate pages.
+- Harly works over plain HTTP on a LAN (development) without crypto-only APIs.
+- Dropping a card on Reject on the board asks for the reason.
+- The Refer trigger on a candidate profile renders on the client.
+- Home counts and links reflect the real data.
+
+### Security
+
+- The MCP server and its OAuth endpoints are rate limited, accept only
+  audience-bound tokens that are stored as hashes, validate redirect URIs,
+  refuse cross-origin browser calls unless allowed, and re-check membership,
+  `mcp:use` and the user's current permissions on every call.
+- The in-app updater cannot be used to install an arbitrary version: the host
+  updater re-reads the stable channel and the web app never receives Docker
+  access. Its token is derived from `CRON_SECRET` and never leaves the host.
+- Signing links and OTP verification were hardened (server-stamped consent,
+  rotated tokens remembered, per-signer expiry).
+- With local storage, `/uploads/*` serves only public images and logos.
+  Signed PDFs, offer letters, saved signatures, documents and resumes were
+  reachable by URL alone; they now go only through their permission-checked
+  routes.
+- The realtime stream sends event names only, so members no longer receive
+  candidate data outside their role.
+- Candidate portal sign-in with Google or LinkedIn requires a verified email.
+- The login page redirects only to same-origin paths after sign-in.
+- Mailbox attachment downloads respect the member's thread scope.
+- The SSRF guard also blocks private addresses written as NAT64 or 6to4.
+- Anonymous JSON endpoints cap the request body size, and the metrics token
+  is compared in constant time.
+- Interview sync retries run only on the server and are no longer exposed as
+  server actions.
+- Dependency overrides for `tar`, `follow-redirects`, `brace-expansion` and
+  `fast-copy`.
+
+### Migrations
+
+`0159`–`0164` add rejection reasons and the application rejection columns
+(`0159`); the signer experience, signing consent and reminder columns, with a
+backfill of invite timestamps (`0160`; documents signed before 0.3.0 keep no
+consent timestamp, because none was recorded); an envelope-to-document
+reference with a backfill (`0161`); a `date` signature field type (`0162`); the
+in-app updater tables (`0163`); and MCP clients, grants, tokens, codes and
+workspace settings (`0164`). They are additive and safe on a live 0.2.4
+installation. `0162` widens an existing `CHECK` constraint. Rolling back to the
+0.2.4 image after using documents with date fields is not supported without
+restoring a backup.
+
+### Operators
+
+- New optional variables: `HARLY_RELEASE_MANIFEST_URL`,
+  `HARLY_DISABLE_UPDATE_CHECK`, `MCP_ALLOWED_ORIGINS`. Existing installations
+  must add them to their `compose.yaml` to use them; see the upgrade notes.
+- The optional DocuSeal service is pinned to `3.3.4` (`HARLY_DOCUSEAL_VERSION`)
+  instead of `latest`. `THIRD_PARTY_NOTICES.md` lists weak-copyleft dependencies.
+- The `Caddyfile` limits request bodies to 30 MB and no longer compresses or
+  buffers `/mcp`. Installations that keep their own proxy configuration must
+  do the same.
+- With local storage, links that pointed straight at a document, offer letter
+  or signature under `/uploads/` stop working. Use the links Harly shows in the
+  app instead.
+
 ## [0.2.4]
 
 A feature release that makes the hiring pipeline, reports, search, email and

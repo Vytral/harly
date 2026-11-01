@@ -38,13 +38,13 @@ export async function IntegrationAttentionCard() {
           count={items.length}
           action={<TileLink href={"/settings/integrations" as Route}>Open integrations</TileLink>}
         />
-        <ul className="divide-y divide-border/60 px-2 pb-2 pt-1">
+        <ul className="flex flex-col gap-0.5 px-2 pb-3 pt-3">
           {items.map((item) => {
             const target = ATTENTION_TARGET[item.integration];
             return (
               <li
                 key={item.integration}
-                className="flex flex-wrap items-center gap-3 rounded-xl px-3 py-2.5"
+                className="flex flex-wrap items-center gap-3 rounded-[var(--radius-md)] px-3 py-2.5"
               >
                 <div className="min-w-0 flex-1">
                   <p className="flex items-center gap-2 text-sm font-medium">
@@ -53,11 +53,11 @@ export async function IntegrationAttentionCard() {
                       {item.reconnectRequired ? "Reconnect required" : "Needs attention"}
                     </StatusPill>
                   </p>
-                  <p className="truncate text-xs text-muted-foreground">{attentionMessage(item)}</p>
+                  <p className="truncate text-xs text-soft-ink">{attentionMessage(item)}</p>
                 </div>
                 <Link
                   href={reconnectHref(item.integration) as Route}
-                  className="shrink-0 rounded-full px-3 py-1.5 text-sm font-medium text-foreground transition hover:bg-muted/60"
+                  className="shrink-0 rounded-[var(--radius-btn)] border border-mist-border bg-card px-3 py-1.5 text-[13px] font-medium text-near-ink transition-colors hover:bg-card-inset"
                 >
                   Reconnect
                 </Link>

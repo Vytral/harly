@@ -1,3 +1,5 @@
+import { didYouMean, suggest } from "./suggest.js";
+
 export type ParsedCli = {
   command: string;
   positionals: string[];
@@ -15,6 +17,7 @@ const booleanFlags = new Set([
   "--launch",
   "--no-launch",
   "--non-interactive",
+  "--once",
   "--quiet",
   "--remove-data",
   "--save-env",
@@ -34,6 +37,7 @@ const valueFlags = new Set([
   "--domain",
   "--email",
   "--image",
+  "--interval",
   "--organization",
   "--output-dir",
   "--port",
@@ -107,7 +111,9 @@ export function parseCliArgs(argv: string[]): ParsedCli {
         flags.add(normalized);
         continue;
       }
-      invalid(`Unknown option: ${normalized}`);
+      const close = suggest(normalized, [...booleanFlags, ...valueFlags, "--help", "--version"]);
+      const hint = didYouMean(close);
+      invalid(`Unknown option: ${normalized}.${hint ? ` ${hint}` : ""}`.replace(/\.$/, ""));
     }
     if (booleanFlags.has(normalized)) {
       if (inlineValue !== undefined) invalid(`${normalized} does not accept a value.`);

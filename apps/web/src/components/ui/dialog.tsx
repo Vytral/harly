@@ -1,11 +1,37 @@
 "use client"
 
 import * as React from "react"
-import { XIcon } from "lucide-react"
+import { ArrowLeftIcon, XIcon } from "lucide-react"
 import { Dialog as DialogPrimitive } from "radix-ui"
 
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
+
+/**
+ * Modal anatomy (Deel-inspired): ink/30 scrim (no blur), a white
+ * 16px card with no border, floating shadow, 24px padding and 20px rhythm.
+ * Enter is fade + scale 0.97 -> 1 over 180ms, exit 140ms; reduced motion
+ * collapses both to an instant swap. AlertDialog shares these constants so the
+ * two never drift into different-looking modals.
+ */
+export type DialogSize = "sm" | "md" | "lg" | "xl" | "full"
+
+export const dialogSizeClasses: Record<DialogSize, string> = {
+  sm: "sm:max-w-[400px]",
+  md: "sm:max-w-[480px]",
+  lg: "sm:max-w-[640px]",
+  xl: "sm:max-w-[860px]",
+  full: "h-[calc(100dvh-2rem)] sm:max-w-[calc(100%-2rem)]",
+}
+
+export const dialogOverlayClasses =
+  "fixed inset-0 z-50 bg-ink/30 data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:duration-[180ms] data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:duration-[140ms] motion-reduce:animate-none motion-reduce:duration-0"
+
+export const dialogContentClasses =
+  "fixed top-[50%] left-[50%] z-50 grid max-h-[85dvh] w-full max-w-[calc(100%-2rem)] translate-x-[-50%] translate-y-[-50%] content-start gap-5 overflow-y-auto rounded-[var(--radius-card)] bg-pure-snow p-6 text-near-ink shadow-[var(--shadow-float)] outline-none ease-out data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-[0.97] data-[state=open]:duration-[180ms] data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-[0.97] data-[state=closed]:duration-[140ms] motion-reduce:animate-none motion-reduce:duration-0"
+
+const dialogIconButtonClasses =
+  "absolute top-4 inline-flex size-8 items-center justify-center rounded-full text-soft-ink transition-colors outline-none hover:bg-card-inset hover:text-near-ink focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:pointer-events-none [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4"
 
 function Dialog({
   ...props
@@ -38,10 +64,7 @@ function DialogOverlay({
   return (
     <DialogPrimitive.Overlay
       data-slot="dialog-overlay"
-      className={cn(
-        "fixed inset-0 z-50 bg-black/50 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:animate-in data-[state=open]:fade-in-0",
-        className
-      )}
+      className={cn(dialogOverlayClasses, className)}
       {...props}
     />
   )
@@ -52,27 +75,28 @@ function DialogContent({
   overlayClassName,
   children,
   showCloseButton = true,
+  size = "md",
   ...props
 }: React.ComponentProps<typeof DialogPrimitive.Content> & {
-  overlayClassName?: string;
+  overlayClassName?: string
   showCloseButton?: boolean
+  /** sm 400 / md 480 (default) / lg 640 / xl 860 / full (viewport minus gutter). */
+  size?: DialogSize
 }) {
   return (
     <DialogPortal data-slot="dialog-portal">
       <DialogOverlay className={overlayClassName} />
       <DialogPrimitive.Content
         data-slot="dialog-content"
-        className={cn(
-          "fixed top-[50%] left-[50%] z-50 grid max-h-[85dvh] w-full max-w-[calc(100%-2rem)] translate-x-[-50%] translate-y-[-50%] gap-4 overflow-y-auto rounded-lg border bg-background p-6 shadow-lg duration-200 outline-none data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95 sm:max-w-lg",
-          className
-        )}
+        data-size={size}
+        className={cn(dialogContentClasses, dialogSizeClasses[size], className)}
         {...props}
       >
         {children}
         {showCloseButton && (
           <DialogPrimitive.Close
             data-slot="dialog-close"
-            className="absolute top-4 right-4 rounded-xs opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:outline-hidden disabled:pointer-events-none data-[state=open]:bg-accent data-[state=open]:text-muted-foreground [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4"
+            className={cn(dialogIconButtonClasses, "right-4")}
           >
             <XIcon />
             <span className="sr-only">Close</span>
@@ -83,11 +107,61 @@ function DialogContent({
   )
 }
 
-function DialogHeader({ className, ...props }: React.ComponentProps<"div">) {
+/** Top-left arrow for multi-step dialogs. Pass onClick to go to the previous step. */
+function DialogBack({
+  className,
+  children,
+  ...props
+}: React.ComponentProps<"button">) {
+  return (
+    <button
+      type="button"
+      data-slot="dialog-back"
+      className={cn(dialogIconButtonClasses, "left-4", className)}
+      {...props}
+    >
+      {children ?? (
+        <>
+          <ArrowLeftIcon />
+          <span className="sr-only">Back</span>
+        </>
+      )}
+    </button>
+  )
+}
+
+/** Centered 96px slot for a spot illustration, above the header. */
+function DialogMedia({ className, ...props }: React.ComponentProps<"div">) {
+  return (
+    <div
+      data-slot="dialog-media"
+      aria-hidden="true"
+      className={cn(
+        "mx-auto flex size-24 items-center justify-center text-near-ink [&>svg]:size-full",
+        className
+      )}
+      {...props}
+    />
+  )
+}
+
+function DialogHeader({
+  className,
+  align = "start",
+  ...props
+}: React.ComponentProps<"div"> & {
+  /** "center" suits confirms and success; "start" suits forms and long copy. */
+  align?: "center" | "start"
+}) {
   return (
     <div
       data-slot="dialog-header"
-      className={cn("flex flex-col gap-2 text-center sm:text-left", className)}
+      data-align={align}
+      className={cn(
+        "flex flex-col gap-1.5",
+        align === "center" ? "text-center" : "text-left",
+        className
+      )}
       {...props}
     />
   )
@@ -95,17 +169,23 @@ function DialogHeader({ className, ...props }: React.ComponentProps<"div">) {
 
 function DialogFooter({
   className,
+  layout = "end",
   showCloseButton = false,
   children,
   ...props
 }: React.ComponentProps<"div"> & {
+  /** end: buttons right. split: two equal columns. stack: full-width column. */
+  layout?: "end" | "split" | "stack"
   showCloseButton?: boolean
 }) {
   return (
     <div
       data-slot="dialog-footer"
+      data-layout={layout}
       className={cn(
-        "flex flex-col-reverse gap-2 sm:flex-row sm:justify-end",
+        layout === "end" && "flex flex-col-reverse gap-2 sm:flex-row sm:justify-end",
+        layout === "split" && "grid grid-cols-2 gap-3 [&>*]:w-full",
+        layout === "stack" && "flex flex-col gap-2 [&>*]:w-full",
         className
       )}
       {...props}
@@ -113,7 +193,7 @@ function DialogFooter({
       {children}
       {showCloseButton && (
         <DialogPrimitive.Close asChild>
-          <Button variant="outline">Close</Button>
+          <Button variant="soft">Close</Button>
         </DialogPrimitive.Close>
       )}
     </div>
@@ -127,7 +207,10 @@ function DialogTitle({
   return (
     <DialogPrimitive.Title
       data-slot="dialog-title"
-      className={cn("text-lg leading-none font-semibold", className)}
+      className={cn(
+        "text-[18px] leading-snug font-semibold tracking-tight text-near-ink",
+        className
+      )}
       {...props}
     />
   )
@@ -140,7 +223,7 @@ function DialogDescription({
   return (
     <DialogPrimitive.Description
       data-slot="dialog-description"
-      className={cn("text-sm text-muted-foreground", className)}
+      className={cn("text-sm leading-6 text-soft-ink", className)}
       {...props}
     />
   )
@@ -148,11 +231,13 @@ function DialogDescription({
 
 export {
   Dialog,
+  DialogBack,
   DialogClose,
   DialogContent,
   DialogDescription,
   DialogFooter,
   DialogHeader,
+  DialogMedia,
   DialogOverlay,
   DialogPortal,
   DialogTitle,

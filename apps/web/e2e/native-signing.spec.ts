@@ -50,21 +50,23 @@ test.describe("native document signing", () => {
     });
     await expect(page.getByRole("heading", { name: documentName, exact: true })).toBeVisible();
     await acceptCookieConsent(page);
-    await page.getByRole("button", { name: "Native link", exact: true }).click();
+    // The header button is a menu (several ways to sign); the status card sends directly.
+    await page.getByRole("button", { name: "Send for signature", exact: true }).last().click();
 
+    // Signer-first prepare: the PDF seeds one signature field for signer 1;
+    // fields added after "Add signer" go to the new (active) signer.
     const placementDialog = page.getByRole("dialog").last();
-    await expect(placementDialog.getByRole("heading", { name: "Place signature fields" })).toBeVisible();
-    await expect(placementDialog.getByText("1 field placed.")).toBeVisible({ timeout: 30_000 });
-    await placementDialog.getByRole("button", { name: "Add signature field", exact: true }).click();
-    await expect(placementDialog.getByText("2 fields placed.")).toBeVisible();
-    await placementDialog.getByRole("button", { name: "Continue", exact: true }).click();
-
+    await expect(placementDialog.getByRole("heading", { name: "Prepare for signing" })).toBeVisible();
+    await expect(placementDialog.getByRole("region", { name: "Fields" }).getByRole("button", { name: "Remove field 1", exact: true })).toBeVisible({ timeout: 30_000 });
     await placementDialog.getByRole("button", { name: "Add signer", exact: true }).click();
-    await placementDialog.locator("#native-recipient-name-0").fill("Ada Lovelace");
-    await placementDialog.locator("#native-recipient-email-0").fill("signer-one@harly-e2e.test");
-    await placementDialog.locator("#native-recipient-name-1").fill("Grace Hopper");
-    await placementDialog.locator("#native-recipient-email-1").fill("signer-two@harly-e2e.test");
-    await placementDialog.getByLabel("Signer for field 2").selectOption("1");
+    await placementDialog.getByRole("button", { name: "Signature", exact: true }).click();
+    await expect(placementDialog.getByRole("region", { name: "Fields" }).getByRole("button", { name: "Remove field 2", exact: true })).toBeVisible();
+    const names = placementDialog.getByRole("textbox", { name: "Name", exact: true });
+    const emails = placementDialog.getByRole("textbox", { name: "Email", exact: true });
+    await names.nth(0).fill("Ada Lovelace");
+    await emails.nth(0).fill("signer-one@harly-e2e.test");
+    await names.nth(1).fill("Grace Hopper");
+    await emails.nth(1).fill("signer-two@harly-e2e.test");
     const firstInvitationOffset = captureSize();
     await placementDialog.getByRole("button", { name: "Send signing link", exact: true }).click();
     await expect(placementDialog).not.toBeVisible({ timeout: 30_000 });
@@ -86,7 +88,7 @@ test.describe("native document signing", () => {
     const signerOne = await browser.newPage();
     await signerOne.goto(firstLink);
     await acceptCookieConsent(signerOne);
-    await expect(signerOne.getByRole("heading", { name: "Review and sign" })).toBeVisible({ timeout: 30_000 });
+    await expect(signerOne.getByRole("heading", { name: documentName, exact: true })).toBeVisible({ timeout: 30_000 });
     await expect(signerOne.getByText("Signer 1 of 2", { exact: true })).toBeVisible();
     await expect(signerOne.locator('[data-page="1"]')).toBeVisible({ timeout: 30_000 });
     const firstFieldsResponse = await signerOne.request.get(`${E2E_BASE_URL}/api/native-sign/${firstToken}/fields`);
@@ -106,14 +108,17 @@ test.describe("native document signing", () => {
         { routingOrder: 2, status: "sent" },
       ],
     });
-    expect((await signerOne.request.get(`${E2E_BASE_URL}/api/native-sign/${firstToken}`)).status()).toBe(404);
+    const firstTokenAfterSigning = await signerOne.request.get(`${E2E_BASE_URL}/api/native-sign/${firstToken}`);
+    // A used link stays readable so the signer can see the receipt, but only as "signed".
+    expect(firstTokenAfterSigning.status()).toBe(200);
+    expect((await firstTokenAfterSigning.json()).state).toBe("signed");
 
     const secondLink = await waitForSigningLink(secondInvitationOffset, "signer-two@harly-e2e.test");
     const secondToken = tokenFromLink(secondLink);
     const signerTwo = await browser.newPage();
     await signerTwo.goto(secondLink);
     await acceptCookieConsent(signerTwo);
-    await expect(signerTwo.getByRole("heading", { name: "Review and sign" })).toBeVisible({ timeout: 30_000 });
+    await expect(signerTwo.getByRole("heading", { name: documentName, exact: true })).toBeVisible({ timeout: 30_000 });
     await expect(signerTwo.getByText("Signer 2 of 2", { exact: true })).toBeVisible();
     await expect(signerTwo.locator('[data-page="1"]')).toBeVisible({ timeout: 30_000 });
     const secondFieldsResponse = await signerTwo.request.get(`${E2E_BASE_URL}/api/native-sign/${secondToken}/fields`);

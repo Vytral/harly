@@ -9,7 +9,7 @@ copy and is not updated separately.
 - [Proxy modes](../apps/docs/self-hosting/proxy-modes.mdx): Caddy, external
   reverse proxy, and local loopback modes.
 - [Operations](../apps/docs/self-hosting/operations.mdx): health checks, the
-  scheduler runbook, backup, restore, upgrade, and the development database.
+  scheduler runbook, backup, restore, upgrade, owner-run and automatic updates, and the development database.
 - [Install with the CLI](../apps/docs/deployment/cli.mdx): the guided installer
   and management menu.
 - [Cloud deployments](../apps/docs/deployment/cloud.mdx): managed platforms and

@@ -1,6 +1,7 @@
 "use client";
 
 import { useRef } from "react";
+import type { Route } from "next";
 import Link from "next/link";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
@@ -17,8 +18,10 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import type { PipelineApplication } from "@/features/pipeline/data";
+import { candidateHref, pipelineOrigin } from "@/features/candidates/origin";
 import { useDaysSince } from "@/lib/date-hydration";
 import { cn } from "@/lib/utils";
+import { scoreBand, type ScoreBand } from "@/lib/evaluation/score-band";
 
 type CandidateCardProps = {
   application: PipelineApplication;
@@ -54,6 +57,13 @@ const recommendationLabel: Record<
   no: "Weak fit",
 };
 
+/** Dot colour per shared score band (lib/evaluation/score-band.ts). */
+function dotTone(band: ScoreBand) {
+  if (band === "strong" || band === "good") return "bg-chartreuse-signal";
+  if (band === "mixed") return "bg-warning-clay";
+  return "bg-quiet-mist";
+}
+
 function AiFitNote({
   score,
   recommendation,
@@ -73,9 +83,7 @@ function AiFitNote({
             aria-hidden="true"
             className={cn(
               "size-1.5 rounded-full",
-              recommendation === "no"
-                ? "bg-quiet-mist"
-                : "bg-chartreuse-signal",
+              dotTone(scoreBand(score)),
             )}
           />
           {label}
@@ -126,6 +134,12 @@ export function CandidateCard({
   });
   const fullName = `${application.candidateFirstName} ${application.candidateLastName}`;
   const stageStartedAt = application.lastStageMovedAt ?? application.createdAt;
+  // Opened from the board: the candidate's pager walks the board column by column.
+  const href = candidateHref(
+    application.candidateId,
+    pipelineOrigin({ jobId: application.jobId, view: "board" }),
+    application.id,
+  ) as Route;
 
   return (
     <article
@@ -147,24 +161,24 @@ export function CandidateCard({
             )
           : 0;
         if (!isDragging && movedDistance <= 6) {
-          router.push(`/dashboard/candidates/${application.candidateId}`);
+          router.push(href);
         }
       }}
       onKeyDown={(event) => {
         if (event.target !== event.currentTarget) return;
         if (event.key === "Enter" || event.key === " ") {
           event.preventDefault();
-          router.push(`/dashboard/candidates/${application.candidateId}`);
+          router.push(href);
         }
       }}
       className={cn(
-        // A person in a column, not a mini-card: flat snow, hairline, row-wash
-        // hover. No shadow, no coloured left accent bar, no scale-on-press.
-        "group cursor-pointer rounded-[var(--radius-md)] border bg-pure-snow px-2.5 py-2.5 transition-colors",
+        // White card on the inset lane: card shadow, 1px lift on hover.
+        "group cursor-pointer rounded-[var(--radius-inner)] bg-pure-snow px-3 py-3 shadow-[var(--shadow-card)] transition-[transform,box-shadow,background-color,opacity] duration-150",
+        "hover:-translate-y-px hover:shadow-[var(--shadow-soft),var(--shadow-card)] motion-reduce:hover:translate-y-0",
         "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-near-ink",
         selected
-          ? "border-near-ink/20 bg-row-wash"
-          : "border-hairline hover:bg-row-wash",
+          ? "bg-lime-wash shadow-[inset_0_0_0_1.5px_var(--near-ink)]"
+          : null,
         isDragging && "opacity-40",
         pending && "opacity-70",
       )}
@@ -188,7 +202,7 @@ export function CandidateCard({
           />
         </span>
         <Link
-          href={`/dashboard/candidates/${application.candidateId}`}
+          href={href}
           onClick={(event) => event.stopPropagation()}
           className="flex min-w-0 flex-1 items-center gap-2.5"
         >
@@ -216,7 +230,7 @@ export function CandidateCard({
                   <TooltipTrigger asChild>
                     <span
                       aria-label="Featured referral"
-                      className="inline-flex shrink-0 items-center text-amber-600"
+                      className="inline-flex shrink-0 items-center text-warning-clay"
                     >
                       <Star className="size-3 fill-current" />
                     </span>
@@ -258,7 +272,7 @@ export function CandidateCardOverlay({ application }: CandidateCardOverlayProps)
   const fullName = `${application.candidateFirstName} ${application.candidateLastName}`;
 
   return (
-    <article className="w-56 cursor-grabbing rounded-[var(--radius-md)] border border-mist-border bg-pure-snow px-2.5 py-2.5 shadow-[var(--shadow-float)] lg:w-64">
+    <article className="drag-pickup w-56 cursor-grabbing rounded-[var(--radius-inner)] bg-pure-snow px-3 py-3 shadow-[var(--shadow-float)] lg:w-64">
       <div className="flex items-center gap-2.5">
         <UserAvatar
           name={fullName}

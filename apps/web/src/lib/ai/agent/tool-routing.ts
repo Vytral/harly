@@ -1,6 +1,10 @@
 import "server-only";
 
+import { tool } from "ai";
+import { z } from "zod";
+
 import type { HarlyIntent } from "./intent";
+import { AGENT_WRITE_TOOLS } from "./write-tool-names";
 import type { HarlyToolContext } from "./tools";
 
 /**
@@ -17,6 +21,7 @@ import type { HarlyToolContext } from "./tools";
  */
 export type HarlyToolGroup =
   | "general"
+  | "integrations"
   | "automations"
   | "candidates"
   | "jobs"
@@ -33,13 +38,19 @@ export const TOOL_GROUPS: Record<HarlyToolGroup, readonly string[]> = {
   // Always on: cheap, small, and load-bearing for almost every reply
   // (capability/permission answers, undo, product knowledge).
   general: [
+    // Interactive answer blocks (lists, tables, charts, choices, forms): the
+    // answer-style contract asks for it on every reply, so it is always on.
+    "presentUi",
+    // Escape hatch for a narrow route: widens this turn's tool set.
+    "loadToolGroups",
     "workspaceCapabilities",
     "userPermissions",
     "harlyProductKnowledge",
-    "connectedIntegrations",
     "recentAgentActions",
     "undoAgentAction",
   ],
+  // Live connection status: integration/provider questions and scheduling.
+  integrations: ["connectedIntegrations"],
   automations: [
     "listAutomationTools",
     "getAutomationContext",
@@ -119,40 +130,73 @@ export const TOOL_GROUPS: Record<HarlyToolGroup, readonly string[]> = {
 };
 
 const GENERAL_GROUPS: readonly HarlyToolGroup[] = ["general"];
-const ALL_GROUPS = Object.keys(TOOL_GROUPS) as HarlyToolGroup[];
+
+/**
+ * Cheap read helpers offered on every step of every turn, whatever the routed
+ * groups are. They are the "bounded widen": enough to resolve a named person
+ * or job and read it, so a turn whose keywords routed narrowly can still
+ * self-heal without the full ~85-tool catalog (≈35k tokens of schemas) being
+ * sent on every step.
+ */
+export const READ_HELPER_TOOLS: readonly string[] = [
+  "resolveCandidate",
+  "searchCandidates",
+  "candidateProfile",
+  "getCandidateContext",
+  "resolveApplication",
+  "resolveJob",
+  "jobContext",
+  "listJobs",
+  "hiringBrief",
+];
+
+/**
+ * Groups used when a turn carries no group keyword and no structural signal
+ * ("hola", "Charlotte Dubois?"). Everyday read surfaces only: the automation
+ * group alone is ~95k characters of schema, so it is never part of a guess.
+ */
+const DEFAULT_GROUPS: readonly HarlyToolGroup[] = [
+  "general",
+  "candidates",
+  "jobs",
+  "interviews",
+  "tasks",
+];
 
 /**
  * Per-group activation matchers. Deliberately more granular than
- * `classifyHarlyIntent` (which returns one of six coarse categories used only
- * as a prompt hint): each group has its own keyword surface, so a message can
- * legitimately activate several groups at once (e.g. "schedule an interview
- * for the candidate in the Backend job" touches candidates, jobs, and
- * interviews). False positives here only cost a few extra tool schemas in
- * the request; false negatives are the real risk, which is why every
- * uncertain case falls through to "activate everything" (see
- * `resolveActiveToolGroups`).
+ * `classifyHarlyIntent` (which returns one of a few coarse categories used
+ * only as a prompt hint): each group has its own keyword surface, so a
+ * message can legitimately activate several groups at once (e.g. "schedule
+ * an interview for the candidate in the Backend job" touches candidates,
+ * jobs, and interviews). False positives only cost a few extra tool schemas;
+ * false negatives fall back to `DEFAULT_GROUPS` plus `READ_HELPER_TOOLS`.
  */
 const GROUP_MATCHERS: Partial<Record<HarlyToolGroup, RegExp>> = {
+  integrations: /\b(integra|connect|conect|conex|reconnect|reconex|calendar|calendario|google|meet\b|zoom|teams|outlook|slack|cal\.com|jitsi|linkedin|indeed|sync|sincroniz|provider|proveedor)\w*/i,
   automations: /\b(automat(?:ion|izaci[oó]n|izar)|workflow|flujo|webhook|trigger|disparador|branch coverage|proposal)\w*/i,
-  candidates: /\b(candidat[oa]s?|applicant|postulant|reject|rechaz|move|mueve|advance|avanza|stage|pipeline|scorecard|tag\b|note\b|nota\b)\w*/i,
-  jobs: /\b(job|puesto|vacante|role\b|rol\b|hiring brief|distribution|publish|publica)\w*/i,
+  candidates: /\b(candidat[oa]s?|applicant|postulant|reject|rechaz|descart|move|mueve|advance|avanza|pasa(?:r|lo|la)?\b|pass\b|stage|etapa|pipeline|scorecard|tag\b|etiquet|note\b|nota\b|summar|resum|profile|perfil|cv\b|resume\b|review|revis|evalu|opin|who is|qui[eé]n es|tell me about|h[aá]blame|email|correo|mail)\w*/i,
+  jobs: /\b(job|puesto|vacante|role\b|rol\b|hiring brief|distribution|publish|publica|career page|catch me up|ponme al d[ií]a|attention|atenci[oó]n|prioridad|priorit)\w*/i,
   interviews: /\b(interview|entrevista|schedule|agenda|calendar|calendario|meeting|reuni[oó]n)\w*/i,
   tasks: /\b(task|tarea|to-?do|pendiente)\w*/i,
   inbox: /\b(inbox|bandeja)\w*/i,
   offers: /\b(offer|oferta)\w*/i,
   talentPool: /\b(talent pool|pool de talento|pool\b)\w*/i,
   templates: /\b(template|plantilla)\w*/i,
-  reports: /\b(report|reporte|kpi|funnel|embudo|time-?to-?hire|analytics)\w*/i,
-  aiGeneration: /\b(score|puntaje|puntuaci[oó]n|compare|compara|duplicate|duplicad[oa]|draft|borrador|screening question)\w*/i,
+  reports: /\b(report|reporte|kpi|funnel|embudo|time-?to-?hire|analytics|m[eé]trica|metric)\w*/i,
+  aiGeneration: /\b(score|puntaje|puntuaci[oó]n|compare|compara|duplicate|duplicad[oa]|draft|borrador|screening question|redacta|escribe)\w*/i,
 };
 
-/** Coarse `classifyHarlyIntent` categories that should always widen the set
- * to every group rather than narrow it, because they carry no group-specific
- * signal by themselves. */
-const NON_NARROWING_INTENTS: ReadonlySet<HarlyIntent> = new Set([
+/**
+ * A person's name written as two capitalised words ("Charlotte Dubois") is a
+ * strong candidate signal even without a keyword.
+ */
+const PERSON_NAME_RE = /\b\p{Lu}[\p{Ll}'’-]+\s+\p{Lu}[\p{Ll}'’-]+/u;
+
+/** Coarse intents that need product/capability tools, not workspace records. */
+const PRODUCT_ONLY_INTENTS: ReadonlySet<HarlyIntent> = new Set([
   "product_docs",
   "general_advice",
-  "ambiguous",
 ]);
 
 export type ToolRoutingContext = {
@@ -161,18 +205,29 @@ export type ToolRoutingContext = {
   activeCandidateId?: string | null;
   mentionedCandidateIds?: readonly string[];
   activeAutomation?: HarlyToolContext["activeAutomation"];
+  /**
+   * Tools called in the last couple of turns. Their groups stay active so a
+   * follow-up ("sí", "and the other one?") keeps the surface it continues.
+   */
+  recentToolNames?: readonly string[];
 };
 
+const GROUP_BY_TOOL: ReadonlyMap<string, HarlyToolGroup> = new Map(
+  (Object.entries(TOOL_GROUPS) as Array<[HarlyToolGroup, readonly string[]]>).flatMap(
+    ([group, names]) => names.map((name) => [name, group] as const),
+  ),
+);
+
 /**
- * Decide which tool groups are active for the FIRST step of a turn. This is
- * the narrowing side of the gateway (Phase 6, AI10): it never removes a tool
- * a permission check would have kept, it only decides which of the
- * already-permission-filtered tools are offered to the model up front.
+ * Decide which tool groups are active for a turn. The same set is used on
+ * EVERY step of the turn (see `selectActiveToolNames`), which keeps the tool
+ * list byte-stable so Anthropic prompt caching hits between steps. It never
+ * removes a tool a permission check would have kept; it only decides which of
+ * the already-permission-filtered tools are offered.
  *
- * Safety rule: when in doubt, widen. Ambiguous/product/advice intents, or a
- * message that doesn't match any group keyword, activate every group (the
- * pre-Phase-6 behavior) instead of guessing narrowly and risking a false
- * negative.
+ * Safety rule: when there is no signal, fall back to the everyday read
+ * groups (`DEFAULT_GROUPS`) rather than guessing one narrow group; the read
+ * helpers are always added on top.
  */
 export function resolveActiveToolGroups(ctx: ToolRoutingContext): Set<HarlyToolGroup> {
   const active = new Set<HarlyToolGroup>(GENERAL_GROUPS);
@@ -184,18 +239,17 @@ export function resolveActiveToolGroups(ctx: ToolRoutingContext): Set<HarlyToolG
   if (ctx.activeCandidateId || ctx.mentionedCandidateIds?.length) {
     active.add("candidates");
   }
+  for (const name of ctx.recentToolNames ?? []) {
+    const group = GROUP_BY_TOOL.get(name);
+    if (group) active.add(group);
+  }
 
   // Natural requests such as “cuando un candidato postule…” are valid
   // workflow requests even when the user never says “automatización” or
-  // “trigger”. Keep the first turn narrow enough for model context while
-  // making the complete automation orchestration surface available.
+  // “trigger”. Keep the turn narrow enough for model context while making
+  // the complete automation orchestration surface available.
   if (ctx.intent === "automation_build") {
     active.add("automations");
-    return active;
-  }
-
-  if (NON_NARROWING_INTENTS.has(ctx.intent)) {
-    ALL_GROUPS.forEach((group) => active.add(group));
     return active;
   }
 
@@ -209,13 +263,26 @@ export function resolveActiveToolGroups(ctx: ToolRoutingContext): Set<HarlyToolG
       matchedAnyKeyword = true;
     }
   }
-
-  // No keyword and no structural signal beyond "general": we cannot
-  // distinguish intent narrowly enough to safely exclude a group, so widen
-  // to everything rather than risk hiding a tool the turn actually needs.
-  if (!matchedAnyKeyword && active.size <= GENERAL_GROUPS.length) {
-    ALL_GROUPS.forEach((group) => active.add(group));
+  if (PERSON_NAME_RE.test(text)) {
+    active.add("candidates");
+    matchedAnyKeyword = true;
   }
+
+  // Product/advice questions are answered from the always-on general group
+  // (capabilities, permissions, product knowledge) plus the read helpers.
+  if (!matchedAnyKeyword && PRODUCT_ONLY_INTENTS.has(ctx.intent)) {
+    return active;
+  }
+
+  // No keyword and no structural signal beyond "general": offer the
+  // everyday read surfaces instead of the whole catalog.
+  if (!matchedAnyKeyword && active.size <= GENERAL_GROUPS.length) {
+    DEFAULT_GROUPS.forEach((group) => active.add(group));
+  }
+
+  // Scheduling checks live provider status before proposing an interview;
+  // capability questions often hinge on what is connected right now.
+  if (active.has("interviews") || ctx.intent === "capability") active.add("integrations");
 
   return active;
 }
@@ -228,29 +295,55 @@ export function toolNamesForGroups(groups: ReadonlySet<HarlyToolGroup>): string[
 }
 
 /**
- * Widens the active set for later steps. Phase-6 routing is only meant to
- * sharpen the model's FIRST decision; once it has already spent a step
- * calling tools, further narrowing only risks blocking a legitimate
- * multi-category task (e.g. resolve a candidate, then build an automation
- * for them) for no measurable benefit. From `stepNumber` 2 onward every
- * permission-filtered tool is offered again.
+ * Offered only on turns that may change something: every write tool, plus the
+ * read tools whose only job is preparing a stage move.
  */
-export function shouldWidenForStep(stepNumber: number): boolean {
-  return stepNumber >= 2;
+const WRITE_TURN_ONLY_TOOLS: ReadonlySet<string> = new Set([
+  ...AGENT_WRITE_TOOLS,
+  "nextCandidateStage",
+  "candidateNextAction",
+]);
+
+/**
+ * Any hint that the user wants something changed (or is confirming a change
+ * Harly just suggested: "sí", "dale", "go ahead"). Deliberately broad: a false
+ * positive only adds a few write schemas, a false negative hides the action.
+ */
+const WRITE_SIGNAL_RE =
+  /\b(send|env[ií]a|enviar|manda|mandar|m[aá]ndale|mail|email|correo|reject|rechaz|descart|move|mueve|mover|advance|avanza|p[aá]sa|pass|schedule|agenda|programa|reprograma|create|crea|crear|add|agrega|a[nñ]ade|tag|etiquet|note|nota|scorecard|score|puntu|punt[uú]a|review|revis|evalu|offer|oferta|assign|asigna|complete|completa|marca|mark|update|actualiza|cambia|change|edit|modifica|undo|deshaz|deshac|revert|revi[eé]rte|invite|invita|hire|contrata|decide|accept|acepta|approve|aprueba|decline|pool|apply|aplica|retry|reintenta|replay|reconcil|repar|fix|arregla|proceed|procede|confirm)\w*/i;
+/** Short confirmations, matched as whole words only. */
+const CONFIRMATION_RE = /(^|[\s¡!¿,.])(s[ií]|yes|ok|okay|dale|hazlo|do it|go ahead|adelante|claro|sure)(?=$|[\s!?,.])/iu;
+
+/**
+ * Whether this turn offers write tools. Read-only turns ("summarize X",
+ * "what's the status of Y") skip every write schema; any action wording, an
+ * action/automation intent, or the automation builder turns them back on.
+ */
+export function turnNeedsWriteTools(ctx: ToolRoutingContext): boolean {
+  if (ctx.intent === "action" || ctx.intent === "automation_build") return true;
+  if (ctx.activeAutomation) return true;
+  return WRITE_SIGNAL_RE.test(ctx.message) || CONFIRMATION_RE.test(ctx.message.trim());
 }
 
 /**
  * Restricts `toolNames` (a permission-filtered tool set's keys) down to the
- * active groups, preserving the caller's original tool object keys. Returns
+ * active groups plus `READ_HELPER_TOOLS`, preserving the caller's original
+ * tool object order (stable order = stable prompt-cache prefix). Returns
  * `undefined` when every available tool is already active, so callers can
  * pass that straight through as "no activeTools override" without allocating.
  */
 export function selectActiveToolNames(
   availableToolNames: readonly string[],
   groups: ReadonlySet<HarlyToolGroup>,
+  options: { includeWrites?: boolean } = {},
 ): string[] | undefined {
-  const activeNames = new Set(toolNamesForGroups(groups));
-  const selected = availableToolNames.filter((name) => activeNames.has(name));
+  const includeWrites = options.includeWrites ?? true;
+  const activeNames = new Set([...toolNamesForGroups(groups), ...READ_HELPER_TOOLS]);
+  const selected = availableToolNames.filter(
+    (name) =>
+      activeNames.has(name) &&
+      (includeWrites || !WRITE_TURN_ONLY_TOOLS.has(name)),
+  );
   if (selected.length === availableToolNames.length) return undefined;
   return selected;
 }
@@ -290,4 +383,32 @@ export function assertToolRoutingCoversAllTools(allToolNames: readonly string[])
       `Harly tool routing: tool(s) not assigned to any group in tool-routing.ts, so the gateway can never surface them: ${uncovered.join(", ")}`,
     );
   }
+}
+
+const LOADABLE_GROUPS = Object.keys(TOOL_GROUPS).filter(
+  (group) => group !== "general",
+) as [HarlyToolGroup, ...HarlyToolGroup[]];
+
+/**
+ * `loadToolGroups`: lets the model recover when keyword routing left out the
+ * tools it needs ("I can't do that" would otherwise be the answer). The route
+ * widens `activeTools` from the next step on via `onLoad`. Costs ~150 tokens
+ * of schema and nothing when unused.
+ */
+export function buildToolGroupLoader(
+  onLoad: (groups: HarlyToolGroup[], includeWrites: boolean) => void,
+) {
+  return {
+    loadToolGroups: tool({
+      description: `Load more tools for this turn when the ones you have don't cover the request. Groups: ${LOADABLE_GROUPS.join(", ")}. Set includeWrites when the user wants something changed.`,
+      inputSchema: z.object({
+        groups: z.array(z.enum(LOADABLE_GROUPS)).min(1).max(4),
+        includeWrites: z.boolean().optional(),
+      }),
+      execute: async ({ groups, includeWrites }) => {
+        onLoad(groups, includeWrites ?? false);
+        return { loaded: toolNamesForGroups(new Set(groups)).length };
+      },
+    }),
+  };
 }

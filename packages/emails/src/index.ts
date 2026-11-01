@@ -18,6 +18,8 @@ export * from "./templates/InterviewScheduled";
 export * from "./templates/OfferExtended";
 export * from "./templates/OfferWithdrawn";
 export * from "./templates/ResetPassword";
+export * from "./templates/SignatureInvitation";
+export * from "./templates/SignatureNotice";
 export * from "./templates/StaffMagicLink";
 export * from "./templates/VerifyEmail";
 export * from "./templates/WelcomeEmail";

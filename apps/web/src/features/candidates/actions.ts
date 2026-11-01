@@ -58,6 +58,12 @@ import {
   serializeReferral as serializeCandidateReferral,
 } from "./referrals/service";
 import { updateApplicationStatus } from "@/features/pipeline/actions";
+import {
+  rejectApplicationsSchema,
+  rejectionDecisionSchema,
+  type RejectApplicationsInput,
+  type RejectionDecision,
+} from "@/features/rejection-reasons/shared";
 import { candidateScopeSql, jobScopeSql } from "@/features/search/scope";
 import { resolveSearchActor } from "@/features/search/workspace-search";
 import {
@@ -99,6 +105,7 @@ export type CandidateActionState = {
 const bulkStatusSchema = z.object({
   applicationIds: z.array(z.string().min(1)).min(1).max(200),
   status: z.enum(["active", "hired", "rejected", "withdrawn"]),
+  rejection: rejectionDecisionSchema.optional(),
 });
 
 const emailLog = createLogger("candidate-email");
@@ -165,10 +172,17 @@ export async function exportCandidateDirectoryAction(input: CandidateDirectoryFi
   return { success: true as const, csv, count: rows.length };
 }
 
-/** Apply a status to many applications at once from the candidates list. */
+/**
+ * Apply a status to many applications at once from the candidates list.
+ *
+ * In-app rejections use `rejectApplicationsAction` (reason required). A
+ * "rejected" status sent here without `rejection` keeps the legacy behavior:
+ * reason "Other", rejection email sent with the active template.
+ */
 export async function bulkUpdateCandidateStatusAction(input: {
   applicationIds: string[];
   status: "active" | "hired" | "rejected" | "withdrawn";
+  rejection?: RejectionDecision;
 }): Promise<{ success: boolean; error?: string; emailWarning?: string }> {
   const parsed = bulkStatusSchema.safeParse(input);
   if (!parsed.success) {
@@ -182,6 +196,46 @@ export async function bulkUpdateCandidateStatusAction(input: {
     workspaceId: workspace.id,
     applicationIds: parsed.data.applicationIds,
     status: parsed.data.status,
+    ...(parsed.data.status === "rejected" && parsed.data.rejection
+      ? { rejection: parsed.data.rejection }
+      : {}),
+  });
+
+  if (result.success) {
+    revalidatePath("/dashboard/candidates");
+    revalidatePath("/dashboard/pipeline");
+  }
+
+  return result;
+}
+
+/**
+ * Reject one or more applications from RejectDialog: a reason is required,
+ * the note is internal, and `sendEmail` decides whether candidates get the
+ * rejection email (individually, with `templateId` or the active template).
+ * Permissions match every other status change: candidates:edit, checked per
+ * application inside updateApplicationStatus.
+ */
+export async function rejectApplicationsAction(
+  input: RejectApplicationsInput,
+): Promise<{ success: boolean; error?: string; emailWarning?: string }> {
+  const parsed = rejectApplicationsSchema.safeParse(input);
+  if (!parsed.success) {
+    return {
+      success: false,
+      error: parsed.error.issues[0]?.message ?? "Invalid rejection.",
+    };
+  }
+
+  await requirePermission("candidates:edit");
+
+  const { organization: workspace } = await getWorkspaceContext();
+  const { applicationIds, ...rejection } = parsed.data;
+  const result = await updateApplicationStatus({
+    workspaceId: workspace.id,
+    applicationIds,
+    status: "rejected",
+    rejection,
   });
 
   if (result.success) {
@@ -317,11 +371,14 @@ async function parseCandidateFileDetails(input: {
       return empty;
     }
 
-    const { text } = await extractResumeText({
+    const { text, diagnostics } = await extractResumeText({
       buffer,
       fileName: input.fileName,
       mimeType: input.fileType,
     });
+    if (diagnostics.length > 0) {
+      console.warn("Resume extraction notes", { fileName: input.fileName, diagnostics });
+    }
     if (!text.trim()) return empty;
 
     // Prefer the AI structured parse (summary + skills + experience timeline +
@@ -334,6 +391,7 @@ async function parseCandidateFileDetails(input: {
           .filter(Boolean)
           .join(" ");
         const structured = await parseResumeStructured(aiConfig, text, {
+          workspaceId: input.workspaceId,
           identity: {
             firstName: input.identity.firstName,
             lastName: input.identity.lastName,
@@ -897,6 +955,69 @@ export async function updateCandidateAvatarAction(input: {
   }
 }
 
+const candidateFileHashColumns = {
+  id: candidateFiles.id,
+  fileName: candidateFiles.fileName,
+  fileUrl: candidateFiles.fileUrl,
+  fileType: candidateFiles.fileType,
+  fileSize: candidateFiles.fileSize,
+  contentHash: candidateFiles.contentHash,
+  parsedSummary: candidateFiles.parsedSummary,
+  parsedSkills: candidateFiles.parsedSkills,
+  parsedEducation: candidateFiles.parsedEducation,
+  parsedExperienceYears: candidateFiles.parsedExperienceYears,
+  parsedAt: candidateFiles.parsedAt,
+  createdAt: candidateFiles.createdAt,
+};
+
+/** Newest file of this candidate with the same content hash, if any. */
+async function findCandidateFileByHash(
+  executor: Pick<typeof db, "select">,
+  workspaceId: string,
+  candidateId: string,
+  contentHash: string,
+) {
+  const [existing] = await executor
+    .select(candidateFileHashColumns)
+    .from(candidateFiles)
+    .where(
+      and(
+        eq(candidateFiles.workspaceId, workspaceId),
+        eq(candidateFiles.candidateId, candidateId),
+        eq(candidateFiles.contentHash, contentHash.toLowerCase()),
+      ),
+    )
+    .orderBy(desc(candidateFiles.createdAt))
+    .limit(1);
+  return existing ?? null;
+}
+
+function toAttachedFile(
+  row: {
+    id: string;
+    fileName: string;
+    fileUrl: string;
+    fileType: string | null;
+    fileSize: number | null;
+    contentHash: string | null;
+    parsedSummary: string | null;
+    parsedSkills: unknown;
+    parsedEducation: string | null;
+    parsedExperienceYears: number | null;
+    parsedAt: Date | null;
+    createdAt: Date;
+  },
+  uploadedByName: string,
+) {
+  return {
+    ...row,
+    parsedSkills: Array.isArray(row.parsedSkills) ? (row.parsedSkills as string[]) : [],
+    parsedAt: row.parsedAt?.toISOString() ?? null,
+    createdAt: row.createdAt.toISOString(),
+    uploadedByName,
+  };
+}
+
 export async function attachCandidateFile(input: {
   candidateId: string;
   workspaceId: string;
@@ -958,6 +1079,24 @@ export async function attachCandidateFile(input: {
       )
       .limit(1);
 
+    // Dedupe BEFORE parsing: a file we already hold (same content hash) must
+    // not be extracted or sent to the AI again. The in-transaction check below
+    // still guards the concurrent-upload race.
+    if (parsed.data.contentHash) {
+      const duplicate = await findCandidateFileByHash(
+        db,
+        input.workspaceId,
+        input.candidateId,
+        parsed.data.contentHash,
+      );
+      if (duplicate) {
+        return {
+          success: true,
+          file: toAttachedFile(duplicate, user.name),
+        };
+      }
+    }
+
     const parsedDetails = await parseCandidateFileDetails({
       workspaceId: input.workspaceId,
       fileUrl: parsed.data.fileUrl,
@@ -996,48 +1135,14 @@ export async function attachCandidateFile(input: {
       }
 
       if (parsed.data.contentHash) {
-        const [existing] = await tx
-          .select({
-            id: candidateFiles.id,
-            fileName: candidateFiles.fileName,
-            fileUrl: candidateFiles.fileUrl,
-            fileType: candidateFiles.fileType,
-            fileSize: candidateFiles.fileSize,
-            contentHash: candidateFiles.contentHash,
-            parsedSummary: candidateFiles.parsedSummary,
-            parsedSkills: candidateFiles.parsedSkills,
-            parsedEducation: candidateFiles.parsedEducation,
-            parsedExperienceYears: candidateFiles.parsedExperienceYears,
-            parsedAt: candidateFiles.parsedAt,
-            createdAt: candidateFiles.createdAt,
-          })
-          .from(candidateFiles)
-          .where(
-            and(
-              eq(candidateFiles.workspaceId, input.workspaceId),
-              eq(candidateFiles.candidateId, input.candidateId),
-              eq(
-                candidateFiles.contentHash,
-                parsed.data.contentHash.toLowerCase(),
-              ),
-            ),
-          )
-          .orderBy(desc(candidateFiles.createdAt))
-          .limit(1);
-
+        const existing = await findCandidateFileByHash(
+          tx,
+          input.workspaceId,
+          input.candidateId,
+          parsed.data.contentHash,
+        );
         if (existing) {
-          return {
-            success: true,
-            file: {
-              ...existing,
-              parsedSkills: Array.isArray(existing.parsedSkills)
-                ? existing.parsedSkills
-                : [],
-              parsedAt: existing.parsedAt?.toISOString() ?? null,
-              createdAt: existing.createdAt.toISOString(),
-              uploadedByName: user.name,
-            },
-          };
+          return { success: true, file: toAttachedFile(existing, user.name) };
         }
       }
 

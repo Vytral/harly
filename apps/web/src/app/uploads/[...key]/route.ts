@@ -7,7 +7,7 @@ import { eq } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { getWorkspaceContextOrNull } from "@/features/workspaces/context";
 import { requireCandidatePermission } from "@/features/workspaces/permissions-server";
-import { isPrivateResumeStorageKey } from "@/lib/upload-access";
+import { isPrivateResumeStorageKey, isPublicUploadStorageKey } from "@/lib/upload-access";
 import { resumeKeyFromUrl } from "@/lib/resume/storage-key";
 
 export const runtime = "nodejs";
@@ -52,6 +52,11 @@ export async function GET(
   // one-year immutable assets, which meant a leaked/guessed URL was enough to
   // read a CV and a browser/CDN could keep it after deletion.
   const isResume = isPrivateResumeStorageKey(storageKey);
+  // Only images/logos are public. Signed PDFs, offer letters, signatures and
+  // documents are served by permission-checked routes, never by URL alone.
+  if (!isResume && !isPublicUploadStorageKey(storageKey)) {
+    return new NextResponse("Not found", { status: 404 });
+  }
   if (isResume) {
     const context = await getWorkspaceContextOrNull();
     if (!context) return new NextResponse("Not found", { status: 404 });

@@ -82,7 +82,7 @@ describe("Harly AI chat diagnosis and automations integration", () => {
   describe("P2: Tool labels and progress consolidation in English", () => {
     it("maps all automations tools to human-readable English labels", () => {
       expect(TOOL_LABELS["tool-listAutomationTools"]).toBe(
-        "Checking automation tools",
+        "Looking at automation steps",
       );
       expect(TOOL_LABELS["tool-searchAutomations"]).toBe(
         "Searching automations",
@@ -103,10 +103,10 @@ describe("Harly AI chat diagnosis and automations integration", () => {
 
     it("provides a clean English formatted fallback for unknown tools instead of raw Working", () => {
       expect(getToolLabel("tool-customValidationCheck")).toBe(
-        "Checking custom validation check",
+        "Looking at custom validation check",
       );
       expect(getToolLabel("tool-arbitraryThirdPartySync")).toBe(
-        "Checking arbitrary third party sync",
+        "Looking at arbitrary third party sync",
       );
       expect(getToolLabel("")).toBe("Working");
     });

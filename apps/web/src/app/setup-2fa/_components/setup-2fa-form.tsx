@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { QRCodeSVG } from "qrcode.react";
 import { toast } from "@/lib/notification-island/toast";
+import { copyText } from "@/lib/utils";
 
 import { authClient } from "@harly/auth/client";
 import { Button } from "@/components/ui/button";
@@ -72,7 +73,7 @@ export function Setup2FAForm() {
   }
 
   function copyBackupCodes() {
-    navigator.clipboard.writeText(backupCodes.join("\n"));
+    copyText(backupCodes.join("\n"));
     toast.success("Backup codes copied");
   }
 

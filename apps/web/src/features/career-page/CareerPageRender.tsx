@@ -2,13 +2,14 @@
 
 import type { WorkspaceBoardBranding } from "@/features/workspaces/board";
 
-import type { CareerPageConfig } from "./config";
+import type { CareerPageConfig, CareerTemplate } from "./config";
 import type { Job } from "./types";
 import { ThemeWrapper } from "./ThemeWrapper";
 import { PlayfulTemplate } from "./templates/PlayfulTemplate";
 import { MinimalTemplate } from "./templates/MinimalTemplate";
 import { AshbyTemplate } from "./templates/AshbyTemplate";
 import { JoinTemplate } from "./templates/JoinTemplate";
+import { ShowcaseTemplate } from "./templates/ShowcaseTemplate";
 
 /**
  * Renders the public career page from live config. Switch picks the template
@@ -34,7 +35,8 @@ export function CareerPageRender({
     playful: PlayfulTemplate,
     ashby: AshbyTemplate,
     join: JoinTemplate,
-  } as const;
+    showcase: ShowcaseTemplate,
+  } satisfies Record<CareerTemplate, unknown>;
 
   const TemplateComponent =
     config.template !== "" && config.template in templateMap

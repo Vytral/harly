@@ -8,7 +8,7 @@ import { toast } from "@/lib/notification-island/toast";
 
 import { patchTriggerFilter, WORKFLOW_EVENTS, type WorkflowEvent } from "../../schema";
 import type { Binding, WorkflowNode } from "../../definition/schema-v2";
-import { cn } from "@/lib/utils";
+import { cn, copyText } from "@/lib/utils";
 import { ConditionPanel } from "../ConditionPanel";
 import { actionMeta, pickableActions, triggerMeta, type ConfigField } from "../catalog";
 import { NODE_KIND_LABEL, getNodeVisualMeta, nodeCaption, nodeTitle } from "../node-copy";
@@ -531,7 +531,7 @@ function TriggerFields({
 
   const copyValue = async (value: string, label: string) => {
     try {
-      await navigator.clipboard.writeText(value);
+      await copyText(value);
       toast.success(`${label} copied.`);
     } catch {
       toast.error(`Could not copy the ${label.toLowerCase()}.`);

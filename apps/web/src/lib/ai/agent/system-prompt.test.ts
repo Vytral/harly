@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { buildHarlySystemPrompt } from "./system-prompt";
+import { buildHarlySystemPrompt, buildHarlySystemPromptParts } from "./system-prompt";
 
 describe("Harly AI system prompt", () => {
   it("teaches the agent to resolve obvious application context and integrations", () => {
@@ -39,5 +39,36 @@ describe("Harly AI system prompt", () => {
     expect(prompt).not.toContain(
       "You have NO access to Settings , billing, integrations",
     );
+  });
+
+  it("splits a stable core from the per-turn context and only teaches routed playbooks", () => {
+    const base = {
+      workspaceName: "Syntrix",
+      userName: "Max",
+      role: "owner",
+      activeGroups: new Set(["general", "candidates"] as const),
+    };
+    const monday = buildHarlySystemPromptParts({ ...base, today: "Monday", activeCandidateId: "c-1" });
+    const tuesday = buildHarlySystemPromptParts({ ...base, today: "Tuesday", intent: "action" });
+    expect(monday.core).toBe(tuesday.core);
+    expect(monday.context).toContain("Monday");
+    expect(monday.context).toContain("c-1");
+    expect(monday.core).not.toContain("Monday");
+    expect(monday.core).toContain("presentUi");
+    expect(monday.core).toContain("reviewCandidate");
+    expect(monday.core).not.toContain("prepareAutomationPlan");
+    expect(monday.core).not.toContain("scheduleInterview");
+  });
+
+  it("introduces itself with the workspace's assistant name", () => {
+    const prompt = buildHarlySystemPrompt({
+      assistantName: "Nova",
+      workspaceName: "Syntrix",
+      userName: "Max",
+      role: "owner",
+      today: "Monday",
+    });
+    expect(prompt).toContain("You are Nova");
+    expect(prompt).toContain("powered by Harly AI");
   });
 });

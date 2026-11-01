@@ -9,6 +9,9 @@ import { cn } from "@/lib/utils"
 
 type SheetPresentation = "side" | "bottom-on-mobile"
 
+const sheetCloseClasses =
+  "absolute top-4 right-4 inline-flex size-8 items-center justify-center rounded-full text-soft-ink transition-colors outline-none hover:bg-card-inset hover:text-near-ink focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:pointer-events-none"
+
 const SheetContext = React.createContext({ useMobileDrawer: false })
 
 function Sheet({
@@ -77,7 +80,7 @@ function SheetOverlay({
     return (
       <DrawerPrimitive.Overlay
         data-slot="sheet-overlay"
-        className={cn("fixed inset-0 z-50 bg-black/50", className)}
+        className={cn("fixed inset-0 z-50 bg-ink/30", className)}
         {...props}
       />
     )
@@ -87,7 +90,7 @@ function SheetOverlay({
     <SheetPrimitive.Overlay
       data-slot="sheet-overlay"
       className={cn(
-        "fixed inset-0 z-50 bg-black/50 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:animate-in data-[state=open]:fade-in-0",
+        "fixed inset-0 z-50 bg-ink/30 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:duration-[160ms] data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:duration-[220ms] motion-reduce:animate-none",
         className
       )}
       {...props}
@@ -114,7 +117,7 @@ function SheetContent({
         <DrawerPrimitive.Content
           data-slot="sheet-content"
           className={cn(
-            "fixed inset-x-0 bottom-0 z-50 flex max-h-[calc(100dvh-0.75rem)] flex-col rounded-t-xl border bg-background shadow-lg outline-none",
+            "fixed inset-x-0 bottom-0 z-50 flex max-h-[calc(100dvh-0.75rem)] flex-col rounded-t-[var(--radius-card)] bg-pure-snow shadow-[var(--shadow-float)] outline-none",
             className,
           )}
           {...props}
@@ -122,7 +125,7 @@ function SheetContent({
           <DrawerPrimitive.Handle className="mx-auto mt-3 h-1.5 w-10 rounded-full bg-muted-foreground/30" />
           {children}
           {showCloseButton && (
-            <DrawerPrimitive.Close className="absolute top-3 right-3 rounded-xs opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:outline-hidden disabled:pointer-events-none">
+            <DrawerPrimitive.Close className={sheetCloseClasses}>
               <XIcon className="size-4" />
               <span className="sr-only">Close</span>
             </DrawerPrimitive.Close>
@@ -138,22 +141,23 @@ function SheetContent({
       <SheetPrimitive.Content
         data-slot="sheet-content"
         className={cn(
-          "fixed z-50 flex flex-col gap-4 overflow-y-auto bg-background shadow-lg transition ease-in-out data-[state=closed]:animate-out data-[state=closed]:duration-300 data-[state=open]:animate-in data-[state=open]:duration-500",
+          "fixed z-50 flex flex-col gap-4 overflow-y-auto bg-pure-snow text-near-ink shadow-[var(--shadow-float)] outline-none ease-out data-[state=closed]:animate-out data-[state=closed]:duration-[160ms] data-[state=open]:animate-in data-[state=open]:duration-[220ms] motion-reduce:animate-none",
+          // Floating drawer: 8px inset from the viewport, 16px radius all round.
           side === "right" &&
-            "inset-y-0 right-0 h-full w-3/4 border-l data-[state=closed]:slide-out-to-right data-[state=open]:slide-in-from-right sm:max-w-sm",
+            "inset-y-2 right-2 h-[calc(100dvh-1rem)] w-[calc(100%-1rem)] rounded-[var(--radius-card)] data-[state=closed]:slide-out-to-right data-[state=open]:slide-in-from-right sm:max-w-sm",
           side === "left" &&
-            "inset-y-0 left-0 h-full w-3/4 border-r data-[state=closed]:slide-out-to-left data-[state=open]:slide-in-from-left sm:max-w-sm",
+            "inset-y-2 left-2 h-[calc(100dvh-1rem)] w-[calc(100%-1rem)] rounded-[var(--radius-card)] data-[state=closed]:slide-out-to-left data-[state=open]:slide-in-from-left sm:max-w-sm",
           side === "top" &&
-            "inset-x-0 top-0 h-auto border-b data-[state=closed]:slide-out-to-top data-[state=open]:slide-in-from-top",
+            "inset-x-2 top-2 h-auto rounded-[var(--radius-card)] data-[state=closed]:slide-out-to-top data-[state=open]:slide-in-from-top",
           side === "bottom" &&
-            "inset-x-0 bottom-0 h-auto border-t data-[state=closed]:slide-out-to-bottom data-[state=open]:slide-in-from-bottom",
+            "inset-x-2 bottom-2 h-auto rounded-[var(--radius-card)] data-[state=closed]:slide-out-to-bottom data-[state=open]:slide-in-from-bottom",
           className
         )}
         {...props}
       >
         {children}
         {showCloseButton && (
-          <SheetPrimitive.Close className="absolute top-4 right-4 rounded-xs opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:outline-hidden disabled:pointer-events-none data-[state=open]:bg-secondary">
+          <SheetPrimitive.Close className={sheetCloseClasses}>
             <XIcon className="size-4" />
             <span className="sr-only">Close</span>
           </SheetPrimitive.Close>
@@ -167,7 +171,7 @@ function SheetHeader({ className, ...props }: React.ComponentProps<"div">) {
   return (
     <div
       data-slot="sheet-header"
-      className={cn("flex flex-col gap-1.5 p-4", className)}
+      className={cn("flex flex-col gap-1 p-5 pr-14 pb-0", className)}
       {...props}
     />
   )
@@ -177,7 +181,10 @@ function SheetFooter({ className, ...props }: React.ComponentProps<"div">) {
   return (
     <div
       data-slot="sheet-footer"
-      className={cn("mt-auto flex flex-col gap-2 p-4", className)}
+      className={cn(
+        "sticky bottom-0 mt-auto flex flex-col-reverse gap-2 border-t border-hairline bg-pure-snow p-4 sm:flex-row sm:justify-end",
+        className
+      )}
       {...props}
     />
   )
@@ -190,13 +197,13 @@ function SheetTitle({
   const { useMobileDrawer } = React.useContext(SheetContext)
 
   if (useMobileDrawer) {
-    return <DrawerPrimitive.Title data-slot="sheet-title" className={cn("font-semibold text-foreground", className)} {...props} />
+    return <DrawerPrimitive.Title data-slot="sheet-title" className={cn("text-[18px] leading-snug font-semibold tracking-tight text-near-ink", className)} {...props} />
   }
 
   return (
     <SheetPrimitive.Title
       data-slot="sheet-title"
-      className={cn("font-semibold text-foreground", className)}
+      className={cn("text-[18px] leading-snug font-semibold tracking-tight text-near-ink", className)}
       {...props}
     />
   )
@@ -209,13 +216,13 @@ function SheetDescription({
   const { useMobileDrawer } = React.useContext(SheetContext)
 
   if (useMobileDrawer) {
-    return <DrawerPrimitive.Description data-slot="sheet-description" className={cn("text-sm text-muted-foreground", className)} {...props} />
+    return <DrawerPrimitive.Description data-slot="sheet-description" className={cn("text-sm leading-6 text-soft-ink", className)} {...props} />
   }
 
   return (
     <SheetPrimitive.Description
       data-slot="sheet-description"
-      className={cn("text-sm text-muted-foreground", className)}
+      className={cn("text-sm leading-6 text-soft-ink", className)}
       {...props}
     />
   )

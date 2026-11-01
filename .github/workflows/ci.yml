@@ -302,10 +302,11 @@ jobs:
           src/features/pipeline/pipeline-large-load.integration.test.ts
           src/server/api/ratelimit.database.integration.test.ts
 
-      - name: Run stage lifecycle, scope, metrics, search, sample-data and email integration suites
+      - name: Run stage lifecycle, scope, metrics, search, sample-data, email and MCP OAuth integration suites
         run: >-
           RUN_PIPELINE_STAGE_INTEGRATION=1
           RUN_MAILBOX_INTEGRATION=1
+          RUN_MCP_OAUTH_INTEGRATION=1
           pnpm --filter web exec vitest run .integration.test.ts
 
   hiring-e2e:
@@ -444,6 +445,8 @@ jobs:
         run: |
           pnpm --filter @harly/db db:migrate:local
           pnpm --filter @harly/db db:migrate:local
+      - name: Verify the applied migrations match the journal
+        run: pnpm --filter @harly/db db:verify-migrations
       - name: Concurrent first-owner bootstrap
         run: RUN_SETUP_INTEGRATION=1 pnpm --filter @harly/auth exec vitest run src/setup.integration.test.ts
 

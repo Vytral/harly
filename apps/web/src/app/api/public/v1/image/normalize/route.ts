@@ -4,6 +4,7 @@ import { z } from "zod";
 import { normalizeStoredWorkspaceImage, StoredImageNotFoundError } from "@/lib/normalize-stored-image";
 import { UnsupportedImageError } from "@/lib/image-normalization";
 import { resolvePublicWorkspace } from "@/server/api/public";
+import { readJsonBody } from "@/server/api/body";
 import { clientIp, enforceRateLimit } from "@/server/api/ratelimit";
 import { withApi } from "@/server/api/respond";
 
@@ -20,7 +21,7 @@ export const POST = withApi(async (request) => {
   });
 
   const workspace = await resolvePublicWorkspace(request, "applications:write");
-  const parsed = requestSchema.safeParse(await request.json().catch(() => null));
+  const parsed = requestSchema.safeParse(await readJsonBody(request, 16_000));
   if (!parsed.success) {
     return NextResponse.json({ error: "Invalid image request." }, { status: 400 });
   }

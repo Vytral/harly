@@ -6,7 +6,7 @@ import {
 
 /**
  * Career-page looks a demo visitor can preview on the public landing page and
- * carry into their sandbox. Each is one of the four real career-page templates,
+ * carry into their sandbox. Each is one of the real career-page templates,
  * so what the visitor previews is exactly what the sandbox starts with. Client-
  * and server-safe: the landing picker and the sandbox seeder share this module.
  */
@@ -44,6 +44,13 @@ export const DEMO_STYLES: ReadonlyArray<{
     label: "Profile",
     blurb: "A company profile with tabs and a jobs list.",
     theme: {},
+  },
+  {
+    key: "showcase",
+    label: "Showcase",
+    blurb: "A warm, people-first story with a filterable jobs table.",
+    // Showcase is designed on warm paper; the demo brand ships a white canvas.
+    theme: { background: "#f5f5f4", rounded: "soft" },
   },
 ];
 

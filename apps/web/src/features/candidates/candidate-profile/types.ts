@@ -1,3 +1,4 @@
+import type { ApplicationRejectionSummary } from "@/features/rejection-reasons/RejectionReasonTag";
 import type {
   ScheduleApplicationOption,
   ScheduleCalConfig,
@@ -30,6 +31,7 @@ export type CandidateProfileApplication = {
   status: CandidateApplicationStatus;
   appliedAt: string;
   source: string | null;
+  rejection?: ApplicationRejectionSummary | null;
   answers: Array<{ id: string; label: string; type: string; answer: string }>;
 };
 

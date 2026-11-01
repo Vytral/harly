@@ -1,6 +1,9 @@
 import type { ReactNode } from "react";
 
-import { SettingsNav } from "@/components/dashboard/SettingsNav";
+import { isDemoMode } from "@harly/config";
+
+import { SettingsNav, SettingsSectionHeading } from "@/components/dashboard/SettingsNav";
+import { getWorkspaceContextOrNull } from "@/features/workspaces/context";
 import { getCurrentPermissions } from "@/features/workspaces/permissions-server";
 import { SETTINGS_SECTION_PERMISSION } from "@/features/workspaces/permissions";
 
@@ -24,16 +27,20 @@ export default async function SettingsLayout({
     )
     .map(([href]) => href);
 
+  // Updates change how the whole installation runs, so the section is for
+  // owners only. It is not a permission key: no custom role can be granted it.
+  const context = await getWorkspaceContextOrNull();
+  if (context?.roleKey !== "owner") deniedHrefs.push("/settings/updates");
+  // The public demo never exposes the MCP server.
+  if (isDemoMode()) deniedHrefs.push("/settings/ai-agents");
+
+  // The section title spans both columns so the nav card and the content cards
+  // share one top edge; the nav then pins just under the 64px app header.
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="font-display text-2xl font-semibold tracking-tight">Settings</h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Manage your organization profile, team, and integrations.
-        </p>
-      </div>
-      <div className="grid gap-6 lg:grid-cols-[248px_minmax(0,1fr)] xl:gap-8">
-        <aside className="lg:sticky lg:top-20 lg:max-h-[calc(100vh-6rem)] lg:self-start lg:overflow-y-auto scrollbar-hide">
+    <div>
+      <SettingsSectionHeading />
+      <div className="grid gap-6 lg:grid-cols-[288px_minmax(0,1fr)] xl:gap-8">
+        <aside className="lg:sticky lg:top-[88px] lg:max-h-[calc(100dvh-112px)] lg:self-start">
           <SettingsNav deniedHrefs={deniedHrefs} />
         </aside>
         <div className="min-w-0">{children}</div>

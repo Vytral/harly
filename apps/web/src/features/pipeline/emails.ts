@@ -33,6 +33,12 @@ export type PipelineEmail = (
       candidateName: string;
       jobTitle: string;
       workspaceName: string;
+      /**
+       * Template chosen in RejectDialog: an email_templates id, `null` for
+       * Harly's built-in rejection email. Omitted means the workspace's active
+       * rejection template (the behavior before the choice existed).
+       */
+      templateId?: string | null;
     }
 ) & {
   /**
@@ -87,6 +93,9 @@ export async function sendPipelineEmails(
             stageName: email.type === "stage" ? email.stageName : undefined,
             workspaceName: email.workspaceName,
             type: email.type,
+            ...(email.type === "rejected" && email.templateId !== undefined
+              ? { templateId: email.templateId }
+              : {}),
           },
           `pipeline:${email.eventId}`,
           actorId,

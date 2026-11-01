@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { spawn } from "node:child_process";
+import { statSync, writeFileSync } from "node:fs";
 import process from "node:process";
 
 import { drizzle } from "drizzle-orm/postgres-js";
@@ -8,8 +9,12 @@ import postgres from "postgres";
 
 import { pruneCache } from "./cache";
 import {
+  describeSchedulerHeartbeat,
   describeSchedulerRuns as describeSchedulerRunsForJobs,
+  doctorExitOk,
   FRESH_RUN_STATUSES,
+  SCHEDULER_HEARTBEAT_FILE,
+  SCHEDULER_HEARTBEAT_INTERVAL_MS,
   sanitizeRunError,
   shouldRecordSchedulerFallback,
 } from "./scheduler-health";
@@ -392,10 +397,18 @@ async function scheduler() {
   const pruneTimer = setInterval(pruneCronRuns, CRON_RUN_PRUNE_INTERVAL_MS);
   const scheduled = activeJobs();
   scheduled.forEach((job, index) => schedule(job, index * 1_000));
-  const heartbeat = setInterval(
-    () => jsonLog("info", "scheduler.heartbeat", { jobs: scheduled.length }),
-    60_000,
-  );
+  const touchHeartbeat = () => {
+    try {
+      writeFileSync(SCHEDULER_HEARTBEAT_FILE, String(Date.now()));
+    } catch {}
+  };
+  touchHeartbeat();
+  let beats = 0;
+  const heartbeat = setInterval(() => {
+    touchHeartbeat();
+    if (++beats % 4 === 0)
+      jsonLog("info", "scheduler.heartbeat", { jobs: scheduled.length });
+  }, SCHEDULER_HEARTBEAT_INTERVAL_MS);
 
   await new Promise<void>((resolve) => {
     const stop = () => {
@@ -411,15 +424,26 @@ async function scheduler() {
   await database.end();
 }
 
+function readHeartbeatMs(): number | null {
+  try {
+    return statSync(SCHEDULER_HEARTBEAT_FILE).mtimeMs;
+  } catch {
+    return null;
+  }
+}
+
 async function doctor() {
   // Doctor runs inside the read-only scheduler container as its healthcheck;
-  // it must not attempt to create the local upload directory there.
+  // it must not attempt to create the local upload directory there. Without
+  // --strict only liveness checks set the exit code (see doctorExitOk).
+  const strict = process.argv.includes("--strict");
   const config = await runtimeConfig({ validateFilesystem: false });
   const appOrigin = process.env.HARLY_INTERNAL_URL ?? config.HARLY_URL;
   const database = postgres(config.DATABASE_URL!, { max: 1, prepare: false });
   const expectedJobs = activeJobs();
   const expectedJobNames = expectedJobs.map((job) => job.name);
   const checks: Array<{ name: string; ok: boolean; warn?: boolean; detail?: string }> = [];
+  checks.push({ name: "heartbeat", ...describeSchedulerHeartbeat(readHeartbeatMs()) });
   try {
     const health = await fetch(`${appOrigin}/api/health/ready`, {
       signal: AbortSignal.timeout(3_000),
@@ -517,7 +541,7 @@ async function doctor() {
   process.stdout.write(
     `${JSON.stringify({ ok: checks.every((check) => check.ok), checks }, null, 2)}\n`,
   );
-  if (checks.some((check) => !check.ok)) process.exitCode = 1;
+  if (!doctorExitOk(checks, strict)) process.exitCode = 1;
 }
 
 const commands: Record<string, () => Promise<void>> = {

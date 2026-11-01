@@ -2,21 +2,49 @@
 
 /* eslint-disable @next/next/no-img-element */
 
-import { useRef } from "react";
-import { Copy, Trash2 } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { Calendar, Copy, Trash2 } from "lucide-react";
 import type { SignaturePlacement } from "@/lib/esign/native/bake";
 import { usePdfPageRenderer } from "@/features/documents/usePdfPageRenderer";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Callout } from "@/components/ui/callout";
 
 /** A placement the recruiter is authoring. Widens SignaturePlacement with
  *  optional fields only, so existing callers passing bare {page,x,y,w,h}
  *  (NativeSignWorkspace's self-sign flow) keep typechecking untouched —
  *  `type` defaults to "signature" wherever it's absent. */
 export type AuthorFieldPlacement = SignaturePlacement & {
-  type?: "signature" | "text";
+  /** "date" is a client-only type: the backend stores it as a "text" field
+   *  labelled "Date" (see prepare/PrepareSigningDialog.tsx). */
+  type?: "signature" | "text" | "date";
   label?: string | null;
   /** Zero-based recipient slot used by multi-signer native envelopes. */
   recipientIndex?: number;
+  /** Stable client-side signer id. Survives signer reordering/removal, so a
+   *  field never silently changes owner (the dialog maps it to recipientIndex
+   *  on submit). */
+  signerKey?: string;
+  /** Defaults to true. */
+  required?: boolean;
 };
+
+const MOVE_STEP = 0.005;
+const MOVE_STEP_LARGE = 0.025;
+const MIN_W = 0.05;
+const MIN_H = 0.03;
+/** Approximate px size of the contextual controls (toolbar, plus the label
+ *  input for text fields); used to decide which side of a field has room. */
+const CONTROLS_W = 236;
+const TOOLBAR_H = 40;
+const LABEL_H = 36;
+
+function clamp(value: number, min: number, max: number) {
+  return Math.min(max, Math.max(min, value));
+}
+
+function typeName(type: AuthorFieldPlacement["type"]) {
+  return type === "text" ? "Text" : type === "date" ? "Date" : "Signature";
+}
 
 type Props = {
   fileUrl: string;
@@ -44,6 +72,11 @@ type Props = {
   pageCount?: number;
   /** Clear the active selection (clicking empty PDF space). */
   onDeselect?: () => void;
+  /** Accent colour for a field (any CSS colour). Used to colour-code fields
+   *  per signer. Defaults to near-ink. */
+  fieldColor?: (placement: AuthorFieldPlacement, index: number) => string | undefined;
+  /** Short owner name shown in the on-canvas chip and the accessible name. */
+  fieldOwner?: (placement: AuthorFieldPlacement, index: number) => string | undefined;
 };
 
 export function PdfSignaturePlacer({
@@ -63,8 +96,20 @@ export function PdfSignaturePlacer({
   onPageChange,
   pageCount = 1,
   onDeselect,
+  fieldColor,
+  fieldOwner,
 }: Props) {
   const rootRef = useRef<HTMLDivElement>(null);
+  const [pageWidthPx, setPageWidthPx] = useState(maxPageWidth);
+  useEffect(() => {
+    const el = rootRef.current;
+    if (!el || typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(() => {
+      setPageWidthPx(Math.min(el.clientWidth || maxPageWidth, maxPageWidth));
+    });
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [maxPageWidth]);
   const { pages, error } = usePdfPageRenderer(fileUrl, maxPageWidth, rootRef, onPageCountChange, onRotationChange);
   const dragRef = useRef<{
     index: number;
@@ -208,11 +253,49 @@ export function PdfSignaturePlacer({
     event.currentTarget.setPointerCapture(event.pointerId);
   }
 
+  function onFieldKeyDown(
+    event: React.KeyboardEvent<HTMLDivElement>,
+    index: number,
+  ) {
+    // Keys typed inside the label input / toolbar controls bubble up here.
+    if (event.target !== event.currentTarget) return;
+    const placement = placements[index];
+    if (!placement) return;
+    if (event.key === "Enter" || event.key === " ") {
+      event.preventDefault();
+      onActiveIndexChange(index);
+      return;
+    }
+    if (event.key === "Escape") {
+      onDeselect?.();
+      return;
+    }
+    if ((event.key === "Delete" || event.key === "Backspace") && onRemoveField) {
+      event.preventDefault();
+      onRemoveField(index);
+      return;
+    }
+    const dx = event.key === "ArrowRight" ? 1 : event.key === "ArrowLeft" ? -1 : 0;
+    const dy = event.key === "ArrowDown" ? 1 : event.key === "ArrowUp" ? -1 : 0;
+    if (!dx && !dy) return;
+    event.preventDefault();
+    const step = event.shiftKey ? MOVE_STEP_LARGE : MOVE_STEP;
+    onActiveIndexChange(index);
+    if (event.altKey) {
+      // Alt + arrows resizes from the bottom-right corner.
+      const w = clamp(placement.w + dx * step, MIN_W, 1 - placement.x);
+      const h = clamp(placement.h + dy * step, MIN_H, 1 - placement.y);
+      onChange(placements.map((item, i) => (i === index ? { ...item, w, h } : item)));
+      return;
+    }
+    const x = clamp(placement.x + dx * step, 0, 1 - placement.w);
+    const y = clamp(placement.y + dy * step, 0, 1 - placement.h);
+    onChange(placements.map((item, i) => (i === index ? { ...item, x, y } : item)));
+  }
+
   if (error)
     return (
-      <p className="rounded-lg border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive">
-        {error}
-      </p>
+      <Callout tone="danger">{error}</Callout>
     );
   return (
     <div ref={rootRef} className="space-y-5">
@@ -220,7 +303,7 @@ export function PdfSignaturePlacer({
         <div
           key={page.number}
           data-page={page.number}
-          className="relative mx-auto w-full overflow-hidden rounded-md shadow-xs"
+          className="relative mx-auto w-full rounded-md shadow-xs [&>canvas]:rounded-md"
           style={{ aspectRatio: `${page.width}/${page.height}`, maxWidth: maxPageWidth }}
           onPointerDown={(event) => {
             // Clicking anywhere on the page that isn't a placement box
@@ -231,53 +314,86 @@ export function PdfSignaturePlacer({
         >
           {placements.map((placement, index) => {
             if (placement.page !== page.number) return null;
-            const isText = placement.type === "text";
+            const isText = placement.type === "text" || placement.type === "date";
             const isActive = activeIndex === index;
+            const color = fieldColor?.(placement, index) ?? "var(--near-ink)";
+            const owner = fieldOwner?.(placement, index);
+            const optional = placement.required === false;
+            const kind = typeName(placement.type);
+            const accessibleName = `${kind} field ${index + 1}${owner ? `, for ${owner}` : ""}, page ${placement.page}, ${optional ? "optional" : "required"}`;
+            // Pixel geometry of this field inside its page, used to keep the
+            // contextual controls on whichever side still has room.
+            const pageH = pageWidthPx * (page.height / page.width);
+            const fieldLeftPx = placement.x * pageWidthPx;
+            const fieldTopPx = placement.y * pageH;
+            const fieldBottomPx = (placement.y + placement.h) * pageH;
+            const controlsH = TOOLBAR_H + (isText && onLabelChange ? LABEL_H : 0);
+            const controlsBelow = fieldTopPx < controlsH && pageH - fieldBottomPx >= controlsH;
+            const controlsInside = fieldTopPx < controlsH && !controlsBelow;
+            const controlsW = Math.min(CONTROLS_W, pageWidthPx);
+            const controlsLeft =
+              clamp(
+                fieldLeftPx + (placement.w * pageWidthPx) / 2 - controlsW / 2,
+                0,
+                Math.max(0, pageWidthPx - controlsW),
+              ) - fieldLeftPx;
             return (
               <div
                 key={index}
                 data-field={index}
                 role="button"
                 tabIndex={0}
+                aria-label={accessibleName}
+                aria-pressed={isActive}
+                aria-keyshortcuts="ArrowUp ArrowDown ArrowLeft ArrowRight Shift+ArrowUp Alt+ArrowUp Delete"
+                aria-describedby="placer-keyboard-help"
                 onClick={() => onActiveIndexChange(index)}
-                onKeyDown={(event) => {
-                  if (event.key === "Enter" || event.key === " ")
-                    onActiveIndexChange(index);
+                onFocus={() => {
+                  if (!isActive) onActiveIndexChange(index);
                 }}
-                className={`group/field absolute z-10 rounded-sm border border-dashed transition-colors ${
-                  isText
-                    ? isActive
-                      ? "border-info bg-info/10"
-                      : "border-info/40 bg-info/5"
-                    : isActive
-                      ? "border-primary/80 bg-white/40"
-                      : "border-primary/40 bg-white/25"
-                }`}
+                onKeyDown={(event) => onFieldKeyDown(event, index)}
+                className={`group/field absolute z-10 rounded-[6px] border outline-none transition-colors focus-visible:ring-2 focus-visible:ring-offset-1 ${
+                  optional ? "border-dashed" : "border-solid"
+                } ${isActive ? "z-20" : ""}`}
                 style={{
                   left: `${placement.x * 100}%`,
                   top: `${placement.y * 100}%`,
                   width: `${placement.w * 100}%`,
                   height: `${placement.h * 100}%`,
+                  borderColor: `color-mix(in srgb, ${color} ${isActive ? 90 : 55}%, transparent)`,
+                  borderWidth: isActive ? 2 : 1,
+                  backgroundColor: `color-mix(in srgb, ${color} ${isActive ? 14 : 8}%, transparent)`,
+                  ...({ "--tw-ring-color": color } as React.CSSProperties),
                 }}
               >
                 {isText ? (
-                  <div className="flex h-full w-full items-center justify-center px-1 text-center text-[11px] text-info">
-                    {placement.label?.trim() || "Text field"}
+                  <div
+                    className="flex h-full w-full items-center justify-center gap-1 px-1 text-center text-xs font-medium"
+                    style={{ color }}
+                  >
+                    {placement.type === "date" ? <Calendar className="size-3 shrink-0" aria-hidden /> : null}
+                    <span className="truncate">
+                      {placement.label?.trim() || (placement.type === "date" ? "Date" : "Text field")}
+                    </span>
                   </div>
                 ) : hasSignature ? (
                   <img
                     src={signatureDataUrl}
-                    alt={`Signature placement ${index + 1}`}
+                    alt=""
                     className="h-full w-full object-contain"
                     draggable={false}
                   />
                 ) : (
-                  <div className="flex h-full w-full items-center justify-center text-[11px] text-muted-foreground">
+                  <div
+                    className="flex h-full w-full items-center justify-center text-xs font-medium"
+                    style={{ color }}
+                  >
                     Signature
                   </div>
                 )}
                 <div
                   className="absolute inset-0 cursor-move touch-none"
+                  aria-hidden
                   onPointerDown={(event) =>
                     startDrag(event, index, page.number)
                   }
@@ -291,7 +407,9 @@ export function PdfSignaturePlacer({
                 />
                 {/* Resize handle — larger hit area for laptop trackpads. */}
                 <div
-                  className={`absolute -bottom-2.5 -right-2.5 flex size-6 cursor-se-resize touch-none items-center justify-center rounded-full border-2 bg-background shadow-sm transition-transform hover:scale-110 ${isText ? "border-info" : "border-primary"} ${isActive ? "opacity-100" : "opacity-0 group-hover/field:opacity-100"}`}
+                  className={`absolute -bottom-3 -right-3 flex size-7 cursor-se-resize touch-none items-center justify-center rounded-full border-2 bg-pure-snow shadow-[var(--shadow-card)] transition-transform hover:scale-110 ${isActive ? "opacity-100" : "opacity-0 group-hover/field:opacity-100 group-focus-within/field:opacity-100"}`}
+                  style={{ borderColor: color, color }}
+                  aria-hidden
                   onPointerDown={(event) => startResize(event, index)}
                   onPointerMove={(event) => resize(event, index)}
                   onPointerUp={() => {
@@ -300,104 +418,122 @@ export function PdfSignaturePlacer({
                   onPointerCancel={() => {
                     resizeRef.current = null;
                   }}
-                  aria-label={`Resize field ${index + 1}`}
                 >
-                  <svg width="8" height="8" viewBox="0 0 8 8" aria-hidden className={isText ? "text-info" : "text-primary"}>
+                  <svg width="10" height="10" viewBox="0 0 8 8" aria-hidden>
                     <path d="M7 1 1 7M7 4 4 7" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
                   </svg>
                 </div>
-                {isText || !hasSignature ? (
+                {owner ? (
                   <span
-                    className={`pointer-events-none absolute left-1 top-1 rounded px-1 py-px text-[9px] font-medium ${isText ? "text-info" : "text-primary"}`}
+                    className="pointer-events-none absolute -top-2.5 left-1.5 max-w-[calc(100%-12px)] truncate rounded-full px-1.5 py-px text-[11px] font-medium leading-4 text-pure-snow"
+                    style={{ backgroundColor: color }}
                   >
-                    {isText ? `Text ${index + 1}` : `Sign ${index + 1}`}
+                    {owner}
+                    {optional ? " · optional" : ""}
                   </span>
                 ) : null}
 
-                {/* Contextual action toolbar — appears above the active field.
-                    Duplicate / page picker / delete, all in one place instead
-                    of scattered between the canvas and the side panel. */}
-                {isActive && (onDuplicate || onRemoveField || onPageChange) ? (
+                {/* Contextual controls — toolbar (+ label input for text
+                    fields). Sits above the field, flips below it (or inside)
+                    when the page edge leaves no room, and is clamped
+                    horizontally so it is never clipped. */}
+                {isActive && (onDuplicate || onRemoveField || onPageChange || (isText && onLabelChange)) ? (
                   <div
-                    className="t-field-toolbar absolute -top-10 left-1/2 z-20 flex -translate-x-1/2 items-center gap-0.5 rounded-lg border border-border/70 bg-card/95 p-1 shadow-lg backdrop-blur"
+                    className="absolute z-30 flex flex-col gap-1 animate-in fade-in-0 zoom-in-95 duration-150"
+                    style={{
+                      left: controlsLeft,
+                      width: controlsW,
+                      ...(controlsBelow
+                        ? { top: "100%", marginTop: 8 }
+                        : controlsInside
+                          ? { top: 4 }
+                          : { bottom: "100%", marginBottom: 8 }),
+                      alignItems: "center",
+                    }}
                     onPointerDown={(event) => event.stopPropagation()}
                     onClick={(event) => event.stopPropagation()}
                   >
-                    {onPageChange && pageCount > 1 ? (
-                      <>
-                        <select
-                          value={placement.page}
-                          onChange={(event) =>
-                            onPageChange(index, Number(event.target.value))
-                          }
-                          className="h-6 rounded-md border border-input bg-background px-1.5 text-[11px] font-medium outline-none focus:border-ring"
-                          aria-label={`Page for field ${index + 1}`}
-                        >
-                          {Array.from({ length: pageCount }, (_, p) => (
-                            <option key={p + 1} value={p + 1}>
-                              Page {p + 1}
-                            </option>
-                          ))}
-                        </select>
-                        <span className="mx-0.5 h-4 w-px bg-border" aria-hidden />
-                      </>
+                    {isText && onLabelChange ? (
+                      <input
+                        type="text"
+                        value={placement.label ?? ""}
+                        onChange={(event) => onLabelChange(index, event.target.value)}
+                        placeholder={placement.type === "date" ? "Label (default: Date)" : "Label (e.g. Full name)"}
+                        aria-label={`Label for field ${index + 1}`}
+                        maxLength={60}
+                        className="h-8 w-full rounded-[var(--radius-btn)] border border-hairline bg-pure-snow px-2 text-xs text-near-ink shadow-[var(--shadow-card)] outline-none placeholder:text-soft-ink focus-visible:border-near-ink focus-visible:ring-2 focus-visible:ring-near-ink/20"
+                      />
                     ) : null}
-                    {onDuplicate ? (
-                      <button
-                        type="button"
-                        aria-label={`Duplicate field ${index + 1}`}
-                        title="Duplicate"
-                        onClick={() => onDuplicate(index)}
-                        className="flex size-6 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                    {onDuplicate || onRemoveField || (onPageChange && pageCount > 1) ? (
+                      <div
+                        role="toolbar"
+                        aria-label={`Actions for field ${index + 1}`}
+                        className="flex items-center gap-0.5 rounded-[var(--radius-inner)] border border-hairline bg-pure-snow p-1 shadow-lg"
                       >
-                        <Copy className="size-3.5" />
-                      </button>
-                    ) : null}
-                    {onRemoveField ? (
-                      <button
-                        type="button"
-                        aria-label={`Remove field ${index + 1}`}
-                        title="Delete"
-                        onClick={() => onRemoveField(index)}
-                        className="flex size-6 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
-                      >
-                        <Trash2 className="size-3.5" />
-                      </button>
+                        {onPageChange && pageCount > 1 ? (
+                          <>
+                            <select
+                              value={placement.page}
+                              onChange={(event) =>
+                                onPageChange(index, Number(event.target.value))
+                              }
+                              className="h-7 rounded-md border border-hairline bg-pure-snow px-1.5 text-xs font-medium text-near-ink outline-none focus-visible:ring-2 focus-visible:ring-near-ink/30"
+                              aria-label={`Page for field ${index + 1}`}
+                            >
+                              {Array.from({ length: pageCount }, (_, p) => (
+                                <option key={p + 1} value={p + 1}>
+                                  Page {p + 1}
+                                </option>
+                              ))}
+                            </select>
+                            <span className="mx-0.5 h-4 w-px bg-hairline" aria-hidden />
+                          </>
+                        ) : null}
+                        {onDuplicate ? (
+                          <button
+                            type="button"
+                            aria-label={`Duplicate field ${index + 1}`}
+                            title="Duplicate"
+                            onClick={() => onDuplicate(index)}
+                            className="flex size-7 items-center justify-center rounded-md text-soft-ink outline-none transition-colors hover:bg-warm-paper hover:text-near-ink focus-visible:ring-2 focus-visible:ring-near-ink/30"
+                          >
+                            <Copy className="size-3.5" />
+                          </button>
+                        ) : null}
+                        {onRemoveField ? (
+                          <button
+                            type="button"
+                            aria-label={`Remove field ${index + 1}`}
+                            title="Delete (Del)"
+                            onClick={() => onRemoveField(index)}
+                            className="flex size-7 items-center justify-center rounded-md text-soft-ink outline-none transition-colors hover:bg-danger-rust/10 hover:text-danger-rust focus-visible:ring-2 focus-visible:ring-danger-rust/40"
+                          >
+                            <Trash2 className="size-3.5" />
+                          </button>
+                        ) : null}
+                      </div>
                     ) : null}
                   </div>
-                ) : null}
-
-                {isText && isActive && onLabelChange ? (
-                  <input
-                    type="text"
-                    value={placement.label ?? ""}
-                    onChange={(event) => onLabelChange(index, event.target.value)}
-                    onClick={(event) => event.stopPropagation()}
-                    placeholder="Label (e.g. Date)"
-                    maxLength={60}
-                    className="absolute -bottom-8 left-0 w-40 rounded-md border border-input bg-background px-2 py-1 text-xs shadow-xs"
-                  />
                 ) : null}
               </div>
             );
           })}
         </div>
       ))}
+      <span id="placer-keyboard-help" className="sr-only">
+        Arrow keys move the field, Shift with arrows moves further, Alt with arrows resizes it, Delete removes it.
+      </span>
       {pages.length === 0 ? (
-        <div className="space-y-3 p-8">
-          <div
-            className="mx-auto h-[600px] w-full animate-pulse rounded-md bg-card"
-            style={{ maxWidth: maxPageWidth }}
-          />
-          <p className="text-center text-sm text-muted-foreground">
-            Loading PDF…
-          </p>
+        <div className="space-y-3 p-2" role="status" aria-label="Loading PDF">
+          <Skeleton className="mx-auto h-[600px] w-full" style={{ maxWidth: maxPageWidth }} />
         </div>
-      ) : null}
-      <p className="text-center text-xs text-muted-foreground">
-        Drag a field across pages. Hold it near the top or bottom edge to
-        scroll.
-      </p>
+      ) : (
+        <p className="text-center text-xs text-soft-ink">
+          Drag a field to move it, or focus it and use the arrow keys (Shift for
+          larger steps, Alt to resize). Hold a dragged field near the top or
+          bottom edge to scroll.
+        </p>
+      )}
     </div>
   );
 }

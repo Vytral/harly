@@ -64,8 +64,8 @@ function VisibilityField({
               className={cn(
                 "flex cursor-pointer flex-col rounded-md border px-3 py-2 transition-colors duration-150",
                 checked
-                  ? "border-pine/50 bg-sage/50"
-                  : "border-border bg-background/60 hover:border-pine/30",
+                  ? "border-near-ink bg-lime-wash"
+                  : "border-hairline bg-card-inset hover:border-mist-border",
               )}
             >
               <input

@@ -18,7 +18,7 @@ export function PublicJobPreview({ slug }: PublicJobPreviewProps) {
 
   return (
     <section className="overflow-hidden rounded-xl border bg-card shadow-sm">
-      <div className="flex items-center justify-between gap-2 border-b bg-muted/40 px-4 py-2.5">
+      <div className="flex items-center justify-between gap-2 border-b border-hairline bg-card-inset px-4 py-2.5">
         <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
           Live public preview
         </p>
@@ -55,7 +55,7 @@ export function PublicJobPreview({ slug }: PublicJobPreviewProps) {
           </Button>
         </div>
       </div>
-      <div className="flex justify-center bg-muted/30 p-4">
+      <div className="flex justify-center bg-card-inset p-4">
         <iframe
           key={nonce}
           src={src}

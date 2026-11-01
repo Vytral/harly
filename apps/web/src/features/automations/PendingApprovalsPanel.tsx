@@ -23,15 +23,15 @@ export function PendingApprovalsPanel({
   if (approvals.length === 0) return null;
 
   return (
-    <section className="mt-6 rounded-2xl border border-warning/30 bg-warning/5 p-5 shadow-xs" aria-labelledby="pending-approvals-heading">
+    <section className="mt-6 rounded-[var(--radius-card)] bg-warning-clay/5 p-5 shadow-[var(--shadow-card)]" aria-labelledby="pending-approvals-heading">
       <div className="flex items-start justify-between gap-4">
         <div>
           <div className="flex items-center gap-2">
-            <ClockIcon className="size-4 text-warning" />
-            <h2 id="pending-approvals-heading" className="font-display text-base font-semibold text-near-ink">
+            <ClockIcon className="size-4 text-warning-clay" />
+            <h2 id="pending-approvals-heading" className="text-[15px] font-semibold tracking-[-0.01em] text-near-ink">
               {activeApprovals.length > 0 ? "Needs your approval" : "Approval updates"}
             </h2>
-            <span className="rounded-full bg-warning/15 px-2 py-0.5 text-[11px] font-semibold text-warning">
+            <span className="rounded-full bg-warning-clay/15 px-2 py-0.5 text-[11px] font-semibold text-warning-clay">
               {activeApprovals.length}
             </span>
           </div>
@@ -41,13 +41,13 @@ export function PendingApprovalsPanel({
               : "These approval requests are no longer actionable."}
           </p>
         </div>
-        <span className="text-[11px] font-medium uppercase tracking-[0.08em] text-warning">
+        <span className="text-[11px] font-medium uppercase tracking-[0.08em] text-warning-clay">
           {activeApprovals.length > 0 ? "Action required" : "Expired"}
         </span>
       </div>
 
       {activeApprovals.length > 0 && (
-        <div className="mt-4 divide-y divide-warning/20 overflow-hidden rounded-xl border border-warning/20 bg-pure-snow">
+        <div className="mt-4 divide-y divide-hairline overflow-hidden rounded-[var(--radius-inner)] bg-pure-snow">
           {activeApprovals.map((approval) => (
           <ApprovalRow
             key={`${approval.runId}:${approval.nodeId}`}
@@ -59,9 +59,9 @@ export function PendingApprovalsPanel({
       )}
 
       {expiredApprovals.length > 0 && (
-        <div className={cn("divide-y divide-border/60 overflow-hidden rounded-xl border border-border/70 bg-pure-snow", activeApprovals.length > 0 && "mt-3")}>
+        <div className={cn("divide-y divide-hairline overflow-hidden rounded-[var(--radius-inner)] bg-pure-snow", activeApprovals.length > 0 && "mt-3")}>
           {activeApprovals.length > 0 && (
-            <div className="bg-kraft/20 px-4 py-2 text-[11px] font-medium uppercase tracking-[0.08em] text-soft-ink">
+            <div className="bg-card-inset px-4 py-2 text-[11px] font-medium uppercase tracking-[0.08em] text-soft-ink">
               Expired requests
             </div>
           )}
@@ -120,7 +120,7 @@ function ApprovalRow({
       </div>
       <div className="flex items-center gap-2">
         {approval.deadlineAt && (
-          <span className={cn("hidden text-[11px] md:inline", expired ? "font-medium text-rust" : "text-soft-ink")}>
+          <span className={cn("hidden text-[11px] md:inline", expired ? "font-medium text-danger-rust" : "text-soft-ink")}>
             {expired ? "Expired" : "Due"} <RelativeTime value={approval.deadlineAt} />
           </span>
         )}
@@ -128,7 +128,7 @@ function ApprovalRow({
           type="button"
           disabled={pending}
           onClick={() => decide("rejected")}
-          className={cn("inline-flex items-center gap-1 rounded-lg border border-rust/25 px-2.5 py-1.5 text-xs font-medium text-rust hover:bg-rust/10 disabled:opacity-50")}
+          className={cn("inline-flex items-center gap-1 rounded-[var(--radius-btn)] bg-danger-rust/10 px-2.5 py-1.5 text-xs font-medium text-danger-rust hover:bg-danger-rust/15 disabled:opacity-50")}
         >
           <XCircleIcon className="size-3.5" /> Reject
         </button>}
@@ -136,7 +136,7 @@ function ApprovalRow({
           type="button"
           disabled={pending}
           onClick={() => decide("approved")}
-          className="inline-flex items-center gap-1 rounded-lg bg-near-ink px-2.5 py-1.5 text-xs font-medium text-primary-foreground hover:bg-near-ink/90 disabled:opacity-50"
+          className="inline-flex items-center gap-1 rounded-[var(--radius-btn)] bg-near-ink px-2.5 py-1.5 text-xs font-medium text-primary-foreground hover:bg-near-ink/90 disabled:opacity-50"
         >
           <CheckCircleIcon className="size-3.5" /> Approve
         </button>}

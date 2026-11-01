@@ -17,14 +17,30 @@ function parseMonthParam(raw: string | undefined): { year: number; month: number
   return { year, month, param: `${year}-${String(month).padStart(2, "0")}` };
 }
 
+/** `?date=YYYY-MM-DD`: a real calendar day, or null. */
+function parseDateParam(raw: string | undefined): { year: number; month: number; day: number } | null {
+  const match = raw ? /^(\d{4})-(\d{2})-(\d{2})$/.exec(raw) : null;
+  if (!match) return null;
+  const [year, month, day] = [Number(match[1]), Number(match[2]), Number(match[3])];
+  const check = new Date(year, month - 1, day);
+  const real =
+    check.getFullYear() === year && check.getMonth() === month - 1 && check.getDate() === day;
+  return real ? { year, month, day } : null;
+}
+
 type CalendarsPageProps = {
-  searchParams: Promise<{ month?: string }>;
+  searchParams: Promise<{ month?: string; date?: string }>;
 };
 
 export default async function CalendarsPage({ searchParams }: CalendarsPageProps) {
   await requireAnyPagePermission(["interviews:manage", "interviews:feedback"]);
-  const { month: monthRaw } = await searchParams;
-  const { year, month, param } = parseMonthParam(monthRaw);
+  const { month: monthRaw, date: dateRaw } = await searchParams;
+  // `?date=` (Home's "Interviews today") wins over `?month=`: show that day's
+  // month with the day selected.
+  const focus = parseDateParam(dateRaw);
+  const { year, month, param } = focus
+    ? parseMonthParam(`${focus.year}-${String(focus.month).padStart(2, "0")}`)
+    : parseMonthParam(monthRaw);
 
   const monthStart = new Date(year, month - 1, 1);
   const gridStart = new Date(monthStart);
@@ -40,6 +56,8 @@ export default async function CalendarsPage({ searchParams }: CalendarsPageProps
 
   return (
     <CalendarBoard
+      key={dateRaw ?? "month"}
+      focusDate={focus ? `${param}-${String(focus.day).padStart(2, "0")}` : null}
       monthParam={param}
       monthLabel={MONTH_LABEL_FORMAT.format(monthStart)}
       interviews={interviews}

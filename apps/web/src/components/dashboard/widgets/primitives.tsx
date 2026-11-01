@@ -1,6 +1,6 @@
 import Link from "next/link";
 import type { Route } from "next";
-import { ArrowRight, type LucideIcon } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 
@@ -13,7 +13,7 @@ import { cn } from "@/lib/utils";
  * Panels are rectangles; only chips and CTAs are pills.
  */
 export const tileClass =
-  "rounded-[var(--radius-lg)] border border-hairline bg-pure-snow";
+  "rounded-[var(--radius-card)] bg-pure-snow shadow-[var(--shadow-card)]";
 
 export function Tile({
   className,
@@ -46,9 +46,11 @@ export function TileHeader({
   action?: React.ReactNode;
 }) {
   return (
-    <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1 px-5 pt-4">
-      <h2 className="flex min-w-0 items-center gap-2 text-[15px] font-medium text-near-ink">
-        <Icon className="size-4 text-soft-ink" strokeWidth={1.8} />
+    <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1 px-5 pt-5">
+      <h2 className="flex min-w-0 items-center gap-2.5 text-[15px] font-semibold tracking-[-0.01em] text-near-ink">
+        <span className="grid size-8 shrink-0 place-items-center rounded-[var(--radius-btn)] border border-hairline bg-pure-snow">
+          <Icon className="size-4 text-near-ink" strokeWidth={1.8} />
+        </span>
         {title}
         {typeof count === "number" && count > 0 ? (
           <span className="font-chrome rounded-full bg-soft-kraft px-1.5 text-[11px] leading-[18px] text-soft-ink tabular">
@@ -72,10 +74,9 @@ export function TileLink({
   return (
     <Link
       href={href}
-      className="inline-flex shrink-0 items-center gap-1 rounded-md text-[13px] font-medium text-soft-ink transition-colors hover:text-near-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-near-ink"
+      className="inline-flex h-7 shrink-0 items-center gap-1 rounded-[var(--radius-btn)] bg-card-inset px-2.5 text-[12.5px] font-medium text-near-ink transition-colors hover:bg-soft-kraft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-near-ink"
     >
       {children}
-      <ArrowRight className="size-3.5" />
     </Link>
   );
 }
@@ -126,13 +127,3 @@ export function TileRow({
     </Link>
   );
 }
-
-/** Due / aging state → Badge variant. Carries urgency through colour. */
-export const dueVariant: Record<
-  "overdue" | "today" | "soon",
-  "danger" | "warning" | "neutral"
-> = {
-  overdue: "danger",
-  today: "warning",
-  soon: "neutral",
-};

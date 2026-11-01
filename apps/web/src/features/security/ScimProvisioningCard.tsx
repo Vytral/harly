@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { SectionHeader, StatusPill } from "@/features/workspaces/settings-ui";
 import { createScimTokenAction, revokeScimTokenAction, type ScimTokenSummary } from "@/features/security/scim-actions";
+import { copyText } from "@/lib/utils";
 
 export function ScimProvisioningCard({ tokens, workspaceId, isOwner }: { tokens: ScimTokenSummary[]; workspaceId: string; isOwner: boolean }) {
   const router = useRouter();
@@ -37,7 +38,7 @@ export function ScimProvisioningCard({ tokens, workspaceId, isOwner }: { tokens:
       {newToken ? (
         <div className="space-y-2 rounded-xl border border-clay/30 bg-clay/5 p-4">
           <div className="flex items-center gap-2 text-sm font-medium text-clay"><ShieldAlert className="size-4" />Copy this token now</div>
-          <div className="flex gap-2"><Input readOnly value={newToken} className="font-mono text-xs" /><Button type="button" variant="outline" aria-label="Copy token" title="Copy token" onClick={() => { void navigator.clipboard.writeText(newToken); toast.success("Token copied."); }}><Copy className="size-4" /></Button></div>
+          <div className="flex gap-2"><Input readOnly value={newToken} className="font-mono text-xs" /><Button type="button" variant="outline" aria-label="Copy token" title="Copy token" onClick={() => { void copyText(newToken); toast.success("Token copied."); }}><Copy className="size-4" /></Button></div>
         </div>
       ) : null}
       {isOwner ? <div className="grid gap-3 sm:grid-cols-[1fr_180px_auto] sm:items-end">

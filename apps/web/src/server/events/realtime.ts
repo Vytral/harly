@@ -104,6 +104,30 @@ export async function publishRealtimeEvent(
   await sql`select pg_notify('harly_realtime', ${payload})`;
 }
 
+/**
+ * SSE frames go to every signed-in member of the workspace, whatever their
+ * role scope or permissions, so they carry invalidation hints only. Domain
+ * payloads hold full candidate/application/message entities and must never
+ * leave the server; the client only reads `domainEvent` and `area`.
+ */
+export function toSseSafeEnvelope(event: RealtimeEnvelope): RealtimeEnvelope {
+  const payload: Record<string, unknown> = {};
+  if (typeof event.payload.domainEvent === "string") {
+    payload.domainEvent = event.payload.domainEvent;
+  }
+  if (typeof event.payload.area === "string") payload.area = event.payload.area;
+  return {
+    eventId: event.eventId,
+    eventName: event.eventName,
+    eventVersion: event.eventVersion,
+    schemaVersion: event.schemaVersion,
+    workspaceId: event.workspaceId,
+    payload,
+    occurredAt: event.occurredAt,
+  };
+}
+
 export function formatSseEvent(event: RealtimeEnvelope): string {
-  return `id: ${event.eventId}\nevent: ${event.eventName}\ndata: ${JSON.stringify(event)}\n\n`;
+  const safe = toSseSafeEnvelope(event);
+  return `id: ${safe.eventId}\nevent: ${safe.eventName}\ndata: ${JSON.stringify(safe)}\n\n`;
 }

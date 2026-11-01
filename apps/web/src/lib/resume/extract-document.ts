@@ -70,17 +70,22 @@ export async function resolveResumeDocument(
     }
   }
 
-  const { text } = await extractResumeText({
+  const extracted = await extractResumeText({
     buffer: input.buffer,
     fileName: input.fileName,
     mimeType: input.mimeType,
   });
+  const { text } = extracted;
+  // Extraction-level notes (type mismatch, truncation, page limit, timeout, ...)
+  // travel with the document instead of being dropped.
+  providerDiagnostics.push(...extracted.diagnostics);
 
   if (assessTextReadability(text).readable) {
+    const document = fromPlainText({ fileName: input.fileName, text });
     return {
       text,
       fileName: input.fileName,
-      document: fromPlainText({ fileName: input.fileName, text }),
+      document: { ...document, diagnostics: [...providerDiagnostics, ...document.diagnostics] },
     };
   }
 

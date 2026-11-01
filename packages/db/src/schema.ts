@@ -986,6 +986,15 @@ export const workspaceSettings = pgTable("workspace_settings", {
   signatureExpirationDays: integer("signature_expiration_days")
     .default(30)
     .notNull(),
+  // Reminder cadence for native signing links, measured from the moment the
+  // CURRENT signer was invited. 0 turns automatic reminders off.
+  signatureReminderCadenceDays: integer("signature_reminder_cadence_days")
+    .default(3)
+    .notNull(),
+  // Maximum automatic reminders per signer (manual reminders do not count).
+  signatureMaxReminders: integer("signature_max_reminders")
+    .default(3)
+    .notNull(),
   // Offer delivery channel: "email" (default) or "esign" (collect signature via
   // embedded signing inside the candidate portal, email notifies instead).
   offerSignatureChannel: text("offer_signature_channel")
@@ -1664,6 +1673,17 @@ export const applications = pgTable(
     // Lazily generated on first candidate-facing send — see
     // ensureApplicationInboundToken in apps/web/src/lib/email.
     inboundToken: text("inbound_token").unique(),
+    // Why the application was rejected. `rejectionReasonCode` is a stable code
+    // from the workspace's `rejection_reasons` catalog (defaults included);
+    // the note is internal and never shown to the candidate. All nullable:
+    // rejections recorded before this existed, and stage-drag rejections,
+    // carry no reason.
+    rejectionReasonCode: text("rejection_reason_code"),
+    rejectionNote: text("rejection_note"),
+    rejectedById: text("rejected_by_id").references(() => user.id, {
+      onDelete: "set null",
+    }),
+    rejectedAt: timestamp("rejected_at", { withTimezone: true }),
     ...timestamps(),
   },
   (table) => [
@@ -2121,7 +2141,7 @@ export const signatureFields = pgTable(
     documentId: uuid("document_id")
       .notNull()
       .references(() => documents.id, { onDelete: "cascade" }),
-    type: text("type").notNull(), // "signature" | "text"
+    type: text("type").notNull(), // "signature" | "text" | "date"
     page: integer("page").notNull(),
     x: doublePrecision("x").notNull(),
     y: doublePrecision("y").notNull(),
@@ -2142,7 +2162,7 @@ export const signatureFields = pgTable(
     ),
     check(
       "signature_fields_type_check",
-      sql`${table.type} in ('signature', 'text')`,
+      sql`${table.type} in ('signature', 'text', 'date')`,
     ),
     check(
       "signature_fields_geometry_check",
@@ -2640,6 +2660,17 @@ export const signatureEnvelopes = pgTable(
     // keeps the audit trail self-contained on the envelope even if the
     // document's snapshot is later overwritten by a new send cycle.
     fieldsSnapshot: jsonb("fields_snapshot"),
+    // Sender message shown on the signer page and in the invitation email.
+    message: text("message"),
+    // Per-send link lifetime (days, counted from when each signer is invited).
+    // Null falls back to the workspace default.
+    expirationDays: integer("expiration_days"),
+    voidReason: text("void_reason"),
+    // The document this envelope was created for. Kept on the envelope (no FK)
+    // so voided/declined/expired links can still name the document after the
+    // document has been reset for a new send.
+    documentId: uuid("document_id"),
+    documentName: text("document_name"),
     ...timestamps(),
   },
   (table) => [
@@ -2693,12 +2724,32 @@ export const signatureRecipients = pgTable(
     signedAt: timestamp("signed_at", { withTimezone: true }),
     declinedAt: timestamp("declined_at", { withTimezone: true }),
     declinedReason: text("declined_reason"),
+    // When this signer's link was issued (expiry and reminders count from here).
+    invitedAt: timestamp("invited_at", { withTimezone: true }),
+    // First time the signer opened their link.
+    viewedAt: timestamp("viewed_at", { withTimezone: true }),
+    // Server-stamped e-sign consent (never client supplied) and the version of
+    // the disclosure text that was shown.
+    consentAt: timestamp("consent_at", { withTimezone: true }),
+    consentVersion: text("consent_version"),
+    reminderCount: integer("reminder_count").default(0).notNull(),
+    lastReminderAt: timestamp("last_reminder_at", { withTimezone: true }),
+    // Hashes of earlier links for this signer. Reminders issue a fresh link
+    // but earlier emails keep working until the signer finishes or it expires.
+    previousTokenHashes: text("previous_token_hashes")
+      .array()
+      .default(sql`'{}'::text[]`)
+      .notNull(),
     ...timestamps(),
   },
   (table) => [
     uniqueIndex("signature_recipients_envelope_provider_id_idx").on(
       table.envelopeId,
       table.providerRecipientId,
+    ),
+    index("signature_recipients_previous_tokens_idx").using(
+      "gin",
+      table.previousTokenHashes,
     ),
     index("signature_recipients_workspace_envelope_idx").on(
       table.workspaceId,
@@ -2958,6 +3009,117 @@ export const cronRuns = pgTable(
   ],
 );
 
+/**
+ * Instance-wide updater state (a single row). The web app never touches
+ * Docker: it records what the release channel offers and when the host-side
+ * updater (`harly updater run`) last polled, and the updater does the work.
+ */
+export const instanceUpdateState = pgTable(
+  "instance_update_state",
+  {
+    id: integer("id").default(1).primaryKey(),
+    latestVersion: text("latest_version"),
+    latestNotesUrl: text("latest_notes_url"),
+    // Short plain-text excerpt of the release notes. Rendered as text, never HTML.
+    latestNotesSummary: text("latest_notes_summary"),
+    latestCheckedAt: timestamp("latest_checked_at", { withTimezone: true }),
+    latestCheckError: text("latest_check_error"),
+    updaterLastSeenAt: timestamp("updater_last_seen_at", { withTimezone: true }),
+    updaterVersion: text("updater_version"),
+    ...timestamps(),
+  },
+  (table) => [
+    check("instance_update_state_singleton_check", sql`${table.id} = 1`),
+  ],
+);
+
+/**
+ * Per-workspace auto-update policy. `days` are ISO weekdays (1 = Monday …
+ * 7 = Sunday); the window runs from `startHour` (inclusive) to `endHour`
+ * (exclusive) in `timezone` and may cross midnight.
+ */
+export const workspaceUpdateSettings = pgTable(
+  "workspace_update_settings",
+  {
+    organizationId: text("organization_id")
+      .primaryKey()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    autoUpdateEnabled: boolean("auto_update_enabled").default(false).notNull(),
+    // 'patch' installs x.y.Z releases only; 'minor' also installs x.Y.0.
+    autoUpdateLevel: text("auto_update_level").default("patch").notNull(),
+    windowDays: integer("window_days")
+      .array()
+      .default(sql`'{1,2,3,4,5}'::integer[]`)
+      .notNull(),
+    windowStartHour: integer("window_start_hour").default(2).notNull(),
+    windowEndHour: integer("window_end_hour").default(5).notNull(),
+    windowTimezone: text("window_timezone").default("UTC").notNull(),
+    updatedBy: text("updated_by").references(() => user.id, {
+      onDelete: "set null",
+    }),
+    ...timestamps(),
+  },
+  (table) => [
+    check(
+      "workspace_update_settings_level_check",
+      sql`${table.autoUpdateLevel} in ('patch', 'minor')`,
+    ),
+    check(
+      "workspace_update_settings_hours_check",
+      sql`${table.windowStartHour} between 0 and 23 and ${table.windowEndHour} between 0 and 23 and ${table.windowStartHour} <> ${table.windowEndHour}`,
+    ),
+  ],
+);
+
+/**
+ * One row per requested update. The web app inserts `pending` rows; the
+ * host-side updater claims one, reports progress, and finishes it. At most one
+ * request may be active at a time (partial unique index).
+ */
+export const updateRequests = pgTable(
+  "update_requests",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    requestedBy: text("requested_by").references(() => user.id, {
+      onDelete: "set null",
+    }),
+    trigger: text("trigger").default("manual").notNull(),
+    fromVersion: text("from_version").notNull(),
+    targetVersion: text("target_version").notNull(),
+    status: text("status").default("pending").notNull(),
+    // Short human-readable progress / failure line. Never a secret.
+    message: text("message"),
+    logTail: text("log_tail"),
+    claimedAt: timestamp("claimed_at", { withTimezone: true }),
+    finishedAt: timestamp("finished_at", { withTimezone: true }),
+    ...timestamps(),
+  },
+  (table) => [
+    check(
+      "update_requests_status_check",
+      sql`${table.status} in ('pending', 'claimed', 'running', 'succeeded', 'failed', 'rolled_back', 'cancelled')`,
+    ),
+    check(
+      "update_requests_trigger_check",
+      sql`${table.trigger} in ('manual', 'auto')`,
+    ),
+    uniqueIndex("update_requests_one_active_uidx")
+      .on(sql`(true)`)
+      .where(sql`${table.status} in ('pending', 'claimed', 'running')`),
+    index("update_requests_org_created_idx").on(
+      table.organizationId,
+      table.createdAt,
+    ),
+  ],
+);
+
+export type InstanceUpdateState = typeof instanceUpdateState.$inferSelect;
+export type WorkspaceUpdateSettings = typeof workspaceUpdateSettings.$inferSelect;
+export type UpdateRequest = typeof updateRequests.$inferSelect;
+
 export type EmailOutbox = typeof emailOutbox.$inferSelect;
 export type NewEmailOutbox = typeof emailOutbox.$inferInsert;
 
@@ -3023,6 +3185,39 @@ export type DomainEventOutbox = typeof domainEventOutbox.$inferSelect;
 export type NewDomainEventOutbox = typeof domainEventOutbox.$inferInsert;
 
 // Reusable outbound email templates with {{variable}} placeholders.
+// Workspace catalog of rejection reasons. `code` is the stable key stored on
+// `applications.rejection_reason_code`; renaming changes only `label`, and
+// archiving hides a reason from new rejections without touching history.
+// Default reasons are seeded lazily per workspace (see
+// apps/web/src/features/rejection-reasons).
+export const rejectionReasons = pgTable(
+  "rejection_reasons",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    workspaceId: text("workspace_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    code: text("code").notNull(),
+    label: text("label").notNull(),
+    position: integer("position").default(0).notNull(),
+    archivedAt: timestamp("archived_at", { withTimezone: true }),
+    ...timestamps(),
+  },
+  (table) => [
+    uniqueIndex("rejection_reasons_workspace_code_idx").on(
+      table.workspaceId,
+      table.code,
+    ),
+    index("rejection_reasons_workspace_position_idx").on(
+      table.workspaceId,
+      table.position,
+    ),
+  ],
+);
+
+export type RejectionReason = typeof rejectionReasons.$inferSelect;
+export type NewRejectionReason = typeof rejectionReasons.$inferInsert;
+
 export const emailTemplates = pgTable(
   "email_templates",
   {
@@ -6007,3 +6202,158 @@ export type AiActionReceipt = typeof aiActionReceipts.$inferSelect;
 export type NewAiActionReceipt = typeof aiActionReceipts.$inferInsert;
 export type AutomationAiJob = typeof automationAiJobs.$inferSelect;
 export type NewAutomationAiJob = typeof automationAiJobs.$inferInsert;
+
+// ── MCP OAuth authorization server ──────────────────────────────────────────
+// Harly's MCP endpoint (`/mcp`) is an OAuth 2.1 resource server whose
+// authorization server lives in the same app (apps/web/src/lib/mcp/oauth).
+// Tokens are opaque; only SHA-256 hashes are stored.
+
+/** Per-workspace MCP policy. Absent row = defaults (enabled, any client). */
+export const workspaceMcpSettings = pgTable(
+  "workspace_mcp_settings",
+  {
+    workspaceId: text("workspace_id")
+      .primaryKey()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    enabled: boolean("enabled").default(true).notNull(),
+    // "any" = any client passing CIMD/DCR validation, "known_only" = bundled
+    // list of known MCP clients only.
+    clientMode: text("client_mode").default("any").notNull(),
+    allowDcr: boolean("allow_dcr").default(true).notNull(),
+    // null = every scope in MCP_SCOPES may be granted.
+    maxScopes: text("max_scopes").array(),
+    updatedBy: text("updated_by").references(() => user.id, {
+      onDelete: "set null",
+    }),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .defaultNow()
+      .$onUpdate(() => new Date())
+      .notNull(),
+  },
+  (table) => [
+    check(
+      "workspace_mcp_settings_client_mode_check",
+      sql`${table.clientMode} in ('any', 'known_only')`,
+    ),
+  ],
+);
+
+/**
+ * OAuth clients: registered via RFC 7591 (`source = 'dcr'`, `client_id` is a
+ * generated opaque id) or discovered from a Client ID Metadata Document
+ * (`source = 'cimd'`, `client_id` is the https URL; row is a metadata cache).
+ */
+export const mcpOauthClients = pgTable(
+  "mcp_oauth_clients",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    clientId: text("client_id").notNull(),
+    source: text("source").notNull(),
+    name: text("name").notNull(),
+    redirectUris: text("redirect_uris").array().notNull(),
+    logoUri: text("logo_uri"),
+    clientUri: text("client_uri"),
+    // DCR rows expire if never used; CIMD rows are re-fetched after this.
+    expiresAt: timestamp("expires_at", { withTimezone: true }),
+    lastUsedAt: timestamp("last_used_at", { withTimezone: true }),
+    // Set by an operator to refuse the client everywhere.
+    blockedAt: timestamp("blocked_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .defaultNow()
+      .$onUpdate(() => new Date())
+      .notNull(),
+  },
+  (table) => [
+    uniqueIndex("mcp_oauth_clients_client_id_idx").on(table.clientId),
+    index("mcp_oauth_clients_expires_idx").on(table.expiresAt),
+    check(
+      "mcp_oauth_clients_source_check",
+      sql`${table.source} in ('dcr', 'cimd')`,
+    ),
+  ],
+);
+
+/** A user's approval of one client in one workspace. Revoking it kills every token. */
+export const mcpGrants = pgTable(
+  "mcp_grants",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    workspaceId: text("workspace_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    clientId: text("client_id").notNull(),
+    clientName: text("client_name").notNull(),
+    clientHost: text("client_host"),
+    scopes: text("scopes").array().notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    lastUsedAt: timestamp("last_used_at", { withTimezone: true }),
+    // Absolute cap (90 days from consent).
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    revokedAt: timestamp("revoked_at", { withTimezone: true }),
+    revokedBy: text("revoked_by").references(() => user.id, {
+      onDelete: "set null",
+    }),
+    revokeReason: text("revoke_reason"),
+  },
+  (table) => [
+    index("mcp_grants_workspace_idx").on(table.workspaceId, table.createdAt),
+    index("mcp_grants_user_idx").on(table.userId, table.workspaceId),
+  ],
+);
+
+/** Single-use authorization codes (60 s). */
+export const mcpAuthorizationCodes = pgTable(
+  "mcp_authorization_codes",
+  {
+    codeHash: text("code_hash").primaryKey(),
+    grantId: uuid("grant_id")
+      .notNull()
+      .references(() => mcpGrants.id, { onDelete: "cascade" }),
+    clientId: text("client_id").notNull(),
+    redirectUri: text("redirect_uri").notNull(),
+    codeChallenge: text("code_challenge").notNull(),
+    resource: text("resource").notNull(),
+    scopes: text("scopes").array().notNull(),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    usedAt: timestamp("used_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [index("mcp_authorization_codes_expires_idx").on(table.expiresAt)],
+);
+
+/** Access (15 min) and refresh (rotated, idle 30 d) token hashes. */
+export const mcpTokens = pgTable(
+  "mcp_tokens",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    tokenHash: text("token_hash").notNull(),
+    // "access" | "refresh"
+    kind: text("kind").notNull(),
+    grantId: uuid("grant_id")
+      .notNull()
+      .references(() => mcpGrants.id, { onDelete: "cascade" }),
+    resource: text("resource").notNull(),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    // Refresh tokens: set when rotated. Presenting a used one again = reuse.
+    usedAt: timestamp("used_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [
+    uniqueIndex("mcp_tokens_hash_idx").on(table.tokenHash),
+    index("mcp_tokens_grant_idx").on(table.grantId),
+    index("mcp_tokens_expires_idx").on(table.expiresAt),
+    check("mcp_tokens_kind_check", sql`${table.kind} in ('access', 'refresh')`),
+  ],
+);

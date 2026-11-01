@@ -37,6 +37,11 @@ export function ActivityTimeline({
           </div>
           <div className="pb-4">
             <p className="text-sm font-medium">{event.label}</p>
+            {event.detail ? (
+              <p className="mt-0.5 line-clamp-3 text-xs text-soft-ink" title={event.detail}>
+                {event.detail}
+              </p>
+            ) : null}
             <p className="mt-0.5 text-xs text-muted-foreground">
               {event.actorName ? `${event.actorName} · ` : ""}
               <RelativeTime value={event.createdAt} />

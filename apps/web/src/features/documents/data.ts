@@ -1,6 +1,6 @@
 import "server-only";
 
-import { and, desc, eq, inArray, isNull } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNull } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 
 import {
@@ -14,6 +14,10 @@ import {
   documentLegalHolds,
   documentVersions,
   documents,
+  signatureArtifacts,
+  signatureEnvelopes,
+  signatureEvents,
+  signatureRecipients,
   candidates,
   jobs,
   member as authMembers,
@@ -41,11 +45,15 @@ import {
   visibleAssociationTargets,
   type DocumentAssociationTarget,
 } from "./association-scope";
-import type {
-  DocumentCategoryItem,
-  DocumentHubData,
-  DocumentListItem,
-  DocumentMember,
+import {
+  deriveSignerState,
+  type DocumentCategoryItem,
+  type DocumentDetailBundle,
+  type DocumentHubData,
+  type DocumentListItem,
+  type DocumentMember,
+  type DocumentSignatureDetail,
+  type DocumentVersionItem,
 } from "./shared";
 
 /** The caller's role scope, in the shape the scope predicates take. */
@@ -195,7 +203,15 @@ export async function listDocumentsForSigning() {
   return visible.filter((row): row is NonNullable<typeof row> => Boolean(row));
 }
 
-export async function getDocumentHubData(): Promise<DocumentHubData> {
+/**
+ * The whole visible library for the hub, or (with `documentId`) just that one
+ * document with a deeper activity feed. The single-document form skips the
+ * candidate/job pickers and every library-wide query.
+ */
+export async function getDocumentHubData(
+  options: { documentId?: string } = {},
+): Promise<DocumentHubData> {
+  const only = options.documentId;
   const { organization, user, roleKey } = await getWorkspaceContext();
   const actor = await callerActor(organization.id, user.id, roleKey);
   const manualSigners = alias(authUsers, "manual_signers");
@@ -239,37 +255,46 @@ export async function getDocumentHubData(): Promise<DocumentHubData> {
       .from(documents)
       .leftJoin(authUsers, eq(authUsers.id, documents.ownerId))
       .leftJoin(manualSigners, eq(manualSigners.id, documents.manualSignedById))
-      .where(eq(documents.workspaceId, organization.id))
+      .where(
+        and(
+          eq(documents.workspaceId, organization.id),
+          only ? eq(documents.id, only) : undefined,
+        ),
+      )
       .orderBy(desc(documents.updatedAt)),
     listDocumentCategories(),
     listDocumentMembers(),
     getRolePermissions(organization.id, roleKey),
-    db
-      .select({
-        id: candidates.id,
-        label: candidates.firstName,
-        lastName: candidates.lastName,
-      })
-      .from(candidates)
-      .where(
-        and(
-          eq(candidates.workspaceId, organization.id),
-          isNull(candidates.deletedAt),
-          candidateScopeSql(actor, candidates.id),
-        ),
-      )
-      .orderBy(candidates.lastName, candidates.firstName),
-    db
-      .select({ id: jobs.id, label: jobs.title })
-      .from(jobs)
-      .where(
-        and(
-          eq(jobs.workspaceId, organization.id),
-          isNull(jobs.deletedAt),
-          jobScopeSql(actor),
-        ),
-      )
-      .orderBy(jobs.title),
+    only
+      ? Promise.resolve([] as Array<{ id: string; label: string; lastName: string }>)
+      : db
+          .select({
+            id: candidates.id,
+            label: candidates.firstName,
+            lastName: candidates.lastName,
+          })
+          .from(candidates)
+          .where(
+            and(
+              eq(candidates.workspaceId, organization.id),
+              isNull(candidates.deletedAt),
+              candidateScopeSql(actor, candidates.id),
+            ),
+          )
+          .orderBy(candidates.lastName, candidates.firstName),
+    only
+      ? Promise.resolve([] as Array<{ id: string; label: string }>)
+      : db
+          .select({ id: jobs.id, label: jobs.title })
+          .from(jobs)
+          .where(
+            and(
+              eq(jobs.workspaceId, organization.id),
+              isNull(jobs.deletedAt),
+              jobScopeSql(actor),
+            ),
+          )
+          .orderBy(jobs.title),
     db
       .select({
         documentId: documentVersions.documentId,
@@ -277,7 +302,12 @@ export async function getDocumentHubData(): Promise<DocumentHubData> {
         isCurrent: documentVersions.isCurrent,
       })
       .from(documentVersions)
-      .where(eq(documentVersions.workspaceId, organization.id)),
+      .where(
+        and(
+          eq(documentVersions.workspaceId, organization.id),
+          only ? eq(documentVersions.documentId, only) : undefined,
+        ),
+      ),
     getWorkspaceEsignStatus(organization.id),
     db
       .select({ remoteSignEnabled: workspaceSettings.remoteSignEnabled })
@@ -370,7 +400,7 @@ export async function getDocumentHubData(): Promise<DocumentHubData> {
             ),
           )
           .orderBy(desc(activityEvents.createdAt))
-          .limit(200),
+          .limit(only ? 100 : 200),
         db
           .select({
             documentId: documentLegalHolds.documentId,
@@ -403,6 +433,7 @@ export async function getDocumentHubData(): Promise<DocumentHubData> {
   // Labels and candidate ids come only from associations the caller can see.
   const labels = new Map<string, string[]>();
   const candidateIdsByDocument = new Map<string, string[]>();
+  const jobIdsByDocument = new Map<string, string[]>();
   for (const row of associationRows) {
     if (!isAssociationVisible(row, visibleTargets)) continue;
     const current = labels.get(row.documentId) ?? [];
@@ -412,6 +443,11 @@ export async function getDocumentHubData(): Promise<DocumentHubData> {
       const candidateIds = candidateIdsByDocument.get(row.documentId) ?? [];
       candidateIds.push(row.targetId);
       candidateIdsByDocument.set(row.documentId, candidateIds);
+    }
+    if (row.targetType === "job" && row.targetId) {
+      const jobIds = jobIdsByDocument.get(row.documentId) ?? [];
+      jobIds.push(row.targetId);
+      jobIdsByDocument.set(row.documentId, jobIds);
     }
   }
   const categoryById = new Map(
@@ -464,7 +500,7 @@ export async function getDocumentHubData(): Promise<DocumentHubData> {
   >();
   for (const row of activityRows) {
     const current = activityByDocument.get(row.documentId) ?? [];
-    if (current.length < 6)
+    if (current.length < (only ? 40 : 6))
       current.push({
         id: row.id,
         type: row.type,
@@ -548,6 +584,7 @@ export async function getDocumentHubData(): Promise<DocumentHubData> {
         ),
       ],
       candidateIds: candidateIdsByDocument.get(row.id) ?? [],
+      jobIds: jobIdsByDocument.get(row.id) ?? [],
       accessRoles: accessRolesByDocument.get(row.id) ?? [],
       accessMembers: accessMembersByDocument.get(row.id) ?? [],
       assignments: assignmentsByDocument.get(row.id) ?? [],
@@ -589,5 +626,156 @@ export async function getDocumentHubData(): Promise<DocumentHubData> {
       connected: Boolean(esignStatus.hasToken),
       hasWebhookSecret: esignStatus.hasWebhookSecret,
     },
+  };
+}
+
+
+/**
+ * Everything the document page needs in one go: the single document (same
+ * visibility rules as the library), its version history and signer progress.
+ * Returns null when the document does not exist or the caller cannot see it.
+ */
+export async function getDocumentDetail(
+  documentId: string,
+): Promise<DocumentDetailBundle | null> {
+  const data = await getDocumentHubData({ documentId });
+  const document = data.documents[0];
+  if (!document) return null;
+  const { organization } = await getWorkspaceContext();
+  const [versions, signature] = await Promise.all([
+    listDocumentVersions(organization.id, documentId),
+    getDocumentSignatureDetail(organization.id, documentId),
+  ]);
+  return { data, document, versions, signature };
+}
+
+async function listDocumentVersions(
+  workspaceId: string,
+  documentId: string,
+): Promise<DocumentVersionItem[]> {
+  const rows = await db
+    .select({
+      id: documentVersions.id,
+      versionNumber: documentVersions.versionNumber,
+      sizeBytes: documentVersions.sizeBytes,
+      checksum: documentVersions.checksum,
+      isCurrent: documentVersions.isCurrent,
+      uploadedByName: authUsers.name,
+      createdAt: documentVersions.createdAt,
+    })
+    .from(documentVersions)
+    .leftJoin(authUsers, eq(authUsers.id, documentVersions.uploadedById))
+    .where(
+      and(
+        eq(documentVersions.workspaceId, workspaceId),
+        eq(documentVersions.documentId, documentId),
+      ),
+    )
+    .orderBy(desc(documentVersions.versionNumber));
+  return rows.map((row) => ({ ...row, createdAt: row.createdAt.toISOString() }));
+}
+
+/** Per-signer progress for the document's current signing envelope, if it has one. */
+async function getDocumentSignatureDetail(
+  workspaceId: string,
+  documentId: string,
+): Promise<DocumentSignatureDetail | null> {
+  const [doc] = await db
+    .select({
+      refId: documents.signatureEnvelopeRefId,
+      providerEnvelopeId: documents.signatureEnvelopeId,
+      provider: documents.signatureProvider,
+    })
+    .from(documents)
+    .where(and(eq(documents.id, documentId), eq(documents.workspaceId, workspaceId)))
+    .limit(1);
+  if (!doc) return null;
+  const [envelope] = doc.refId
+    ? await db
+        .select()
+        .from(signatureEnvelopes)
+        .where(and(eq(signatureEnvelopes.workspaceId, workspaceId), eq(signatureEnvelopes.id, doc.refId)))
+        .limit(1)
+    : doc.providerEnvelopeId
+      ? await db
+          .select()
+          .from(signatureEnvelopes)
+          .where(
+            and(
+              eq(signatureEnvelopes.workspaceId, workspaceId),
+              eq(signatureEnvelopes.provider, doc.provider ?? "docuseal"),
+              eq(signatureEnvelopes.providerEnvelopeId, doc.providerEnvelopeId),
+            ),
+          )
+          .limit(1)
+      : [];
+  if (!envelope) return null;
+  const [recipients, events, artifacts] = await Promise.all([
+    db
+      .select()
+      .from(signatureRecipients)
+      .where(
+        and(
+          eq(signatureRecipients.workspaceId, workspaceId),
+          eq(signatureRecipients.envelopeId, envelope.id),
+          eq(signatureRecipients.role, "signer"),
+        ),
+      )
+      .orderBy(asc(signatureRecipients.routingOrder), asc(signatureRecipients.createdAt)),
+    db
+      .select({
+        eventType: signatureEvents.eventType,
+        payload: signatureEvents.payload,
+        createdAt: signatureEvents.createdAt,
+      })
+      .from(signatureEvents)
+      .where(and(eq(signatureEvents.workspaceId, workspaceId), eq(signatureEvents.envelopeId, envelope.id)))
+      .orderBy(asc(signatureEvents.createdAt)),
+    db
+      .select({ id: signatureArtifacts.id, kind: signatureArtifacts.kind })
+      .from(signatureArtifacts)
+      .where(
+        and(
+          eq(signatureArtifacts.workspaceId, workspaceId),
+          eq(signatureArtifacts.envelopeId, envelope.id),
+          inArray(signatureArtifacts.kind, ["signed_document", "completion_certificate"]),
+        ),
+      ),
+  ]);
+
+  // Invitation and reminder events carry the recipient id they were sent to.
+  const invitedAt = new Map<string, string>();
+  const remindedAt = new Map<string, string>();
+  for (const event of events) {
+    const recipientId = (event.payload as { recipientId?: string } | null)?.recipientId;
+    if (!recipientId) continue;
+    const stamp = event.createdAt.toISOString();
+    if (event.eventType === "invitation_sent" && !invitedAt.has(recipientId)) invitedAt.set(recipientId, stamp);
+    if (event.eventType === "reminder_sent") remindedAt.set(recipientId, stamp);
+  }
+  return {
+    envelopeId: envelope.id,
+    provider: envelope.provider,
+    status: envelope.status,
+    sentAt: envelope.sentAt?.toISOString() ?? null,
+    completedAt: envelope.completedAt?.toISOString() ?? null,
+    signers: recipients.map((recipient) => ({
+      id: recipient.id,
+      name: recipient.name,
+      email: recipient.email,
+      order: recipient.routingOrder,
+      state: deriveSignerState({
+        status: recipient.status,
+        linkExpiresAt: recipient.linkExpiresAt?.toISOString() ?? null,
+      }),
+      signedAt: recipient.signedAt?.toISOString() ?? null,
+      declinedAt: recipient.declinedAt?.toISOString() ?? null,
+      declinedReason: recipient.declinedReason,
+      linkExpiresAt: recipient.linkExpiresAt?.toISOString() ?? null,
+      invitedAt: invitedAt.get(recipient.id) ?? null,
+      lastRemindedAt: remindedAt.get(recipient.id) ?? null,
+    })),
+    signedDocumentArtifactId: artifacts.find((a) => a.kind === "signed_document")?.id ?? null,
+    certificateArtifactId: artifacts.find((a) => a.kind === "completion_certificate")?.id ?? null,
   };
 }

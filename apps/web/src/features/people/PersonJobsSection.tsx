@@ -1,8 +1,7 @@
 import Link from "next/link";
 import type { Route } from "next";
-import { Briefcase } from "lucide-react";
+import { Briefcase, ChevronRight } from "lucide-react";
 
-import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import type { PersonJobRow } from "@/features/people/actions";
 
@@ -18,22 +17,25 @@ export function PersonJobsSection({ jobs }: { jobs: PersonJobRow[] }) {
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="flex items-center gap-1.5 text-sm font-medium text-muted-foreground">
-          <Briefcase className="size-3.5" />
-          Jobs & hiring teams
-        </CardTitle>
+        <CardTitle>Jobs & hiring teams</CardTitle>
       </CardHeader>
-      <CardContent className="divide-y divide-border/60 p-0">
+      <CardContent className="flex flex-col gap-1.5">
         {jobs.map((job) => (
           <Link
             key={job.id}
             href={`/dashboard/jobs/${job.id}` as Route}
-            className="flex items-center justify-between gap-3 px-6 py-3 text-sm outline-offset-[-2px] hover:bg-accent/40 focus-visible:outline-2 focus-visible:outline-primary"
+            className="group flex items-center gap-3 rounded-[var(--radius-inner)] bg-card-inset px-4 py-3 text-sm transition-colors hover:bg-row-wash focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-near-ink"
           >
-            <span className="min-w-0 truncate font-medium">{job.title}</span>
-            <Badge variant="outline" className="shrink-0">
-              {ROLE_LABELS[job.role] ?? job.role}
-            </Badge>
+            <span className="grid size-8 shrink-0 place-items-center rounded-[var(--radius-btn)] border border-hairline bg-pure-snow">
+              <Briefcase className="size-4" strokeWidth={1.8} />
+            </span>
+            <span className="min-w-0 flex-1">
+              <span className="block truncate font-medium text-near-ink">{job.title}</span>
+              <span className="block text-[12.5px] text-soft-ink">
+                {ROLE_LABELS[job.role] ?? job.role}
+              </span>
+            </span>
+            <ChevronRight className="size-4 shrink-0 text-quiet-mist transition-transform group-hover:translate-x-0.5" />
           </Link>
         ))}
       </CardContent>

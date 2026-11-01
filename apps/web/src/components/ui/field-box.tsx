@@ -34,9 +34,9 @@ export function FieldBox({
     <div className={cn("space-y-1.5", className)}>
       <div
         className={cn(
-          "rounded-lg border border-input bg-card px-3.5 pt-2 pb-2 transition-[border-color,box-shadow] duration-150 ease-out",
-          "focus-within:border-pine focus-within:ring-[3px] focus-within:ring-pine/15",
-          error && "border-destructive/60",
+          "rounded-[var(--radius-btn)] border border-mist-border bg-pure-snow px-3.5 pt-2 pb-2 transition-[border-color,box-shadow] duration-150 ease-out",
+          "focus-within:border-near-ink focus-within:ring-[3px] focus-within:ring-near-ink/10",
+          error && "border-danger-rust",
         )}
       >
         <div className="flex items-center justify-between gap-2">
@@ -52,9 +52,9 @@ export function FieldBox({
         {children}
       </div>
       {error ? (
-        <p className="text-xs text-destructive">{error}</p>
+        <p role="alert" className="text-[12.5px] text-danger-rust">{error}</p>
       ) : hint ? (
-        <p className="text-xs text-muted-foreground">{hint}</p>
+        <p className="text-[12.5px] text-soft-ink">{hint}</p>
       ) : null}
     </div>
   );

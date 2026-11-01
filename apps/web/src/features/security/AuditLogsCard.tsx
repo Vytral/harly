@@ -14,7 +14,7 @@ import {
 } from "@/components/ui/icons/phosphor";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { cn } from "@/lib/utils";
+import { cn, copyText } from "@/lib/utils";
 
 type Severity = "info" | "warning" | "critical";
 
@@ -65,7 +65,7 @@ function CopyButton({ value }: { value: string }) {
       type="button"
       onClick={(e) => {
         e.stopPropagation();
-        void navigator.clipboard.writeText(value);
+        void copyText(value);
         setCopied(true);
         setTimeout(() => setCopied(false), 1400);
       }}

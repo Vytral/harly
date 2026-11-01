@@ -1,10 +1,12 @@
 "use client";
 
-import type { ComponentType } from "react";
-import { useState, useTransition } from "react";
+import { ConfirmDialog, useConfirm } from "@/components/ui/confirm-dialog";
+import type { ComponentType, ReactNode, RefObject } from "react";
+import { useRef, useState, useTransition } from "react";
 
 import { useRouter } from "next/navigation";
 import {
+  Briefcase,
   CalendarClock,
   CheckCircle2,
   ChevronDown,
@@ -12,6 +14,7 @@ import {
   Download,
   FileText,
   Mail,
+  MoreHorizontal,
   Pencil,
   RotateCcw,
   Trash2,
@@ -19,6 +22,7 @@ import {
 } from "lucide-react";
 import { toast } from "@/lib/notification-island/toast";
 
+import { Badge } from "@/components/ui/badge";
 import {
   EditCandidateDrawer,
   type EditableCandidate,
@@ -34,7 +38,8 @@ import {
   type MoveStageTarget,
 } from "@/features/candidates/MoveStageButton";
 import { PdfViewer } from "@/features/candidates/PdfViewer";
-import { ProhibitIcon } from "@/components/ui/icons/phosphor";
+import { CandidateStageStepper } from "@/features/candidates/CandidateStageStepper";
+import { BookmarkSimpleIcon, ProhibitIcon } from "@/components/ui/icons/phosphor";
 import {
   ScheduleDrawer,
   type ScheduleApplicationOption,
@@ -45,23 +50,28 @@ import {
   bulkUpdateCandidateStatusAction,
   trashCandidateAction,
 } from "@/features/candidates/actions";
-import { CandidatePoolButton } from "@/features/pool/CandidatePoolButton";
+import { useCandidatePool } from "@/features/pool/CandidatePoolButton";
+import { RejectDialog } from "@/features/rejection-reasons/RejectDialog";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
   DialogContent,
   DialogDescription,
-  DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from "@/components/ui/dialog";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuShortcut,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { cn } from "@/lib/utils";
+import { ariaKeys, withHint, type ShortcutId } from "@/components/dashboard/shortcuts/catalog";
+import { usePublishCandidateActions } from "@/components/dashboard/shortcuts/candidate-actions";
+import { useShortcut } from "@/components/dashboard/shortcuts/useShortcut";
 
 function isPdfResume(
   url: string,
@@ -121,28 +131,53 @@ function decisionApplication(
   return selected ?? null;
 }
 
+/**
+ * "Decide for" job context pill. A native select is laid transparently over
+ * the pill so keyboard, screen-reader and mobile pickers keep working for
+ * free; with a single application it is a static pill without the chevron.
+ */
 function DecisionApplicationSelector({
   applications,
   selectedApplicationId,
   onChange,
+  className,
 }: {
   applications: ScheduleApplicationOption[];
   selectedApplicationId: string | null;
   onChange: (applicationId: string) => void;
+  className?: string;
 }) {
-  if (applications.length < 2) return null;
-
   const selected = decisionApplication(applications, selectedApplicationId);
+  if (!selected) return null;
+
+  const pillClass =
+    "inline-flex h-8 min-w-0 max-w-full items-center gap-1.5 rounded-full border border-hairline bg-card px-3 text-[13px] font-medium text-near-ink";
+
+  if (applications.length < 2) {
+    return (
+      <span className={cn(pillClass, className)} title={`Job: ${selected.jobTitle}`}>
+        <Briefcase className="size-3.5 shrink-0 text-soft-ink" strokeWidth={1.8} />
+        <span className="truncate">{selected.jobTitle}</span>
+      </span>
+    );
+  }
 
   return (
-    <label className="flex min-w-0 items-center gap-2 rounded-xl border border-border/70 bg-background px-2.5 py-1.5 focus-within:ring-2 focus-within:ring-ring">
-      <span className="shrink-0 text-xs font-medium text-muted-foreground">
-        Decide for
-      </span>
+    <label
+      title="Decide for"
+      className={cn(
+        pillClass,
+        "relative cursor-pointer transition-colors duration-150 hover:bg-card-inset focus-within:ring-[3px] focus-within:ring-ring/50",
+        className,
+      )}
+    >
+      <Briefcase className="size-3.5 shrink-0 text-soft-ink" strokeWidth={1.8} />
+      <span className="truncate">{selected.jobTitle}</span>
+      <ChevronDown className="size-3.5 shrink-0 text-soft-ink" strokeWidth={1.8} />
       <select
         aria-label="Application to update"
-        className="min-w-0 max-w-52 bg-transparent text-sm font-medium text-foreground outline-none"
-        value={selected?.applicationId ?? ""}
+        className="absolute inset-0 size-full cursor-pointer opacity-0"
+        value={selected.applicationId}
         onChange={(event) => onChange(event.target.value)}
       >
         {applications.map((application) => (
@@ -156,43 +191,43 @@ function DecisionApplicationSelector({
 }
 
 /**
- * Prominent, isolated reject control (rust) with a split dropdown for
- * "withdrawn". Mirrors the Workable red reject button + reason menu.
+ * Status mutations for one application (withdraw / hire / reactivate).
+ * Hoisted so the decision bar and the ⋯ menu share one pending state and the
+ * same confirm + toast behavior. Rejecting goes through RejectDialog.
  */
-function RejectButton({
-  name,
-  application,
-  compact = false,
-}: {
-  name: string;
-  application: ScheduleApplicationOption | null;
-  compact?: boolean;
-}) {
+function useApplicationStatus(
+  name: string,
+  application: ScheduleApplicationOption | null,
+) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
+  const confirm = useConfirm();
 
-  function run(status: "rejected" | "withdrawn", pastTense: string) {
+  async function withdraw() {
     if (!application) {
       toast.error("This candidate has no application to update.");
       return;
     }
     if (
-      !window.confirm(
-        `${pastTense === "withdrawn" ? "Mark" : "Reject"} ${name}'s application for ${application.jobTitle}?`,
-      )
+      !(await confirm({
+        tone: "warning",
+        title: `Mark ${name}'s application as withdrawn?`,
+        description: `Applies to ${application.jobTitle}. No rejection email is sent.`,
+        confirmLabel: "Mark withdrawn",
+      }))
     ) {
       return;
     }
     startTransition(async () => {
       const result = await bulkUpdateCandidateStatusAction({
         applicationIds: [application.applicationId],
-        status,
+        status: "withdrawn",
       });
       if (result.success) {
         if (result.emailWarning) {
-          toast.warning(`${name} ${pastTense}. ${result.emailWarning}`);
+          toast.warning(`${name} withdrawn. ${result.emailWarning}`);
         } else {
-          toast.success(`${name} ${pastTense}.`);
+          toast.success(`${name} withdrawn.`);
         }
         (router as { refresh?: () => void }).refresh?.();
       } else {
@@ -201,61 +236,7 @@ function RejectButton({
     });
   }
 
-  return (
-    <div className="flex items-center">
-      <Button
-        size="sm"
-        variant="outline"
-        disabled={isPending}
-        onClick={() => run("rejected", "rejected")}
-        className="rounded-r-none border-destructive/30 text-destructive hover:border-destructive/50 hover:bg-destructive/10 hover:text-destructive"
-        title="Reject candidate"
-      >
-        <ProhibitIcon className="size-4" />
-        {compact ? <span className="sr-only">Reject</span> : "Reject"}
-      </Button>
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <Button
-            size="sm"
-            variant="outline"
-            disabled={isPending}
-            className="rounded-l-none border-l-0 border-destructive/30 px-1.5 text-destructive hover:border-destructive/50 hover:bg-destructive/10 hover:text-destructive"
-            title="More reject options"
-          >
-            <ChevronDown className="size-4" />
-            <span className="sr-only">Reject options</span>
-          </Button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="end">
-          <DropdownMenuItem
-            variant="destructive"
-            onSelect={() => run("rejected", "rejected")}
-          >
-            <ProhibitIcon className="size-4" />
-            Reject candidate
-          </DropdownMenuItem>
-          <DropdownMenuItem onSelect={() => run("withdrawn", "withdrawn")}>
-            <UserMinus className="size-4" />
-            Mark withdrawn
-          </DropdownMenuItem>
-        </DropdownMenuContent>
-      </DropdownMenu>
-    </div>
-  );
-}
-
-function CandidateStatusMenu({
-  name,
-  application,
-}: {
-  name: string;
-  application: ScheduleApplicationOption | null;
-}) {
-  const router = useRouter();
-  const [isPending, startTransition] = useTransition();
-
-  function handleSelect(
+  async function change(
     status: CandidateStatus,
     label: string,
     confirmMessage: string,
@@ -265,11 +246,13 @@ function CandidateStatusMenu({
       return;
     }
     if (
-      !window.confirm(
-        confirmMessage
+      !(await confirm({
+        title: confirmMessage
           .replace("{name}", name)
           .replace("{job}", application.jobTitle),
-      )
+        description: "You can change the status again later.",
+        confirmLabel: label,
+      }))
     ) {
       return;
     }
@@ -292,100 +275,77 @@ function CandidateStatusMenu({
     });
   }
 
+  return { isPending, withdraw, change };
+}
+
+/** Reject: outline with rust text. Withdraw lives in the ⋯ menu. */
+function RejectButton({
+  onReject,
+  pending,
+  compact = false,
+  className,
+}: {
+  onReject: () => void;
+  pending: boolean;
+  compact?: boolean;
+  className?: string;
+}) {
   return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <Button size="sm" variant="outline" disabled={isPending}>
-          Status
-          <ChevronDown className="size-4" />
-        </Button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="end">
-        {STATUS_ACTIONS.map(
-          ({ status, label, icon: Icon, confirm, destructive }) => (
-            <DropdownMenuItem
-              key={status}
-              variant={destructive ? "destructive" : "default"}
-              onSelect={() => handleSelect(status, label, confirm)}
-            >
-              <Icon className="size-4" />
-              {label}
-            </DropdownMenuItem>
-          ),
-        )}
-      </DropdownMenuContent>
-    </DropdownMenu>
+    <Button
+      size="sm"
+      variant="outline"
+      disabled={pending}
+      onClick={onReject}
+      className={cn(
+        "border-destructive/30 text-destructive hover:border-destructive/50 hover:bg-destructive/10 hover:text-destructive",
+        className,
+      )}
+      title={withHint("Reject candidate", "candidate.reject")}
+      aria-keyshortcuts={ariaKeys("candidate.reject")}
+    >
+      <ProhibitIcon className="size-4" />
+      {compact ? <span className="sr-only">Reject</span> : "Reject"}
+    </Button>
   );
 }
 
-function DeleteCandidateButton({
+function DeleteCandidateDialog({
+  open,
+  onOpenChange,
   candidateId,
   name,
-  trigger,
 }: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
   candidateId: string;
   name: string;
-  trigger?: React.ReactNode;
 }) {
   const router = useRouter();
-  const [isPending, startTransition] = useTransition();
-  const [confirmOpen, setConfirmOpen] = useState(false);
 
-  function deleteCandidate() {
-    startTransition(async () => {
-      const result = await trashCandidateAction(candidateId);
-      if (!result.success) {
-        toast.error(result.error ?? "Could not delete candidate.");
-        return;
-      }
-      setConfirmOpen(false);
-      toast.success(`${name} moved to trash.`);
-      router.push("/dashboard/candidates");
-    });
+  async function deleteCandidate() {
+    const result = await trashCandidateAction(candidateId);
+    if (!result.success) {
+      toast.error(result.error ?? "Could not delete candidate.");
+      throw new Error("trash failed");
+    }
+    toast.success(`${name} moved to trash.`);
+    router.push("/dashboard/candidates");
   }
 
   return (
-    <Dialog open={confirmOpen} onOpenChange={setConfirmOpen}>
-      <DialogTrigger asChild>
-        {trigger ?? (
-          <Button
-            size="sm"
-            variant="outline"
-            className="text-destructive hover:text-destructive"
-          >
-            <Trash2 className="size-4" />
-            Delete
-          </Button>
-        )}
-      </DialogTrigger>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>Delete candidate?</DialogTitle>
-          <DialogDescription>
-            {name} will be moved to the trash. You can restore them later, or
-            delete permanently from the Trash tab on the candidates list.
-          </DialogDescription>
-        </DialogHeader>
-        <DialogFooter>
-          <Button
-            variant="outline"
-            onClick={() => setConfirmOpen(false)}
-            disabled={isPending}
-          >
-            Cancel
-          </Button>
-          <Button
-            variant="destructive"
-            onClick={deleteCandidate}
-            disabled={isPending}
-          >
-            {isPending ? "Deleting…" : "Delete candidate"}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+    <ConfirmDialog
+      open={open}
+      onOpenChange={onOpenChange}
+      tone="destructive"
+      title={`Delete ${name}?`}
+      description="They will move to the trash. You can restore them later, or delete them permanently from the Trash tab."
+      confirmLabel="Move to trash"
+      onConfirm={deleteCandidate}
+    />
   );
 }
+
+type StageActionKey = "schedule" | "evaluate" | "email";
 
 export function CandidateActionBar({
   candidate,
@@ -404,6 +364,7 @@ export function CandidateActionBar({
   inPool = false,
   variant = "full",
   aiConfigured = false,
+  identity,
 }: {
   candidate: EditableCandidate;
   name: string;
@@ -421,6 +382,8 @@ export function CandidateActionBar({
   inPool?: boolean;
   variant?: "full" | "compact";
   aiConfigured?: boolean;
+  /** Full variant only: the identity block rendered at the left of row 1. */
+  identity?: ReactNode;
 }) {
   const [selectedApplicationId, setSelectedApplicationId] = useState(
     applications[0]?.applicationId ?? null,
@@ -437,12 +400,87 @@ export function CandidateActionBar({
     moveTargets.find(
       (target) => target.applicationId === selectedApplication?.applicationId,
     ) ?? move;
+
+  const status = useApplicationStatus(name, selectedApplication);
+  const pool = useCandidatePool(candidate.id, inPool);
+  const [resumeOpen, setResumeOpen] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [rejectOpen, setRejectOpen] = useState(false);
+  const scheduleRef = useRef<HTMLSpanElement>(null);
+  const editRef = useRef<HTMLSpanElement>(null);
+  const emailRef = useRef<HTMLSpanElement>(null);
+  const evaluateRef = useRef<HTMLSpanElement>(null);
+  const moveRef = useRef<HTMLSpanElement>(null);
+  // Menu selections run after the menu has closed and returned focus, so a
+  // drawer or dialog they open is not immediately stolen back by the trigger.
+  const afterMenuClose = useRef<(() => void) | null>(null);
+  const queueAfterMenu = (fn: () => void) => {
+    afterMenuClose.current = fn;
+  };
+  const clickTrigger = (ref: RefObject<HTMLSpanElement | null>) =>
+    ref.current?.querySelector("button")?.click();
+
   const applicationSelector = (
     <DecisionApplicationSelector
       applications={applications}
       selectedApplicationId={selectedApplicationId}
       onChange={setSelectedApplicationId}
     />
+  );
+
+  const isHired = selectedApplication?.status === "hired";
+  const moveTarget = isHired ? null : selectedMoveTarget;
+
+  /**
+   * Which verb this stage is actually about (DESIGN.md , "Primary action
+   * changes with stage"). Advancing is always available via MoveStageButton.
+   *
+   *   Applied / Screening → Evaluate  (is this person any good?)
+   *   Interview           → Schedule  (get them in a room)
+   *   Offer / Hired       → Email     (talk terms)
+   */
+  const stage = (stageName ?? "").toLowerCase();
+  const stageActionKey: StageActionKey = stage.includes("interview")
+    ? "schedule"
+    : stage.includes("offer") || stage.includes("hire")
+      ? "email"
+      : selectedApplication
+        ? "evaluate"
+        : "email";
+
+  const triggerButton = (
+    key: StageActionKey,
+    Icon: ComponentType<{ className?: string }>,
+    label: string,
+    shortcut?: ShortcutId,
+  ) => (
+    <Button
+      size="sm"
+      variant={key === stageActionKey && key !== "evaluate" ? "soft" : "outline"}
+      className="max-sm:flex-1"
+      title={shortcut ? withHint(label, shortcut) : undefined}
+      aria-keyshortcuts={shortcut ? ariaKeys(shortcut) : undefined}
+    >
+      <Icon className="size-4" />
+      {label}
+    </Button>
+  );
+
+  const compactTrigger = (
+    Icon: ComponentType<{ className?: string }>,
+    label: string,
+    shortcut?: ShortcutId,
+  ) => (
+    <Button
+      size="sm"
+      variant="ghost"
+      className="hidden size-8 p-0 text-muted-foreground hover:text-foreground md:inline-flex"
+      title={shortcut ? withHint(label, shortcut) : label}
+      aria-keyshortcuts={shortcut ? ariaKeys(shortcut) : undefined}
+    >
+      <Icon className="size-4" />
+      <span className="sr-only">{label}</span>
+    </Button>
   );
 
   const email = (
@@ -455,22 +493,9 @@ export function CandidateActionBar({
       templateValues={emailTemplateValues}
       aiConfigured={aiConfigured}
       trigger={
-        variant === "compact" ? (
-          <Button
-            size="sm"
-            variant="ghost"
-            className="size-8 p-0 text-muted-foreground hover:text-foreground"
-            title="Email"
-          >
-            <Mail className="size-4" />
-            <span className="sr-only">Email</span>
-          </Button>
-        ) : (
-          <Button size="sm" variant="outline">
-            <Mail className="size-4" />
-            Email
-          </Button>
-        )
+        variant === "compact"
+          ? compactTrigger(Mail, "Email")
+          : triggerButton("email", Mail, "Email")
       }
     />
   );
@@ -485,22 +510,9 @@ export function CandidateActionBar({
       members={members}
       cal={cal}
       trigger={
-        variant === "compact" ? (
-          <Button
-            size="sm"
-            variant="ghost"
-            className="size-8 p-0 text-muted-foreground hover:text-foreground"
-            title="Schedule"
-          >
-            <CalendarClock className="size-4" />
-            <span className="sr-only">Schedule</span>
-          </Button>
-        ) : (
-          <Button size="sm" variant="outline">
-            <CalendarClock className="size-4" />
-            Schedule
-          </Button>
-        )
+        variant === "compact"
+          ? compactTrigger(CalendarClock, "Schedule", "candidate.schedule")
+          : triggerButton("schedule", CalendarClock, "Schedule", "candidate.schedule")
       }
     />
   );
@@ -512,202 +524,319 @@ export function CandidateActionBar({
       applicationId={selectedApplication.applicationId}
       stageName={selectedApplication.currentStageName ?? stageName}
       trigger={
-        variant === "compact" ? (
-          <Button
-            size="sm"
-            variant="ghost"
-            className="size-8 p-0 text-muted-foreground hover:text-foreground"
-            title="Evaluate"
-          >
-            <ClipboardCheck className="size-4" />
-            <span className="sr-only">Evaluate</span>
-          </Button>
-        ) : (
-          <Button size="sm" variant="outline">
-            <ClipboardCheck className="size-4" />
-            Evaluate
-          </Button>
-        )
+        variant === "compact"
+          ? compactTrigger(ClipboardCheck, "Evaluate", "candidate.evaluate")
+          : triggerButton("evaluate", ClipboardCheck, "Evaluate", "candidate.evaluate")
       }
     />
   ) : null;
 
-  const isHired = selectedApplication?.status === "hired";
+  const rejectDialog = selectedApplication ? (
+    <RejectDialog
+      open={rejectOpen}
+      onOpenChange={setRejectOpen}
+      targets={[
+        {
+          applicationId: selectedApplication.applicationId,
+          candidateName: name,
+          jobTitle: selectedApplication.jobTitle,
+        },
+      ]}
+    />
+  ) : null;
+
   const reject = isHired ? null : (
     <RejectButton
-      name={name}
-      application={selectedApplication}
       compact={variant === "compact"}
+      pending={status.isPending}
+      onReject={() => {
+        if (!selectedApplication) {
+          toast.error("This candidate has no application to update.");
+          return;
+        }
+        setRejectOpen(true);
+      }}
+      className={variant === "compact" ? undefined : "max-sm:flex-1"}
     />
   );
-  const moveTarget = isHired ? null : selectedMoveTarget;
+
+  /*
+   * Keyboard shortcuts and ⌘K actions. Only the full bar owns them (the sticky
+   * "compact" bar is a second copy of the same buttons), and every one drives
+   * the visible control: it clicks the same trigger or opens the same dialog,
+   * so disabled and pending states apply exactly as for a mouse click.
+   */
+  const owner = variant === "full";
+  const canMove = Boolean(moveTarget?.nextStage);
+  const canReject = !isHired && Boolean(selectedApplication) && !status.isPending;
+  const canEvaluate = Boolean(selectedApplication);
+  const openMove = () => clickTrigger(moveRef);
+  const openReject = () => setRejectOpen(true);
+  const openEvaluate = () => clickTrigger(evaluateRef);
+  const openSchedule = () => clickTrigger(scheduleRef);
+  const openEmail = () => clickTrigger(emailRef);
+
+  useShortcut("candidate.move", openMove, { enabled: owner && canMove });
+  useShortcut("candidate.reject", openReject, { enabled: owner && canReject });
+  useShortcut("candidate.evaluate", openEvaluate, { enabled: owner && canEvaluate });
+  useShortcut("candidate.schedule", openSchedule, { enabled: owner });
+
+  usePublishCandidateActions(
+    {
+      ...(canMove && moveTarget?.nextStage
+        ? { move: { label: `Move to ${moveTarget.nextStage.name}`, run: openMove } }
+        : {}),
+      ...(canReject ? { reject: { label: "Reject…", run: openReject } } : {}),
+      ...(canEvaluate ? { evaluate: { label: "Evaluate", run: openEvaluate } } : {}),
+      schedule: { label: "Schedule interview", run: openSchedule },
+      email: { label: "Email", run: openEmail },
+    },
+    owner,
+  );
 
   // ── Compact (sticky bar): fast-path actions only ──
   if (variant === "compact") {
     return (
       <div className="flex items-center gap-1.5">
-        {applicationSelector}
+        {applicationSelector ? (
+          <span className="hidden min-w-0 max-w-48 md:block">
+            {applicationSelector}
+          </span>
+        ) : null}
         {email}
         {schedule}
         {evaluate}
         {reject}
         <MoveStageButton target={moveTarget} />
+        {rejectDialog}
       </div>
     );
   }
 
   /*
-   * ── Full (decision row) ──
+   * ── Full: header row 1 (identity · contact actions · ⋯) + decision bar ──
    *
-   * This used to be ten controls in one row: Move, Email, Schedule, Evaluate,
-   * Status, Pool, Edit, Resume, Reject, Delete , separated by four vertical
-   * rules. That is not power, it is surface without choreography, and it makes
-   * every decision cost a scan (DESIGN.md , Candidate Focus: one primary action
-   * that changes with stage, reject secondary, the rest behind an overflow).
-   *
-   * Shape now: [primary advance] [the one action this stage calls for] · [Reject]
-   * · [⋯]. MoveStageButton is already stage-contextual , its label and target
-   * read "Move to Screening", "Move to Interview" , and `stageAction` picks the
-   * verb that matters at that stage.
+   * Row 1 right: Email, Schedule (≥sm) and the ⋯ menu that collects the rare
+   * actions (status, withdraw, pool, edit, resume, delete). Row 2 is the
+   * decision bar: job context pill, stage stepper, then Reject · the stage's
+   * contextual action · the primary "Move to <next stage>".
    */
-  const stageAction = stageContextualAction(stageName, {
-    schedule,
-    evaluate,
-    email,
-  });
+  const menuStatusItems = STATUS_ACTIONS.map(
+    ({ status: next, label, icon: Icon, confirm }) => (
+      <DropdownMenuItem
+        key={next}
+        onSelect={() => queueAfterMenu(() => status.change(next, label, confirm))}
+      >
+        <Icon className="size-4" />
+        {label}
+      </DropdownMenuItem>
+    ),
+  );
+
+  const resumeIsPdf = resumeUrl
+    ? isPdfResume(resumeUrl, resumeFileType, resumeFileName)
+    : false;
+
+  // Schedule / Email already sit in row 1 (emphasized for this stage); only
+  // Evaluate needs its own slot in the decision bar.
+  const contextual =
+    stageActionKey === "evaluate" ? (
+      <span ref={evaluateRef} className="contents">
+        {evaluate}
+      </span>
+    ) : null;
+  const stepperStage = selectedApplication?.currentStageName ?? stageName;
 
   return (
-    <div className="flex flex-wrap items-center gap-x-2 gap-y-2">
-      {/* Primary , advance the pipeline. Label and target follow the stage. */}
-      <MoveStageButton target={moveTarget} />
+    <div className="space-y-4">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0 flex-1">{identity}</div>
 
-      {/* The one action this stage actually calls for. */}
-      {stageAction}
+        <div className="flex shrink-0 items-center gap-2">
+          <span ref={emailRef} className="contents">
+            {email}
+          </span>
+          <span ref={scheduleRef} className="hidden sm:inline-flex">
+            {schedule}
+          </span>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                size="icon-sm"
+                variant="outline"
+                aria-label="More actions"
+                title="More actions"
+              >
+                <MoreHorizontal className="size-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent
+              align="end"
+              className="min-w-52"
+              onCloseAutoFocus={(event) => {
+                const action = afterMenuClose.current;
+                if (!action) return;
+                afterMenuClose.current = null;
+                event.preventDefault();
+                action();
+              }}
+            >
+              <DropdownMenuItem
+                className="sm:hidden"
+                onSelect={() => queueAfterMenu(() => clickTrigger(scheduleRef))}
+              >
+                <CalendarClock className="size-4" />
+                Schedule
+              </DropdownMenuItem>
+              {stageActionKey !== "evaluate" && selectedApplication ? (
+                <DropdownMenuItem
+                  onSelect={() => queueAfterMenu(() => clickTrigger(evaluateRef))}
+                >
+                  <ClipboardCheck className="size-4" />
+                  Evaluate
+                  <DropdownMenuShortcut aria-hidden>E</DropdownMenuShortcut>
+                </DropdownMenuItem>
+              ) : null}
+              {menuStatusItems}
+              {!isHired ? (
+                <DropdownMenuItem
+                  onSelect={() => queueAfterMenu(() => status.withdraw())}
+                >
+                  <UserMinus className="size-4" />
+                  Mark withdrawn
+                </DropdownMenuItem>
+              ) : null}
+              <DropdownMenuSeparator />
+              <DropdownMenuItem
+                disabled={pool.isPending}
+                onSelect={() => pool.toggle()}
+              >
+                <BookmarkSimpleIcon
+                  className={cn("size-4", pool.inPool && "fill-current")}
+                />
+                {pool.inPool ? "Remove from pool" : "Add to pool"}
+              </DropdownMenuItem>
+              <DropdownMenuItem onSelect={() => queueAfterMenu(() => clickTrigger(editRef))}>
+                <Pencil className="size-4" />
+                Edit candidate
+              </DropdownMenuItem>
+              {resumeUrl ? (
+                <>
+                  {resumeIsPdf ? (
+                    <DropdownMenuItem onSelect={() => queueAfterMenu(() => setResumeOpen(true))}>
+                      <FileText className="size-4" />
+                      View resume
+                    </DropdownMenuItem>
+                  ) : (
+                    <DropdownMenuItem asChild>
+                      <a href={resumeUrl} target="_blank" rel="noreferrer">
+                        <FileText className="size-4" />
+                        View resume
+                      </a>
+                    </DropdownMenuItem>
+                  )}
+                  <DropdownMenuItem asChild>
+                    <a href={resumeUrl} target="_blank" rel="noreferrer" download>
+                      <Download className="size-4" />
+                      Download resume
+                    </a>
+                  </DropdownMenuItem>
+                </>
+              ) : null}
+              {!isHired ? (
+                <>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem
+                    variant="destructive"
+                    onSelect={() => queueAfterMenu(() => setDeleteOpen(true))}
+                  >
+                    <Trash2 className="size-4" />
+                    Delete candidate
+                  </DropdownMenuItem>
+                </>
+              ) : null}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+      </div>
 
-      {/* Reject , grave, adjacent to the advance it opposes, never hidden in a
-          menu: an irreversible decision should cost a deliberate click, not a
-          hunt. */}
-      {reject}
+      {/* Decision bar */}
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-[var(--radius-inner)] bg-card-inset px-3 py-2.5">
+        <div className="flex min-w-0 items-center gap-3 max-sm:w-full">
+          <span className="sr-only">Decide for</span>
+          {applicationSelector}
+          <CandidateStageStepper stageName={stepperStage} className="hidden md:flex" />
+        </div>
 
-      {/* Everything rare , status, pool, edit, resume, delete , lives here. */}
-      <div className="ml-auto flex min-w-0 max-w-full flex-wrap items-center gap-1">
-        {applicationSelector}
-        <CandidateStatusMenu
-          name={name}
-          application={selectedApplication}
-        />
-        <CandidatePoolButton candidateId={candidate.id} inPool={inPool} />
+        {isHired ? (
+          <Badge variant="success" className="ml-auto">
+            Hired
+          </Badge>
+        ) : (
+          <div className="ml-auto flex items-center gap-2 max-sm:w-full">
+            {reject}
+            {contextual}
+            <span ref={moveRef} className="contents">
+              <MoveStageButton target={moveTarget} className="max-sm:flex-1" />
+            </span>
+          </div>
+        )}
+      </div>
+
+      {rejectDialog}
+
+      {/* Hidden triggers driven from the ⋯ menu and the E shortcut */}
+      {stageActionKey !== "evaluate" ? (
+        <span ref={evaluateRef} className="hidden">
+          {evaluate}
+        </span>
+      ) : null}
+      <span ref={editRef} className="hidden">
         <EditCandidateDrawer
           candidate={candidate}
           trigger={
-            <Button
-              size="sm"
-              variant="ghost"
-              className="size-8 p-0 text-muted-foreground hover:text-foreground"
-              title="Edit candidate"
-            >
+            <Button size="sm" variant="ghost" title="Edit candidate">
               <Pencil className="size-4" />
               <span className="sr-only">Edit</span>
             </Button>
           }
         />
-        {resumeUrl ? (
-          isPdfResume(resumeUrl, resumeFileType, resumeFileName) ? (
-            <Dialog>
-              <DialogTrigger asChild>
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  className="size-8 p-0 text-muted-foreground hover:text-foreground"
-                  title="View resume"
-                >
-                  <FileText className="size-4" />
-                  <span className="sr-only">Resume</span>
-                </Button>
-              </DialogTrigger>
-              <DialogContent className="sm:max-w-3xl">
-                <DialogHeader>
-                  <DialogTitle className="flex items-center justify-between gap-3 pr-8">
-                    <span className="truncate">
-                      {resumeFileName ?? `${name}'s resume`}
-                    </span>
-                    <Button asChild size="sm" variant="outline">
-                      <a href={resumeUrl} target="_blank" rel="noreferrer">
-                        <Download className="size-4" />
-                        Download
-                      </a>
-                    </Button>
-                  </DialogTitle>
-                  <DialogDescription className="sr-only">
-                    Resume preview for {name}
-                  </DialogDescription>
-                </DialogHeader>
-                <PdfViewer
-                  fileUrl={resumeUrl}
-                  fileName={resumeFileName}
-                  className="h-[75vh]"
-                />
-              </DialogContent>
-            </Dialog>
-          ) : (
-            <Button
-              asChild
-              size="sm"
-              variant="ghost"
-              className="size-8 p-0 text-muted-foreground hover:text-foreground"
-              title="View resume"
-            >
-              <a href={resumeUrl} target="_blank" rel="noreferrer">
-                <FileText className="size-4" />
-                <span className="sr-only">Resume</span>
-              </a>
-            </Button>
-          )
-        ) : null}
+      </span>
 
-        {/* Destructive , last in the row so it can't be hit by accident. */}
-        {!isHired ? (
-          <DeleteCandidateButton
-            candidateId={candidate.id}
-            name={name}
-            trigger={
-              <Button
-                size="sm"
-                variant="ghost"
-                className="size-8 p-0 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
-                title="Delete candidate"
-              >
-                <Trash2 className="size-4" />
-                <span className="sr-only">Delete</span>
-              </Button>
-            }
-          />
-        ) : null}
-      </div>
+      {resumeUrl && resumeIsPdf ? (
+        <Dialog open={resumeOpen} onOpenChange={setResumeOpen}>
+          <DialogContent className="sm:max-w-3xl">
+            <DialogHeader>
+              <DialogTitle className="flex items-center justify-between gap-3 pr-8">
+                <span className="truncate">
+                  {resumeFileName ?? `${name}'s resume`}
+                </span>
+                <Button asChild size="sm" variant="outline">
+                  <a href={resumeUrl} target="_blank" rel="noreferrer">
+                    <Download className="size-4" />
+                    Download
+                  </a>
+                </Button>
+              </DialogTitle>
+              <DialogDescription className="sr-only">
+                Resume preview for {name}
+              </DialogDescription>
+            </DialogHeader>
+            <PdfViewer
+              fileUrl={resumeUrl}
+              fileName={resumeFileName}
+              className="h-[75vh]"
+            />
+          </DialogContent>
+        </Dialog>
+      ) : null}
+
+      <DeleteCandidateDialog
+        open={deleteOpen}
+        onOpenChange={setDeleteOpen}
+        candidateId={candidate.id}
+        name={name}
+      />
     </div>
   );
-}
-
-/**
- * Which verb this stage is actually about (DESIGN.md , "Primary action changes
- * with stage"). Advancing is always available via MoveStageButton; this picks
- * the one companion action worth a full button here, instead of showing every
- * weapon at every stage.
- *
- *   Applied / Screening → Evaluate  (is this person any good?)
- *   Interview           → Schedule  (get them in a room)
- *   Offer / Hired       → Email     (talk terms)
- */
-function stageContextualAction(
-  stageName: string | null,
-  actions: {
-    schedule: React.ReactNode;
-    evaluate: React.ReactNode;
-    email: React.ReactNode;
-  },
-) {
-  const stage = (stageName ?? "").toLowerCase();
-  if (stage.includes("interview")) return actions.schedule;
-  if (stage.includes("offer") || stage.includes("hire")) return actions.email;
-  return actions.evaluate ?? actions.email;
 }

@@ -1,10 +1,10 @@
 import { Briefcase } from "lucide-react";
 
 import type { WorkspaceBoardBranding } from "@/features/workspaces/board";
-import { CareerPositions } from "@/features/career-page/CareerPositions";
-import { CareerTestimonials } from "@/features/career-page/CareerTestimonials";
-import { CareerFaq } from "@/features/career-page/CareerFaq";
-import { CareerGallery } from "@/features/career-page/CareerGallery";
+import { PlayfulPositions } from "@/features/career-page/templates/playful/PlayfulPositions";
+import { PlayfulTestimonials } from "@/features/career-page/templates/playful/PlayfulTestimonials";
+import { PlayfulFaq } from "@/features/career-page/templates/playful/PlayfulFaq";
+import { PlayfulGallery } from "@/features/career-page/templates/playful/PlayfulGallery";
 import { CareerFooter } from "@/features/career-page/CareerFooter";
 import { RichBody } from "@/features/career-page/RichBody";
 import { careerIcon } from "@/features/career-page/icons";
@@ -191,7 +191,7 @@ export function PlayfulTemplate({
       {/* Gallery */}
       {config.gallery.enabled && config.gallery.images.length > 0 && (
         <section className="mx-auto mt-14 max-w-6xl px-6">
-          <CareerGallery gallery={config.gallery} />
+          <PlayfulGallery gallery={config.gallery} />
         </section>
       )}
 
@@ -247,7 +247,7 @@ export function PlayfulTemplate({
           {config.positions.title}
         </h2>
         <div className="mt-7">
-          <CareerPositions
+          <PlayfulPositions
             jobs={jobs}
             boardRoot={boardRoot}
             accent={accent}
@@ -270,7 +270,7 @@ export function PlayfulTemplate({
             {config.testimonials.title}
           </h2>
           <div className="mt-8">
-            <CareerTestimonials
+            <PlayfulTestimonials
               items={config.testimonials.items}
               accent={accent}
             />
@@ -285,7 +285,7 @@ export function PlayfulTemplate({
             {config.faq.title}
           </h2>
           <div className="mt-8">
-            <CareerFaq items={config.faq.items} accent={accent} />
+            <PlayfulFaq items={config.faq.items} accent={accent} />
           </div>
         </section>
       )}

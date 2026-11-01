@@ -80,8 +80,9 @@ describe.skipIf(!runPipelineIntegration)("dashboard widgets: permission and scop
     await expect(getDashboardWidgetAccess()).resolves.toEqual({
       reviewCandidates: false,
       todayInterviews: false,
+      scheduling: false,
       pipeline: false,
-      inbox: false,
+      approvals: false,
       tasks: false,
       performance: false,
     });
@@ -90,8 +91,9 @@ describe.skipIf(!runPipelineIntegration)("dashboard widgets: permission and scop
     await expect(getDashboardWidgetAccess()).resolves.toEqual({
       reviewCandidates: true,
       todayInterviews: true,
+      scheduling: false,
       pipeline: true,
-      inbox: true,
+      approvals: true,
       tasks: true,
       // Canonical metrics are workspace-wide, so a restricted caller never sees them.
       performance: false,
@@ -103,26 +105,32 @@ describe.skipIf(!runPipelineIntegration)("dashboard widgets: permission and scop
 
   it("review widget: unauthorized gets nothing, scoped sees in-scope applications only", async () => {
     actAs("plain");
-    await expect(getCandidatesNeedingReview()).resolves.toEqual([]);
+    await expect(getCandidatesNeedingReview()).resolves.toEqual({
+      total: 0,
+      waitingOverWeek: 0,
+      items: [],
+    });
 
     actAs("scoped");
     const scoped = await getCandidatesNeedingReview();
-    expect(scoped.map((row) => row.candidateId)).toEqual([fx.candidateA]);
+    expect(scoped.items.map((row) => row.candidateId)).toEqual([fx.candidateA]);
+    // The count is the real total, not the number of rows shown.
+    expect(scoped.total).toBe(scoped.items.length);
 
     actAs("full");
-    const full = (await getCandidatesNeedingReview()).map((row) => row.candidateId);
+    const full = (await getCandidatesNeedingReview()).items.map((row) => row.candidateId);
     expect(full).toEqual(expect.arrayContaining([fx.candidateA, fx.candidateB]));
   });
 
   it("interviews widget: unauthorized gets nothing, scoped sees interviews on assigned jobs", async () => {
     actAs("plain");
-    await expect(getTodayInterviews()).resolves.toEqual([]);
+    await expect(getTodayInterviews()).resolves.toMatchObject({ total: 0, items: [] });
 
     actAs("scoped");
-    await expect(getTodayInterviews()).resolves.toHaveLength(1);
+    await expect(getTodayInterviews()).resolves.toMatchObject({ total: 1 });
 
     actAs("full");
-    await expect(getTodayInterviews()).resolves.toHaveLength(2);
+    await expect(getTodayInterviews()).resolves.toMatchObject({ total: 2 });
   });
 
   it("pipeline widget: unauthorized gets an empty overview, scoped sees assigned open jobs only", async () => {
@@ -175,32 +183,30 @@ describe.skipIf(!runPipelineIntegration)("dashboard widgets: permission and scop
     expect(names).toContain("Rejected");
   });
 
-  it("inbox: unauthorized gets nothing, scoped sees in-scope items, draft approvals need the job in scope", async () => {
+  it("decisions waiting: unauthorized gets nothing, draft approvals need the job in scope", async () => {
     actAs("plain");
-    await expect(getInbox()).resolves.toEqual([]);
+    await expect(getInbox()).resolves.toEqual({ total: 0, items: [] });
 
     actAs("scoped");
-    const scoped = (await getInbox()).map((item) => item.title);
-    expect(scoped).toContain(`Send feedback for ${fx.names.candidateA}`);
-    expect(scoped.join("|")).not.toContain(fx.names.candidateB);
-    expect(scoped.join("|")).not.toContain(fx.names.candidateAB);
-    const scopedApprovals = (await getInbox()).map((item) => item.id);
-    expect(scopedApprovals).not.toContain(`${fx.jobDraft}-approve`);
+    const scoped = await getInbox();
+    expect(scoped.items.map((item) => item.id)).not.toContain(fx.jobDraft);
 
     actAs("full");
     const full = await getInbox();
-    expect(full.map((item) => item.title).join("|")).toContain(fx.names.candidateB);
-    expect(full.map((item) => item.id)).toContain(`${fx.jobDraft}-approve`);
+    expect(full.items.map((item) => item.id)).toContain(fx.jobDraft);
+    expect(full.total).toBeGreaterThanOrEqual(full.items.length);
   });
 
   it("tasks widget: unauthorized gets nothing, the owner sees their own task", async () => {
     actAs("plain");
-    await expect(getMyDashboardTasks()).resolves.toEqual([]);
+    await expect(getMyDashboardTasks()).resolves.toEqual({ total: 0, dueNow: 0, items: [] });
 
     actAs("scoped");
-    await expect(getMyDashboardTasks()).resolves.toEqual(
+    const mine = await getMyDashboardTasks();
+    expect(mine.items).toEqual(
       expect.arrayContaining([expect.objectContaining({ title: taskTitle })]),
     );
+    expect(mine.total).toBeGreaterThanOrEqual(mine.items.length);
   });
 
   it("hiring performance: unauthorized and restricted callers are refused, unrestricted callers see it", async () => {

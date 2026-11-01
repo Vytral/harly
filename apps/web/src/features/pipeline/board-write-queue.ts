@@ -67,6 +67,7 @@ export async function runBoardWrite(operation: BoardOperation): Promise<WriteOut
           applicationIds: operation.applicationIds,
           workspaceId: operation.workspaceId,
           status: operation.status,
+          ...(operation.rejection ? { rejection: operation.rejection } : {}),
         }),
       );
     }

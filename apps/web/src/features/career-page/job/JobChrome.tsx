@@ -2,9 +2,9 @@ import type { CSSProperties } from "react";
 
 import type { WorkspaceBoardBranding } from "@/features/workspaces/board";
 
-import { readableInk } from "../color";
 import type { CareerPageConfig, CareerTemplate } from "../config";
 import { ThemeWrapper } from "../ThemeWrapper";
+import { careerTheme } from "../theme";
 import { JobShell, type JobShellVariant } from "./JobShell";
 import type { JobLike } from "./jobMeta";
 
@@ -38,13 +38,16 @@ export function JobChrome({
   portalEnabled?: boolean;
   children: React.ReactNode;
 }) {
-  const accent = config.theme.accent ?? workspace.primaryColor;
+  const theme = careerTheme(config, workspace.primaryColor);
 
-  const ink = readableInk(accent);
+  // `--board-primary*` feed the shared form and buttons (apply form, uploads);
+  // the `--career-*` set feeds links, focus rings and tints. Text on the accent
+  // fill is always the readable ink (>= 4.5:1).
   const vars = {
-    "--board-primary": accent,
-    "--board-primary-foreground": ink,
-    "--board-primary-contrast": ink,
+    ...theme.vars,
+    "--board-primary": theme.accent,
+    "--board-primary-foreground": theme.onAccent,
+    "--board-primary-contrast": theme.onAccent,
   } as CSSProperties;
 
   return (

@@ -1,20 +1,15 @@
 "use client";
 
-import { useCallback, useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useConfirm } from "@/components/ui/confirm-dialog";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { KanbanSquare, List, Plus, Search } from "lucide-react";
 import { toast } from "@/lib/notification-island/toast";
 
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { FilterPill } from "@/components/ui/FilterPill";
 import { PageTitle } from "@/components/dashboard/PageTitleContext";
 import { deleteTask, updateTask } from "./actions";
 import { CreateTaskDialog } from "./CreateTaskDialog";
@@ -23,8 +18,18 @@ import { TaskBoard } from "./TaskBoard";
 import { TaskList } from "./TaskList";
 import { type TaskHandlers } from "./task-ui";
 import { taskDueState, type TaskItem, type TaskStatus } from "./shared";
+import {
+  FILTER_ALL,
+  matchesDue,
+  matchesStatus,
+  OPEN_STATUSES,
+  parseTaskFilters,
+  withTaskFilter,
+  type TaskFilters,
+} from "./url-filters";
 import { TASK_PRIORITIES, TASK_PRIORITY_LABELS, TASK_STATUSES, TASK_STATUS_LABELS } from "./shared";
 import type { TaskContextOptions } from "./TaskLinkFields";
+import { useOpenFromQuery } from "@/components/dashboard/use-open-from-query";
 
 type Member = { id: string; name: string; image: string | null };
 type View = "list" | "board";
@@ -38,10 +43,10 @@ const NEXT_STATUS: Record<TaskStatus, TaskStatus> = {
 
 function SummaryChip({ count, label, tone }: { count: number; label: string; tone: string }) {
   return (
-    <span className="inline-flex items-center gap-1.5 rounded-full border bg-card px-2.5 py-1 text-xs font-medium">
+    <span className="inline-flex items-center gap-1.5 rounded-full bg-pure-snow px-2.5 py-1 text-xs font-medium shadow-[var(--shadow-card)]">
       <span className={cn("size-1.5 rounded-full", tone)} />
       <span className="tabular-nums">{count}</span>
-      <span className="text-muted-foreground">{label}</span>
+      <span className="text-soft-ink">{label}</span>
     </span>
   );
 }
@@ -50,9 +55,12 @@ export function TasksView({
   tasks: initialTasks,
   members,
   contextOptions,
+  currentUserId,
 }: {
   tasks: TaskItem[];
   members: Member[];
+  /** The viewer, so `?owner=me` can be resolved. */
+  currentUserId: string;
   counts: Record<string, number>;
   contextOptions: TaskContextOptions;
 }) {
@@ -64,15 +72,48 @@ export function TasksView({
   const [removed, setRemoved] = useState<Set<string>>(() => new Set());
   const [pending, setPending] = useState<Set<string>>(() => new Set());
   const [view, setView] = useState<View>("list");
-  const [createOpen, setCreateOpen] = useState(false);
+  // `?new=1` (header "+" menu) opens the create sheet on arrival.
+  const [createOpen, setCreateOpen] = useOpenFromQuery("new");
   const [createStatus, setCreateStatus] = useState<TaskStatus>("pending");
-  const [editingTask, setEditingTask] = useState<TaskItem | null>(null);
+  const searchParams = useSearchParams();
+  // `?task=<id>` (Home's task rows) opens that task for editing on arrival.
+  const taskParam = searchParams.get("task");
+  const [editingTask, setEditingTask] = useState<TaskItem | null>(
+    () => initialTasks.find((t) => t.id === taskParam) ?? null,
+  );
+  const [seenTaskParam, setSeenTaskParam] = useState(taskParam);
+  if (taskParam !== seenTaskParam) {
+    setSeenTaskParam(taskParam);
+    const requested = initialTasks.find((t) => t.id === taskParam);
+    if (requested) setEditingTask(requested);
+  }
   const [query, setQuery] = useState("");
-  const [assignee, setAssignee] = useState("all");
-  const [priority, setPriority] = useState("all");
-  const [status, setStatus] = useState("all");
-  const [due, setDue] = useState("all");
   const router = useRouter();
+
+  // Filters live in the URL (single source of truth), so a link lands on a
+  // filtered list and a reload keeps it. Writes use the History API, which
+  // Next syncs into useSearchParams without re-fetching the page.
+  const { assignee, priority, status, due } = useMemo(
+    () => parseTaskFilters(searchParams, currentUserId),
+    [searchParams, currentUserId],
+  );
+  const setFilter = useCallback(
+    (key: keyof TaskFilters, value: string) => {
+      const next = withTaskFilter(new URLSearchParams(window.location.search), key, value, currentUserId);
+      const qs = next.toString();
+      window.history.replaceState(null, "", qs ? `?${qs}` : window.location.pathname);
+    },
+    [currentUserId],
+  );
+
+  useEffect(() => {
+    if (!taskParam) return;
+    const next = new URLSearchParams(window.location.search);
+    next.delete("task");
+    const qs = next.toString();
+    window.history.replaceState(null, "", qs ? `?${qs}` : window.location.pathname);
+  }, [taskParam]);
+  const confirm = useConfirm();
 
   const tasks = useMemo(
     () =>
@@ -118,7 +159,15 @@ export function TasksView({
 
   const runRemove = useCallback(
     async (id: string) => {
-      if (!window.confirm("Archive this task? It will leave the active task list.")) return;
+      if (
+        !(await confirm({
+          tone: "warning",
+          title: "Archive this task?",
+          description: "It will leave the active task list.",
+          confirmLabel: "Archive task",
+        }))
+      )
+        return;
       setPending((p) => new Set(p).add(id));
       setRemoved((r) => new Set(r).add(id));
       const res = await deleteTask(id);
@@ -134,7 +183,7 @@ export function TasksView({
         router.refresh();
       }
     },
-    [router, settle],
+    [confirm, router, settle],
   );
 
   const handlers = useMemo<TaskHandlers>(
@@ -149,19 +198,16 @@ export function TasksView({
       },
       edit: (task) => setEditingTask(task),
     }),
-    [pending, runStatus, runRemove],
+    [pending, runStatus, runRemove, setCreateOpen],
   );
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     return tasks.filter((t) => {
-      if (assignee !== "all" && t.ownerId !== assignee) return false;
-      if (priority !== "all" && t.priority !== priority) return false;
-      if (status !== "all" && t.status !== status) return false;
-      const dueState = taskDueState(t.dueDate);
-      if (due === "due" && !dueState) return false;
-      if (due === "overdue" && dueState !== "overdue") return false;
-      if (due === "no_due" && t.dueDate) return false;
+      if (assignee !== FILTER_ALL && t.ownerId !== assignee) return false;
+      if (priority !== FILTER_ALL && t.priority !== priority) return false;
+      if (!matchesStatus(t, status)) return false;
+      if (!matchesDue(t, due)) return false;
       if (!q) return true;
       return [t.title, t.candidateName, t.jobTitle, t.ownerName]
         .filter(Boolean)
@@ -187,79 +233,67 @@ export function TasksView({
     <div className="space-y-5">
       <PageTitle title="Tasks" />
 
-      <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
-        <div className="relative sm:w-60">
-          <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+      <div className="flex flex-wrap items-center gap-2">
+        <div className="relative w-full sm:w-60">
+          <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-quiet-mist" />
           <Input
             type="search"
             aria-label="Search tasks"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Search tasks…"
-            className="w-full pl-9"
+            className="w-full rounded-full pl-9"
           />
         </div>
 
-        <Select value={assignee} onValueChange={setAssignee}>
-          <SelectTrigger aria-label="Filter by assignee" className="w-full sm:w-44">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All assignees</SelectItem>
-            {members.map((m) => (
-              <SelectItem key={m.id} value={m.id}>
-                {m.name}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-
-        <Select value={priority} onValueChange={setPriority}>
-          <SelectTrigger aria-label="Filter by priority" className="w-full sm:w-36">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All priorities</SelectItem>
-            {TASK_PRIORITIES.map((p) => (
-              <SelectItem key={p} value={p}>
-                {TASK_PRIORITY_LABELS[p]}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-
-        <Select value={status} onValueChange={setStatus}>
-          <SelectTrigger aria-label="Filter by status" className="w-full sm:w-36">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All statuses</SelectItem>
-            {TASK_STATUSES.map((item) => (
-              <SelectItem key={item} value={item}>{TASK_STATUS_LABELS[item]}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-
-        <Select value={due} onValueChange={setDue}>
-          <SelectTrigger aria-label="Filter by due date" className="w-full sm:w-36">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All due dates</SelectItem>
-            <SelectItem value="due">With due date</SelectItem>
-            <SelectItem value="overdue">Overdue</SelectItem>
-            <SelectItem value="no_due">No due date</SelectItem>
-          </SelectContent>
-        </Select>
+        <FilterPill
+          label="Assignee"
+          value={assignee}
+          onChange={(v) => setFilter("assignee", v)}
+          options={["all", ...members.map((m) => m.id)]}
+          labelMap={{ all: "All", ...Object.fromEntries(members.map((m) => [m.id, m.name])) }}
+          allValue="all"
+        />
+        <FilterPill
+          label="Priority"
+          value={priority}
+          onChange={(v) => setFilter("priority", v)}
+          options={["all", ...TASK_PRIORITIES]}
+          labelMap={{ all: "All", ...TASK_PRIORITY_LABELS }}
+          allValue="all"
+        />
+        <FilterPill
+          label="Status"
+          value={status}
+          onChange={(v) => setFilter("status", v)}
+          options={["all", OPEN_STATUSES, ...TASK_STATUSES]}
+          labelMap={{ all: "All", [OPEN_STATUSES]: "Open", ...TASK_STATUS_LABELS }}
+          allValue="all"
+        />
+        <FilterPill
+          label="Due"
+          value={due}
+          onChange={(v) => setFilter("due", v)}
+          options={["all", "overdue,today", "overdue", "today", "due", "no_due"]}
+          labelMap={{
+            all: "All",
+            "overdue,today": "Overdue or today",
+            overdue: "Overdue",
+            today: "Due today",
+            due: "With due date",
+            no_due: "No due date",
+          }}
+          allValue="all"
+        />
 
         <div className="flex items-center gap-1.5 sm:ml-auto">
           <SummaryChip count={summary.open} label="open" tone="bg-slate-info" />
           <SummaryChip count={summary.overdue} label="overdue" tone="bg-rust" />
-          <SummaryChip count={summary.done} label="done" tone="bg-primary" />
+          <SummaryChip count={summary.done} label="done" tone="bg-success-olive" />
         </div>
 
         <div className="flex items-center gap-2">
-          <div className="inline-flex rounded-full border bg-card p-0.5">
+          <div className="inline-flex rounded-full bg-soft-kraft p-0.5">
             {([
               { key: "list", icon: List, label: "List view" },
               { key: "board", icon: KanbanSquare, label: "Board view" },
@@ -272,7 +306,7 @@ export function TasksView({
                 aria-pressed={view === key}
                 className={cn(
                   "rounded-full p-1.5 transition",
-                  view === key ? "bg-muted text-foreground" : "text-muted-foreground hover:text-foreground",
+                  view === key ? "bg-pure-snow text-near-ink" : "text-soft-ink hover:text-near-ink",
                 )}
               >
                 <Icon className="size-4" />
@@ -280,13 +314,12 @@ export function TasksView({
             ))}
           </div>
           <Button
-            size="sm"
             onClick={() => {
               setCreateStatus("pending");
               setCreateOpen(true);
             }}
           >
-            <Plus className="mr-1.5 size-4" />
+            <Plus className="size-4" />
             New task
           </Button>
         </div>
@@ -298,10 +331,10 @@ export function TasksView({
           handlers={handlers}
           filtersActive={
             query.trim() !== "" ||
-            assignee !== "all" ||
-            priority !== "all" ||
-            status !== "all" ||
-            due !== "all"
+            assignee !== FILTER_ALL ||
+            priority !== FILTER_ALL ||
+            status !== FILTER_ALL ||
+            due !== FILTER_ALL
           }
         />
       ) : (

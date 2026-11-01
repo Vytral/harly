@@ -2,10 +2,10 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { UserRound } from "lucide-react";
 
 import { toast } from "@/lib/notification-island/toast";
 import { Card } from "@/components/ui/card";
+import { SettingRow } from "@/components/ui/setting-row";
 import { Switch } from "@/components/ui/switch";
 import { saveGravatarEnabledAction } from "@/features/workspaces/gravatar-settings-actions";
 
@@ -41,27 +41,23 @@ export function GravatarSettingsCard({ enabled }: { enabled: boolean }) {
   }
 
   return (
-    <Card className="gap-0 p-5">
-      <div className="flex items-start justify-between gap-3">
-        <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-muted/70 text-foreground/80">
-          <UserRound className="size-5" strokeWidth={1.5} />
-        </span>
-        <Switch
-          checked={optimistic}
-          onCheckedChange={toggle}
-          disabled={pending}
-          aria-label="Show profile pictures from Gravatar"
-          className="mt-0.5"
-        />
-      </div>
-      <h3 className="mt-3.5 text-sm font-semibold tracking-tight">
-        Gravatar profile pictures
-      </h3>
-      <p className="mt-1 text-sm text-muted-foreground">
-        Show profile pictures from Gravatar. This sends a hash of each
-        candidate&apos;s email address to gravatar.com. Candidates without an
-        uploaded photo show initials when this is off.
-      </p>
+    <Card className="gap-0 p-0">
+      <SettingRow
+        htmlFor="gravatar-toggle"
+        descriptionId="gravatar-toggle-desc"
+        align="start"
+        title="Gravatar profile pictures"
+        description="Show profile pictures from Gravatar. This sends a hash of each candidate's email address to gravatar.com. Candidates without an uploaded photo show initials when this is off."
+        control={
+          <Switch
+            id="gravatar-toggle"
+            aria-describedby="gravatar-toggle-desc"
+            checked={optimistic}
+            onCheckedChange={toggle}
+            disabled={pending}
+          />
+        }
+      />
     </Card>
   );
 }

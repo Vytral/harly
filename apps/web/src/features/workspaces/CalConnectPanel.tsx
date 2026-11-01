@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "@/lib/notification-island/toast";
+import { copyText } from "@/lib/utils";
 
 import {
   disableCalAction,
@@ -31,6 +32,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { SettingRow } from "@/components/ui/setting-row";
 import { Switch } from "@/components/ui/switch";
 
 type TestState =
@@ -114,7 +116,7 @@ export function CalConnectPanel({
                   : "Connect"}
               </Button>
               {status.hasApiKey ? (
-                <label className="flex items-center gap-2 rounded-lg border bg-card px-3 py-2 text-sm">
+                <label className="flex h-9 items-center gap-2 rounded-[var(--radius-btn)] border border-mist-border bg-pure-snow px-3 text-sm">
                   <Switch
                     checked={status.enabled}
                     disabled={togglePending}
@@ -278,7 +280,7 @@ function CalConnectForm({
 
   function copyWebhook() {
     if (!webhookUrl) return;
-    void navigator.clipboard.writeText(webhookUrl);
+    void copyText(webhookUrl);
     toast.success("Webhook URL copied");
   }
 
@@ -396,15 +398,13 @@ function CalConnectForm({
           </div>
         ) : null}
 
-        <div className="flex items-center justify-between rounded-xl border px-3 py-2.5">
-          <div>
-            <p className="text-sm font-medium">Enable Cal.com</p>
-            <p className="text-xs text-muted-foreground">
-              When off, scheduling stays manual.
-            </p>
-          </div>
-          <Switch checked={enabled} onCheckedChange={setEnabled} />
-        </div>
+        <SettingRow
+          htmlFor="calconnectpanel-switch-1"
+          className="rounded-[var(--radius-inner)] border border-hairline px-4 py-3"
+          title={<>Enable Cal.com</>}
+          description={<>When off, scheduling stays manual.</>}
+          control={<Switch id="calconnectpanel-switch-1" checked={enabled} onCheckedChange={setEnabled} />}
+        />
 
         {test.kind === "error" ? (
           <div className="flex items-start gap-2 rounded-xl border border-clay/30 bg-clay/5 px-3 py-2 text-sm text-clay">

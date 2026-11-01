@@ -6,7 +6,14 @@ import { toast } from "@/lib/notification-island/toast";
 
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetFooter,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { InterviewerSelect } from "@/features/candidates/InterviewerSelect";
@@ -18,7 +25,7 @@ import { TASK_PRIORITIES, TASK_PRIORITY_LABELS, TASK_STATUS_LABELS } from "./sha
 type Member = { id: string; name: string; image: string | null };
 
 const PRIORITY_COLOR: Record<TaskPriority, string> = {
-  low: "border-border text-muted-foreground",
+  low: "border-hairline text-soft-ink",
   medium: "border-status-quiet-ink/40 text-status-quiet-ink",
   high: "border-warning/40 text-warning",
   urgent: "border-destructive/40 text-destructive",
@@ -96,24 +103,25 @@ export function CreateTaskDialog({
   }
 
   return (
-    <Dialog
+    <Sheet
       open={open}
       onOpenChange={(v) => {
         if (!v) reset();
         onOpenChange(v);
       }}
     >
-      <DialogContent className="sm:max-w-lg">
-        <DialogHeader>
-          <DialogTitle>New task</DialogTitle>
-          <DialogDescription>
+      <SheetContent className="sm:max-w-md">
+        <SheetHeader>
+          <SheetTitle>New task</SheetTitle>
+          <SheetDescription>
             {defaultStatus === "pending"
               ? "Add a task with an assignee, priority, and due date."
               : `Adds to "${TASK_STATUS_LABELS[defaultStatus]}". Set an assignee, priority, and due date.`}
-          </DialogDescription>
-        </DialogHeader>
+          </SheetDescription>
+        </SheetHeader>
 
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form onSubmit={handleSubmit} className="flex min-h-0 flex-1 flex-col">
+          <div className="flex-1 space-y-4 overflow-y-auto px-5 pb-5">
           <div>
             <label htmlFor="new-task-title" className="sr-only">Task title</label>
             <Input
@@ -149,7 +157,7 @@ export function CreateTaskDialog({
             </div>
 
             <div className="flex-1">
-              <label htmlFor="new-task-due-date" className="mb-1.5 block text-xs font-medium text-muted-foreground">
+              <label htmlFor="new-task-due-date" className="mb-1.5 block text-[12.5px] font-medium text-soft-ink">
                 <Calendar className="mr-1 inline size-3" />
                 Due date
               </label>
@@ -166,7 +174,7 @@ export function CreateTaskDialog({
           <TaskLinkFields value={links} options={contextOptions} onChange={setLinks} />
 
           <div>
-            <label className="mb-1.5 block text-xs font-medium text-muted-foreground">
+            <label className="mb-1.5 block text-[12.5px] font-medium text-soft-ink">
               <Flag className="mr-1 inline size-3" />
               Priority
             </label>
@@ -178,10 +186,10 @@ export function CreateTaskDialog({
                   aria-pressed={priority === p}
                   onClick={() => setPriority(p)}
                   className={cn(
-                    "rounded-md border px-3 py-1.5 text-xs font-medium capitalize transition-colors",
+                    "rounded-[var(--radius-btn)] border px-3 py-1.5 text-xs font-medium capitalize transition-colors",
                     priority === p
-                      ? cn(PRIORITY_COLOR[p], "bg-card shadow-sm")
-                      : "border-transparent text-muted-foreground hover:text-foreground",
+                      ? cn(PRIORITY_COLOR[p], "bg-pure-snow")
+                      : "border-transparent bg-card-inset text-soft-ink hover:text-near-ink",
                   )}
                 >
                   {TASK_PRIORITY_LABELS[p]}
@@ -194,24 +202,26 @@ export function CreateTaskDialog({
             <p role="alert" className="text-sm text-destructive">{error}</p>
           )}
 
-          <DialogFooter>
+          </div>
+
+          <SheetFooter>
             <Button
               type="button"
-              variant="outline"
+              variant="ghost"
               onClick={() => onOpenChange(false)}
               disabled={pending}
             >
-              Cancel
+              Discard
             </Button>
             <Button type="submit" disabled={pending || !title.trim()}>
               {pending ? (
                 <Loader2 className="mr-1.5 size-4 animate-spin" />
               ) : null}
-              Create task
+              Save task
             </Button>
-          </DialogFooter>
+          </SheetFooter>
         </form>
-      </DialogContent>
-    </Dialog>
+      </SheetContent>
+    </Sheet>
   );
 }

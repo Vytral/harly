@@ -9,6 +9,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 
+import { cn } from "@/lib/utils";
 import { UserAvatar } from "@/components/ui/UserAvatar";
 import { PersonLink } from "@/components/people/PersonLink";
 import {
@@ -31,7 +32,7 @@ export const STATUS_ICON: Record<TaskStatus, LucideIcon> = {
 export const STATUS_COLOR: Record<TaskStatus, string> = {
   pending: "text-muted-foreground",
   in_progress: "text-clay",
-  completed: "text-primary",
+  completed: "text-success-olive",
   canceled: "text-muted-foreground",
 };
 
@@ -55,7 +56,7 @@ export const PRIORITY: Record<
   TaskPriority,
   { dot: string; text: string; spine: string }
 > = {
-  low: { dot: "bg-muted-foreground/40", text: "text-muted-foreground", spine: "transparent" },
+  low: { dot: "bg-quiet-mist", text: "text-soft-ink", spine: "transparent" },
   medium: { dot: "bg-slate-info", text: "text-slate-info", spine: "var(--slate-info)" },
   high: { dot: "bg-clay", text: "text-clay", spine: "var(--clay)" },
   urgent: { dot: "bg-rust", text: "text-rust", spine: "var(--rust)" },
@@ -108,11 +109,11 @@ export const URGENCY_LABEL: Record<UrgencyKey, string> = {
 };
 
 export const URGENCY_DOT: Record<UrgencyKey, string> = {
-  overdue: "bg-rust",
-  today: "bg-clay",
+  overdue: "bg-danger-rust",
+  today: "bg-warning-clay",
   week: "bg-slate-info",
-  later: "bg-muted-foreground/40",
-  none: "bg-muted-foreground/30",
+  later: "bg-quiet-mist",
+  none: "bg-quiet-mist/60",
 };
 
 // ── small shared pieces ──────────────────────────────────────────────────────
@@ -120,20 +121,30 @@ export const URGENCY_DOT: Record<UrgencyKey, string> = {
 export function RelativeDate({ iso }: { iso: string | null }) {
   // Reading the clock is impure, so it lives in useMemo (not the render body).
   const view = useMemo(() => {
-    if (!iso) return { label: "No date", cls: "text-muted-foreground" };
+    if (!iso) return { label: "No date", cls: "text-quiet-mist", dot: "bg-quiet-mist/60" };
     const dateKey = taskDateKey(iso);
-    if (!dateKey) return { label: "No date", cls: "text-muted-foreground" };
+    if (!dateKey) return { label: "No date", cls: "text-quiet-mist", dot: "bg-quiet-mist/60" };
     const d = new Date(`${dateKey}T12:00:00`);
     const label = new Intl.DateTimeFormat("en", { month: "short", day: "numeric" }).format(d);
     const today = currentTaskDateKey();
-    if (dateKey < today) return { label, cls: "font-medium text-rust" };
-    if (dateKey === today) return { label, cls: "font-medium text-clay" };
+    if (dateKey < today) return { label, cls: "text-danger-rust", dot: "bg-danger-rust" };
+    if (dateKey === today) return { label, cls: "text-warning-clay", dot: "bg-warning-clay" };
     const daysAway = Math.round((Date.parse(`${dateKey}T00:00:00`) - Date.parse(`${today}T00:00:00`)) / DAY);
-    if (daysAway <= 2) return { label, cls: "text-clay" };
-    return { label, cls: "text-muted-foreground" };
+    if (daysAway <= 2) return { label, cls: "text-warning-clay", dot: "bg-warning-clay" };
+    return { label, cls: "text-soft-ink", dot: "bg-quiet-mist" };
   }, [iso]);
 
-  return <span className={view.cls}>{view.label}</span>;
+  return (
+    <span
+      className={cn(
+        "inline-flex items-center gap-1.5 whitespace-nowrap rounded-full bg-card-inset px-2.5 py-1 text-xs font-medium tabular-nums",
+        view.cls,
+      )}
+    >
+      <span aria-hidden className={cn("size-1.5 rounded-full", view.dot)} />
+      {view.label}
+    </span>
+  );
 }
 
 export function OwnerAvatar({

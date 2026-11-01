@@ -15,6 +15,7 @@ import {
 import { Card } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
 import { Button } from "@/components/ui/button";
+import { SettingRow, SettingRows } from "@/components/ui/setting-row";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { DrawerLayout } from "@/features/candidates/DrawerLayout";
@@ -350,7 +351,7 @@ export function CandidatePortalCard({
             description="A self-service portal where candidates can sign in, track their applications, and update their profile."
             action={
               canEdit ? (
-                <label className="flex items-center gap-2 rounded-lg border bg-card px-3 py-2 text-sm">
+                <label className="flex h-9 items-center gap-2 rounded-[var(--radius-btn)] border border-mist-border bg-pure-snow px-3 text-sm">
                   <Switch
                     checked={optimisticEnabled}
                     disabled={toggling}
@@ -417,7 +418,7 @@ export function CandidatePortalCard({
 
       {/* OAuth providers */}
       <div>
-        <h2 className="mb-3 text-sm font-semibold tracking-tight text-foreground/80">
+        <h2 className="mb-3 text-sm font-semibold tracking-tight text-near-ink">
           Sign-in providers
         </h2>
         <div className="space-y-3">
@@ -492,40 +493,47 @@ export function CandidatePortalCard({
 
       {/* UI options */}
       <div>
-        <h2 className="mb-3 text-sm font-semibold tracking-tight text-foreground/80">
+        <h2 className="mb-3 text-sm font-semibold tracking-tight text-near-ink">
           Portal options
         </h2>
-        <Card className="gap-0 divide-y p-0">
-          <div className="flex items-center justify-between px-5 py-4">
-            <div>
-              <p className="text-sm font-medium">Show application status</p>
-              <p className="text-xs text-muted-foreground">
-                Candidates can see which pipeline stage they are in (e.g.
-                &quot;Screening&quot;, &quot;Interview&quot;).
-              </p>
-            </div>
-            <Switch
-              checked={optimisticStatus}
-              onCheckedChange={toggleStatus}
-              disabled={!canEdit || savingUi}
-              aria-label="Show application status"
+        <Card className="gap-0 p-0">
+          <SettingRows>
+            <SettingRow
+              htmlFor="portal-show-status"
+              descriptionId="portal-show-status-desc"
+              title="Show application status"
+              description={
+                <>
+                  Candidates can see which pipeline stage they are in (e.g.
+                  &quot;Screening&quot;, &quot;Interview&quot;).
+                </>
+              }
+              control={
+                <Switch
+                  id="portal-show-status"
+                  aria-describedby="portal-show-status-desc"
+                  checked={optimisticStatus}
+                  onCheckedChange={toggleStatus}
+                  disabled={!canEdit || savingUi}
+                />
+              }
             />
-          </div>
-          <div className="flex items-center justify-between px-5 py-4">
-            <div>
-              <p className="text-sm font-medium">Show hiring team</p>
-              <p className="text-xs text-muted-foreground">
-                Show candidate-facing names, roles, and profile photos of your
-                workspace members. Off by default for privacy.
-              </p>
-            </div>
-            <Switch
-              checked={optimisticHiringTeam}
-              onCheckedChange={toggleHiringTeam}
-              disabled={!canEdit || savingUi}
-              aria-label="Show hiring team"
+            <SettingRow
+              htmlFor="portal-show-team"
+              descriptionId="portal-show-team-desc"
+              title="Show hiring team"
+              description="Show candidate-facing names, roles, and profile photos of your workspace members. Off by default for privacy."
+              control={
+                <Switch
+                  id="portal-show-team"
+                  aria-describedby="portal-show-team-desc"
+                  checked={optimisticHiringTeam}
+                  onCheckedChange={toggleHiringTeam}
+                  disabled={!canEdit || savingUi}
+                />
+              }
             />
-          </div>
+          </SettingRows>
         </Card>
       </div>
     </div>

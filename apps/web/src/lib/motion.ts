@@ -38,6 +38,8 @@ export const easing = {
 export const spring = {
   gentle: { type: "spring", stiffness: 260, damping: 30 },
   snappy: { type: "spring", stiffness: 420, damping: 34 },
+  /** Sliding active indicator (header pills, sub-nav): settles in ~200ms. */
+  pill: { type: "spring", stiffness: 520, damping: 40, mass: 0.8 },
 } as const satisfies Record<string, Transition>;
 
 /**

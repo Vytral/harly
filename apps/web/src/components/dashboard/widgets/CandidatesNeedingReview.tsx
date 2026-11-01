@@ -1,12 +1,13 @@
 import Link from "next/link";
 import type { Route } from "next";
-import { ArrowRight, ClipboardCheck } from "lucide-react";
+import { ClipboardCheck } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { UserAvatar } from "@/components/ui/UserAvatar";
 import { cn } from "@/lib/utils";
-import type { ReviewCandidate } from "@/features/dashboard/widgets";
+import type { ReviewCandidates } from "@/features/dashboard/widgets";
+import { REVIEW_QUEUE_HREF, reviewApplicationHref } from "@/features/review/rules";
 import { Tile, TileHeader, TileLink, EmptyHint } from "./primitives";
 
 function agingLabel(days: number) {
@@ -14,11 +15,16 @@ function agingLabel(days: number) {
   return `Requested ${days} day${days === 1 ? "" : "s"} ago`;
 }
 
+/**
+ * My pending reviews, longest-waiting first. The header count is the real
+ * total and "View all" opens the same set in the review queue; each row opens
+ * that application in queue mode.
+ */
 export function CandidatesNeedingReview({
-  candidates,
+  review,
   className,
 }: {
-  candidates: ReviewCandidate[];
+  review: ReviewCandidates;
   className?: string;
 }) {
   return (
@@ -26,57 +32,54 @@ export function CandidatesNeedingReview({
       <TileHeader
         icon={ClipboardCheck}
         title="Candidates needing your review"
-        action={<TileLink href="/dashboard/candidates">View all</TileLink>}
+        count={review.total}
+        action={<TileLink href={REVIEW_QUEUE_HREF as Route}>View all</TileLink>}
       />
-      <div className="flex flex-1 flex-col px-2 pb-2 pt-1">
-        {candidates.length > 0 ? (
-          <ul className="flex-1 divide-y divide-border/60">
-            {candidates.map((c) => (
-              <li key={c.id}>
-                <Link
-                  href={`/dashboard/candidates/${c.candidateId}` as Route}
-                  className="group flex items-center gap-3 rounded-xl px-3 py-3 transition hover:bg-muted/60"
+      <div className="flex flex-1 flex-col px-2 pb-3 pt-3">
+        {review.items.length > 0 ? (
+          <ul className="flex-1 flex flex-col gap-0.5">
+            {review.items.map((c) => {
+              const href = reviewApplicationHref(c.candidateId, c.applicationId) as Route;
+              return (
+                <li
+                  key={c.applicationId}
+                  className="flex items-center gap-3 rounded-[var(--radius-md)] pr-3 transition-colors hover:bg-row-wash"
                 >
-                  <UserAvatar
-                    name={c.name}
-                    src={c.avatarUrl}
-                    fallbackSrcs={c.avatarFallbackSrcs}
-                    size="sm"
-                  />
-                  <div className="min-w-0 flex-[1.3]">
-                    <p className="truncate text-sm font-medium" title={c.name}>{c.name}</p>
-                    <p className="truncate text-xs text-muted-foreground" title={c.job}>{c.job}</p>
-                  </div>
-                  <Badge variant="secondary" className="hidden shrink-0 sm:inline-flex">
-                    {c.stage}
-                  </Badge>
-                  <div className="hidden w-36 shrink-0 text-right md:block">
-                    <p className="truncate text-sm font-medium">{c.action}</p>
-                    <p
-                      className={cn(
-                        "truncate text-xs",
-                        c.ageDays > 3
-                          ? "text-destructive"
-                          : "text-muted-foreground",
-                      )}
-                    >
-                      {agingLabel(c.ageDays)}
-                    </p>
-                  </div>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="shrink-0 opacity-0 transition-opacity group-hover:opacity-100 max-md:hidden"
-                    asChild
+                  <Link
+                    href={href}
+                    className="group flex min-w-0 flex-1 items-center gap-3 rounded-[var(--radius-md)] py-2.5 pl-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-near-ink"
                   >
-                    <span>
-                      Review
-                      <ArrowRight className="size-3.5" strokeWidth={1.8} />
-                    </span>
+                    <UserAvatar
+                      name={c.name}
+                      src={c.avatarUrl}
+                      fallbackSrcs={c.avatarFallbackSrcs}
+                      size="sm"
+                    />
+                    <div className="min-w-0 flex-[1.3]">
+                      <p className="truncate text-sm font-medium" title={c.name}>{c.name}</p>
+                      <p className="truncate text-xs text-soft-ink" title={c.job}>{c.job}</p>
+                    </div>
+                    <Badge variant="neutral" dot={false} className="hidden shrink-0 sm:inline-flex">
+                      {c.stage}
+                    </Badge>
+                    <div className="hidden w-36 shrink-0 text-right md:block">
+                      <p className="truncate text-sm font-medium">{c.action}</p>
+                      <p
+                        className={cn(
+                          "truncate text-xs",
+                          c.ageDays > 3 ? "text-danger-rust" : "text-soft-ink",
+                        )}
+                      >
+                        {agingLabel(c.ageDays)}
+                      </p>
+                    </div>
+                  </Link>
+                  <Button variant="outline" size="sm" className="shrink-0 max-md:hidden" asChild>
+                    <Link href={href}>Review</Link>
                   </Button>
-                </Link>
-              </li>
-            ))}
+                </li>
+              );
+            })}
           </ul>
         ) : (
           <EmptyHint
@@ -84,6 +87,14 @@ export function CandidatesNeedingReview({
             text="No reviews pending. Your team is on top of feedback."
           />
         )}
+        {review.total > review.items.length ? (
+          <Link
+            href={REVIEW_QUEUE_HREF as Route}
+            className="mx-3 mt-1 rounded-[var(--radius-md)] px-3 py-2.5 text-center text-xs font-medium text-soft-ink transition hover:bg-row-wash"
+          >
+            {review.total - review.items.length} more in your queue
+          </Link>
+        ) : null}
       </div>
     </Tile>
   );

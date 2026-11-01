@@ -122,7 +122,7 @@ export function StageEditor({
           }
         }}
       >
-        <SheetHeader className="border-b px-5 py-4 text-left">
+        <SheetHeader className="border-b border-hairline px-5 py-4 text-left">
           <SheetTitle>Pipeline stages</SheetTitle>
           <SheetDescription>
             {jobTitle}. Candidates move through active stages in this order.
@@ -140,7 +140,7 @@ export function StageEditor({
               variants={motionSafe.fadeUp(4)}
               initial="hidden"
               animate="visible"
-              className="flex items-start gap-2 rounded-xl border bg-card px-3 py-2.5 text-sm text-foreground"
+              className="flex items-start gap-2 rounded-[var(--radius-inner)] bg-lime-wash px-3 py-2.5 text-sm text-foreground"
             >
               <AlertTriangle className="mt-0.5 size-4 shrink-0 text-destructive" aria-hidden="true" />
               <p className="min-w-0 flex-1">{state.notice}</p>
@@ -258,7 +258,7 @@ export function StageEditor({
                       variants={motionSafe.fade()}
                       initial="hidden"
                       animate="visible"
-                      className="mt-1 divide-y rounded-xl border"
+                      className="mt-1 divide-y divide-hairline rounded-[var(--radius-inner)] bg-card-inset"
                     >
                       {archived.map((stage) => (
                         <li key={stage.id} className="flex flex-wrap items-center justify-between gap-2 px-3 py-2.5 text-sm">

@@ -7,14 +7,7 @@ import { toast } from "@/lib/notification-island/toast";
 
 import { permanentlyDeleteJobAction, restoreJobAction } from "./actions";
 import { Button } from "@/components/ui/button";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 
 export function TrashJobActions({
   jobId,
@@ -39,17 +32,16 @@ export function TrashJobActions({
     });
   }
 
-  function deleteForever() {
-    startTransition(async () => {
-      const result = await permanentlyDeleteJobAction(jobId);
-      if (result.success) {
-        toast.success("Job deleted permanently.");
-        setConfirmOpen(false);
-        router.refresh();
-      } else {
-        toast.error(result.error ?? "Could not delete the job.");
-      }
-    });
+  async function deleteForever() {
+    const result = await permanentlyDeleteJobAction(jobId);
+    if (result.success) {
+      toast.success("Job deleted permanently.");
+      router.refresh();
+    } else {
+      toast.error(result.error ?? "Could not delete the job.");
+      // Keep the dialog open so the user can read the error and retry.
+      throw new Error(result.error);
+    }
   }
 
   return (
@@ -74,33 +66,15 @@ export function TrashJobActions({
         <Trash2 className="size-4" />
       </Button>
 
-      <Dialog open={confirmOpen} onOpenChange={setConfirmOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Delete permanently?</DialogTitle>
-            <DialogDescription>
-              “{jobTitle}” will be removed for good. This can&apos;t be undone.
-              Jobs with applications can&apos;t be deleted. Close them instead.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => setConfirmOpen(false)}
-              disabled={isPending}
-            >
-              Cancel
-            </Button>
-            <Button
-              variant="destructive"
-              onClick={deleteForever}
-              disabled={isPending}
-            >
-              {isPending ? "Deleting…" : "Delete permanently"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <ConfirmDialog
+        open={confirmOpen}
+        onOpenChange={setConfirmOpen}
+        tone="destructive"
+        title="Delete job permanently?"
+        description={`“${jobTitle}” will be removed for good. Jobs with applications can't be deleted. Close them instead. This can't be undone.`}
+        confirmLabel="Delete permanently"
+        onConfirm={deleteForever}
+      />
     </div>
   );
 }

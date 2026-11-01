@@ -1,9 +1,23 @@
 "use client";
 
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import type { Route } from "next";
-import { ListChecks, X } from "lucide-react";
+import {
+  CalendarClock,
+  ClipboardCheck,
+  FileUp,
+  Keyboard,
+  ListChecks,
+  ListTodo,
+  Mail,
+  MoveRight,
+  ScanSearch,
+  UserPlus,
+  UserX,
+  X,
+  type LucideIcon,
+} from "lucide-react";
 
 import { UserAvatar } from "@/components/ui/UserAvatar";
 import { Button } from "@/components/ui/button";
@@ -52,7 +66,14 @@ import {
 } from "@/features/search/recents";
 import type { SearchGroupKey } from "@/features/search/results";
 import type { SearchRange } from "@/features/search/query";
+import { AssistantAvatar, useHarlyAI } from "@/components/dashboard/HarlyAIContext";
 import type { Permission } from "@/features/workspaces/permissions";
+import {
+  useCandidateActions,
+  type CandidateActionId,
+} from "@/components/dashboard/shortcuts/candidate-actions";
+import { openShortcutsHelp } from "@/components/dashboard/shortcuts/shortcut-ui-store";
+import { SHORTCUTS, displayKey } from "@/components/dashboard/shortcuts/catalog";
 
 /** Id of the header button that opens the palette; focus returns here on close. */
 export const COMMAND_MENU_TRIGGER_ID = "command-menu-trigger";
@@ -77,6 +98,20 @@ const GROUP_HEADINGS: Record<SearchGroupKey, string> = {
 };
 
 const SKELETON_ROWS = 4;
+
+/** Actions on the open candidate page, in menu order, with what each needs. */
+const CANDIDATE_ACTIONS: Array<{
+  id: CandidateActionId;
+  icon: LucideIcon;
+  permission: Permission;
+  shortcut?: keyof typeof SHORTCUTS;
+}> = [
+  { id: "move", icon: MoveRight, permission: "candidates:move", shortcut: "candidate.move" },
+  { id: "reject", icon: UserX, permission: "candidates:edit", shortcut: "candidate.reject" },
+  { id: "evaluate", icon: ClipboardCheck, permission: "collab:write", shortcut: "candidate.evaluate" },
+  { id: "schedule", icon: CalendarClock, permission: "collab:write", shortcut: "candidate.schedule" },
+  { id: "email", icon: Mail, permission: "collab:write" },
+];
 
 const LIST_CLASSES =
   "[&_[cmdk-group-heading]]:px-2 [&_[cmdk-group-heading]]:font-medium [&_[cmdk-group-heading]]:text-muted-foreground [&_[cmdk-group]]:px-2 [&_[cmdk-group]:not([hidden])_~[cmdk-group]]:pt-0 [&_[cmdk-input-wrapper]_svg]:h-5 [&_[cmdk-input-wrapper]_svg]:w-5 [&_[cmdk-input]]:h-12 [&_[cmdk-item]]:min-h-11 [&_[cmdk-item]]:px-2 [&_[cmdk-item]]:py-2.5 [&_[cmdk-item]_svg]:h-5 [&_[cmdk-item]_svg]:w-5";
@@ -211,6 +246,13 @@ export function CommandMenu({
     router.push(href as Route);
   }
 
+  // Hand the question to Harly AI instead of searching for it.
+  const harly = useHarlyAI();
+  function askHarly(text: string) {
+    onOpenChange(false);
+    harly.ask(text);
+  }
+
   function openResult(item: RecentSearchItem) {
     if (recentsScope) {
       setRecents(recordRecent(browserRecentsStorage(), recentsScope, item));
@@ -224,12 +266,34 @@ export function CommandMenu({
     }
   }
 
+  // Actions that open a drawer or dialog wait for the palette to finish
+  // closing, so the focus it hands back does not steal focus from them.
+  const afterClose = useRef<(() => void) | null>(null);
+  function runAfterClose(action: () => void) {
+    afterClose.current = action;
+    onOpenChange(false);
+  }
+
   function restoreTriggerFocus(event: Event) {
+    const pending = afterClose.current;
+    if (pending) {
+      afterClose.current = null;
+      event.preventDefault();
+      pending();
+      return;
+    }
     const trigger = document.getElementById(COMMAND_MENU_TRIGGER_ID);
     if (!trigger) return;
     event.preventDefault();
     trigger.focus();
   }
+
+  const candidateActions = useCandidateActions();
+  const candidateItems = CANDIDATE_ACTIONS.filter(
+    (item) =>
+      candidateActions[item.id] && userPermissions.includes(item.permission),
+  );
+  const can = (permission: Permission) => userPermissions.includes(permission);
 
   const hasQuery = state.query.length > 0;
   const { results, stale: isStale, busy: isLoading } = presentResults(state);
@@ -421,6 +485,22 @@ export function CommandMenu({
               </div>
             ) : null}
 
+            {hasQuery ? (
+              <CommandGroup>
+                <CommandItem
+                  value={`ask-harly-${state.query}`}
+                  onSelect={() => askHarly(state.query)}
+                  className="gap-3 rounded-2xl"
+                >
+                  <AssistantAvatar avatarUrl={harly.assistant.avatarUrl} size={16} className="size-4 shrink-0 rounded-full" />
+                  <span className="min-w-0 flex-1 truncate">
+                    Ask {harly.assistant.name} &ldquo;{state.query}&rdquo;
+                  </span>
+                  <kbd className="font-chrome text-[11px] text-quiet-mist">AI</kbd>
+                </CommandItem>
+              </CommandGroup>
+            ) : null}
+
             {hasQuery && hasResults && seeAllHref && !isStale ? (
               <CommandGroup>
                 <CommandItem
@@ -453,7 +533,90 @@ export function CommandMenu({
                     </CommandItem>
                   ))}
                 </CommandGroup>
+                {candidateItems.length > 0 ? (
+                  <CommandGroup heading="This candidate">
+                    {candidateItems.map((item) => {
+                      const entry = candidateActions[item.id];
+                      if (!entry) return null;
+                      return (
+                        <CommandItem
+                          key={item.id}
+                          value={`candidate-${item.id}`}
+                          onSelect={() => runAfterClose(entry.run)}
+                          className="gap-3 rounded-2xl"
+                        >
+                          <item.icon className="size-4" strokeWidth={1.8} />
+                          <span className="flex-1">{entry.label}</span>
+                          {item.shortcut ? (
+                            <kbd className="font-chrome text-[11px] text-quiet-mist">
+                              {displayKey(SHORTCUTS[item.shortcut].keys)}
+                            </kbd>
+                          ) : null}
+                        </CommandItem>
+                      );
+                    })}
+                  </CommandGroup>
+                ) : null}
                 <CommandGroup heading="Actions">
+                  {can("candidates:edit") ? (
+                    <>
+                      <CommandItem
+                        value="action-new-candidate"
+                        onSelect={() => go("/dashboard/candidates?new=1")}
+                        className="gap-3 rounded-2xl"
+                      >
+                        <UserPlus className="size-4" strokeWidth={1.8} />
+                        New candidate
+                      </CommandItem>
+                      <CommandItem
+                        value="action-import-candidates"
+                        onSelect={() => go("/dashboard/candidates?import=csv")}
+                        className="gap-3 rounded-2xl"
+                      >
+                        <FileUp className="size-4" strokeWidth={1.8} />
+                        Import candidates
+                      </CommandItem>
+                    </>
+                  ) : null}
+                  {can("tasks:write") ? (
+                    <CommandItem
+                      value="action-new-task"
+                      onSelect={() => go("/dashboard/tasks?new=1")}
+                      className="gap-3 rounded-2xl"
+                    >
+                      <ListTodo className="size-4" strokeWidth={1.8} />
+                      New task
+                    </CommandItem>
+                  ) : null}
+                  {can("candidates:view") ? (
+                    <CommandItem
+                      value="action-review-queue"
+                      onSelect={() => go("/dashboard/candidates?queue=review")}
+                      className="gap-3 rounded-2xl"
+                    >
+                      <ScanSearch className="size-4" strokeWidth={1.8} />
+                      <span className="flex-1">Go to my review queue</span>
+                      <kbd className="font-chrome text-[11px] text-quiet-mist">G R</kbd>
+                    </CommandItem>
+                  ) : null}
+                  <CommandItem
+                    value="action-keyboard-shortcuts"
+                    onSelect={() => runAfterClose(openShortcutsHelp)}
+                    className="gap-3 rounded-2xl"
+                  >
+                    <Keyboard className="size-4" strokeWidth={1.8} />
+                    <span className="flex-1">Keyboard shortcuts</span>
+                    <kbd className="font-chrome text-[11px] text-quiet-mist">?</kbd>
+                  </CommandItem>
+                  <CommandItem
+                    value="action-ask-harly"
+                    onSelect={() => askHarly("")}
+                    className="gap-3 rounded-2xl"
+                  >
+                    <AssistantAvatar avatarUrl={harly.assistant.avatarUrl} size={16} className="size-4 shrink-0 rounded-full" />
+                    <span className="flex-1">Ask {harly.assistant.name}</span>
+                    <kbd className="font-chrome text-[11px] text-quiet-mist">⌘J</kbd>
+                  </CommandItem>
                   <CommandItem
                     value="action-new-job"
                     onSelect={() => go("/dashboard/jobs/new")}

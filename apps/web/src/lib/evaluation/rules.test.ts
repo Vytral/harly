@@ -8,7 +8,7 @@ import {
 } from "./rules";
 import { buildStructuredCriteria } from "./criteria-builder";
 
-describe("Harly ATS Deterministic Engine rules-v5", () => {
+describe("Harly ATS Deterministic Engine rules-v6", () => {
   const juniorPhpJob = {
     title: "Junior PHP Engineer",
     description: "Build web applications.",
@@ -37,7 +37,7 @@ PHP Developer - Acme Web (2024 - Present)
       referenceDate: "2026-09-19",
     });
 
-    expect(RULES_EVALUATION_VERSION).toBe("rules-v5");
+    expect(RULES_EVALUATION_VERSION).toBe("rules-v6");
     expect(result.result.score).toBeGreaterThanOrEqual(80);
     expect(result.criterionResults.map((c) => c.label)).toContain("PHP");
     expect(
@@ -528,7 +528,7 @@ Frontend Engineer — Acme Corp | Mar 2021 - Present
       expect(exp2024?.extendedStatus).toBe("partially_met");
       expect(exp2024?.evidence).toContain("3 years of experience");
       expect(res2024.metadata.referenceDate).toBe("2024-03-15");
-      expect(res2024.metadata.engineVersion).toBe("rules-v5");
+      expect(res2024.metadata.engineVersion).toBe("rules-v6");
       expect(res2024.metadata.neutralEvidenceBaseline).toBe(40);
       expect(res2024.candidateFacts.schemaVersion).toBe(2);
       expect(res2024.skillProfiles.schemaVersion).toBe(2);
@@ -763,8 +763,8 @@ Backend Developer — Acme Corp | 2020 - 2023
 
     it("exposes engine, layer, taxonomy, and configuration versions in metadata", () => {
       const res = evaluateCandidateWithRules(snapshotInput());
-      expect(res.metadata.engineVersion).toBe("rules-v5");
-      expect(res.metadata.parserVersion).toBe("parser-v2");
+      expect(res.metadata.engineVersion).toBe("rules-v6");
+      expect(res.metadata.parserVersion).toBe("parser-v3");
     expect(res.metadata.matcherVersion).toBe("matcher-v3");
     expect(res.metadata.scoringVersion).toBe("scoring-v3");
       expect(res.metadata.taxonomyVersion).toBe("skill-taxonomy-v2");

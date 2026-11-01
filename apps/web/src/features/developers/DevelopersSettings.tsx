@@ -28,6 +28,7 @@ import {
   WebhooksDuotoneIcon,
 } from "@/components/ui/icons/phosphor";
 import { Badge } from "@/components/ui/badge";
+import { SecretField } from "@/components/ui/secret-field";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import {
@@ -46,7 +47,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { cn } from "@/lib/utils";
+import { cn, copyText } from "@/lib/utils";
 
 /** Human-readable labels for API scopes , raw scope strings surface in a tooltip. */
 const SCOPE_LABELS: Record<string, string> = {
@@ -146,7 +147,7 @@ export function DevelopersSettings(props: {
 }
 
 function copy(value: string) {
-  navigator.clipboard.writeText(value).then(
+  copyText(value).then(
     () => toast.success("Copied"),
     () => toast.error("Could not copy"),
   );
@@ -208,31 +209,26 @@ function SecretBanner({
   onDismiss: () => void;
 }) {
   return (
-    <div className="animate-in fade-in zoom-in-95 duration-200 rounded-2xl border border-pine/30 bg-sage/40 p-3 text-sm shadow-[inset_0_1px_0_rgba(255,255,255,0.12)]">
-      <p className="font-medium text-sage-ink">{label}</p>
-      <p className="mt-1 text-xs text-muted-foreground">
+    <div role="status" className="animate-in fade-in zoom-in-95 duration-200 rounded-[var(--radius-inner)] border border-mist-border bg-lime-wash p-4 text-sm">
+      <p className="text-[13px] font-medium text-near-ink">{label}</p>
+      <p className="mt-0.5 text-[12.5px] text-soft-ink">
         Copy it now. You won&apos;t be able to see it again.
       </p>
-      <div className="mt-2 flex items-center gap-2">
-        <code className="flex-1 overflow-x-auto rounded-lg bg-background px-2 py-1.5 font-mono text-xs">
-          {value}
-        </code>
-        <Button
-          size="sm"
-          variant="outline"
-          className="shrink-0 transition-transform active:scale-[0.97]"
-          onClick={() => copy(value)}
-        >
-          <CopyIcon className="size-3.5" /> Copy
-        </Button>
-        <Button
-          size="sm"
-          variant="ghost"
-          className="shrink-0 transition-transform active:scale-[0.97]"
-          onClick={onDismiss}
-        >
-          Done
-        </Button>
+      <div className="mt-2">
+        <SecretField
+          value={value}
+          label={label}
+          defaultRevealed
+          actions={
+            <Button
+              variant="ghost"
+              className="shrink-0"
+              onClick={onDismiss}
+            >
+              Done
+            </Button>
+          }
+        />
       </div>
     </div>
   );
@@ -432,17 +428,12 @@ function ApiKeysSection({
                   <p className="mt-2.5 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
                     {key.type === "secret" ? "Secret key" : "Publishable key"}
                   </p>
-                  <div className="mt-1 flex items-center gap-2">
-                    <code className="min-w-0 flex-1 truncate rounded-lg bg-muted/50 px-2.5 py-1.5 font-mono text-xs">
-                      {maskKey(key.prefix, key.last4)}
-                    </code>
-                    <button
-                      type="button"
-                      onClick={() => copy(maskKey(key.prefix, key.last4))}
-                      className="inline-flex shrink-0 items-center gap-1 rounded-md px-1.5 py-1 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground active:scale-95"
-                    >
-                      <CopyIcon className="size-3.5" /> Copy
-                    </button>
+                  <div className="mt-1.5">
+                    <SecretField
+                      value={maskKey(key.prefix, key.last4)}
+                      label={key.type === "secret" ? "secret key" : "publishable key"}
+                      revealable={false}
+                    />
                   </div>
 
                   {key.scopes.length > 0 && (

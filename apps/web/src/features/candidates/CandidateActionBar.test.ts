@@ -4,6 +4,9 @@ import { renderToStaticMarkup } from "react-dom/server";
 
 vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: vi.fn() }) }));
 vi.mock("lucide-react", () => ({
+  Briefcase: () => null,
+  Check: () => null,
+  MoreHorizontal: () => null,
   CalendarClock: () => null,
   CheckCircle2: () => null,
   ChevronDown: () => null,
@@ -27,7 +30,15 @@ vi.mock("@/features/candidates/actions", () => ({
   bulkUpdateCandidateStatusAction: vi.fn(),
   trashCandidateAction: vi.fn(),
 }));
-vi.mock("@/features/pool/CandidatePoolButton", () => ({ CandidatePoolButton: () => null }));
+vi.mock("@/features/rejection-reasons/RejectDialog", () => ({ RejectDialog: () => null }));
+vi.mock("@/features/pool/CandidatePoolButton", () => ({
+  CandidatePoolButton: () => null,
+  useCandidatePool: () => ({ inPool: false, isPending: false, toggle: vi.fn() }),
+}));
+vi.mock("@/components/ui/confirm-dialog", () => ({
+  ConfirmDialog: () => null,
+  useConfirm: () => vi.fn(),
+}));
 vi.mock("@/components/ui/button", () => ({ Button: () => null }));
 vi.mock("@/components/ui/dialog", () => ({
   Dialog: () => null,
@@ -42,9 +53,14 @@ vi.mock("@/components/ui/dropdown-menu", () => ({
   DropdownMenu: () => null,
   DropdownMenuContent: () => null,
   DropdownMenuItem: () => null,
+  DropdownMenuSeparator: () => null,
+  DropdownMenuShortcut: () => null,
   DropdownMenuTrigger: () => null,
 }));
-vi.mock("@/components/ui/icons/phosphor", () => ({ ProhibitIcon: () => null }));
+vi.mock("@/components/ui/icons/phosphor", () => ({
+  BookmarkSimpleIcon: () => null,
+  ProhibitIcon: () => null,
+}));
 
 import {
   CandidateActionBar,

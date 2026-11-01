@@ -6,6 +6,7 @@ import { UNTRUSTED_DATA_GUARDRAIL } from "@/lib/ai/prompts/guardrails";
 vi.mock("ai", () => ({
   Output: { object: (x: unknown) => x },
   generateText: vi.fn(),
+  NoObjectGeneratedError: { isInstance: () => false },
 }));
 
 vi.mock("@/lib/ai/registry", () => ({

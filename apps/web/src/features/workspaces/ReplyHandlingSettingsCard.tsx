@@ -5,6 +5,7 @@ import type { Route } from "next";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "@/lib/notification-island/toast";
+import { copyText } from "@/lib/utils";
 
 import {
   disableInboundEmailAction,
@@ -43,6 +44,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { SettingRow } from "@/components/ui/setting-row";
 import { Switch } from "@/components/ui/switch";
 import { formatRelative } from "@/lib/date";
 
@@ -533,15 +535,13 @@ function SharedMailboxFields({
         />
       </div>
 
-      <div className="flex items-center justify-between rounded-xl border px-3 py-2.5">
-        <div>
-          <p className="text-sm font-medium">Enable shared mailbox</p>
-          <p className="text-xs text-muted-foreground">
-            New mail is polled by the self-hosted cron.
-          </p>
-        </div>
-        <Switch checked={enabled} onCheckedChange={onEnabledChange} />
-      </div>
+      <SettingRow
+        htmlFor="replyhandlingsettingscard-switch-1"
+        className="rounded-[var(--radius-inner)] border border-hairline px-4 py-3"
+        title={<>Enable shared mailbox</>}
+        description={<>New mail is polled by the self-hosted cron.</>}
+        control={<Switch id="replyhandlingsettingscard-switch-1" checked={enabled} onCheckedChange={onEnabledChange} />}
+      />
 
       <Button
         type="button"
@@ -692,7 +692,7 @@ function ThreadedReplyFields({
               variant="outline"
               size="icon"
               onClick={() => {
-                void navigator.clipboard.writeText(webhookUrl);
+                void copyText(webhookUrl);
                 toast.success("Webhook URL copied");
               }}
               aria-label="Copy webhook URL"
@@ -706,15 +706,13 @@ function ThreadedReplyFields({
         </div>
       ) : null}
 
-      <div className="flex items-center justify-between rounded-xl border px-3 py-2.5">
-        <div>
-          <p className="text-sm font-medium">Receive candidate replies automatically</p>
-          <p className="text-xs text-muted-foreground">
-            Replies are routed directly to the candidate timeline.
-          </p>
-        </div>
-        <Switch checked={enabled} onCheckedChange={onEnabledChange} />
-      </div>
+      <SettingRow
+        htmlFor="replyhandlingsettingscard-switch-2"
+        className="rounded-[var(--radius-inner)] border border-hairline px-4 py-3"
+        title={<>Receive candidate replies automatically</>}
+        description={<>Replies are routed directly to the candidate timeline.</>}
+        control={<Switch id="replyhandlingsettingscard-switch-2" checked={enabled} onCheckedChange={onEnabledChange} />}
+      />
     </div>
   );
 }
@@ -729,7 +727,7 @@ function Field({
   children: React.ReactNode;
 }) {
   return (
-    <div className="space-y-2">
+    <div className="space-y-1.5">
       <Label htmlFor={htmlFor}>{label}</Label>
       {children}
     </div>
@@ -748,13 +746,16 @@ function TlsToggle({
   ariaLabel: string;
 }) {
   return (
-    <div className="flex items-center justify-between rounded-xl border px-3 py-2.5">
-      <p className="text-sm font-medium">{label}</p>
-      <Switch
-        checked={checked}
-        onCheckedChange={onCheckedChange}
-        aria-label={ariaLabel}
-      />
-    </div>
+    <SettingRow
+      className="rounded-[var(--radius-inner)] border border-hairline px-4 py-3"
+      title={label}
+      control={
+        <Switch
+          checked={checked}
+          onCheckedChange={onCheckedChange}
+          aria-label={ariaLabel}
+        />
+      }
+    />
   );
 }

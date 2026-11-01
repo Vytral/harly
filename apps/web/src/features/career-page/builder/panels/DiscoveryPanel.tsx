@@ -3,76 +3,86 @@
 import { useSyncExternalStore } from "react";
 
 import { FileDropzone } from "@/components/ui/FileDropzone";
-import { Input } from "@/components/ui/input";
-import type { CareerPageConfig } from "@/features/career-page/config";
-import type { WorkspaceBoardBranding } from "@/features/workspaces/board";
 
-import type { ConfigUpdater } from "../types";
-import { Field, ToggleRow } from "../primitives";
-import { PanelHeader, Section } from "./PanelKit";
+import type { SectionProps } from "../types";
+import { Field, TextField, ToggleRow } from "../primitives";
+import { Group, PanelHeader } from "./PanelKit";
 
 export function DiscoveryPanel({
   config,
   update,
   workspace,
-}: {
-  config: CareerPageConfig;
-  update: ConfigUpdater;
-  workspace: WorkspaceBoardBranding;
-}) {
+  boardPath,
+}: SectionProps & { boardPath: string }) {
   const title = config.seo.title || workspace.name || "Careers";
-  const description = config.seo.description || workspace.description || workspace.tagline || "Explore open roles and build your next chapter with us.";
+  const description =
+    config.seo.description ||
+    workspace.description ||
+    workspace.tagline ||
+    "Explore open roles and build your next chapter with us.";
   const host = useSyncExternalStore(
     () => () => {},
     () => window.location.host,
     () => "",
   );
-  const previewUrl = host ? `${host}/board/${workspace.slug}` : `/board/${workspace.slug}`;
+  const previewUrl = `${host}${boardPath}`;
 
   return (
-    <div className="space-y-6">
-      <PanelHeader title="Discovery" subtitle="Control how your careers site appears in search and shares." />
+    <div className="space-y-4">
+      <PanelHeader title="SEO & sharing" subtitle="How your careers site shows up in search and link previews." />
 
-      <Section title="Search engines" defaultOpen>
+      <Group title="Search engines" defaultOpen errorPrefix="seo.">
         <ToggleRow
-          label="Allow search engines to index this careers site"
+          label="Let search engines index this site"
+          description="When off, the careers page and every job use noindex and leave the sitemap."
           checked={config.seo.indexable}
-          onCheckedChange={(value) => update((draft) => (draft.seo.indexable = value))}
+          onCheckedChange={(value) => update((draft) => void (draft.seo.indexable = value))}
         />
-        <p className="text-xs leading-5 text-ink-soft">
-          When off, the careers page and every job use noindex and are removed from Harly&apos;s sitemap.
-        </p>
-        <Field label="SEO title">
-          <Input value={config.seo.title} maxLength={70} onChange={(event) => update((draft) => (draft.seo.title = event.target.value))} placeholder={workspace.name || "Careers"} />
-        </Field>
-        <Field label="Meta description">
-          <textarea
-            value={config.seo.description}
-            maxLength={180}
-            rows={4}
-            onChange={(event) => update((draft) => (draft.seo.description = event.target.value))}
-            placeholder={workspace.description ?? "Tell candidates why they should join."}
-            className="flex w-full resize-y rounded-lg border border-border bg-paper px-3 py-2 text-sm text-foreground outline-none placeholder:text-ink-soft focus-visible:ring-2 focus-visible:ring-pine/40"
+        <TextField
+          label="SEO title"
+          path="seo.title"
+          value={config.seo.title}
+          max={70}
+          placeholder={workspace.name || "Careers"}
+          onChange={(v) => update((draft) => void (draft.seo.title = v))}
+        />
+        <TextField
+          label="Meta description"
+          path="seo.description"
+          value={config.seo.description}
+          max={180}
+          rows={3}
+          placeholder={workspace.description ?? "Tell candidates why they should join."}
+          onChange={(v) => update((draft) => void (draft.seo.description = v))}
+        />
+        <div className="space-y-1.5">
+          <span className="block text-[13px] font-medium text-near-ink">Search preview</span>
+          <div className="space-y-1 rounded-[var(--radius-inner)] border border-hairline bg-pure-snow px-3.5 py-3">
+            <p className="truncate text-[12px] text-soft-ink">{previewUrl}</p>
+            <p className="line-clamp-2 text-[15px] font-medium leading-snug text-[#1a0dab] dark:text-[#8ab4f8]">
+              {title}
+            </p>
+            <p className="line-clamp-3 text-[12px] leading-5 text-soft-ink">{description}</p>
+          </div>
+        </div>
+      </Group>
+
+      <Group title="Share assets" description="Favicon and link-preview image">
+        <Field label="Favicon" hint="Square, at least 64×64.">
+          <FileDropzone
+            aspect="square"
+            value={config.seo.faviconUrl}
+            onChange={(url) => update((draft) => void (draft.seo.faviconUrl = url))}
           />
         </Field>
-      </Section>
-
-      <Section title="Share assets">
-        <Field label="Favicon">
-          <FileDropzone aspect="square" value={config.seo.faviconUrl} onChange={(url) => update((draft) => (draft.seo.faviconUrl = url))} />
+        <Field label="Social share image" hint="1200×630 works everywhere.">
+          <FileDropzone
+            aspect="banner"
+            value={config.seo.socialImageUrl}
+            onChange={(url) => update((draft) => void (draft.seo.socialImageUrl = url))}
+          />
         </Field>
-        <Field label="Social share image">
-          <FileDropzone aspect="banner" value={config.seo.socialImageUrl} onChange={(url) => update((draft) => (draft.seo.socialImageUrl = url))} />
-        </Field>
-      </Section>
-
-      <Section title="Search preview">
-        <div className="space-y-1.5 rounded-lg border border-border bg-paper px-3 py-3">
-          <p className="truncate text-xs text-success">{previewUrl}</p>
-          <p className="line-clamp-2 text-sm font-medium text-pine">{title}</p>
-          <p className="line-clamp-3 text-xs leading-5 text-ink-soft">{description}</p>
-        </div>
-      </Section>
+      </Group>
     </div>
   );
 }

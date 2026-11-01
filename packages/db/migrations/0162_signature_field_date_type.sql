@@ -1,0 +1,2 @@
+ALTER TABLE "signature_fields" DROP CONSTRAINT "signature_fields_type_check";--> statement-breakpoint
+ALTER TABLE "signature_fields" ADD CONSTRAINT "signature_fields_type_check" CHECK ("signature_fields"."type" in ('signature', 'text', 'date'));

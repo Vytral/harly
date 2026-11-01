@@ -1,53 +1,50 @@
 import { safeImageUrl } from "./config";
 import type { CareerPageConfig } from "./config";
+import { CareerMarquee } from "./CareerMarquee";
 
+/**
+ * Photo strip. Images are decorative (the config stores bare URLs, no
+ * captions), so they carry an empty alt and the strip is labelled as a region.
+ * Auto-scrolls when `autoplay` is on and there are 2+ photos; otherwise a
+ * keyboard-scrollable row.
+ */
 export function CareerGallery({
   gallery,
-  rounded = "rounded-3xl",
+  rounded = "rounded-[var(--career-r-card,16px)]",
   aspectClass = "h-64 w-80",
+  label = "Photo gallery",
 }: {
   gallery: CareerPageConfig["gallery"];
   rounded?: string;
   aspectClass?: string;
+  label?: string;
 }) {
   const images = gallery.images.map(safeImageUrl).filter((u): u is string => u !== null);
   if (!gallery.enabled || images.length === 0) return null;
 
+  const imgClass = `${aspectClass} shrink-0 ${rounded} bg-card-inset object-cover`;
+
   if (gallery.autoplay && images.length >= 2) {
-    const track = [...images, ...images];
     return (
-      <div className="group relative -mx-6 overflow-hidden px-6 [mask-image:linear-gradient(to_right,transparent,black_5%,black_95%,transparent)]">
-        <div
-          className={`flex w-max gap-4 ${
-            gallery.speed === "normal" ? "career-marquee-normal" : "career-marquee-slow"
-          }`}
-        >
-          {track.map((src, i) => (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
-              key={`${i}-${src.slice(-12)}`}
-              src={src}
-              alt=""
-              loading="lazy"
-              className={`${aspectClass} shrink-0 ${rounded} bg-zinc-100 object-cover dark:bg-zinc-800`}
-            />
-          ))}
-        </div>
-      </div>
+      <CareerMarquee speed={gallery.speed} label={label}>
+        {images.map((src, i) => (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img key={`${i}-${src.slice(-12)}`} src={src} alt="" loading="lazy" className={imgClass} />
+        ))}
+      </CareerMarquee>
     );
   }
 
   return (
-    <div className="flex gap-4 overflow-x-auto pb-2">
+    <div
+      className="flex gap-4 overflow-x-auto pb-2"
+      role="region"
+      aria-label={label}
+      tabIndex={0}
+    >
       {images.map((src, i) => (
         // eslint-disable-next-line @next/next/no-img-element
-        <img
-          key={`${i}-${src.slice(-12)}`}
-          src={src}
-          alt=""
-          loading="lazy"
-          className={`${aspectClass} shrink-0 ${rounded} bg-zinc-100 object-cover dark:bg-zinc-800`}
-        />
+        <img key={`${i}-${src.slice(-12)}`} src={src} alt="" loading="lazy" className={imgClass} />
       ))}
     </div>
   );

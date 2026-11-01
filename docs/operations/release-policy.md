@@ -136,19 +136,18 @@ npx @harly/cli update --to 0.2.1-beta.1
 Before the tag: merge the intended changes into `main`, wait for CI, and write
 the changelog and migration notes.
 
-Publish `@harly/cli` when its own version changes; the image workflow does not
-publish the npm package. Publish it **after** the release commit lands on
-`main`, because that commit is what rewrites the release metadata embedded in
-the CLI. Publishing earlier ships a package whose offline fallback still points
-at the previous image:
+`@harly/cli` is published by the **Publish CLI** workflow
+(`.github/workflows/publish-cli.yml`) through npm Trusted Publishing, with no
+token. It runs after the image workflow succeeds for a stable tag, from `main`
+including the release commit, because that commit rewrites the release
+metadata embedded in the CLI; publishing earlier would ship an offline
+fallback that still points at the previous image. It publishes only when
+`tooling/harly/package.json` names a version that is not on npm yet, and only
+after the CLI's typecheck, tests and a matching `CHANGELOG.md` section pass.
 
-```bash
-git switch main
-git pull
-pnpm --filter @harly/cli test
-pnpm --filter @harly/cli pack:check
-pnpm --filter @harly/cli publish --access public
-```
+So, before tagging, bump the CLI version and add its changelog entry in the
+same release. For a CLI-only change (no new image), merge the version bump and
+run **Publish CLI** from the Actions tab.
 
 The CLI embedded in an image release is the fallback for an offline install.
 Online installs and updates read the manifest.

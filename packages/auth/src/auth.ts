@@ -338,6 +338,19 @@ async function organizationExists(): Promise<boolean> {
   return result;
 }
 
+/**
+ * Dev only: extra origins (comma-separated `HARLY_DEV_ORIGINS`, e.g.
+ * "http://192.168.0.8:3000") so the dev server can be opened from another
+ * device on the LAN. Ignored in production.
+ */
+function devExtraOrigins(): string[] {
+  if (process.env.NODE_ENV === "production") return [];
+  return (process.env.HARLY_DEV_ORIGINS ?? "")
+    .split(",")
+    .map((origin) => origin.trim())
+    .filter(Boolean);
+}
+
 export const auth = betterAuth({
   baseURL: appUrl,
   secret: process.env.BETTER_AUTH_SECRET,
@@ -434,7 +447,7 @@ export const auth = betterAuth({
       maxAge: 60 * 5,
     },
   },
-  trustedOrigins: [appUrl],
+  trustedOrigins: [appUrl, ...devExtraOrigins()],
 });
 
 export type Auth = typeof auth;

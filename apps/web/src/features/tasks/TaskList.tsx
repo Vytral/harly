@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { CheckCircle2, ChevronRight, SearchX } from "lucide-react";
 
+import { Card } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
 import { cn } from "@/lib/utils";
 import type { TaskItem } from "./shared";
@@ -50,10 +51,10 @@ export function TaskList({
     })).filter((g) => g.tasks.length > 0);
 
     if (done.length > 0) {
-      byUrgency.push({ key: "completed", label: "Completed", dot: "bg-primary", tasks: done });
+      byUrgency.push({ key: "completed", label: "Completed", dot: "bg-success-olive", tasks: done });
     }
     if (canceled.length > 0) {
-      byUrgency.push({ key: "canceled", label: "Canceled", dot: "bg-muted-foreground/40", tasks: canceled });
+      byUrgency.push({ key: "canceled", label: "Canceled", dot: "bg-quiet-mist", tasks: canceled });
     }
     return byUrgency;
   }, [tasks]);
@@ -76,11 +77,11 @@ export function TaskList({
   }
 
   return (
-    <div className="space-y-5">
-      {groups.map((group) => {
+    <Card className="gap-0 overflow-hidden py-2">
+      {groups.map((group, gi) => {
         const isCollapsed = collapsed.has(group.key);
         return (
-          <section key={group.key}>
+          <section key={group.key} className={cn(gi > 0 && "border-t border-hairline")}>
             <button
               type="button"
               onClick={() =>
@@ -91,22 +92,20 @@ export function TaskList({
                   return next;
                 })
               }
-              className="mb-2 flex w-full items-center gap-2 text-left"
+              className="flex w-full items-center gap-2 px-4 py-3 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-near-ink"
               aria-expanded={!isCollapsed}
             >
               <ChevronRight
-                className={cn("size-3.5 text-muted-foreground transition-transform", !isCollapsed && "rotate-90")}
+                className={cn("size-3.5 text-quiet-mist transition-transform", !isCollapsed && "rotate-90")}
               />
-              <span className={cn("size-2 rounded-full", group.dot)} />
-              <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                {group.label}
-              </span>
-              <span className="rounded-full bg-muted px-1.5 text-xs font-medium tabular-nums text-muted-foreground">
+              <span aria-hidden className={cn("size-2 rounded-full", group.dot)} />
+              <span className="text-[13px] font-semibold text-near-ink">{group.label}</span>
+              <span className="rounded-full bg-soft-kraft px-2 py-0.5 text-[11px] font-medium tabular-nums text-soft-ink">
                 {group.tasks.length}
               </span>
             </button>
             {!isCollapsed && (
-              <div className="divide-y divide-border/60 overflow-hidden rounded-2xl border border-border/60 bg-card">
+              <div className="divide-y divide-hairline border-t border-hairline">
                 {group.tasks.map((task) => (
                   <TaskRow key={task.id} task={task} handlers={handlers} />
                 ))}
@@ -115,6 +114,6 @@ export function TaskList({
           </section>
         );
       })}
-    </div>
+    </Card>
   );
 }

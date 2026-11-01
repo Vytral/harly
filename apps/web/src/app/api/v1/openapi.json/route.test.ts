@@ -81,6 +81,13 @@ describe("GET /api/v1/openapi.json", () => {
     expect(dereferenced).toBeTruthy();
   });
 
+  it("does not advertise the withdrawn Automations API", async () => {
+    const spec = await (
+      await GET(new Request("https://harly.example/api/v1/openapi.json"))
+    ).json();
+    expect(Object.keys(spec.paths).filter((p) => p.includes("/automations"))).toEqual([]);
+  });
+
   it("keeps the contract registry aligned with the implemented API routes", () => {
     const apiRoot = path.resolve(process.cwd(), "src/app/api/v1");
     const implementedRoutes: string[] = [];

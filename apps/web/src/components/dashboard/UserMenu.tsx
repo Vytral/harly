@@ -11,6 +11,9 @@ import {
   ListChecks,
   LogOut,
   MessageSquare,
+  Moon,
+  Sun,
+  UserPlus,
   UserRound,
 } from "lucide-react";
 import Link from "next/link";
@@ -28,6 +31,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
+import { useTheme } from "@/components/ThemeProvider";
 import type { WorkspaceOption } from "@/features/workspaces/data";
 import { restoreSetupChecklistAction } from "@/features/onboarding/checklist-actions";
 
@@ -46,11 +50,32 @@ type UserMenuProps = {
   workspaceOptions: WorkspaceOption[];
   /** The public demo hides the beta chip and the checklist restore entry. */
   demoMode?: boolean;
+  /** When set, the menu offers "Invite teammates" and calls this on select. */
+  onInvite?: () => void;
 };
 
 /** Shared row styling for the menu's action items (overrides the Radix item defaults). */
 const itemClass =
   "gap-2.5 rounded-lg px-2 py-2 text-sm text-foreground/80 hover:text-foreground";
+
+/** Theme toggle; only mounts while the menu is open, inside ThemeProvider. */
+function ThemeItem() {
+  const { resolvedTheme, setTheme } = useTheme();
+  const dark = resolvedTheme === "dark";
+  return (
+    <DropdownMenuItem
+      className={itemClass}
+      onSelect={() => setTheme(dark ? "light" : "dark")}
+    >
+      {dark ? (
+        <Sun className="size-4 text-muted-foreground" strokeWidth={1.5} />
+      ) : (
+        <Moon className="size-4 text-muted-foreground" strokeWidth={1.5} />
+      )}
+      {dark ? "Light mode" : "Dark mode"}
+    </DropdownMenuItem>
+  );
+}
 
 function formatRole(role: string) {
   return role.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
@@ -62,6 +87,7 @@ export function UserMenu({
   workspace,
   workspaceOptions,
   demoMode = false,
+  onInvite,
 }: UserMenuProps) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
@@ -86,8 +112,11 @@ export function UserMenu({
     });
   }
 
-  const canRestoreChecklist =
-    !demoMode && (role === "owner" || role === "admin");
+  const isWorkspaceAdmin = role === "owner" || role === "admin";
+  const canRestoreChecklist = !demoMode && isWorkspaceAdmin;
+  // Product links (GitHub, docs, issues, beta badge) are for whoever runs the
+  // install, not for day-to-day recruiters and interviewers.
+  const showProductLinks = !demoMode && isWorkspaceAdmin;
 
   function switchTo(organizationId: string) {
     if (organizationId === workspace.id) return;
@@ -107,7 +136,7 @@ export function UserMenu({
       <DropdownMenuTrigger asChild>
         <button
           type="button"
-          className="flex shrink-0 items-center rounded-full ring-offset-background transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+          className="flex shrink-0 items-center rounded-full ring-2 ring-pure-snow/70 transition duration-150 ease-out hover:ring-pure-snow focus-visible:outline-none focus-visible:ring-near-ink data-[state=open]:ring-pure-snow"
           aria-label="Account menu"
         >
           <UserAvatar name={user.name} src={user.image} size="md" priority />
@@ -210,6 +239,19 @@ export function UserMenu({
               Organization settings
             </Link>
           </DropdownMenuItem>
+          {onInvite ? (
+            <DropdownMenuItem
+              onSelect={() => onInvite()}
+              className={itemClass}
+            >
+              <UserPlus
+                className="size-4 text-muted-foreground"
+                strokeWidth={1.5}
+              />
+              Invite teammates
+            </DropdownMenuItem>
+          ) : null}
+          <ThemeItem />
           {canRestoreChecklist ? (
             <DropdownMenuItem
               disabled={isPending}
@@ -229,9 +271,10 @@ export function UserMenu({
           ) : null}
         </div>
 
-        <DropdownMenuSeparator className="m-0" />
-
         {/* ── GitHub ── */}
+        {showProductLinks ? (
+        <>
+        <DropdownMenuSeparator className="m-0" />
         <div className="px-3 py-2">
           <DropdownMenuItem asChild className={itemClass}>
             <a href={REPO_URL} target="_blank" rel="noreferrer">
@@ -241,9 +284,11 @@ export function UserMenu({
             </a>
           </DropdownMenuItem>
         </div>
+        </>
+        ) : null}
 
         {/* ── Public beta: quiet status, plus where to get help ── */}
-        {!demoMode ? (
+        {showProductLinks ? (
           <>
             <DropdownMenuSeparator className="m-0" />
             <div className="px-3 py-2">

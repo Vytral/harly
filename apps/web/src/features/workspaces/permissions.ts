@@ -43,6 +43,8 @@ export const PERMISSIONS = [
   "documents:manage",
   "documents:share",
   "automations:manage", // create / edit / toggle / delete workflows
+  "mcp:use", // connect an AI client (MCP) and act with your own permissions
+  "mcp:manage", // turn MCP on/off, client policy, see and revoke every connection
 ] as const;
 
 export type Permission = (typeof PERMISSIONS)[number];
@@ -266,6 +268,21 @@ export const PERMISSION_GROUPS: PermissionGroup[] = [
     ],
   },
   {
+    label: "AI agents (MCP)",
+    permissions: [
+      {
+        key: "mcp:use",
+        label: "Connect AI agents",
+        hint: "Connect Claude, ChatGPT, Cursor and other MCP clients to Harly. They act with your own permissions, never more",
+      },
+      {
+        key: "mcp:manage",
+        label: "Manage AI agent access",
+        hint: "Turn MCP on or off for the workspace, choose which clients may connect, and revoke anyone's connection",
+      },
+    ],
+  },
+  {
     label: "Administration",
     permissions: [
       { key: "members:read", label: "View members & invitations" },
@@ -329,6 +346,7 @@ export const BUILTIN_ROLE_PERMISSIONS: Record<BuiltinRole, Permission[]> = {
     "documents:manage",
     "documents:share",
     "automations:manage",
+    "mcp:use",
   ],
   hiring_manager: [
     "jobs:view",
@@ -343,8 +361,39 @@ export const BUILTIN_ROLE_PERMISSIONS: Record<BuiltinRole, Permission[]> = {
     "members:read",
     "reports:read",
     "documents:read",
+    "mcp:use",
   ],
 };
+
+/**
+ * `custom_roles` rows override a built-in role's defaults wholesale, so a row
+ * saved before MCP existed does not list `mcp:use` even though the built-in
+ * recruiter / hiring manager now has it. Rows last written before this instant
+ * predate the permission: their admin could not have chosen to withhold it, so
+ * they inherit the new built-in default. Any later save carries an explicit
+ * choice and is taken as is. No data migration needed.
+ */
+export const MCP_PERMISSIONS_INTRODUCED_AT = new Date("2026-10-31T00:00:00Z");
+
+const LEGACY_MCP_DEFAULT_ROLES: ReadonlySet<string> = new Set([
+  "recruiter",
+  "hiring_manager",
+]);
+
+/** Apply new built-in defaults to a stored override that predates them. */
+export function withLegacyRoleDefaults(
+  roleKey: string,
+  permissions: Permission[],
+  updatedAt: Date | string | null | undefined,
+): Permission[] {
+  if (!LEGACY_MCP_DEFAULT_ROLES.has(roleKey)) return permissions;
+  if (permissions.includes("mcp:use")) return permissions;
+  const writtenAt = updatedAt ? new Date(updatedAt).getTime() : Number.NaN;
+  if (!Number.isFinite(writtenAt) || writtenAt >= MCP_PERMISSIONS_INTRODUCED_AT.getTime()) {
+    return permissions;
+  }
+  return [...permissions, "mcp:use"];
+}
 
 export function isBuiltinRole(role: string): role is BuiltinRole {
   return (BUILTIN_ROLES as readonly string[]).includes(role);
@@ -400,6 +449,7 @@ export const SETTINGS_SECTION_PERMISSION: Record<
   "/settings/email": "settings:edit",
   "/settings/integrations": "integrations:manage",
   "/settings/developers": "integrations:manage",
+  "/settings/ai-agents": ["mcp:use", "mcp:manage"],
   "/settings/security": "security:manage",
   "/settings/legal": ["settings:edit", "dsar:manage"],
   "/settings/portal": "settings:edit",

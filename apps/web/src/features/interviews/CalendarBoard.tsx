@@ -16,20 +16,13 @@ import {
   CalendarIcon,
   CaretLeftIcon,
   CaretRightIcon,
-  FunnelIcon,
   MapPinIcon,
   PhoneIcon,
   VideoCameraIcon,
 } from "@/components/ui/icons/phosphor";
+import { FilterPill } from "@/components/ui/FilterPill";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { UserAvatar } from "@/components/ui/UserAvatar";
 import { duration, easing, resolveTransition } from "@/lib/motion";
 import { cn } from "@/lib/utils";
@@ -44,9 +37,9 @@ const MODE_ICON: Record<
 };
 
 const MODE_TONE: Record<InterviewMode, string> = {
-  video: "bg-pine/10 text-pine",
-  phone: "bg-sage-ink/10 text-sage-ink",
-  onsite: "bg-clay/10 text-clay",
+  video: "bg-lime-wash text-sage-ink",
+  phone: "bg-status-quiet text-status-quiet-ink",
+  onsite: "bg-warning-clay/10 text-warning-clay",
 };
 
 const MAX_VISIBLE_PER_DAY = 3;
@@ -69,12 +62,15 @@ function buildMonthGrid(monthStart: Date): Date[] {
 }
 
 export function CalendarBoard({
+  focusDate,
   monthParam,
   monthLabel,
   interviews,
   jobOptions,
   interviewerOptions,
 }: {
+  /** `YYYY-MM-DD` to open on (from `?date=`): that day starts selected. */
+  focusDate: string | null;
   monthParam: string;
   monthLabel: string;
   interviews: UpcomingInterviewItem[];
@@ -86,7 +82,11 @@ export function CalendarBoard({
   const [jobFilter, setJobFilter] = useState("all");
   const [interviewerFilter, setInterviewerFilter] = useState("all");
   const [typeFilter, setTypeFilter] = useState("all");
-  const [selectedDay, setSelectedDay] = useState<string | null>(null);
+  const [selectedDay, setSelectedDay] = useState<string | null>(() => {
+    if (!focusDate) return null;
+    const [y, m, d] = focusDate.split("-").map(Number);
+    return dayKey(new Date(y, m - 1, d));
+  });
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const detailRef = useRef<HTMLDivElement | null>(null);
 
@@ -160,15 +160,57 @@ export function CalendarBoard({
   return (
     <div className="space-y-4">
       <header className="flex flex-wrap items-center justify-between gap-3">
-        <p className="text-sm text-muted-foreground">
-          {filtered.length} interview{filtered.length === 1 ? "" : "s"} this
-          month{hasAnyFilter ? " (filtered)" : ""}.
-        </p>
+        <div className="flex flex-wrap items-center gap-2">
+          <FilterPill
+            label="Job"
+            value={jobFilter}
+            onChange={setJobFilter}
+            options={jobOptions.map((o) => o.value)}
+            labelMap={{ all: "All", ...Object.fromEntries(jobOptions.map((o) => [o.value, o.label])) }}
+            allValue="all"
+          />
+          <FilterPill
+            label="Interviewer"
+            value={interviewerFilter}
+            onChange={setInterviewerFilter}
+            options={interviewerOptions.map((o) => o.value)}
+            labelMap={{ all: "All", ...Object.fromEntries(interviewerOptions.map((o) => [o.value, o.label])) }}
+            allValue="all"
+          />
+          <FilterPill
+            label="Type"
+            value={typeFilter}
+            onChange={setTypeFilter}
+            options={["all", "screening", "culture_fit", "technical", "onsite", "final"]}
+            labelMap={{
+              all: "All",
+              screening: "Screening",
+              culture_fit: "Culture fit",
+              technical: "Technical",
+              onsite: "Onsite",
+              final: "Final round",
+            }}
+            allValue="all"
+          />
+          {hasAnyFilter ? (
+            <button
+              type="button"
+              onClick={() => {
+                setJobFilter("all");
+                setInterviewerFilter("all");
+                setTypeFilter("all");
+              }}
+              className="rounded-full px-2 py-1 text-[13px] font-medium text-soft-ink transition-colors hover:text-near-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-near-ink"
+            >
+              Clear filters
+            </button>
+          ) : null}
+        </div>
         <div className="flex items-center gap-1">
           <button
             type="button"
             onClick={() => goToMonth(-1)}
-            className="inline-flex size-8 items-center justify-center rounded-md border border-border text-muted-foreground transition-colors hover:bg-accent hover:text-foreground active:scale-[0.97]"
+            className="inline-flex size-9 items-center justify-center rounded-full bg-soft-kraft text-near-ink transition-colors hover:bg-row-wash focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-near-ink active:scale-[0.97]"
             aria-label="Previous month"
           >
             <CaretLeftIcon className="size-4" />
@@ -176,14 +218,14 @@ export function CalendarBoard({
           <button
             type="button"
             onClick={goToday}
-            className="rounded-md border border-border px-3 py-1.5 text-sm font-medium transition-colors hover:bg-accent active:scale-[0.97]"
+            className="h-9 rounded-full bg-soft-kraft px-4 text-[13px] font-medium text-near-ink transition-colors hover:bg-row-wash focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-near-ink active:scale-[0.97]"
           >
             {monthLabel}
           </button>
           <button
             type="button"
             onClick={() => goToMonth(1)}
-            className="inline-flex size-8 items-center justify-center rounded-md border border-border text-muted-foreground transition-colors hover:bg-accent hover:text-foreground active:scale-[0.97]"
+            className="inline-flex size-9 items-center justify-center rounded-full bg-soft-kraft text-near-ink transition-colors hover:bg-row-wash focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-near-ink active:scale-[0.97]"
             aria-label="Next month"
           >
             <CaretRightIcon className="size-4" />
@@ -191,61 +233,10 @@ export function CalendarBoard({
         </div>
       </header>
 
-      <div className="flex flex-wrap items-center gap-2 rounded-lg border border-border bg-card/50 p-2.5">
-        <FunnelIcon className="ml-1 size-4 text-muted-foreground" />
-        <Select value={jobFilter} onValueChange={setJobFilter}>
-          <SelectTrigger className="h-8 w-auto min-w-32 text-xs">
-            <SelectValue placeholder="All jobs" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All jobs</SelectItem>
-            {jobOptions.map((o) => (
-              <SelectItem key={o.value} value={o.value}>
-                {o.label}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        <Select value={interviewerFilter} onValueChange={setInterviewerFilter}>
-          <SelectTrigger className="h-8 w-auto min-w-36 text-xs">
-            <SelectValue placeholder="All interviewers" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All interviewers</SelectItem>
-            {interviewerOptions.map((o) => (
-              <SelectItem key={o.value} value={o.value}>
-                {o.label}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        <Select value={typeFilter} onValueChange={setTypeFilter}>
-          <SelectTrigger className="h-8 w-auto min-w-28 text-xs">
-            <SelectValue placeholder="All types" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All types</SelectItem>
-            <SelectItem value="screening">Screening</SelectItem>
-            <SelectItem value="culture_fit">Culture fit</SelectItem>
-            <SelectItem value="technical">Technical</SelectItem>
-            <SelectItem value="onsite">Onsite</SelectItem>
-            <SelectItem value="final">Final round</SelectItem>
-          </SelectContent>
-        </Select>
-        {hasAnyFilter ? (
-          <button
-            type="button"
-            onClick={() => {
-              setJobFilter("all");
-              setInterviewerFilter("all");
-              setTypeFilter("all");
-            }}
-            className="ml-auto text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
-          >
-            Clear filters
-          </button>
-        ) : null}
-      </div>
+      <p className="text-[13px] text-soft-ink">
+        {filtered.length} interview{filtered.length === 1 ? "" : "s"} this
+        month{hasAnyFilter ? " (filtered)" : ""}.
+      </p>
 
       {/* Mobile: agenda list grouped by day (7-col grid is unreadable under sm) */}
       <div className="space-y-3 sm:hidden">
@@ -262,7 +253,7 @@ export function CalendarBoard({
                 });
                 return (
                   <div key={key} className="space-y-1.5">
-                    <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                    <h3 className="text-xs font-semibold uppercase tracking-wide text-soft-ink">
                       {heading}
                     </h3>
                     <div className="space-y-1.5">
@@ -272,9 +263,9 @@ export function CalendarBoard({
                           <Link
                             key={iv.id}
                             href={`/dashboard/candidates/${iv.candidateId}`}
-                            className="flex items-center gap-3 rounded-lg border border-border bg-card px-3 py-2.5 transition-colors hover:bg-accent/60"
+                            className="flex items-center gap-3 rounded-[var(--radius-inner)] bg-card px-3 py-2.5 shadow-[var(--shadow-card)] transition-colors hover:bg-row-wash"
                           >
-                            <span className="w-14 shrink-0 text-xs font-medium tabular-nums text-muted-foreground">
+                            <span className="w-14 shrink-0 text-xs font-medium tabular-nums text-soft-ink">
                               {new Date(iv.scheduledAt).toLocaleTimeString(
                                 "en",
                                 {
@@ -295,7 +286,7 @@ export function CalendarBoard({
                               <span className="block truncate text-sm font-medium">
                                 {iv.candidateName}
                               </span>
-                              <span className="block truncate text-xs text-muted-foreground">
+                              <span className="block truncate text-xs text-soft-ink">
                                 {interviewTypeLabel(iv.type)} · {iv.jobTitle}
                               </span>
                             </span>
@@ -315,16 +306,16 @@ export function CalendarBoard({
           animate={{ opacity: 1, x: 0 }}
           exit={shouldReduceMotion ? undefined : { opacity: 0, x: -8 }}
           transition={resolveTransition({ duration: duration.fast, ease: easing.easeOut }, Boolean(shouldReduceMotion))}
-          className="hidden overflow-hidden rounded-xl border border-border sm:block"
+          className="hidden overflow-hidden rounded-[var(--radius-card)] bg-card shadow-[var(--shadow-card)] sm:block"
         >
           <div
-            className="grid grid-cols-7 border-b border-border bg-muted/40"
+            className="grid grid-cols-7 border-b border-hairline"
             aria-hidden="true"
           >
             {WEEKDAY_LABELS.map((d) => (
               <div
                 key={d}
-                className="px-2 py-2 text-center text-xs font-medium uppercase tracking-wide text-muted-foreground"
+                className="px-2 py-3 text-center text-[11px] font-medium uppercase tracking-wide text-soft-ink"
               >
                 {d}
               </div>
@@ -363,17 +354,18 @@ export function CalendarBoard({
                     setSelectedDay(selectedDay === key ? null : key)
                   }
                   className={cn(
-                    "flex min-h-24 flex-col items-stretch gap-1 border-b border-r border-border p-1.5 text-left transition-colors last:border-r-0",
-                    !isCurrentMonth && "bg-muted/20 text-muted-foreground/50",
-                    "hover:bg-accent/60",
-                    selectedDay === key && "bg-accent",
+                    "flex min-h-28 flex-col items-stretch gap-1 border-b border-r border-hairline p-1.5 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-near-ink [&:nth-child(7n)]:border-r-0",
+                    !isCurrentMonth && "bg-card-inset/60 text-quiet-mist",
+                    isToday && "bg-lime-wash",
+                    "hover:bg-row-wash",
+                    selectedDay === key && "bg-row-wash",
                   )}
                 >
                   <span
                     aria-hidden="true"
                     className={cn(
                       "inline-flex size-6 items-center justify-center rounded-full text-xs font-medium tabular-nums",
-                      isToday && "bg-pine text-primary-foreground",
+                      isToday && "bg-chartreuse-signal text-chartreuse-ink",
                     )}
                   >
                     {date.getDate()}
@@ -388,7 +380,7 @@ export function CalendarBoard({
                         <span
                           key={iv.id}
                           className={cn(
-                            "flex items-center gap-1 truncate rounded px-1.5 py-0.5 text-[11px] font-medium",
+                            "flex items-center gap-1 truncate rounded-full px-2 py-0.5 text-[11px] font-medium",
                             MODE_TONE[iv.mode],
                           )}
                         >
@@ -404,7 +396,7 @@ export function CalendarBoard({
                       );
                     })}
                     {overflow > 0 ? (
-                      <span className="px-1.5 text-[11px] font-medium text-muted-foreground">
+                      <span className="px-1.5 text-[11px] font-medium text-soft-ink">
                         +{overflow} more
                       </span>
                     ) : null}
@@ -426,7 +418,7 @@ export function CalendarBoard({
             transition={resolveTransition({ duration: duration.fast, ease: easing.easeOut }, Boolean(shouldReduceMotion))}
           >
             <Card>
-              <CardContent className="space-y-2 py-4">
+              <CardContent className="space-y-2">
                 <div className="flex items-center justify-between">
                   <h2 className="text-sm font-semibold tracking-tight">
                     {selectedDayHeading}
@@ -434,14 +426,14 @@ export function CalendarBoard({
                   <button
                     type="button"
                     onClick={() => setSelectedDay(null)}
-                    className="text-xs font-medium text-muted-foreground hover:text-foreground"
+                    className="text-xs font-medium text-soft-ink hover:text-near-ink"
                   >
                     Close
                   </button>
                 </div>
                 <div className="space-y-1.5">
                   {selectedDayInterviews.length === 0 ? (
-                    <p className="py-2 text-sm text-muted-foreground">
+                    <p className="py-2 text-sm text-soft-ink">
                       No interviews on this day. Schedule an interview from a candidate&apos;s profile.
                     </p>
                   ) : null}
@@ -454,7 +446,7 @@ export function CalendarBoard({
                     return (
                       <div
                         key={iv.id}
-                        className="rounded-lg border border-transparent transition-colors hover:border-border hover:bg-accent/60"
+                        className="rounded-[var(--radius-inner)] transition-colors hover:bg-row-wash"
                       >
                         <div className="flex items-center gap-3 px-2 py-2">
                           <button
@@ -465,7 +457,7 @@ export function CalendarBoard({
                             className="flex min-w-0 flex-1 items-center gap-3 text-left"
                             aria-expanded={isExpanded}
                           >
-                            <span className="w-16 shrink-0 text-xs font-medium tabular-nums text-muted-foreground">
+                            <span className="w-16 shrink-0 text-xs font-medium tabular-nums text-soft-ink">
                               {new Date(iv.scheduledAt).toLocaleTimeString(
                                 "en",
                                 {
@@ -486,7 +478,7 @@ export function CalendarBoard({
                               <span className="block truncate text-sm font-medium">
                                 {iv.title || iv.candidateName}
                               </span>
-                              <span className="block truncate text-xs text-muted-foreground">
+                              <span className="block truncate text-xs text-soft-ink">
                                 {interviewTypeLabel(iv.type)} · {iv.jobTitle} ·{" "}
                                 {interviewModeLabel(iv.mode)}
                               </span>
@@ -505,7 +497,7 @@ export function CalendarBoard({
                           </button>
                           <Link
                             href={`/dashboard/candidates/${iv.candidateId}`}
-                            className="shrink-0 text-muted-foreground transition-colors hover:text-foreground"
+                            className="shrink-0 text-soft-ink transition-colors hover:text-near-ink"
                             title="Open candidate"
                           >
                             <ArrowUpRightIcon className="size-4" />
@@ -528,9 +520,9 @@ export function CalendarBoard({
                               transition={resolveTransition({ duration: duration.fast, ease: easing.easeOut }, Boolean(shouldReduceMotion))}
                               className="overflow-hidden"
                             >
-                              <div className="space-y-1.5 border-t border-border/60 px-2 py-2.5 pl-[4.75rem] text-xs text-muted-foreground">
+                              <div className="space-y-1.5 border-t border-border/60 px-2 py-2.5 pl-[4.75rem] text-xs text-soft-ink">
                                 <div>
-                                  <span className="font-medium text-foreground">
+                                  <span className="font-medium text-near-ink">
                                     {iv.candidateName}
                                   </span>{" "}
                                   ·{" "}
@@ -556,14 +548,14 @@ export function CalendarBoard({
                                       href={iv.meetLink}
                                       target="_blank"
                                       rel="noopener noreferrer"
-                                      className="truncate text-pine hover:underline"
+                                      className="truncate text-sage-ink hover:underline"
                                     >
                                       {iv.meetLink}
                                     </a>
                                   </div>
                                 ) : null}
                                 {iv.notes ? (
-                                  <p className="whitespace-pre-wrap text-foreground/80">
+                                  <p className="whitespace-pre-wrap text-near-ink/80">
                                     {iv.notes}
                                   </p>
                                 ) : null}
@@ -578,7 +570,7 @@ export function CalendarBoard({
                                         "noopener,noreferrer",
                                       );
                                     }}
-                                    className="inline-flex items-center gap-1 text-foreground/80 transition-colors hover:text-foreground"
+                                    className="inline-flex items-center gap-1 text-near-ink/80 transition-colors hover:text-near-ink"
                                   >
                                     View in Google Calendar
                                     <ArrowUpRightIcon className="size-3" />
@@ -601,9 +593,9 @@ export function CalendarBoard({
       {filtered.length === 0 ? (
         <Card>
           <CardContent className="flex flex-col items-center gap-2 py-12 text-center">
-            <CalendarIcon className="size-10 text-muted-foreground" />
+            <CalendarIcon className="size-8 text-quiet-mist" />
             <p className="text-sm font-medium">No interviews this month</p>
-            <p className="max-w-sm text-sm text-muted-foreground">
+            <p className="max-w-sm text-sm text-soft-ink">
               {hasAnyFilter
                 ? "Try clearing a filter, or schedule one from a candidate's profile."
                 : "Schedule an interview from a candidate's profile to see it here."}

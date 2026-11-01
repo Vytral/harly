@@ -28,6 +28,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { RichTextEditor } from "@/components/ui/RichTextEditor";
+import { SettingRow } from "@/components/ui/setting-row";
 import { Switch } from "@/components/ui/switch";
 import {
   Select,
@@ -352,22 +353,22 @@ export function LegalSettings({
           How long candidate data is kept after the hiring process concludes.
         </p>
 
-        <div className="flex items-start justify-between gap-4 rounded-xl border border-border/70 bg-muted/20 p-4">
-          <div>
-            <p className="text-sm font-medium text-foreground">Enforce automatically</p>
-            <p className="mt-1 text-xs leading-5 text-muted-foreground">
-              When on, a nightly job anonymizes candidates past their retention window (name,
-              contact info, and résumé data redacted; documents deleted). Hired candidates and
-              anything under legal hold are always skipped. Pipeline history is kept for metrics.
-              Off by default — the months below are advisory until you turn this on.
-            </p>
-          </div>
-          <Switch
-            checked={retentionEnabled}
-            onCheckedChange={setRetentionEnabled}
-            aria-label="Enforce data retention automatically"
-          />
-        </div>
+        <SettingRow
+          htmlFor="retention-enforce"
+          descriptionId="retention-enforce-desc"
+          align="start"
+          className="rounded-[var(--radius-inner)] border border-hairline px-4 py-3"
+          title="Enforce automatically"
+          description="When on, a nightly job anonymizes candidates past their retention window (name, contact info, and résumé data redacted; documents deleted). Hired candidates and anything under legal hold are always skipped. Pipeline history is kept for metrics. Off by default — the months below are advisory until you turn this on."
+          control={
+            <Switch
+              id="retention-enforce"
+              aria-describedby="retention-enforce-desc"
+              checked={retentionEnabled}
+              onCheckedChange={setRetentionEnabled}
+            />
+          }
+        />
 
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <Field>
@@ -380,7 +381,7 @@ export function LegalSettings({
               value={retentionApplicants}
               onChange={(e) => setRetentionApplicants(Number(e.target.value) || 6)}
             />
-            <p className="text-xs text-muted-foreground">
+            <p className="text-[12.5px] text-soft-ink">
               Unsuccessful candidates are anonymized after this period{retentionEnabled ? "" : " once enforcement is on"}.
             </p>
           </Field>
@@ -394,7 +395,7 @@ export function LegalSettings({
               value={retentionTalentPool}
               onChange={(e) => setRetentionTalentPool(Number(e.target.value) || 24)}
             />
-            <p className="text-xs text-muted-foreground">
+            <p className="text-[12.5px] text-soft-ink">
               Candidates who opt-in to your talent pool. Requires re-consent.
             </p>
           </Field>
@@ -410,7 +411,7 @@ export function LegalSettings({
               value={auditRetentionMonths}
               onChange={(e) => setAuditRetentionMonths(Number(e.target.value) || 24)}
             />
-            <p className="text-xs text-muted-foreground">
+            <p className="text-[12.5px] text-soft-ink">
               Audit evidence is pruned by the protected nightly retention job. Minimum 12 months.
             </p>
           </Field>
@@ -516,5 +517,5 @@ export function LegalSettings({
 }
 
 function Field({ children }: { children: React.ReactNode }) {
-  return <div className="space-y-2">{children}</div>;
+  return <div className="space-y-1.5">{children}</div>;
 }
