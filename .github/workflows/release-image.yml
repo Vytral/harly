@@ -36,10 +36,10 @@ jobs:
     uses: ./.github/workflows/ci.yml
     secrets: inherit
 
-  # The scan gate runs once, before anything reaches the registry. The two
-  # architectures then build in parallel on native runners (arm64 used to be
-  # emulated with QEMU, which made a release take about an hour) and are
-  # joined into one multi-architecture index in `image`.
+  # The two architectures build in parallel on native runners (arm64 used to
+  # be emulated with QEMU, which made a release take about an hour). Each one
+  # is scanned locally before anything is pushed, and `image` joins them into
+  # one multi-architecture index.
   prepare:
     needs: validate
     outputs:
@@ -65,31 +65,6 @@ jobs:
           else
             echo "prerelease=false" >> "$GITHUB_OUTPUT"
           fi
-      - uses: docker/setup-buildx-action@v3
-
-      # Build for amd64 and keep it local. The scan below is the publication
-      # gate, so it has to run against an image that is not in the registry
-      # yet. Its cache scope is the one the amd64 build below reads.
-      - id: candidate
-        name: Build the candidate image without publishing it
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          push: false
-          load: true
-          platforms: linux/amd64
-          tags: harly:candidate
-          cache-from: type=gha,scope=linux-amd64
-          cache-to: type=gha,mode=max,scope=linux-amd64
-      - name: Block HIGH and CRITICAL vulnerabilities before publishing
-        uses: aquasecurity/trivy-action@v0.36.0
-        with:
-          image-ref: harly:candidate
-          format: table
-          severity: HIGH,CRITICAL
-          ignore-unfixed: false
-          exit-code: "1"
-
       - id: meta
         uses: docker/metadata-action@v5
         with:
@@ -122,8 +97,31 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
+      # Build this architecture and keep it local. The scan below is the
+      # publication gate, so it runs against an image not in the registry yet;
+      # a finding in either architecture stops the release before any push.
+      - name: Build the candidate image without publishing it
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: false
+          load: true
+          platforms: ${{ matrix.platform }}
+          tags: harly:candidate
+          cache-from: type=gha,scope=${{ steps.platform.outputs.slug }}
+          cache-to: type=gha,mode=max,scope=${{ steps.platform.outputs.slug }}
+      - name: Block HIGH and CRITICAL vulnerabilities before publishing
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          image-ref: harly:candidate
+          format: table
+          severity: HIGH,CRITICAL
+          ignore-unfixed: false
+          exit-code: "1"
+
       # Pushed by digest only: no tag exists until `image` joins both
-      # architectures, so nothing installable appears half-built.
+      # architectures, so nothing installable appears half-built. The build
+      # reuses the candidate's layers from the cache.
       - id: build
         name: Build and push this architecture by digest
         uses: docker/build-push-action@v6
