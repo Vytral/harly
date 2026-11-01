@@ -33,7 +33,12 @@ const PUBLIC_PATHS = [
   // SCIM authenticates with its workspace-scoped bearer token in the route;
   // never redirect an IdP to the browser login page.
   "/api/scim",
+  // MCP endpoint: bearer-token auth in the route, answers 401 with a
+  // resource_metadata challenge instead of redirecting to /login.
+  "/mcp",
   "/api/cron",
+  // The host updater authenticates with its own bearer token in the route.
+  "/api/updater",
   "/embed",
   "/api/applications/resume/presign",
   "/api/storage/presign",
@@ -55,6 +60,10 @@ const PUBLIC_PATHS = [
   "/sign",
   "/api/native-sign",
   "/api/pdfjs",
+  // MCP OAuth: discovery documents and the token/register endpoints are called
+  // by AI clients without a session; /oauth/consent checks the session itself.
+  "/.well-known",
+  "/oauth",
 ];
 
 const PROTECTED_PATH_PREFIXES = ["/dashboard", "/settings"];
@@ -64,7 +73,7 @@ const SECURITY_EXEMPT_PREFIXES = ["/settings/security", "/account", "/api"];
 const CHANGE_PASSWORD_EXEMPT = ["/change-password", "/api", "/setup-2fa"];
 
 // Portal protected paths , require portal session cookie (no DB needed)
-const PORTAL_PROTECTED = ["/portal/dashboard", "/portal/jobs", "/portal/profile", "/portal/notifications"];
+const PORTAL_PROTECTED = ["/portal/dashboard", "/portal/applications", "/portal/jobs", "/portal/profile", "/portal/notifications"];
 
 function isProtected(pathname: string): boolean {
   return PROTECTED_PATH_PREFIXES.some((p) => pathname.startsWith(p));
@@ -90,6 +99,17 @@ function publicRedirectUrl(request: NextRequest, pathname: string): URL {
 // credential `/enter` screen. The career board at `/` is untouched.
 const DEMO_REDIRECT_TO_ENTER = ["/login", "/signup", "/forgot-password", "/setup"];
 
+function isMcpPath(pathname: string) {
+  return (
+    pathname === "/mcp" ||
+    pathname.startsWith("/mcp/") ||
+    pathname === "/oauth" ||
+    pathname.startsWith("/oauth/") ||
+    pathname.startsWith("/.well-known/oauth-") ||
+    pathname === "/.well-known/openid-configuration"
+  );
+}
+
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
@@ -101,6 +121,12 @@ export async function proxy(request: NextRequest) {
     DEMO_REDIRECT_TO_ENTER.some((p) => pathname === p || pathname.startsWith(`${p}/`))
   ) {
     return NextResponse.redirect(publicRedirectUrl(request, "/enter"));
+  }
+
+  // ── Demo mode: no MCP server, OAuth endpoints or discovery documents ────
+  // Sandboxes are throwaway and shared publicly, so AI agents never connect.
+  if (process.env.DEMO_MODE === "true" && isMcpPath(pathname)) {
+    return new NextResponse(null, { status: 404 });
   }
 
   // ── Candidate portal protected routes (cookie-only, no DB) ──────────────

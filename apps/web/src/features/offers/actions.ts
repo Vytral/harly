@@ -85,6 +85,7 @@ const updateOfferSchema = offerFieldsSchema.extend({
 });
 
 type ActionResult = { success: boolean; error?: string };
+type CreateOfferResult = ActionResult & { offerId?: string };
 
 /** Load an offer's application context, workspace-scoped. */
 async function getOfferRow(workspaceId: string, offerId: string) {
@@ -211,7 +212,7 @@ export async function createOffer(input: {
   expiresAt: string | null;
   notes: string | null;
   documentIds?: string[];
-}): Promise<ActionResult> {
+}): Promise<CreateOfferResult> {
   const parsed = createOfferSchema.safeParse(input);
   if (!parsed.success) {
     return {
@@ -291,6 +292,7 @@ export async function createOffer(input: {
     }
   }
 
+  let newOfferId: string | undefined;
   const transactionError = await db.transaction(async (tx) => {
     const [lockedApplication] = await tx
       .select({
@@ -352,6 +354,7 @@ export async function createOffer(input: {
         createdById: context.user.id,
       })
       .returning({ id: offers.id });
+    newOfferId = createdOffer?.id;
     if (createdOffer && parsed.data.documentIds.length > 0) {
       await tx.insert(documentAssociations).values(
         parsed.data.documentIds.map((documentId) => ({
@@ -379,7 +382,7 @@ export async function createOffer(input: {
   if (transactionError) return { success: false, error: transactionError };
 
   revalidatePath(`/dashboard/candidates/${application.candidateId}`);
-  return { success: true };
+  return { success: true, offerId: newOfferId };
 }
 
 /** Edit a draft offer's terms. Sent/decided offers are immutable. */

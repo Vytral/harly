@@ -15,8 +15,10 @@ import {
 } from "@/components/ui/icons/settings";
 import {
   CodeDuotoneIcon,
+  DownloadDuotoneIcon,
   IdentificationCardDuotoneIcon,
   PencilIcon,
+  PlugsConnectedIcon,
   RobotDuotoneIcon,
   SealCheckDuotoneIcon,
 } from "@/components/ui/icons/phosphor";
@@ -90,6 +92,12 @@ const groups: SettingsGroup[] = [
         icon: PlugIcon,
       },
       {
+        href: "/settings/ai-agents" as Route,
+        label: "AI agents (MCP)",
+        hint: "Connect Claude, ChatGPT, Cursor and other AI apps to Harly with your own permissions.",
+        icon: PlugsConnectedIcon,
+      },
+      {
         href: "/settings/developers" as Route,
         label: "Developers & API",
         hint: "API keys, webhooks, and developer tools.",
@@ -111,6 +119,17 @@ const groups: SettingsGroup[] = [
         label: "Legal & Compliance",
         hint: "Legal entity, retention policies, privacy policy, and terms.",
         icon: SealCheckDuotoneIcon,
+      },
+    ],
+  },
+  {
+    label: "Installation",
+    sections: [
+      {
+        href: "/settings/updates" as Route,
+        label: "Updates",
+        hint: "Harly version, one-click and automatic updates.",
+        icon: DownloadDuotoneIcon,
       },
     ],
   },

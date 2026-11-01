@@ -14,6 +14,7 @@ import {
 import { isUnrestrictedScope, jobVisibleUnderScope } from "@/features/search/scope";
 import {
   BUILTIN_ROLE_PERMISSIONS,
+  withLegacyRoleDefaults,
   PERMISSIONS,
   isBuiltinRole,
   normalizeRoleScope,
@@ -40,12 +41,16 @@ export async function actorHasPermission(
   if (roleIsAllPowerful(membership.role)) return { ok: true };
 
   const [custom] = await database
-    .select({ permissions: customRoles.permissions })
+    .select({ permissions: customRoles.permissions, updatedAt: customRoles.updatedAt })
     .from(customRoles)
     .where(and(eq(customRoles.workspaceId, workspaceId), eq(customRoles.key, membership.role)))
     .limit(1);
   const permissions = custom
-    ? PERMISSIONS.filter((item) => Array.isArray(custom.permissions) && (custom.permissions as string[]).includes(item))
+    ? withLegacyRoleDefaults(
+        membership.role,
+        PERMISSIONS.filter((item) => Array.isArray(custom.permissions) && (custom.permissions as string[]).includes(item)),
+        custom.updatedAt,
+      )
     : isBuiltinRole(membership.role)
       ? BUILTIN_ROLE_PERMISSIONS[membership.role as BuiltinRole]
       : [];
