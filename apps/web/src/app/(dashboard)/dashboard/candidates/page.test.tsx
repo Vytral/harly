@@ -11,6 +11,7 @@ const mocks = vi.hoisted(() => ({
   listEmailTemplates: vi.fn(),
   listJobOptions: vi.fn(),
   listWorkspaceMembers: vi.fn(),
+  getReviewQueue: vi.fn(),
 }));
 
 vi.mock("next/navigation", () => ({ notFound: vi.fn(), redirect: vi.fn() }));
@@ -28,6 +29,8 @@ vi.mock("@/features/candidates/data", () => ({
 vi.mock("@/features/email-templates/data", () => ({ listEmailTemplates: mocks.listEmailTemplates }));
 vi.mock("@/features/jobs/data", () => ({ listJobOptions: mocks.listJobOptions }));
 vi.mock("@/features/jobs/hiring-team-data", () => ({ listWorkspaceMembers: mocks.listWorkspaceMembers }));
+vi.mock("@/features/search/workspace-search", () => ({ resolveSearchActor: vi.fn(async () => ({})) }));
+vi.mock("@/features/review/queue", () => ({ getReviewQueue: mocks.getReviewQueue }));
 vi.mock("@/lib/gravatar", () => ({ getWorkspaceGravatarEnabled: vi.fn(async () => false) }));
 vi.mock("@/features/candidates/CandidatesTable", () => ({ CandidatesTable: () => null }));
 vi.mock("@/features/candidates/import/ImportCandidatesDrawer", () => ({ ImportCandidatesDrawer: () => null }));
@@ -50,6 +53,7 @@ describe("candidates directory page: trash for job-limited roles", () => {
     mocks.listEmailTemplates.mockResolvedValue([]);
     mocks.listJobOptions.mockResolvedValue([]);
     mocks.listWorkspaceMembers.mockResolvedValue([]);
+    mocks.getReviewQueue.mockResolvedValue({ total: 0, waitingOverWeek: 0, items: [] });
   });
 
   it("does not load trashed candidates for a role limited to specific jobs", async () => {

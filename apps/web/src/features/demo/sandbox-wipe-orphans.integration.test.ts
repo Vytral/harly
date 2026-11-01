@@ -126,6 +126,8 @@ describe.skipIf(!runPipelineIntegration)("sandbox wipe leaves no orphans (databa
       "ai_conversation_candidates",
       "evaluation_criteria",
       "evaluation_criterion_results",
+      "mcp_authorization_codes",
+      "mcp_tokens",
     ]);
   });
 });

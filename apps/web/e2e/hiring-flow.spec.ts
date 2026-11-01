@@ -107,13 +107,10 @@ test.describe("candidate-to-hire native signing flow", () => {
       // The database commit precedes the server action's completion and the
       // router refresh. Do not start a stage-specific action against stale
       // server-rendered props while the primary CTA still says "Moving…".
-      const stagePosition =
-        STAGE_IDS.findIndex(
-          (candidateStageId) => candidateStageId === stageId,
-        ) + 1;
       await expect(
-        page.getByRole("img", {
-          name: `Stage: ${stageName} (${stagePosition} of ${STAGE_IDS.length})`,
+        page.getByRole("list", {
+          name: `Pipeline progress: ${stageName}`,
+          exact: true,
         }),
       ).toBeVisible({ timeout: 30_000 });
       await expect(

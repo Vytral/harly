@@ -50,21 +50,22 @@ test.describe("native document signing", () => {
     });
     await expect(page.getByRole("heading", { name: documentName, exact: true })).toBeVisible();
     await acceptCookieConsent(page);
-    await page.getByRole("button", { name: "Native link", exact: true }).click();
+    await page.getByRole("button", { name: "Send for signature", exact: true }).first().click();
 
+    // Signer-first prepare: the PDF seeds one signature field for signer 1;
+    // fields added after "Add signer" go to the new (active) signer.
     const placementDialog = page.getByRole("dialog").last();
-    await expect(placementDialog.getByRole("heading", { name: "Place signature fields" })).toBeVisible();
-    await expect(placementDialog.getByText("1 field placed.")).toBeVisible({ timeout: 30_000 });
-    await placementDialog.getByRole("button", { name: "Add signature field", exact: true }).click();
-    await expect(placementDialog.getByText("2 fields placed.")).toBeVisible();
-    await placementDialog.getByRole("button", { name: "Continue", exact: true }).click();
-
+    await expect(placementDialog.getByRole("heading", { name: "Prepare for signing" })).toBeVisible();
+    await expect(placementDialog.getByRole("button", { name: "Remove field 1", exact: true })).toBeVisible({ timeout: 30_000 });
     await placementDialog.getByRole("button", { name: "Add signer", exact: true }).click();
-    await placementDialog.locator("#native-recipient-name-0").fill("Ada Lovelace");
-    await placementDialog.locator("#native-recipient-email-0").fill("signer-one@harly-e2e.test");
-    await placementDialog.locator("#native-recipient-name-1").fill("Grace Hopper");
-    await placementDialog.locator("#native-recipient-email-1").fill("signer-two@harly-e2e.test");
-    await placementDialog.getByLabel("Signer for field 2").selectOption("1");
+    await placementDialog.getByRole("button", { name: "Signature", exact: true }).click();
+    await expect(placementDialog.getByRole("button", { name: "Remove field 2", exact: true })).toBeVisible();
+    const names = placementDialog.getByRole("textbox", { name: "Name", exact: true });
+    const emails = placementDialog.getByRole("textbox", { name: "Email", exact: true });
+    await names.nth(0).fill("Ada Lovelace");
+    await emails.nth(0).fill("signer-one@harly-e2e.test");
+    await names.nth(1).fill("Grace Hopper");
+    await emails.nth(1).fill("signer-two@harly-e2e.test");
     const firstInvitationOffset = captureSize();
     await placementDialog.getByRole("button", { name: "Send signing link", exact: true }).click();
     await expect(placementDialog).not.toBeVisible({ timeout: 30_000 });

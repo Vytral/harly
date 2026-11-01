@@ -749,6 +749,18 @@ async function deleteWorkspaceOrphanRows(
       SELECT id FROM evaluation_rubrics WHERE workspace_id = ${workspaceId}
     )
   `;
+  await tx`
+    DELETE FROM mcp_tokens
+    WHERE grant_id IN (
+      SELECT id FROM mcp_grants WHERE workspace_id = ${workspaceId}
+    )
+  `;
+  await tx`
+    DELETE FROM mcp_authorization_codes
+    WHERE grant_id IN (
+      SELECT id FROM mcp_grants WHERE workspace_id = ${workspaceId}
+    )
+  `;
 }
 
 async function wipeWorkspaceScopedData(input: {

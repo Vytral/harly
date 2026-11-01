@@ -181,7 +181,7 @@ test("document expiry is recovered by cron and a later v2 scheduler tick", async
       .select({ status: documents.signatureStatus })
       .from(documents)
       .where(eq(documents.id, documentId));
-    const [voidedEnvelope] = await db
+    const [expiredEnvelope] = await db
       .select({ status: signatureEnvelopes.status })
       .from(signatureEnvelopes)
       .where(eq(signatureEnvelopes.id, envelopeId));
@@ -194,7 +194,7 @@ test("document expiry is recovered by cron and a later v2 scheduler tick", async
       .from(signatureEvents)
       .where(eq(signatureEvents.eventKey, `native:${envelopeId}:expired`));
     expect(expiredDocument?.status).toBe("expired");
-    expect(voidedEnvelope?.status).toBe("voided");
+    expect(expiredEnvelope?.status).toBe("expired");
     expect(expiredRecipient?.status).toBe("expired");
     expect(expiryEvent?.eventType).toBe("envelope_expired");
 

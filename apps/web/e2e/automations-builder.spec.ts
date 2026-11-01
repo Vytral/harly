@@ -61,12 +61,10 @@ test.describe("automations builder", () => {
     await page
       .getByRole("button", { name: "Ask Harly AI", exact: true })
       .click();
-    await expect(page.getByText(/Hi Harly/)).toBeVisible();
-    await expect(
-      page.getByPlaceholder("Ask Harly AI… Use @ to mention a candidate"),
-    ).toBeVisible();
+    await expect(page.getByText(/^How can I help, /)).toBeVisible();
+    await expect(page.getByPlaceholder("Ask Harly AI…")).toBeVisible();
     await page
-      .getByLabel("Harly AI assistant")
+      .getByRole("dialog", { name: "Harly AI", exact: true })
       .getByRole("button", { name: "Close Harly AI", exact: true })
       .click();
     const searchBlocks = page.getByRole("searchbox", { name: "Search steps" });
@@ -277,9 +275,7 @@ test.describe("automations builder", () => {
       await page
         .getByRole("button", { name: "Ask Harly AI", exact: true })
         .click();
-      const prompt = page.getByPlaceholder(
-        "Ask Harly AI… Use @ to mention a candidate",
-      );
+      const prompt = page.getByPlaceholder("Ask Harly AI…");
       await prompt.fill(
         "Create the reviewed low-score candidate rejection automation.",
       );
@@ -596,15 +592,9 @@ test.describe("automations builder", () => {
       page.getByPlaceholder("What should the note say?"),
     ).toHaveValue("Latest approval test note");
     await page.goto("/dashboard/automations", { timeout: 90_000 });
-    const workflowCard = page.getByRole("heading", {
-      name: workflowName,
-      exact: true,
-    });
-    await expect(workflowCard).toBeVisible();
+    // The card is one link whose name is the workflow name, then its status.
     await expect(
-      workflowCard
-        .locator("xpath=../../../..")
-        .getByText("On", { exact: true }),
+      page.getByRole("link", { name: `${workflowName} On `, exact: false }),
     ).toBeVisible();
   });
 });

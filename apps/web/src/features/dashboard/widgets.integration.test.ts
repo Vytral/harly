@@ -80,8 +80,9 @@ describe.skipIf(!runPipelineIntegration)("dashboard widgets: permission and scop
     await expect(getDashboardWidgetAccess()).resolves.toEqual({
       reviewCandidates: false,
       todayInterviews: false,
+      scheduling: false,
       pipeline: false,
-      inbox: false,
+      approvals: false,
       tasks: false,
       performance: false,
     });
@@ -90,8 +91,9 @@ describe.skipIf(!runPipelineIntegration)("dashboard widgets: permission and scop
     await expect(getDashboardWidgetAccess()).resolves.toEqual({
       reviewCandidates: true,
       todayInterviews: true,
+      scheduling: false,
       pipeline: true,
-      inbox: true,
+      approvals: true,
       tasks: true,
       // Canonical metrics are workspace-wide, so a restricted caller never sees them.
       performance: false,
