@@ -368,7 +368,11 @@ export async function finalizeNativeSignature(input: {
       nativeApplication = application;
     }
 
-    const [locked] = await tx.select({ versionNumber: documentVersions.versionNumber, signatureStatus: documents.signatureStatus }).from(documentVersions).innerJoin(documents, eq(documents.id, documentVersions.documentId)).where(and(eq(documentVersions.documentId, input.documentId), eq(documents.workspaceId, input.workspaceId), eq(documentVersions.isCurrent, true))).for("update").limit(1);
+    // Lock order is documents, then document_versions — the same order a
+    // version replacement takes — so the two can never deadlock.
+    const [lockedDocument] = await tx.select({ signatureStatus: documents.signatureStatus }).from(documents).where(and(eq(documents.id, input.documentId), eq(documents.workspaceId, input.workspaceId))).for("update").limit(1);
+    const [lockedVersion] = lockedDocument ? await tx.select({ versionNumber: documentVersions.versionNumber }).from(documentVersions).where(and(eq(documentVersions.documentId, input.documentId), eq(documentVersions.isCurrent, true))).for("update").limit(1) : [];
+    const locked = lockedDocument && lockedVersion ? { versionNumber: lockedVersion.versionNumber, signatureStatus: lockedDocument.signatureStatus } : undefined;
     if (!locked || locked.signatureStatus !== expectedStatus) throw new Error("The document changed while it was being signed.");
     let providerEnvelopeId = `native:${randomUUID()}`;
     let version: { id: string } | undefined;
