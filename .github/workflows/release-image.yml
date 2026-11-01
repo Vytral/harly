@@ -119,6 +119,10 @@ jobs:
       # untagged digest left in the registry is not installable by any name.
       - name: Block HIGH and CRITICAL vulnerabilities before tagging
         uses: aquasecurity/trivy-action@v0.36.0
+        env:
+          # Each digest holds one architecture; Trivy otherwise looks for
+          # linux/amd64 and cannot find it in the arm64 image.
+          TRIVY_PLATFORM: ${{ matrix.platform }}
         with:
           image-ref: ghcr.io/vytral/harly@${{ steps.build.outputs.digest }}
           format: table
