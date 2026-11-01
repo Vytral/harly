@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 
 import { NextResponse, type NextRequest } from "next/server";
 
-import { retryInterviewSyncForWorkspace } from "@/features/interviews/sync-actions";
+import { retryInterviewSyncForWorkspace } from "@/features/interviews/sync-retry";
 import { claimDueInterviewSyncs } from "@/lib/interviews/sync-ledger";
 import { authorizeCron } from "@/server/cron-auth";
 import { startCronRun } from "@/server/cron-runs";

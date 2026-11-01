@@ -1,6 +1,8 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { getWorkspaceContext } from "@/features/workspaces/context";
 import { requirePermission } from "@/features/workspaces/permissions-server";
+import { mailThreadScopeSql } from "@/features/mailbox/data";
+import { resolveSearchActor } from "@/features/search/workspace-search";
 import { getWorkspaceMailboxAttachment } from "@/lib/mailbox/attachment-access";
 import { storage } from "@/lib/storage";
 import { logAuditEvent } from "@/lib/audit-log";
@@ -19,9 +21,12 @@ export async function GET(
   }
   const { attachmentId } = await params;
   const { organization, user } = await getWorkspaceContext();
+  // Role-scoped members only reach attachments on threads they can see.
+  const threadScope = mailThreadScopeSql(await resolveSearchActor());
   const attachment = await getWorkspaceMailboxAttachment({
     attachmentId,
     workspaceId: organization.id,
+    threadScope,
   });
   if (!attachment) return NextResponse.json({ error: "Attachment not found." }, { status: 404 });
 

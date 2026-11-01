@@ -2,6 +2,8 @@ import { NextResponse, type NextRequest } from "next/server";
 import { getWorkspaceContext } from "@/features/workspaces/context";
 import { requirePermission } from "@/features/workspaces/permissions-server";
 import { storage } from "@/lib/storage";
+import { mailThreadScopeSql } from "@/features/mailbox/data";
+import { resolveSearchActor } from "@/features/search/workspace-search";
 import { listWorkspaceMailboxAttachments } from "@/lib/mailbox/attachment-access";
 
 export async function GET(
@@ -23,6 +25,7 @@ export async function GET(
   const attachments = await listWorkspaceMailboxAttachments({
     messageId,
     workspaceId: workspace.id,
+    threadScope: mailThreadScopeSql(await resolveSearchActor()),
   });
 
   const attachment = attachments[attachmentIndex];

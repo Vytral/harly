@@ -9,6 +9,7 @@ import { privateResumeFileUrl } from "@/lib/resume/storage-key";
 import { appendStorageUploadIntent, createStorageUploadIntent } from "@/lib/storage-upload-intent";
 import { toHarlyPublicUrl } from "@/lib/public-origin";
 import { resolvePublicWorkspace } from "@/server/api/public";
+import { readJsonBody } from "@/server/api/body";
 import { clientIp, enforceRateLimit } from "@/server/api/ratelimit";
 import { apiOk, corsPreflight, withApi } from "@/server/api/respond";
 
@@ -29,7 +30,7 @@ export const POST = withApi(async (request) => {
   const workspace = await resolvePublicWorkspace(request, "applications:write");
 
   const parsed = resumeUploadRequestSchema.safeParse(
-    await request.json().catch(() => null),
+    await readJsonBody(request, 16_000),
   );
   if (!parsed.success) {
     throw ApiError.badRequest("Invalid upload request.");

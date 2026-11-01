@@ -419,10 +419,17 @@ export async function exchangeGoogleCode(
   if (!userRes.ok) throw new Error("Google userinfo fetch failed.");
   const user = (await userRes.json()) as {
     email: string;
+    verified_email?: boolean;
     given_name?: string;
     family_name?: string;
     picture?: string;
   };
+  // Candidates are matched to their records by email, so an unverified address
+  // (Google can return one for accounts created with a third-party email)
+  // would let anyone sign in as the owner of that address.
+  if (!user.email || user.verified_email !== true) {
+    throw new Error("No verified email on Google account.");
+  }
   return {
     email: user.email,
     firstName: user.given_name ?? user.email.split("@")[0] ?? "Candidate",
@@ -577,11 +584,15 @@ export async function exchangeLinkedInCode(
   const user = (await userRes.json()) as {
     sub: string;
     email: string;
+    email_verified?: boolean;
     name: string;
     given_name?: string;
     family_name?: string;
     picture?: string;
   };
+  if (!user.email || user.email_verified !== true) {
+    throw new Error("No verified email on LinkedIn account.");
+  }
 
   const result: {
     email: string;

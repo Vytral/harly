@@ -97,6 +97,21 @@ export function isBlockedHost(hostname: string): boolean {
     const first = groups[0]!;
     const firstSixZero = groups.slice(0, 6).every((group) => group === 0);
     if (firstSixZero) return true; // ::/96, including :: and IPv4-compatible forms
+    // NAT64 (64:ff9b::/96) and 6to4 (2002::/16) embed an IPv4 address that a
+    // gateway will happily connect to, so judge the embedded IPv4 itself.
+    const ipv4Of = (hi: number, lo: number) =>
+      [hi >> 8, hi & 0xff, lo >> 8, lo & 0xff].join(".");
+    if (
+      groups[0] === 0x64 &&
+      groups[1] === 0xff9b &&
+      groups.slice(2, 6).every((group) => group === 0)
+    ) {
+      return isBlockedHost(ipv4Of(groups[6]!, groups[7]!));
+    }
+    if (groups[0] === 0x64 && groups[1] === 0xff9b && groups[2] === 1) {
+      return true; // 64:ff9b:1::/48 local-use NAT64 prefix
+    }
+    if (first === 0x2002) return isBlockedHost(ipv4Of(groups[1]!, groups[2]!));
     if ((first & 0xfe00) === 0xfc00) return true; // fc00::/7 unique local
     if ((first & 0xffc0) === 0xfe80) return true; // fe80::/10 link-local
     if ((first & 0xffc0) === 0xfec0) return true; // fec0::/10 site-local

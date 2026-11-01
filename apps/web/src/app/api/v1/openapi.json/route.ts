@@ -68,6 +68,9 @@ export const GET = withApi(async (request) => {
 
   const paths: Record<string, Record<string, unknown>> = {};
   for (const contract of apiContracts) {
+    // The Automations HTTP API is withdrawn (its routes answer 410 Gone), so it
+    // must not be advertised as callable in the public spec.
+    if (contract.tags?.includes("Automations")) continue;
     const method = contract.method.toLowerCase();
     paths[contract.path] ??= {};
     paths[contract.path][method] = {

@@ -28,7 +28,7 @@ vi.mock("@/features/workspaces/permissions-server", () => ({
 }));
 
 import { GET } from "./[...key]/route";
-import { isPrivateResumeStorageKey } from "@/lib/upload-access";
+import { isPrivateResumeStorageKey, isPublicUploadStorageKey } from "@/lib/upload-access";
 
 function makeSelectReturning(rows: unknown[]) {
   const builder: Record<string, unknown> = {
@@ -51,6 +51,28 @@ describe("local upload serving", () => {
     expect(isPrivateResumeStorageKey("workspaces/ws-1/resumes/cv.pdf")).toBe(true);
     expect(isPrivateResumeStorageKey("resumes/legacy/cv.pdf")).toBe(true);
     expect(isPrivateResumeStorageKey("workspaces/ws-1/images/avatar.png")).toBe(false);
+  });
+
+  it("only treats images and logos as publicly servable", () => {
+    expect(isPublicUploadStorageKey("workspaces/ws-1/images/x/logo.png")).toBe(true);
+    expect(isPublicUploadStorageKey("images/legacy/logo.png")).toBe(true);
+    expect(isPublicUploadStorageKey("logos/legacy.png")).toBe(true);
+    expect(isPublicUploadStorageKey("workspaces/ws-1/offers/abc.pdf")).toBe(false);
+    expect(isPublicUploadStorageKey("workspaces/ws-1/signatures/signed/abc.pdf")).toBe(false);
+    expect(isPublicUploadStorageKey("workspaces/ws-1/documents/abc/contract.pdf")).toBe(false);
+  });
+
+  it.each([
+    ["offers", ["workspaces", "ws-1", "offers", "abc.pdf"]],
+    ["signatures", ["workspaces", "ws-1", "signatures", "signed", "abc.pdf"]],
+    ["documents", ["workspaces", "ws-1", "documents", "abc", "contract.pdf"]],
+  ])("does not serve %s by URL alone", async (_name, key) => {
+    const response = await GET(new Request("http://harly.test/uploads/x.pdf"), {
+      params: Promise.resolve({ key }),
+    });
+
+    expect(response.status).toBe(404);
+    expect(mocks.readFile).not.toHaveBeenCalled();
   });
 
   it("serves uploaded SVG logos as safe inline images", async () => {

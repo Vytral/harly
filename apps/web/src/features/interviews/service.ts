@@ -30,7 +30,7 @@ import { findWorkspaceMember } from "./core";
 import { lockInterviewerSchedule } from "./booking-lock";
 import {
   retryInterviewSyncsForInterview,
-} from "./sync-actions";
+} from "./sync-retry";
 import { InterviewProviderReconciliationError } from "@/lib/interviews/sync-ledger";
 
 /** Workspace-scoped, session-free interview service for REST API handlers. */

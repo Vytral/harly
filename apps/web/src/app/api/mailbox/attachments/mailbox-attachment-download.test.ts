@@ -10,7 +10,9 @@ const mocks = vi.hoisted(() => ({
   requirePermission: vi.fn(),
   storageRead: vi.fn(),
   attachmentRows: [] as unknown[],
+  getAttachment: vi.fn(),
 }));
+mocks.getAttachment.mockImplementation(async () => mocks.attachmentRows[0] ?? null);
 
 vi.mock("@harly/db", () => ({
   db: {
@@ -37,8 +39,14 @@ vi.mock("@/lib/storage", () => ({
 vi.mock("@/lib/audit-log", () => ({
   logAuditEvent: vi.fn(),
 }));
+vi.mock("@/features/mailbox/data", () => ({
+  mailThreadScopeSql: vi.fn(() => "scope-sentinel"),
+}));
+vi.mock("@/features/search/workspace-search", () => ({
+  resolveSearchActor: vi.fn(async () => ({ scope: { kind: "all" } })),
+}));
 vi.mock("@/lib/mailbox/attachment-access", () => ({
-  getWorkspaceMailboxAttachment: vi.fn(async () => mocks.attachmentRows[0] ?? null),
+  getWorkspaceMailboxAttachment: mocks.getAttachment,
 }));
 
 import { GET } from "./[attachmentId]/route";
@@ -58,6 +66,24 @@ describe("F2-10 mailbox attachment download authorization", () => {
     });
 
     expect(res.status).toBe(403);
+  });
+
+  it("passes the role-scope thread predicate to the attachment lookup", async () => {
+    mocks.getWorkspaceContext.mockResolvedValue({
+      organization: { id: WORKSPACE_ID },
+      user: { id: "user-1", email: "user@example.com" },
+    });
+    mocks.requirePermission.mockResolvedValue(undefined);
+    mocks.attachmentRows = [];
+
+    const res = await GET(new NextRequest("http://localhost/x"), {
+      params: Promise.resolve({ attachmentId: "att-1" }),
+    });
+
+    expect(res.status).toBe(404);
+    expect(mocks.getAttachment).toHaveBeenCalledWith(
+      expect.objectContaining({ workspaceId: WORKSPACE_ID, threadScope: "scope-sentinel" }),
+    );
   });
 
   it("returns 404 for an attachment that does not belong to the workspace", async () => {

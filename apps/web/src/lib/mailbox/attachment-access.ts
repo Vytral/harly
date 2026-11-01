@@ -6,6 +6,7 @@ import {
   isNotNull,
   isNull,
   or,
+  type SQL,
 } from "drizzle-orm";
 
 import {
@@ -35,7 +36,11 @@ const activeMailboxMessageLink = and(
   ),
 );
 
-function attachmentQuery(workspaceId: string, extraCondition: ReturnType<typeof and>) {
+function attachmentQuery(
+  workspaceId: string,
+  extraCondition: ReturnType<typeof and>,
+  threadScope?: SQL,
+) {
   return db
     .select({
       filename: mailAttachments.filename,
@@ -79,17 +84,24 @@ function attachmentQuery(workspaceId: string, extraCondition: ReturnType<typeof 
         eq(mailAttachments.workspaceId, workspaceId),
         activeMailboxMessageLink,
         extraCondition,
+        threadScope,
       ),
     );
 }
 
+/**
+ * `threadScope` is the role-scope predicate from `mailThreadScopeSql`; pass it
+ * wherever the caller is a user whose role may be limited to some jobs.
+ */
 export async function getWorkspaceMailboxAttachment(input: {
   attachmentId: string;
   workspaceId: string;
+  threadScope?: SQL;
 }): Promise<WorkspaceMailboxAttachment | null> {
   const [attachment] = await attachmentQuery(
     input.workspaceId,
     eq(mailAttachments.id, input.attachmentId),
+    input.threadScope,
   )
     .limit(1);
   return attachment ?? null;
@@ -98,10 +110,12 @@ export async function getWorkspaceMailboxAttachment(input: {
 export async function listWorkspaceMailboxAttachments(input: {
   messageId: string;
   workspaceId: string;
+  threadScope?: SQL;
 }): Promise<WorkspaceMailboxAttachment[]> {
   return attachmentQuery(
     input.workspaceId,
     eq(mailAttachments.messageId, input.messageId),
+    input.threadScope,
   )
     .orderBy(asc(mailAttachments.createdAt));
 }
