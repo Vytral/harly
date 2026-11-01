@@ -59,7 +59,7 @@ export async function getNativeVoidImpact(input: { workspaceId: string; document
   const warning = signed.length
     ? `${signed.map((row) => row.name).join(", ")} already signed. Their signatures stay in the audit record and the partially signed copy is kept, but they will not carry over: if you send this document again, everyone signs again. ${invited.length} ${invited.length === 1 ? "person" : "people"} will be emailed that the request was cancelled.`
     : `${invited.length} ${invited.length === 1 ? "person" : "people"} will be emailed that the request was cancelled.`;
-  return { voidable: true, signers: rows.map(({ routingOrder: _o, ...row }) => row), signedCount: signed.length, warning };
+  return { voidable: true, signers: rows.map((row) => ({ name: row.name, email: row.email, status: row.status, signedAt: row.signedAt })), signedCount: signed.length, warning };
 }
 
 export async function voidNativeSignature(input: {

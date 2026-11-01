@@ -104,6 +104,8 @@ export function GenerateDocumentDialog({
   useEffect(() => {
     if (!open) return;
     const seq = ++searchSeq.current;
+    // Mark the search as pending before the debounced request starts.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setSearching(true);
     const timer = setTimeout(
       () => {
@@ -127,9 +129,12 @@ export function GenerateDocumentDialog({
   useEffect(() => {
     const seq = ++previewSeq.current;
     if (!open || !templateId || !applicationId) {
+      // Clear a stale preview as soon as either choice is removed.
+      /* eslint-disable react-hooks/set-state-in-effect */
       setPreview(null);
       setPreviewError(null);
       setPreviewing(false);
+      /* eslint-enable react-hooks/set-state-in-effect */
       return;
     }
     setPreviewing(true);

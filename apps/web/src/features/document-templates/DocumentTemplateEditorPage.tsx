@@ -34,8 +34,8 @@ export function DocumentTemplateEditorPage({ template }: { template: WorkflowDoc
   const [body, setBody] = useState(template?.body ?? "");
   const [mode, setMode] = useState<"edit" | "preview">("edit");
   const editorRef = useRef<{ insertText: (text: string) => void } | null>(null);
-  const saved = useRef({ name, title, body });
-  const dirty = name !== saved.current.name || title !== saved.current.title || body !== saved.current.body;
+  const [saved, setSaved] = useState({ name, title, body });
+  const dirty = name !== saved.name || title !== saved.title || body !== saved.body;
 
   const missing = [
     !name.trim() && "a library name",
@@ -76,7 +76,7 @@ export function DocumentTemplateEditorPage({ template }: { template: WorkflowDoc
         return;
       }
       toast.success(template ? "Document template updated." : "Document template created.");
-      saved.current = { name, title, body };
+      setSaved({ name, title, body });
       router.push(LIST_HREF as Route);
       router.refresh();
     });

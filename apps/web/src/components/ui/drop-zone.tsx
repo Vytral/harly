@@ -38,16 +38,12 @@ function DropZone({
 }) {
   const localRef = React.useRef<HTMLInputElement>(null)
   const [dragging, setDragging] = React.useState(false)
-  const setRefs = (node: HTMLInputElement | null) => {
-    localRef.current = node
-    if (typeof inputRef === "function") inputRef(node)
-    else if (inputRef) (inputRef as React.MutableRefObject<HTMLInputElement | null>).current = node
-  }
+  React.useImperativeHandle(inputRef, () => localRef.current as HTMLInputElement)
 
   return (
     <>
       <input
-        ref={setRefs}
+        ref={localRef}
         id={id}
         type="file"
         className="sr-only"

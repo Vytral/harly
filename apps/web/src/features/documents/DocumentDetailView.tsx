@@ -82,7 +82,6 @@ import {
   UploadDialog,
   formatActivityType,
   formatDate,
-  iconForDocument,
 } from "./DocumentShared";
 import { DocumentVersionsPanel } from "./DocumentVersionsPanel";
 import { SignatureStatusCard, useSignerActions } from "./SignatureStatusCard";
@@ -218,7 +217,6 @@ export function DocumentDetailView({
 
   const state = documentStateMeta(document);
   const isArchived = document.status === "archived";
-  const Icon = iconForDocument(document.mimeType);
   const activeHolds = document.legalHolds.filter((hold) => !hold.releasedAt);
   const activeHold = activeHolds[0] ?? null;
 

@@ -32,6 +32,30 @@ describe("salvageCandidateScore", () => {
     expect(salvageCandidateScore(text)?.strengths).toEqual(["A", "B"]);
   });
 
+  it("unpacks fields leaked into strengths as <parameter> markup (seen from Haiku 5.5)", () => {
+    const text = JSON.stringify({
+      score: 78,
+      recommendation: "yes",
+      summary: "Strong design systems evidence.",
+      strengths:
+        '["Owns design system used by 5 squads","Ran 60+ user interviews"]<parameter name="gaps">["Web-specific experience not stated"]<parameter name="criteria">[{"label":"Design systems","score":88,"evidence":"Owned the design system"}]',
+    });
+    const result = salvageCandidateScore(text);
+    expect(result?.strengths).toEqual(["Owns design system used by 5 squads", "Ran 60+ user interviews"]);
+    expect(result?.gaps).toEqual(["Web-specific experience not stated"]);
+    expect(result?.criteria).toEqual([{ label: "Design systems", score: 88, evidence: "Owned the design system" }]);
+  });
+
+  it("ignores closing </parameter> tags and never overwrites a field sent properly", () => {
+    const text = JSON.stringify({
+      ...base,
+      strengths: '["A"]</parameter><parameter name="gaps">["leaked"]</parameter>',
+    });
+    const result = salvageCandidateScore(text);
+    expect(result?.strengths).toEqual(["A"]);
+    expect(result?.gaps).toEqual(base.gaps);
+  });
+
   it("returns null when the rest of the shape is wrong", () => {
     expect(salvageCandidateScore(JSON.stringify({ ...base, strengths: [], score: "high" }))).toBeNull();
     expect(salvageCandidateScore("not json")).toBeNull();

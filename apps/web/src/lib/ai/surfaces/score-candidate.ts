@@ -363,9 +363,49 @@ function coerceStringList(value: unknown): unknown {
     .filter(Boolean);
 }
 
+const LEAKED_PARAMETER_RE = /<\/?parameter(?:\s+name="([^"]+)")?>/g;
+
+function parseLeakedValue(value: string): unknown {
+  const trimmed = value.trim();
+  try {
+    return JSON.parse(trimmed);
+  } catch {
+    return trimmed;
+  }
+}
+
+/**
+ * Anthropic models sometimes leak their tool-call markup into a value: the
+ * remaining fields arrive inside one string as
+ * `["a","b"]<parameter name="gaps">[...]<parameter name="criteria">[...]`.
+ * Split those segments back out into their own fields (never overwriting a
+ * field the model did send properly).
+ */
+function unpackLeakedParameters(record: Record<string, unknown>): Record<string, unknown> {
+  const out: Record<string, unknown> = { ...record };
+  for (const [key, value] of Object.entries(record)) {
+    if (typeof value !== "string" || !value.includes("<parameter")) continue;
+    const parts: { name: string | null; text: string }[] = [{ name: key, text: "" }];
+    let last = 0;
+    for (const match of value.matchAll(LEAKED_PARAMETER_RE)) {
+      parts[parts.length - 1].text += value.slice(last, match.index);
+      last = (match.index ?? 0) + match[0].length;
+      // `</parameter>` closes the current segment; text after it is noise.
+      parts.push({ name: match[1] ?? null, text: "" });
+    }
+    parts[parts.length - 1].text += value.slice(last);
+    out[key] = parseLeakedValue(parts[0].text);
+    for (const part of parts.slice(1)) {
+      if (part.name && out[part.name] === undefined) out[part.name] = parseLeakedValue(part.text);
+    }
+  }
+  return out;
+}
+
 /**
  * Recovers a usable evaluation from raw model text that failed the schema,
- * when the only problem is a list sent as a string. Returns null otherwise.
+ * when the content is all there but mis-shaped: a list sent as a string, or
+ * fields leaked into another field as tool-call markup. Returns null otherwise.
  */
 export function salvageCandidateScore(text: string | undefined): CandidateScore | null {
   if (!text) return null;
@@ -376,11 +416,12 @@ export function salvageCandidateScore(text: string | undefined): CandidateScore 
     return null;
   }
   if (!raw || typeof raw !== "object") return null;
-  const record = raw as Record<string, unknown>;
+  const record = unpackLeakedParameters(raw as Record<string, unknown>);
   const parsed = candidateScoreSchema.safeParse({
     ...record,
     strengths: coerceStringList(record.strengths),
     gaps: coerceStringList(record.gaps),
+    criteria: typeof record.criteria === "string" ? parseLeakedValue(record.criteria) : record.criteria,
   });
   return parsed.success ? parsed.data : null;
 }

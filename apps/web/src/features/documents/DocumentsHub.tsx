@@ -307,11 +307,11 @@ function SortHeader({
     <button
       type="button"
       onClick={() => onSort(sortKey)}
-      aria-sort={active ? (dir === "asc" ? "ascending" : "descending") : "none"}
       className="inline-flex items-center gap-1 text-left uppercase outline-none hover:text-near-ink focus-visible:text-near-ink"
     >
       {label}
       {active ? dir === "asc" ? <ArrowUp className="size-3" /> : <ArrowDown className="size-3" /> : null}
+      {active ? <span className="sr-only">{dir === "asc" ? ", sorted ascending" : ", sorted descending"}</span> : null}
     </button>
   );
 }
@@ -382,7 +382,7 @@ export function DocumentsHub({
     syncUrl({ ...current, [key]: value });
   }
 
-  const now = useMemo(() => Date.now(), []);
+  const [now] = useState(() => Date.now());
   const counts = useMemo(() => {
     const result = {} as Record<HubFocus, number>;
     for (const key of FOCUSES) result[key] = data.documents.filter((d) => matchesFocus(d, key, now)).length;

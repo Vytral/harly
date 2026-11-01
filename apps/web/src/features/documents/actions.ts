@@ -1,6 +1,6 @@
 "use server";
 
-import { createHash, randomBytes, randomUUID } from "node:crypto";
+import { randomUUID } from "node:crypto";
 
 import { revalidatePath } from "next/cache";
 import { and, desc, eq, exists, ilike, inArray, isNull, or } from "drizzle-orm";
@@ -22,12 +22,10 @@ import {
   signatureArtifacts,
   documentVersions,
   documents,
-  emailOutbox,
   jobs,
   member as authMembers,
   offers,
   signatureEnvelopes,
-  signatureEvents,
   signatureRecipients,
 } from "@harly/db";
 
@@ -39,8 +37,6 @@ import { candidateScopeSql, jobScopeSql } from "@/features/search/scope";
 import { listActiveWorkflowDocumentTemplates } from "@/features/document-templates/data";
 import { generateDocumentForWorkflow } from "./workflow-generation";
 import { renderTemplateForApplication } from "./generate-from-template";
-import { encryptSecret } from "@/lib/crypto";
-import { processEmailOutbox } from "@/lib/email/outbox-processor";
 import { remindNativeSigner, rotateNativePortalSigningLink } from "@/lib/esign/native/remote";
 import type { GenerateTargetOption, GenerateTemplateOption } from "./shared";
 import { isExternallyManagedSignatureProvider } from "@/lib/esign/signature-state";

@@ -128,6 +128,8 @@ export function NativeSigningPage({ token }: { token: string }) {
   useEffect(() => {
     if (!active || needsOtp || !unlockedOnce) return;
     let cancelled = false;
+    // Reset the error before each (re)load of the fields.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setFieldsError(null);
     void fetch(`/api/native-sign/${token}/fields`, { cache: "no-store" })
       .then(async (res) => {
