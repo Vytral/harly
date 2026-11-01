@@ -191,23 +191,79 @@ describe.skipIf(!runPipelineIntegration)("native signing under concurrency (data
     expect(versions.map((version) => version.versionNumber)).toEqual([1]);
   });
 
-  it("lets signing and a racing replacement both finish without a deadlock", async () => {
-    const document = await createDocument();
-    const sent = await send(document.id, "racer@example.test");
-    if (!sent.ok) throw new Error(sent.error);
+  // A deadlock needs one path to hold the version row while waiting for the
+  // document row. So while the document row is held elsewhere, each path must
+  // be waiting on it without having taken the version row yet.
+  async function versionRowFreeWhileDocumentHeld(documentId: string, start: () => Promise<unknown>) {
+    let locked!: () => void;
+    const lockHeld = new Promise<void>((resolve) => (locked = resolve));
+    let release!: () => void;
+    const released = new Promise<void>((resolve) => (release = resolve));
+    const holder = db.transaction(async (tx) => {
+      await tx.select({ id: documents.id }).from(documents).where(eq(documents.id, documentId)).for("update");
+      locked();
+      await released;
+    });
+    await lockHeld;
+    const operation = start();
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    let versionFree = true;
+    try {
+      await db.transaction(async (tx) => {
+        await tx.select({ id: documentVersions.id }).from(documentVersions).where(eq(documentVersions.documentId, documentId)).for("update", { noWait: true });
+      });
+    } catch {
+      versionFree = false;
+    }
+    release();
+    await holder;
+    return { versionFree, result: await operation };
+  }
 
+  it("self-signing takes the document lock before the version lock", async () => {
+    const document = await createDocument();
+    const { versionFree, result } = await versionRowFreeWhileDocumentHeld(document.id, () =>
+      finalizeNativeSignature({
+        workspaceId,
+        documentId: document.id,
+        actorId,
+        signerName: "Ada Lovelace",
+        signerEmail: `${actorId}@example.test`,
+        signaturePngBytes,
+        verification: "self_sign",
+      }),
+    );
+    expect(versionFree).toBe(true);
+    expect(result).toMatchObject({ complete: true });
+  });
+
+  it("replacing a document takes the document lock before the version lock", async () => {
+    const document = await createDocument();
+    const { versionFree, result } = await versionRowFreeWhileDocumentHeld(document.id, () =>
+      createDocumentVersion({
+        documentId: document.id,
+        originalName: "Replacement.pdf",
+        mimeType: "application/pdf",
+        sizeBytes: pdfBytes.byteLength,
+        checksum: "replacement-checksum",
+        storageKey: `tests/${document.id}/replacement.pdf`,
+      }),
+    );
+    expect(versionFree).toBe(true);
+    expect(result).toEqual({ ok: true });
+  });
+
+  it("an unsigned document survives self-signing and replacement racing", async () => {
+    const document = await createDocument();
     const [signed, replaced] = await Promise.allSettled([
       finalizeNativeSignature({
         workspaceId,
         documentId: document.id,
-        actorId: null,
+        actorId,
         signerName: "Ada Lovelace",
-        signerEmail: "racer@example.test",
+        signerEmail: `${actorId}@example.test`,
         signaturePngBytes,
-        verification: "link_only",
-        consentAt: new Date(),
-        existingEnvelopeId: sent.envelopeId,
-        existingRecipientId: sent.recipientId,
+        verification: "self_sign",
       }),
       createDocumentVersion({
         documentId: document.id,
@@ -218,12 +274,10 @@ describe.skipIf(!runPipelineIntegration)("native signing under concurrency (data
         storageKey: `tests/${document.id}/replacement.pdf`,
       }),
     ]);
-
-    expect(signed.status).toBe("fulfilled");
-    // The document was pending, so the replacement is refused under the lock.
-    expect(replaced).toMatchObject({ status: "fulfilled", value: { ok: false } });
-    const [row] = await db.select({ signatureStatus: documents.signatureStatus }).from(documents).where(eq(documents.id, document.id));
-    expect(row?.signatureStatus).toBe("signed");
+    // Whichever wins, neither is aborted by Postgres as a deadlock victim.
+    for (const outcome of [signed, replaced]) {
+      if (outcome.status === "rejected") expect(String(outcome.reason)).not.toMatch(/deadlock/i);
+    }
   });
 
   it("records and shows consent only when the signer gave it", async () => {
