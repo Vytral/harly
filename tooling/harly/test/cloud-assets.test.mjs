@@ -88,9 +88,17 @@ test("version tags are the only published images", async () => {
   // The build itself never publishes :latest. Which version owns the channel is
   // recomputed inside the serialized job, so two overlapping releases cannot
   // both believe they are the newest and race to overwrite it.
-  assert.match(workflow, /flavor: latest=false/);
-  assert.doesNotMatch(workflow, /flavor: latest=true/);
-  assert.doesNotMatch(workflow, /flavor: latest=\$\{\{/);
+  // Each architecture is pushed by digest with no tag, and the only tag the
+  // jobs before release-channel write is the version itself.
+  const beforeChannel = workflow
+    .slice(0, workflow.indexOf("\n  release-channel:"))
+    .split("\n")
+    .filter((line) => !/^\s*#/.test(line))
+    .join("\n");
+  assert.match(beforeChannel, /push-by-digest=true/);
+  assert.match(beforeChannel, /imagetools create --tag "ghcr\.io\/vytral\/harly:\$VERSION"/);
+  assert.doesNotMatch(beforeChannel, /:latest|latest=true|type=raw,value=latest/);
+  assert.doesNotMatch(beforeChannel, /flavor: latest=\$\{\{/);
   assert.match(workflow, /group: release-channel/);
   assert.match(workflow, /Recompute which stable version owns the channel/);
   assert.match(workflow, /gh api --paginate/);
