@@ -70,6 +70,9 @@ export function GenerateDocumentDialog({
   const [preview, setPreview] = useState<Preview | null>(null);
   const [previewError, setPreviewError] = useState<string | null>(null);
   const [previewing, setPreviewing] = useState(false);
+  const [searchError, setSearchError] = useState<string | null>(null);
+  // Bumped by "Try again" to re-run whichever request failed.
+  const [attempt, setAttempt] = useState(0);
   const [isPending, startTransition] = useTransition();
   const candidateId = candidate?.id;
   const searchSeq = useRef(0);
@@ -79,7 +82,7 @@ export function GenerateDocumentDialog({
   useEffect(() => {
     if (!open) return;
     let cancelled = false;
-    void getGenerateDocumentOptions().then((result) => {
+    getGenerateDocumentOptions().then((result) => {
       if (cancelled) return;
       if (!result.ok) {
         setLoadError(result.error ?? "Could not load templates.");
@@ -94,11 +97,13 @@ export function GenerateDocumentDialog({
             ? result.templates[0].id
             : "",
       );
+    }, () => {
+      if (!cancelled) setLoadError("Could not load templates.");
     });
     return () => {
       cancelled = true;
     };
-  }, [open]);
+  }, [open, attempt]);
 
   // Candidate applications: all of one candidate's, or a debounced name search.
   useEffect(() => {
@@ -109,21 +114,36 @@ export function GenerateDocumentDialog({
     setSearching(true);
     const timer = setTimeout(
       () => {
-        void searchGenerateDocumentTargets({
+        searchGenerateDocumentTargets({
           query: candidateId ? undefined : query,
           candidateId,
         }).then((result) => {
           if (seq !== searchSeq.current) return;
           setSearching(false);
+          setSearchError(null);
           const next = result.targets;
           setTargets(next);
-          if (candidateId && next.length === 1) setApplicationId(next[0].applicationId);
+          // A selection the new results no longer show is cleared, so
+          // "Generate PDF" never saves against a hidden application.
+          setApplicationId((current) =>
+            next.some((target) => target.applicationId === current)
+              ? current
+              : candidateId && next.length === 1
+                ? next[0].applicationId
+                : "",
+          );
+        }, () => {
+          if (seq !== searchSeq.current) return;
+          setSearching(false);
+          setTargets([]);
+          setApplicationId("");
+          setSearchError("Could not search candidates.");
         });
       },
       candidateId ? 0 : 250,
     );
     return () => clearTimeout(timer);
-  }, [open, query, candidateId]);
+  }, [open, query, candidateId, attempt]);
 
   // Fill the template as soon as both choices are made.
   useEffect(() => {
@@ -138,7 +158,7 @@ export function GenerateDocumentDialog({
       return;
     }
     setPreviewing(true);
-    void previewTemplateDocument({ templateId, applicationId }).then((result) => {
+    previewTemplateDocument({ templateId, applicationId }).then((result) => {
       if (seq !== previewSeq.current) return;
       setPreviewing(false);
       if (!result.ok) {
@@ -152,10 +172,16 @@ export function GenerateDocumentDialog({
         html: DOMPurify.sanitize(result.html ?? "", previewTags),
         blank: result.blank ?? [],
       });
+    }, () => {
+      if (seq !== previewSeq.current) return;
+      setPreviewing(false);
+      setPreview(null);
+      setPreviewError("Could not preview the document.");
     });
-  }, [open, templateId, applicationId]);
+  }, [open, templateId, applicationId, attempt]);
 
   function reset() {
+    setSearchError(null);
     setQuery("");
     setApplicationId("");
     setPreview(null);
@@ -197,7 +223,18 @@ export function GenerateDocumentDialog({
           </DialogDescription>
         </DialogHeader>
 
-        {loadError ? <Callout tone="danger">{loadError}</Callout> : null}
+        {loadError || searchError ? (
+          <Callout tone="danger">
+            {loadError ?? searchError}{" "}
+            <button
+              type="button"
+              onClick={() => setAttempt((n) => n + 1)}
+              className="font-medium text-near-ink underline underline-offset-2"
+            >
+              Try again
+            </button>
+          </Callout>
+        ) : null}
         {noTemplates ? (
           <Callout tone="info" title="No templates yet" icon={<FileText />}>
             Create a reusable template first.{" "}
@@ -304,7 +341,16 @@ export function GenerateDocumentDialog({
             {previewing ? (
               <Skeleton className="h-40 w-full rounded-[var(--radius-inner)]" />
             ) : previewError ? (
-              <Callout tone="danger">{previewError}</Callout>
+              <Callout tone="danger">
+                {previewError}{" "}
+                <button
+                  type="button"
+                  onClick={() => setAttempt((n) => n + 1)}
+                  className="font-medium text-near-ink underline underline-offset-2"
+                >
+                  Try again
+                </button>
+              </Callout>
             ) : preview ? (
               <div className="space-y-3">
                 {preview.blank.length > 0 ? (
@@ -335,7 +381,7 @@ export function GenerateDocumentDialog({
           </Button>
           <Button
             onClick={generate}
-            disabled={isPending || previewing || !preview || Boolean(previewError)}
+            disabled={isPending || previewing || !preview || !selectedTarget || Boolean(previewError)}
           >
             {isPending ? "Generating…" : "Generate PDF"}
           </Button>

@@ -46,10 +46,25 @@ async function readJsonBody(request: Request): Promise<{ ok: true; body: unknown
   if (Number.isFinite(length) && length > MAX_REQUEST_BYTES) {
     return { ok: false, response: jsonResponse(413, { error: "payload_too_large" }) };
   }
-  const text = await request.clone().text();
-  if (text.length > MAX_REQUEST_BYTES) {
-    return { ok: false, response: jsonResponse(413, { error: "payload_too_large" }) };
+  // Count bytes while streaming and stop at the cap, so a body without a
+  // Content-Length is never buffered past MAX_REQUEST_BYTES. The clone leaves
+  // the original stream for the transport.
+  const reader = request.clone().body?.getReader();
+  const chunks: Uint8Array[] = [];
+  let size = 0;
+  if (reader) {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      size += value.byteLength;
+      if (size > MAX_REQUEST_BYTES) {
+        await reader.cancel().catch(() => undefined);
+        return { ok: false, response: jsonResponse(413, { error: "payload_too_large" }) };
+      }
+      chunks.push(value);
+    }
   }
+  const text = Buffer.concat(chunks).toString("utf8");
   if (!text) return { ok: true, body: undefined };
   try {
     return { ok: true, body: JSON.parse(text) };
