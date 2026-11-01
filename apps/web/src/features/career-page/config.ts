@@ -228,7 +228,7 @@ export const CAREER_PRESETS: Record<CareerTemplate, () => CareerPageConfig> = {
   join: () => ({
     ...structuredClone(EMPTY),
     template: "join",
-    hero: { ...EMPTY.hero, headline: "Join us", logoPosition: "left" },
+    hero: { ...EMPTY.hero, headline: "Join us", logoPosition: "left", showHeadline: true },
     // Optional sections start OFF — the profile tabs only show up once the
     // admin adds real content (no demo content ever ships to prod).
     overview: { enabled: false, title: "About", stats: [] },

@@ -351,7 +351,7 @@ export function PrepareSigningDialog({
         size="full"
         className="flex max-h-[calc(100dvh-2rem)] flex-col gap-0 overflow-hidden p-0 sm:max-w-[min(1440px,calc(100%-2rem))]"
       >
-        <DialogHeader className="border-b border-hairline px-6 py-4 text-left">
+        <DialogHeader className="border-b border-hairline px-4 py-3 text-left sm:px-6 sm:py-4">
           <DialogTitle>{isMulti ? "Prepare for signing" : "Place signature fields"}</DialogTitle>
           <DialogDescription>
             {isMulti
@@ -359,10 +359,10 @@ export function PrepareSigningDialog({
               : <>Mark where <strong>{subjectName}</strong> needs a signature, date or other text before it is sent.</>}
           </DialogDescription>
         </DialogHeader>
-        <div className="grid min-h-0 flex-1 grid-cols-1 grid-rows-[minmax(0,1fr)] lg:grid-cols-[minmax(0,1fr)_380px]">
+        <div className="grid min-h-0 flex-1 grid-cols-[minmax(0,1fr)] grid-rows-[minmax(0,11fr)_minmax(0,9fr)] lg:grid-cols-[minmax(0,1fr)_380px] lg:grid-rows-[minmax(0,1fr)]">
           <div
             data-signature-scroll
-            className="min-h-0 overflow-y-auto border-b border-hairline bg-warm-paper p-6 lg:border-b-0 lg:border-r"
+            className="min-h-0 overflow-y-auto border-b border-hairline bg-warm-paper p-3 sm:p-6 lg:border-b-0 lg:border-r"
           >
             <PdfSignaturePlacer
               fileUrl={fileUrl}
@@ -392,7 +392,7 @@ export function PrepareSigningDialog({
           </div>
 
           <aside className="flex min-h-0 flex-col overflow-y-auto bg-pure-snow">
-            <div className="flex flex-col gap-6 p-6">
+            <div className="flex flex-col gap-6 p-4 sm:p-6">
               {/* ---- Signers ---- */}
               <section aria-labelledby={`${uid}-signers`} className="space-y-3">
                 <div>
@@ -592,7 +592,7 @@ export function PrepareSigningDialog({
               </section>
             </div>
 
-            <div className="mt-auto space-y-3 border-t border-hairline bg-pure-snow p-6">
+            <div className="mt-auto space-y-3 border-t border-hairline bg-pure-snow p-4 sm:p-6">
               {rotated ? (
                 <Callout tone="danger">This PDF has rotated pages. Re-export it without rotation before sending.</Callout>
               ) : null}

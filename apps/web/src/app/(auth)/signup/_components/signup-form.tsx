@@ -116,7 +116,7 @@ export function SignupForm({ googleEnabled = false }: { googleEnabled?: boolean 
               value={password}
               onChange={(e) => { setPassword(e.target.value); setError(null); }}
               placeholder="At least 8 characters"
-              className="auth-field w-full border-0 border-b border-input bg-transparent pb-2.5 pr-10 text-sm text-foreground outline-none transition-colors placeholder:text-muted-foreground focus:border-ring"
+              className="auth-field w-full border-0 border-b border-input bg-transparent pb-2.5 pr-10 text-base md:text-sm text-foreground outline-none transition-colors placeholder:text-muted-foreground focus:border-ring"
             />
             <button
               type="button"
@@ -145,7 +145,7 @@ export function SignupForm({ googleEnabled = false }: { googleEnabled?: boolean 
               value={confirmPassword}
               onChange={(e) => { setConfirmPassword(e.target.value); setError(null); }}
               placeholder="Repeat your password"
-              className="auth-field w-full border-0 border-b border-input bg-transparent pb-2.5 pr-10 text-sm text-foreground outline-none transition-colors placeholder:text-muted-foreground focus:border-ring"
+              className="auth-field w-full border-0 border-b border-input bg-transparent pb-2.5 pr-10 text-base md:text-sm text-foreground outline-none transition-colors placeholder:text-muted-foreground focus:border-ring"
             />
             <button
               type="button"
@@ -240,7 +240,7 @@ function Field({
         value={value}
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
-        className="auth-field mt-2 w-full border-0 border-b border-input bg-transparent pb-2.5 text-sm text-foreground outline-none transition-colors placeholder:text-muted-foreground focus:border-ring"
+        className="auth-field mt-2 w-full border-0 border-b border-input bg-transparent pb-2.5 text-base md:text-sm text-foreground outline-none transition-colors placeholder:text-muted-foreground focus:border-ring"
       />
     </div>
   );

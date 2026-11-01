@@ -235,7 +235,7 @@ export function RequestDialog({
               id="request-application"
               value={applicationId}
               onChange={(event) => setApplicationId(event.target.value)}
-              className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              className="h-9 w-full rounded-md border border-input bg-background px-3 text-base sm:text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
               {applications.map((application) => (
                 <option key={application.id} value={application.id}>
@@ -275,7 +275,7 @@ export function RequestDialog({
                     setItems((current) => current.map((it, i) => (i === index ? { ...it, instructions: event.target.value } : it)))
                   }
                   placeholder="Instructions (optional)"
-                  className="text-xs"
+                  className="text-base sm:text-xs"
                 />
               </div>
             ))}

@@ -407,7 +407,7 @@ export function PdfSignaturePlacer({
                 />
                 {/* Resize handle — larger hit area for laptop trackpads. */}
                 <div
-                  className={`absolute -bottom-3 -right-3 flex size-7 cursor-se-resize touch-none items-center justify-center rounded-full border-2 bg-pure-snow shadow-[var(--shadow-card)] transition-transform hover:scale-110 ${isActive ? "opacity-100" : "opacity-0 group-hover/field:opacity-100 group-focus-within/field:opacity-100"}`}
+                  className={`absolute -bottom-3 -right-3 flex size-7 max-md:-bottom-4 max-md:-right-4 max-md:size-9 cursor-se-resize touch-none items-center justify-center rounded-full border-2 bg-pure-snow shadow-[var(--shadow-card)] transition-transform hover:scale-110 ${isActive ? "opacity-100" : "opacity-0 group-hover/field:opacity-100 group-focus-within/field:opacity-100"}`}
                   style={{ borderColor: color, color }}
                   aria-hidden
                   onPointerDown={(event) => startResize(event, index)}
@@ -461,7 +461,7 @@ export function PdfSignaturePlacer({
                         placeholder={placement.type === "date" ? "Label (default: Date)" : "Label (e.g. Full name)"}
                         aria-label={`Label for field ${index + 1}`}
                         maxLength={60}
-                        className="h-8 w-full rounded-[var(--radius-btn)] border border-hairline bg-pure-snow px-2 text-xs text-near-ink shadow-[var(--shadow-card)] outline-none placeholder:text-soft-ink focus-visible:border-near-ink focus-visible:ring-2 focus-visible:ring-near-ink/20"
+                        className="h-9 w-full rounded-[var(--radius-btn)] border border-hairline bg-pure-snow px-2 text-base text-near-ink md:h-8 md:text-xs shadow-[var(--shadow-card)] outline-none placeholder:text-soft-ink focus-visible:border-near-ink focus-visible:ring-2 focus-visible:ring-near-ink/20"
                       />
                     ) : null}
                     {onDuplicate || onRemoveField || (onPageChange && pageCount > 1) ? (
@@ -477,7 +477,7 @@ export function PdfSignaturePlacer({
                               onChange={(event) =>
                                 onPageChange(index, Number(event.target.value))
                               }
-                              className="h-7 rounded-md border border-hairline bg-pure-snow px-1.5 text-xs font-medium text-near-ink outline-none focus-visible:ring-2 focus-visible:ring-near-ink/30"
+                              className="h-8 rounded-md border border-hairline bg-pure-snow px-1.5 text-base font-medium md:h-7 md:text-xs text-near-ink outline-none focus-visible:ring-2 focus-visible:ring-near-ink/30"
                               aria-label={`Page for field ${index + 1}`}
                             >
                               {Array.from({ length: pageCount }, (_, p) => (

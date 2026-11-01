@@ -25,7 +25,7 @@ export type TriageItem = {
  */
 export function TriageStrip({ items }: { items: TriageItem[] }) {
   return (
-    <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+    <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-4">
       {items.map((item) => (
         <Link
           key={item.label}

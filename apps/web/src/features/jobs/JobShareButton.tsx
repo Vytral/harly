@@ -81,7 +81,7 @@ export function JobShareButton({
           Share job
         </Button>
       </PopoverTrigger>
-      <PopoverContent align="end" className="w-80 p-0">
+      <PopoverContent align="end" className="w-80 max-w-[calc(100vw-2rem)] p-0">
         <div className="border-b p-3">
           <p className="text-sm font-medium">Share this role</p>
           <p className="mt-0.5 text-xs text-muted-foreground">

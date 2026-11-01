@@ -24,7 +24,7 @@ export function ShellPageHeading() {
   if (!title) return null;
 
   return (
-    <h1 className="font-display mb-5 text-[28px] leading-9 tracking-tight text-near-ink">
+    <h1 className="font-display mb-5 break-words text-2xl sm:text-[28px] leading-9 tracking-tight text-near-ink">
       {title}
     </h1>
   );

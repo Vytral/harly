@@ -39,8 +39,8 @@ export default async function SettingsLayout({
   return (
     <div>
       <SettingsSectionHeading />
-      <div className="grid gap-6 lg:grid-cols-[288px_minmax(0,1fr)] xl:gap-8">
-        <aside className="lg:sticky lg:top-[88px] lg:max-h-[calc(100dvh-112px)] lg:self-start">
+      <div className="grid grid-cols-[minmax(0,1fr)] gap-6 lg:grid-cols-[288px_minmax(0,1fr)] xl:gap-8">
+        <aside className="min-w-0 lg:sticky lg:top-[88px] lg:max-h-[calc(100dvh-112px)] lg:self-start">
           <SettingsNav deniedHrefs={deniedHrefs} />
         </aside>
         <div className="min-w-0">{children}</div>

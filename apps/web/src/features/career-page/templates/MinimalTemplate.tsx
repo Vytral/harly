@@ -228,8 +228,12 @@ export function MinimalTemplate({
                     </h3>
                   )}
                   <ul className="divide-y divide-hairline">
-                    {deptJobs.map((job) => (
-                      <li key={job.id}>
+                    {deptJobs.map((job, rowIdx) => (
+                      <li
+                        key={job.id}
+                        className="motion-safe:animate-in motion-safe:fade-in motion-safe:duration-300 motion-safe:fill-mode-backwards"
+                        style={{ animationDelay: `${Math.min(rowIdx, 8) * 30}ms` }}
+                      >
                         <Link
                           href={`${base}/jobs/${job.slug}` as Route}
                           className="group flex flex-col gap-1 py-4 transition-colors sm:flex-row sm:items-center sm:justify-between sm:gap-6"

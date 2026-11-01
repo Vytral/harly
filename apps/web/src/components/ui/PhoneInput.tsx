@@ -200,7 +200,7 @@ export function PhoneInput({
           disabled={disabled}
           onChange={(e) => onNationalChange(e.target.value)}
           placeholder="9 1234 5678"
-          className="min-w-0 flex-1 bg-transparent px-3 text-foreground outline-none placeholder:text-muted-foreground"
+          className="min-w-0 flex-1 bg-transparent px-3 text-base text-foreground outline-none sm:text-sm placeholder:text-muted-foreground"
         />
       </div>
       {name ? <input type="hidden" name={name} value={value} /> : null}

@@ -45,7 +45,7 @@ export function DurationInput({
             const n = Number(e.target.value);
             if (n >= 5 && n <= 480) onChange(n);
           }}
-          className="h-9 w-full rounded-lg border bg-transparent px-3 text-sm tabular-nums outline-none focus:ring-2 focus:ring-ring/20"
+          className="h-9 w-full rounded-lg border bg-transparent px-3 text-base sm:text-sm tabular-nums outline-none focus:ring-2 focus:ring-ring/20"
         />
         <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">
           min

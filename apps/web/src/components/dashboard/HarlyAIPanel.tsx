@@ -2779,7 +2779,7 @@ function HarlyChat({
               const textEl = fullText.trim() ? (
                 <Markdown
                   key="text-body"
-                  className="prose prose-sm max-w-none text-[13.5px] leading-[22px] text-near-ink prose-p:my-1 prose-headings:my-1.5 prose-ul:my-1 prose-ol:my-1 prose-li:my-0 prose-pre:my-1.5"
+                  className="prose prose-sm max-w-none break-words [&_pre]:overflow-x-auto [&_table]:block [&_table]:max-w-full [&_table]:overflow-x-auto text-[13.5px] leading-[22px] text-near-ink prose-p:my-1 prose-headings:my-1.5 prose-ul:my-1 prose-ol:my-1 prose-li:my-0 prose-pre:my-1.5"
                   components={MARKDOWN_COMPONENTS}
                 >
                   {fullText}
@@ -2959,7 +2959,7 @@ function HarlyChat({
                     ? `Ask about ${surfaceContext.label}…`
                     : `Ask ${assistant.name}…`
                 }
-                className="min-h-[36px] bg-transparent py-1 text-[13.5px] dark:bg-transparent"
+                className="min-h-[36px] bg-transparent py-1 text-base md:text-[13.5px] dark:bg-transparent"
               />
               <PromptInputActions className="items-center justify-between pt-1">
                 <span className="text-[11.5px] text-quiet-mist">

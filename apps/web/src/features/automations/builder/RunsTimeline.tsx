@@ -430,7 +430,7 @@ function UncertainResolution({ step }: { step: SerializedRunStep }) {
     <div className="basis-full rounded-lg border border-danger-rust/30 bg-danger-rust/5 p-2.5 text-xs">
       <p className="font-medium text-foreground">Provider outcome is unknown</p>
       <p className="mt-0.5 text-[11px] text-soft-ink">Check the provider first. This records the result and never sends the action again.</p>
-      <div className="mt-2 grid gap-2 sm:grid-cols-2">
+      <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2">
         <label className="grid gap-1 text-[11px] text-soft-ink">
           Result
           <BuilderSelect

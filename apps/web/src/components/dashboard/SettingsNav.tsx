@@ -176,7 +176,7 @@ export function SettingsNav({ deniedHrefs }: { deniedHrefs: string[] }) {
           value={query}
           onChange={(event) => setQuery(event.target.value)}
           placeholder="Search setting"
-          className="h-10 w-full rounded-full border border-mist-border bg-pure-snow pl-9 pr-3 text-[14px] text-near-ink placeholder:text-quiet-mist focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-near-ink"
+          className="h-10 w-full rounded-full border border-mist-border bg-pure-snow pl-9 pr-3 text-base md:text-[14px] text-near-ink placeholder:text-quiet-mist focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-near-ink"
         />
       </label>
 
@@ -244,8 +244,8 @@ export function SettingsSectionHeading() {
   // Detail pages below a section (e.g. one integration) bring their own title.
   if (section && pathname !== section.href) return null;
   return (
-    <div className="mb-5">
-      <h1 className="font-display text-[28px] leading-tight text-near-ink">
+    <div className="mb-5 min-w-0">
+      <h1 className="font-display break-words text-2xl sm:text-[28px] leading-tight text-near-ink">
         {section?.label ?? "Settings"}
       </h1>
       {section ? (

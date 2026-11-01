@@ -111,7 +111,7 @@ export function JoinTemplate({
   }, [jobs]);
 
   const subhead = config.hero.subhead || workspace.tagline;
-  const excerpt = config.intro.body ? htmlToExcerpt(config.intro.body) : "";
+  const excerpt = config.intro.body ? htmlToExcerpt(config.intro.body, Infinity) : "";
 
   const ctaHref = config.cta.url || workspace.websiteUrl;
   const ctaBg = config.cta.color ?? tintInk;
@@ -205,14 +205,7 @@ export function JoinTemplate({
 
           {excerpt && (
             <p className="mt-4 max-w-2xl text-soft-ink">
-              {excerpt}{" "}
-              <a
-                href="#about"
-                className="whitespace-nowrap text-sm font-medium underline underline-offset-2 hover:no-underline"
-                style={{ color: "var(--career-accent)" }}
-              >
-                Read more
-              </a>
+              {excerpt}
             </p>
           )}
         </div>
@@ -311,11 +304,12 @@ export function JoinTemplate({
           ) : (
             <>
               <div className="mt-5 divide-y divide-hairline overflow-hidden rounded-[var(--career-r-card,16px)] border border-hairline bg-pure-snow">
-                {shown.map((job) => (
+                {shown.map((job, rowIdx) => (
                   <Link
                     key={job.id}
                     href={`${base}/jobs/${job.slug}` as Route}
-                    className="group flex items-center gap-4 px-5 py-4 transition-colors hover:bg-row-wash"
+                    className="group flex items-center gap-4 px-5 py-4 transition-colors hover:bg-row-wash motion-safe:animate-in motion-safe:fade-in motion-safe:duration-300 motion-safe:fill-mode-backwards"
+                    style={{ animationDelay: `${Math.min(rowIdx, 8) * 30}ms` }}
                   >
                     <span
                       aria-hidden

@@ -122,7 +122,7 @@ export function SummarizeNotesSheet({
             <>
               <Textarea
                 placeholder="Paste your raw interview notes here — messy is fine."
-                className="min-h-[180px] resize-y text-sm"
+                className="min-h-[180px] resize-y text-base sm:text-sm"
                 value={rawNotes}
                 onChange={(e) => setRawNotes(e.target.value)}
                 disabled={isPending}

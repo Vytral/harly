@@ -14,7 +14,7 @@ import { Group, PanelHeader } from "./PanelKit";
 function TemplateThumb({ swatch }: { swatch: TemplateCapabilities["swatch"] }) {
   return (
     <div
-      className="flex h-16 w-20 shrink-0 flex-col gap-1.5 rounded-[10px] border border-hairline p-2"
+      className="flex h-16 w-20 shrink-0 flex-col gap-1.5 rounded-[10px] border border-hairline p-2 dark:border-white/10"
       style={{ background: swatch.bg }}
       aria-hidden
     >

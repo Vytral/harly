@@ -186,7 +186,7 @@ export function PrivacyRequestCard({
                 : "No linked records — only the candidate profile remains"}
             </p>
             {scoped.length > 0 ? (
-              <dl className="mt-4 grid grid-cols-[repeat(3,auto)] justify-start gap-x-12 gap-y-5">
+              <dl className="mt-4 grid grid-cols-1 justify-start gap-x-12 gap-y-5 sm:grid-cols-[repeat(3,auto)]">
                 {scoped.map((row) => (
                   <div key={row.key}>
                     <dd className="text-xl font-semibold tabular-nums leading-none text-foreground">
@@ -223,7 +223,7 @@ export function PrivacyRequestCard({
               onChange={(event) => setNote(event.target.value)}
               placeholder="Internal review note (optional)"
               maxLength={1000}
-              className="min-h-[70px] resize-y text-sm"
+              className="min-h-[70px] resize-y text-base sm:text-sm"
             />
             <div className="flex gap-2.5">
               <Dialog>

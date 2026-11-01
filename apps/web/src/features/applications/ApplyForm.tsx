@@ -210,18 +210,18 @@ function isYesNoQuestion(question: JobApplicationQuestion): boolean {
 }
 
 const inputClass =
-  "h-10 w-full rounded-md border border-zinc-200 bg-white px-3 text-sm text-zinc-900 outline-none transition placeholder:text-zinc-400 focus:border-zinc-900 focus:ring-2 focus:ring-zinc-900/10 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100 dark:placeholder:text-zinc-500 dark:focus:border-zinc-100 dark:focus:ring-zinc-100/15";
+  "h-10 w-full rounded-md border border-zinc-200 bg-white px-3 text-base sm:text-sm text-zinc-900 outline-none transition placeholder:text-zinc-400 focus:border-zinc-900 focus:ring-2 focus:ring-zinc-900/10 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100 dark:placeholder:text-zinc-500 dark:focus:border-zinc-100 dark:focus:ring-zinc-100/15";
 
 const textareaClass =
-  "w-full rounded-md border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900 outline-none transition placeholder:text-zinc-400 focus:border-zinc-900 focus:ring-2 focus:ring-zinc-900/10 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100 dark:placeholder:text-zinc-500 dark:focus:border-zinc-100 dark:focus:ring-zinc-100/15";
+  "w-full rounded-md border border-zinc-200 bg-white px-3 py-2 text-base sm:text-sm text-zinc-900 outline-none transition placeholder:text-zinc-400 focus:border-zinc-900 focus:ring-2 focus:ring-zinc-900/10 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100 dark:placeholder:text-zinc-500 dark:focus:border-zinc-100 dark:focus:ring-zinc-100/15";
 
 // Ashby variant fields: taller, softer radius, accent-tinted focus ring so the
 // form picks up each workspace's --board-primary instead of a fixed blue.
 const inputClassAshby =
-  "h-11 w-full rounded-lg border border-zinc-200 bg-white px-3.5 text-sm text-zinc-900 outline-none transition placeholder:text-zinc-400 focus:border-[color:var(--board-primary)] focus:ring-2 focus:ring-[color:var(--board-primary)]/15 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100 dark:placeholder:text-zinc-500";
+  "h-11 w-full rounded-lg border border-zinc-200 bg-white px-3.5 text-base sm:text-sm text-zinc-900 outline-none transition placeholder:text-zinc-400 focus:border-[color:var(--board-primary)] focus:ring-2 focus:ring-[color:var(--board-primary)]/15 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100 dark:placeholder:text-zinc-500";
 
 const textareaClassAshby =
-  "w-full rounded-lg border border-zinc-200 bg-white px-3.5 py-2.5 text-sm text-zinc-900 outline-none transition placeholder:text-zinc-400 focus:border-[color:var(--board-primary)] focus:ring-2 focus:ring-[color:var(--board-primary)]/15 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100 dark:placeholder:text-zinc-500";
+  "w-full rounded-lg border border-zinc-200 bg-white px-3.5 py-2.5 text-base sm:text-sm text-zinc-900 outline-none transition placeholder:text-zinc-400 focus:border-[color:var(--board-primary)] focus:ring-2 focus:ring-[color:var(--board-primary)]/15 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100 dark:placeholder:text-zinc-500";
 
 const labelClass = "text-sm font-medium text-zinc-800 dark:text-zinc-200";
 const requiredMarkClass = "text-red-500";

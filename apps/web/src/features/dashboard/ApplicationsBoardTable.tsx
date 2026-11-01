@@ -311,7 +311,7 @@ function RowMenu({
     <DropdownMenu>
       <DropdownMenuTrigger
         aria-label={`Actions for ${name}`}
-        className="ml-auto flex size-8 items-center justify-center rounded-full text-soft-ink opacity-0 transition-opacity hover:bg-pure-snow hover:text-near-ink focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-near-ink group-hover/row:opacity-100 data-[state=open]:opacity-100"
+        className="ml-auto flex size-8 items-center justify-center rounded-full text-soft-ink max-md:opacity-100 opacity-0 transition-opacity hover:bg-pure-snow hover:text-near-ink focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-near-ink group-hover/row:opacity-100 data-[state=open]:opacity-100"
       >
         <MoreHorizontal className="size-4" strokeWidth={2} />
       </DropdownMenuTrigger>

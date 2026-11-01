@@ -108,7 +108,7 @@ export function DocumentTemplateEditorPage({ template }: { template: WorkflowDoc
           </Button>
         </div>
       </header>
-      <main className="mx-auto grid w-full max-w-7xl gap-8 px-5 py-8 sm:px-8 lg:grid-cols-[minmax(0,1fr)_22rem]">
+      <main className="mx-auto grid grid-cols-1 w-full max-w-7xl gap-8 px-5 py-8 sm:px-8 lg:grid-cols-[minmax(0,1fr)_22rem]">
         <section className="space-y-6">
           <div>
             <h1 className="font-display text-2xl">{template ? "Edit document template" : "New document template"}</h1>
@@ -116,7 +116,7 @@ export function DocumentTemplateEditorPage({ template }: { template: WorkflowDoc
               The PDF is generated the same way every time. Use it by hand from Documents or in any published workflow.
             </p>
           </div>
-          <div className="grid gap-4 md:grid-cols-2">
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
             <div className="space-y-2">
               <Label htmlFor="document-template-name">Library name</Label>
               <Input

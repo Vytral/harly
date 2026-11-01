@@ -186,7 +186,7 @@ export function AshbyTemplate({
                       value={query}
                       onChange={(e) => setQuery(e.target.value)}
                       placeholder="Search roles"
-                      className="w-full bg-transparent text-sm text-near-ink outline-none placeholder:text-soft-ink"
+                      className="w-full bg-transparent text-base sm:text-sm text-near-ink outline-none placeholder:text-soft-ink"
                     />
                   </div>
                   {facetGroups.length > 0 && (
@@ -281,7 +281,7 @@ export function AshbyTemplate({
                             <Link
                               key={job.id}
                               href={`${base}/jobs/${job.slug}` as Route}
-                              className="group flex items-center gap-4 px-5 py-4 transition-colors hover:bg-row-wash"
+                              className="group flex items-center gap-4 px-5 py-4 transition-colors hover:bg-row-wash active:bg-row-wash/70"
                             >
                               <span className="min-w-0 flex-1">
                                 <span className="block font-medium tracking-tight text-near-ink">

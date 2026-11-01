@@ -205,7 +205,7 @@ function InboxEmptyState({ status, demoMode = false }: { status: InboxMailboxSta
           <h2 className="mt-4 text-lg font-semibold tracking-[-0.02em]">Your inbox is ready</h2>
           <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-muted-foreground">No candidate has replied yet. When they reply to a Harly email, the message appears here automatically.</p>
         </div>
-        <div className="mt-8 grid gap-3 sm:grid-cols-3">
+        <div className="mt-8 grid grid-cols-1 gap-3 sm:grid-cols-3">
           {[
             ["1", "Send an email", "Contact a candidate from Harly."],
             ["2", "Candidate replies", "Their reply goes to your Harly address."],
@@ -585,7 +585,7 @@ export function RecruitingInbox({
                       }}
                       placeholder="Search conversations"
                       aria-keyshortcuts="/"
-                      className="h-9 w-full rounded-full border border-transparent bg-card-inset pl-9 pr-9 text-sm outline-none transition-[border-color,background-color] placeholder:text-quiet-mist hover:bg-row-wash focus:border-near-ink focus:bg-pure-snow [&::-webkit-search-cancel-button]:hidden dark:focus:bg-card"
+                      className="h-9 w-full rounded-full border border-transparent bg-card-inset pl-9 pr-9 text-base outline-none md:text-sm transition-[border-color,background-color] placeholder:text-quiet-mist hover:bg-row-wash focus:border-near-ink focus:bg-pure-snow [&::-webkit-search-cancel-button]:hidden dark:focus:bg-card"
                     />
                     {query ? null : <Kbd className="pointer-events-none absolute right-2.5 hidden h-5 min-w-5 text-[11px] lg:inline-flex">/</Kbd>}
                     {query ? (

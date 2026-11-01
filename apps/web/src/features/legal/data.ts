@@ -2,7 +2,10 @@ import "server-only";
 
 import { eq } from "drizzle-orm";
 
+import { isDemoMode } from "@harly/config";
 import { db, workspaceSettings, organization } from "@harly/db";
+
+import { DEMO_LEGAL_PAGES } from "./demo-legal-content";
 
 const LEGAL_SLUG_MAP: Record<string, string> = {
   "privacy-policy": "privacyPolicy",
@@ -21,6 +24,14 @@ export const LEGAL_PAGE_TITLES: Record<string, string> = {
 };
 
 export const VALID_LEGAL_SLUGS = Object.keys(LEGAL_SLUG_MAP);
+
+/** Demo only: fill pages the workspace has not authored with sample content. */
+function withDemoFallback(pages: Record<string, string> | null): Record<string, string> | null {
+  if (!isDemoMode()) return pages;
+  const merged: Record<string, string> = { ...DEMO_LEGAL_PAGES };
+  for (const [k, v] of Object.entries(pages ?? {})) if (v) merged[k] = v;
+  return merged;
+}
 
 export type LegalPageData = {
   workspaceName: string;
@@ -73,7 +84,7 @@ export async function getLegalIndexData(
 
   if (!ws) return null;
 
-  const pages = ws.legalPages as Record<string, string> | null;
+  const pages = withDemoFallback(ws.legalPages as Record<string, string> | null);
   const publishedSlugs = VALID_LEGAL_SLUGS.filter((s) => {
     const k = LEGAL_SLUG_MAP[s];
     return k && pages?.[k];
@@ -116,7 +127,7 @@ export async function getLegalPageData(
 
   if (!ws) return null;
 
-  const pages = ws.legalPages as Record<string, string> | null;
+  const pages = withDemoFallback(ws.legalPages as Record<string, string> | null);
   const content = pages?.[pageKey];
   if (!content) return null;
 

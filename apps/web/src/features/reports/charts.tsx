@@ -305,7 +305,7 @@ export function FunnelChart({ stages }: { stages: FunnelDatum[] }) {
           initial={shouldReduceMotion ? false : { opacity: 0, x: -6 }}
           animate={{ opacity: 1, x: 0 }}
           transition={{ duration: 0.25, ease: EASE_OUT, delay: i * 0.04 }}
-          className="grid grid-cols-[minmax(90px,120px)_1fr_auto] items-center gap-3 sm:gap-4"
+          className="grid grid-cols-[minmax(64px,120px)_minmax(0,1fr)_auto] items-center gap-3 sm:gap-4"
         >
           <span className="truncate text-sm font-medium text-near-ink">{stage.name}</span>
           <span className="relative h-7 overflow-hidden rounded-lg bg-warm-paper">
@@ -394,7 +394,7 @@ export function SourceBars({ sources }: { sources: SourceDatum[] }) {
             initial={shouldReduceMotion ? false : { opacity: 0, x: -6 }}
             animate={{ opacity: 1, x: 0 }}
             transition={{ duration: 0.25, ease: EASE_OUT, delay: i * 0.04 }}
-            className="grid grid-cols-[minmax(110px,160px)_1fr_auto] items-center gap-3 sm:gap-4"
+            className="grid grid-cols-[minmax(84px,160px)_minmax(0,1fr)_auto] items-center gap-3 sm:gap-4"
           >
             <span className="flex min-w-0 items-center gap-2">
               <span className="flex size-5 shrink-0 items-center justify-center text-soft-ink">

@@ -33,6 +33,30 @@ Before tagging, write the version section below. Use these headings when they
 apply: `Added`, `Changed`, `Fixed`, `Removed`, `Security`. Note migrations and
 anything an operator must do before upgrading.
 
+## [0.3.1]
+
+A patch release with fixes for the public demo, career page polish and a
+mobile layout pass. No database migrations.
+
+### Fixed
+
+- Signing failed on the server with `DOMMatrix is not defined`; pdfjs now loads
+  without it.
+- Settings pages no longer grow wider than a phone screen; the settings tabs
+  scroll inside their own row.
+- Grids, dialogs and popovers across the app fit 360px screens, menus that only
+  appeared on hover are visible on touch, and inputs use 16px on phones so iOS
+  does not zoom.
+
+### Changed
+
+- Career page templates: restrained motion on job lists and buttons (respects
+  reduced motion), a redesigned Showcase hero, and distinct colors per template
+  in the picker. Join shows its headline by default and the full intro.
+- The demo seeds two signable sample documents (an NDA and an offer letter) and
+  sample legal pages, shown only in demo mode and only where a workspace has
+  written none.
+
 ## [0.3.0]
 
 A feature release: a redesigned product, an MCP server so AI agents can work in

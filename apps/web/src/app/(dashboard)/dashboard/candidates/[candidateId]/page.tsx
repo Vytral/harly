@@ -244,7 +244,7 @@ export default async function CandidateDetailPage({
       <div className="min-w-0 space-y-2">
         <div>
           <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1">
-            <h1 className="font-display text-[26px] leading-tight tracking-[-0.01em] text-near-ink">
+            <h1 className="font-display text-[26px] leading-tight tracking-[-0.01em] text-near-ink [overflow-wrap:anywhere]">
               <Redact>{fullName}</Redact>
             </h1>
             {latestApplication ? (

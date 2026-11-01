@@ -86,7 +86,7 @@ export function CandidateTags({
           }}
           onBlur={add}
           placeholder="Tag name…"
-          className="h-7 w-32 rounded-full px-3 text-xs"
+          className="h-7 w-32 rounded-full px-3 text-base sm:text-xs"
         />
       ) : (
         <button

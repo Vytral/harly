@@ -152,7 +152,7 @@ export function NativeSignWorkspace({
         </span>
       </header>
 
-      <div className="grid min-h-0 flex-1 gap-5 py-4 duration-500 animate-in fade-in slide-in-from-bottom-2 lg:grid-cols-[minmax(0,1fr)_340px]">
+      <div className="grid min-h-0 flex-1 grid-cols-[minmax(0,1fr)] gap-5 py-4 duration-500 animate-in fade-in slide-in-from-bottom-2 lg:grid-cols-[minmax(0,1fr)_340px]">
         <section className="flex min-h-[520px] flex-col overflow-hidden rounded-2xl border border-border/70 bg-muted/30 shadow-xs">
           <div
             data-signature-scroll
