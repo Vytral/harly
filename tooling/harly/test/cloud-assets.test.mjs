@@ -135,17 +135,24 @@ test("version tags are the only published images", async () => {
   // The notes are published only once the channel has been settled.
   assert.match(workflow, /needs: \[image, release-channel\]/);
   assert.match(workflow, /LATEST: \$\{\{ needs\.release-channel\.outputs\.owns \}\}/);
-  // The image is scanned before it is pushed, so a blocking finding keeps it
-  // out of the registry instead of only skipping the release.
-  assert.match(workflow, /image-ref: harly:candidate/);
+  // Each architecture's pushed digest is scanned, so what is scanned is exactly
+  // what gets tagged; a blocking finding fails the build job, and the version
+  // tag (written only by `image`, which needs that job) is never created.
+  const digestRef = "image-ref: ghcr.io/vytral/harly@${{ steps.build.outputs.digest }}";
+  assert.ok(workflow.includes(digestRef), "pushed digest scan not found");
   const scan = workflow
     .split(/\n      - (?=name:|uses:|id:)/)
-    .find((block) => block.includes("image-ref: harly:candidate"));
-  assert.ok(scan, "candidate image scan not found");
+    .find((block) => block.includes(digestRef));
+  assert.ok(scan, "pushed digest scan not found");
   assert.match(scan, /severity: HIGH,CRITICAL/);
   assert.match(scan, /ignore-unfixed: false/);
   assert.match(scan, /exit-code: "1"/);
-  assert.ok(workflow.indexOf(scan) < workflow.indexOf("Publish the multi-architecture image"));
+  // The scan sits between the push and the step that records the digest for
+  // tagging, and the tagging job depends on the build job.
+  assert.ok(workflow.indexOf("Build and push this architecture by digest") < workflow.indexOf(scan));
+  assert.ok(workflow.indexOf(scan) < workflow.indexOf("Record the scanned digest"));
+  assert.ok(workflow.indexOf("Record the scanned digest") < workflow.indexOf("Publish the multi-architecture image"));
+  assert.match(workflow, /needs: \[prepare, build\]/);
   // gh has no checkout in the release job, so it needs GH_REPO to find the repo.
   assert.match(workflow, /GH_REPO: \$\{\{ github\.repository \}\}/);
   // The tagged commit is validated before anything is published.
