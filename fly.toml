@@ -6,7 +6,7 @@ app = "replace-with-your-harly-app-name"
 primary_region = "iad"
 
 [build]
-  image = "ghcr.io/vytral/harly@sha256:a66a54cd7dc4b1cc265f38a82aadadf7b91a797525649f7620bf022518441c5b"
+  image = "ghcr.io/vytral/harly@sha256:2941795e99fcb7b228fbd8c78a6f56d941d012909b4b06de9feba069364b3663"
 
 [processes]
   web = "serve"
