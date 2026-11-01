@@ -555,14 +555,20 @@ export async function createDocumentVersion(input: { documentId: string; origina
   if (["signed", "pending"].includes(access.document.signatureStatus)) return { ok: false, error: "Signed documents cannot be replaced. Create a new document instead." };
   const checked = await verifyUploadedDocument({ workspaceId: context.organization.id, storageKey: input.storageKey, name: input.originalName, mimeType: input.mimeType, sizeBytes: input.sizeBytes, checksum: input.checksum });
   if ("error" in checked) return { ok: false, error: checked.error };
-  const [current] = await db.select({ versionNumber: documentVersions.versionNumber }).from(documentVersions).where(eq(documentVersions.documentId, input.documentId)).orderBy(desc(documentVersions.versionNumber)).limit(1);
-  const versionNumber = (current?.versionNumber ?? 0) + 1;
-  await db.transaction(async (tx) => {
+  const replaced = await db.transaction(async (tx) => {
+    // Recheck under the document row lock that signing finalization also takes:
+    // a signature that completes while the upload was being verified must win.
+    const [locked] = await tx.select({ signatureStatus: documents.signatureStatus }).from(documents).where(and(eq(documents.id, input.documentId), eq(documents.workspaceId, context.organization.id))).for("update").limit(1);
+    if (!locked || ["signed", "pending"].includes(locked.signatureStatus)) return false;
+    const [current] = await tx.select({ versionNumber: documentVersions.versionNumber }).from(documentVersions).where(eq(documentVersions.documentId, input.documentId)).orderBy(desc(documentVersions.versionNumber)).limit(1);
+    const versionNumber = (current?.versionNumber ?? 0) + 1;
     await tx.update(documentVersions).set({ isCurrent: false }).where(eq(documentVersions.documentId, input.documentId));
     await tx.insert(documentVersions).values({ workspaceId: context.organization.id, documentId: input.documentId, versionNumber, storageKey: input.storageKey, sizeBytes: input.sizeBytes, checksum: checked.checksum, uploadedById: context.user.id });
     await tx.update(documents).set({ storageKey: input.storageKey, sizeBytes: input.sizeBytes, checksum: checked.checksum, mimeType: input.mimeType, originalName: input.originalName.replace(/[\r\n]/g, "") }).where(and(eq(documents.id, input.documentId), eq(documents.workspaceId, context.organization.id)));
     await logDocumentActivity(tx, { workspaceId: context.organization.id, actorId: context.user.id, documentId: input.documentId, type: "document.version_created", metadata: { versionNumber } });
+    return true;
   });
+  if (!replaced) return { ok: false, error: "Signed documents cannot be replaced. Create a new document instead." };
   revalidatePath("/dashboard/documents");
   return { ok: true };
 }

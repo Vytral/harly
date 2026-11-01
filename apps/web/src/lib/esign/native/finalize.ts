@@ -400,7 +400,7 @@ export async function finalizeNativeSignature(input: {
       if (existingRecipients.some((row) => row.routingOrder < recipient!.routingOrder && row.status !== "signed")) throw new Error("The previous signer has not completed this document yet.");
       if (existingRecipients.some((row) => row.routingOrder > recipient!.routingOrder && row.status === "signed")) throw new Error("The signing order state is invalid; a later signer is already marked complete.");
       providerEnvelopeId = envelope.providerEnvelopeId ?? providerEnvelopeId;
-      await tx.update(signatureRecipients).set({ status: "signed", signedAt, consentAt: input.consentAt ?? signedAt, consentVersion: input.consentVersion ?? ESIGN_CONSENT_VERSION, updatedAt: signedAt }).where(eq(signatureRecipients.id, recipient.id));
+      await tx.update(signatureRecipients).set({ status: "signed", signedAt, consentAt: input.consentAt ?? null, consentVersion: input.consentAt ? (input.consentVersion ?? ESIGN_CONSENT_VERSION) : null, updatedAt: signedAt }).where(eq(signatureRecipients.id, recipient.id));
       complete = existingRecipients.filter((row) => row.routingOrder > recipient!.routingOrder).every((row) => row.status === "signed");
       if (!complete) {
         const next = existingRecipients.filter((row) => row.routingOrder > recipient!.routingOrder && row.status === "created").sort((a, b) => a.routingOrder - b.routingOrder)[0];

@@ -83,7 +83,9 @@ export async function getNativeSignatureTimeline(input: { workspaceId: string; d
       signedAt: row.signedAt,
       declinedAt: row.declinedAt,
       declinedReason: row.declinedReason,
-      consentAt: row.consentAt,
+      // Consent counts only with a recorded disclosure version; a bare
+      // timestamp is not evidence that the signer accepted anything.
+      consentAt: row.consentVersion ? row.consentAt : null,
       linkExpiresAt: row.linkExpiresAt,
       reminderCount: row.reminderCount,
       lastReminderAt: row.lastReminderAt,
@@ -98,7 +100,7 @@ export async function getNativeSignatureTimeline(input: { workspaceId: string; d
       entries.push({ id: `invited-${row.id}`, at: row.invitedAt, kind: "invited", tone: "neutral", title: `${row.name} was invited`, detail: row.email, signer: row.name });
     }
     if (row.viewedAt) entries.push({ id: `opened-${row.id}`, at: row.viewedAt, kind: "opened", tone: "neutral", title: `${row.name} opened the link`, signer: row.name });
-    if (row.consentAt && row.status === "signed") entries.push({ id: `consent-${row.id}`, at: row.consentAt, kind: "consented", tone: "neutral", title: `${row.name} accepted the e-sign disclosure`, detail: undefined, signer: row.name });
+    if (row.consentAt && row.consentVersion && row.status === "signed") entries.push({ id: `consent-${row.id}`, at: row.consentAt, kind: "consented", tone: "neutral", title: `${row.name} accepted the e-sign disclosure`, detail: undefined, signer: row.name });
     if (row.signedAt) entries.push({ id: `signed-${row.id}`, at: row.signedAt, kind: "signed", tone: "success", title: `${row.name} signed`, signer: row.name });
     if (row.declinedAt) entries.push({ id: `declined-${row.id}`, at: row.declinedAt, kind: "declined", tone: "danger", title: `${row.name} declined to sign`, detail: row.declinedReason ?? "No reason given", signer: row.name });
     if (row.status === "expired" || (row.status === "sent" && row.linkExpiresAt && row.linkExpiresAt <= now)) {

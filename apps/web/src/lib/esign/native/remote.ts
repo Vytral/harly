@@ -317,7 +317,28 @@ export async function createNativeSigningLink(input: {
   // Fail before changing document state if the workspace cannot protect the
   // bearer token that will be placed in the email outbox.
   const encryptedToken = encryptSecret(rawToken);
-  const created = await database.transaction(async (tx) => {
+  let created;
+  try {
+    created = await database.transaction(async (tx) => {
+    // Re-read the document under a row lock: everything validated above (state,
+    // fields, file) must still hold when the envelope is created, so two sends
+    // racing on the same document cannot both open a workflow, and the invite
+    // never carries fields or a file that changed since they were checked.
+    const [current] = await tx
+      .select({ status: documents.status, signatureStatus: documents.signatureStatus, storageKey: documents.storageKey, fieldsSnapshot: documents.fieldsSnapshot })
+      .from(documents)
+      .where(and(eq(documents.id, input.documentId), eq(documents.workspaceId, input.workspaceId)))
+      .for("update")
+      .limit(1);
+    if (
+      !current ||
+      current.status !== "active" ||
+      !["unsigned", "declined", "expired"].includes(current.signatureStatus) ||
+      current.storageKey !== document.storageKey ||
+      JSON.stringify(current.fieldsSnapshot) !== JSON.stringify(document.fieldsSnapshot)
+    ) {
+      throw new NativeSendConflict();
+    }
     const [envelope] = await tx.insert(signatureEnvelopes).values({ workspaceId: input.workspaceId, provider: "native", providerEnvelopeId, kind: "document", status: "sent", subject: input.subject?.trim() || document.name, message: input.message?.trim() || null, expirationDays: input.expirationDays ?? null, documentId: input.documentId, documentName: document.name, createdById: input.actorId, workflowEffectId: input.effectKey ?? null, sentAt: invitedAt }).returning({ id: signatureEnvelopes.id });
     if (!envelope) throw new Error("Could not create signing envelope.");
     const createdRecipients = await tx.insert(signatureRecipients).values(recipients.map((recipient, index) => ({ workspaceId: input.workspaceId, envelopeId: envelope.id, providerRecipientId: index === 0 ? signingTokenId : `native-pending:${index}:${randomUUID()}`, role: "signer", email: recipient.email, name: recipient.name, routingOrder: index + 1, status: index === 0 ? "sent" : "created", linkExpiresAt: index === 0 ? expiresAt : null, invitedAt: index === 0 ? invitedAt : null }))).returning({ id: signatureRecipients.id, routingOrder: signatureRecipients.routingOrder });
@@ -359,7 +380,13 @@ export async function createNativeSigningLink(input: {
       automationParentRunId: input.automationParentRunId,
     });
     return { envelopeId: envelope.id, recipientId: firstRecipient.id, outboxId: outbox.id, event, targetContext };
-  });
+    });
+  } catch (error) {
+    if (error instanceof NativeSendConflict) {
+      return { ok: false as const, error: "This document changed or was already sent for signature. Refresh and try again." };
+    }
+    throw error;
+  }
 
   await processEmailOutbox({ ids: [created.outboxId], workspaceId: input.workspaceId, database });
   await publishPersistedDomainEvents([created.event], database);
@@ -369,6 +396,9 @@ export async function createNativeSigningLink(input: {
   }, { actorId: input.actorId, skipDomainEvent: true, eventId: created.event.eventId, parentRunId: input.automationParentRunId, database });
   return { ok: true as const, envelopeId: created.envelopeId, recipientId: created.recipientId, signingUrl: `${getHarlyPublicOrigin()}/sign/${rawToken}`, expiresAt };
 }
+
+/** The document changed between validation and envelope creation. */
+class NativeSendConflict extends Error {}
 
 /**
  * Issue a fresh native signing capability for an authenticated portal session.

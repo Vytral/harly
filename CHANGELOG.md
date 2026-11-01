@@ -174,7 +174,8 @@ existing installation. All migrations are additive.
 
 `0159`–`0164` add rejection reasons and the application rejection columns
 (`0159`); the signer experience, signing consent and reminder columns, with a
-backfill of invite and consent timestamps (`0160`); an envelope-to-document
+backfill of invite timestamps (`0160`; documents signed before 0.3.0 keep no
+consent timestamp, because none was recorded); an envelope-to-document
 reference with a backfill (`0161`); a `date` signature field type (`0162`); the
 in-app updater tables (`0163`); and MCP clients, grants, tokens, codes and
 workspace settings (`0164`). They are additive and safe on a live 0.2.4

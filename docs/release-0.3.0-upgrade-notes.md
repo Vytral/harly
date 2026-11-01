@@ -13,7 +13,7 @@ The container applies six additive migrations (`0159`–`0164`) on start.
 | Migration | What it does | Notes |
 | --- | --- | --- |
 | `0159` | `rejection_reasons` table; reason, note, rejected by and rejected at columns on `applications` | Additive. Existing rejections keep no reason. |
-| `0160` | E-sign signer experience: envelope message, expiry days and void reason; recipient invite, view and consent timestamps, reminder counters and previous token hashes; workspace reminder cadence (3 days) and cap (3) | Additive. Backfills `invited_at` for envelopes already sent and `consent_at` for signed recipients. |
+| `0160` | E-sign signer experience: envelope message, expiry days and void reason; recipient invite, view and consent timestamps, reminder counters and previous token hashes; workspace reminder cadence (3 days) and cap (3) | Additive. Backfills `invited_at` for envelopes already sent. `consent_at` stays empty for documents signed before 0.3.0, which recorded no disclosure acceptance. |
 | `0161` | `signature_envelopes.document_id` and `document_name` | Additive. Backfilled from the documents that already reference an envelope. |
 | `0162` | Allows `date` signature fields | Drops and re-adds one `CHECK` constraint with a wider list. Existing rows are valid. |
 | `0163` | In-app updater: `instance_update_state`, `update_requests`, `workspace_update_settings` | Additive. Auto-update is off by default. |
