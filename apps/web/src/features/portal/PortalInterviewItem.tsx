@@ -71,14 +71,18 @@ function address(interview: PortalInterviewItemData): string | null {
 }
 
 function DateTile({ date, muted }: { date: Date; muted: boolean }) {
-  const parts = useLocal(
-    () => ({
-      weekday: new Intl.DateTimeFormat(undefined, { weekday: "short" }).format(date),
-      day: new Intl.DateTimeFormat(undefined, { day: "numeric" }).format(date),
-      month: new Intl.DateTimeFormat(undefined, { month: "short" }).format(date),
-    }),
-    { weekday: "", day: "", month: "" },
-  );
+  // A snapshot must be stable between calls, so it is one string, not a fresh
+  // object (which useSyncExternalStore treats as a change on every render).
+  const [weekday = "", day = "", month = ""] = useLocal(
+    () =>
+      [
+        new Intl.DateTimeFormat(undefined, { weekday: "short" }).format(date),
+        new Intl.DateTimeFormat(undefined, { day: "numeric" }).format(date),
+        new Intl.DateTimeFormat(undefined, { month: "short" }).format(date),
+      ].join("\u0000"),
+    "",
+  ).split("\u0000");
+  const parts = { weekday, day, month };
   return (
     <div
       className={cn(
