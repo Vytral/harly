@@ -46,7 +46,10 @@ while still blocking critical issues that can be fixed.
 
 The release workflow scans the image **before** it is pushed. The candidate is
 built for the host architecture and kept local, both Trivy passes run against
-it, and only then is the multi-architecture image published. A blocking finding
+it, and only then are the architectures built and published. Each one builds
+on a native runner (`ubuntu-latest` for amd64, `ubuntu-24.04-arm` for arm64), is
+pushed by digest without a tag, and the two are joined into one
+multi-architecture index tagged with the version. A blocking finding
 keeps the image out of the registry entirely rather than leaving a published
 image that the release simply does not announce. SBOM and provenance generation
 remain enabled in BuildKit.
