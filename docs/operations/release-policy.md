@@ -46,8 +46,8 @@ while still blocking critical issues that can be fixed.
 
 The release workflow scans the image **before** it is pushed. Each
 architecture builds on a native runner (`ubuntu-latest` for amd64,
-`ubuntu-24.04-arm` for arm64), is kept local and scanned with Trivy, and only
-then is pushed by digest without a tag. The two digests are then joined into one
+`ubuntu-24.04-arm` for arm64), is kept local and scanned with Trivy. Only when
+both scans pass is each architecture pushed, by digest and without a tag. The two digests are then joined into one
 multi-architecture index tagged with the version. A blocking finding
 keeps the image out of the registry entirely rather than leaving a published
 image that the release simply does not announce. SBOM and provenance generation
