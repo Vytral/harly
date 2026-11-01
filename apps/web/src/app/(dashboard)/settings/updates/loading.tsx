@@ -11,11 +11,11 @@ export default function UpdatesSettingsLoading() {
       <span className="sr-only">Loading…</span>
 
       <Card className="gap-5 p-6">
-        <div className="flex items-start justify-between gap-4">
-          <div className="flex items-start gap-4">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+          <div className="flex min-w-0 items-start gap-4">
             <Skeleton className="size-10 shrink-0 rounded-[var(--radius-btn)]" />
-            <div className="space-y-2 pt-0.5">
-              <Skeleton className="h-4 w-36" />
+            <div className="min-w-0 space-y-2 pt-0.5">
+              <Skeleton className="h-4 w-36 max-w-full" />
               <Skeleton className="h-3.5 w-64 max-w-full" />
             </div>
           </div>
@@ -30,7 +30,7 @@ export default function UpdatesSettingsLoading() {
           <div className="divide-y divide-hairline overflow-hidden rounded-xl border border-hairline">
             {Array.from({ length: 3 }).map((_, i) => (
               <div key={i} className="flex items-center justify-between gap-4 px-4 py-3">
-                <div className="space-y-1.5">
+                <div className="min-w-0 space-y-1.5">
                   <Skeleton className="h-3.5 w-36" />
                   <Skeleton className="h-3 w-52 max-w-full" />
                 </div>
