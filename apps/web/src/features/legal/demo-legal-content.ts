@@ -29,7 +29,7 @@ export const DEMO_LEGAL_PAGES: Record<string, string> = {
 <h2>Who sees it</h2>
 <p>Your application is visible to the Syntrix hiring team and to service providers that host our systems under confidentiality terms.</p>
 <h2>Retention</h2>
-<p>Unsuccessful applications are deleted after 12 months unless you ask us to keep them for future roles.</p>
+<p>We keep your application while the role is open and for future roles you may fit. You can ask us at any time to anonymize your data.</p>
 <h2>Your rights</h2>
 <p>You can request access, correction, export or deletion of your data at any time by writing to <a href="mailto:privacy@syntrix.com">privacy@syntrix.com</a>.</p>`,
 
