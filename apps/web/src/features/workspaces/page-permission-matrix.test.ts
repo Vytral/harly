@@ -45,6 +45,7 @@ const GUARD_ALLOWLIST: Record<string, string> = {
   "page.tsx:dashboard/replies": "Redirect only; renders nothing. The target page is guarded.",
   "page.tsx:dashboard/document-templates": "Redirect only; renders nothing. The target page is guarded.",
   "page.tsx:settings/roles": "Redirect only to /settings/members, which is guarded.",
+  "page.tsx:settings/updates": "Owner-only by role key (notFound for everyone else); updates are not a grantable permission.",
   "layout.tsx:": "Shell layout: authentication and workspace resolution. Every page declares its own permission.",
   "layout.tsx:settings": "Navigation chrome: hides sections the viewer cannot open. Each settings page guards itself.",
 };

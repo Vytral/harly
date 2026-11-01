@@ -1,6 +1,9 @@
 import type { ReactNode } from "react";
 
+import { isDemoMode } from "@harly/config";
+
 import { SettingsNav, SettingsSectionHeading } from "@/components/dashboard/SettingsNav";
+import { getWorkspaceContextOrNull } from "@/features/workspaces/context";
 import { getCurrentPermissions } from "@/features/workspaces/permissions-server";
 import { SETTINGS_SECTION_PERMISSION } from "@/features/workspaces/permissions";
 
@@ -23,6 +26,13 @@ export default async function SettingsLayout({
         : !permissions.includes(required),
     )
     .map(([href]) => href);
+
+  // Updates change how the whole installation runs, so the section is for
+  // owners only. It is not a permission key: no custom role can be granted it.
+  const context = await getWorkspaceContextOrNull();
+  if (context?.roleKey !== "owner") deniedHrefs.push("/settings/updates");
+  // The public demo never exposes the MCP server.
+  if (isDemoMode()) deniedHrefs.push("/settings/ai-agents");
 
   // The section title spans both columns so the nav card and the content cards
   // share one top edge; the nav then pins just under the 64px app header.
