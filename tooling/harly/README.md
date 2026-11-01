@@ -326,17 +326,11 @@ conflicting port.
 
 ## Publishing the package
 
-From this package directory:
-
-```bash
-pnpm pack:check
-npm whoami
-npm publish --access public
-```
-
-The package is scoped as `@harly/cli` and exposes the `harly` executable. The
-first public scoped publish requires `--access public` and npm account
-authentication with 2FA or an appropriately scoped granular token.
+The **Publish CLI** GitHub workflow publishes `@harly/cli` to npm through
+Trusted Publishing, after each stable Harly release or when run by hand. Bump
+`version` in `package.json` and add a matching `CHANGELOG.md` section; the
+workflow skips a version that is already on npm. `pnpm pack:check` previews
+the tarball locally. See `docs/operations/release-policy.md`.
 
 ## License
 

@@ -1,0 +1,117 @@
+# Publishes @harly/cli to npm after a stable Harly release, or on demand.
+#
+# Authentication is npm Trusted Publishing (OIDC): npmjs.com trusts this exact
+# workflow file in Vytral/harly, so there is no NPM_TOKEN secret, and npm
+# attaches provenance automatically. The package's trusted publisher must keep
+# naming `publish-cli.yml`; renaming this file breaks publishing.
+#
+# It runs when "Release container image" finishes for a stable tag, because
+# that workflow's release commit on main rewrites the release the CLI embeds
+# as its offline fallback; publishing before it would ship the previous image.
+# For a CLI-only release (no new image), bump the version, merge, and run this
+# workflow by hand from the Actions tab.
+#
+# Bump `version` in tooling/harly/package.json and add its CHANGELOG entry
+# first. A version already on npm is skipped, so re-runs publish nothing. A
+# prerelease CLI version (0.7.0-beta.1) goes to the `next` dist-tag.
+name: Publish CLI
+
+on:
+  workflow_run:
+    workflows: ["Release container image"]
+    types: [completed]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: publish-cli
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    name: Publish @harly/cli
+    # After a release: only a successful, stable tag (v1.2.3), which is the one
+    # that lands a release commit on main.
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.conclusion == 'success' &&
+       !contains(github.event.workflow_run.head_branch, '-'))
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    defaults:
+      run:
+        working-directory: tooling/harly
+    steps:
+      # main, including the release commit the image workflow just pushed.
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.0
+
+      # Trusted publishing needs npm 11.5.1 or newer, which Node 24 ships.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+          registry-url: https://registry.npmjs.org
+
+      - name: Read the version to publish
+        id: version
+        run: |
+          name=$(node -p "require('./package.json').name")
+          version=$(node -p "require('./package.json').version")
+          if npm view "$name@$version" version >/dev/null 2>&1; then
+            echo "$name@$version is already on npm; nothing to publish."
+            echo "publish=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "publish=true" >> "$GITHUB_OUTPUT"
+          fi
+          case "$version" in
+            *-*) echo "tag=next" >> "$GITHUB_OUTPUT" ;;
+            *) echo "tag=latest" >> "$GITHUB_OUTPUT" ;;
+          esac
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      # A stable tag that does not own the channel (an older patch) gets no
+      # release commit; then the embedded release is not this one, so skip.
+      - name: Require the release commit for this tag
+        id: embedded
+        if: github.event_name == 'workflow_run' && steps.version.outputs.publish == 'true'
+        env:
+          TAG: ${{ github.event.workflow_run.head_branch }}
+        run: |
+          embedded=$(sed -n 's/^  version: "\(.*\)",$/\1/p' src/release.ts | head -1)
+          if [ "v$embedded" != "$TAG" ]; then
+            echo "::notice::main embeds Harly $embedded, not $TAG; the CLI is not published for this tag."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Install dependencies
+        if: steps.version.outputs.publish == 'true' && steps.embedded.outputs.skip != 'true'
+        run: pnpm install --frozen-lockfile --filter @harly/cli...
+
+      # The same checks CI runs: build, release-asset sync and the test suite.
+      - name: Typecheck and test
+        if: steps.version.outputs.publish == 'true' && steps.embedded.outputs.skip != 'true'
+        run: |
+          pnpm typecheck
+          pnpm test
+
+      - name: Check the changelog names this version
+        if: steps.version.outputs.publish == 'true' && steps.embedded.outputs.skip != 'true'
+        run: |
+          if ! grep -q "^## ${{ steps.version.outputs.version }}\b" CHANGELOG.md; then
+            echo "::error::tooling/harly/CHANGELOG.md has no section for ${{ steps.version.outputs.version }}."
+            exit 1
+          fi
+
+      - name: Publish
+        if: steps.version.outputs.publish == 'true' && steps.embedded.outputs.skip != 'true'
+        run: npm publish --access public --tag ${{ steps.version.outputs.tag }}
