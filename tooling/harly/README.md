@@ -11,10 +11,16 @@ deployment from the command line.
 Requires Node.js 20.12 or newer. A local installation also requires Docker
 Engine 24+ and Docker Compose 2.20+.
 
-## What's new in 0.5.2
+## What's new in 0.6.0
 
-- Resume interrupted installations from the menu or with `harly resume`.
-- Caddy waits for public readiness with up to 15 minutes for automatic HTTPS.
+- `harly status` shows the URL, version against the latest release, container
+  health, database, disk, last backup, and certificate expiry on one screen.
+- `harly` opens a menu of common actions; `harly --help` groups commands by
+  purpose, and `harly help <command>` lists a command's options and examples.
+- Mistyped commands and options suggest the closest match.
+- Errors end with next steps. `--quiet` hides the header and hints.
+- `harly install-global` installs the CLI so you can just type `harly`, and the
+  npx offer is asked once and remembered.
 
 See [CHANGELOG.md](CHANGELOG.md) for the release notes.
 
@@ -60,6 +66,7 @@ web service, the scheduler, and Caddy when enabled. With automatic HTTPS,
 | `harly init [directory]` | Generate a new installation. Use `--launch` to start it in the same run. |
 | `harly launch [directory]` | Pull images, start services, and wait for readiness. |
 | `harly resume [directory]` | Retry startup with saved configuration and secrets. |
+| `harly status [directory]` | One-screen overview: URL, version vs latest, containers, database, disk, last backup, certificate. |
 | `harly doctor [directory]` | Check service health and public readiness. |
 | `harly setup-secret [directory]` | Read the setup secret from the local `.env` file. |
 | `harly backup [directory]` | Create a private rollback archive. |
@@ -69,14 +76,63 @@ web service, the scheduler, and Caddy when enabled. With automatic HTTPS,
 | `harly deploy railway` | Provision and deploy the Railway project. |
 | `harly deploy fly prepare` | Generate a Fly.io deployment configuration. |
 | `harly deploy digitalocean prepare` | Generate a DigitalOcean App Platform specification. |
+| `harly install-global` | Install this CLI globally with npm so you can type `harly` instead of `npx @harly/cli`. |
 
-Run `npx @harly/cli --help` for the compact command list.
+Run `npx @harly/cli --help` for the commands grouped by purpose, and
+`harly help <command>` (or `harly <command> --help`) for one command's options
+and examples. A mistyped command or option suggests the closest match, for
+example `harly docter` answers `Did you mean harly doctor?`.
 
-After a successful interactive install, launch, or resume through npx, the CLI
-offers to install the same CLI version globally. Accepting lets you use `harly`
-directly. The offer is skipped when the CLI is already installed globally, and
-is never accepted automatically by `--yes`. Declining or an npm permissions
+### `harly status`
+
+```text
+INSTANCE
+✓ URL      https://ats.example.com  answers ready · 120 ms
+✓ Version  v0.2.4  latest
+SERVICES
+✓ Database     running · healthy
+✓ Application  running · healthy
+HOST
+✓ Disk         23.4 GB free
+✓ Last backup  2 days ago · 12 MB
+✓ Certificate  Let's Encrypt · expires in 61 days
+```
+
+Only what the CLI can verify is shown: container state comes from
+`docker compose ps`, readiness from the public `/api/health/ready` endpoint,
+the latest release from the release manifest (marked "latest unknown" offline),
+the last backup from `backups/`, and the certificate from a TLS handshake with
+the public host. Warnings (a backup older than a week, low disk, a certificate
+expiring within 14 days, a newer release) do not change the exit code; a stopped
+service or failing readiness exits `1`. `--json` prints the same data as one
+document.
+
+### Installing the CLI globally
+
+When you run the CLI through npx in a terminal, it asks once:
+`Install Harly globally so you can just type harly?` (default yes). It then
+installs the same version with npm, checks that `harly` resolves, and, if npm's
+global bin directory is not on `PATH`, prints the exact command for your shell
+(zsh, bash, fish, or PowerShell). The question is skipped when the CLI is
+already installed globally, is never accepted automatically by `--yes`, and is
+never asked in CI, pipes, or `--json`. Declining is remembered in
+`config.json` under `$XDG_CONFIG_HOME/harly` (default `~/.config/harly`; on
+Windows `%APPDATA%\harly`; override with `HARLY_CONFIG_DIR`). An npm permissions
 error keeps the deployment running; you can keep using npx.
+
+To do it explicitly, at any time:
+
+```bash
+npx @harly/cli install-global          # asks first in a terminal
+npx @harly/cli install-global --yes    # for scripts; --dry-run previews
+```
+
+### Update notices
+
+In a terminal, the header notes when a newer CLI is published (checked at most
+once a day against the npm registry, with a short timeout). Set
+`HARLY_NO_UPDATE_CHECK=1` to turn it off. It never runs in CI, with `--json`, or
+with `--quiet`.
 
 Run management commands from the installation directory. `harly update` updates
 the application; update the global CLI separately with:
@@ -209,8 +265,14 @@ stdin source, such as `--railway-token-stdin` or `--s3-secret-stdin`.
 Global flags work before or after the subcommand when unambiguous:
 
 ```text
---json --verbose --non-interactive --yes --dry-run --force --timeout <seconds>
+--json --quiet --no-color --verbose --non-interactive --yes --dry-run --force --timeout <seconds>
 ```
+
+`--quiet` hides the header, hints, and update notices but keeps results and
+errors. `--no-color` (or `NO_COLOR`) removes colour. Without a terminal, in CI,
+or with `--non-interactive`, `harly` with no arguments checks the installation
+found in the current path (or prints the command list) instead of opening the
+menu.
 
 `--json` disables prompts and loaders. stdout contains exactly one JSON
 document for success, failure, and cancellation; human diagnostics go to

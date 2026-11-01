@@ -37,20 +37,46 @@ export function accentBadge(text: string): string {
 }
 
 let brandShown = false;
+let silent = false;
+
+/** --quiet: drop decorative output (brand header, hints); results and errors stay. */
+export function setQuiet(value: boolean) {
+  silent = value;
+}
 
 /** Keep the CLI identity compact. The installer is often run in narrow SSH
  * sessions, where a large ASCII mark competes with the task instead of
- * supporting it. Later surfaces become quiet section labels. */
-export function showBrand(context?: string, version = "") {
+ * supporting it. Later surfaces become quiet section labels. `notice` is an
+ * optional dim line under the header, e.g. an available CLI update. */
+export function showBrand(context?: string, version = "", notice?: string) {
+  if (silent) return;
   const suffix = version ? ` ${soft(`· v${version}`)}` : "";
+  const extra = notice ? `  ${notice}\n` : "";
   if (brandShown) {
-    if (context) process.stdout.write(`\n  ${ink(context)}${suffix}\n\n`);
+    if (context) process.stdout.write(`\n  ${ink(context)}${suffix}\n${extra}\n`);
     return;
   }
   brandShown = true;
   process.stdout.write(
-    `\n  ${accent(ink("harly"))}  ${soft("Self-hosted ATS")}${suffix}\n\n`,
+    `\n  ${accent(ink("harly"))}  ${soft("Self-hosted ATS")}${suffix}\n${extra}\n`,
   );
+}
+
+/** A command the reader can copy, set apart from prose. */
+export const command = (text: string) => accent(text);
+
+/** The "Next:" lines that close an error or a result, so every failure says
+ * what to do. Plain text under NO_COLOR and in pipes. */
+export function nextSteps(steps: string[], title = "Next"): string {
+  if (steps.length === 0) return "";
+  return [soft(`${title}:`), ...steps.map((step) => `  ${step}`)].join("\n");
+}
+
+/** An error message followed by its next steps, in one consistent shape. */
+export function errorBlock(message: string, steps: string[] = []): string {
+  const body = `${mark.fail()} ${message}`;
+  const next = nextSteps(steps);
+  return next ? `${body}\n\n${next}` : body;
 }
 
 /** Spinner frames tinted with the brand pulse. */

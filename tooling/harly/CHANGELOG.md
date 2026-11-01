@@ -1,5 +1,50 @@
 # Changelog
 
+## 0.6.0 — 2026-10-31
+
+### A more guided CLI
+
+- Added `harly status`: URL, version against the latest release, container
+  health, database, free disk, last backup, and certificate expiry on one
+  screen, with next steps. `--json` returns the same data and the command exits
+  `1` when a service or the public endpoint is down. `doctor` is unchanged.
+- `harly --help` groups commands by purpose, hides flag tails from the overview,
+  and adds global options and examples. `harly help <command>` and
+  `harly <command> --help` list a command's options and examples. `--json help`
+  keeps `commands` and adds `groups`.
+- The interactive menu shows version, update availability, and last backup, and
+  adds "Check this server first", "Show setup secret", and "Show all commands".
+  Restore now names the newest archive and the exact restore command.
+- Mistyped commands and options suggest the closest match (`harly docter` ->
+  `Did you mean harly doctor?`) and an unknown command no longer prints the whole
+  help. Failures end with next steps (also under `next` in `--json`); `--verbose`
+  adds the stack for unexpected errors.
+- `--quiet` is now honoured: it hides the header, hints, and update notices.
+  `--no-color`/`NO_COLOR` apply everywhere.
+- The header notes an available CLI update, checked at most once a day. Disable
+  it with `HARLY_NO_UPDATE_CHECK=1`; it never runs in CI, pipes, or `--json`.
+
+### Updater
+
+- Added `harly updater run | install-service | status`, the host-side half of
+  Settings → Updates in the app. The updater polls the instance for owner-
+  requested and scheduled updates, runs `harly update`, rolls back to the
+  pre-update backup if the update fails after changing the install, and reports
+  the outcome. It authenticates with a token derived from `CRON_SECRET`.
+  `--once` and `--interval <seconds>` are new options.
+
+### Global install
+
+- Added `harly install-global` (`--yes` for scripts, `--dry-run` to preview).
+- The npx offer is now asked once, in plain language, defaulting to yes, at the
+  start of the interactive menu as well as after install, launch, and resume.
+  After installing it verifies that `harly` resolves and, when npm's global bin
+  directory is missing from PATH, prints the exact command for zsh, bash, fish,
+  or PowerShell.
+- A declined offer is remembered in `config.json` under `$XDG_CONFIG_HOME/harly`
+  (default `~/.config/harly`) or `%APPDATA%\harly`; `HARLY_CONFIG_DIR` overrides
+  it. `--yes` still never accepts the offer implicitly.
+
 ## 0.5.2 — 2026-09-27
 
 - Added `harly resume` and a guided menu action to retry startup with saved
