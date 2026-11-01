@@ -23,15 +23,11 @@ export default async function PortalNotificationsPage() {
 
   return (
     <PortalShell>
-      <div className="space-y-6">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight text-foreground">
-            Notifications
-          </h1>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Updates on your applications and interviews
-          </p>
-        </div>
+      <div className="mx-auto max-w-3xl space-y-6">
+        <header className="pt-2">
+          <h1 className="text-[28px] font-semibold tracking-tight text-near-ink">Updates</h1>
+          <p className="mt-1 text-[15px] text-soft-ink">News about your applications and interviews.</p>
+        </header>
         <PortalNotificationsList notifications={notifications} />
       </div>
     </PortalShell>

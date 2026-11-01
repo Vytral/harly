@@ -3,8 +3,11 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { Route } from "next";
-import type { ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
+import { LayoutGroup, motion, useReducedMotion } from "motion/react";
+
 import { cn } from "@/lib/utils";
+import { spring } from "@/lib/motion";
 import {
   HouseIcon,
   BellIcon,
@@ -12,6 +15,7 @@ import {
   BriefcaseIcon,
   FileTextIcon,
 } from "@/components/ui/icons/phosphor";
+import { headerCornerBadge, headerRoundButton } from "@/components/dashboard/header-styles";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -37,9 +41,76 @@ type PortalTopNavProps = {
 const NAV_ITEMS = [
   { href: "/portal/dashboard" as Route, label: "Home", icon: HouseIcon },
   { href: "/portal/applications" as Route, label: "Applications", icon: FileTextIcon },
-  { href: "/portal/notifications" as Route, label: "Notifications", icon: BellIcon },
-  { href: "/portal/jobs" as Route, label: "Jobs", icon: BriefcaseIcon },
-];
+  { href: "/portal/jobs" as Route, label: "Open roles", icon: BriefcaseIcon },
+] as const;
+
+function isActive(pathname: string, href: string) {
+  return pathname === href || pathname.startsWith(href + "/");
+}
+
+/** White pill that glides between tabs; a plain swap when motion is reduced. */
+function ActivePill() {
+  const reduce = useReducedMotion();
+  return (
+    <motion.span
+      layoutId="portal-active-pill"
+      aria-hidden="true"
+      transition={reduce ? { duration: 0 } : spring.pill}
+      className="absolute inset-0 rounded-full bg-pure-snow shadow-[var(--shadow-card)] dark:bg-soft-kraft"
+    />
+  );
+}
+
+function OrgMark({
+  orgName,
+  orgLogo,
+  orgFullLogoUrl,
+  orgFullLogoDarkUrl,
+  accent,
+}: {
+  orgName: string;
+  orgLogo: string | null;
+  orgFullLogoUrl: string | null;
+  orgFullLogoDarkUrl: string | null;
+  accent: string;
+}) {
+  if (orgFullLogoUrl) {
+    return (
+      <>
+        {/* eslint-disable-next-line @next/next/no-img-element -- external URL from workspace */}
+        <img
+          src={orgFullLogoUrl}
+          alt={orgName}
+          className={cn("h-7 max-w-[150px] object-contain", orgFullLogoDarkUrl && "dark:hidden")}
+        />
+        {orgFullLogoDarkUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element -- external URL from workspace
+          <img src={orgFullLogoDarkUrl} alt={orgName} className="hidden h-7 max-w-[150px] object-contain dark:block" />
+        ) : null}
+      </>
+    );
+  }
+  return (
+    <>
+      {orgLogo ? (
+        // eslint-disable-next-line @next/next/no-img-element -- external URL from workspace
+        <img src={orgLogo} alt="" className="size-8 rounded-lg object-cover" />
+      ) : (
+        <span
+          className="flex size-8 items-center justify-center rounded-lg text-sm font-semibold text-white"
+          style={{ backgroundColor: accent }}
+          aria-hidden="true"
+        >
+          {orgName.charAt(0).toUpperCase()}
+        </span>
+      )}
+      <span className="min-w-0 truncate text-[15px] font-semibold tracking-tight text-near-ink">
+        {orgName}
+        <span className="ml-1.5 font-normal text-soft-ink max-sm:hidden">Careers</span>
+      </span>
+    </>
+  );
+}
 
 export function PortalTopNav({
   orgName,
@@ -54,149 +125,158 @@ export function PortalTopNav({
   signOutForm,
 }: PortalTopNavProps) {
   const pathname = usePathname();
-  const accentColor = orgColor ?? "#3f6212";
-  const hasUnread = unreadNotificationCount > 0;
+  const accent = orgColor ?? "#3f6212";
+  const unread = unreadNotificationCount;
+  const [scrolled, setScrolled] = useState(false);
+
+  useEffect(() => {
+    const onScroll = () => setScrolled(window.scrollY > 4);
+    onScroll();
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
+  }, []);
 
   return (
-    <nav className="sticky top-0 z-50 border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80">
-      <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
-        {/* Logo */}
-        <Link href={"/portal/dashboard" as Route} className="flex items-center gap-2.5">
-          {orgFullLogoUrl ? (
-            <>
-              {/* eslint-disable-next-line @next/next/no-img-element -- external URL from workspace */}
-              <img
-                src={orgFullLogoUrl}
-                alt={orgName}
-                className={cn("h-8 max-w-[160px] object-contain", orgFullLogoDarkUrl && "dark:hidden")}
-              />
-              {orgFullLogoDarkUrl && (
-                // eslint-disable-next-line @next/next/no-img-element -- external URL from workspace
-                <img
-                  src={orgFullLogoDarkUrl}
-                  alt={orgName}
-                  className="hidden h-8 max-w-[160px] object-contain dark:block"
-                />
-              )}
-            </>
-          ) : orgLogo ? (
-            <>
-              {/* eslint-disable-next-line @next/next/no-img-element -- external URL from workspace */}
-              <img
-                src={orgLogo}
-                alt={orgName}
-                className="size-9 rounded-lg object-cover"
-              />
-              <span className="font-display text-lg font-semibold tracking-tight text-foreground">
-                {orgName}
-              </span>
-            </>
-          ) : (
-            <>
-              <span
-                className="flex size-9 items-center justify-center rounded-lg text-sm font-bold text-white"
-                style={{ backgroundColor: accentColor }}
-              >
-                {orgName.charAt(0).toUpperCase()}
-              </span>
-              <span className="font-display text-lg font-semibold tracking-tight text-foreground">
-                {orgName}
-              </span>
-            </>
-          )}
-        </Link>
-
-        {/* Center nav */}
-        <div className="hidden sm:flex items-center gap-1">
-          {NAV_ITEMS.map((item) => {
-            const active = pathname === item.href || pathname.startsWith(item.href + "/");
-            return (
-              <Link
-                key={item.href}
-                href={item.href}
-                className={cn(
-                  "flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-colors",
-                  active
-                    ? "text-foreground"
-                    : "text-muted-foreground hover:text-foreground"
-                )}
-              >
-                <item.icon className="size-5" />
-                {item.label}
-              </Link>
-            );
-          })}
-        </div>
-
-        {/* Right side: bell + avatar dropdown */}
-        <div className="flex items-center gap-2">
-          {/* Notifications bell (transparent) with unread dot */}
+    <>
+      <div
+        data-scrolled={scrolled || undefined}
+        className="sticky top-0 z-40 border-b border-transparent transition-[background-color,border-color] duration-[var(--motion-base)] ease-out data-[scrolled]:border-hairline data-[scrolled]:bg-warm-paper/85 data-[scrolled]:backdrop-blur-md"
+      >
+        <header className="mx-auto grid h-16 max-w-6xl grid-cols-[minmax(0,1fr)_auto] items-center gap-x-4 px-4 sm:px-6 md:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)]">
           <Link
-            href={"/portal/notifications" as Route}
-            aria-label={
-              hasUnread
-                ? `Notifications, ${unreadNotificationCount} unread`
-                : "Notifications"
-            }
-            className="relative flex size-9 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+            href={"/portal/dashboard" as Route}
+            className="flex min-w-0 items-center gap-2.5 rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-near-ink"
           >
-            <BellIcon className="size-5" />
-            {hasUnread && (
-              <span className="absolute right-2 top-2 size-2 rounded-full bg-rust ring-2 ring-background" />
-            )}
+            <OrgMark
+              orgName={orgName}
+              orgLogo={orgLogo}
+              orgFullLogoUrl={orgFullLogoUrl}
+              orgFullLogoDarkUrl={orgFullLogoDarkUrl}
+              accent={accent}
+            />
           </Link>
 
-          {/* Avatar dropdown */}
-          <DropdownMenu>
-            <DropdownMenuTrigger className="flex items-center rounded-full outline-none ring-offset-background transition-shadow focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2">
-              {candidateAvatarUrl ? (
-                // eslint-disable-next-line @next/next/no-img-element -- external URL
-                <img
-                  src={candidateAvatarUrl}
-                  alt={candidateName}
-                  className="size-9 rounded-full object-cover ring-2 ring-border"
-                />
-              ) : (
-                <div
-                  className="flex size-9 items-center justify-center rounded-full text-sm font-semibold text-white ring-2 ring-border"
-                  style={{ backgroundColor: accentColor }}
-                >
-                  {candidateInitials}
-                </div>
-              )}
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-56">
-              <DropdownMenuLabel className="font-normal">
-                <p className="text-sm font-medium text-foreground">{candidateName}</p>
-                <p className="text-xs text-muted-foreground">Candidate</p>
-              </DropdownMenuLabel>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem asChild>
-                <Link href={"/portal/applications" as Route}>
-                  <BriefcaseIcon className="size-4" />
-                  My applications
-                </Link>
-              </DropdownMenuItem>
-              <DropdownMenuItem asChild>
-                <Link href={"/portal/profile" as Route}>
-                  <UserCircleIcon className="size-4" />
-                  My profile
-                </Link>
-              </DropdownMenuItem>
-              <DropdownMenuItem asChild>
-                <Link href={"/portal/notifications" as Route}>
-                  <BellIcon className="size-4" />
-                  Notifications
-                </Link>
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem asChild className="p-0">
-                {signOutForm}
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </div>
+          <nav aria-label="Portal" className="hidden md:block">
+            <LayoutGroup id="portal-pills">
+              <ul className="flex items-center gap-1 rounded-full bg-pure-snow/40 p-1 dark:bg-soft-kraft/30">
+                {NAV_ITEMS.map((item) => {
+                  const active = isActive(pathname, item.href);
+                  return (
+                    <li key={item.href}>
+                      <Link
+                        href={item.href}
+                        aria-current={active ? "page" : undefined}
+                        className={cn(
+                          "relative inline-flex h-9 items-center gap-2 rounded-full px-3.5 text-[14px] font-medium transition-colors duration-150 ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-near-ink",
+                          active ? "text-near-ink" : "text-soft-ink hover:text-near-ink",
+                        )}
+                      >
+                        {active ? <ActivePill /> : null}
+                        <item.icon className="relative size-[18px]" />
+                        <span className="relative">{item.label}</span>
+                      </Link>
+                    </li>
+                  );
+                })}
+              </ul>
+            </LayoutGroup>
+          </nav>
+
+          <div className="flex items-center justify-end gap-2">
+            <Link
+              href={"/portal/notifications" as Route}
+              aria-label={unread > 0 ? `Notifications, ${unread} unread` : "Notifications"}
+              className={cn(headerRoundButton, "max-md:hidden", isActive(pathname, "/portal/notifications") && "bg-pure-snow text-near-ink")}
+            >
+              <BellIcon className="size-[18px]" />
+              {unread > 0 ? <span className={headerCornerBadge}>{unread > 99 ? "99+" : unread}</span> : null}
+            </Link>
+
+            <DropdownMenu>
+              <DropdownMenuTrigger
+                aria-label="Account"
+                className="flex items-center rounded-full outline-none transition-shadow focus-visible:ring-2 focus-visible:ring-near-ink focus-visible:ring-offset-2"
+              >
+                {candidateAvatarUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element -- external URL
+                  <img src={candidateAvatarUrl} alt="" className="size-9 rounded-full object-cover ring-1 ring-hairline" />
+                ) : (
+                  <span className="flex size-9 items-center justify-center rounded-full bg-near-ink text-[13px] font-semibold text-pure-snow">
+                    {candidateInitials}
+                  </span>
+                )}
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-56">
+                <DropdownMenuLabel className="font-normal">
+                  <p className="truncate text-sm font-medium text-foreground">{candidateName}</p>
+                  <p className="text-xs text-muted-foreground">Candidate at {orgName}</p>
+                </DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem asChild>
+                  <Link href={"/portal/profile" as Route}>
+                    <UserCircleIcon className="size-4" />
+                    Profile & privacy
+                  </Link>
+                </DropdownMenuItem>
+                <DropdownMenuItem asChild>
+                  <Link href={"/portal/notifications" as Route}>
+                    <BellIcon className="size-4" />
+                    Notifications
+                    {unread > 0 ? <span className="ml-auto text-xs tabular-nums text-soft-ink">{unread}</span> : null}
+                  </Link>
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem asChild className="p-0">
+                  {signOutForm}
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+        </header>
       </div>
+
+      <PortalTabBar pathname={pathname} unread={unread} />
+    </>
+  );
+}
+
+/** Phone and small tablet: a bottom tab bar, thumb-reachable, above the home indicator. */
+function PortalTabBar({ pathname, unread }: { pathname: string; unread: number }) {
+  const items = [
+    ...NAV_ITEMS.map((item) => ({ ...item, label: item.label === "Open roles" ? "Roles" : item.label, badge: 0 })),
+    { href: "/portal/notifications" as Route, label: "Updates", icon: BellIcon, badge: unread },
+  ];
+  return (
+    <nav
+      aria-label="Portal"
+      className="fixed inset-x-0 bottom-0 z-40 border-t border-hairline bg-warm-paper/90 pb-[env(safe-area-inset-bottom)] backdrop-blur-md md:hidden"
+    >
+      <ul className="mx-auto grid max-w-md grid-cols-4">
+        {items.map((item) => {
+          const active = isActive(pathname, item.href);
+          return (
+            <li key={item.href}>
+              <Link
+                href={item.href}
+                aria-current={active ? "page" : undefined}
+                className={cn(
+                  "relative flex h-14 flex-col items-center justify-center gap-0.5 text-[11px] font-medium transition-colors duration-150 [-webkit-tap-highlight-color:transparent] active:scale-95",
+                  active ? "text-near-ink" : "text-soft-ink",
+                )}
+              >
+                <span className={cn("relative flex h-7 w-12 items-center justify-center rounded-full transition-colors duration-200", active && "bg-lime-wash")}>
+                  <item.icon className="size-5" />
+                  {item.badge > 0 ? (
+                    <span className="absolute right-1.5 top-0.5 size-2 rounded-full bg-chartreuse-signal ring-2 ring-warm-paper" aria-hidden="true" />
+                  ) : null}
+                </span>
+                {item.label}
+                {item.badge > 0 ? <span className="sr-only">, {item.badge} unread</span> : null}
+              </Link>
+            </li>
+          );
+        })}
+      </ul>
     </nav>
   );
 }

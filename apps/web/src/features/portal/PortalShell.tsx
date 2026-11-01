@@ -39,7 +39,7 @@ export function PortalShellClient({
   year,
 }: PortalShellClientProps) {
   return (
-    <div className="flex min-h-screen flex-col bg-background">
+    <div className="flex min-h-screen flex-col bg-warm-paper">
       <PortalTopNav
         orgName={orgName}
         orgLogo={orgLogo}
@@ -52,7 +52,7 @@ export function PortalShellClient({
         unreadNotificationCount={unreadNotificationCount}
         signOutForm={signOutForm}
       />
-      <main className="mx-auto w-full max-w-7xl flex-1 px-4 py-8 sm:px-6 lg:px-8">
+      <main className="mx-auto w-full max-w-6xl flex-1 px-4 pt-4 pb-12 sm:px-6 md:pt-8">
         {children}
       </main>
       <PortalFooter

@@ -1,33 +1,31 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
-import { desc, eq, and, asc, isNull } from "drizzle-orm";
+import Link from "next/link";
+import { eq, and, isNull } from "drizzle-orm";
 import type { Route } from "next";
 
-import {
-  applications,
-  candidates,
-  db,
-  jobs,
-  jobStages,
-  organization,
-  workspaceSettings,
-} from "@harly/db";
+import { candidates, db, organization, workspaceSettings } from "@harly/db";
 import { PORTAL_SESSION_COOKIE, resolvePortalSession } from "@/lib/portal-auth";
 import { PortalShell } from "@/features/portal/PortalShellServer";
-import { getPortalApplicationInterviews } from "@/server/portal-applications";
 import {
-  BriefcaseIcon,
-  GlobeIcon,
-  ArrowUpRightIcon,
-} from "@/components/ui/icons/phosphor";
-import { PortalHeroBanner } from "@/features/portal/PortalHeroBanner";
-import { PortalInterviewPlan } from "@/features/portal/PortalInterviewPlan";
-import { PortalInterviewList } from "@/features/portal/PortalInterviewList";
+  getPortalApplicationInterviews,
+  getPortalApplicationOffer,
+} from "@/server/portal-applications";
+import { listDocumentRequestsForPortal } from "@/features/documents/requests-data";
+import { BriefcaseIcon, GlobeIcon, ArrowUpRightIcon, CaretRightIcon } from "@/components/ui/icons/phosphor";
 import { PortalEmptyState } from "@/features/portal/PortalEmptyState";
 import { PortalProfileCompletionCard } from "@/features/portal/PortalProfileCompletionCard";
 import { getPortalProfileCompletion } from "@/features/portal/profile-completion";
+import { listPortalApplications } from "@/features/portal/applications-data";
+import { portalApplicationProgress } from "@/features/portal/application-progress";
+import { PortalApplicationRow } from "@/features/portal/PortalApplicationRow";
+import { PortalNextStep, type PortalNextStepData } from "@/features/portal/PortalNextStep";
+import { formatEnumLabel } from "@/lib/format";
 
 export const dynamic = "force-dynamic";
+
+/** How many active applications the dashboard inspects for pending actions. */
+const ACTION_SCAN_LIMIT = 5;
 
 export default async function PortalDashboardPage() {
   const cookieStore = await cookies();
@@ -43,8 +41,6 @@ export default async function PortalDashboardPage() {
         tagline: workspaceSettings.tagline,
         description: workspaceSettings.description,
         websiteUrl: workspaceSettings.websiteUrl,
-        primaryColor: workspaceSettings.primaryColor,
-        heroImageUrl: workspaceSettings.heroImageUrl,
         showStatus: workspaceSettings.portalShowApplicationStatus,
       })
       .from(workspaceSettings)
@@ -72,201 +68,226 @@ export default async function PortalDashboardPage() {
       .limit(1),
   ]);
 
-  const showPipeline = settings?.showStatus !== false;
+  const showStages = settings?.showStatus !== false;
   const orgName = org?.name ?? "this company";
+  const applications = await listPortalApplications({
+    workspaceId: session.workspaceId,
+    candidateId: session.candidateId,
+    withStages: showStages,
+  });
 
-  const appRows = await db
-    .select({
-      id: applications.id,
-      status: applications.status,
-      appliedAt: applications.appliedAt,
-      updatedAt: applications.updatedAt,
-      jobTitle: jobs.title,
-      jobId: applications.jobId,
-      currentStageId: applications.currentStageId,
-    })
-    .from(applications)
-    .innerJoin(jobs, and(eq(jobs.id, applications.jobId), eq(jobs.workspaceId, session.workspaceId), isNull(jobs.deletedAt)))
-    .innerJoin(
-      candidates,
-      and(
-        eq(candidates.id, applications.candidateId),
-        eq(candidates.workspaceId, applications.workspaceId),
-        isNull(candidates.deletedAt),
-      ),
-    )
-    .where(
-      and(
-        eq(applications.candidateId, session.candidateId),
-        eq(applications.workspaceId, session.workspaceId),
-      ),
-    )
-    .orderBy(desc(applications.appliedAt));
-
-  const primaryApp = appRows.find((a) => a.status === "active") ?? appRows[0] ?? null;
-
-  if (!primaryApp) {
-    return (
-      <PortalShell>
-        <div className="space-y-6">
-          {candidate && (
-            <PortalProfileCompletionCard
-              completion={getPortalProfileCompletion(candidate)}
-            />
-          )}
-          <PortalEmptyState
-            icon={BriefcaseIcon}
-            title="No applications yet"
-            description="Browse open positions and apply to get started."
-            cta={{ label: "Browse positions", href: "/portal/jobs" as Route }}
-          />
-        </div>
-      </PortalShell>
-    );
-  }
-
-  type StageRow = { id: string; name: string; order: number };
-  let stages: StageRow[] = [];
-  if (showPipeline) {
-    stages = await db
-      .select({ id: jobStages.id, name: jobStages.name, order: jobStages.order })
-      .from(jobStages)
-      .where(
-        and(eq(jobStages.jobId, primaryApp.jobId), isNull(jobStages.archivedAt)),
-      )
-      .orderBy(asc(jobStages.order));
-  }
-
-  const interviews = await getPortalApplicationInterviews(primaryApp.id);
+  // Look for anything waiting on the candidate across their open applications.
+  const active = applications.filter((a) => a.status === "active" || a.status === "hired").slice(0, ACTION_SCAN_LIMIT);
+  const scans = await Promise.all(
+    active.map(async (application) => {
+      const [interviews, offer, requests] = await Promise.all([
+        getPortalApplicationInterviews(application.id),
+        getPortalApplicationOffer({
+          applicationId: application.id,
+          candidateId: session.candidateId,
+          workspaceId: session.workspaceId,
+        }),
+        listDocumentRequestsForPortal({
+          workspaceId: session.workspaceId,
+          candidateId: session.candidateId,
+          applicationId: application.id,
+        }),
+      ]);
+      return { application, interviews, offer, requests };
+    }),
+  );
 
   const now = new Date();
-  const upcoming = interviews
-    .filter((i) => i.status === "scheduled" && i.scheduledAt > now)
-    .sort((a, b) => a.scheduledAt.getTime() - b.scheduledAt.getTime());
-  const past = interviews
-    .filter((i) => i.status === "completed" || i.scheduledAt <= now)
-    .sort((a, b) => b.scheduledAt.getTime() - a.scheduledAt.getTime());
+  const nextStep = pickNextStep(scans, now);
+  const primary = applications.find((a) => a.status === "active") ?? applications[0] ?? null;
 
-  // Build hiring team from distinct interviewers
-  const teamMap = new Map<string, { name: string; image: string | null }>();
-  for (const iv of interviews) {
-    if (iv.interviewerName && !teamMap.has(iv.interviewerName)) {
-      teamMap.set(iv.interviewerName, {
-        name: iv.interviewerName,
-        image: iv.interviewerImage,
-      });
+  // Everyone the candidate has met or will meet, across open applications.
+  const team = new Map<string, { name: string; image: string | null }>();
+  for (const { interviews } of scans) {
+    for (const iv of interviews) {
+      if (iv.interviewerName && !team.has(iv.interviewerName)) {
+        team.set(iv.interviewerName, { name: iv.interviewerName, image: iv.interviewerImage });
+      }
     }
   }
-  const hiringTeam = Array.from(teamMap.values());
+
+  const waiting: PortalNextStepData | null = primary
+    ? (() => {
+        const progress = portalApplicationProgress({
+          stages: primary.stages,
+          currentStageId: primary.currentStageId,
+          status: primary.status,
+          showStages,
+          orgName,
+        });
+        return {
+          kind: "waiting",
+          headline: primary.status === "active" ? "Nothing to do right now" : progress.headline,
+          body: primary.status === "active" ? progress.body : `${primary.jobTitle}: ${progress.body}`,
+        };
+      })()
+    : null;
+
+  const firstName = session.firstName?.trim();
+  const openCount = applications.filter((a) => a.status === "active").length;
 
   return (
     <PortalShell>
-      <div className="space-y-8">
-        {candidate && (
-          <PortalProfileCompletionCard
-            completion={getPortalProfileCompletion(candidate)}
-          />
-        )}
-
-        {/* Hero banner */}
-        <PortalHeroBanner
-          orgName={orgName}
-          orgColor={settings?.primaryColor ?? null}
-          heroImageUrl={settings?.heroImageUrl ?? null}
-        />
-
-        {/* Candidate heading */}
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight text-foreground">
-            {session.firstName} {session.lastName}
+      <div className="stagger-in space-y-6">
+        <header className="pt-2">
+          <h1 className="text-[28px] font-semibold tracking-tight text-near-ink sm:text-[32px]">
+            {firstName ? `Hi, ${firstName}` : "Welcome back"}
           </h1>
-          <p className="mt-1 text-base text-muted-foreground">
-            For <span className="font-medium text-foreground">{primaryApp.jobTitle}</span> at{" "}
-            <span className="font-medium text-foreground">{orgName}</span>
+          <p className="mt-1 text-[15px] text-soft-ink">
+            {applications.length === 0
+              ? `Your space for applying to ${orgName}.`
+              : openCount > 0
+                ? `You have ${openCount} open ${openCount === 1 ? "application" : "applications"} with ${orgName}.`
+                : `Here's where your applications with ${orgName} ended up.`}
           </p>
-          <p className="mt-3 text-base text-muted-foreground">
-            Hello 👋 from {orgName}! We&apos;ll use this guide to share information
-            about our company, the job, and track your interview process.
-          </p>
-        </div>
+        </header>
 
-        {/* Two-column: Interview plan | Interviews */}
-        <div className="grid grid-cols-1 gap-8 lg:grid-cols-2">
-          {showPipeline && stages.length > 0 && (
-            <PortalInterviewPlan
-              stages={stages}
-              currentStageId={primaryApp.currentStageId}
-              applicationStatus={primaryApp.status}
-            />
-          )}
-          <PortalInterviewList interviews={upcoming} />
-        </div>
+        {nextStep ?? waiting ? <PortalNextStep step={(nextStep ?? waiting)!} orgName={orgName} /> : null}
 
-        {/* Past interviews */}
-        {past.length > 0 && <PortalInterviewList interviews={past} variant="past" />}
-
-        {/* Welcome / about company */}
-        {(settings?.description || settings?.websiteUrl) && (
-          <section className="rounded-2xl border border-border bg-card p-6 shadow-[0_1px_3px_rgba(0,0,0,0.04)]">
-            <h2 className="mb-3 text-xl font-bold text-foreground">
-              Welcome to {orgName}!
-            </h2>
-            {settings.description && (
-              <p className="text-base leading-relaxed text-muted-foreground">
-                {settings.description}
-              </p>
-            )}
-            {settings.websiteUrl && (
-              <a
-                href={settings.websiteUrl}
-                target="_blank"
-                rel="noreferrer"
-                className="mt-4 inline-flex items-center gap-1.5 text-sm font-medium text-foreground transition-colors hover:text-muted-foreground"
-              >
-                <GlobeIcon className="size-4" />
-                Visit website
-                <ArrowUpRightIcon className="size-3" />
-              </a>
-            )}
-          </section>
-        )}
-
-        {/* Meet your hiring team */}
-        {hiringTeam.length > 0 && (
-          <section>
-            <h2 className="mb-4 text-lg font-semibold text-foreground">
-              Meet your hiring team
-            </h2>
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-              {hiringTeam.map((member) => (
-                <div
-                  key={member.name}
-                  className="flex items-center gap-3 rounded-2xl border border-border bg-card p-4 shadow-[0_1px_3px_rgba(0,0,0,0.04)]"
+        <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
+          <section aria-labelledby="applications-title" className="min-w-0 space-y-3">
+            <div className="flex items-baseline justify-between gap-3">
+              <h2 id="applications-title" className="text-[17px] font-semibold text-near-ink">
+                Your applications
+              </h2>
+              {applications.length > 4 ? (
+                <Link
+                  href={"/portal/applications" as Route}
+                  className="inline-flex items-center gap-1 text-[13px] font-medium text-soft-ink hover:text-near-ink"
                 >
-                  {member.image ? (
-                    // eslint-disable-next-line @next/next/no-img-element -- external URL
-                    <img
-                      src={member.image}
-                      alt={member.name}
-                      className="size-11 rounded-full object-cover"
-                    />
-                  ) : (
-                    <div className="flex size-11 items-center justify-center rounded-full bg-muted text-sm font-semibold text-muted-foreground">
-                      {member.name.charAt(0).toUpperCase()}
-                    </div>
-                  )}
-                  <div className="min-w-0">
-                    <p className="truncate font-medium text-foreground">
-                      {member.name}
-                    </p>
-                    <p className="text-sm text-muted-foreground">Interviewer</p>
-                  </div>
-                </div>
-              ))}
+                  View all {applications.length}
+                  <CaretRightIcon className="size-3.5" />
+                </Link>
+              ) : null}
             </div>
+            {applications.length === 0 ? (
+              <PortalEmptyState
+                icon={BriefcaseIcon}
+                title="No applications yet"
+                description={`Browse open roles at ${orgName} and apply in a couple of minutes.`}
+                cta={{ label: "Browse open roles", href: "/portal/jobs" as Route }}
+              />
+            ) : (
+              <ul className="stagger-in space-y-2.5">
+                {applications.slice(0, 4).map((application) => (
+                  <PortalApplicationRow
+                    key={application.id}
+                    application={application}
+                    showStages={showStages}
+                    orgName={orgName}
+                  />
+                ))}
+              </ul>
+            )}
           </section>
-        )}
+
+          <aside className="space-y-4">
+            {candidate ? <PortalProfileCompletionCard completion={getPortalProfileCompletion(candidate)} /> : null}
+
+            <section className="rounded-2xl border border-hairline bg-card p-5">
+              <div className="flex items-center gap-3">
+                {org?.logo ? (
+                  // eslint-disable-next-line @next/next/no-img-element -- workspace logo
+                  <img src={org.logo} alt="" className="size-10 rounded-xl object-cover" />
+                ) : (
+                  <span className="grid size-10 place-items-center rounded-xl bg-card-inset text-[15px] font-semibold text-near-ink">
+                    {orgName.charAt(0).toUpperCase()}
+                  </span>
+                )}
+                <div className="min-w-0">
+                  <p className="truncate text-[15px] font-semibold text-near-ink">{orgName}</p>
+                  {settings?.tagline ? <p className="truncate text-[12.5px] text-soft-ink">{settings.tagline}</p> : null}
+                </div>
+              </div>
+              {settings?.description ? (
+                <p className="mt-3 line-clamp-4 text-[13.5px] leading-5 text-soft-ink">{settings.description}</p>
+              ) : null}
+              <div className="mt-4 flex flex-wrap gap-x-4 gap-y-2 text-[13px] font-medium">
+                <Link href={"/portal/jobs" as Route} className="inline-flex items-center gap-1 text-near-ink hover:underline underline-offset-2">
+                  Open roles
+                  <CaretRightIcon className="size-3.5" />
+                </Link>
+                {settings?.websiteUrl ? (
+                  <a
+                    href={settings.websiteUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex items-center gap-1 text-soft-ink hover:text-near-ink"
+                  >
+                    <GlobeIcon className="size-3.5" />
+                    Website
+                    <ArrowUpRightIcon className="size-3" />
+                  </a>
+                ) : null}
+              </div>
+            </section>
+
+            {team.size > 0 ? (
+              <section className="rounded-2xl border border-hairline bg-card p-5">
+                <h2 className="text-[13px] font-semibold uppercase tracking-wider text-soft-ink">Your hiring team</h2>
+                <ul className="mt-3 space-y-3">
+                  {[...team.values()].slice(0, 6).map((member) => (
+                    <li key={member.name} className="flex items-center gap-3">
+                      {member.image ? (
+                        // eslint-disable-next-line @next/next/no-img-element -- workspace user avatar
+                        <img src={member.image} alt="" className="size-8 rounded-full object-cover" />
+                      ) : (
+                        <span className="grid size-8 place-items-center rounded-full bg-card-inset text-[12px] font-semibold text-soft-ink">
+                          {member.name.charAt(0).toUpperCase()}
+                        </span>
+                      )}
+                      <div className="min-w-0">
+                        <p className="truncate text-[13.5px] font-medium text-near-ink">{member.name}</p>
+                        <p className="text-[12px] text-soft-ink">Interviewer</p>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            ) : null}
+          </aside>
+        </div>
       </div>
     </PortalShell>
   );
+}
+
+type Scan = {
+  application: { id: string; jobTitle: string };
+  interviews: Awaited<ReturnType<typeof getPortalApplicationInterviews>>;
+  offer: Awaited<ReturnType<typeof getPortalApplicationOffer>>;
+  requests: Awaited<ReturnType<typeof listDocumentRequestsForPortal>>;
+};
+
+/** Priority: an offer to sign, then documents to upload, then the soonest interview. */
+function pickNextStep(scans: Scan[], now: Date): PortalNextStepData | null {
+  for (const { application, offer } of scans) {
+    if (offer?.status === "sent" && !(offer.expiresAt && offer.expiresAt <= now)) {
+      return { kind: "offer", applicationId: application.id, jobTitle: application.jobTitle, offerTitle: offer.title };
+    }
+  }
+  for (const { application, requests } of scans) {
+    const open = requests.filter((r) => r.status === "pending" || r.status === "declined").length;
+    if (open > 0) return { kind: "documents", applicationId: application.id, jobTitle: application.jobTitle, count: open };
+  }
+  let soonest: { scan: Scan; interview: Scan["interviews"][number] } | null = null;
+  for (const scan of scans) {
+    for (const interview of scan.interviews) {
+      if (interview.status !== "scheduled" || interview.scheduledAt <= now) continue;
+      if (!soonest || interview.scheduledAt < soonest.interview.scheduledAt) soonest = { scan, interview };
+    }
+  }
+  if (!soonest) return null;
+  const { scan, interview } = soonest;
+  return {
+    kind: "interview",
+    applicationId: scan.application.id,
+    jobTitle: scan.application.jobTitle,
+    interview: { ...interview, title: interview.title ?? formatEnumLabel(interview.type) },
+  };
 }

@@ -171,7 +171,7 @@ export function JobApplyForm({
               <div className="size-4 animate-spin rounded-full border-2 border-muted-foreground border-t-transparent" />
             )}
             {resumeUrl && !uploading && (
-              <svg className="size-5 text-emerald-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <svg className="size-5 text-success-olive" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="m4.5 12.75 6 6 9-13.5" />
               </svg>
             )}

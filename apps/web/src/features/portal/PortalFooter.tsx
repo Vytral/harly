@@ -39,8 +39,8 @@ export function PortalFooter({
   const visibleSocials = socials.filter((s) => s.url.trim());
 
   return (
-    <footer className="mt-16 border-t border-border bg-muted/20">
-      <div className="mx-auto max-w-7xl px-4 py-10 sm:px-6 lg:px-8">
+    <footer className="mt-8 border-t border-hairline pb-[calc(3.5rem+env(safe-area-inset-bottom))] md:pb-0">
+      <div className="mx-auto max-w-6xl px-4 py-10 sm:px-6">
         {/* Top tier: brand + socials */}
         <div className="flex flex-col items-center justify-between gap-6 sm:flex-row">
           {/* Workspace brand */}

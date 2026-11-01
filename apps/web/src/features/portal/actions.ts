@@ -39,6 +39,7 @@ import { getWorkspaceEmailSender } from "@/lib/email";
 import { createLogger } from "@/lib/logger";
 import { normalizeJobApplicationConfig } from "@/features/jobs/config";
 import { validatePortalApplication } from "@/features/portal/application-validation";
+import { magicLinkDelivery } from "@/features/portal/magic-link-delivery";
 import { sendApplicationReceivedEmails } from "@/features/applications/notifications";
 import { verifyResumeUpload } from "@/features/applications/resume-upload";
 import { lockApplicationPipelineOrder } from "@/features/applications/pipeline-order";
@@ -129,15 +130,24 @@ export async function sendPortalMagicLinkAction(
     const appUrl = getHarlyPublicOrigin();
     const url = `${appUrl}/api/portal/auth/magic?token=${token}`;
 
+    // Development only: print the link instead of mailing it when no sender
+    // is configured or the address is on a reserved test domain (RFC 2606),
+    // so demo candidates can sign in locally without real mail going out.
+    // magicLinkDelivery() never returns "log" in production.
     const sender = await getWorkspaceEmailSender(workspaceId);
-    if (sender) {
+    const delivery = magicLinkDelivery({
+      nodeEnv: process.env.NODE_ENV,
+      hasSender: Boolean(sender),
+      email: parsed.data,
+    });
+    if (delivery === "send" && sender) {
       await sender.send({
         to: parsed.data,
         subject: portalMagicLinkSubject(),
         react: createElement(PortalMagicLinkEmail, { loginUrl: url }),
       });
-    } else {
-      // Dev fallback: magic link URL is logged server-side when no email sender is configured.
+    } else if (delivery === "log") {
+      console.info(`[portal] Magic link for ${parsed.data}: ${url}`);
     }
 
     return { ok: true };

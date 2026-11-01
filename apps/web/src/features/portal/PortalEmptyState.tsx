@@ -22,21 +22,23 @@ export function PortalEmptyState({
   return (
     <div
       className={cn(
-        "rounded-2xl border border-dashed border-border bg-card p-8 text-center sm:p-10",
+        "animate-empty-state rounded-2xl border border-dashed border-hairline bg-card p-8 text-center sm:p-10",
         className,
       )}
     >
-      <Icon className="mx-auto mb-3 size-10 text-muted-foreground/60" />
-      <h3 className="text-sm font-medium text-foreground">{title}</h3>
+      <span className="mx-auto mb-4 grid size-12 place-items-center rounded-2xl bg-card-inset text-soft-ink">
+        <Icon className="size-6" />
+      </span>
+      <h3 className="text-[15px] font-semibold text-near-ink">{title}</h3>
       {description && (
-        <p className="mt-1.5 mx-auto max-w-xs text-sm text-muted-foreground">
+        <p className="mx-auto mt-1.5 max-w-sm text-[13.5px] leading-5 text-soft-ink">
           {description}
         </p>
       )}
       {cta && (
         <Link
           href={cta.href}
-          className="mt-4 inline-flex items-center gap-1.5 rounded-full bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground hover:bg-primary/90 active:scale-[0.98] transition-colors"
+          className="mt-5 inline-flex items-center gap-1.5 rounded-full bg-near-ink px-4 py-2 text-sm font-semibold text-pure-snow transition-[background-color,transform] duration-150 hover:bg-near-ink/90 active:scale-[0.98]"
         >
           {cta.label}
           <ArrowUpRightIcon className="size-3.5" />

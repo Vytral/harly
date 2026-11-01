@@ -1056,6 +1056,19 @@ html[data-tab-switch="true"] .animate-in {
   animation: empty-state-in var(--motion-base) var(--ease-out) both;
 }
 
+/* Portal progress: each finished segment fills left-to-right on first paint,
+   one after another (delay set inline), so the bar reads as "how far". */
+@keyframes segment-fill {
+  from {
+    transform: scaleX(0);
+  }
+}
+
+.animate-segment-fill {
+  transform-origin: left center;
+  animation: segment-fill var(--motion-slow) var(--ease-out) both;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .animate-empty-state {
     animation: none;
