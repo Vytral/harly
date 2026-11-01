@@ -36,12 +36,16 @@ jobs:
     uses: ./.github/workflows/ci.yml
     secrets: inherit
 
-  image:
+  # The two architectures build in parallel on native runners (arm64 used to
+  # be emulated with QEMU, which made a release take about an hour). Each one
+  # is pushed by digest and that digest is scanned; only after both pass does
+  # `image` join them into the multi-architecture index and tag the version.
+  prepare:
     needs: validate
     outputs:
-      digest: ${{ steps.build.outputs.digest }}
       version: ${{ steps.version.outputs.version }}
       prerelease: ${{ steps.version.outputs.prerelease }}
+      labels: ${{ steps.meta.outputs.labels }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -61,7 +65,32 @@ jobs:
           else
             echo "prerelease=false" >> "$GITHUB_OUTPUT"
           fi
-      - uses: docker/setup-qemu-action@v3
+      - id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/vytral/harly
+          labels: |
+            org.opencontainers.image.title=Harly
+            org.opencontainers.image.description=Self-hosted applicant tracking system
+            org.opencontainers.image.licenses=MIT
+
+  build:
+    needs: prepare
+    strategy:
+      fail-fast: true
+      matrix:
+        include:
+          - platform: linux/amd64
+            runner: ubuntu-latest
+          - platform: linux/arm64
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: platform
+        run: echo "slug=${PLATFORM//\//-}" >> "$GITHUB_OUTPUT"
+        env:
+          PLATFORM: ${{ matrix.platform }}
       - uses: docker/setup-buildx-action@v3
       - uses: docker/login-action@v3
         with:
@@ -69,58 +98,88 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      # Build for the host architecture first and keep it local. The scan below
-      # is the publication gate, so it has to run against an image that is not
-      # in the registry yet. The layer cache makes the multi-architecture build
-      # that follows reuse this work instead of repeating it.
-      - id: candidate
-        name: Build the candidate image without publishing it
+      # Pushed by digest only: no tag exists until `image` joins both
+      # architectures, so nothing installable appears half-built.
+      - id: build
+        name: Build and push this architecture by digest
         uses: docker/build-push-action@v6
         with:
           context: .
-          push: false
-          load: true
-          platforms: linux/amd64
-          tags: harly:candidate
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-      - name: Block HIGH and CRITICAL vulnerabilities before publishing
+          platforms: ${{ matrix.platform }}
+          labels: ${{ needs.prepare.outputs.labels }}
+          outputs: type=image,name=ghcr.io/vytral/harly,push-by-digest=true,name-canonical=true,push=true
+          cache-from: type=gha,scope=${{ steps.platform.outputs.slug }}
+          cache-to: type=gha,mode=max,scope=${{ steps.platform.outputs.slug }}
+          sbom: true
+          provenance: mode=max
+
+      # The publication gate scans the exact digest that was pushed, so what is
+      # scanned is byte for byte what gets tagged. A finding fails this job,
+      # its digest is never recorded, and `image` never tags the version; the
+      # untagged digest left in the registry is not installable by any name.
+      - name: Block HIGH and CRITICAL vulnerabilities before tagging
         uses: aquasecurity/trivy-action@v0.36.0
         with:
-          image-ref: harly:candidate
+          image-ref: ghcr.io/vytral/harly@${{ steps.build.outputs.digest }}
           format: table
           severity: HIGH,CRITICAL
           ignore-unfixed: false
           exit-code: "1"
+      - name: Record the scanned digest
+        run: |
+          mkdir -p "$RUNNER_TEMP/digests"
+          touch "$RUNNER_TEMP/digests/${DIGEST#sha256:}"
+        env:
+          DIGEST: ${{ steps.build.outputs.digest }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: digest-${{ steps.platform.outputs.slug }}
+          path: ${{ runner.temp }}/digests/*
+          if-no-files-found: error
+          retention-days: 1
 
-      - id: meta
-        uses: docker/metadata-action@v5
+  # Joins the per-architecture images into the version tag. Its outputs keep
+  # the names the jobs below have always read.
+  image:
+    needs: [prepare, build]
+    outputs:
+      digest: ${{ steps.index.outputs.digest }}
+      version: ${{ needs.prepare.outputs.version }}
+      prerelease: ${{ needs.prepare.outputs.prerelease }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
         with:
-          images: ghcr.io/vytral/harly
-          # This job never publishes :latest. Which version owns that channel is
-          # decided later, in a serialized job that recomputes it at write time —
-          # see release-channel. Deciding it here would be a stale read: the
-          # build takes long enough for a newer tag to be pushed and published in
-          # the meantime, and this run would then overwrite it.
-          flavor: latest=false
-          tags: |
-            type=semver,pattern={{version}}
-          labels: |
-            org.opencontainers.image.title=Harly
-            org.opencontainers.image.description=Self-hosted applicant tracking system
-            org.opencontainers.image.licenses=MIT
-      - id: build
+          path: ${{ runner.temp }}/digests
+          pattern: digest-*
+          merge-multiple: true
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      # This job never publishes :latest. Which version owns that channel is
+      # decided later, in a serialized job that recomputes it at write time —
+      # see release-channel.
+      - id: index
         name: Publish the multi-architecture image
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          push: true
-          platforms: linux/amd64,linux/arm64
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha
-          sbom: true
-          provenance: mode=max
+        working-directory: ${{ runner.temp }}/digests
+        env:
+          VERSION: ${{ needs.prepare.outputs.version }}
+        run: |
+          shopt -s nullglob
+          refs=()
+          for digest in *; do refs+=("ghcr.io/vytral/harly@sha256:$digest"); done
+          if [ "${#refs[@]}" -ne 2 ]; then
+            echo "::error::Expected 2 architecture digests, found ${#refs[@]}."
+            exit 1
+          fi
+          docker buildx imagetools create --tag "ghcr.io/vytral/harly:$VERSION" "${refs[@]}"
+          digest=$(docker buildx imagetools inspect "ghcr.io/vytral/harly:$VERSION" --format '{{json .Manifest}}' | jq -r .digest)
+          [[ "$digest" =~ ^sha256:[a-f0-9]{64}$ ]] || { echo "::error::Could not read the index digest."; exit 1; }
+          echo "digest=$digest" >> "$GITHUB_OUTPUT"
+          docker buildx imagetools inspect "ghcr.io/vytral/harly:$VERSION"
 
   # Everything that points the stable channel at a version lives here, in one
   # serialized job, and the decision is recomputed at write time.

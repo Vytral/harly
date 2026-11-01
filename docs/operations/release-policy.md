@@ -44,11 +44,14 @@ Both passes use `ignore-unfixed: true`. This keeps images with known but
 currently unpatched base-image issues visible without blocking every build,
 while still blocking critical issues that can be fixed.
 
-The release workflow scans the image **before** it is pushed. The candidate is
-built for the host architecture and kept local, both Trivy passes run against
-it, and only then is the multi-architecture image published. A blocking finding
-keeps the image out of the registry entirely rather than leaving a published
-image that the release simply does not announce. SBOM and provenance generation
+The release workflow scans the image **before** any version tag points at it.
+Each architecture builds on a native runner (`ubuntu-latest` for amd64,
+`ubuntu-24.04-arm` for arm64) and is pushed by digest, without a tag; Trivy then
+scans that exact digest, so what is scanned is byte for byte what is released.
+Only when both scans pass are the two digests joined into one multi-architecture
+index tagged with the version. A blocking finding leaves at most an untagged
+digest in the registry, which no tag, manifest or `harly update` ever points at.
+SBOM and provenance generation
 remain enabled in BuildKit.
 
 The workflow also runs the full CI suite against the tagged commit before it
