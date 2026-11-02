@@ -304,9 +304,14 @@
     scroll-behavior: smooth;
     /* Reserve the scrollbar lane so the header doesn't shift between short and long pages. */
     scrollbar-gutter: stable;
+    /* A child wider than the screen must never widen the page: on phones the
+       browser would zoom the whole layout out to fit it. clip (not hidden)
+       keeps position: sticky working. */
+    overflow-x: clip;
   }
   body {
     min-height: 100vh;
+    overflow-x: clip;
     margin: 0;
     background: var(--background);
     color: var(--foreground);
@@ -1118,4 +1123,15 @@ html body[data-scroll-locked] {
   --removed-body-scroll-bar-size: 0px !important;
   margin-right: 0 !important;
   padding-right: 0 !important;
+}
+
+/* iOS Safari zooms the whole page when a focused field is under 16px and never
+   zooms back out, which looks like a broken layout. Phones only: desktop keeps
+   its denser sizes. Unlayered on purpose so it wins over text-sm/text-xs. */
+@media (max-width: 767px) {
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]):not([type="color"]),
+  select,
+  textarea {
+    font-size: max(16px, 1em);
+  }
 }

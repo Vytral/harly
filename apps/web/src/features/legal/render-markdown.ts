@@ -49,7 +49,7 @@ export function renderMarkdown(md: string): string {
       })
       .join("");
     out.push(
-      `<div class="my-4 overflow-x-auto"><table class="w-full border-collapse">${thead(ths)}<tbody>${rows}</tbody></table></div>`,
+      `<div class="relative my-4 overflow-x-auto"><table class="w-full border-collapse">${thead(ths)}<tbody>${rows}</tbody></table></div>`,
     );
     tableRows = [];
     inTable = false;

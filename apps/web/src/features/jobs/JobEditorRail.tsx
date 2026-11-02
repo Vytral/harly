@@ -106,29 +106,46 @@ export function JobEditorRail({
           <div className="flex flex-col gap-1.5">{secondaryActions}</div>
         ) : null}
       </aside>
-
-      <nav
-        aria-label="Job sections"
-        className="sticky top-0 z-10 flex gap-1.5 overflow-x-auto bg-background px-3 py-2 md:hidden"
-      >
-        {sections.map((s, index) => {
-          const isActive = s.key === active;
-          return (
-            <button
-              key={s.key}
-              type="button"
-              onClick={() => onSelect(s.key)}
-              aria-current={isActive ? "step" : undefined}
-              className={cn(
-                "shrink-0 whitespace-nowrap rounded-full px-3.5 py-1.5 text-[13px] font-medium transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-near-ink",
-                isActive ? "bg-near-ink text-pure-snow" : "bg-soft-kraft text-soft-ink",
-              )}
-            >
-              {index + 1}. {s.label}
-            </button>
-          );
-        })}
-      </nav>
     </>
+  );
+}
+
+/**
+ * Phone/tablet step chips. Lives inside the editor's scroll column (not beside
+ * it) so it sticks to the top of the form instead of becoming a flex sibling
+ * that squeezes the form sideways.
+ */
+export function JobEditorMobileNav({
+  sections,
+  active,
+  onSelect,
+}: {
+  sections: EditorRailSection[];
+  active: string;
+  onSelect: (key: string) => void;
+}) {
+  return (
+    <nav
+      aria-label="Job sections"
+      className="scrollbar-hide sticky top-0 z-10 flex shrink-0 gap-1.5 overflow-x-auto bg-background px-3 py-2 md:hidden"
+    >
+      {sections.map((s, index) => {
+        const isActive = s.key === active;
+        return (
+          <button
+            key={s.key}
+            type="button"
+            onClick={() => onSelect(s.key)}
+            aria-current={isActive ? "step" : undefined}
+            className={cn(
+              "shrink-0 whitespace-nowrap rounded-full px-3.5 py-1.5 text-[13px] font-medium transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-near-ink",
+              isActive ? "bg-near-ink text-pure-snow" : "bg-soft-kraft text-soft-ink",
+            )}
+          >
+            {index + 1}. {s.label}
+          </button>
+        );
+      })}
+    </nav>
   );
 }

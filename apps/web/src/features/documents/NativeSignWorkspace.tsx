@@ -53,8 +53,8 @@ export function NativeSignWorkspace({
       page: base?.page ?? 1,
       x: Math.min(0.6, 0.08 + offset),
       y: Math.min(0.8, 0.7 + offset),
-      w: base?.w ?? 0.24,
-      h: base?.h ?? 0.055,
+      w: base?.w ?? 0.34,
+      h: base?.h ?? 0.08,
     };
     setPlacements((items) => [...items, next]);
     setActiveIndex(placements.length);
@@ -92,7 +92,7 @@ export function NativeSignWorkspace({
   function handleSignatureChange(value: string) {
     setSignature(value);
     if (value && placements.length === 0) {
-      setPlacements([{ page: 1, x: 0.08, y: 0.7, w: 0.24, h: 0.055 }]);
+      setPlacements([{ page: 1, x: 0.08, y: 0.68, w: 0.34, h: 0.08 }]);
       setActiveIndex(0);
     }
   }
@@ -136,10 +136,10 @@ export function NativeSignWorkspace({
         <span className="hidden h-5 w-px bg-border sm:block" aria-hidden />
         <div className="flex min-w-0 items-center gap-2">
           <PenLine className="size-4 shrink-0 text-primary" />
-          <h1 className="shrink-0 font-display text-base font-semibold tracking-tight">
+          <h1 className="shrink-0 font-display text-base font-semibold tracking-tight max-sm:sr-only">
             Sign document
           </h1>
-          <span className="text-muted-foreground/50" aria-hidden>
+          <span className="text-muted-foreground/50 max-sm:hidden" aria-hidden>
             /
           </span>
           <p className="min-w-0 truncate text-sm text-muted-foreground">

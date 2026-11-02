@@ -62,7 +62,7 @@ export function FieldBox({
 
 /** Strips Input/Textarea's own chrome so it sits flush inside a FieldBox. */
 export const fieldBoxControlClassName =
-  "h-auto w-full border-0 bg-transparent p-0 shadow-none text-sm focus-visible:ring-0 dark:bg-transparent";
+  "h-auto w-full border-0 bg-transparent p-0 shadow-none text-base md:text-sm focus-visible:ring-0 dark:bg-transparent";
 
 /**
  * Same, for `SelectTrigger`: its height utilities are conditioned on its own

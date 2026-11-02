@@ -213,7 +213,7 @@ function TaskList({ block }: { block: Extract<UiBlock, { kind: "task_list" }> })
 function TableBlock({ block }: { block: Extract<UiBlock, { kind: "table" }> }) {
   return (
     <Shell title={block.title}>
-      <div className="overflow-x-auto">
+      <div className="relative overflow-x-auto">
         <table className="w-full text-left text-[12.5px]">
           <thead>
             <tr className="bg-card-inset">

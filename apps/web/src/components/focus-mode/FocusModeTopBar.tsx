@@ -30,11 +30,13 @@ export function FocusModeTopBar({
         className,
       )}
     >
-      <div className="flex min-w-0 flex-1 items-center">{left}</div>
+      <div className="flex min-w-0 flex-1 items-center max-md:flex-none">{left}</div>
       {center ? (
-        <div className="flex shrink-0 items-center justify-center">{center}</div>
+        <div className="flex shrink-0 items-center justify-center max-md:min-w-0 max-md:flex-1 max-md:shrink max-md:justify-start">
+          {center}
+        </div>
       ) : null}
-      <div className="flex min-w-0 flex-1 items-center justify-end gap-2">
+      <div className="flex min-w-0 flex-1 items-center justify-end gap-2 max-md:flex-none">
         {right}
       </div>
     </header>

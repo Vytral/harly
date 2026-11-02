@@ -43,7 +43,7 @@ export function JobEditorTopBar({
         </button>
       }
       center={
-        <div className="flex min-w-0 max-w-[40vw] items-center gap-2">
+        <div className="flex min-w-0 max-w-[40vw] items-center gap-2 max-md:max-w-full">
           {eyebrow ? (
             <span className="hidden shrink-0 text-[11px] font-semibold uppercase tracking-wider text-soft-ink md:inline">
               {eyebrow}
