@@ -79,6 +79,8 @@ graphify-out/
 skills-lock.json
 /skills/
 /referencias/
+**/AGENTS.md
+**/CLAUDE.md
 .qwen
 
 # local Git worktrees and generated CLI release output
