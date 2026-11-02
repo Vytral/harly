@@ -523,7 +523,7 @@ export function JobForm({
                   key={s.key}
                   id={s.key}
                   className={cn(
-                    "scroll-mt-6 rounded-2xl transition-colors duration-300",
+                    "scroll-mt-20 lg:scroll-mt-6 rounded-2xl transition-colors duration-300",
                     flashSection === s.key && "bg-destructive/10",
                   )}
                 >

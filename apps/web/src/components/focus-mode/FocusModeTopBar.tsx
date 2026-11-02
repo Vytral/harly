@@ -36,7 +36,7 @@ export function FocusModeTopBar({
           {center}
         </div>
       ) : null}
-      <div className="flex min-w-0 flex-1 items-center justify-end gap-2 max-md:flex-none">
+      <div className="ml-auto flex min-w-0 flex-1 items-center justify-end gap-2 max-md:flex-none">
         {right}
       </div>
     </header>
