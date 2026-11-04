@@ -65,6 +65,7 @@ import {
 import { consumeDemoAiDailyBudget, enforceDemoChatIpLimits } from "@/lib/ai/demo-budget";
 import { clientIp, enforceRateLimit } from "@/server/api/ratelimit";
 import { isDemoMode } from "@harly/config";
+import { withoutReplayedReasoning } from "@/lib/ai/replay-history";
 
 export const runtime = "nodejs";
 // Self-hosted (no serverless wall): automation builds chain discovery →
@@ -775,20 +776,3 @@ export async function POST(req: Request) {
   });
 }
 
-/**
- * Earlier turns' reasoning ("thinking") parts are not sent back to the model.
- * Anthropic binds a thinking block's signature to the exact system prompt and
- * tool list of the turn that produced it; both change per turn here (surface
- * context, per-query tool routing), so replaying them fails the whole request
- * with a 400 ("block is bound to a different conversation"). The final text
- * and tool results already carry what the next turn needs.
- */
-function withoutReplayedReasoning<T extends { role: string; parts: Array<{ type: string }> }>(
-  messages: T[],
-): T[] {
-  return messages.map((message) =>
-    message.role === "assistant"
-      ? { ...message, parts: message.parts.filter((part) => part.type !== "reasoning") }
-      : message,
-  );
-}
