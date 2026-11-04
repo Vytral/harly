@@ -129,8 +129,20 @@ test(
       HARLY_DB_LOCK_POOL_MAX: "8",
       HARLY_DB_MAILBOX_LOCK_POOL_MAX: "3",
     };
+    // Resolve defaults with these settings stripped from the inherited shell
+    // environment, so a developer's exported DEMO_MODE cannot fail the test.
+    const cleanEnv = Object.fromEntries(
+      Object.entries(process.env).filter(([name]) => !(name in forwarded)),
+    );
+    const defaults = spawnSync(
+      "docker",
+      ["compose", "--project-directory", target, "-f", path.join(target, "compose.yaml"), "config", "--format", "json"],
+      { cwd: target, encoding: "utf8", env: cleanEnv },
+    );
+    assert.equal(defaults.status, 0, defaults.stderr || defaults.stdout);
+    const defaultsCompose = JSON.parse(defaults.stdout);
     for (const service of ["app", "migrate", "scheduler"]) {
-      const environment = resolvedCompose.services[service].environment;
+      const environment = defaultsCompose.services[service].environment;
       assert.equal(environment.DEMO_MODE, "false", `${service} DEMO_MODE default`);
       for (const name of Object.keys(forwarded).filter((key) => key !== "DEMO_MODE")) {
         assert.equal(environment[name], "", `${service} ${name} default`);
