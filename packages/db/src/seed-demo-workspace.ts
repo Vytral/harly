@@ -31,7 +31,8 @@ const OWNER_NAME = "Alex Morgan";
 // Fixed CDN host for demo assets (avatars, logos, hero). These live under
 // /demo/* on the CDN so the periodic reset restores them identically every
 // time. Override with DEMO_CDN_URL for local/preview environments.
-const DEMO_CDN = (process.env.DEMO_CDN_URL ?? "https://cdn.harly.dev").replace(/\/$/, "");
+// Empty counts as unset: Compose forwards an unset variable as "".
+const DEMO_CDN = (process.env.DEMO_CDN_URL?.trim() || "https://cdn.harly.dev").replace(/\/$/, "");
 
 /** Career board layout + copy captured from the live demo workspace.
  *  Gallery/team image URLs require matching files on DEMO_CDN under demo/careers/.
