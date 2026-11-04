@@ -14,7 +14,7 @@ import { updateTask } from "@/features/tasks/actions";
 import { toast } from "@/lib/notification-island/toast";
 import { cn } from "@/lib/utils";
 import {
-  renderableUiBlocks,
+  streamedUiBlocks,
   type CandidateAction,
   type UiBlock,
 } from "@/lib/ai/agent/ui-blocks-schema";
@@ -28,19 +28,21 @@ type Send = (message: string) => void;
 export function UiBlocks({ input, onSend, disabled }: { input: unknown; onSend: Send; disabled?: boolean }) {
   // While the input streams, a block whose newest item is half-written fails
   // validation for a token or two. Keep showing what was already rendered
-  // rather than dropping it, so nothing unmounts and re-animates.
+  // rather than dropping it, so nothing unmounts and re-animates. Retention
+  // applies only mid-stream: a complete input always renders exactly as is.
   // (Derived state updated during render, per React's "storing information
   // from previous renders" pattern; the signature check stops it looping.)
-  const next = renderableUiBlocks(input);
-  const nextSignature = JSON.stringify(next);
+  const next = streamedUiBlocks(input);
+  const nextSignature = JSON.stringify(next.blocks);
   const [shown, setShown] = useState<{ signature: string; blocks: UiBlock[] }>({
     signature: "[]",
     blocks: [],
   });
-  if (next.length >= shown.blocks.length && nextSignature !== shown.signature) {
-    setShown({ signature: nextSignature, blocks: next });
+  const keepShown = !next.complete && next.blocks.length < shown.blocks.length;
+  if (!keepShown && nextSignature !== shown.signature) {
+    setShown({ signature: nextSignature, blocks: next.blocks });
   }
-  const blocks = next.length >= shown.blocks.length ? next : shown.blocks;
+  const blocks = keepShown ? shown.blocks : next.blocks;
   if (blocks.length === 0) return null;
   return (
     <div className="flex flex-col gap-2.5">

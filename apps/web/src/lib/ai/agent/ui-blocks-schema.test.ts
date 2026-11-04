@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { renderableUiBlocks } from "./ui-blocks-schema";
+import { renderableUiBlocks, streamedUiBlocks } from "./ui-blocks-schema";
 
 const note = { kind: "note", tone: "info", text: "Two interviews today." };
 const tasks = {
@@ -33,5 +33,15 @@ describe("renderableUiBlocks", () => {
 
   it("never returns more than the schema allows", () => {
     expect(renderableUiBlocks({ blocks: Array(9).fill(note) })).toHaveLength(6);
+  });
+});
+
+describe("streamedUiBlocks", () => {
+  it("marks a valid input complete and a partial one incomplete", () => {
+    expect(streamedUiBlocks({ blocks: [note] }).complete).toBe(true);
+    expect(streamedUiBlocks({ blocks: [note, { kind: "note" }] })).toEqual({
+      blocks: [note],
+      complete: false,
+    });
   });
 });

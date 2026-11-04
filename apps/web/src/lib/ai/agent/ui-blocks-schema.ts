@@ -132,8 +132,17 @@ export type CandidateAction = z.infer<typeof candidateActionSchema>;
  * already valid and let the one still arriving wait.
  */
 export function renderableUiBlocks(input: unknown): UiBlock[] {
+  return streamedUiBlocks(input).blocks;
+}
+
+/** Like renderableUiBlocks, plus whether the input is already complete. */
+export function streamedUiBlocks(input: unknown): { blocks: UiBlock[]; complete: boolean } {
   const full = presentUiInputSchema.safeParse(input);
-  if (full.success) return full.data.blocks;
+  if (full.success) return { blocks: full.data.blocks, complete: true };
+  return { blocks: leadingValidBlocks(input), complete: false };
+}
+
+function leadingValidBlocks(input: unknown): UiBlock[] {
   const raw = (input as { blocks?: unknown } | null | undefined)?.blocks;
   if (!Array.isArray(raw)) return [];
   const blocks: UiBlock[] = [];
