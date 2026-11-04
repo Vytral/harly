@@ -9,7 +9,7 @@ import { ImapFlow } from "imapflow";
 import { simpleParser } from "mailparser";
 import { getLocalUploadPath } from "@harly/storage";
 
-import { candidates, db, mailAttachments, mailMessages, mailThreads, mailboxes, sql as postgresSql } from "@harly/db";
+import { candidates, db, mailAttachments, mailMessages, mailThreads, mailboxes, advisoryLockSql } from "@harly/db";
 
 import { getMailboxConfig } from "@/lib/mailbox/config";
 import { createLogger } from "@/lib/logger";
@@ -184,7 +184,7 @@ export async function syncMailbox(workspaceId: string): Promise<{ imported: numb
   const digest = createHash("sha256").update(`mailbox:${workspaceId}`).digest();
   const keyHi = digest.readInt32BE(0);
   const keyLo = digest.readInt32BE(4);
-  const connection = await postgresSql.reserve();
+  const connection = await advisoryLockSql("mailbox").reserve();
   try {
     const [row] = await connection`
       select pg_try_advisory_lock(${keyHi}, ${keyLo}) as locked

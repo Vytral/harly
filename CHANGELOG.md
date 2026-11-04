@@ -33,6 +33,44 @@ Before tagging, write the version section below. Use these headings when they
 apply: `Added`, `Changed`, `Fixed`, `Removed`, `Security`. Note migrations and
 anything an operator must do before upgrading.
 
+## [0.3.2]
+
+A patch release for the public demo and scheduler reliability. No database
+migrations.
+
+### Fixed
+
+- Harly AI was off in every demo visitor sandbox: sandboxes have their own
+  workspace id, so the `DEMO_WORKSPACE_ID` pin rejected them. Live sandboxes now
+  use the platform demo key, with the same per-IP and daily limits.
+- `compose.yaml` did not pass `DEMO_AI_API_KEY`, `DEMO_AI_MODEL`,
+  `DEMO_AI_DAILY_REQUEST_LIMIT`, `DEMO_SANDBOX_TTL_MINUTES` or
+  `DEMO_SANDBOX_MAX_ACTIVE` to the containers, so setting them in `.env` had no
+  effect.
+- In demo mode the scheduler no longer runs `automations` and `domain-events`,
+  which the demo refuses by design and which logged a failed run every few
+  seconds. Normal installations are unchanged.
+- Cron and mailbox-sync advisory locks now use small dedicated connection
+  pools (`HARLY_DB_LOCK_POOL_MAX`, default 20, and
+  `HARLY_DB_MAILBOX_LOCK_POOL_MAX`, default 4), forwarded by `compose.yaml`
+  along with `HARLY_DB_POOL_MAX`. Holding them on the main pool
+  let enough overlapping jobs take every connection while their own queries
+  waited for one.
+- A demo visitor's entry purges at most three expired sandboxes before its own
+  is created; the `demo-reset` cron still purges the full backlog.
+
+### Changed
+
+- The demo seed includes AI evaluations for most applications, so scores and
+  recommendations show on first load. Two new applicants stay unscored so
+  visitors can try scoring.
+
+### Upgrade notes
+
+- Demo instances: set `DEMO_WORKSPACE_ID` to the demo template workspace id.
+  Without it `demo-reset` refuses to run (HTTP 503) and never purges expired
+  sandboxes.
+
 ## [0.3.1]
 
 A patch release with fixes for the public demo, career page polish and a

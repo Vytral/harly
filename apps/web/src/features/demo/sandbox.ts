@@ -87,13 +87,29 @@ async function findLegacySandboxOwner(workspaceId: string): Promise<string | nul
   return row?.id ?? null;
 }
 
-/** Delete every sandbox whose lifetime has ended. Returns how many went. */
-export async function purgeExpiredSandboxes(now: Date = new Date()): Promise<number> {
+/**
+ * Most expired sandboxes a visitor's entry request will purge before its own
+ * sandbox is seeded. The cron purges the full backlog; the visitor path only
+ * nibbles at it so a backlog never stalls a page load.
+ */
+export const SANDBOX_ENTRY_PURGE_LIMIT = 3;
+
+/**
+ * Delete sandboxes whose lifetime has ended, at most `limit` of them (all when
+ * omitted). Returns how many went.
+ */
+export async function purgeExpiredSandboxes(
+  now: Date = new Date(),
+  limit: number = Number.POSITIVE_INFINITY,
+): Promise<number> {
   const rows = await listSandboxOrganizations();
   let purged = 0;
+  let attempted = 0;
   for (const row of rows) {
+    if (attempted >= limit) break;
     const meta = parseSandboxMetadata(row.metadata);
     if (!meta || !isSandboxExpired(meta, now)) continue;
+    attempted++;
     try {
       // The account to delete is the one recorded when the sandbox was minted.
       // Never infer it from membership: seeded teammates are members too, and
@@ -119,7 +135,7 @@ export async function purgeExpiredSandboxes(now: Date = new Date()): Promise<num
  * another visitor or the public template.
  */
 export async function createDemoSandbox(input: { style: DemoStyle }): Promise<DemoSandbox> {
-  await purgeExpiredSandboxes();
+  await purgeExpiredSandboxes(new Date(), SANDBOX_ENTRY_PURGE_LIMIT);
 
   const settings = demoSandboxSettings();
   const suffix = randomBytes(5).toString("hex");

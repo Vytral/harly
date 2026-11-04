@@ -456,6 +456,42 @@ const APPLICATIONS: { c: number; j: number; stage: StageName; source: string }[]
   { c: 1, j: 0, stage: "Screening", source: "Referral" },
 ];
 const STAGE_AGE = [3, 1, 0, 1, 2, 3, 1, 2, 0, 4, 2, 1, 0, 1, 0, 2, 2, 3, 1, 2, 0, 1, 2, 1];
+// Precomputed evaluations so scores, recommendations and strengths/gaps show
+// up the moment a visitor opens the pipeline. Keyed by `${c}-${j}`. Two fresh
+// "Applied" candidates (17-0, 13-6) are left unscored on purpose so visitors
+// can run a score themselves.
+type SeedEvaluation = {
+  score: number;
+  rec: "strong_yes" | "yes" | "maybe" | "no";
+  summary: string;
+  strengths: string[];
+  gaps: string[];
+  criteria: [string, number, string][];
+};
+const EVALUATIONS: Record<string, SeedEvaluation> = {
+  "0-0": { score: 94, rec: "strong_yes", summary: "Seven years shipping React at scale, including Next.js performance work at Vercel. Matches every must-have and most nice-to-haves.", strengths: ["Deep Next.js and React Server Components experience", "Led a design-system migration across 4 product teams", "Strong performance track record (LCP −40%)"], gaps: ["Limited GraphQL beyond client usage"], criteria: [["React & TypeScript", 97, "7 yrs React, TS-first codebases at Vercel"], ["Next.js", 96, "Core contributor to internal Next.js tooling"], ["GraphQL", 72, "Consumer side only (Apollo client)"], ["Leadership", 90, "Mentored 5 engineers, owned design-system roadmap"]] },
+  "6-0": { score: 86, rec: "yes", summary: "Solid TypeScript/React engineer with a strong testing culture. Slightly less senior than the role asks, but ramps fast.", strengths: ["Testing discipline (Playwright, RTL)", "Accessibility work cited on resume", "Referral from a current engineer"], gaps: ["4.5 years vs 5+ requested", "No Next.js App Router in production yet"], criteria: [["React & TypeScript", 90, "Daily React + TS for 4 years"], ["Next.js", 70, "Pages Router only"], ["GraphQL", 78, "Built a schema-first BFF"], ["Leadership", 74, "Tech lead on one squad project"]] },
+  "12-0": { score: 81, rec: "yes", summary: "Design-minded frontend engineer; great UI craft and CSS depth. Fewer large-scale data-heavy apps.", strengths: ["Excellent UI polish and animation work", "Tailwind and design tokens experience"], gaps: ["Smaller codebases so far", "Little GraphQL"], criteria: [["React & TypeScript", 84, "3 React products shipped"], ["Next.js", 80, "Next.js marketing + app sites"], ["GraphQL", 55, "Not mentioned beyond tutorials"], ["Leadership", 70, "Ran internal UI guild"]] },
+  "2-0": { score: 58, rec: "maybe", summary: "Strong product designer, but this application targets an engineering role. Better fit for the open Product Designer position.", strengths: ["Design systems expertise", "Prototyping in code (React)"], gaps: ["No production engineering experience", "No TypeScript on resume"], criteria: [["React & TypeScript", 45, "Prototype-level React only"], ["Next.js", 40, "Not mentioned"], ["GraphQL", 20, "Not mentioned"], ["Leadership", 75, "Led a 3-person design pod"]] },
+  "1-0": { score: 77, rec: "yes", summary: "Full-stack generalist, comfortable on both React and Node. Would grow into the senior bar within a year.", strengths: ["End-to-end ownership of features", "Node + React in one codebase"], gaps: ["Frontend depth below senior bar", "No design-system work"], criteria: [["React & TypeScript", 80, "React + TS across 2 startups"], ["Next.js", 74, "One Next.js app in production"], ["GraphQL", 68, "Apollo server and client"], ["Leadership", 62, "IC, no formal mentoring"]] },
+  "3-1": { score: 92, rec: "strong_yes", summary: "Go and Postgres specialist with clear ownership of high-throughput services. Hired.", strengths: ["Designed a 30k rps Go ingestion service", "Postgres tuning and partitioning", "On-call maturity"], gaps: ["Limited gRPC streaming"], criteria: [["Go", 95, "6 years Go in production"], ["Postgres", 94, "Query tuning, partitioning, logical replication"], ["Distributed systems", 86, "Event-driven pipelines with Kafka"], ["Ownership", 92, "Owned services end to end incl. on-call"]] },
+  "4-1": { score: 88, rec: "yes", summary: "Platform engineer with strong distributed-systems background moving closer to product backend work.", strengths: ["Consensus and replication experience", "Go tooling and observability"], gaps: ["Less product-facing API design"], criteria: [["Go", 88, "Go for platform tooling, 4 years"], ["Postgres", 78, "Operated Postgres clusters"], ["Distributed systems", 95, "Raft-based storage work"], ["Ownership", 85, "Led an SLO program"]] },
+  "11-1": { score: 90, rec: "strong_yes", summary: "Senior Go engineer with payments background; very strong on correctness and reliability.", strengths: ["Payments-grade correctness (idempotency, ledgers)", "Mentors juniors actively"], gaps: ["Relocation timing needs confirming"], criteria: [["Go", 93, "8 years Go"], ["Postgres", 88, "Ledger schemas, serializable txns"], ["Distributed systems", 84, "Saga orchestration"], ["Ownership", 90, "Tech lead for payments core"]] },
+  "19-1": { score: 79, rec: "yes", summary: "Go + gRPC backend engineer, mid-level. Good fundamentals; less Postgres depth.", strengths: ["gRPC service design", "Clean, well-tested code samples"], gaps: ["Mostly MySQL, little Postgres"], criteria: [["Go", 85, "3 years Go + gRPC"], ["Postgres", 60, "MySQL background"], ["Distributed systems", 76, "Service mesh experience"], ["Ownership", 72, "Owns two internal services"]] },
+  "7-1": { score: 63, rec: "maybe", summary: "Strong SRE profile, but backend product coding is a secondary skill. Stronger match for DevOps Engineer.", strengths: ["Infra-as-code and reliability"], gaps: ["Limited application-level Go", "No API design examples"], criteria: [["Go", 60, "Go for CLIs and operators"], ["Postgres", 65, "Runs managed Postgres"], ["Distributed systems", 78, "Kubernetes at scale"], ["Ownership", 80, "Incident commander"]] },
+  "2-2": { score: 93, rec: "strong_yes", summary: "Outstanding design-systems designer with a portfolio that maps directly to our product surface.", strengths: ["Built and scaled a multi-brand design system", "Strong research-to-UI storytelling", "Prototypes in code"], gaps: ["Less mobile-native work"], criteria: [["Product thinking", 92, "Clear problem framing in case studies"], ["Visual craft", 95, "Portfolio quality is top tier"], ["Design systems", 97, "Owned tokens + component library"], ["Collaboration", 88, "Pairs with engineering weekly"]] },
+  "8-2": { score: 87, rec: "yes", summary: "Mobile-first product designer with great interaction design; portfolio review scheduled.", strengths: ["Interaction and motion design", "Shipped consumer apps with 1M+ users"], gaps: ["Less B2B / dense data UI"], criteria: [["Product thinking", 86, "Metrics-driven iterations"], ["Visual craft", 92, "Polished mobile work"], ["Design systems", 78, "Contributed, didn't own"], ["Collaboration", 85, "Cross-timezone team"]] },
+  "18-2": { score: 84, rec: "yes", summary: "B2B SaaS designer, comfortable with complex workflows and data-heavy screens.", strengths: ["Dense data UI and tables", "Usability testing practice"], gaps: ["Visual style slightly conservative"], criteria: [["Product thinking", 88, "Owned onboarding redesign"], ["Visual craft", 78, "Clean, functional"], ["Design systems", 82, "Maintained Figma library"], ["Collaboration", 86, "PM/eng trio lead"]] },
+  "12-2": { score: 66, rec: "maybe", summary: "Frontend engineer with a good eye applying to the designer role; craft is there, process less so.", strengths: ["Can build what they design"], gaps: ["No formal research or discovery work"], criteria: [["Product thinking", 60, "Few case studies"], ["Visual craft", 80, "Solid UI work"], ["Design systems", 70, "Implements tokens in code"], ["Collaboration", 62, "Mostly solo projects"]] },
+  "9-3": { score: 89, rec: "strong_yes", summary: "Experienced support lead from a hosting company; strong technical troubleshooting. Hired.", strengths: ["Technical depth (DNS, SSL, logs)", "Built a macro library cutting handle time 30%"], gaps: ["Timezone overlap is partial"], criteria: [["Technical troubleshooting", 92, "Hosting support background"], ["Written communication", 88, "Sample replies are clear and warm"], ["Process", 86, "Introduced SLA tiers"]] },
+  "14-3": { score: 82, rec: "yes", summary: "Technical support specialist with API debugging experience. Technical interview done.", strengths: ["Reads logs and API traces", "High CSAT history"], gaps: ["No team-lead experience"], criteria: [["Technical troubleshooting", 86, "API + webhook debugging"], ["Written communication", 82, "Concise, friendly"], ["Process", 74, "Follows, rarely designs process"]] },
+  "19-3": { score: 52, rec: "no", summary: "Backend engineer applying to support; skills mismatch for a customer-facing role.", strengths: ["Strong technical understanding"], gaps: ["No customer-facing experience", "Likely to want an engineering path"], criteria: [["Technical troubleshooting", 85, "Engineer background"], ["Written communication", 50, "No samples"], ["Process", 30, "Not mentioned"]] },
+  "5-4": { score: 85, rec: "yes", summary: "B2B SaaS growth marketer with clear pipeline attribution. Recruiter screen in two days.", strengths: ["Owned paid + SEO pipeline", "Comfortable with attribution and SQL"], gaps: ["Less product-led growth"], criteria: [["Growth strategy", 86, "Built full-funnel plan from scratch"], ["Analytics", 88, "SQL + Looker dashboards"], ["Content", 76, "Managed freelance writers"]] },
+  "10-4": { score: 78, rec: "yes", summary: "Lifecycle and content marketer; excellent writing, lighter on paid acquisition.", strengths: ["Lifecycle email programs", "Strong editorial voice"], gaps: ["Limited paid channels"], criteria: [["Growth strategy", 72, "Retention focus"], ["Analytics", 74, "Cohort analysis"], ["Content", 92, "Portfolio of high-performing content"]] },
+  "16-4": { score: 91, rec: "strong_yes", summary: "Growth marketing manager who scaled a SaaS from 2k to 15k signups/month. Offer stage.", strengths: ["Proven scaling results", "Manages a small team", "Experimentation culture"], gaps: ["Salary expectation at top of band"], criteria: [["Growth strategy", 94, "Scaled signups 7x"], ["Analytics", 90, "Experiment design and stats"], ["Content", 84, "Owned content calendar"]] },
+  "7-5": { score: 92, rec: "strong_yes", summary: "SRE with AWS + Terraform at scale; exactly the profile for the DevOps role.", strengths: ["Terraform module library author", "Cut infra cost 35%", "Strong incident practice"], gaps: ["Less GCP"], criteria: [["Cloud (AWS)", 95, "6 years AWS, multi-account"], ["Infrastructure as code", 94, "Terraform at org scale"], ["Kubernetes", 84, "EKS operator"], ["Reliability", 92, "SLOs and on-call design"]] },
+  "15-5": { score: 87, rec: "yes", summary: "Kubernetes-heavy DevOps engineer; strong CI/CD and platform automation.", strengths: ["Kubernetes and Helm depth", "GitOps (Argo CD) rollout"], gaps: ["Terraform less than requested"], criteria: [["Cloud (AWS)", 80, "AWS + some GCP"], ["Infrastructure as code", 76, "Pulumi mostly"], ["Kubernetes", 95, "CKA, ran 40-node clusters"], ["Reliability", 84, "Built alerting stack"]] },
+};
 // Round-robin of who advanced each candidate (feeds team-activity ownership).
 const MOVERS = ["sarah", "diego", "emma", "james", "sofia"];
 
@@ -1394,6 +1430,35 @@ export async function seedDemoWorkspace(options: SeedDemoOptions): Promise<SeedD
         messageId: `seed:${message.c}:${message.subject}`,
         receivedAt: daysAgo(3),
         createdAt: daysAgo(3),
+      });
+    }
+
+    // ── Precomputed evaluations (scores visible on first load) ──
+    for (const [key, ev] of Object.entries(EVALUATIONS)) {
+      const applicationId = appIds.get(key);
+      if (!applicationId) continue;
+      const [c, j] = key.split("-").map(Number);
+      await db.insert(schema.aiEvaluations).values({
+        workspaceId,
+        candidateId: candidateIds[c],
+        applicationId,
+        jobId: jobIds[j],
+        source: "ai",
+        provider: "openai",
+        modelId: "gpt-6-luna",
+        score: ev.score,
+        recommendation: ev.rec,
+        summary: ev.summary,
+        strengths: ev.strengths,
+        gaps: ev.gaps,
+        criteria: ev.criteria.map(([label, score, evidence]) => ({ label, score, evidence })),
+        usedResume: true,
+        confidence: 80 + (c % 15),
+        evidenceCoverage: 75 + (j * 3) % 20,
+        requiresHumanReview: true,
+        evaluationStatus: "completed",
+        createdAt: daysAgoAt(1 + (c % 3), 8),
+        updatedAt: daysAgoAt(1 + (c % 3), 8),
       });
     }
 
