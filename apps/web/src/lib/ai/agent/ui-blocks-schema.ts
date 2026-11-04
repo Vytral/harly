@@ -153,3 +153,19 @@ function leadingValidBlocks(input: unknown): UiBlock[] {
   }
   return blocks;
 }
+
+export type ShownUiBlocks = { signature: string; blocks: UiBlock[] };
+
+/**
+ * What a streaming presentUi card should show next, given what it shows now.
+ * Mid-stream it never drops blocks it already rendered (a half-written item
+ * briefly invalidates the newest block); a complete input always wins.
+ */
+export function nextShownUiBlocks(shown: ShownUiBlocks, input: unknown): ShownUiBlocks {
+  const next = streamedUiBlocks(input);
+  if (!next.complete && next.blocks.length < shown.blocks.length) return shown;
+  const signature = JSON.stringify(next.blocks);
+  return signature === shown.signature ? shown : { signature, blocks: next.blocks };
+}
+
+export const NO_SHOWN_UI_BLOCKS: ShownUiBlocks = { signature: "[]", blocks: [] };

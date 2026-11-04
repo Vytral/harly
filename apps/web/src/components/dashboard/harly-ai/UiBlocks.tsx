@@ -14,7 +14,9 @@ import { updateTask } from "@/features/tasks/actions";
 import { toast } from "@/lib/notification-island/toast";
 import { cn } from "@/lib/utils";
 import {
-  streamedUiBlocks,
+  nextShownUiBlocks,
+  NO_SHOWN_UI_BLOCKS,
+  type ShownUiBlocks,
   type CandidateAction,
   type UiBlock,
 } from "@/lib/ai/agent/ui-blocks-schema";
@@ -32,17 +34,10 @@ export function UiBlocks({ input, onSend, disabled }: { input: unknown; onSend: 
   // applies only mid-stream: a complete input always renders exactly as is.
   // (Derived state updated during render, per React's "storing information
   // from previous renders" pattern; the signature check stops it looping.)
-  const next = streamedUiBlocks(input);
-  const nextSignature = JSON.stringify(next.blocks);
-  const [shown, setShown] = useState<{ signature: string; blocks: UiBlock[] }>({
-    signature: "[]",
-    blocks: [],
-  });
-  const keepShown = !next.complete && next.blocks.length < shown.blocks.length;
-  if (!keepShown && nextSignature !== shown.signature) {
-    setShown({ signature: nextSignature, blocks: next.blocks });
-  }
-  const blocks = keepShown ? shown.blocks : next.blocks;
+  const [shown, setShown] = useState<ShownUiBlocks>(NO_SHOWN_UI_BLOCKS);
+  const target = nextShownUiBlocks(shown, input);
+  if (target !== shown) setShown(target);
+  const blocks = target.blocks;
   if (blocks.length === 0) return null;
   return (
     <div className="flex flex-col gap-2.5">
