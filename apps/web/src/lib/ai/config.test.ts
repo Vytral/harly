@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
   select: vi.fn(),
@@ -12,6 +12,7 @@ vi.mock("drizzle-orm", () => ({
 
 vi.mock("@harly/db", () => ({
   db: { select: mocks.select },
+  organization: { id: {}, metadata: {} },
   workspaceSettings: {
     organizationId: {},
     aiEnabled: {},
@@ -94,5 +95,52 @@ describe("getWorkspaceAiConfig resumeAnonymization", () => {
   it("returns null without a config when AI is disabled", async () => {
     mocks.select.mockImplementation(() => selectReturning([{ ...WORKSPACE_ROW, aiEnabled: false }]));
     expect(await getWorkspaceAiConfig("ws-1")).toBeNull();
+  });
+});
+
+describe("getWorkspaceAiConfig demo sandboxes", () => {
+  const DEMO_CFG = { provider: "openai", modelId: "gpt-6-luna", apiKey: "sk-demo" };
+
+  beforeEach(() => {
+    vi.stubEnv("DEMO_MODE", "true");
+    vi.stubEnv("DEMO_WORKSPACE_ID", "ws-demo");
+    mocks.getDemoAiModelConfig.mockImplementation(
+      (_id: string, _env: unknown, opts?: { sandbox?: boolean }) => (opts?.sandbox ? DEMO_CFG : null),
+    );
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  it("uses the demo key in a live visitor sandbox", async () => {
+    const future = new Date(Date.now() + 60_000).toISOString();
+    mocks.select
+      .mockImplementationOnce(() =>
+        selectReturning([
+          { metadata: JSON.stringify({ harlyDemoSandbox: { expiresAt: future, style: "" } }) },
+        ]),
+      )
+      .mockImplementation(() => selectReturning([{ aiResumeAnonymization: false }]));
+    await expect(getWorkspaceAiConfig("ws-sandbox")).resolves.toMatchObject(DEMO_CFG);
+    expect(mocks.consumeDemoAiDailyBudget).toHaveBeenCalled();
+  });
+
+  it("does not use the demo key for an expired sandbox or a non-sandbox workspace", async () => {
+    const past = new Date(Date.now() - 60_000).toISOString();
+    mocks.select
+      .mockImplementationOnce(() =>
+        selectReturning([
+          { metadata: JSON.stringify({ harlyDemoSandbox: { expiresAt: past, style: "" } }) },
+        ]),
+      )
+      .mockImplementation(() => selectReturning([]));
+    await expect(getWorkspaceAiConfig("ws-sandbox")).resolves.toBeNull();
+
+    mocks.select.mockReset();
+    mocks.select
+      .mockImplementationOnce(() => selectReturning([{ metadata: null }]))
+      .mockImplementation(() => selectReturning([]));
+    await expect(getWorkspaceAiConfig("ws-other")).resolves.toBeNull();
   });
 });

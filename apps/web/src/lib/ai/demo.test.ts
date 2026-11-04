@@ -50,6 +50,14 @@ describe("getDemoAiModelConfig", () => {
     expect(getDemoAiModelConfig("ws-demo", env)).not.toBeNull();
     expect(getDemoAiModelConfig("ws-other", env)).toBeNull();
   });
+
+  it("serves a visitor sandbox even though its id differs from the pinned one", () => {
+    const env = { ...DEMO_ENV, DEMO_WORKSPACE_ID: "ws-demo" };
+    expect(getDemoAiModelConfig("ws-sandbox", env, { sandbox: true })).not.toBeNull();
+    expect(
+      getDemoAiModelConfig("ws-sandbox", { ...env, DEMO_MODE: "false" }, { sandbox: true }),
+    ).toBeNull();
+  });
 });
 
 describe("consumeDemoAiDailyBudget", () => {

@@ -2,8 +2,10 @@ import "server-only";
 
 import { eq } from "drizzle-orm";
 
-import { db, workspaceSettings } from "@harly/db";
+import { demoWorkspaceId, isDemoMode } from "@harly/config";
+import { db, organization, workspaceSettings } from "@harly/db";
 
+import { isSandboxExpired, parseSandboxMetadata } from "@/features/demo/sandbox-metadata";
 import { decryptSecret, isEncryptionConfigured } from "@/lib/crypto";
 import { consumeDemoAiDailyBudget } from "./demo-budget";
 import { getDemoAiModelConfig } from "./demo";
@@ -27,6 +29,35 @@ export type WorkspaceAiStatus = {
   resumeAnonymization: boolean;
 };
 
+/**
+ * True when the workspace is a live (unexpired) per-visitor demo sandbox,
+ * judged by the server-written marker in organization.metadata.
+ */
+async function isLiveDemoSandbox(workspaceId: string): Promise<boolean> {
+  const [row] = await db
+    .select({ metadata: organization.metadata })
+    .from(organization)
+    .where(eq(organization.id, workspaceId))
+    .limit(1);
+  const meta = parseSandboxMetadata(row?.metadata);
+  return Boolean(meta && !isSandboxExpired(meta));
+}
+
+/**
+ * Demo AI config for the pinned demo workspace or a live visitor sandbox.
+ * Sandboxes get fresh workspace ids, so the pinned-id check alone would turn
+ * AI off for every visitor. Only touches the DB on a demo instance whose
+ * pinned id did not match.
+ */
+async function resolveDemoAiModelConfig(workspaceId: string) {
+  const direct = getDemoAiModelConfig(workspaceId);
+  if (direct || !isDemoMode()) return direct;
+  const pinned = demoWorkspaceId();
+  if (!pinned || pinned === workspaceId) return null;
+  if (!(await isLiveDemoSandbox(workspaceId))) return null;
+  return getDemoAiModelConfig(workspaceId, process.env, { sandbox: true });
+}
+
 /** Public-safe status for the settings UI. Never returns the API key. */
 export async function getWorkspaceAiStatus(
   workspaceId: string,
@@ -46,7 +77,7 @@ export async function getWorkspaceAiStatus(
     .where(eq(workspaceSettings.organizationId, workspaceId))
     .limit(1);
 
-  const demoConfig = getDemoAiModelConfig(workspaceId);
+  const demoConfig = await resolveDemoAiModelConfig(workspaceId);
 
   return {
     enabled: demoConfig ? true : Boolean(row?.aiEnabled),
@@ -100,7 +131,7 @@ export async function getWorkspaceAiConfig(
   // Public demo: the reseed wipes the stored key, so AI comes from env. Each
   // AI operation spends one slot of the instance-wide daily budget; once it
   // runs out every surface falls back to its non-AI path until the window resets.
-  const demoConfig = getDemoAiModelConfig(workspaceId);
+  const demoConfig = await resolveDemoAiModelConfig(workspaceId);
   if (demoConfig) {
     if (options.consumeDemoBudget === false) {
       return { ...demoConfig, resumeAnonymization: await loadResumeAnonymization(workspaceId) };
