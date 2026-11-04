@@ -495,9 +495,12 @@ jobs:
         run: docker build -t harly:ci .
       - name: Verify CLI backup and restore on a disposable installation
         run: pnpm --filter @harly/cli test:backup-restore:ci harly:ci
+      - name: Install Trivy
+        uses: ./.github/actions/install-trivy
       - name: Block HIGH and CRITICAL image vulnerabilities
         uses: aquasecurity/trivy-action@v0.36.0
         with:
+          skip-setup-trivy: true
           image-ref: harly:ci
           format: table
           severity: HIGH,CRITICAL
