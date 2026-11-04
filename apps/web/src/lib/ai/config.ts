@@ -3,9 +3,9 @@ import "server-only";
 import { eq } from "drizzle-orm";
 
 import { demoWorkspaceId, isDemoMode } from "@harly/config";
-import { db, organization, workspaceSettings } from "@harly/db";
+import { db, workspaceSettings } from "@harly/db";
 
-import { isSandboxExpired, parseSandboxMetadata } from "@/features/demo/sandbox-metadata";
+import { isLiveSandboxWorkspace } from "@/features/demo/sandbox-state";
 import { decryptSecret, isEncryptionConfigured } from "@/lib/crypto";
 import { consumeDemoAiDailyBudget } from "./demo-budget";
 import { getDemoAiModelConfig } from "./demo";
@@ -30,20 +30,6 @@ export type WorkspaceAiStatus = {
 };
 
 /**
- * True when the workspace is a live (unexpired) per-visitor demo sandbox,
- * judged by the server-written marker in organization.metadata.
- */
-async function isLiveDemoSandbox(workspaceId: string): Promise<boolean> {
-  const [row] = await db
-    .select({ metadata: organization.metadata })
-    .from(organization)
-    .where(eq(organization.id, workspaceId))
-    .limit(1);
-  const meta = parseSandboxMetadata(row?.metadata);
-  return Boolean(meta && !isSandboxExpired(meta));
-}
-
-/**
  * Demo AI config for the pinned demo workspace or a live visitor sandbox.
  * Sandboxes get fresh workspace ids, so the pinned-id check alone would turn
  * AI off for every visitor. Only touches the DB on a demo instance whose
@@ -54,7 +40,7 @@ async function resolveDemoAiModelConfig(workspaceId: string) {
   if (direct || !isDemoMode()) return direct;
   const pinned = demoWorkspaceId();
   if (!pinned || pinned === workspaceId) return null;
-  if (!(await isLiveDemoSandbox(workspaceId))) return null;
+  if (!(await isLiveSandboxWorkspace(workspaceId))) return null;
   return getDemoAiModelConfig(workspaceId, process.env, { sandbox: true });
 }
 
