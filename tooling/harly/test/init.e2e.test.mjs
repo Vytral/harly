@@ -112,6 +112,43 @@ test(
     const resolvedCompose = JSON.parse(composeConfig.stdout);
     assert.deepEqual(resolvedCompose.services.app.tmpfs, ["/tmp:size=256m,mode=1777"]);
     assert.deepEqual(resolvedCompose.services.scheduler.tmpfs, ["/tmp:size=64m,mode=1777"]);
+
+    // Demo and pool settings must reach every Harly service. Unset, they
+    // resolve to their defaults; set (shell env overrides .env), they pass through.
+    const forwarded = {
+      DEMO_MODE: "true",
+      DEMO_LOGIN_EMAIL: "demo@example.com",
+      DEMO_WORKSPACE_ID: "ws-demo",
+      DEMO_CDN_URL: "https://cdn.example.com",
+      DEMO_SANDBOX_TTL_MINUTES: "120",
+      DEMO_SANDBOX_MAX_ACTIVE: "10",
+      DEMO_AI_API_KEY: "sk-test-demo",
+      DEMO_AI_MODEL: "gpt-test",
+      DEMO_AI_DAILY_REQUEST_LIMIT: "50",
+      HARLY_DB_POOL_MAX: "12",
+      HARLY_DB_LOCK_POOL_MAX: "8",
+      HARLY_DB_MAILBOX_LOCK_POOL_MAX: "3",
+    };
+    for (const service of ["app", "migrate", "scheduler"]) {
+      const environment = resolvedCompose.services[service].environment;
+      assert.equal(environment.DEMO_MODE, "false", `${service} DEMO_MODE default`);
+      for (const name of Object.keys(forwarded).filter((key) => key !== "DEMO_MODE")) {
+        assert.equal(environment[name], "", `${service} ${name} default`);
+      }
+    }
+    const overridden = spawnSync(
+      "docker",
+      ["compose", "--project-directory", target, "-f", path.join(target, "compose.yaml"), "config", "--format", "json"],
+      { cwd: target, encoding: "utf8", env: { ...process.env, ...forwarded } },
+    );
+    assert.equal(overridden.status, 0, overridden.stderr || overridden.stdout);
+    const overriddenCompose = JSON.parse(overridden.stdout);
+    for (const service of ["app", "migrate", "scheduler"]) {
+      const environment = overriddenCompose.services[service].environment;
+      for (const [name, value] of Object.entries(forwarded)) {
+        assert.equal(environment[name], value, `${service} ${name}`);
+      }
+    }
   } finally {
     await rm(parent, { recursive: true, force: true });
   }
