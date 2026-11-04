@@ -146,6 +146,22 @@ function neutralizeDelimiters(text: string, nonce: string): string {
   return text.split(nonce).join("").replace(/<{3,}|>{3,}/g, " ");
 }
 
+/**
+ * Whether a model accepts a `temperature` setting. Anthropic's Claude 5 models
+ * reject it, and so do OpenAI reasoning models. The OpenAI SDK strips it only
+ * for the model ids it knows (o1, o3, o4-mini, gpt-5), so newer ids such as
+ * gpt-6-* reached the API with it and were refused.
+ */
+export function acceptsTemperature(config: Pick<AiModelConfig, "provider" | "modelId">): boolean {
+  if (config.provider === "anthropic") return false;
+  if (config.provider === "openai") {
+    const id = config.modelId.toLowerCase();
+    const reasoning = /^o\d/.test(id) || /^gpt-(?:[5-9]|\d{2,})/.test(id);
+    return !reasoning || /-chat(?:-|$)/.test(id);
+  }
+  return true;
+}
+
 export async function scoreCandidateWithAI(
   config: AiModelConfig & AnonymizationSettings,
   input: ScoreCandidateInput,
@@ -244,10 +260,10 @@ export async function scoreCandidateWithAI(
         model: getModel(config),
         system: SYSTEM_PROMPT,
         prompt,
-        // Scoring should be repeatable, so temperature 0 — except on Anthropic:
-        // Claude 5 models reject `temperature` ("deprecated for this model"),
-        // which made every AI score fall back to rules.
-        ...(config.provider === "anthropic" ? {} : { temperature: 0 }),
+        // Scoring should be repeatable, so temperature 0 where the model takes
+        // it. Claude 5 and OpenAI reasoning models reject `temperature`, which
+        // made every AI score fall back to rules.
+        ...(acceptsTemperature(config) ? { temperature: 0 } : {}),
         output: Output.object({
           schema: candidateScoreSchema,
           name: "candidate_fit_evaluation",

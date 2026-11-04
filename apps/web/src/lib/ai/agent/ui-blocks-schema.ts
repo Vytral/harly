@@ -123,3 +123,49 @@ export const presentUiInputSchema = z.object({
 export type UiBlock = z.infer<typeof uiBlockSchema>;
 export type PresentUiInput = z.infer<typeof presentUiInputSchema>;
 export type CandidateAction = z.infer<typeof candidateActionSchema>;
+
+/**
+ * Blocks safe to render from a presentUi input that may still be streaming.
+ * The whole input fails validation while its JSON is incomplete, so parsing it
+ * as one unit made the card vanish and reappear on almost every token (and
+ * replay its entrance animation). Instead, render the leading blocks that are
+ * already valid and let the one still arriving wait.
+ */
+export function renderableUiBlocks(input: unknown): UiBlock[] {
+  return streamedUiBlocks(input).blocks;
+}
+
+/** Like renderableUiBlocks, plus whether the input is already complete. */
+export function streamedUiBlocks(input: unknown): { blocks: UiBlock[]; complete: boolean } {
+  const full = presentUiInputSchema.safeParse(input);
+  if (full.success) return { blocks: full.data.blocks, complete: true };
+  return { blocks: leadingValidBlocks(input), complete: false };
+}
+
+function leadingValidBlocks(input: unknown): UiBlock[] {
+  const raw = (input as { blocks?: unknown } | null | undefined)?.blocks;
+  if (!Array.isArray(raw)) return [];
+  const blocks: UiBlock[] = [];
+  for (const candidate of raw.slice(0, 6)) {
+    const parsed = uiBlockSchema.safeParse(candidate);
+    if (!parsed.success) break;
+    blocks.push(parsed.data);
+  }
+  return blocks;
+}
+
+export type ShownUiBlocks = { signature: string; blocks: UiBlock[] };
+
+/**
+ * What a streaming presentUi card should show next, given what it shows now.
+ * Mid-stream it never drops blocks it already rendered (a half-written item
+ * briefly invalidates the newest block); a complete input always wins.
+ */
+export function nextShownUiBlocks(shown: ShownUiBlocks, input: unknown): ShownUiBlocks {
+  const next = streamedUiBlocks(input);
+  if (!next.complete && next.blocks.length < shown.blocks.length) return shown;
+  const signature = JSON.stringify(next.blocks);
+  return signature === shown.signature ? shown : { signature, blocks: next.blocks };
+}
+
+export const NO_SHOWN_UI_BLOCKS: ShownUiBlocks = { signature: "[]", blocks: [] };

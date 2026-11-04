@@ -27,7 +27,7 @@ describe("Harly AI system prompt", () => {
     expect(prompt).toContain("recentAgentActions");
     expect(prompt).toContain("undoAgentAction");
     expect(prompt).toContain("deshaz lo último");
-    expect(prompt).toContain("Reply in the same language");
+    expect(prompt).toContain("Reply in the language of the user's latest message");
     expect(prompt).toContain("hiringBrief");
     expect(prompt).toContain("workspaceCapabilities");
     expect(prompt).toContain("jobDistributionOptions");
