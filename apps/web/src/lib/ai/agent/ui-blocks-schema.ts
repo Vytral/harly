@@ -123,3 +123,24 @@ export const presentUiInputSchema = z.object({
 export type UiBlock = z.infer<typeof uiBlockSchema>;
 export type PresentUiInput = z.infer<typeof presentUiInputSchema>;
 export type CandidateAction = z.infer<typeof candidateActionSchema>;
+
+/**
+ * Blocks safe to render from a presentUi input that may still be streaming.
+ * The whole input fails validation while its JSON is incomplete, so parsing it
+ * as one unit made the card vanish and reappear on almost every token (and
+ * replay its entrance animation). Instead, render the leading blocks that are
+ * already valid and let the one still arriving wait.
+ */
+export function renderableUiBlocks(input: unknown): UiBlock[] {
+  const full = presentUiInputSchema.safeParse(input);
+  if (full.success) return full.data.blocks;
+  const raw = (input as { blocks?: unknown } | null | undefined)?.blocks;
+  if (!Array.isArray(raw)) return [];
+  const blocks: UiBlock[] = [];
+  for (const candidate of raw.slice(0, 6)) {
+    const parsed = uiBlockSchema.safeParse(candidate);
+    if (!parsed.success) break;
+    blocks.push(parsed.data);
+  }
+  return blocks;
+}

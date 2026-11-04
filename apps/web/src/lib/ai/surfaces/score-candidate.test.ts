@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 
 vi.mock("server-only", () => ({}));
 
-import { salvageCandidateScore } from "./score-candidate";
+import { acceptsTemperature, salvageCandidateScore } from "./score-candidate";
 
 const base = {
   score: 78,
@@ -90,5 +90,20 @@ describe("truncateAtLine", () => {
     const text = `${"a".repeat(90)}\n${"b".repeat(50)}`;
     expect(truncateAtLine(text, 100)).toEqual({ text: "a".repeat(90), truncated: true });
     expect(truncateAtLine("short", 100)).toEqual({ text: "short", truncated: false });
+  });
+});
+
+describe("acceptsTemperature", () => {
+  it.each([
+    ["openai", "gpt-4o", true],
+    ["openai", "gpt-4.1-mini", true],
+    ["openai", "gpt-5-chat-latest", true],
+    ["openai", "gpt-5", false],
+    ["openai", "gpt-6-luna", false],
+    ["openai", "o3-mini", false],
+    ["anthropic", "claude-sonnet-5-5", false],
+    ["openai-compatible", "llama-3.3-70b", true],
+  ])("%s %s -> %s", (provider, modelId, expected) => {
+    expect(acceptsTemperature({ provider, modelId } as never)).toBe(expected);
   });
 });
