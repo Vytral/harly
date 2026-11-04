@@ -184,7 +184,7 @@ export async function syncMailbox(workspaceId: string): Promise<{ imported: numb
   const digest = createHash("sha256").update(`mailbox:${workspaceId}`).digest();
   const keyHi = digest.readInt32BE(0);
   const keyLo = digest.readInt32BE(4);
-  const connection = await advisoryLockSql().reserve();
+  const connection = await advisoryLockSql("mailbox").reserve();
   try {
     const [row] = await connection`
       select pg_try_advisory_lock(${keyHi}, ${keyLo}) as locked

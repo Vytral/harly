@@ -64,7 +64,7 @@ type LockClient = ReturnType<typeof postgres>;
 
 declare global {
   var harlyDatabase: DatabaseClient | undefined;
-  var harlyAdvisoryLockClient: LockClient | undefined;
+  var harlyAdvisoryLockClients: Partial<Record<"cron" | "mailbox", LockClient>> | undefined;
 }
 
 // Cached in every environment, not just development. Development needs it so a
@@ -79,20 +79,30 @@ export const sql = globalDatabase.sql;
 export { schema };
 
 /**
- * Small pool reserved for holding session-level advisory locks (cron overlap
- * guards, per-mailbox sync). A held lock pins its connection for the whole job;
- * reserving those from the main pool let a burst of overlapping jobs take every
- * connection while their own queries (and web requests) waited for one, a
- * self-deadlock. Kept separate so lock holders can never starve the app pool.
- * Created lazily, so processes that never take a lock open no extra connections.
+ * Small pools reserved for holding session-level advisory locks. A held lock
+ * pins its connection for the whole job; reserving those from the main pool let
+ * a burst of overlapping jobs take every connection while their own queries
+ * (and web requests) waited for one, a self-deadlock. Each scope has its own
+ * pool because locks nest: the mailbox-sync cron holds a "cron" lock while
+ * syncMailbox takes a "mailbox" lock, so sharing one pool could deadlock the
+ * same way. Created lazily, so a process that never takes a lock opens none.
  */
-export function advisoryLockSql(): LockClient {
-  globalThis.harlyAdvisoryLockClient ??= postgres(getDatabaseUrl(), {
+export type AdvisoryLockScope = "cron" | "mailbox";
+
+const LOCK_POOL_DEFAULT_MAX: Record<AdvisoryLockScope, number> = { cron: 20, mailbox: 4 };
+const LOCK_POOL_ENV: Record<AdvisoryLockScope, string> = {
+  cron: "HARLY_DB_LOCK_POOL_MAX",
+  mailbox: "HARLY_DB_MAILBOX_LOCK_POOL_MAX",
+};
+
+export function advisoryLockSql(scope: AdvisoryLockScope): LockClient {
+  const pools = (globalThis.harlyAdvisoryLockClients ??= {});
+  pools[scope] ??= postgres(getDatabaseUrl(), {
     prepare: false,
-    max: positiveInteger("HARLY_DB_LOCK_POOL_MAX", 20),
+    max: positiveInteger(LOCK_POOL_ENV[scope], LOCK_POOL_DEFAULT_MAX[scope]),
     idle_timeout: positiveInteger("HARLY_DB_IDLE_TIMEOUT", 30),
     connect_timeout: positiveInteger("HARLY_DB_CONNECT_TIMEOUT", 10),
     max_lifetime: positiveInteger("HARLY_DB_MAX_LIFETIME", 60 * 30),
   });
-  return globalThis.harlyAdvisoryLockClient;
+  return pools[scope];
 }

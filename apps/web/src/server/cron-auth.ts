@@ -68,7 +68,7 @@ export async function authorizeCron(
 
   const [keyHi, keyLo] = advisoryKey(key);
   // Held on the dedicated lock pool so overlapping jobs cannot starve the app pool.
-  const connection = await advisoryLockSql().reserve();
+  const connection = await advisoryLockSql("cron").reserve();
   try {
     const rows = await connection`
       select pg_try_advisory_lock(${keyHi}, ${keyLo}) as locked

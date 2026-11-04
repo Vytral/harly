@@ -50,8 +50,10 @@ migrations.
 - In demo mode the scheduler no longer runs `automations` and `domain-events`,
   which the demo refuses by design and which logged a failed run every few
   seconds. Normal installations are unchanged.
-- Cron and mailbox-sync advisory locks now use a small dedicated connection
-  pool (`HARLY_DB_LOCK_POOL_MAX`, default 20). Holding them on the main pool
+- Cron and mailbox-sync advisory locks now use small dedicated connection
+  pools (`HARLY_DB_LOCK_POOL_MAX`, default 20, and
+  `HARLY_DB_MAILBOX_LOCK_POOL_MAX`, default 4), forwarded by `compose.yaml`
+  along with `HARLY_DB_POOL_MAX`. Holding them on the main pool
   let enough overlapping jobs take every connection while their own queries
   waited for one.
 - A demo visitor's entry purges at most three expired sandboxes before its own
