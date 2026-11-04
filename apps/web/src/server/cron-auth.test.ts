@@ -7,7 +7,13 @@ const state = vi.hoisted(() => ({
 }));
 
 vi.mock("@harly/db", () => ({
+  // The app pool must never be reserved for a lock: fail loudly if it is.
   sql: {
+    reserve: async () => {
+      throw new Error("cron locks must not reserve from the app pool");
+    },
+  },
+  advisoryLockSql: () => ({
     reserve: async () => {
       const connection = async (strings: TemplateStringsArray) => {
         state.queries.push(strings.join(" "));
@@ -16,7 +22,7 @@ vi.mock("@harly/db", () => ({
       connection.release = state.release;
       return connection;
     },
-  },
+  }),
 }));
 
 vi.mock("@/lib/logger", () => ({

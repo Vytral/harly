@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createHash, timingSafeEqual } from "node:crypto";
 
-import { sql } from "@harly/db";
+import { advisoryLockSql } from "@harly/db";
 
 import { getServerLogger } from "@/lib/logger";
 
@@ -67,7 +67,8 @@ export async function authorizeCron(
   }
 
   const [keyHi, keyLo] = advisoryKey(key);
-  const connection = await sql.reserve();
+  // Held on the dedicated lock pool so overlapping jobs cannot starve the app pool.
+  const connection = await advisoryLockSql().reserve();
   try {
     const rows = await connection`
       select pg_try_advisory_lock(${keyHi}, ${keyLo}) as locked

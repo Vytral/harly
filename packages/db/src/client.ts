@@ -60,9 +60,11 @@ export function createDatabaseClient(connectionString = getDatabaseUrl()) {
 }
 
 type DatabaseClient = ReturnType<typeof createDatabaseClient>;
+type LockClient = ReturnType<typeof postgres>;
 
 declare global {
   var harlyDatabase: DatabaseClient | undefined;
+  var harlyAdvisoryLockClient: LockClient | undefined;
 }
 
 // Cached in every environment, not just development. Development needs it so a
@@ -75,3 +77,22 @@ globalThis.harlyDatabase = globalDatabase;
 export const db = globalDatabase.db;
 export const sql = globalDatabase.sql;
 export { schema };
+
+/**
+ * Small pool reserved for holding session-level advisory locks (cron overlap
+ * guards, per-mailbox sync). A held lock pins its connection for the whole job;
+ * reserving those from the main pool let a burst of overlapping jobs take every
+ * connection while their own queries (and web requests) waited for one, a
+ * self-deadlock. Kept separate so lock holders can never starve the app pool.
+ * Created lazily, so processes that never take a lock open no extra connections.
+ */
+export function advisoryLockSql(): LockClient {
+  globalThis.harlyAdvisoryLockClient ??= postgres(getDatabaseUrl(), {
+    prepare: false,
+    max: positiveInteger("HARLY_DB_LOCK_POOL_MAX", 20),
+    idle_timeout: positiveInteger("HARLY_DB_IDLE_TIMEOUT", 30),
+    connect_timeout: positiveInteger("HARLY_DB_CONNECT_TIMEOUT", 10),
+    max_lifetime: positiveInteger("HARLY_DB_MAX_LIFETIME", 60 * 30),
+  });
+  return globalThis.harlyAdvisoryLockClient;
+}
