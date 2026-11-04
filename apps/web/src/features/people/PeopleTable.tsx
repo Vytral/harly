@@ -112,7 +112,7 @@ export function PeopleTable({ rows }: { rows: PersonListRow[] }) {
           }
         />
       ) : (
-        <div className="overflow-x-auto">
+        <div className="relative overflow-x-auto">
           <table className={dirTable}>
             <thead>
               <tr>

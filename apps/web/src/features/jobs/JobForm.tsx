@@ -31,7 +31,7 @@ import { ApplicationSection } from "./sections/ApplicationSection";
 import { AdvancedSection } from "./sections/AdvancedSection";
 import { ReviewSection } from "./sections/ReviewSection";
 import { JobEditorTopBar } from "./JobEditorTopBar";
-import { JobEditorRail, type EditorRailSection } from "./JobEditorRail";
+import { JobEditorMobileNav, JobEditorRail, type EditorRailSection } from "./JobEditorRail";
 import { JobLivePreview, type PreviewJobDraft } from "./JobLivePreview";
 import { FocusModeShell } from "@/components/focus-mode/FocusModeShell";
 import { useUnsavedChangesGuard } from "@/components/focus-mode/useUnsavedChangesGuard";
@@ -428,6 +428,33 @@ export function JobForm({
     </>
   );
 
+  // Phones: the top bar only has room for the main save; "Save as draft"
+  // stays reachable in the wizard footer on the last step.
+  const topBarActions = (
+    <>
+      <Button
+        type="submit"
+        name="intent"
+        value="draft"
+        variant="ghost"
+        size="sm"
+        className="max-md:hidden"
+        onClick={validateBeforeSubmit}
+      >
+        Save as draft
+      </Button>
+      <Button
+        type="submit"
+        name="intent"
+        value="continue"
+        size="sm"
+        onClick={validateBeforeSubmit}
+      >
+        {submitLabel}
+      </Button>
+    </>
+  );
+
   return (
     <form ref={formRef} action={action} className="contents">
       {job ? <input type="hidden" name="jobId" value={job.id} /> : null}
@@ -456,7 +483,7 @@ export function JobForm({
             statusBadge={statusBadge}
             headerActions={headerActions}
             railActions={railActions}
-            actions={primaryActions}
+            actions={topBarActions}
           />
         }
       >
@@ -484,6 +511,11 @@ export function JobForm({
             content in normal flow instead; short drafts get a small gap
             before it rather than a forced full-viewport stretch.
           */}
+          <JobEditorMobileNav
+            sections={RAIL_SECTIONS}
+            active={activeSection}
+            onSelect={(key) => jumpToSection(key as SectionKey)}
+          />
           <div className="flex flex-col px-4 pb-8 pt-6 sm:px-6">
             <div className="space-y-10">
               {SECTIONS.map((s) => (
@@ -491,7 +523,7 @@ export function JobForm({
                   key={s.key}
                   id={s.key}
                   className={cn(
-                    "scroll-mt-6 rounded-2xl transition-colors duration-300",
+                    "scroll-mt-20 lg:scroll-mt-6 rounded-2xl transition-colors duration-300",
                     flashSection === s.key && "bg-destructive/10",
                   )}
                 >
