@@ -33,6 +33,29 @@ Before tagging, write the version section below. Use these headings when they
 apply: `Added`, `Changed`, `Fixed`, `Removed`, `Security`. Note migrations and
 anything an operator must do before upgrading.
 
+## [0.3.3]
+
+A patch release for Harly AI on OpenAI reasoning models and the public demo.
+No database migrations.
+
+### Fixed
+
+- Chat follow-ups failed on OpenAI reasoning models (such as `gpt-6-*`) with
+  "function_call was provided without its required 'reasoning' item": earlier
+  turns now replay tool calls inline instead of as stored item references.
+- AI scoring fell back to Harly's built-in rules on those models because
+  `temperature` was sent to a model that rejects it.
+- Harly AI cards (`presentUi`) no longer flicker while they stream: finished
+  blocks stay on screen while the next one arrives.
+- Replies follow the language of the latest message only.
+- `harly init` now writes a `compose.yaml` that forwards the `DEMO_*` settings
+  and the database pool sizes; an empty `DEMO_CDN_URL` falls back to the CDN.
+
+### Upgrade notes
+
+- Existing CLI installations keep their `compose.yaml`. On a demo instance, add
+  the `DEMO_*` lines to its `x-env` block by hand (see the generated template).
+
 ## [0.3.2]
 
 A patch release for the public demo and scheduler reliability. No database
