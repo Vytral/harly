@@ -31,6 +31,7 @@ Example Nginx server block:
 server {
     listen 443 ssl;
     server_name careers.example.com;
+    client_max_body_size 30m;
 
     location / {
         proxy_pass http://127.0.0.1:3000;
@@ -41,8 +42,26 @@ server {
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
     }
+
+    # The MCP endpoint can answer with a server-sent event stream.
+    location /mcp {
+        proxy_pass http://127.0.0.1:3000;
+        proxy_buffering off;
+        proxy_cache off;
+        gzip off;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-Peer 127.0.0.1;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
 }
 ```
+
+Your proxy must meet the same requirements as the bundled Caddy configuration:
+
+- Accept request bodies up to 30 MB. Document uploads can be up to 25 MB, and the extra room covers request overhead. In Nginx, set `client_max_body_size 30m;`.
+- Do not buffer or compress responses from `/mcp` and `/mcp/*`. The [MCP server](/developers/mcp) can stream server-sent events, and buffering delays or breaks them.
 
 Point your existing certificate management (Certbot, an ACME client, or a load balancer) at the same hostname; Harly does not manage TLS in this mode.
 

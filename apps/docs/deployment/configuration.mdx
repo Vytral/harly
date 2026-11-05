@@ -102,6 +102,40 @@ HARLY_SCHEDULER_MEMORY=192m
 HARLY_CADDY_MEMORY=128m
 ```
 
+## Database connection pools
+
+Each Harly process keeps its own PostgreSQL connection pools. The generated
+`compose.yaml` forwards these variables to the app, scheduler, and migrate
+services. Leave them unset to use the defaults.
+
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `HARLY_DB_POOL_MAX` | `10` | Main application pool used by web requests and background jobs. |
+| `HARLY_DB_LOCK_POOL_MAX` | `20` | Reserved pool for cron overlap guards. Each running cron job holds one connection for its whole run. |
+| `HARLY_DB_MAILBOX_LOCK_POOL_MAX` | `4` | Reserved pool for per-mailbox sync locks. |
+
+Lock pools are separate from the main pool so that long-running jobs holding a
+lock can never take every connection away from web requests. The cron and
+mailbox lock pools are also separate from each other because the mailbox-sync
+cron holds a cron lock while it takes a mailbox lock. Harly opens a lock pool
+only when a process first takes that kind of lock.
+
+```dotenv
+# Example: larger app pool on a busy installation
+HARLY_DB_POOL_MAX=20
+HARLY_DB_LOCK_POOL_MAX=20
+HARLY_DB_MAILBOX_LOCK_POOL_MAX=4
+```
+
+Size the pools against PostgreSQL `max_connections` (`100` by default). A
+single Harly process can open up to `HARLY_DB_POOL_MAX + HARLY_DB_LOCK_POOL_MAX +
+HARLY_DB_MAILBOX_LOCK_POOL_MAX` connections, which is 34 with the defaults.
+Multiply that by the number of Harly processes that connect to the database,
+and keep the total below `max_connections` with headroom for backups,
+`psql` sessions, and other clients. If you raise the pools, raise
+`max_connections` on PostgreSQL as well, or lower the lock pools on small
+installations.
+
 ## Optional integration credentials
 
 Installation-level OAuth credentials enable each integration's connect flow.
