@@ -21,8 +21,9 @@ Use Harly Sign when candidates should sign inside Harly's candidate portal.
   <Step title="Configure signing controls">
     Select **Signature settings** or open **Settings → Signature**. You can
     enable self-signing, remote signing links, saved signatures, the signing
-    timeline, and email OTP for remote recipients. Remote links expire after
-    30 days by default and accept a value from 1 to 365 days.
+    timeline, and email OTP for remote recipients. You can also set the link
+    lifetime and automatic reminders. See
+    [reminders and link lifetime](#reminders-and-link-lifetime).
   </Step>
   <Step title="Create the offer">
     Open an active candidate application, choose **New offer**, enter the offer
@@ -31,14 +32,16 @@ Use Harly Sign when candidates should sign inside Harly's candidate portal.
   </Step>
   <Step title="Place required fields and send">
     Choose **Send offer**. With Native selected, Harly opens **Place signature
-    fields**. Review the automatically seeded signature field, add more
-    **Signature field** or **Text field** controls, position them on the PDF,
-    and select **Send offer**.
+    fields**. Add **Signature**, **Date**, or **Text** fields, position them on
+    the PDF, and select **Send offer**. Documents use the same dialog, titled
+    **Prepare for signing**, where you also add signers in signing order. See
+    [documents](/product/documents#send-a-document-for-signature).
   </Step>
   <Step title="Verify completion">
-    The candidate opens the secure link, completes every required field, and
-    verifies the email OTP if you enabled it. Confirm the offer/document state
-    on the Harly record before marking the application hired.
+    The candidate opens the secure link, verifies the email OTP if you enabled
+    it, completes every required field, and accepts the e-sign disclosure.
+    Confirm the offer/document state on the Harly record before marking the
+    application hired.
   </Step>
 </Steps>
 
@@ -46,6 +49,30 @@ Use Harly Sign when candidates should sign inside Harly's candidate portal.
   Native signing requires at least one required signature field. If no field is
   saved, Harly keeps the offer in draft and refuses to send it.
 </Warning>
+
+### Reminders and link lifetime
+
+Set these values in **Settings → Signature**:
+
+| Setting | Default | Range | Behavior |
+| --- | --- | --- | --- |
+| **Link lifetime (days)** | 30 | 3 to 365 | Each signer's clock starts when they are invited, not when the document is sent. |
+| **Remind signers every (days)** | 3 | 0 to 30 | Counted from when the current signer was invited or last reminded. `0` turns automatic reminders off. |
+| **Maximum automatic reminders** | 3 | 0 to 10 | Per signer. Manual reminders from the document page do not count toward this limit. |
+
+Each reminder emails a fresh link. Links from earlier invitations and reminders
+keep working until the signer finishes.
+
+### Consent and evidence
+
+Before signing, every external signer accepts an e-sign disclosure. Harly stamps
+the consent time on the server, not from the signer's browser, and stores it
+with the disclosure version. Harly also records the signer's IP address,
+browser, the document fingerprint, and what they entered. Documents signed
+before Harly 0.3.0 have no consent timestamp because none was recorded.
+
+When signing completes, Harly produces a completion certificate. Download it
+from the document page next to the signed PDF.
 
 ## DocuSeal
 
@@ -86,7 +113,11 @@ DocuSeal**.
 
 - A candidate redirect can show `pending` while webhook verification is still
   running.
-- A voided or expired submission must not be treated as signed.
+- A voided or expired submission must not be treated as signed. Voiding a
+  native request keeps signatures already given in the audit record, but they
+  are not applied to a new request.
+- A declined request ends for every signer. Edit the document and send it
+  again.
 - If the provider is unavailable, keep the offer record and retry the provider
   operation after checking the integration status.
 - Never mark a document signed by editing the database or trusting an email
