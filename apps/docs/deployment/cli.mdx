@@ -1,6 +1,6 @@
 ---
 title: "Deploy with the Harly CLI"
-description: "Install, deploy, upgrade, and automate a self-hosted Harly instance from the terminal using the @harly/cli v0.5.2 command reference."
+description: "Install, deploy, upgrade, and automate a self-hosted Harly instance from the terminal using the @harly/cli v0.6.0 command reference."
 ---
 
 The Harly CLI installs and operates a self-hosted Harly deployment. It
@@ -14,6 +14,7 @@ backups and upgrades.
 - Generate and launch a local Docker deployment.
 - Automate the installer from CI or an agent without unexpected prompts.
 - Provision Railway or prepare Fly.io and DigitalOcean deployments.
+- Check an installation at a glance with `harly status`.
 - Interpret JSON results, exit codes, and readiness failures.
 
 ## Prerequisites
@@ -98,18 +99,43 @@ waiting. On timeout, it shows how to inspect Caddy's logs and retry.
 
 ### Install the CLI globally
 
-After a successful interactive install, launch, or resume using npx, the CLI
-offers to install its current version globally. If accepted, you can run
-`harly doctor`, `harly backup`, and other commands from the installation
-directory. Existing global installations are detected before prompting.
+When you run the CLI through npx in a terminal, it asks once:
+`Install Harly globally so you can just type harly?` The default answer is yes.
+The CLI asks at the start of the interactive menu and after `init`, `launch`,
+and `resume`. After installing, it checks that `harly` resolves. If npm's global
+bin directory is not on your `PATH`, it prints the exact command to add it for
+zsh, bash, fish, or PowerShell.
 
-This optional step requires its own confirmation, even with `--yes`. Declining,
-cancelling the prompt, or an npm permissions error keeps the deployment
-successful. If npm's global bin directory is outside your PATH, the CLI tells
-you which directory to add. You can always keep using `npx @harly/cli`.
+The offer follows these rules:
+
+- It is skipped when the CLI is already installed globally.
+- `--yes` never accepts it implicitly.
+- It is never shown in CI, in pipes, or with `--json`.
+- Declining, cancelling, or an npm permissions error keeps the deployment successful. You can keep using `npx @harly/cli`.
+
+The CLI remembers a declined offer in `config.json` under
+`$XDG_CONFIG_HOME/harly` (default `~/.config/harly`), or `%APPDATA%\harly` on
+Windows. Set `HARLY_CONFIG_DIR` to use another directory.
+
+To install the CLI explicitly at any time, run `install-global`:
+
+```bash
+npx @harly/cli install-global          # asks first in a terminal
+npx @harly/cli install-global --yes    # for scripts
+npx @harly/cli install-global --dry-run
+```
+
+`--dry-run` previews the installation without running it.
 
 `harly update` upgrades the application. Upgrade the global CLI separately with
 `npm install -g @harly/cli@latest`.
+
+### CLI update notices
+
+In a terminal, the header notes when a newer CLI version is published. The CLI
+checks the npm registry at most once a day, with a short timeout. Set
+`HARLY_NO_UPDATE_CHECK=1` to turn the check off. It never runs in CI, with
+`--json`, or with `--quiet`.
 
 ## Configure installer inputs
 
@@ -167,13 +193,41 @@ The supported environment values are:
 | `S3_ENDPOINT` | Optional S3-compatible endpoint. |
 | `S3_PUBLIC_URL` | Optional public object URL. |
 
+## Get help
+
+Run `harly --help` to list commands grouped by purpose, with global options and
+examples. For one command's options and examples, run either form:
+
+```bash
+harly help status
+harly status --help
+```
+
+`harly --json help` returns the command list under `commands` and the grouping
+under `groups`.
+
+If you mistype a command or option, the CLI suggests the closest match instead
+of printing the full help:
+
+```text
+$ harly docter
+Did you mean harly doctor?
+```
+
+Failures end with suggested next steps. With `--json`, these are returned under
+`next`. Add `--verbose` to include the stack trace for unexpected errors.
+
 ## Automate the CLI
 
 Global flags work before or after a subcommand when unambiguous:
 
 ```text
---json --verbose --non-interactive --yes --dry-run --force --timeout <seconds>
+--json --quiet --no-color --verbose --non-interactive --yes --dry-run --force --timeout <seconds>
 ```
+
+`--quiet` hides the header, hints, and update notices but keeps results and
+errors. `--no-color`, or the `NO_COLOR` environment variable, removes color from
+all output.
 
 Use `--non-interactive` in CI and agent workflows. It never prompts; missing
 values fail before host or provider operations begin.
@@ -326,6 +380,46 @@ secrets file.
 
 ## Operate an installation
 
+### See installation status
+
+`status` summarizes an installation on one screen and suggests next steps:
+
+```bash
+harly status ./harly
+```
+
+```text
+INSTANCE
+✓ URL      https://ats.example.com  answers ready · 120 ms
+✓ Version  v0.2.4  latest
+SERVICES
+✓ Database     running · healthy
+✓ Application  running · healthy
+HOST
+✓ Disk         23.4 GB free
+✓ Last backup  2 days ago · 12 MB
+✓ Certificate  Let's Encrypt · expires in 61 days
+```
+
+The CLI only shows what it can verify:
+
+| Item | Source |
+| --- | --- |
+| URL | The public `/api/health/ready` endpoint. |
+| Version | The running version compared with the release manifest. Offline, it shows `latest unknown`. |
+| Containers and database | `docker compose ps`. |
+| Disk | Free space on the host. |
+| Last backup | The newest archive in `backups/`. |
+| Certificate | A TLS handshake with the public host. |
+
+Warnings do not change the exit code. These include a backup older than a week,
+low disk space, a certificate expiring within 14 days, or a newer release.
+`status` exits `1` when a service is stopped or the readiness check fails, so
+you can use it in monitoring scripts. `--json` prints the same data as one JSON
+document.
+
+`doctor` is unchanged. Use it for detailed checks and `--fix`.
+
 ### Check readiness
 
 ```bash
@@ -350,6 +444,55 @@ prerelease. The flow creates a rollback archive, pulls that exact version,
 runs the database migration once, restarts the services, and waits for
 readiness.
 
+Before running any migration, `update` checks the pulled release's image
+digest against the release manifest. If the digests differ, `update` refuses
+the release.
+
+`update` does not rewrite `compose.yaml`. Installations generated by an older
+CLI keep their original file. See
+[Database pool settings in compose.yaml](#database-pool-settings-in-compose-yaml).
+
+### Update from the app
+
+`harly updater` is the host-side half of **Settings → Updates** in the app:
+
+```bash
+harly updater install-service ./harly   # install and start a systemd service
+harly updater status ./harly
+harly updater run                       # run under another supervisor
+```
+
+The updater polls the instance for requested and scheduled updates, runs
+`harly update`, and rolls back if the update fails. See
+[Update from the app](/self-hosting/operations#update-from-the-app) for setup
+and options.
+
+### Database pool settings in compose.yaml
+
+`harly init` writes a `compose.yaml` that forwards these database pool sizes
+from `.env` to the app and scheduler:
+
+| Variable | Purpose |
+| --- | --- |
+| `HARLY_DB_POOL_MAX` | Main connection pool size. Default `10`. |
+| `HARLY_DB_LOCK_POOL_MAX` | Dedicated pool for cron advisory locks. Default `20`. |
+| `HARLY_DB_MAILBOX_LOCK_POOL_MAX` | Dedicated pool for mailbox-sync advisory locks. Default `4`. |
+
+An existing installation keeps its old `compose.yaml`, and `harly update` does
+not rewrite it. To set these values on an existing install, add the lines by
+hand under `x-env: &env` in `compose.yaml`:
+
+```yaml
+x-env: &env
+  # ...existing entries
+  HARLY_DB_POOL_MAX: ${HARLY_DB_POOL_MAX:-}
+  HARLY_DB_LOCK_POOL_MAX: ${HARLY_DB_LOCK_POOL_MAX:-}
+  HARLY_DB_MAILBOX_LOCK_POOL_MAX: ${HARLY_DB_MAILBOX_LOCK_POOL_MAX:-}
+```
+
+Then set the values in `.env` and restart the services with
+`docker compose up -d`.
+
 ### Restore or uninstall
 
 ```bash
@@ -366,7 +509,7 @@ volumes; it is intentionally separate from the default uninstall behavior.
 | Code | Meaning |
 | --- | --- |
 | `0` | Successful completion. |
-| `1` | Operational failure. |
+| `1` | Operational failure. `status` also exits `1` when a service or the public endpoint is down. |
 | `2` | Invalid usage or configuration. |
 | `130` | Ctrl+C cancellation. |
 
