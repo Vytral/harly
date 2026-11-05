@@ -50,6 +50,16 @@ Point your existing certificate management (Certbot, an ACME client, or a load b
   The Nginx block above is a standard reverse-proxy pattern, not a file shipped by Harly. Adapt it to your existing proxy configuration.
 </Note>
 
+### Set `HARLY_URL` to the public hostname
+
+Harly builds upload presign URLs, authenticated file URLs, OAuth callbacks, redirects, page metadata, outbound webhooks, and integration callbacks from `HARLY_URL`, not from the incoming request. Set it to the public origin that candidates and integrations reach:
+
+```dotenv
+HARLY_URL=https://careers.example.com
+```
+
+Never point `HARLY_URL` at the container's internal bind address. In production, Harly rejects `HARLY_URL` values that use `http://` or resolve to `localhost`, the IPv4 loopback range `127.0.0.0/8`, `::1`, `0.0.0.0`, or `::`, and refuses to start. See [`HARLY_URL` validation](/deployment/configuration#harly-url-validation) for the full list of rules.
+
 ### Trust your reverse proxy for client IPs
 
 By default, Harly reads the client IP from the rightmost hop in `X-Forwarded-For`. In `external` mode that hop is your reverse proxy, not the end user. Workspace IP allowlists, per-IP rate limits, and audit log `ipAddress` fields will all see the proxy's address instead of the real client until you tell Harly which peer to trust.
