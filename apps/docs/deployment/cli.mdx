@@ -391,7 +391,7 @@ harly status ./harly
 ```text
 INSTANCE
 ✓ URL      https://ats.example.com  answers ready · 120 ms
-✓ Version  v0.2.4  latest
+✓ Version  v0.3.3  latest
 SERVICES
 ✓ Database     running · healthy
 ✓ Application  running · healthy
@@ -418,7 +418,7 @@ low disk space, a certificate expiring within 14 days, or a newer release.
 you can use it in monitoring scripts. `--json` prints the same data as one JSON
 document.
 
-`doctor` is unchanged. Use it for detailed checks and `--fix`.
+For detailed checks and automatic repairs, use `harly doctor` (and `--fix`).
 
 ### Check readiness
 
@@ -469,14 +469,12 @@ and options.
 
 ### Database pool settings in compose.yaml
 
-`harly init` writes a `compose.yaml` that forwards these database pool sizes
-from `.env` to the app and scheduler:
-
-| Variable | Purpose |
-| --- | --- |
-| `HARLY_DB_POOL_MAX` | Main connection pool size. Default `10`. |
-| `HARLY_DB_LOCK_POOL_MAX` | Dedicated pool for cron advisory locks. Default `20`. |
-| `HARLY_DB_MAILBOX_LOCK_POOL_MAX` | Dedicated pool for mailbox-sync advisory locks. Default `4`. |
+`harly init` writes a `compose.yaml` that forwards the database pool sizes
+(`HARLY_DB_POOL_MAX`, `HARLY_DB_LOCK_POOL_MAX`, and
+`HARLY_DB_MAILBOX_LOCK_POOL_MAX`) from `.env` to the app, scheduler, and
+migrate services. See
+[Database connection pools](/deployment/configuration#database-connection-pools)
+for defaults and sizing.
 
 An existing installation keeps its old `compose.yaml`, and `harly update` does
 not rewrite it. To set these values on an existing install, add the lines by
