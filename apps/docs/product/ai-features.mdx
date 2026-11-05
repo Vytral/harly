@@ -52,6 +52,48 @@ reads it and decides.
 This is a triage signal, not a filter. Use it to prioritize which applications
 to open first, not to skip reading them.
 
+Scoring is evidence-backed:
+
+- **Verified quotes.** Each criterion gets a score from 0 to 100 and a short
+  quote copied from the résumé or application answers. Harly checks every quote
+  against the text the model received and drops any quote it cannot find. A
+  criterion without a verified quote shows no evidence instead of an invented
+  one.
+- **One rubric per job.** When a job has a published rubric, every candidate
+  for that job is scored against the same criteria, in the same order, with
+  the same labels. This keeps scores comparable across applicants.
+- **Résumé and answers as data.** Harly passes the résumé and application
+  answers to the model as clearly delimited, untrusted data. Instructions
+  written inside a résumé are not followed.
+- **No names or locations.** The candidate's name and location are never part
+  of the scoring prompt, whether or not anonymization is on. They are not
+  needed to judge fit.
+- **Malformed answers are salvaged.** If the provider returns a score in a
+  slightly broken format, Harly recovers the usable result instead of falling
+  back to its built-in rules.
+- **Bulk scoring skips duplicates.** Scoring many applications at once does not
+  re-score the same application twice.
+
+The evaluation card shows which engine produced the score. An AI score shows the
+model name. A score from Harly's built-in rules shows **Harly Algorithm** with
+the rules version, and a manual run that fell back shows the warning "Scored
+with Harly's built-in rules: the AI provider didn't return a usable answer."
+
+<Accordion title="Troubleshooting: scores fall back to Harly's built-in rules">
+  Harly uses its built-in rules when the provider does not return a usable
+  answer. Check the following:
+
+  - The API key in **Settings → AI** is valid and has quota.
+  - The selected model is available to your provider account.
+  - You run Harly 0.3.3 or later if you use an OpenAI reasoning model (the
+    o-series, or `gpt-5` and newer). Earlier versions sent a `temperature`
+    setting that these models reject, so every score fell back to rules. From
+    0.3.3, Harly omits `temperature` for these models.
+
+  After you fix the cause, run the evaluation again from the candidate's
+  evaluation card.
+</Accordion>
+
 ### Assisted drafting
 
 Draft candidate messages and job descriptions you review and edit before
@@ -120,6 +162,48 @@ Examples:
 - "Summarize this candidate's relevant experience."
 - "What questions has this candidate not answered yet?"
 
+#### Open the assistant
+
+The assistant launcher is always visible at the bottom of the dashboard and
+shares that surface with notifications. Select it to open the chat panel.
+
+In the panel:
+
+- Press `Enter` to send a message.
+- Type `@` to mention a candidate, job, or other record.
+- Press `Escape` to close the panel. Focus returns to where you were.
+
+Press `?` anywhere in the dashboard to see the full list of keyboard shortcuts.
+
+#### Rich answers
+
+Besides text, the assistant can answer with interactive blocks: candidate and
+task lists, tables, bar and line charts, stat tiles, choice buttons, short
+forms, and notes. Blocks stay on screen while the rest of the answer streams in.
+
+#### Reply language
+
+The assistant replies in the language of your latest message, not the language
+of earlier turns or of the workspace data. Product names, candidate names, URLs,
+and values you typed are kept as written.
+
+#### Brand the assistant
+
+Open **Settings → AI** and use the **Assistant** card to change how the
+assistant appears to your team. Only your workspace sees the change.
+
+- **Name**: up to 24 characters. The default is "Harly AI".
+- **Avatar**: the Harly mark, or your own square PNG, JPG, SVG, or WEBP image up
+  to 5 MB.
+- **Show "Powered by Harly"**: adds a small attribution under the message box
+  when the assistant has a custom name.
+
+<Note>
+  Multi-turn chat works with OpenAI reasoning models (the o-series, or `gpt-5`
+  and newer) from Harly 0.3.3. On earlier versions, follow-up messages after a
+  tool call could fail on these models.
+</Note>
+
 ### Automation authoring
 
 Harly AI can propose complete workflows in the Automations Builder. It can
@@ -145,7 +229,7 @@ for a feature you have not enabled or used.
 
 | Feature | What is sent to the provider | With candidate anonymization on |
 | --- | --- | --- |
-| Candidate scoring (on apply, manually, in bulk, or by an `ai_score` automation) | Job title, description, requirements, sector, experience level, education and keywords. Candidate name, headline, location, skills, years of experience, résumé text (first 12,000 characters) and application answers (600 characters each) | Name becomes "Candidate". Location, email, phone, links and addresses are not sent. Headline, résumé and answers are redacted. Job text is unchanged. |
+| Candidate scoring (on apply, manually, in bulk, or by an `ai_score` automation) | Job title, description, requirements, sector, experience level, education and keywords, plus the job's published rubric criteria. Candidate headline, skills (up to 20), years of experience, résumé text (first 12,000 characters) and application answers (600 characters each). Candidate name and location are never sent. | Headline, résumé and answers are redacted. Job text is unchanged. |
 | Semantic matching (OpenAI embeddings only) | Job text. Candidate name, headline, skills, years of experience and résumé text, to build each candidate's vector | Candidate name is not included, and the headline and résumé are redacted. Location is never included. A vector built before the setting was turned on stays as it was until the candidate's record is next edited. |
 | Duplicate detection | Name, email, headline and skills of the candidate and of up to 10 similar candidates | Paused. Nothing is sent. |
 | Interview note summary | Notes (first 8,000 characters), candidate name, job title, interview type | Candidate name is removed from the notes and replaced with "Candidate". |
