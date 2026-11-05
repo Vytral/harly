@@ -29,6 +29,10 @@ In production (`NODE_ENV=production`), `HARLY_URL` must:
 Outside production, `http://` is allowed so local development against
 `http://localhost:3000` continues to work.
 
+If `HARLY_URL` is unset, Harly falls back to the legacy `NEXT_PUBLIC_APP_URL`
+or `BETTER_AUTH_URL` and applies the same rules. Set `HARLY_URL` explicitly;
+the fallbacks exist only for older deployments.
+
 If validation fails, Harly throws at startup with a message such as
 `HARLY_URL must use HTTPS in production.` or `HARLY_URL must use a reachable
 public hostname, not a local or bind address.`. Fix the value in `.env` (or
