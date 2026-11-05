@@ -56,6 +56,27 @@ status changes because of an archive.
   </Step>
 </Steps>
 
+## Review queue
+
+The review queue lists the applications waiting on your review. Open it from
+the **Review queue** tab on **Candidates**
+(`/dashboard/candidates?queue=review`), from **Candidates to review** on the
+dashboard, or with the `g` `r` keyboard shortcut.
+
+An application is in your queue when it's active, sits in a screening or
+interview stage, and you haven't submitted a scorecard for it at its current
+stage. Scorecards from other teammates don't clear it from your queue. An
+interview-stage application with no interview scheduled yet isn't in the
+queue, because it needs scheduling first. The longest-waiting applications come
+first.
+
+When you open a candidate from the queue, the previous and next buttons (and
+the `j` and `k` shortcuts) walk the queue instead of the full directory. The
+pager follows whichever list you opened the candidate from, such as a filtered
+directory or a pipeline. In the review queue only, Harly auto-advances to the
+next candidate after you submit a scorecard or move the application. After the
+last item, Harly shows that the queue is cleared.
+
 ## Customize your pipeline
 
 Stages belong to each job. Select **Edit stages** on the pipeline to add,
@@ -65,9 +86,49 @@ rules are in [Jobs](/product/jobs#customize-your-pipeline).
 
 ## Reject and hire
 
-Reject with a reason so reporting and candidate communication stay consistent.
-Rejection is a per-application outcome; a candidate rejected for one role can
-still be active for another.
+Every rejection records a reason so reporting and candidate communication stay
+consistent. Rejection is a per-application outcome. A candidate rejected for one
+role can still be active for another.
+
+Harly opens the same reject dialog from every reject entry point: the candidate
+record, bulk actions, and dropping a card on **Reject** on the pipeline board.
+In the dialog, you:
+
+1. Choose a **Reason**. This is required, and you can't confirm the rejection
+   without it.
+2. Optionally add an **Internal note** (up to 2,000 characters). Only your team
+   sees it.
+3. Decide whether to **Send rejection email**. When it's on, pick a
+   **Template**. The default is your workspace's active rejection template,
+   with Harly's built-in rejection email as the fallback. Select **Preview
+   email** to check the message first. For bulk rejections, Harly sends the
+   email individually to each candidate. When it's off, Harly doesn't email the
+   candidate about the decision.
+
+The reason appears on the application and in the activity timeline.
+
+### Rejection reasons
+
+Each workspace has its own reason catalog. It starts with seven defaults:
+
+- Not enough experience
+- Skills mismatch
+- Salary expectations
+- Location/visa
+- Position filled
+- Withdrew interest
+- Other
+
+Edit the catalog under **Settings** > **Rejection reasons**. You can add,
+rename, archive, and restore reasons. Harly keeps at least one reason active.
+Reasons are internal and never shown to candidates. Renaming a reason updates
+its label everywhere, while each timeline entry keeps the label used at the time.
+
+<Note>
+  Rejections from the [REST API](/developers/api-reference#reject-an-application)
+  and from Harly AI or [MCP](/developers/mcp) tools don't choose a reason. Harly
+  records **Other** for them and still sends the rejection email.
+</Note>
 
 Hiring an application marks the role filled for that candidate and closes the
 loop for the hiring team. Confirm any signed offer from the [document
