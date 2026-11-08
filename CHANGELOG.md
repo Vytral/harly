@@ -33,6 +33,52 @@ Before tagging, write the version section below. Use these headings when they
 apply: `Added`, `Changed`, `Fixed`, `Removed`, `Security`. Note migrations and
 anything an operator must do before upgrading.
 
+## [0.3.4]
+
+A release that makes a fresh, empty installation usable without a team or an AI
+provider. No database migrations.
+
+### Fixed
+
+- A job could not be created on a new instance. Only the title is required now;
+  the description, education, keywords and a teammate are optional. Publishing a
+  job still needs a description or at least one section, and says so.
+- In the job form, revealing a field or adding a section scrolled the page and
+  left it blank. Hidden native controls escaped the form's clipped container and
+  stretched the document; the form and its fullscreen shells now contain them.
+- The empty space under the job form, caused by a fixed-width form column that
+  squeezed the live preview between 1024 and 1280 px.
+- Setup checklist: the skip control and the sample-data button no longer break
+  the alignment of the card.
+
+### Changed
+
+- Harly AI buttons, the chat launcher and shortcut, command-palette entries and
+  AI panels are hidden until an AI provider is configured and usable. Actions
+  that need AI keep returning a controlled error instead of failing.
+- The job form preview follows what you edit: Details, Description,
+  Compensation, the application form (required, optional and disabled fields
+  animate) and Advanced each move the preview to the matching block. The public
+  page preview is offered only once the job is published.
+- The first-run dashboard has a welcome state with the next steps, and empty
+  charts show a message instead of a flat zero line.
+- The onboarding wizard has two optional steps (branding and profile). It no
+  longer asks for the company name when `HARLY_ORG_NAME` is set, and it never
+  requires AI or teammates.
+- "Draft for me" in the job description is now "Insert outline".
+
+### Added
+
+- `HARLY_ORG_NAME`: optional organization name that `harly init` writes to
+  `.env` and the onboarding wizard uses as the default.
+- "Connect AI (optional)" in the setup checklist and the first-run dashboard,
+  shown only while AI is not configured.
+
+### Upgrade notes
+
+- Existing installations keep their `.env` and `compose.yaml`. To prefill the
+  company name on a new deployment, set `HARLY_ORG_NAME`.
+
 ## [0.3.3]
 
 A patch release for Harly AI on OpenAI reasoning models and the public demo.
