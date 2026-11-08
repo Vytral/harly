@@ -14,6 +14,7 @@ import {
 } from "@harly/db";
 import { getWorkspaceContext } from "@/features/workspaces/context";
 import { getHarlyPublicOrigin } from "@/lib/public-origin";
+import { getWorkspaceAiStatus } from "@/lib/ai/config";
 import { getSampleDataStatus } from "@/features/sample-data/service";
 import {
   buildSetupChecklist,
@@ -63,6 +64,7 @@ export async function getSetupChecklist(): Promise<SetupChecklist> {
     automationsRow,
     sampleStatus,
     preferences,
+    aiStatus,
   ] = await Promise.all([
     db
       .select({
@@ -131,6 +133,7 @@ export async function getSetupChecklist(): Promise<SetupChecklist> {
       .where(eq(workflowDefinitions.workspaceId, workspaceId)),
     getSampleDataStatus(workspaceId),
     readChecklistPreferences({ workspaceId, userId }),
+    getWorkspaceAiStatus(workspaceId),
   ]);
 
   const settings = settingsRow[0];
@@ -144,6 +147,8 @@ export async function getSetupChecklist(): Promise<SetupChecklist> {
     ),
     automationCount: automationsRow[0]?.value ?? 0,
     teammateInvited: (membersRow[0]?.value ?? 0) > 1 || (invitesRow[0]?.value ?? 0) > 0,
+    // Same rule the dashboard layout uses to enable the AI assistant.
+    aiConfigured: aiStatus.enabled && aiStatus.hasApiKey && aiStatus.encryptionReady,
   };
 
   const model = buildSetupChecklist({ facts, preferences, canManage });

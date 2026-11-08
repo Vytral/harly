@@ -19,6 +19,7 @@ const EMPTY_FACTS: ChecklistFacts = {
   calendarConnected: false,
   automationCount: 0,
   teammateInvited: false,
+  aiConfigured: false,
 };
 
 const NONE: ChecklistPreferences = { dismissed: false, skipped: [] };
@@ -40,10 +41,10 @@ function doneKeys(model: ReturnType<typeof build>) {
 }
 
 describe("buildSetupChecklist: derivation matrix", () => {
-  it("lists the guided steps in order, starting with the teammate invite", () => {
+  it("lists the guided steps in order, starting with the first job", () => {
     const model = build();
     expect(model.items.map((item) => item.key)).toEqual([...CHECKLIST_ITEM_KEYS]);
-    expect(model.items[0].key).toBe("invite_teammate");
+    expect(model.items[0].key).toBe("create_job");
     expect(model.items.at(-1)?.key).toBe("automate_workflow");
   });
 
@@ -52,7 +53,7 @@ describe("buildSetupChecklist: derivation matrix", () => {
     expect(model.completed).toBe(0);
     expect(model.percent).toBe(0);
     expect(model.allDone).toBe(false);
-    expect(model.nextStep?.key).toBe("invite_teammate");
+    expect(model.nextStep?.key).toBe("create_job");
     expect(model.showCard).toBe(true);
   });
 
@@ -63,6 +64,7 @@ describe("buildSetupChecklist: derivation matrix", () => {
     ["pipeline_candidates", { applicationCount: 1 }],
     ["connect_email", { emailConnected: true }],
     ["connect_calendar", { calendarConnected: true }],
+    ["connect_ai", { aiConfigured: true }],
     ["automate_workflow", { automationCount: 1 }],
   ] as const)("marks %s done only from its own fact", (key, fact) => {
     const model = build(fact);
@@ -72,7 +74,17 @@ describe("buildSetupChecklist: derivation matrix", () => {
   it("does not treat a job as published when it is only a draft", () => {
     const model = build({ jobCount: 1, publishedJobCount: 0 });
     expect(doneKeys(model)).toEqual(["create_job"]);
-    expect(model.nextStep?.key).toBe("invite_teammate");
+    expect(model.nextStep?.key).toBe("publish_job");
+  });
+
+  it("offers AI as an optional, skippable step", () => {
+    const ai = build().items.find((item) => item.key === "connect_ai");
+    expect(ai?.optional).toBe(true);
+    expect(ai?.title).toMatch(/optional/i);
+    const skipped = build({}, { skipped: ["connect_ai"] }).items.find(
+      (item) => item.key === "connect_ai",
+    );
+    expect(skipped?.skipped).toBe(true);
   });
 
   it("advances the next step to the first unfinished row", () => {
@@ -89,6 +101,7 @@ describe("buildSetupChecklist: derivation matrix", () => {
       emailConnected: true,
       calendarConnected: true,
       automationCount: 3,
+      aiConfigured: true,
     });
     expect(model.allDone).toBe(true);
     expect(model.percent).toBe(100);
@@ -112,17 +125,20 @@ describe("buildSetupChecklist: dismiss and skip", () => {
   });
 
   it("skips optional steps and moves the next step past them", () => {
-    const model = build({}, { skipped: ["invite_teammate"] });
+    const model = build(
+      { jobCount: 1, publishedJobCount: 1, applicationCount: 1 },
+      { skipped: ["invite_teammate"] },
+    );
     const invite = model.items.find((item) => item.key === "invite_teammate");
     expect(invite?.skipped).toBe(true);
-    expect(model.nextStep?.key).toBe("create_job");
+    expect(model.nextStep?.key).toBe("connect_email");
   });
 
   it("ignores skips on required steps", () => {
     const model = build({}, { skipped: ["create_job"] });
     const createJob = model.items.find((item) => item.key === "create_job");
     expect(createJob?.skipped).toBe(false);
-    expect(model.nextStep?.key).toBe("invite_teammate");
+    expect(model.nextStep?.key).toBe("create_job");
   });
 
   it("does not mark a done optional step as skipped", () => {
@@ -141,7 +157,7 @@ describe("buildSetupChecklist: dismiss and skip", () => {
         applicationCount: 1,
         emailConnected: true,
       },
-      { skipped: ["invite_teammate", "connect_calendar", "automate_workflow"] },
+      { skipped: ["invite_teammate", "connect_calendar", "connect_ai", "automate_workflow"] },
     );
     expect(model.nextStep).toBeNull();
     expect(model.showCard).toBe(false);

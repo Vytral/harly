@@ -97,7 +97,10 @@ export function TodayInterviews({
             ))}
           </ul>
         ) : (
-          <EmptyHint icon={CalendarClock} text="No interviews today. Enjoy the calm." />
+          <EmptyHint
+            icon={CalendarClock}
+            text="No interviews today. Scheduled interviews show up here."
+          />
         )}
         {interviews.total > interviews.items.length ? (
           <Link
