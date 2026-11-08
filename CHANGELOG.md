@@ -51,7 +51,10 @@ more ways to sign in. Contains two database migrations (`0165`, `0166`); run
   installations start with password and access code, which need nothing
   external; existing ones keep the methods they already used.
 - Password accounts for candidates (scrypt, progressive lockout, session
-  rotation) with account recovery that does not need email: one-time recovery
+  rotation), set up after proving access through a sign-in provider, magic link
+  or a recruiter-issued access or password setup link. Unverified registration
+  cannot reserve another person's email and gain access to future applications.
+  Account recovery does not need email: one-time recovery
   codes shown once, and reset or access links a recruiter issues from the
   candidate's record. With email configured, candidates can also request a
   reset link.
@@ -96,6 +99,15 @@ more ways to sign in. Contains two database migrations (`0165`, `0166`); run
 
 ### Fixed
 
+- Published jobs keep the same readable-content requirements when edited in
+  the dashboard or through the API. The API can publish jobs whose content is
+  in sections, and empty HTML or nonbreaking spaces do not count as content.
+- Saving Ollama with its default endpoint checks whether local connections
+  are allowed before enabling AI.
+- The fullscreen automation builder can open Harly AI when a provider is
+  configured; it no longer reads an unavailable dashboard context.
+- The bundled OpenAPI documents match the current contracts, including the
+  finer API key scopes and title-only job drafts.
 - A job could not be created on a new instance. Only the title is required; the
   description, education, keywords and a teammate are optional. Publishing a
   job still needs a description or at least one section, in the app and in the

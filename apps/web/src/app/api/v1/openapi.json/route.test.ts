@@ -88,6 +88,17 @@ describe("GET /api/v1/openapi.json", () => {
     expect(Object.keys(spec.paths).filter((p) => p.includes("/automations"))).toEqual([]);
   });
 
+  it("keeps both shipped API snapshots aligned with the live contracts", async () => {
+    const spec = await (
+      await GET(new Request("https://harly.example/api/v1/openapi.json"))
+    ).json();
+    for (const filename of ["public/openapi.json", "../docs/openapi.json"]) {
+      const snapshot = JSON.parse(fs.readFileSync(path.resolve(filename), "utf8"));
+      expect(snapshot.paths, filename).toEqual(spec.paths);
+      expect(snapshot.components, filename).toEqual(spec.components);
+    }
+  });
+
   it("keeps the contract registry aligned with the implemented API routes", () => {
     const apiRoot = path.resolve(process.cwd(), "src/app/api/v1");
     const implementedRoutes: string[] = [];

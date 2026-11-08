@@ -25,16 +25,26 @@ data. It is optional and disabled until you enable it.
 
     | Method | Notes |
     | --- | --- |
+    | **Password** | Set up after signing in through another method or receiving a setup link from a recruiter. No email provider required. |
+    | **Access code** | A recruiter issues a one-time link from the candidate's record. Works without email or an external provider. |
     | **Magic link** | One-time email link, no password. Requires outbound email configured. |
     | **Google OAuth** | Candidates sign in with their Google account. |
     | **GitHub OAuth** | For technical roles where GitHub accounts are common. |
     | **LinkedIn OAuth** | For roles where candidates are likely to have LinkedIn. |
+    | **Passkey** | Candidates add a passkey from their profile after signing in. |
 
-    At least one method must be enabled. Magic link works without OAuth setup.
+    At least one usable method must stay enabled. Passkeys cannot be the only
+    method because candidates register them after signing in. New installations
+    start with password and access codes.
+
+    Password setup requires proof of access first: a sign-in provider, magic
+    link, or recruiter-issued access or password setup link. Entering an email
+    alone cannot create an account that receives that address's future applications.
   </Step>
   <Step title="Test the experience">
     Submit a test application from the career page, then open the portal at
-    `https://hiring.example.com/portal` and sign in with the test email address.
+    `https://hiring.example.com/portal`. Use an enabled sign-in method; without
+    outbound email, issue an access or password setup link from the candidate's record.
     Confirm you can see the application and its status.
   </Step>
 </Steps>

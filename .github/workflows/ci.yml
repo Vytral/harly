@@ -307,7 +307,12 @@ jobs:
           RUN_PIPELINE_STAGE_INTEGRATION=1
           RUN_MAILBOX_INTEGRATION=1
           RUN_MCP_OAUTH_INTEGRATION=1
+          RUN_JOB_CREATE_INTEGRATION=1
+          PORTAL_AUTH_INTEGRATION=1
           pnpm --filter web exec vitest run .integration.test.ts
+
+      - name: Run telemetry PostgreSQL store flows
+        run: TELEMETRY_TEST_PG_URL="$DATABASE_URL" pnpm --filter @harly/telemetry test
 
   hiring-e2e:
     name: Browser hiring and signing flows

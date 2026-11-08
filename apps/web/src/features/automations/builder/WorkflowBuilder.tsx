@@ -4,7 +4,6 @@ import { useCallback, useEffect, useMemo, useReducer, useRef, useState, useTrans
 import { toast } from "@/lib/notification-island/toast";
 
 import { cn, randomId } from "@/lib/utils";
-import { useAiEnabled } from "@/components/ai/AiAvailability";
 import { FocusModeShell } from "@/components/focus-mode/FocusModeShell";
 import { FocusModeTopBar } from "@/components/focus-mode/FocusModeTopBar";
 import { useUnsavedChangesGuard } from "@/components/focus-mode/useUnsavedChangesGuard";
@@ -141,10 +140,12 @@ export function WorkflowBuilder({
   initial,
   builderData,
   isNew = false,
+  aiConfigured = false,
 }: {
   initial: SerializedWorkflow | null;
   builderData: BuilderDataProps;
   isNew?: boolean;
+  aiConfigured?: boolean;
 }) {
   const [draft, setDraft] = useState<WorkflowDraft>(() =>
     initial
@@ -190,7 +191,7 @@ export function WorkflowBuilder({
   );
   const [conflictOpen, setConflictOpen] = useState(false);
   const [aiOpen, setAiOpen] = useState(false);
-  const aiAvailable = useAiEnabled();
+  const aiAvailable = aiConfigured;
   // A new, unsaved automation has no durable id yet. Keep its chat isolated
   // for this editor session instead of restoring another new draft's history.
   const [newDraftChatKey] = useState(newBuilderChatKey);

@@ -5,6 +5,7 @@ import { getBuilderData } from "@/features/automations/builder-data";
 import { WorkflowBuilder } from "@/features/automations/builder/WorkflowBuilder";
 import { getWorkflow, serializeWorkflow } from "@/features/automations/data";
 import { requirePagePermission } from "@/features/workspaces/permissions-server";
+import { isWorkspaceAiEnabled } from "@/lib/ai/availability";
 
 export const dynamic = "force-dynamic";
 
@@ -23,16 +24,17 @@ export default async function WorkflowBuilderRoute({
   ]);
 
   const isNew = id === "new";
-  const [initial, builderData] = await Promise.all([
+  const [initial, builderData, aiConfigured] = await Promise.all([
     isNew
       ? Promise.resolve(null)
       : getWorkflow({ workspaceId: workspace.organization.id, id })
           .then(serializeWorkflow)
           .catch(() => null),
     getBuilderData(isNew ? undefined : id),
+    isWorkspaceAiEnabled(workspace.organization.id),
   ]);
 
   if (!isNew && !initial) notFound();
 
-  return <WorkflowBuilder initial={initial} builderData={builderData} isNew={isNew} />;
+  return <WorkflowBuilder initial={initial} builderData={builderData} isNew={isNew} aiConfigured={aiConfigured} />;
 }

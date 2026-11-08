@@ -135,6 +135,14 @@ export async function updateJobAction(formData: FormData) {
   const jobId = String(formData.get("jobId") ?? "");
   const context = await requireJobPermission("jobs:edit", jobId);
   const values = parseJobFormData(formData);
+  if (formData.get("intent") !== "draft") {
+    const current = await getDashboardJob(jobId);
+    if (!current) notFound();
+    if (current.job.status === "open") {
+      const blockers = getPublishBlockers(values);
+      if (blockers.length) throw new Error(blockers[0]);
+    }
+  }
   const job = await updateJob(jobId, values);
 
   if (!job) {

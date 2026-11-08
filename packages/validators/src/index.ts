@@ -143,6 +143,20 @@ const jobFields = z.object({
   currency: z.string().trim().max(8).nullish(),
   salaryPeriod: z.enum(["annual", "monthly"]).nullish(),
 });
+
+export function jobReadableText(html?: string | null): string {
+  return (html ?? "")
+    .replace(/<[^>]*>/g, "")
+    .replace(/&nbsp;|&#0*160;|&#x0*a0;/gi, " ")
+    .trim();
+}
+
+/** The same readable-description rule applies to dashboard and API publishing. */
+export function isPublishableJobDescription(description?: string | null): boolean {
+  const text = jobReadableText(description);
+  return text.length >= 10 &&
+    text.toLowerCase() !== "describe the role, the team, and the impact this person will have.";
+}
 // A job needs only a title to exist. Description is optional while drafting;
 // employment/workplace type fall back to sensible defaults. Publishing
 // (status "open") needs readable content, mirroring the dashboard rule.
@@ -154,11 +168,11 @@ export const jobCreateSchema = jobFields
   })
   .superRefine(refineJobSalary)
   .superRefine((values, ctx) => {
-    if (values.status === "open" && values.description.length === 0) {
+    if (values.status === "open" && !isPublishableJobDescription(values.description)) {
       ctx.addIssue({
         code: "custom",
         path: ["description"],
-        message: "A description is required to publish a job.",
+        message: "Add a readable description before publishing a job.",
       });
     }
   });

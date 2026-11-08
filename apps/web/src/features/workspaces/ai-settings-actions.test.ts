@@ -108,6 +108,16 @@ describe("saveAiSettingsAction", () => {
     );
   });
 
+  it("validates Ollama's implicit localhost endpoint before saving", async () => {
+    const settings = { provider: "ollama", modelId: "llama3.1", enabled: true };
+    const blocked = await saveAiSettingsAction(settings);
+    expect(blocked.ok).toBe(false);
+    expect(blocked.error).toMatch(/HARLY_ALLOW_LOCAL_LLM=1/);
+    expect(mocks.insertValues).not.toHaveBeenCalled();
+    process.env.HARLY_ALLOW_LOCAL_LLM = "1";
+    await expect(saveAiSettingsAction(settings)).resolves.toEqual({ ok: true });
+  });
+
   it("does not reuse a stored key for a different provider", async () => {
     mocks.getWorkspaceAiStatus.mockResolvedValue({ hasApiKey: true, provider: "openai" });
     const result = await saveAiSettingsAction({

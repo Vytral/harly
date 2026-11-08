@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { isPublishableJobDescription, jobReadableText } from "@harly/validators";
 
 import { slugify } from "@/lib/utils";
 import {
@@ -249,9 +250,6 @@ export const jobFormSchema = z
     };
   });
 
-const DESCRIPTION_PLACEHOLDER =
-  "describe the role, the team, and the impact this person will have.";
-
 /**
  * Publish-time requirements. Saving a draft only needs a title; a posting that
  * goes public needs something for candidates to read: a description or at
@@ -262,11 +260,9 @@ export function getPublishBlockers(input: {
   description?: string | null;
   contentSections?: unknown;
 }): string[] {
-  const stripped = (input.description ?? "").replace(/<[^>]*>/g, "").trim();
-  const hasDescription =
-    stripped.length >= 10 && stripped.toLowerCase() !== DESCRIPTION_PLACEHOLDER;
+  const hasDescription = isPublishableJobDescription(input.description);
   const hasSections = parseJobContentSections(input.contentSections).some(
-    (section) => section.body.replace(/<[^>]*>/g, "").trim().length > 0,
+    (section) => jobReadableText(section.body).length > 0,
   );
   return hasDescription || hasSections
     ? []

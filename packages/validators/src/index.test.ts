@@ -512,4 +512,12 @@ describe("jobCreateSchema minimum", () => {
     });
     expect(result.success).toBe(false);
   });
+
+  it.each(["<p><br></p>", "&nbsp;&nbsp;&nbsp;", "short", "Describe the role, the team, and the impact this person will have."])("refuses unreadable descriptions when publishing: %s", (description) => {
+    expect(jobCreateSchema.safeParse({ title: "Support Engineer", status: "open", description }).success).toBe(false);
+  });
+
+  it("publishes a job with readable content", () => {
+    expect(jobCreateSchema.safeParse({ title: "Support Engineer", status: "open", description: "<p>Help customers run their servers.</p>" }).success).toBe(true);
+  });
 });

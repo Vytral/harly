@@ -9,14 +9,12 @@ import { sendPortalMagicLinkAction } from "@/features/portal/actions";
 import {
   loginPortalPasswordAction,
   recoverPortalPasswordAction,
-  registerPortalPasswordAction,
   requestPortalPasswordResetEmailAction,
   redeemPortalAccessCodeAction,
 } from "@/features/portal/auth-actions";
 import {
   PortalField,
   PortalFormError,
-  RecoveryCodesPanel,
   portalInputClass,
   portalLinkButtonClass,
   portalPrimaryButtonClass,
@@ -46,7 +44,7 @@ export type PortalLoginMethods = {
   emailReset: boolean;
 };
 
-type View = "signin" | "register" | "recover" | "forgot" | "access" | "magic-sent" | "codes";
+type View = "signin" | "register" | "recover" | "forgot" | "access" | "magic-sent";
 
 export function PortalLoginForm({ methods }: { methods: PortalLoginMethods }) {
   const params = useSearchParams();
@@ -58,7 +56,6 @@ export function PortalLoginForm({ methods }: { methods: PortalLoginMethods }) {
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [sentTo, setSentTo] = useState("");
-  const [codes, setCodes] = useState<string[]>([]);
   const [pending, start] = useTransition();
 
   const anyOAuth = methods.google || methods.github || methods.linkedin;
@@ -90,29 +87,6 @@ export function PortalLoginForm({ methods }: { methods: PortalLoginMethods }) {
         next,
       });
       if (!r.ok) return setError(r.error);
-      goto(r.redirectTo ?? "/portal/dashboard");
-    });
-  }
-
-  function onRegister(e: React.SyntheticEvent<HTMLFormElement>) {
-    const get = formValues(e);
-    setError(null);
-    if (get("password") !== get("confirm")) {
-      return setError("The passwords don't match.");
-    }
-    start(async () => {
-      const r = await registerPortalPasswordAction({
-        email: get("email"),
-        password: get("password"),
-        firstName: get("firstName"),
-        lastName: get("lastName"),
-      });
-      if (!r.ok) return setError(r.error);
-      if (r.recoveryCodes?.length) {
-        setCodes(r.recoveryCodes);
-        setView("codes");
-        return;
-      }
       goto(r.redirectTo ?? "/portal/dashboard");
     });
   }
@@ -191,10 +165,6 @@ export function PortalLoginForm({ methods }: { methods: PortalLoginMethods }) {
   const oauthHref = (p: "google" | "github" | "linkedin") =>
     `/api/portal/auth?provider=${p}&next=${encodeURIComponent(next)}`;
 
-  if (view === "codes") {
-    return <RecoveryCodesPanel codes={codes} onDone={() => goto("/portal/dashboard")} />;
-  }
-
   if (view === "magic-sent") {
     return (
       <div className="space-y-4 py-4 text-center" role="status">
@@ -268,7 +238,7 @@ export function PortalLoginForm({ methods }: { methods: PortalLoginMethods }) {
               </button>
               <div className="flex justify-between">
                 <button type="button" className={portalLinkButtonClass} onClick={() => show("register")}>
-                  Create an account
+                  Set up a password
                 </button>
                 <button type="button" className={portalLinkButtonClass} onClick={() => show(methods.emailReset ? "forgot" : "recover")}>
                   Forgot password?
@@ -302,30 +272,20 @@ export function PortalLoginForm({ methods }: { methods: PortalLoginMethods }) {
       ) : null}
 
       {view === "register" ? (
-        <form onSubmit={onRegister} className="space-y-3" aria-busy={pending}>
-          <h3 className="text-base font-semibold text-foreground">Create your account</h3>
-          <div className="grid grid-cols-2 gap-3">
-            <PortalField label="First name">
-              {(p) => <input {...p} name="firstName" required autoComplete="given-name" className={portalInputClass} />}
-            </PortalField>
-            <PortalField label="Last name">
-              {(p) => <input {...p} name="lastName" autoComplete="family-name" className={portalInputClass} />}
-            </PortalField>
-          </div>
-          <PortalField label="Email">
-            {(p) => <input {...p} name="email" type="email" required autoComplete="username" className={portalInputClass} />}
-          </PortalField>
-          <PortalField label="Password" hint="At least 10 characters.">
-            {(p) => <input {...p} name="password" type="password" required minLength={10} autoComplete="new-password" className={portalInputClass} />}
-          </PortalField>
-          <PortalField label="Confirm password">
-            {(p) => <input {...p} name="confirm" type="password" required minLength={10} autoComplete="new-password" className={portalInputClass} />}
-          </PortalField>
-          <button type="submit" disabled={pending} className={portalPrimaryButtonClass}>
-            {submitLabel("Create account", "Creating…")}
-          </button>
+        <div className="space-y-4">
+          <h3 className="text-base font-semibold text-foreground">Set up your account</h3>
+          <p className="text-sm text-muted-foreground">
+            First verify your access with a sign-in link or connected account.
+            You can then set a password from your profile. If those options are
+            unavailable, ask the company for an access or password setup link.
+          </p>
+          {methods.accessCode ? (
+            <button type="button" className={portalPrimaryButtonClass} onClick={() => show("access")}>
+              I have an access code
+            </button>
+          ) : null}
           <BackLink onClick={() => show("signin")} />
-        </form>
+        </div>
       ) : null}
 
       {view === "recover" ? (

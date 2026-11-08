@@ -235,4 +235,8 @@ describe("getPublishBlockers", () => {
       }),
     ).toEqual([]);
   });
+
+  it("blocks sections containing only nonbreaking spaces", () => {
+    expect(getPublishBlockers({ contentSections: [{ title: "Requirements", body: "<p>&nbsp;&#160;&#xA0;</p>" }] })).toHaveLength(1);
+  });
 });
