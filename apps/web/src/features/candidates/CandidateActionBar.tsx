@@ -654,8 +654,8 @@ export function CandidateActionBar({
 
   return (
     <div className="space-y-4">
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0 flex-1">{identity}</div>
+      <div className="flex items-start justify-between gap-3 max-sm:flex-col">
+        <div className="min-w-0 flex-1 max-sm:w-full">{identity}</div>
 
         <div className="flex shrink-0 items-center gap-2">
           <span ref={emailRef} className="contents">

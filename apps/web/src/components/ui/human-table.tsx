@@ -31,7 +31,7 @@ export function HumanTable({
   className?: string;
 }) {
   return (
-    <div className={cn("w-full overflow-x-auto", className)}>
+    <div className={cn("relative w-full overflow-x-auto", className)}>
       <table className="w-full border-separate border-spacing-y-1 text-left">
         {children}
       </table>

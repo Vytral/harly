@@ -657,7 +657,7 @@ export function CandidatesTable({
         />
 
         {filtered.length > 0 ? (
-          <div className="overflow-x-auto">
+          <div className="relative overflow-x-auto">
             <table className={dirTable}>
               <thead>
                 <tr>

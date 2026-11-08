@@ -464,7 +464,7 @@ export function DirectoryTableSkeleton({
     : "flex h-[var(--spacing-row)] items-center gap-4 rounded-[var(--radius-row)] px-4";
 
   return (
-    <div className={isDirectory ? "overflow-x-auto" : "px-2 pb-3"}>
+    <div className={isDirectory ? "relative overflow-x-auto" : "px-2 pb-3"}>
       <div className={headClass}>
         {checkbox ? <Skeleton className="size-4 shrink-0 rounded-sm" /> : null}
         <div className="min-w-0 flex-1">

@@ -113,7 +113,7 @@ export function DeliveryLog({ initial }: { initial: DeliveryLogPage }) {
       {data.rows.length === 0 ? (
         <p className="text-sm text-muted-foreground">No emails match this filter.</p>
       ) : (
-        <div className="overflow-x-auto">
+        <div className="relative overflow-x-auto">
           <table className="w-full min-w-[640px] text-left text-sm">
             <thead className="text-xs text-muted-foreground">
               <tr>

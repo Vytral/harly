@@ -335,7 +335,7 @@ export function PoolView({ candidates, openJobs = [] }: PoolViewProps) {
           <>
             {/* Wide screens: a table inside an overflow container, so it scrolls
                 sideways instead of breaking the page. */}
-            <div className="hidden overflow-x-auto md:block">
+            <div className="relative hidden overflow-x-auto md:block">
               <table className={dirTable}>
                 <thead>
                   <tr>
