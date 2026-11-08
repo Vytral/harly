@@ -96,6 +96,11 @@ more ways to sign in. Contains two database migrations (`0165`, `0166`); run
 
 ### Fixed
 
+- Published jobs keep the same readable-content requirements when edited in
+  the dashboard or through the API. The API can publish jobs whose content is
+  in sections, and empty HTML or nonbreaking spaces do not count as content.
+- Saving Ollama with its default endpoint checks whether local connections
+  are allowed before enabling AI.
 - A job could not be created on a new instance. Only the title is required; the
   description, education, keywords and a teammate are optional. Publishing a
   job still needs a description or at least one section, in the app and in the

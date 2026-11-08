@@ -144,12 +144,16 @@ const jobFields = z.object({
   salaryPeriod: z.enum(["annual", "monthly"]).nullish(),
 });
 
-/** The same readable-description rule applies to dashboard and API publishing. */
-export function isPublishableJobDescription(description?: string | null): boolean {
-  const text = (description ?? "")
+export function jobReadableText(html?: string | null): string {
+  return (html ?? "")
     .replace(/<[^>]*>/g, "")
     .replace(/&nbsp;|&#0*160;|&#x0*a0;/gi, " ")
     .trim();
+}
+
+/** The same readable-description rule applies to dashboard and API publishing. */
+export function isPublishableJobDescription(description?: string | null): boolean {
+  const text = jobReadableText(description);
   return text.length >= 10 &&
     text.toLowerCase() !== "describe the role, the team, and the impact this person will have.";
 }

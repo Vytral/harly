@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { isPublishableJobDescription } from "@harly/validators";
+import { isPublishableJobDescription, jobReadableText } from "@harly/validators";
 
 import { slugify } from "@/lib/utils";
 import {
@@ -262,7 +262,7 @@ export function getPublishBlockers(input: {
 }): string[] {
   const hasDescription = isPublishableJobDescription(input.description);
   const hasSections = parseJobContentSections(input.contentSections).some(
-    (section) => section.body.replace(/<[^>]*>/g, "").trim().length > 0,
+    (section) => jobReadableText(section.body).length > 0,
   );
   return hasDescription || hasSections
     ? []

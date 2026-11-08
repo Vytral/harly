@@ -10,7 +10,7 @@ import { db, organization, workspaceSettings } from "@harly/db";
 import { requirePermission } from "@/features/workspaces/permissions-server";
 import { encryptSecret, isEncryptionConfigured } from "@/lib/crypto";
 import { getWorkspaceAiConfig, getWorkspaceAiStatus } from "@/lib/ai/config";
-import { fetchOpenRouterModels, getModel } from "@/lib/ai/registry";
+import { fetchOpenRouterModels, getModel, resolveBaseUrl } from "@/lib/ai/registry";
 import { assertSafeAiBaseUrl } from "@/lib/ai/base-url";
 import {
   assistantBrandingSchema,
@@ -74,7 +74,7 @@ export async function saveAiSettingsAction(input: {
   }
 
   try {
-    assertSafeAiBaseUrl(provider, baseUrl);
+    assertSafeAiBaseUrl(provider, resolveBaseUrl({ provider, baseUrl }));
   } catch (error) {
     return { ok: false, error: error instanceof Error ? error.message : "Invalid AI baseUrl." };
   }
