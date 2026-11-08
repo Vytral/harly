@@ -32,6 +32,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { SecretInput } from "@/components/ui/secret-input";
 import { Label } from "@/components/ui/label";
 import { SettingRow } from "@/components/ui/setting-row";
 import { Switch } from "@/components/ui/switch";
@@ -302,13 +303,11 @@ function OutlookCredentialsForm({ onSaved }: { onSaved: () => void }) {
 
         <div className="space-y-2">
           <Label htmlFor="outlook-client-secret">Client Secret</Label>
-          <Input
+          <SecretInput
             id="outlook-client-secret"
-            type="password"
             value={clientSecret}
             onChange={(e) => setClientSecret(e.target.value)}
             placeholder="e.g. ~abc..."
-            autoComplete="off"
             className="font-mono text-xs"
           />
           <p className="text-xs text-muted-foreground">

@@ -31,6 +31,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { SecretInput } from "@/components/ui/secret-input";
 import { Label } from "@/components/ui/label";
 import { SettingRow } from "@/components/ui/setting-row";
 import { Switch } from "@/components/ui/switch";
@@ -311,9 +312,8 @@ function CalConnectForm({
       <div className="space-y-5">
         <div className="space-y-2">
           <Label htmlFor="cal-key">API key</Label>
-          <Input
+          <SecretInput
             id="cal-key"
-            type="password"
             value={apiKey}
             onChange={(event) => {
               setApiKey(event.target.value);
@@ -324,7 +324,6 @@ function CalConnectForm({
                 ? "•••••••• (stored, leave blank to keep)"
                 : "cal_live_…"
             }
-            autoComplete="off"
           />
           <p className="text-xs text-muted-foreground">
             Cal.com → Settings → Developer →{" "}
