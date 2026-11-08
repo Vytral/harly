@@ -8,6 +8,7 @@ const mocks = vi.hoisted(() => ({
   }),
   requirePagePermission: vi.fn(),
   getBuilderData: vi.fn(),
+  isWorkspaceAiEnabled: vi.fn(),
   getWorkflow: vi.fn(),
   serializeWorkflow: vi.fn((value: unknown) => value),
   notFound: vi.fn(() => {
@@ -22,6 +23,9 @@ vi.mock("next/navigation", () => ({
 vi.mock("@harly/config", () => ({ isDemoMode: mocks.isDemoMode }));
 vi.mock("@/features/automations/builder-data", () => ({
   getBuilderData: mocks.getBuilderData,
+}));
+vi.mock("@/lib/ai/availability", () => ({
+  isWorkspaceAiEnabled: mocks.isWorkspaceAiEnabled,
 }));
 vi.mock("@/features/automations/data", () => ({
   getWorkflow: mocks.getWorkflow,
@@ -58,12 +62,13 @@ describe("automation builder route in demo mode", () => {
     },
   );
 
-  it("preserves the normal new-workflow builder path", async () => {
+  it.each([true, false])("passes workspace AI availability to the fullscreen editor: %s", async (enabled) => {
     mocks.isDemoMode.mockReturnValue(false);
     mocks.requirePagePermission.mockResolvedValue({
       organization: { id: "workspace-1" },
     });
     mocks.getBuilderData.mockResolvedValue({ jobs: [] });
+    mocks.isWorkspaceAiEnabled.mockResolvedValue(enabled);
 
     const page = await WorkflowBuilderRoute({
       params: Promise.resolve({ id: "new" }),
@@ -73,5 +78,7 @@ describe("automation builder route in demo mode", () => {
     expect(mocks.getBuilderData).toHaveBeenCalledWith(undefined);
     expect((page as ReactElement).type).toBe(WorkflowBuilder);
     expect((page as ReactElement<{ isNew: boolean }>).props.isNew).toBe(true);
+    expect(mocks.isWorkspaceAiEnabled).toHaveBeenCalledWith("workspace-1");
+    expect((page as ReactElement<{ aiConfigured: boolean }>).props.aiConfigured).toBe(enabled);
   });
 });
