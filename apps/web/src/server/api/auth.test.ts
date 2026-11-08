@@ -115,3 +115,15 @@ describe("requireScope webhook legacy compatibility", () => {
     expect(() => requireApiScope(context, "jobs:read")).toThrow(ApiError);
   });
 });
+
+describe("legacy umbrella scopes", () => {
+  it("keep covering the finer scopes split out of them", async () => {
+    const { hasApiScope } = await import("./auth");
+    expect(hasApiScope(["jobs:write"], "jobs:publish")).toBe(true);
+    expect(hasApiScope(["offers:write"], "offers:decide")).toBe(true);
+    expect(hasApiScope(["applications:write"], "applications:reject")).toBe(true);
+    expect(hasApiScope(["applications:write"], "applications:hire")).toBe(true);
+    expect(hasApiScope(["jobs:publish"], "jobs:write")).toBe(false);
+    expect(hasApiScope(["jobs:read"], "jobs:publish")).toBe(false);
+  });
+});

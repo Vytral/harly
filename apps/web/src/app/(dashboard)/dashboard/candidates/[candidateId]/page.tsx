@@ -75,7 +75,12 @@ export default async function CandidateDetailPage({
       listWorkspaceMembers(),
       listJobOptions(),
       listCandidateInterviews(candidateId),
-      listOffersForCandidate(candidateId),
+      // Offer terms (salary, equity, notes) follow offers:manage, not just
+      // candidates:view, so a hiring manager never receives them.
+      Promise.all([can("offers:manage"), can("offers:decide")]).then(
+        ([manage, decide]) =>
+          manage || decide ? listOffersForCandidate(candidateId) : [],
+      ),
       listEmailTemplates(),
       listDocumentsForCandidate(candidateId),
     ]);
@@ -146,7 +151,7 @@ export default async function CandidateDetailPage({
     visibleApplicationIds.has(offer.applicationId),
   );
 
-  const [calStatus, aiStatus, esignStatus, workspaceContext, canManageDsar, canDeleteCandidates, canCollaborate, canEditCandidates] = await Promise.all([
+  const [calStatus, aiStatus, esignStatus, workspaceContext, canManageDsar, canDeleteCandidates, canCollaborate, canEditCandidates, canRejectCandidates, canManageOffers, canDecideOffers] = await Promise.all([
     getWorkspaceCalStatus(workspaceId),
     getWorkspaceAiStatus(workspaceId),
     getWorkspaceEsignStatus(workspaceId),
@@ -155,6 +160,9 @@ export default async function CandidateDetailPage({
     can("candidates:delete"),
     can("collab:write"),
     can("candidates:edit"),
+    can("candidates:reject"),
+    can("offers:manage"),
+    can("offers:decide"),
   ]);
   const workspaceName = workspaceContext.organization.name;
   const currentUserName = workspaceContext.user.name;
@@ -325,6 +333,7 @@ export default async function CandidateDetailPage({
     emailTemplateValues: actionTemplateValues,
     inPool,
     aiConfigured,
+    access: { canReject: canRejectCandidates, canDelete: canDeleteCandidates },
   };
 
   const queueNavigation = {
@@ -422,6 +431,7 @@ export default async function CandidateDetailPage({
               currentUserId={workspaceContext.user.id}
               aiConfigured={aiConfigured}
               offers={offers}
+              offerAccess={{ canManage: canManageOffers, canDecide: canDecideOffers }}
               offerSignatureChannel={esignStatus.offerSignatureChannel}
               privacyRequests={canManageDsar ? privacyRequests.map((request) => ({
                 ...request,

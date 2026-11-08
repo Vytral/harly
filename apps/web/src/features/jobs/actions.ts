@@ -226,7 +226,7 @@ export async function trashJobAction(jobId: string): Promise<JobActionState> {
 }
 
 export async function restoreJobAction(jobId: string): Promise<JobActionState> {
-  const ctx = await requirePermission("jobs:delete");
+  const ctx = await requireJobPermission("jobs:delete", jobId, { trashed: true });
   const result = await restoreJob(jobId);
 
   if (!result.ok) {
@@ -252,7 +252,7 @@ export async function restoreJobAction(jobId: string): Promise<JobActionState> {
 export async function permanentlyDeleteJobAction(
   jobId: string,
 ): Promise<JobActionState> {
-  const ctx = await requirePermission("jobs:delete");
+  const ctx = await requireJobPermission("jobs:delete", jobId, { trashed: true });
   const result = await permanentlyDeleteJob(jobId);
 
   if (!result.ok) {

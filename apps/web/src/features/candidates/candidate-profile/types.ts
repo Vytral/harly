@@ -127,6 +127,8 @@ export type CandidateProfileTabsProps = {
   aiEvaluations: CandidateAiEvaluationItem[];
   aiConfigured: boolean;
   offers: CandidateOfferItem[];
+  /** What the viewer may do with offers; omitted means everything. */
+  offerAccess?: { canManage: boolean; canDecide: boolean };
   offerSignatureChannel: "email" | "esign" | "native";
   emailTemplates?: EmailTemplateOption[];
   emailTemplateValues?: TemplateValues;

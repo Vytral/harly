@@ -172,7 +172,7 @@ vi.mock("@/lib/logger", () => ({
 }));
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 
-import { decideOffer } from "./actions";
+import { decideOffer, withdrawOffer } from "./actions";
 import * as dbModule from "@harly/db";
 
 // The vi.mock factory below exposes a `__makeTx` side channel (not part of the
@@ -209,6 +209,34 @@ describe("decideOffer guards", () => {
       user: { id: "user-1", name: "Recruiter" },
       organization: { id: "ws-1" },
     });
+  });
+
+  it("checks offers:decide, not offers:approve or offers:manage, before deciding", async () => {
+    mocks.requirePermission.mockRejectedValueOnce(
+      new Error("You do not have permission to perform this action."),
+    );
+
+    const result = await decideOffer({ offerId: OFFER.id, decision: "accepted" });
+
+    expect(result.success).toBe(false);
+    expect(mocks.requirePermission).toHaveBeenCalledWith(
+      "offers:decide",
+      OFFER.id,
+    );
+    expect(mocks.transactionImpl).not.toHaveBeenCalled();
+    expect(mocks.emitWebhookEvent).not.toHaveBeenCalled();
+  });
+
+  it("requires offers:decide to withdraw an offer", async () => {
+    mocks.requirePermission.mockRejectedValueOnce(new Error("forbidden"));
+
+    const result = await withdrawOffer({ offerId: OFFER.id });
+
+    expect(result.success).toBe(false);
+    expect(mocks.requirePermission).toHaveBeenCalledWith(
+      "offers:decide",
+      OFFER.id,
+    );
   });
 
   it("accepts an active application: marks offer accepted, hires, and logs inside the tx", async () => {

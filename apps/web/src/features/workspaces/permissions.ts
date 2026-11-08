@@ -18,7 +18,9 @@ export const PERMISSIONS = [
   "hiring_team:manage",
   "candidates:view",
   "candidates:edit",
-  "candidates:delete",
+  "candidates:reject", // reject / discard a candidate in the pipeline
+  "candidates:delete", // trash, restore and purge candidates (GDPR)
+  "candidates:export", // CSV exports that carry candidate PII
   "candidates:move",
   "dsar:manage",
   "collab:write", // notes, scorecards, schedule interviews, message
@@ -26,8 +28,9 @@ export const PERMISSIONS = [
   "interviews:feedback",
   "tasks:read",
   "tasks:write",
-  "offers:manage",
-  "offers:approve",
+  "offers:manage", // create, edit and send offers
+  "offers:approve", // internal approval of an offer before it is sent
+  "offers:decide", // record the candidate's answer: accepted, declined, withdrawn
   "templates:manage",
   "reports:read",
   "members:read",
@@ -190,7 +193,21 @@ export const PERMISSION_GROUPS: PermissionGroup[] = [
     permissions: [
       { key: "candidates:edit", label: "Edit candidates" },
       { key: "candidates:view", label: "View candidates" },
-      { key: "candidates:delete", label: "Delete / reject candidates" },
+      {
+        key: "candidates:reject",
+        label: "Reject candidates",
+        hint: "Reject or discard a candidate in the pipeline, single or in bulk",
+      },
+      {
+        key: "candidates:delete",
+        label: "Delete candidates",
+        hint: "Move candidates to trash, restore them and purge their data",
+      },
+      {
+        key: "candidates:export",
+        label: "Export candidate data",
+        hint: "Download CSV exports that contain candidate personal data",
+      },
       { key: "candidates:move", label: "Move in pipeline" },
     ],
   },
@@ -228,7 +245,16 @@ export const PERMISSION_GROUPS: PermissionGroup[] = [
         label: "Manage offers",
         hint: "Create, send and decide job offers",
       },
-      { key: "offers:approve", label: "Approve offers" },
+      {
+        key: "offers:approve",
+        label: "Approve offers",
+        hint: "Internal approval of an offer before it is sent",
+      },
+      {
+        key: "offers:decide",
+        label: "Record offer responses",
+        hint: "Mark an offer accepted, declined or withdrawn",
+      },
       {
         key: "templates:manage",
         label: "Manage email templates",
@@ -316,6 +342,10 @@ export const BUILTIN_ROLES = [
   "admin",
   "recruiter",
   "hiring_manager",
+  "coordinator",
+  "sourcer",
+  "interviewer",
+  "viewer",
 ] as const;
 export type BuiltinRole = (typeof BUILTIN_ROLES)[number];
 
@@ -331,6 +361,8 @@ export const BUILTIN_ROLE_PERMISSIONS: Record<BuiltinRole, Permission[]> = {
     "hiring_team:manage",
     "candidates:view",
     "candidates:edit",
+    "candidates:reject",
+    "candidates:export",
     "candidates:move",
     "collab:write",
     "interviews:manage",
@@ -338,6 +370,7 @@ export const BUILTIN_ROLE_PERMISSIONS: Record<BuiltinRole, Permission[]> = {
     "tasks:read",
     "tasks:write",
     "offers:manage",
+    "offers:decide",
     "templates:manage",
     "reports:read",
     "members:read",
@@ -363,7 +396,94 @@ export const BUILTIN_ROLE_PERMISSIONS: Record<BuiltinRole, Permission[]> = {
     "documents:read",
     "mcp:use",
   ],
+  // Schedules and runs interviews, keeps tasks moving and advances candidates.
+  // No offers, no rejecting, no deleting, no exports.
+  coordinator: [
+    "jobs:view",
+    "candidates:view",
+    "candidates:move",
+    "collab:write",
+    "interviews:manage",
+    "interviews:feedback",
+    "tasks:read",
+    "tasks:write",
+    "documents:read",
+    "members:read",
+  ],
+  // Finds and maintains candidates and the talent pool. Cannot move stages,
+  // reject, make offers or export.
+  sourcer: [
+    "jobs:view",
+    "candidates:view",
+    "candidates:edit",
+    "collab:write",
+    "tasks:read",
+    "tasks:write",
+    "documents:read",
+    "members:read",
+  ],
+  // Interviews the candidates of the jobs they are assigned to and leaves
+  // feedback. collab:write is what scorecards and notes check today.
+  interviewer: [
+    "jobs:view",
+    "candidates:view",
+    "collab:write",
+    "interviews:feedback",
+    "tasks:read",
+    "documents:read",
+  ],
+  // Read-only: jobs, candidates, tasks, documents and reports. No writes.
+  viewer: [
+    "jobs:view",
+    "candidates:view",
+    "tasks:read",
+    "documents:read",
+    "reports:read",
+  ],
 };
+
+/** One-line description of each built-in role, shown in Members & roles. */
+export const BUILTIN_ROLE_DESCRIPTIONS: Record<BuiltinRole, string> = {
+  owner: "Full control of the workspace. The only role that can grant Owner.",
+  admin: "Full access except granting Owner; manages members, roles and settings.",
+  recruiter: "Runs hiring end to end: jobs, candidates, interviews and offers.",
+  hiring_manager:
+    "Reviews and advances candidates, approves jobs and leaves feedback.",
+  coordinator:
+    "Schedules interviews, manages tasks and moves candidates. No offers or deletion.",
+  sourcer:
+    "Adds and edits candidates and the talent pool. Cannot move stages or make offers.",
+  interviewer:
+    "Sees candidates on assigned jobs only and submits interview feedback.",
+  viewer: "Read-only access to jobs, candidates and reports.",
+};
+
+/**
+ * Default job scope of each built-in role. Only roles listed here differ from
+ * unrestricted; an explicit scope saved on the role overrides it.
+ */
+export const BUILTIN_ROLE_SCOPES: Partial<Record<BuiltinRole, RoleScope>> = {
+  interviewer: { jobAccess: "assigned", departments: [], regions: [] },
+};
+
+export function builtinRoleDefaultScope(role: string): RoleScope {
+  const scope = isBuiltinRole(role) ? BUILTIN_ROLE_SCOPES[role] : undefined;
+  return scope ? { ...scope } : unrestrictedRoleScope();
+}
+
+/**
+ * A stored scope of `{}` (the column default) means "not chosen": built-in roles
+ * with a narrower default keep it. Any explicit scope wins.
+ */
+export function builtinRoleScope(role: string, stored: unknown): RoleScope {
+  const empty =
+    stored === null ||
+    stored === undefined ||
+    (typeof stored === "object" &&
+      !Array.isArray(stored) &&
+      Object.keys(stored as object).length === 0);
+  return empty ? builtinRoleDefaultScope(role) : normalizeRoleScope(stored);
+}
 
 /**
  * `custom_roles` rows override a built-in role's defaults wholesale, so a row

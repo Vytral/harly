@@ -142,11 +142,11 @@ describe("pipeline application-scoped authorization", () => {
 
     expect(result.success).toBe(false);
     expect(mocks.requireApplicationPermission).toHaveBeenCalledWith(
-      "candidates:edit",
+      "candidates:reject",
       "allowed-application",
     );
     expect(mocks.requireApplicationPermission).toHaveBeenCalledWith(
-      "candidates:edit",
+      "candidates:reject",
       "blocked-application",
     );
     expect(mocks.transaction).not.toHaveBeenCalled();
@@ -162,5 +162,27 @@ describe("pipeline application-scoped authorization", () => {
     expect(result.success).toBe(true);
     expect(mocks.requireApplicationPermission).toHaveBeenCalledTimes(2);
     expect(mocks.transaction).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps candidates:edit for non-rejecting status changes", async () => {
+    mocks.requireApplicationPermission.mockImplementation(async () => {
+      throw new Error("denied");
+    });
+
+    const result = await updateApplicationStatus({
+      applicationIds: ["allowed-application"],
+      status: "withdrawn",
+      workspaceId: WORKSPACE_ID,
+    });
+
+    expect(result.success).toBe(false);
+    expect(mocks.requireApplicationPermission).toHaveBeenCalledWith(
+      "candidates:edit",
+      "allowed-application",
+    );
+    expect(mocks.requireApplicationPermission).not.toHaveBeenCalledWith(
+      "candidates:reject",
+      "allowed-application",
+    );
   });
 });

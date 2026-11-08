@@ -37,19 +37,24 @@ export function OffersPanel({
   applications,
   documents,
   offerSignatureChannel,
+  access,
 }: {
+  /** What the viewer may do. Omitted means everything (the server still checks). */
+  access?: { canManage: boolean; canDecide: boolean };
   offers: CandidateOfferItem[];
   applications: Array<{ id: string; jobTitle: string }>;
   documents: Array<{ id: string; name: string; mimeType: string }>;
   offerSignatureChannel: "email" | "esign" | "native";
 }) {
   const router = useRouter();
+  const canManage = access?.canManage !== false;
+  const canDecide = access?.canDecide !== false;
   const [isPending, startTransition] = useTransition();
   const [editing, setEditing] = useState<CandidateOfferItem | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
   const [placingFieldsFor, setPlacingFieldsFor] = useState<CandidateOfferItem | null>(null);
 
-  function run(action: () => Promise<{ success: boolean; error?: string }>, ok: string) {
+  function run(action: () => Promise<{ success: boolean; error?: string; warning?: string }>, ok: string) {
     startTransition(async () => {
       const result = await action();
       if (!result.success) {
@@ -57,6 +62,7 @@ export function OffersPanel({
         return;
       }
       toast.success(ok);
+      if (result.warning) toast.warning(result.warning);
       router.refresh();
     });
   }
@@ -69,7 +75,7 @@ export function OffersPanel({
             ? "No offers yet."
             : `${offers.length} offer${offers.length === 1 ? "" : "s"}.`}
         </p>
-        {applications.length > 0 ? (
+        {canManage && applications.length > 0 ? (
           <Button size="sm" onClick={() => setCreateOpen(true)}>
             <BadgeDollarSign className="size-4" />
             New offer
@@ -112,7 +118,7 @@ export function OffersPanel({
                       </div>
                     </div>
                     <div className="flex flex-wrap gap-2">
-                      {offer.status === "draft" ? (
+                      {canManage && offer.status === "draft" ? (
                         <>
                           <Button
                             size="sm"
@@ -136,7 +142,7 @@ export function OffersPanel({
                           </Button>
                         </>
                       ) : null}
-                      {offer.status === "sent" ? (
+                      {canDecide && offer.status === "sent" ? (
                         <>
                           <Button
                             size="sm"
@@ -169,7 +175,7 @@ export function OffersPanel({
                           </Button>
                         </>
                       ) : null}
-                      {offer.status === "draft" || offer.status === "sent" ? (
+                      {canDecide && (offer.status === "draft" || offer.status === "sent") ? (
                         <Button
                           size="sm"
                           variant="ghost"

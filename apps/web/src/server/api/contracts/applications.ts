@@ -131,7 +131,7 @@ export const rejectApplicationContract = defineContract({
   operationId: "rejectApplication",
   summary: "Reject application",
   tags: ["Applications"],
-  auth: { scopes: ["applications:write"], keyTypes: ["secret"] },
+  auth: { scopes: ["applications:reject"], keyTypes: ["secret"] },
   idempotent: true,
   parameters: { path: applicationPath },
   responses: {
@@ -148,7 +148,7 @@ export const hireApplicationContract = defineContract({
   operationId: "hireApplication",
   summary: "Hire application",
   tags: ["Applications"],
-  auth: { scopes: ["applications:write"], keyTypes: ["secret"] },
+  auth: { scopes: ["applications:hire"], keyTypes: ["secret"] },
   idempotent: true,
   parameters: { path: applicationPath },
   responses: {

@@ -1912,6 +1912,9 @@ export async function trashCandidate(candidateId: string) {
 /** Move multiple candidates to the trash (soft delete) , reversible. */
 export async function trashCandidates(candidateIds: string[]) {
   const { organization: workspace } = await getWorkspaceContext();
+  // Ids come from the client: a role limited to assigned jobs/departments may
+  // only trash candidates inside its scope, like every single-candidate path.
+  const actor = await resolveSearchActor();
 
   const rows = await db
     .update(candidates)
@@ -1921,6 +1924,7 @@ export async function trashCandidates(candidateIds: string[]) {
         inArray(candidates.id, candidateIds),
         eq(candidates.workspaceId, workspace.id),
         isNull(candidates.deletedAt),
+        candidateScopeSql(actor, candidates.id),
       ),
     )
     .returning({ id: candidates.id });

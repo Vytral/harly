@@ -116,7 +116,15 @@ function displayNameFromInput(input: ScimUserInput, fallback: string) {
 
 function roleFromInput(input: ScimUserInput) {
   const role = input.roles?.find((item) => item.value)?.value?.trim().toLowerCase();
-  return role && ["admin", "recruiter", "hiring_manager"].includes(role)
+  return role && [
+        "admin",
+        "recruiter",
+        "hiring_manager",
+        "coordinator",
+        "sourcer",
+        "interviewer",
+        "viewer",
+      ].includes(role)
     ? role
     : "recruiter";
 }

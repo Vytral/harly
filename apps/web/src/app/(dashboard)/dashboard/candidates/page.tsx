@@ -116,6 +116,9 @@ const initialImportSource: ImportSource | undefined =
     jobOptions,
     members,
     canCreateCandidates,
+    canReject,
+    canDelete,
+    canExport,
   ] = await Promise.all([
     isQueue
       ? Promise.resolve({ rows: [], total: 0, page: 1, pageSize: 50, hasNextPage: false })
@@ -132,6 +135,9 @@ const initialImportSource: ImportSource | undefined =
     listJobOptions(),
     listWorkspaceMembers(),
     can("candidates:edit"),
+    can("candidates:reject"),
+    can("candidates:delete"),
+    can("candidates:export"),
   ]);
   const gravatarEnabled = await getWorkspaceGravatarEnabled(workspaceContext.organization.id);
 
@@ -322,6 +328,7 @@ const initialImportSource: ImportSource | undefined =
           filterOptions={facets}
           initialFilters={{ query: q ?? "", dept: dept ?? "__all__", role: role ?? "__all__", stage: stage ?? "__all__", status: candidateStatus ?? "__all__", source: source ?? "__all__", tag: tag ?? "__all__", sort: candidateSort }}
           emailTemplates={emailTemplates}
+          access={{ canReject, canDelete, canExport }}
         />
       )}
     </div>

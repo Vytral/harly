@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { and, eq, ilike, or } from "drizzle-orm";
+import { and, eq, ilike, isNull, or } from "drizzle-orm";
 
 import { db, schema } from "@harly/db";
 
@@ -272,6 +272,13 @@ export async function listPersonJobsAction(
   userId: string,
 ): Promise<PersonJobRow[]> {
   const context = await requirePermission("members:read");
+  // members:read exposes the directory, not every job: a role limited to
+  // assigned jobs/departments only sees the jobs inside its own scope.
+  const [{ resolveSearchActor }, { jobScopeSql }] = await Promise.all([
+    import("@/features/search/workspace-search"),
+    import("@/features/search/scope"),
+  ]);
+  const jobScope = jobScopeSql(await resolveSearchActor());
 
   return db
     .select({
@@ -287,6 +294,8 @@ export async function listPersonJobsAction(
       and(
         eq(schema.jobHiringTeam.workspaceId, context.organization.id),
         eq(schema.jobHiringTeam.userId, userId),
+        isNull(schema.jobs.deletedAt),
+        jobScope,
       ),
     )
     .orderBy(schema.jobs.title);

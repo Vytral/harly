@@ -69,7 +69,9 @@ either.
 | Scope | Endpoints |
 | --- | --- |
 | `jobs:read` | `GET /jobs`, `GET /jobs/{id}` |
-| `jobs:write` | `POST /jobs`, `PATCH /jobs/{id}`, `DELETE /jobs/{id}`, `POST /jobs/{id}/publish`, `POST /jobs/{id}/close` |
+| `jobs:write` | `POST /jobs`, `PATCH /jobs/{id}`; also covers `jobs:publish` and `jobs:delete` for keys created before they existed |
+| `jobs:publish` | `POST /jobs/{id}/publish`, `POST /jobs/{id}/close` |
+| `jobs:delete` | `DELETE /jobs/{id}` |
 | `stages:read` | `GET /jobs/{id}/stages` |
 | `stages:write` | Create, update, reorder, archive, and delete job stages |
 | `candidates:read` | `GET /candidates`, `GET /candidates/{id}` |
@@ -78,9 +80,12 @@ either.
 | `tags:read` / `tags:write` | List, add, and remove candidate tags |
 | `files:read` | `GET /candidates/{id}/files` |
 | `applications:read` | `GET /applications`, `GET /applications/{id}` |
-| `applications:write` | Create, move, reject, hire, and bulk-update applications |
+| `applications:write` | Create, move, and bulk-create applications; also covers `applications:reject` and `applications:hire` for older keys |
+| `applications:reject` | `POST /applications/{id}/reject` |
+| `applications:hire` | `POST /applications/{id}/hire` |
 | `interviews:read` / `interviews:write` | List, read, schedule, update, cancel, and complete interviews |
-| `offers:read` / `offers:write` | List, read, draft, update, send, decide, and withdraw offers |
+| `offers:read` / `offers:write` | List, read, draft, update and send offers; `offers:write` also covers `offers:decide` for older keys |
+| `offers:decide` | Record a decision on an offer and withdraw it |
 | `scorecards:read` / `scorecards:write` | List and create scorecards |
 | `tasks:read` / `tasks:write` | List, read, create, update, and delete tasks |
 | `pool:read` / `pool:write` | List, add, remove, and assign talent-pool entries |
@@ -131,3 +136,12 @@ path for existing keys.
    by default, and retire `webhooks:manage` for newly created keys.
 6. **Test by scope.** Add integration tests that run each endpoint family with a
    scoped key and assert that out-of-scope records are absent or refused.
+
+## Creating keys with finer scopes
+
+Keys created before `jobs:publish`, `jobs:delete`, `applications:reject`,
+`applications:hire` and `offers:decide` existed keep working: the umbrella scope
+still satisfies the finer ones. To create a new key with `jobs:write`,
+`applications:write` or `offers:write`, the creator's role must also hold the
+permissions those scopes still reach (publish, delete, reject, edit, decide).
+Prefer the finer scopes for new integrations.

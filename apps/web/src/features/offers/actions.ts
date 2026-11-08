@@ -37,6 +37,8 @@ import {
   processEmailOutbox,
 } from "@/lib/email/outbox-processor";
 import { offerSendOutcomeMessage } from "@/lib/email/delivery-warning";
+import { createCandidatePortalNotification } from "@/features/portal/notify";
+import { getWorkspaceEmailSender } from "@/lib/email";
 import { offerEmailDedupeKey, offerExtendedEmailDedupeKey } from "@/lib/email/dedupe-keys";
 import {
   archiveDocusealOffer,
@@ -84,7 +86,7 @@ const updateOfferSchema = offerFieldsSchema.extend({
   offerId: z.uuid(),
 });
 
-type ActionResult = { success: boolean; error?: string };
+type ActionResult = { success: boolean; error?: string; warning?: string };
 type CreateOfferResult = ActionResult & { offerId?: string };
 
 /** Load an offer's application context, workspace-scoped. */
@@ -599,6 +601,47 @@ export async function sendOffer(input: {
     }
   }
 
+  // No email provider at all (fresh instance, no SMTP/Resend): the offer must
+  // still be usable. Mark it sent directly; the candidate sees it in the portal
+  // and the recruiter shares the link manually. Nothing is queued, so a retry
+  // loop never leaves the offer stuck in draft.
+  const emailSender = await getWorkspaceEmailSender(workspaceId, context.user.id);
+  if (!emailSender) {
+    const [transitioned] = await db
+      .update(offers)
+      .set({ status: "sent", updatedAt: new Date() })
+      .where(
+        and(
+          eq(offers.workspaceId, workspaceId),
+          eq(offers.id, offer.id),
+          eq(offers.status, "draft"),
+        ),
+      )
+      .returning({ id: offers.id });
+    if (transitioned) {
+      await db.insert(activityEvents).values({
+        workspaceId,
+        actorId: context.user.id,
+        entityType: "application",
+        entityId: offer.applicationId,
+        type: "offer.sent",
+        metadata: { title: offer.title, delivery: "manual" },
+      });
+      await notifyCandidateOfferSent({
+        workspaceId,
+        candidateId: offer.candidateId,
+        applicationId: offer.applicationId,
+        title: offer.title,
+      });
+    }
+    revalidatePath(`/dashboard/candidates/${offer.candidateId}`);
+    return {
+      success: true,
+      warning:
+        "Email is not configured, so the candidate was not notified. The offer is marked as sent; share the portal link with them directly.",
+    };
+  }
+
   // A durable outbox row is the single source of truth: the worker sends the
   // email and only then flips the offer to `sent`, so a crash mid-flight can
   // never leave the offer as `sent` without a delivered email (or resend it).
@@ -635,8 +678,40 @@ export async function sendOffer(input: {
     };
   }
 
+  await notifyCandidateOfferSent({
+    workspaceId,
+    candidateId: offer.candidateId,
+    applicationId: offer.applicationId,
+    title: offer.title,
+  });
   revalidatePath(`/dashboard/candidates/${offer.candidateId}`);
   return { success: true };
+}
+
+/**
+ * In-app copy of "you have an offer", so the candidate sees it in the portal
+ * even when email is off or fails. Never lets a notification error fail the
+ * send: the offer is already marked as sent at this point.
+ */
+async function notifyCandidateOfferSent(input: {
+  workspaceId: string;
+  candidateId: string;
+  applicationId: string;
+  title: string;
+}): Promise<void> {
+  try {
+    await createCandidatePortalNotification({
+      workspaceId: input.workspaceId,
+      candidateId: input.candidateId,
+      type: "offer.sent",
+      title: "You have a new offer",
+      body: input.title,
+      href: `/portal/applications/${input.applicationId}`,
+      metadata: { applicationId: input.applicationId },
+    });
+  } catch (error) {
+    log.error(error, "sendOffer: portal notification failed");
+  }
 }
 
 const draftFieldSchema = z.object({
@@ -811,7 +886,7 @@ export async function decideOffer(input: {
   let context;
   try {
     context = await requireOfferPermission(
-      "offers:approve",
+      "offers:decide",
       parsed.data.offerId,
     );
   } catch (error) {
@@ -1038,7 +1113,7 @@ export async function withdrawOffer(input: {
   let context;
   try {
     context = await requireOfferPermission(
-      "offers:manage",
+      "offers:decide",
       parsed.data.offerId,
     );
   } catch (error) {

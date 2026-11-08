@@ -91,7 +91,11 @@ vi.mock("./deletion-jobs", () => ({
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 
 import {
+  bulkTrashCandidatesAction,
+  bulkUpdateCandidateStatusAction,
+  exportCandidateDirectoryAction,
   generateEmailDraftAction,
+  rejectApplicationsAction,
   refineScorecardTextAction,
   suggestScorecardAttributesAction,
 } from "./actions";
@@ -132,5 +136,49 @@ describe("candidate AI authorization", () => {
       "collab:write",
       "candidate-1",
     );
+  });
+});
+
+describe("candidate reject, delete and export permissions", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.requirePermission.mockRejectedValue(new Error("denied"));
+  });
+
+  it("rejecting needs candidates:reject", async () => {
+    await expect(
+      rejectApplicationsAction({
+        applicationIds: ["00000000-0000-4000-8000-000000000001"],
+        reasonCode: "other",
+        sendEmail: false,
+      } as never),
+    ).rejects.toThrow("denied");
+    expect(mocks.requirePermission).toHaveBeenCalledWith("candidates:reject");
+  });
+
+  it("a bulk status change to rejected needs candidates:reject, other statuses candidates:edit", async () => {
+    const ids = ["00000000-0000-4000-8000-000000000001"];
+    await expect(
+      bulkUpdateCandidateStatusAction({ applicationIds: ids, status: "rejected" }),
+    ).rejects.toThrow("denied");
+    expect(mocks.requirePermission).toHaveBeenLastCalledWith("candidates:reject");
+
+    await expect(
+      bulkUpdateCandidateStatusAction({ applicationIds: ids, status: "hired" }),
+    ).rejects.toThrow("denied");
+    expect(mocks.requirePermission).toHaveBeenLastCalledWith("candidates:edit");
+  });
+
+  it("moving candidates to the trash needs candidates:delete", async () => {
+    await expect(bulkTrashCandidatesAction(["candidate-1"])).rejects.toThrow(
+      "denied",
+    );
+    expect(mocks.requirePermission).toHaveBeenCalledWith("candidates:delete");
+  });
+
+  it("exporting the directory needs candidates:export, not just candidates:view", async () => {
+    await expect(exportCandidateDirectoryAction({})).rejects.toThrow("denied");
+    expect(mocks.requirePermission).toHaveBeenCalledWith("candidates:export");
+    expect(mocks.requirePermission).not.toHaveBeenCalledWith("candidates:view");
   });
 });

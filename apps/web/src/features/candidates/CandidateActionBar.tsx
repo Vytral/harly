@@ -364,6 +364,7 @@ export function CandidateActionBar({
   inPool = false,
   variant = "full",
   aiConfigured = false,
+  access,
   identity,
 }: {
   candidate: EditableCandidate;
@@ -382,6 +383,8 @@ export function CandidateActionBar({
   inPool?: boolean;
   variant?: "full" | "compact";
   aiConfigured?: boolean;
+  /** What the viewer may do. Omitted means everything (the server still checks). */
+  access?: { canReject?: boolean; canDelete?: boolean };
   /** Full variant only: the identity block rendered at the left of row 1. */
   identity?: ReactNode;
 }) {
@@ -545,7 +548,9 @@ export function CandidateActionBar({
     />
   ) : null;
 
-  const reject = isHired ? null : (
+  const mayReject = access?.canReject !== false;
+  const mayDelete = access?.canDelete !== false;
+  const reject = isHired || !mayReject ? null : (
     <RejectButton
       compact={variant === "compact"}
       pending={status.isPending}
@@ -577,7 +582,7 @@ export function CandidateActionBar({
   const openEmail = () => clickTrigger(emailRef);
 
   useShortcut("candidate.move", openMove, { enabled: owner && canMove });
-  useShortcut("candidate.reject", openReject, { enabled: owner && canReject });
+  useShortcut("candidate.reject", openReject, { enabled: owner && canReject && mayReject });
   useShortcut("candidate.evaluate", openEvaluate, { enabled: owner && canEvaluate });
   useShortcut("candidate.schedule", openSchedule, { enabled: owner });
 
@@ -586,7 +591,7 @@ export function CandidateActionBar({
       ...(canMove && moveTarget?.nextStage
         ? { move: { label: `Move to ${moveTarget.nextStage.name}`, run: openMove } }
         : {}),
-      ...(canReject ? { reject: { label: "Reject…", run: openReject } } : {}),
+      ...(canReject && mayReject ? { reject: { label: "Reject…", run: openReject } } : {}),
       ...(canEvaluate ? { evaluate: { label: "Evaluate", run: openEvaluate } } : {}),
       schedule: { label: "Schedule interview", run: openSchedule },
       email: { label: "Email", run: openEmail },
@@ -743,7 +748,7 @@ export function CandidateActionBar({
                   </DropdownMenuItem>
                 </>
               ) : null}
-              {!isHired ? (
+              {!isHired && mayDelete ? (
                 <>
                   <DropdownMenuSeparator />
                   <DropdownMenuItem
