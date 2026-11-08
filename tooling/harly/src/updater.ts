@@ -1,4 +1,5 @@
 import { createHmac } from "node:crypto";
+import { cliCommand } from "./invocation.js";
 import { spawn } from "node:child_process";
 import {
   chmod,
@@ -240,7 +241,7 @@ export async function performUpdate(
       {
         status: "failed",
         message:
-          "The update failed and no pre-update backup was found, so it was not rolled back automatically. Run `harly doctor`.",
+          `The update failed and no pre-update backup was found, so it was not rolled back automatically. Run \`${cliCommand("doctor")}\`.`,
       },
       result.output,
     );
@@ -253,7 +254,7 @@ export async function performUpdate(
     return finish(
       {
         status: "failed",
-        message: `The update failed and the automatic rollback did not complete. Restore ${path.relative(deps.directory, archive)} by hand: harly restore <archive> --force.`,
+        message: `The update failed and the automatic rollback did not complete. Restore ${path.relative(deps.directory, archive)} by hand: ${cliCommand("restore")} <archive> --force.`,
       },
       `${result.output}\n--- rollback ---\n${restore.output}`,
     );
@@ -420,7 +421,7 @@ async function recoverInterruptedUpdate(settings: Settings) {
       settings,
       requestId,
       "failed",
-      "The updater was interrupted during this update. Run `harly doctor` on the server; the pre-update backup is in the backups folder.",
+      `The updater was interrupted during this update. Run \`${cliCommand("doctor")}\` on the server; the pre-update backup is in the backups folder.`,
     );
   } catch {
     // A corrupt journal is not worth stopping the updater for.

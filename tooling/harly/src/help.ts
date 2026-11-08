@@ -13,7 +13,7 @@ export const commandGroups: ReadonlyArray<{ title: string; commands: readonly st
   { title: "Get started", commands: ["menu", "check", "init", "launch", "resume"] },
   { title: "Day to day", commands: ["status", "doctor", "setup-secret", "backup", "restore"] },
   { title: "Keep it current", commands: ["update", "updater", "uninstall"] },
-  { title: "Cloud and tooling", commands: ["deploy", "install-global"] },
+  { title: "Cloud and tooling", commands: ["deploy", "install-global", "telemetry"] },
 ];
 
 export const globalOptions: ReadonlyArray<readonly [string, string]> = [
@@ -124,6 +124,14 @@ export const commandDetails: Record<string, CommandDetail> = {
     flags: [["--dry-run", "Preview the generated files; write nothing"]],
     examples: ["harly deploy railway", "harly deploy fly --dry-run", "harly deploy digitalocean"],
     note: "Prepares configuration for a managed platform: railway, fly or digitalocean.",
+  },
+  telemetry: {
+    flags: [
+      ["--no-telemetry", "Send nothing for this run"],
+      ["--telemetry", "Allow the anonymous install event for this run"],
+    ],
+    examples: ["harly telemetry status", "harly telemetry disable"],
+    note: "Opt-in only. Sends a random local ID, CLI version, OS/arch, deployment mode and an optional how-you-heard answer, never your domain, email, company or secrets. HARLY_TELEMETRY=0 and DO_NOT_TRACK=1 always turn it off.",
   },
   "install-global": {
     flags: [

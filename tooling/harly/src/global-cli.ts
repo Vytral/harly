@@ -1,5 +1,6 @@
 import { spawn } from "node:child_process";
 import path from "node:path";
+import { NPX_COMMAND, isNpxInvocation, markGlobalCliInstalled } from "./invocation.js";
 import { readPrefs, updatePrefs } from "./prefs.js";
 
 export type GlobalCliUi = {
@@ -10,10 +11,7 @@ export type GlobalCliUi = {
   warn(message: string): void;
 };
 
-export function isNpxInvocation(env = process.env, entrypoint = process.argv[1] ?? ""): boolean {
-  return /(?:^|[/\\])_npx(?:[/\\]|$)/.test(entrypoint) ||
-    (env.npm_command === "exec" && path.basename(env.npm_execpath ?? "") === "npm-cli.js");
-}
+export { isNpxInvocation };
 
 function runNpm(args: string[], env: NodeJS.ProcessEnv, cwd: string, timeout: number) {
   return new Promise<{ status: number | null; stdout: string; stderr: string }>((resolve) => {
@@ -168,7 +166,7 @@ async function runGlobalInstall(
     const reason = /EACCES|EPERM/.test(result.stderr)
       ? "npm could not write to its global installation directory."
       : "npm could not complete the global installation.";
-    ui.warn(`Harly is still running. ${reason} Continue with npx @harly/cli, or install manually with npm install -g @harly/cli@${version}.`);
+    ui.warn(`Harly is still running. ${reason} Continue with ${NPX_COMMAND}, or install manually with npm install -g @harly/cli@${version}.`);
     return false;
   }
   ui.stop(`Harly CLI v${version} installed globally`);
@@ -186,10 +184,11 @@ async function reportGlobalBin(
   }
   if (!location.onPath) {
     const hint = pathHint({ binDir: location.bin, shell: env.SHELL });
-    ui.warn(`The CLI is installed, but ${location.bin} must be added to PATH before the harly command is available. You can continue using npx @harly/cli.`);
+    ui.warn(`The CLI is installed, but ${location.bin} must be added to PATH before the harly command is available. You can continue using ${NPX_COMMAND}.`);
     ui.info(`For ${hint.shell}, run:\n  ${hint.command}\nThen ${hint.reload}.`);
     return { bin: location.bin, onPath: false, hint };
   }
+  markGlobalCliInstalled();
   ui.info(`Type harly to open the menu, or use harly doctor, harly backup, or harly resume from ${directory}.`);
   let resolvedVersion: string | undefined;
   if (verify) {
@@ -231,7 +230,7 @@ export async function offerGlobalCliInstallation(options: {
         ...current,
         globalInstall: { declined: true, declinedAt: new Date().toISOString() },
       }), env);
-      ui.info("You can keep managing Harly with npx @harly/cli. To install later, run npx @harly/cli install-global.");
+      ui.info(`You can keep managing Harly with ${NPX_COMMAND}. To install later, run ${NPX_COMMAND} install-global.`);
       return "skipped";
     }
     if (!(await runGlobalInstall(ui, env, directory, version))) return "failed";

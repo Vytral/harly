@@ -77,6 +77,7 @@ test(
     assert.equal(envStat.mode & 0o777, 0o600);
 
     const env = await readFile(path.join(target, ".env"), "utf8");
+    assert.match(env, /^HARLY_ORG_NAME="Harly E2E"$/m);
     const secrets = [
       "BETTER_AUTH_SECRET",
       "AI_ENCRYPTION_KEY",
@@ -456,7 +457,7 @@ test("resume failure provides a recovery command and a retry preserves the insta
   const failed = await fixture.run(["resume", "--yes"], { failUp: true });
   assert.equal(failed.status, 1, failed.stderr || failed.stdout);
   assert.match(failed.stderr, /simulated startup failure/);
-  assert.match(failed.stderr, /npx @harly\/cli resume .* --yes/);
+  assert.match(failed.stderr, /harly resume .* --yes/);
   await fixture.assertUnchanged();
   const retry = await fixture.run(["resume", "--yes"]);
   assert.equal(retry.status, 0, retry.stderr || retry.stdout);

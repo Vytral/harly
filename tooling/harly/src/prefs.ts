@@ -5,6 +5,8 @@ import path from "node:path";
 /** Small per-user state the CLI remembers between runs. Never holds secrets. */
 export type Prefs = {
   globalInstall?: { declined?: boolean; declinedAt?: string };
+  /** Anonymous opt-in telemetry decision. The id is random and local only. */
+  telemetry?: { enabled: boolean; instanceId?: string; decidedAt?: string; referral?: "github" | "search" | "friend" | "social" | "blog_video" | "other" | "skip" };
   updateCheck?: { checkedAt: string; latest: string };
 };
 

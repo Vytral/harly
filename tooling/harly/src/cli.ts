@@ -16,6 +16,8 @@ const booleanFlags = new Set([
   "--json",
   "--launch",
   "--no-launch",
+  "--no-telemetry",
+  "--telemetry",
   "--non-interactive",
   "--once",
   "--quiet",
