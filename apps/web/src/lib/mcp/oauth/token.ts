@@ -15,7 +15,7 @@ import {
 } from "./config";
 import { generateOpaqueToken, sha256Hex, verifyPkceS256 } from "./crypto";
 import { purgeExpiredMcpSecrets, revokeMcpGrant } from "./grants";
-import { normalizeResource } from "./authorize";
+import { resourceMatches } from "./authorize";
 
 export type TokenResponse = {
   access_token: string;
@@ -45,7 +45,7 @@ export function refreshExpiry(now: number, grantExpiresAt: Date): Date {
 }
 
 function resourceMismatch(requested: string | undefined, bound: string): boolean {
-  return requested !== undefined && normalizeResource(requested) !== normalizeResource(bound);
+  return requested !== undefined && !resourceMatches(requested, bound);
 }
 
 type GrantRow = {

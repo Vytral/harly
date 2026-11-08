@@ -66,6 +66,19 @@ export const ADVERTISED_SCOPES: readonly string[] = MCP_SCOPES;
  * abuse, but we still only answer same-origin, loopback and explicitly listed
  * origins (MCP_ALLOWED_ORIGINS, comma separated).
  */
+/**
+ * Hosted AI apps whose connector UIs (test connection, tool pickers) can call
+ * the server from the browser. Auth is a bearer token, never a cookie, so
+ * answering them exposes nothing a token holder could not already reach.
+ */
+const HOSTED_CLIENT_ORIGINS = new Set([
+  "https://claude.ai",
+  "https://claude.com",
+  "https://chatgpt.com",
+  "https://chat.openai.com",
+  "https://platform.openai.com",
+]);
+
 export function isAllowedOrigin(origin: string, publicOrigin: string, extra: string | undefined = process.env.MCP_ALLOWED_ORIGINS): boolean {
   let parsed: URL;
   try {
@@ -75,6 +88,7 @@ export function isAllowedOrigin(origin: string, publicOrigin: string, extra: str
   }
   if (parsed.origin === new URL(publicOrigin).origin) return true;
   if (["localhost", "127.0.0.1", "[::1]"].includes(parsed.hostname)) return true;
+  if (HOSTED_CLIENT_ORIGINS.has(parsed.origin)) return true;
   return (extra ?? "")
     .split(",")
     .map((item) => item.trim().replace(/\/$/, ""))

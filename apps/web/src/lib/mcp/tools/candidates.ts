@@ -1539,7 +1539,7 @@ const applicationsReject = defineMcpTool({
     "Reject one or more applications (up to 100) with a reason from the workspace catalog (pipeline_list_rejection_reasons) and an optional internal note. sendEmail decides whether each candidate receives the rejection email: true sends it immediately with the chosen template (templateId), or the workspace's active rejection template, or Harly's built-in one; false rejects silently. This is a human hiring decision: only call it when the user explicitly asked to reject these people, never on an AI score alone, and confirm sendEmail with them. Hard to undo (reopen with applications_set_status 'active', but an email cannot be unsent).",
   group: "pipeline",
   scope: "candidates:write",
-  permission: "candidates:edit",
+  permission: "candidates:reject",
   annotations: DESTRUCTIVE_EMAILING,
   input: z.object({
     applicationIds: z.array(z.uuid()).min(1).max(100).describe("Application ids to reject."),

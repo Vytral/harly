@@ -36,6 +36,18 @@ const REQUEST_ERROR_COPY: Record<string, string> = {
   invalid_request: "The application's request is incomplete, or its redirect address does not match its registration.",
 };
 
+const REQUEST_ERROR_REASON_COPY: Record<string, string> = {
+  client_id_missing: "The application did not say who it is (client_id is missing).",
+  client_unknown:
+    "This application is not registered with this Harly instance. In the app, remove the Harly connection and add it again so it registers itself. If it keeps failing, check that Settings > AI agents > Allow automatic app registration is on.",
+  client_expired: "This application's registration expired. In the app, remove the Harly connection and add it again.",
+  client_blocked: "An administrator has blocked this application.",
+  client_metadata_unverifiable: "This application's client metadata document could not be fetched or verified.",
+  redirect_uri_missing: "The application did not say where to return after sign-in (redirect_uri is missing).",
+  redirect_uri_mismatch:
+    "The address this application wants to return to does not match the one it registered. Remove the Harly connection in the app and add it again.",
+};
+
 export default async function ConsentPage({ searchParams }: { searchParams: Promise<SearchParams> }) {
   const params = toParams(await searchParams);
   const branding = await getAuthBranding();
@@ -43,10 +55,17 @@ export default async function ConsentPage({ searchParams }: { searchParams: Prom
   let body: React.ReactNode;
   const requestError = params.get("request_error");
   if (requestError) {
+    const reason = params.get("request_error_reason");
     body = (
       <MessageCard
         title="This request can't be completed"
-        message={Object.hasOwn(REQUEST_ERROR_COPY, requestError) ? REQUEST_ERROR_COPY[requestError]! : DEFAULT_REQUEST_ERROR}
+        message={
+          reason && Object.hasOwn(REQUEST_ERROR_REASON_COPY, reason)
+            ? REQUEST_ERROR_REASON_COPY[reason]!
+            : Object.hasOwn(REQUEST_ERROR_COPY, requestError)
+              ? REQUEST_ERROR_COPY[requestError]!
+              : DEFAULT_REQUEST_ERROR
+        }
       />
     );
   } else {

@@ -92,15 +92,43 @@ export async function updateWorkspaceMcpSettings(
 }
 
 /**
- * Pre-consent endpoints (discovery, registration) run before any user is known.
- * Harly instances host one workspace, so those use that workspace's policy;
- * the consent step re-checks against the signed-in user's actual workspace.
+ * Pre-consent endpoints (discovery, registration) run before any user is known,
+ * so they cannot read "the signed-in user's workspace" policy. The settings UI
+ * saves per workspace, so reading just one arbitrary workspace here (the old
+ * behaviour: the oldest) meant a toggle saved in the owner's workspace was
+ * ignored whenever the instance held any other workspace. Instead the
+ * instance is open to registration when ANY workspace that saved a policy allows it; the consent
+ * step re-checks the signed-in user's actual workspace (clientMode, scopes,
+ * kill switch), so this never widens what a user can approve.
  */
 export async function getInstanceMcpSettings(): Promise<WorkspaceMcpSettings> {
-  const [org] = await db
-    .select({ id: organization.id })
-    .from(organization)
-    .orderBy(organization.createdAt)
-    .limit(1);
-  return org ? getWorkspaceMcpSettings(org.id) : resolveMcpSettings("", null);
+  // Only workspaces whose admin actually saved a policy count: an untouched
+  // workspace (defaults) must not re-open what the owner switched off.
+  const rows = await db
+    .select({
+      workspaceId: workspaceMcpSettings.workspaceId,
+      enabled: workspaceMcpSettings.enabled,
+      clientMode: workspaceMcpSettings.clientMode,
+      allowDcr: workspaceMcpSettings.allowDcr,
+      maxScopes: workspaceMcpSettings.maxScopes,
+    })
+    .from(workspaceMcpSettings);
+  if (rows.length === 0) {
+    const [org] = await db.select({ id: organization.id }).from(organization).orderBy(organization.createdAt).limit(1);
+    return resolveMcpSettings(org?.id ?? "", null);
+  }
+  return mergeInstanceSettings(rows.map((row) => resolveMcpSettings(row.workspaceId, row)));
+}
+
+/** Pure: union of the workspaces' pre-consent policy. Never empty. */
+export function mergeInstanceSettings(all: readonly WorkspaceMcpSettings[]): WorkspaceMcpSettings {
+  const live = all.filter((settings) => settings.enabled);
+  const first = all[0]!;
+  if (live.length === 0) return { ...first, enabled: false };
+  return {
+    ...live[0]!,
+    enabled: true,
+    allowDcr: live.some((settings) => settings.allowDcr),
+    clientMode: live.some((settings) => settings.clientMode === "any") ? "any" : "known_only",
+  };
 }
