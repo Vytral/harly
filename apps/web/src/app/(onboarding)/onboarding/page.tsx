@@ -19,6 +19,10 @@ const BUILTIN_ROLE_LABELS: Record<string, string> = {
   admin: "Admin",
   recruiter: "Recruiter",
   hiring_manager: "Hiring Manager",
+  coordinator: "Coordinator",
+  sourcer: "Sourcer",
+  interviewer: "Interviewer",
+  viewer: "Viewer",
 };
 
 /** Human label for the role assigned at invite time, used to pre-fill "Your

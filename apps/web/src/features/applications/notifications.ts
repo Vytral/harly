@@ -2,7 +2,10 @@ import "server-only";
 
 import { applicationReceivedEmailDedupeKey } from "@/lib/email/dedupe-keys";
 import { enqueueEmailOutbox, processEmailOutbox } from "@/lib/email/outbox-processor";
+import { createLogger } from "@/lib/logger";
 import type { PublicApplicationResult } from "@/features/applications/data";
+
+const log = createLogger("application-notifications");
 
 type ApplicationEmail = Extract<
   PublicApplicationResult,
@@ -17,6 +20,22 @@ type ApplicationEmail = Extract<
  * `pending`/`failed` and is retried by the scheduler (F4-03).
  */
 export async function sendApplicationReceivedEmails(
+  email: ApplicationEmail & { portalEnabled?: boolean },
+): Promise<void> {
+  // The application is already saved when this runs. A missing mail provider
+  // or an outbox failure must never turn a stored application into an error
+  // for the candidate (they would resubmit): log it and carry on.
+  try {
+    await enqueueAndSend(email);
+  } catch (error) {
+    log.error(
+      { err: error, applicationId: email.applicationId },
+      "application received emails failed; application was saved",
+    );
+  }
+}
+
+async function enqueueAndSend(
   email: ApplicationEmail & { portalEnabled?: boolean },
 ): Promise<void> {
   const ids: string[] = [

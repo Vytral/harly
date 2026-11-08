@@ -104,4 +104,15 @@ describe("F1-14 application-received emails use the durable outbox", () => {
 
     expect(mocks.enqueueEmailOutbox.mock.calls[0]?.[3]).toBe("application-received:application-1:candidate");
   });
+
+  it("never throws when the outbox or mail delivery fails (application is already saved)", async () => {
+    mocks.enqueueEmailOutbox.mockReset();
+    mocks.processEmailOutbox.mockReset();
+    mocks.enqueueEmailOutbox.mockResolvedValue("out");
+    mocks.processEmailOutbox.mockRejectedValue(new Error("no email provider"));
+    await expect(sendApplicationReceivedEmails(EMAIL as never)).resolves.toBeUndefined();
+
+    mocks.enqueueEmailOutbox.mockRejectedValue(new Error("db down"));
+    await expect(sendApplicationReceivedEmails(EMAIL as never)).resolves.toBeUndefined();
+  });
 });
