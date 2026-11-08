@@ -14,6 +14,8 @@ export type HarlyAIContextValue = {
   toggle: () => void;
   /** False when the workspace has no usable AI config; the panel then explains how to turn it on. */
   enabled: boolean;
+  /** True when the viewer may open AI settings (drives "Connect an AI provider" links). */
+  canConfigure: boolean;
   /** Open the panel and send `text` as a new turn (command menu hand-off). */
   ask: (text: string) => void;
   /** Workspace branding of the assistant (name, avatar, "Powered by" flag). */
@@ -24,6 +26,7 @@ export const HarlyAIContext = createContext<HarlyAIContextValue>({
   open: false,
   toggle: () => {},
   enabled: false,
+  canConfigure: false,
   ask: () => {},
   assistant: DEFAULT_CLIENT_ASSISTANT,
 });

@@ -6,6 +6,7 @@ import {
   type InferUITools,
   type UIMessage,
 } from "ai";
+import { AI_NOT_CONFIGURED_CODE } from "@/lib/ai/availability-shared";
 import { z } from "zod";
 
 import { getWorkspaceContextOrNull } from "@/features/workspaces/context";
@@ -417,6 +418,7 @@ export async function POST(req: Request) {
     return Response.json(
       {
         error: "AI is not configured for this workspace.",
+        code: AI_NOT_CONFIGURED_CODE,
         reason: "not_configured",
       },
       { status: 400 },

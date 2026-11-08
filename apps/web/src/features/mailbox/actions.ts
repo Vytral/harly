@@ -11,6 +11,7 @@ import { getMailboxConfig } from "@/lib/mailbox/config";
 import { createLogger } from "@/lib/logger";
 import { syncMailbox } from "@/lib/mailbox/sync";
 import { getWorkspaceAiConfig } from "@/lib/ai/config";
+import { aiNotConfiguredResult } from "@/lib/ai/availability-shared";
 import { enforceRateLimit } from "@/server/api/ratelimit";
 import { generateMailboxReplyWithAI, generateMailboxSummaryWithAI } from "@/lib/ai/surfaces/mailbox-assistance";
 import { logAuditEvent } from "@/lib/audit-log";
@@ -679,7 +680,7 @@ export async function summarizeMailboxThreadAction(input: { threadId: string }) 
       enforceRateLimit(`ai-inbox:user:${context.organization.id}:${context.user.id}`, { limit: 20, windowMs: 60 * 60_000 }),
     ]);
     const config = await getWorkspaceAiConfig(context.organization.id);
-    if (!config) return { ok: false, error: "Enable AI in Settings to use Inbox assistance." };
+    if (!config) return aiNotConfiguredResult();
     const data = await getMailboxMessagesForAi(parsed.data);
     if (!data) return { ok: false, error: "Thread not found." };
     const summary = await generateMailboxSummaryWithAI(config, {
@@ -712,7 +713,7 @@ export async function suggestMailboxReplyAction(input: { threadId: string }) {
       enforceRateLimit(`ai-inbox:user:${context.organization.id}:${context.user.id}`, { limit: 20, windowMs: 60 * 60_000 }),
     ]);
     const config = await getWorkspaceAiConfig(context.organization.id);
-    if (!config) return { ok: false, error: "Enable AI in Settings to use Inbox assistance." };
+    if (!config) return aiNotConfiguredResult();
     const data = await getMailboxMessagesForAi(parsed.data);
     if (!data) return { ok: false, error: "Thread not found." };
     const draft = await generateMailboxReplyWithAI(config, {

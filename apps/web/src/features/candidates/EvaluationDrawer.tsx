@@ -19,6 +19,7 @@ import {
   SparkleFillIcon,
   SpinnerIcon,
 } from "@/components/ui/icons/phosphor";
+import { useAiEnabled } from "@/components/ai/AiAvailability";
 import { cn } from "@/lib/utils";
 
 const RATINGS = [
@@ -44,6 +45,7 @@ export function EvaluationDrawer({
   stageName: string | null;
   trigger: ReactNode;
 }) {
+  const aiEnabled = useAiEnabled();
   const advance = useAdvanceAfterDecision();
   const [open, setOpen] = useState(false);
   const [rating, setRating] = useState<RatingKey | null>(null);
@@ -198,6 +200,7 @@ export function EvaluationDrawer({
             >
               Comments
             </label>
+{aiEnabled ? (
             <button
               type="button"
               onClick={suggestAttributes}
@@ -216,6 +219,7 @@ export function EvaluationDrawer({
               )}
               {suggesting ? "Thinking…" : "Suggest attributes"}
             </button>
+) : null}
           </div>
 
           {attributes && attributes.length > 0 ? (
@@ -247,8 +251,9 @@ export function EvaluationDrawer({
               value={comment}
               onChange={(e) => setComment(e.target.value)}
               placeholder="Strengths, concerns, and your recommendation…"
-              className="min-h-32 pb-11"
+              className={aiEnabled ? "min-h-32 pb-11" : "min-h-32"}
             />
+{aiEnabled ? (
             <button
               type="button"
               onClick={refine}
@@ -267,10 +272,13 @@ export function EvaluationDrawer({
               )}
               {refining ? "Refining…" : "Refine with AI"}
             </button>
+) : null}
           </div>
+{aiEnabled ? (
           <p className="text-xs text-muted-foreground">
             AI cleans up grammar and clarity without changing your judgement.
           </p>
+) : null}
         </div>
       </div>
     </SidePanel>

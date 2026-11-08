@@ -1,5 +1,6 @@
 "use client";
 
+import { useAiEnabled } from "@/components/ai/AiAvailability";
 import { useId, useState, useTransition } from "react";
 import Link from "next/link";
 
@@ -52,6 +53,7 @@ export function InboxActionsPanel({
   onSummarize: () => Promise<{ ok: boolean; summary?: AiSummary; error?: string }>;
   onSuggestReply: () => Promise<{ ok: boolean; draft?: { body: string }; error?: string }>;
 }) {
+  const aiEnabled = useAiEnabled();
   const idPrefix = useId();
   const [aiSummary, setAiSummary] = useState<AiSummary | null>(null);
   const [aiError, setAiError] = useState<string | null>(null);
@@ -162,6 +164,7 @@ export function InboxActionsPanel({
           </div>
         </section>
 
+        {aiEnabled ? (
         <section className="border-t border-hairline pt-4" aria-labelledby={`${idPrefix}-ai-heading`}>
           <div className="mb-3 flex items-center justify-between gap-2">
             <h3 id={`${idPrefix}-ai-heading`} className={sectionTitle}>Harly AI</h3>
@@ -189,6 +192,7 @@ export function InboxActionsPanel({
             </div>
           ) : null}
         </section>
+        ) : null}
 
         {thread.source === "mailbox" ? (
           <section className="border-t border-hairline pt-4">

@@ -18,6 +18,7 @@ import { isLiveSandboxWorkspace } from "@/features/demo/sandbox-access";
 
 import { getWorkspaceContext } from "@/features/workspaces/context";
 import { getWorkspaceAiStatus } from "@/lib/ai/config";
+import { isAiUsable } from "@/lib/ai/availability-shared";
 import { getClientAssistantBranding } from "@/lib/ai/assistant-branding";
 import { getCurrentPermissions } from "@/features/workspaces/permissions-server";
 import {
@@ -93,9 +94,7 @@ export default async function DashboardLayout({
           userName={user.name}
           userId={user.id}
           workspaceId={organization.id}
-          aiEnabled={
-            aiStatus.enabled && aiStatus.hasApiKey && aiStatus.encryptionReady
-          }
+          aiEnabled={isAiUsable(aiStatus)}
           canConfigureAi={userPermissions.includes("settings:edit") && !demo}
           assistant={assistantBranding}
         >

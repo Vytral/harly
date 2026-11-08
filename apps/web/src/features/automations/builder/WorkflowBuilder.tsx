@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useReducer, useRef, useState, useTrans
 import { toast } from "@/lib/notification-island/toast";
 
 import { cn, randomId } from "@/lib/utils";
+import { useAiEnabled } from "@/components/ai/AiAvailability";
 import { FocusModeShell } from "@/components/focus-mode/FocusModeShell";
 import { FocusModeTopBar } from "@/components/focus-mode/FocusModeTopBar";
 import { useUnsavedChangesGuard } from "@/components/focus-mode/useUnsavedChangesGuard";
@@ -189,6 +190,7 @@ export function WorkflowBuilder({
   );
   const [conflictOpen, setConflictOpen] = useState(false);
   const [aiOpen, setAiOpen] = useState(false);
+  const aiAvailable = useAiEnabled();
   // A new, unsaved automation has no durable id yet. Keep its chat isolated
   // for this editor session instead of restoring another new draft's history.
   const [newDraftChatKey] = useState(newBuilderChatKey);
@@ -859,6 +861,7 @@ export function WorkflowBuilder({
                     </TabButton>
                   ) : null}
                 </div>
+                {aiAvailable ? (
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <button
@@ -889,6 +892,7 @@ export function WorkflowBuilder({
                   </TooltipTrigger>
                   <TooltipContent>{aiOpen ? "Close Harly AI" : "Ask Harly AI"}</TooltipContent>
                 </Tooltip>
+                ) : null}
                 <SaveStatus state={save} onSave={() => void performSave()} isNew={!draft.id} />
               </>
             }
@@ -1011,7 +1015,7 @@ export function WorkflowBuilder({
         onConfirm={discardDialogProps.onConfirm}
         onCancel={discardDialogProps.onCancel}
       />
-      {aiOpen && (
+      {aiOpen && aiAvailable && (
         <HarlyAIPanel
           userName={builderData.userName}
           persistenceKey={draft.id ? `builder:${draft.id}` : newDraftChatKey}
