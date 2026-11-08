@@ -28,6 +28,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { SecretInput } from "@/components/ui/secret-input";
 import { Label } from "@/components/ui/label";
 
 export function ZoomConnectPanel({
@@ -311,9 +312,8 @@ function ZoomCredentialsForm({
 
         <div className="space-y-2">
           <Label htmlFor="zoom-client-secret">Client Secret</Label>
-          <Input
+          <SecretInput
             id="zoom-client-secret"
-            type="password"
             value={clientSecret}
             onChange={(e) => setClientSecret(e.target.value)}
             placeholder={
@@ -321,7 +321,6 @@ function ZoomCredentialsForm({
                 ? "Saved · enter a new secret to replace"
                 : "e.g. abcdef1234567890abcdef1234567890"
             }
-            autoComplete="off"
             className="font-mono text-xs"
           />
           <p className="text-xs text-muted-foreground">

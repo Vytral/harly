@@ -1,21 +1,30 @@
 import { DcrError, purgeExpiredClients, registerDcrClient } from "@/lib/mcp/oauth/clients";
 import { corsPreflight, jsonResponse, limitByIp, oauthError } from "@/lib/mcp/oauth/http";
 import { getInstanceMcpSettings } from "@/lib/mcp/settings";
+import { createLogger } from "@/lib/logger";
+
+const log = createLogger("mcp-oauth");
 
 // RFC 7591 Dynamic Client Registration (public clients only, no secrets issued).
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+
+// Claude and ChatGPT register from a small pool of shared egress IPs, and every
+// retry of "add connector" registers again, so a tight per-IP cap locks out
+// real users. Registrations are cheap, expire unused and are capped in size.
+const REGISTRATIONS_PER_HOUR = 300;
 
 export function OPTIONS() {
   return corsPreflight();
 }
 
 export async function POST(request: Request) {
-  const limited = await limitByIp(request, "register", 20, 60 * 60 * 1000);
+  const limited = await limitByIp(request, "register", REGISTRATIONS_PER_HOUR, 60 * 60 * 1000);
   if (limited) return limited;
 
   const settings = await getInstanceMcpSettings();
   if (!settings.enabled || !settings.allowDcr) {
+    log.warn({ enabled: settings.enabled, allowDcr: settings.allowDcr }, "oauth registration refused: disabled in AI agent settings");
     return oauthError("access_denied", "Dynamic client registration is disabled on this server.", 403);
   }
 
@@ -25,6 +34,7 @@ export async function POST(request: Request) {
   try {
     body = JSON.parse(raw);
   } catch {
+    log.warn({ contentType: request.headers.get("content-type") }, "oauth registration refused: body is not JSON");
     return oauthError("invalid_client_metadata", "Request body must be JSON.");
   }
 
@@ -44,7 +54,10 @@ export async function POST(request: Request) {
       { status: 201 },
     );
   } catch (error) {
-    if (error instanceof DcrError) return oauthError(error.code, error.message);
+    if (error instanceof DcrError) {
+      log.warn({ code: error.code, reason: error.message.slice(0, 200) }, "oauth registration refused: invalid metadata");
+      return oauthError(error.code, error.message);
+    }
     throw error;
   }
 }

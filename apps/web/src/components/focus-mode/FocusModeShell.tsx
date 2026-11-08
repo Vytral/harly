@@ -15,7 +15,7 @@ export function FocusModeShell({
   children: React.ReactNode;
 }) {
   return (
-    <div className="flex h-dvh w-full flex-col overflow-hidden bg-paper">
+    <div className="relative flex h-dvh w-full flex-col overflow-clip bg-paper">
       {topBar}
       <div className="flex min-h-0 flex-1">{children}</div>
     </div>

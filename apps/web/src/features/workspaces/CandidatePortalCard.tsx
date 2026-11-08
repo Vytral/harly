@@ -17,17 +17,22 @@ import { Switch } from "@/components/ui/switch";
 import { Button } from "@/components/ui/button";
 import { SettingRow, SettingRows } from "@/components/ui/setting-row";
 import { Input } from "@/components/ui/input";
+import { SecretInput } from "@/components/ui/secret-input";
 import { Label } from "@/components/ui/label";
 import { DrawerLayout } from "@/features/candidates/DrawerLayout";
 import { Sheet, SheetClose, SheetTrigger } from "@/components/ui/sheet";
 import { GithubIcon } from "@/components/ui/icons/GithubIcon";
 import { LinkedinLogo } from "@/components/ui/icons/brands";
+import { PortalAuthMethodsSection } from "@/features/workspaces/PortalAuthMethodsSection";
+import type {
+  PortalAuthConfig,
+  PortalAuthRequirements,
+} from "@/lib/portal-auth-methods-core";
 import { SectionHeader, StatusPill } from "@/features/workspaces/settings-ui";
 import {
   IdentificationCardDuotoneIcon,
   SpinnerIcon,
   CheckIcon,
-  WarningCircleIcon,
 } from "@/components/ui/icons/phosphor";
 
 // Inline SVG logos , no external deps
@@ -218,9 +223,8 @@ function OAuthProviderSection({
                       </span>
                     ) : null}
                   </Label>
-                  <Input
+                  <SecretInput
                     id={`${provider}-client-secret`}
-                    type="password"
                     value={clientSecret}
                     onChange={(e) => setClientSecret(e.target.value)}
                     placeholder={
@@ -247,7 +251,6 @@ function OAuthProviderSection({
 
 export function CandidatePortalCard({
   enabled,
-  emailEnabled,
   canEdit,
   googleConfigured,
   googleClientId,
@@ -258,7 +261,11 @@ export function CandidatePortalCard({
   appUrl,
   showApplicationStatus,
   showHiringTeam,
+  authConfig,
+  authRequirements,
 }: {
+  authConfig: PortalAuthConfig;
+  authRequirements: PortalAuthRequirements;
   enabled: boolean;
   emailEnabled: boolean;
   canEdit: boolean;
@@ -381,78 +388,33 @@ export function CandidatePortalCard({
             </div>
           ) : null}
 
-          {!optimisticEnabled && !emailEnabled ? (
-            <div className="mt-4 flex items-start gap-3 rounded-xl border border-clay/25 bg-clay/5 px-4 py-3.5">
-              <WarningCircleIcon className="mt-0.5 size-5 shrink-0 text-clay" />
-              <div className="min-w-0 flex-1">
-                <p className="text-sm font-medium text-foreground">
-                  Set up email before enabling the portal
-                </p>
-                <p className="mt-1 text-xs leading-5 text-muted-foreground">
-                  Candidates use email magic links to sign in. Configure an
-                  email provider first so portal access works from day one.
-                </p>
-                <Link
-                  href="/settings/email"
-                  className="mt-2 inline-flex text-xs font-semibold text-clay-strong underline-offset-2 hover:underline"
-                >
-                  Configure email
-                </Link>
-              </div>
-            </div>
-          ) : null}
         </div>
 
         <div className="grid grid-cols-1 divide-y border-t bg-muted/20 sm:grid-cols-3 sm:divide-x sm:divide-y-0">
-          <FeatureCell label="Authentication" value="Magic link · OAuth" />
+          <FeatureCell label="Authentication" value="Password · Access code · Magic link · OAuth · Passkeys" />
           <FeatureCell
             label="Candidate views"
             value="Applications · Jobs · Profile"
           />
           <FeatureCell
             label="Sign-in methods"
-            value="Email · Google · GitHub · LinkedIn"
+            value="Chosen below"
           />
         </div>
       </Card>
 
+      <PortalAuthMethodsSection
+        config={authConfig}
+        requirements={authRequirements}
+        canEdit={canEdit}
+      />
+
       {/* OAuth providers */}
       <div>
         <h2 className="mb-3 text-sm font-semibold tracking-tight text-near-ink">
-          Sign-in providers
+          OAuth provider credentials
         </h2>
         <div className="space-y-3">
-          {/* Magic link , always available */}
-          <div className="flex items-center justify-between rounded-xl border bg-card px-4 py-3.5">
-            <div className="flex items-center gap-3">
-              <span className="flex size-8 items-center justify-center rounded-lg border bg-muted/50">
-                <svg
-                  className="size-4 text-foreground"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                  strokeWidth={1.5}
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    d="M21.75 6.75v10.5a2.25 2.25 0 0 1-2.25 2.25h-15a2.25 2.25 0 0 1-2.25-2.25V6.75m19.5 0A2.25 2.25 0 0 0 19.5 4.5h-15a2.25 2.25 0 0 0-2.25 2.25m19.5 0v.243a2.25 2.25 0 0 1-1.07 1.916l-7.5 4.615a2.25 2.25 0 0 1-2.36 0L3.32 8.91a2.25 2.25 0 0 1-1.07-1.916V6.75"
-                  />
-                </svg>
-              </span>
-              <div>
-                <p className="text-sm font-medium">Magic link (email)</p>
-                <p className="text-xs text-muted-foreground">
-                  Passwordless. Candidates enter their email and receive a
-                  sign-in link.
-                </p>
-              </div>
-            </div>
-            <span className="flex items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 text-[11px] font-semibold text-primary">
-              <CheckIcon className="size-3" /> Always on
-            </span>
-          </div>
-
           <OAuthProviderSection
             key={`google-${googleClientId}`}
             provider="google"

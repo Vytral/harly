@@ -228,10 +228,10 @@ export const offerTools = [
     name: "offers_record_decision",
     title: "Record offer decision",
     description:
-      "Record the candidate's answer to a SENT offer: accepted or declined. Requires the offers:approve permission. Accepting moves the application to the job's Hired stage, marks it hired and withdraws the candidate's other applications as the app does; declining just closes the offer. Use only when the candidate has actually answered (outside the portal e-signature).",
+      "Record the candidate's answer to a SENT offer: accepted or declined. Requires the offers:decide permission. Accepting moves the application to the job's Hired stage, marks it hired and withdraws the candidate's other applications as the app does; declining just closes the offer. Use only when the candidate has actually answered (outside the portal e-signature).",
     group: "offers",
     scope: "offers:write",
-    permission: "offers:approve",
+    permission: "offers:decide",
     annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: false },
     input: z.object({
       offerId: z.string().uuid().describe("Sent offer id from offers_list."),
@@ -251,7 +251,7 @@ export const offerTools = [
       "Withdraw a draft or sent offer. A sent offer is revoked (its signature request is voided) and the candidate is emailed a withdrawal notice. Cannot be undone; create a new offer instead. Not possible once accepted or declined.",
     group: "offers",
     scope: "offers:write",
-    permission: "offers:manage",
+    permission: "offers:decide",
     annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: true },
     input: z.object({ offerId: z.string().uuid().describe("Offer id from offers_list (draft or sent).") }),
     async run(input) {

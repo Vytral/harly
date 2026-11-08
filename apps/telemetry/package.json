@@ -1,0 +1,34 @@
+{
+  "name": "@harly/telemetry",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Anonymous install-telemetry collector for the Harly CLI.",
+  "license": "MIT",
+  "engines": {
+    "node": ">=22.13"
+  },
+  "scripts": {
+    "dev": "tsx watch src/main.ts",
+    "build": "esbuild src/main.ts --bundle --packages=external --platform=node --format=esm --target=node22 --outfile=dist/main.js",
+    "start": "node dist/main.js",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint ."
+  },
+  "dependencies": {
+    "pg": "^8",
+    "zod": "^4.6.6"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.39.4",
+    "@types/node": "^22",
+    "@types/pg": "8.20.0",
+    "esbuild": "^0.28.2",
+    "eslint": "^9",
+    "tsx": "^4.23.13",
+    "typescript": "^6.0.3",
+    "typescript-eslint": "^8.59.4",
+    "vitest": "4.1.12"
+  }
+}

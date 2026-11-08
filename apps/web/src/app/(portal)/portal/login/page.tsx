@@ -4,12 +4,9 @@ import { and, eq, sql } from "drizzle-orm";
 
 import { db, jobs, organization, workspaceSettings } from "@harly/db";
 import { PortalLoginForm } from "@/features/portal/PortalLoginForm";
-import {
-  getPortalGitHubCredentials,
-  getPortalGoogleCredentials,
-  getPortalLinkedInCredentials,
-  getSinglePortalWorkspace,
-} from "@/lib/portal-auth";
+import { getSinglePortalWorkspace } from "@/lib/portal-auth";
+import { getPortalAuthMethods } from "@/lib/portal-auth-methods";
+import { getWorkspaceEmailSender } from "@/lib/email";
 
 export const dynamic = "force-dynamic";
 
@@ -82,15 +79,10 @@ export default async function PortalLoginPage() {
   }
 
   const org = await getOrgBranding(workspace.id);
-  const [googleCredentials, githubCredentials, linkedinCredentials] =
-    await Promise.all([
-      getPortalGoogleCredentials(workspace.id),
-      getPortalGitHubCredentials(workspace.id),
-      getPortalLinkedInCredentials(workspace.id),
-    ]);
-  const hasGoogle = Boolean(googleCredentials);
-  const hasGitHub = Boolean(githubCredentials);
-  const hasLinkedIn = Boolean(linkedinCredentials);
+  const [methods, sender] = await Promise.all([
+    getPortalAuthMethods(workspace.id),
+    getWorkspaceEmailSender(workspace.id).catch(() => null),
+  ]);
 
   const accentColor = org.primaryColor ?? "#18181b";
   const departments =
@@ -185,9 +177,16 @@ export default async function PortalLoginPage() {
 
           <Suspense>
             <PortalLoginForm
-              hasGoogle={hasGoogle}
-              hasGitHub={hasGitHub}
-              hasLinkedIn={hasLinkedIn}
+              methods={{
+                password: methods.password,
+                magicLink: methods.magicLink,
+                google: methods.oauth.google,
+                github: methods.oauth.github,
+                linkedin: methods.oauth.linkedin,
+                passkey: methods.passkey,
+                accessCode: methods.accessCode,
+                emailReset: methods.password && Boolean(sender),
+              }}
             />
           </Suspense>
 

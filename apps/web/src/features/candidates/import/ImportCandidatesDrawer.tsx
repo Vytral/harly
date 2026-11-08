@@ -36,6 +36,7 @@ import {
 import { DrawerLayout } from "@/features/candidates/DrawerLayout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { SecretInput } from "@/components/ui/secret-input";
 import { Label } from "@/components/ui/label";
 import {
   Select,
@@ -523,10 +524,8 @@ export function ImportCandidatesDrawer({
                     Greenhouse API key
                   </Label>
                 </div>
-                <Input
+                <SecretInput
                   id="greenhouse-api-key"
-                  type="password"
-                  autoComplete="off"
                   value={greenhouseApiKey}
                   onChange={(event) => setGreenhouseApiKey(event.target.value)}
                   placeholder="Harvest API key"
@@ -579,10 +578,8 @@ export function ImportCandidatesDrawer({
                   >
                     API access token
                   </Label>
-                  <Input
+                  <SecretInput
                     id="workable-api-token"
-                    type="password"
-                    autoComplete="off"
                     value={workableApiToken}
                     onChange={(event) =>
                       setWorkableApiToken(event.target.value)
@@ -622,10 +619,8 @@ export function ImportCandidatesDrawer({
                     Ashby API key
                   </Label>
                 </div>
-                <Input
+                <SecretInput
                   id="ashby-api-key"
-                  type="password"
-                  autoComplete="off"
                   value={ashbyApiKey}
                   onChange={(event) => setAshbyApiKey(event.target.value)}
                   placeholder="Ashby API key"
@@ -657,10 +652,8 @@ export function ImportCandidatesDrawer({
                     Lever API key
                   </Label>
                 </div>
-                <Input
+                <SecretInput
                   id="lever-api-key"
-                  type="password"
-                  autoComplete="off"
                   value={leverApiKey}
                   onChange={(event) => setLeverApiKey(event.target.value)}
                   placeholder="Lever API key"
@@ -691,10 +684,8 @@ export function ImportCandidatesDrawer({
                     JOIN API token
                   </Label>
                 </div>
-                <Input
+                <SecretInput
                   id="join-api-token"
-                  type="password"
-                  autoComplete="off"
                   value={joinApiToken}
                   onChange={(event) => setJoinApiToken(event.target.value)}
                   placeholder="API token from JOIN"

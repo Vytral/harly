@@ -17,7 +17,17 @@ import {
   writeAssistantBranding,
   type AssistantBranding,
 } from "@/lib/ai/assistant-branding-shared";
-import { isAiProviderId, type OpenRouterModel } from "@/lib/ai/providers";
+import {
+  KEYLESS_PLACEHOLDER,
+  getProvider,
+  isAiProviderId,
+  type OpenRouterModel,
+} from "@/lib/ai/providers";
+import { getProviderModels } from "@/lib/ai/models-catalog";
+import {
+  buildModelOptions,
+  type ProviderModelsResult,
+} from "@/lib/ai/model-options";
 
 import { assertNotDemo } from "@/features/demo/assert-not-demo";
 
@@ -69,12 +79,25 @@ export async function saveAiSettingsAction(input: {
     return { ok: false, error: error instanceof Error ? error.message : "Invalid AI baseUrl." };
   }
 
-  const status = await getWorkspaceAiStatus(context.organization.id);
-  if (enabled && !apiKey && !status.hasApiKey) {
-    return { ok: false, error: "Add an API key before enabling AI." };
+  const info = getProvider(provider)!;
+  if (info.requiresBaseUrl && !baseUrl) {
+    return { ok: false, error: `${info.label} needs an endpoint URL.` };
   }
 
-  const encrypted = apiKey ? encryptSecret(apiKey) : null;
+  const status = await getWorkspaceAiStatus(context.organization.id);
+  // A stored key belongs to the provider it was saved for; never carry it over
+  // to a different provider (it would be sent to the wrong host).
+  const keyReusable = status.hasApiKey && status.provider === provider;
+  if (!apiKey && !keyReusable && info.requiresKey) {
+    return {
+      ok: false,
+      error: `Add your ${info.label} API key${enabled ? " before enabling AI" : ""}.`,
+    };
+  }
+
+  const effectiveKey =
+    apiKey || (!keyReusable && !info.requiresKey ? KEYLESS_PLACEHOLDER : undefined);
+  const encrypted = effectiveKey ? encryptSecret(effectiveKey) : null;
   const keyColumns = encrypted
     ? {
         aiApiKeyCiphertext: encrypted.ciphertext,
@@ -143,18 +166,26 @@ export async function testAiConnectionAction(input: {
     return { ok: false, error: "Choose a model first." };
   }
   try {
-    assertSafeAiBaseUrl(input.provider, input.baseUrl);
+    assertSafeAiBaseUrl(input.provider, input.baseUrl?.trim() || undefined);
   } catch (error) {
     return { ok: false, error: error instanceof Error ? error.message : "Invalid AI baseUrl." };
+  }
+
+  const info = getProvider(input.provider)!;
+  if (info.requiresBaseUrl && !input.baseUrl?.trim()) {
+    return { ok: false, error: `${info.label} needs an endpoint URL.` };
   }
 
   let apiKey = input.apiKey?.trim();
   if (!apiKey) {
     const config = await getWorkspaceAiConfig(context.organization.id);
-    if (!config) {
-      return { ok: false, error: "Enter an API key to test." };
+    if (config && config.provider === input.provider) {
+      apiKey = config.apiKey;
+    } else if (!info.requiresKey) {
+      apiKey = KEYLESS_PLACEHOLDER;
+    } else {
+      return { ok: false, error: `Enter your ${info.label} API key to test.` };
     }
-    apiKey = config.apiKey;
   }
 
   try {
@@ -162,7 +193,7 @@ export async function testAiConnectionAction(input: {
       provider: input.provider,
       modelId: input.modelId.trim(),
       apiKey,
-      baseUrl: input.baseUrl,
+      baseUrl: input.baseUrl?.trim() || undefined,
     });
     const { text } = await generateText({
       model,
@@ -177,7 +208,10 @@ export async function testAiConnectionAction(input: {
       error instanceof Error ? error.message : "Connection failed.";
     // Redact any API-key material (e.g. "Incorrect API key provided: sk-***AB")
     // before surfacing the provider's error to the client (IA-13).
-    const redacted = raw.replace(/(sk-)[A-Za-z0-9_-]{4,}/g, "$1***REDACTED***");
+    const redacted = raw
+      .replace(/(sk-)[A-Za-z0-9_-]{4,}/g, "$1***REDACTED***")
+      .split(apiKey)
+      .join("***REDACTED***");
     return { ok: false, error: `Connection failed: ${redacted}` };
   }
 }
@@ -289,4 +323,48 @@ export async function saveAssistantBrandingAction(
   revalidatePath("/settings/ai");
   revalidatePath("/dashboard", "layout");
   return { ok: true };
+}
+
+/**
+ * Model list for the settings picker. Reads models.dev through the shared
+ * catalog (live, cached or the bundled snapshot) and never touches API keys.
+ */
+export async function listProviderModelsAction(input: {
+  provider: string;
+  forceRefresh?: boolean;
+}): Promise<ProviderModelsResult> {
+  assertNotDemo();
+  await requirePermission("settings:edit");
+
+  const info = isAiProviderId(input.provider) ? getProvider(input.provider) : undefined;
+  if (!info) return { models: [], source: "builtin", fetchedAt: null };
+
+  if (info.catalogId) {
+    try {
+      const result = await getProviderModels(info.catalogId, {
+        forceRefresh: input.forceRefresh,
+      });
+      if (result.models.length > 0) {
+        return {
+          models: buildModelOptions(info, result.models),
+          source: result.source,
+          fetchedAt: result.fetchedAt,
+        };
+      }
+    } catch {
+      // Fall through to the built-in list: the picker must never error out.
+    }
+  }
+
+  if (info.supportsModelSearch) {
+    const live = await fetchOpenRouterModels();
+    if (live.length > 0) {
+      return {
+        models: live.map((model) => ({ id: model.id, name: model.name, fromCatalog: false })),
+        source: "live",
+        fetchedAt: new Date().toISOString(),
+      };
+    }
+  }
+  return { models: buildModelOptions(info, []), source: "builtin", fetchedAt: null };
 }

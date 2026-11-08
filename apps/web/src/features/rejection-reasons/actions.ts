@@ -40,7 +40,7 @@ export async function getRejectDialogDataAction(): Promise<
   { ok: true; data: RejectDialogData } | { ok: false; error: string }
 > {
   try {
-    const context = await requirePermission("candidates:edit");
+    const context = await requirePermission("candidates:reject");
     const workspaceId = context.organization.id;
     const [reasons, templates] = await Promise.all([
       listRejectionReasons(workspaceId),

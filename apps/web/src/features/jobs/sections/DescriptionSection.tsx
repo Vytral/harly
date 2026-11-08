@@ -1,9 +1,11 @@
 import type { Job } from "@harly/db";
-import { Plus, Trash2, FileText } from "lucide-react";
+import { useEffect, useRef } from "react";
+import { Info, Plus, Trash2, FileText } from "lucide-react";
 import { toast } from "@/lib/notification-island/toast";
 
 import type { JobContentSection } from "../config";
 import { generateJobDraftAction } from "../actions";
+import { scrollWithinEditor } from "../scroll";
 import { AiButton } from "@/components/ui/AiButton";
 import { RichTextEditor } from "@/components/ui/RichTextEditor";
 import { Button } from "@/components/ui/button";
@@ -51,10 +53,12 @@ function pickTemplateKey(title: string): keyof typeof SECTION_TEMPLATES {
   return "Generic";
 }
 
-let sectionSeq = 0;
+// Unique across sessions: ids of sections loaded from the DB must never collide
+// with new ones (a module counter restarts at 1 on every page load, so "Add
+// section" could mint an id already in use -> duplicate React keys -> editors
+// vanishing/duplicating).
 function newSectionId() {
-  sectionSeq += 1;
-  return `section-${sectionSeq}`;
+  return `section-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
 export function DescriptionSection({
@@ -69,6 +73,8 @@ export function DescriptionSection({
   keywords,
   aiPending,
   startAi,
+  aiConfigured,
+  publishHint,
 }: {
   job?: Job;
   description: string;
@@ -81,13 +87,36 @@ export function DescriptionSection({
   keywords: string[];
   aiPending: boolean;
   startAi: React.TransitionStartFunction;
+  /** AI affordances are hidden entirely unless a provider is usable. */
+  aiConfigured: boolean;
+  /** Inline explanation of what publishing needs; null when satisfied. */
+  publishHint: string | null;
 }) {
+  const newSectionRef = useRef<string | null>(null);
+  const listRef = useRef<HTMLDivElement>(null);
+
+  // After "Add section": focus the new title WITHOUT letting the browser scroll
+  // every ancestor, then scroll only the editor's own scroll root if needed.
+  useEffect(() => {
+    const id = newSectionRef.current;
+    if (!id) return;
+    newSectionRef.current = null;
+    const el = listRef.current?.querySelector<HTMLElement>(
+      `[data-preview-target="section:${id}"]`,
+    );
+    if (!el) return;
+    el.querySelector<HTMLInputElement>("input")?.focus({ preventScroll: true });
+    scrollWithinEditor(el, { align: "nearest", bottomInset: 80 });
+  }, [sections]);
+
   function updateSection(id: string, patch: Partial<JobContentSection>) {
     setSections((prev) => prev.map((s) => (s.id === id ? { ...s, ...patch } : s)));
   }
 
   function addSection() {
-    setSections((prev) => [...prev, { id: newSectionId(), title: "", body: "" }]);
+    const id = newSectionId();
+    newSectionRef.current = id;
+    setSections((prev) => [...prev, { id, title: "", body: "" }]);
   }
 
   function removeSection(id: string) {
@@ -157,19 +186,21 @@ export function DescriptionSection({
         <div className="flex items-center justify-between border-b px-5 py-3">
           <p className="text-sm font-semibold">Description</p>
           <div className="flex items-center gap-2">
-            <AiButton
-              type="button"
-              size="sm"
-              onClick={generateWithAI}
-              loading={aiPending}
-              loadingText="Generating"
-              logoClassName="size-4"
-            >
-              Generate with AI
-            </AiButton>
+            {aiConfigured ? (
+              <AiButton
+                type="button"
+                size="sm"
+                onClick={generateWithAI}
+                loading={aiPending}
+                loadingText="Generating"
+                logoClassName="size-4"
+              >
+                Generate with AI
+              </AiButton>
+            ) : null}
             <Button type="button" variant="outline" size="sm" onClick={scaffoldDraft}>
               <FileText className="size-4" />
-              Draft for me
+              Insert outline
             </Button>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
@@ -192,8 +223,14 @@ export function DescriptionSection({
           </div>
         </div>
 
-        <div className="space-y-5 p-5">
-          <div className="space-y-2">
+        <div ref={listRef} className="space-y-5 p-5">
+          {publishHint ? (
+            <p className="flex items-start gap-2 rounded-[var(--radius-inner)] bg-card-inset px-3 py-2 text-[13px] text-soft-ink">
+              <Info className="mt-0.5 size-3.5 shrink-0" aria-hidden />
+              {publishHint}
+            </p>
+          ) : null}
+          <div className="space-y-2" data-preview-target="description">
             <Label>About the role</Label>
             <input type="hidden" name="description" value={description} />
             <RichTextEditor
@@ -206,7 +243,11 @@ export function DescriptionSection({
           </div>
 
           {sections.map((section) => (
-            <div key={section.id} className="rounded-[var(--radius-inner)] bg-card-inset p-4">
+            <div
+              key={section.id}
+              data-preview-target={`section:${section.id}`}
+              className="rounded-[var(--radius-inner)] bg-card-inset p-4"
+            >
               <div className="mb-2 flex items-center gap-2">
                 <Input
                   value={section.title}

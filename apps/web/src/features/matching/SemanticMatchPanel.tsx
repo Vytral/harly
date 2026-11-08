@@ -43,6 +43,9 @@ export function SemanticMatchPanel({
   const [loading, setLoading] = useState(false);
   const [assigning, setAssigning] = useState<string | null>(null);
 
+  // Embedding-based matching is AI-only: without a provider there is nothing to show.
+  if (!aiConfigured) return null;
+
   async function findMatches() {
     setLoading(true);
     try {

@@ -335,3 +335,42 @@ the tarball locally. See `docs/operations/release-policy.md`.
 ## License
 
 MIT — see [LICENSE](https://github.com/Vytral/harly/blob/main/LICENSE).
+
+## Anonymous telemetry (opt-in)
+
+`harly init` asks once, in a terminal, whether to share anonymous install statistics. The default answer is **no**. Nothing is sent in non-interactive runs unless you pass `--telemetry` or set `HARLY_TELEMETRY=1`.
+
+- Turn it off: `harly telemetry disable`, `--no-telemetry`, `HARLY_TELEMETRY=0` or `DO_NOT_TRACK=1`. These always win over a saved "yes".
+- Inspect: `harly telemetry status`. Enable later: `harly telemetry enable`.
+- The choice and the random instance id are stored in the CLI preferences file (`config.json` in the Harly config directory).
+- One `POST` is sent after a successful install, with a 2 second timeout. Failures are ignored and never affect the install.
+- Endpoint: `HARLY_TELEMETRY_URL`, default `https://telemetry.harly.dev/v1/events`. That default is a **placeholder**; the project owner must point it at a real collector.
+
+Never sent: domain, email, company name, hostname, IP-derived data or secrets.
+
+### Collector contract
+
+`POST <endpoint>` with `content-type: application/json`. Respond `2xx` (the body is ignored). Source IPs should not be logged or stored by the collector.
+
+```json
+{
+  "schema": 1,
+  "event": "install_completed",
+  "instanceId": "3f1c9a52-8d0e-4b7a-9c1d-2a6e5b8f0d41",
+  "cliVersion": "0.6.0",
+  "os": "linux",
+  "arch": "x64",
+  "deployMode": "caddy",
+  "referral": "github"
+}
+```
+
+| Field | Type | Notes |
+| --- | --- | --- |
+| `schema` | number | Always `1` for this shape. |
+| `event` | string | `install_completed`. |
+| `instanceId` | uuid v4 | Random, generated locally. Not derived from host, IP or domain. |
+| `cliVersion` | string | Semver of the CLI. |
+| `os`, `arch` | string | Node `os.platform()` and `os.arch()`. |
+| `deployMode` | string, optional | Proxy mode, for example `caddy`, `external`, `local`. |
+| `referral` | string, optional | One of `github`, `search`, `friend`, `social`, `blog_video`, `other`. Omitted when the user skips. |

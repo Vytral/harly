@@ -1,15 +1,16 @@
 import { cookies } from "next/headers";
-import { redirect } from "next/navigation";
+import { redirect, unstable_rethrow } from "next/navigation";
 import { type NextRequest } from "next/server";
 import type { Route } from "next";
 
 import {
-  PORTAL_SESSION_COOKIE,
-  createPortalSession,
   exchangeGitHubCode,
   findOrCreateCandidateByEmail,
   isPortalEnabled,
 } from "@/lib/portal-auth";
+import { getPortalAuthMethods } from "@/lib/portal-auth-methods";
+import { auditPortalEvent } from "@/lib/portal-credentials";
+import { establishPortalSession } from "@/lib/portal-session";
 import { PORTAL_OAUTH_STATE_COOKIE, verifyPortalOAuthState } from "@/lib/portal-oauth-state";
 import { getHarlyPublicOrigin } from "@/lib/public-origin";
 
@@ -32,6 +33,7 @@ export async function GET(request: NextRequest) {
     const redirectUri = `${appUrl}/api/portal/auth/callback/github`;
     const workspaceId = oauthState!.workspaceId;
     if (!(await isPortalEnabled(workspaceId))) redirect("/portal/login?error=no_workspace" as Route);
+    if (!(await getPortalAuthMethods(workspaceId)).oauth.github) redirect("/portal/login?error=method_disabled" as Route);
     const userInfo = await exchangeGitHubCode(code!, redirectUri, workspaceId);
 
     const candidateId = await findOrCreateCandidateByEmail(
@@ -43,19 +45,13 @@ export async function GET(request: NextRequest) {
     );
 
     const ua = request.headers.get("user-agent") ?? undefined;
-    const raw = await createPortalSession(candidateId, workspaceId, ua);
-
     cookieStore.delete(PORTAL_OAUTH_STATE_COOKIE);
-    cookieStore.set(PORTAL_SESSION_COOKIE, raw, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "lax",
-      path: "/",
-      maxAge: 60 * 60 * 24 * 30,
-    });
+    await establishPortalSession(candidateId, workspaceId, ua);
+    await auditPortalEvent({ workspaceId, candidateId, email: userInfo.email, action: "portal.login", metadata: { method: "github" } });
 
     redirect(oauthState!.next as Route);
   } catch (err) {
+    unstable_rethrow(err);
     console.error("GitHub OAuth callback error:", err);
     redirect("/portal/login?error=oauth_failed" as Route);
   }

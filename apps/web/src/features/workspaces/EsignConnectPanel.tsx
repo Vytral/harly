@@ -29,6 +29,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { SecretInput } from "@/components/ui/secret-input";
 import { Label } from "@/components/ui/label";
 
 /**
@@ -235,13 +236,11 @@ function ConnectForm({
 
         <div className="space-y-2">
           <Label htmlFor="docuseal-token">API token</Label>
-          <Input
+          <SecretInput
             id="docuseal-token"
-            type="password"
             value={apiToken}
             onChange={(event) => setApiToken(event.target.value)}
             placeholder={status.hasToken ? "•••••••• (stored, leave blank to keep)" : "Paste your X-Auth-Token"}
-            autoComplete="off"
             className="font-mono text-xs"
           />
           <p className="text-xs text-muted-foreground">DocuSeal → Settings → API. Encrypted at rest.</p>

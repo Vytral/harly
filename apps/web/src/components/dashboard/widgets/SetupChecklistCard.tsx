@@ -4,7 +4,7 @@ import { useState, useSyncExternalStore, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { Route } from "next";
-import { ArrowRight, Check, ChevronDown, Copy, EyeOff, Rocket, X } from "lucide-react";
+import { ArrowRight, Check, ChevronDown, Copy, EyeOff, Rocket, Sparkles } from "lucide-react";
 
 import { cn, copyText } from "@/lib/utils";
 import { tileClass } from "@/components/dashboard/widgets/primitives";
@@ -100,24 +100,24 @@ export function SetupChecklistCard({ checklist }: { checklist: SetupChecklist })
         onClick={() => collapseStore.set(!collapsed)}
         aria-expanded={!collapsed}
         className={cn(
-          "flex w-full flex-wrap items-center justify-between gap-3 px-5 py-4 text-left transition-colors hover:bg-muted/40",
-          !collapsed && "border-b border-border/50",
+          "flex w-full flex-wrap items-center justify-between gap-3 px-5 py-4 text-left transition-colors hover:bg-row-wash",
+          !collapsed && "border-b border-hairline",
         )}
       >
         <div className="flex items-center gap-3">
-          <span className="flex size-9 items-center justify-center rounded-xl bg-sage text-pine ring-1 ring-pine/10">
+          <span className="flex size-9 items-center justify-center rounded-[var(--radius-btn)] border border-hairline bg-pure-snow text-near-ink">
             <Rocket className="size-[18px]" strokeWidth={1.8} />
           </span>
           <div>
-            <h2 className="font-display text-[15px] font-semibold tracking-tight">
+            <h2 className="font-display text-[15px] font-semibold tracking-[-0.01em] text-near-ink">
               Your first hour
             </h2>
-            <p className="text-xs text-muted-foreground">
+            <p className="text-xs text-soft-ink">
               {checklist.completed} of {checklist.total} done
               {checklist.nextStep ? (
                 <>
                   {" · Next: "}
-                  <span className="font-medium text-foreground">
+                  <span className="font-medium text-near-ink">
                     {checklist.nextStep.title}
                   </span>
                 </>
@@ -144,7 +144,7 @@ export function SetupChecklistCard({ checklist }: { checklist: SetupChecklist })
 
       {!collapsed ? (
         <>
-          <ul className="divide-y divide-border/50">
+          <ul className="divide-y divide-hairline">
             {rows.map((item, i) => (
               <li
                 key={item.key}
@@ -165,13 +165,37 @@ export function SetupChecklistCard({ checklist }: { checklist: SetupChecklist })
             ))}
           </ul>
 
-          <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border/50 px-5 py-3">
+          {/* Secondary actions live in the footer, never inside a row, so the
+              rows keep one rhythm: text on the left, one action on the right. */}
+          {checklist.visible && !checklist.sampleDataActive ? (
+            <div className="flex flex-col gap-3 border-t border-hairline bg-card-inset/60 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+              <div className="min-w-0">
+                <p className="text-sm font-medium text-near-ink">Just exploring?</p>
+                <p className="text-xs text-soft-ink">
+                  Load sample jobs and candidates to see Harly with data. Remove them any time.
+                </p>
+              </div>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                disabled={pending}
+                onClick={() => run(() => loadSampleDataAction())}
+                className="w-full shrink-0 sm:w-auto"
+              >
+                <Sparkles className="size-3.5" />
+                Load sample data
+              </Button>
+            </div>
+          ) : null}
+
+          <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 border-t border-hairline px-5 py-3">
             {error ? (
               <p role="alert" className="text-xs text-destructive">
                 {error}
               </p>
             ) : (
-              <span className="text-xs text-muted-foreground">
+              <span className="text-xs text-soft-ink">
                 Hidden steps come back from your account menu.
               </span>
             )}
@@ -179,7 +203,7 @@ export function SetupChecklistCard({ checklist }: { checklist: SetupChecklist })
               type="button"
               disabled={pending}
               onClick={() => run(() => dismissSetupChecklistAction())}
-              className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-50"
+              className="-mr-2.5 inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium text-soft-ink transition-colors hover:bg-row-wash hover:text-near-ink disabled:opacity-50"
             >
               <EyeOff className="size-3.5" />
               Hide checklist
@@ -208,66 +232,48 @@ function ChecklistRowView({
   const showSkip = item.optional && !item.done;
 
   return (
-    <div className="flex items-center gap-3.5 px-5 py-3.5">
-      <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-semibold tabular-nums text-muted-foreground">
-        {index + 1}
-      </span>
-      <div className="min-w-0 flex-1">
-        <p className="truncate text-sm font-medium text-foreground">{item.title}</p>
-        <p className="truncate text-xs text-muted-foreground">{item.value}</p>
-        {isPipeline ? (
-          <PipelineExtras checklist={checklist} busy={busy} onRun={onRun} />
-        ) : null}
+    <div className="flex flex-col gap-3 px-5 py-4 sm:flex-row sm:items-center sm:gap-4">
+      <div className="flex min-w-0 flex-1 items-start gap-3.5">
+        <span className="mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-full bg-card-inset text-xs font-semibold tabular-nums text-soft-ink">
+          {index + 1}
+        </span>
+        <div className="min-w-0 flex-1">
+          <p className="text-sm font-medium text-near-ink">{item.title}</p>
+          <p className="mt-0.5 text-pretty text-xs text-soft-ink">{item.value}</p>
+          {isPipeline && checklist.publishedJob ? (
+            <div className="mt-2">
+              <CopyJobLink
+                title={checklist.publishedJob.title}
+                url={checklist.publishedJob.url}
+              />
+            </div>
+          ) : null}
+          {showSkip ? (
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => onRun(() => skipSetupChecklistItemAction(item.key))}
+              aria-label={`Skip "${item.title}"`}
+              className="mt-1.5 -ml-1 rounded px-1 text-xs font-medium text-soft-ink underline-offset-2 transition-colors hover:text-near-ink hover:underline disabled:opacity-50"
+            >
+              Skip for now
+            </button>
+          ) : null}
+        </div>
       </div>
-      <Link
-        href={(isPipeline ? "/dashboard/candidates?import=csv" : item.href) as Route}
-        className="group inline-flex shrink-0 items-center gap-1 rounded-lg px-2.5 py-1.5 text-sm font-medium text-primary transition-all hover:gap-1.5"
+      <Button
+        asChild
+        variant="outline"
+        size="sm"
+        className="w-full shrink-0 sm:w-32"
       >
-        {isPipeline ? "Import CSV" : item.ctaLabel}
-        <ArrowRight className="size-4" />
-      </Link>
-      {showSkip ? (
-        <button
-          type="button"
-          disabled={busy}
-          onClick={() => onRun(() => skipSetupChecklistItemAction(item.key))}
-          aria-label={`Skip "${item.title}"`}
-          title="Skip this step"
-          className="shrink-0 rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-50"
+        <Link
+          href={(isPipeline ? "/dashboard/candidates?import=csv" : item.href) as Route}
         >
-          <X className="size-4" />
-        </button>
-      ) : null}
-    </div>
-  );
-}
-
-function PipelineExtras({
-  checklist,
-  busy,
-  onRun,
-}: {
-  checklist: SetupChecklist;
-  busy: boolean;
-  onRun: (action: () => Promise<ActionResult>) => void;
-}) {
-  const canLoadSample = checklist.visible && !checklist.sampleDataActive;
-  return (
-    <div className="mt-2 space-y-2">
-      {canLoadSample ? (
-        <Button
-          type="button"
-          size="sm"
-          variant="secondary"
-          disabled={busy}
-          onClick={() => onRun(() => loadSampleDataAction())}
-        >
-          Load sample data
-        </Button>
-      ) : null}
-      {checklist.publishedJob ? (
-        <CopyJobLink title={checklist.publishedJob.title} url={checklist.publishedJob.url} />
-      ) : null}
+          {isPipeline ? "Import CSV" : item.ctaLabel}
+          <ArrowRight className="size-3.5" />
+        </Link>
+      </Button>
     </div>
   );
 }

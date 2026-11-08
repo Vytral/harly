@@ -2,7 +2,7 @@ import "server-only";
 
 import type { Route } from "next";
 import { redirect } from "next/navigation";
-import { and, eq, isNull } from "drizzle-orm";
+import { and, eq, isNotNull, isNull } from "drizzle-orm";
 
 import { db } from "@harly/db";
 import {
@@ -35,6 +35,8 @@ import {
   roleLabel,
   withLegacyRoleDefaults,
   normalizeRoleScope,
+  builtinRoleDefaultScope,
+  builtinRoleScope,
   rolePolicyIsStrictlyBelow,
   unrestrictedRoleScope,
   type BuiltinRole,
@@ -191,13 +193,13 @@ export async function getRolePolicy(
         PERMISSIONS.filter((permission) => rawPermissions.includes(permission)),
         row.updatedAt,
       ),
-      scope: normalizeRoleScope(row.scope),
+      scope: builtinRoleScope(roleKey, row.scope),
     };
   }
 
   return {
     permissions: await getRolePermissions(workspaceId, roleKey),
-    scope: unrestrictedRoleScope(),
+    scope: builtinRoleDefaultScope(roleKey),
   };
 }
 
@@ -230,6 +232,7 @@ export async function requirePermission(permission: Permission) {
 export async function requireJobPermission(
   permission: Permission,
   jobId: string,
+  options: { trashed?: boolean } = {},
 ) {
   const context = await requirePermission(permission);
   const policy = await getRolePolicy(context.organization.id, context.roleKey);
@@ -244,7 +247,8 @@ export async function requireJobPermission(
       and(
         eq(jobs.workspaceId, context.organization.id),
         eq(jobs.id, jobId),
-        isNull(jobs.deletedAt),
+        // `trashed` is for restoring or purging: only a job in the trash counts.
+        options.trashed ? isNotNull(jobs.deletedAt) : isNull(jobs.deletedAt),
       ),
     )
     .limit(1);
@@ -685,8 +689,8 @@ export async function listWorkspaceRoles(): Promise<WorkspaceRoleSummary[]> {
         key === "owner"
           ? unrestrictedRoleScope()
           : override
-            ? normalizeRoleScope(override.scope)
-            : unrestrictedRoleScope(),
+            ? builtinRoleScope(key, override.scope)
+            : builtinRoleDefaultScope(key),
       isBuiltin: true,
       isOwner: key === "owner",
       editable: key !== "owner",

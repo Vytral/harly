@@ -33,6 +33,167 @@ Before tagging, write the version section below. Use these headings when they
 apply: `Added`, `Changed`, `Fixed`, `Removed`, `Security`. Note migrations and
 anything an operator must do before upgrading.
 
+## [0.4.0]
+
+A release that makes a fresh installation usable without a mail provider, an AI
+provider or any other external service, and gives candidates and recruiters
+more ways to sign in. Contains two database migrations (`0165`, `0166`); run
+`pnpm db:migrate` (the container image does it for you). The CLI is
+`@harly/cli` 0.7.0.
+
+### Added
+
+- Candidate portal sign-in methods. Owners and admins choose which ones are on
+  in Settings → Candidate Portal: password, access code, magic link, OAuth
+  (Google, GitHub, LinkedIn) and passkeys. A method is offered only when it is
+  enabled and its requirements exist (magic link needs outgoing email, OAuth
+  needs credentials), and at least one usable method always remains. New
+  installations start with password and access code, which need nothing
+  external; existing ones keep the methods they already used.
+- Password accounts for candidates (scrypt, progressive lockout, session
+  rotation) with account recovery that does not need email: one-time recovery
+  codes shown once, and reset or access links a recruiter issues from the
+  candidate's record. With email configured, candidates can also request a
+  reset link.
+- In-app candidate notifications for offers, so a candidate sees an offer in the
+  portal even when email is off or fails.
+- Permissions `candidates:reject`, `candidates:export` and `offers:decide`.
+  Rejecting, deleting and exporting candidates are now separate permissions, and
+  recording a candidate's answer to an offer is separate from approving it.
+- Built-in roles `viewer`, `interviewer`, `coordinator` and `sourcer`.
+- More AI providers: Groq, DeepSeek, Mistral, Together AI, Fireworks AI,
+  Cerebras, Azure OpenAI, Ollama and a generic OpenAI-compatible provider.
+- A searchable model picker fed by models.dev, with a bundled copy that works
+  offline. Set `HARLY_MODELS_DEV=0` to never contact it.
+- API key scopes `jobs:publish`, `jobs:delete`, `applications:reject`,
+  `applications:hire` and `offers:decide`. The older `*:write` scopes still
+  cover them, so existing keys keep working.
+- `HARLY_ORG_NAME`: optional organization name that `harly init` writes to
+  `.env` and the onboarding wizard uses as the default.
+- A telemetry collector (`apps/telemetry`) for the CLI's opt-in, anonymous
+  install statistics.
+
+### Changed
+
+- Webhooks and the embed widget in Settings → Developers & API are redesigned:
+  endpoint status, grouped events, signature verification examples, test
+  events, delivery history, and an embed configurator with a live preview and
+  copy-ready snippets.
+- The job form preview follows what you edit, and shows the public page only
+  once the job is published.
+- The first-run dashboard has a welcome state with next steps, the setup
+  checklist is aligned, and the onboarding wizard is shorter and every step is
+  optional.
+- Harly AI buttons, the chat launcher and its shortcut, command palette entries
+  and AI panels stay hidden until an AI provider is configured and usable.
+- The Gravatar setting sits under Identity on small screens.
+- The custom AI endpoint now works: hosted providers accept their own host,
+  OpenAI-compatible and Ollama accept any public https host, and local or LAN
+  hosts need `HARLY_ALLOW_LOCAL_LLM=1`. Errors explain which rule applied.
+- The sign-in screens follow the device's light or dark mode instead of being
+  forced to light.
+- "Draft for me" in the job description is now "Insert outline".
+
+### Fixed
+
+- A job could not be created on a new instance. Only the title is required; the
+  description, education, keywords and a teammate are optional. Publishing a
+  job still needs a description or at least one section, in the app and in the
+  API.
+- Revealing a field or adding a section in the job form scrolled the page and
+  left it blank, and the preview left a large gap under the form.
+- The embed widget never rendered because of a reference error in its loader.
+- Connecting Claude or ChatGPT over MCP failed with an unknown application:
+  automatic app registration is a separate switch from "any MCP app", the
+  setting was read from a single workspace, the registration rate limit was too
+  low for shared addresses, and the browser origins of claude.ai and chatgpt.com
+  were refused. Errors now say what failed.
+- Offers could not be sent without an email provider; they are now marked as
+  sent and the recruiter shares the portal link.
+- A failing confirmation email no longer fails an application that was already
+  saved, and `skills` and `experienceYears` are stored.
+- Bulk deleting candidates ignored a role's job assignment, a hiring manager
+  received offer details, and a person's jobs listed deleted and unassigned jobs.
+- Restoring or permanently deleting a job ignored a role's job assignment.
+- The AI Model and API key fields were filled with the owner's email or a saved
+  password by browser password managers. Secret fields now use a masked text
+  input that password managers ignore.
+- Forgot password said a link was sent when no email provider was configured.
+- The three candidate OAuth callbacks always ended in a sign-in failure.
+- The setup checklist and sample-data controls no longer break the card layout.
+
+### Upgrade notes
+
+- Run the database migrations. `0166` keeps custom roles working: roles with
+  `candidates:edit` gain `candidates:reject`, roles with `offers:manage` or
+  `offers:approve` gain `offers:decide`, and roles with `candidates:view` gain
+  `candidates:export`. Remove `candidates:export` from roles that should not
+  download candidate data.
+- Hiring managers no longer export the candidate directory.
+- Existing installations keep their `.env` and `compose.yaml`. To prefill the
+  company name on a new deployment, set `HARLY_ORG_NAME`.
+
+## [0.3.3]
+
+A patch release for Harly AI on OpenAI reasoning models and the public demo.
+No database migrations.
+
+### Fixed
+
+- Chat follow-ups failed on OpenAI reasoning models (such as `gpt-6-*`) with
+  "function_call was provided without its required 'reasoning' item": earlier
+  turns now replay tool calls inline instead of as stored item references.
+- AI scoring fell back to Harly's built-in rules on those models because
+  `temperature` was sent to a model that rejects it.
+- Harly AI cards (`presentUi`) no longer flicker while they stream: finished
+  blocks stay on screen while the next one arrives.
+- Replies follow the language of the latest message only.
+- `harly init` now writes a `compose.yaml` that forwards the `DEMO_*` settings
+  and the database pool sizes; an empty `DEMO_CDN_URL` falls back to the CDN.
+
+### Upgrade notes
+
+- Existing CLI installations keep their `compose.yaml`. On a demo instance, add
+  the `DEMO_*` lines to its `x-env` block by hand (see the generated template).
+
+## [0.3.2]
+
+A patch release for the public demo and scheduler reliability. No database
+migrations.
+
+### Fixed
+
+- Harly AI was off in every demo visitor sandbox: sandboxes have their own
+  workspace id, so the `DEMO_WORKSPACE_ID` pin rejected them. Live sandboxes now
+  use the platform demo key, with the same per-IP and daily limits.
+- `compose.yaml` did not pass `DEMO_AI_API_KEY`, `DEMO_AI_MODEL`,
+  `DEMO_AI_DAILY_REQUEST_LIMIT`, `DEMO_SANDBOX_TTL_MINUTES` or
+  `DEMO_SANDBOX_MAX_ACTIVE` to the containers, so setting them in `.env` had no
+  effect.
+- In demo mode the scheduler no longer runs `automations` and `domain-events`,
+  which the demo refuses by design and which logged a failed run every few
+  seconds. Normal installations are unchanged.
+- Cron and mailbox-sync advisory locks now use small dedicated connection
+  pools (`HARLY_DB_LOCK_POOL_MAX`, default 20, and
+  `HARLY_DB_MAILBOX_LOCK_POOL_MAX`, default 4), forwarded by `compose.yaml`
+  along with `HARLY_DB_POOL_MAX`. Holding them on the main pool
+  let enough overlapping jobs take every connection while their own queries
+  waited for one.
+- A demo visitor's entry purges at most three expired sandboxes before its own
+  is created; the `demo-reset` cron still purges the full backlog.
+
+### Changed
+
+- The demo seed includes AI evaluations for most applications, so scores and
+  recommendations show on first load. Two new applicants stay unscored so
+  visitors can try scoring.
+
+### Upgrade notes
+
+- Demo instances: set `DEMO_WORKSPACE_ID` to the demo template workspace id.
+  Without it `demo-reset` refuses to run (HTTP 503) and never purges expired
+  sandboxes.
+
 ## [0.3.1]
 
 A patch release with fixes for the public demo, career page polish and a

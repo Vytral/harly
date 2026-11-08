@@ -84,14 +84,33 @@ export function TileLink({
 export function EmptyHint({
   icon: Icon,
   text,
+  title,
+  action,
 }: {
   icon: LucideIcon;
   text: string;
+  /** Optional bold lead line above the explanation. */
+  title?: string;
+  /** One clear next step; rendered as a small outline button. */
+  action?: { label: string; href: Route };
 }) {
   return (
     <div className="m-4 flex flex-1 flex-col items-center justify-center gap-2 rounded-[var(--radius-md)] bg-warm-paper px-6 py-10 text-center">
-      <Icon className="size-5 text-quiet-mist" strokeWidth={1.6} />
-      <p className="text-[13px] text-soft-ink">{text}</p>
+      <span className="grid size-10 place-items-center rounded-full bg-pure-snow shadow-[var(--shadow-card)]">
+        <Icon className="size-[18px] text-soft-ink" strokeWidth={1.6} />
+      </span>
+      {title ? (
+        <p className="text-[14px] font-medium text-near-ink">{title}</p>
+      ) : null}
+      <p className="max-w-[28ch] text-pretty text-[13px] text-soft-ink">{text}</p>
+      {action ? (
+        <Link
+          href={action.href}
+          className="mt-1 inline-flex h-8 items-center rounded-[var(--radius-btn)] border border-hairline bg-pure-snow px-3 text-[12.5px] font-medium text-near-ink transition-colors hover:bg-card-inset focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-near-ink"
+        >
+          {action.label}
+        </Link>
+      ) : null}
     </div>
   );
 }

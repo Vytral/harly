@@ -14,7 +14,9 @@ import { updateTask } from "@/features/tasks/actions";
 import { toast } from "@/lib/notification-island/toast";
 import { cn } from "@/lib/utils";
 import {
-  presentUiInputSchema,
+  nextShownUiBlocks,
+  NO_SHOWN_UI_BLOCKS,
+  type ShownUiBlocks,
   type CandidateAction,
   type UiBlock,
 } from "@/lib/ai/agent/ui-blocks-schema";
@@ -26,11 +28,20 @@ type Send = (message: string) => void;
  * parsed defensively: only fully-formed blocks render, the rest wait.
  */
 export function UiBlocks({ input, onSend, disabled }: { input: unknown; onSend: Send; disabled?: boolean }) {
-  const parsed = presentUiInputSchema.safeParse(input);
-  if (!parsed.success) return null;
+  // While the input streams, a block whose newest item is half-written fails
+  // validation for a token or two. Keep showing what was already rendered
+  // rather than dropping it, so nothing unmounts and re-animates. Retention
+  // applies only mid-stream: a complete input always renders exactly as is.
+  // (Derived state updated during render, per React's "storing information
+  // from previous renders" pattern; the signature check stops it looping.)
+  const [shown, setShown] = useState<ShownUiBlocks>(NO_SHOWN_UI_BLOCKS);
+  const target = nextShownUiBlocks(shown, input);
+  if (target !== shown) setShown(target);
+  const blocks = target.blocks;
+  if (blocks.length === 0) return null;
   return (
     <div className="flex flex-col gap-2.5">
-      {parsed.data.blocks.map((block, index) => (
+      {blocks.map((block, index) => (
         <div
           key={`${block.kind}-${index}`}
           className="animate-in fade-in slide-in-from-bottom-1 fill-mode-both duration-200 motion-reduce:animate-none"

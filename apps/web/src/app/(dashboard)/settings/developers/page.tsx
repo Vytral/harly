@@ -4,6 +4,7 @@ import { DevelopersSettings } from "@/features/developers/DevelopersSettings";
 import {
   getLastWebhookDelivery,
   listApiKeys,
+  listWebhookDeliveries,
   listWebhookEndpoints,
   serializeApiKey,
   serializeWebhookEndpoint,
@@ -17,6 +18,7 @@ import {
   WEBHOOK_EVENTS,
   WEBHOOK_EVENT_LABELS,
 } from "@/server/webhooks/events";
+import { summarizeDeliveries } from "@/features/developers/webhook-ui";
 import { getHarlyPublicOrigin } from "@/lib/public-origin";
 
 export const dynamic = "force-dynamic";
@@ -33,13 +35,21 @@ export default async function DevelopersSettingsPage() {
   ]);
 
   const webhooks = await Promise.all(
-    endpoints.map(async (endpoint) => ({
-      ...serializeWebhookEndpoint(endpoint),
-      lastDelivery: await getLastWebhookDelivery({
+    endpoints.map(async (endpoint) => {
+      const recent = await listWebhookDeliveries({
         workspaceId: organization.id,
         endpointId: endpoint.id,
-      }),
-    })),
+        limit: 20,
+      });
+      return {
+        ...serializeWebhookEndpoint(endpoint),
+        lastDelivery: await getLastWebhookDelivery({
+          workspaceId: organization.id,
+          endpointId: endpoint.id,
+        }),
+        recent: summarizeDeliveries(recent),
+      };
+    }),
   );
 
   const appUrl = getHarlyPublicOrigin();

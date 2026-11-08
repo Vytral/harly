@@ -116,7 +116,7 @@ describe("Harly AI task updates", () => {
     });
     mocks.getActorPermissions.mockResolvedValue([
       "jobs:create", "jobs:view", "jobs:edit", "jobs:delete", "jobs:publish", "jobs:approve",
-      "hiring_team:manage", "candidates:view", "candidates:edit", "candidates:delete", "candidates:move",
+      "hiring_team:manage", "candidates:view", "candidates:edit", "candidates:reject", "candidates:delete", "candidates:move",
       "dsar:manage", "collab:write", "interviews:manage", "interviews:feedback", "tasks:read", "tasks:write",
       "offers:manage", "offers:approve", "templates:manage", "reports:read", "members:read", "members:invite",
       "members:edit", "members:remove", "invite_links:manage", "settings:edit", "integrations:manage",
@@ -713,7 +713,7 @@ describe("AI write results name the records they changed", () => {
       roleKey: "owner",
     });
     mocks.getActorPermissions.mockResolvedValue([
-      "jobs:create", "jobs:view", "candidates:view", "candidates:edit", "candidates:move",
+      "jobs:create", "jobs:view", "candidates:view", "candidates:edit", "candidates:reject", "candidates:move",
       "candidates:delete", "collab:write", "interviews:manage", "interviews:feedback", "tasks:read",
       "tasks:write", "offers:manage", "offers:approve", "automations:manage", "reports:read",
     ]);

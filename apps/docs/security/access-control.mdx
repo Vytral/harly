@@ -20,8 +20,20 @@ does not grant or revoke access by itself.
 | --- | --- |
 | **Owner** | Unconditionally has every permission. The Owner role is locked and cannot be edited or deleted. |
 | **Admin** | Starts with every explicit permission, but an administrator can tune it. It is not the same as the locked Owner role. |
-| **Recruiter** | Create and publish jobs, manage candidates, offers, interviews, documents, and recruiting workflows. |
-| **Hiring manager** | Approve and edit jobs, view candidates, move applications, provide interview feedback, and read reports. |
+| **Recruiter** | Create and publish jobs, manage, reject and export candidates, run interviews, make offers and record the candidate's answer, documents, and recruiting workflows. Cannot delete candidates or jobs. |
+| **Hiring manager** | Approve and edit jobs, view candidates, move applications, provide interview feedback, and read reports. Cannot reject, export, or see offers. |
+| **Coordinator** | Schedule and run interviews, manage tasks, and move candidates. No offers, rejecting, deleting or exporting. |
+| **Sourcer** | Add and edit candidates and the talent pool. Cannot move stages, reject, make offers or export. |
+| **Interviewer** | See candidates on the jobs they are assigned to and submit interview feedback. Limited to **Assigned jobs only** by default. |
+| **Viewer** | Read-only access to jobs, candidates, tasks, documents and reports. Holds no write permission. |
+
+Admins can assign any role below their own. A role can only assign roles with
+strictly fewer permissions and an equal or narrower job scope, so a Recruiter
+can hand out Coordinator, Sourcer, Interviewer or Viewer, but not Hiring
+manager. Built-in roles other than Owner can be tuned in **Settings → Members &
+roles**; a workspace that already had a custom role with one of the new keys
+(`coordinator`, `sourcer`, `interviewer`, `viewer`) keeps that role's saved
+permissions and scope.
 
 ## Create a custom role
 
@@ -33,7 +45,8 @@ role editor is in **Settings → Members & roles → Roles → New role**. The
   <Step title="Name the role">
     Enter a name between 2 and 40 characters, such as `Sourcer`. Harly creates
     a slug-like role key from the name. A role key that collides with a
-    built-in key (`owner`, `admin`, `recruiter`, or `hiring_manager`) is
+    built-in key (`owner`, `admin`, `recruiter`, `hiring_manager`,
+    `coordinator`, `sourcer`, `interviewer`, or `viewer`) is
     rejected.
   </Step>
   <Step title="Set the access scope">
@@ -83,12 +96,17 @@ Permissions follow the pattern `resource:action`. The available permissions are:
 | Permission | What it controls |
 | --- | --- |
 | `jobs:create` `jobs:view` `jobs:edit` `jobs:delete` `jobs:publish` `jobs:approve` | Job lifecycle |
-| `candidates:view` `candidates:edit` `candidates:delete` `candidates:move` | Candidate records |
+| `candidates:view` `candidates:edit` `candidates:move` | View, edit and advance candidates |
+| `candidates:reject` | Reject or discard a candidate, one or in bulk, including moving them to a rejection stage |
+| `candidates:delete` | Move candidates to the trash, restore them and purge their data |
+| `candidates:export` | Download CSV exports that contain candidate personal data |
 | `hiring_team:manage` | Add or remove hiring team members for a job |
 | `collab:write` | Notes, scorecards, interview scheduling, and candidate messaging |
 | `interviews:manage` `interviews:feedback` | Schedule interviews and submit feedback |
 | `tasks:read` `tasks:write` | Task management |
-| `offers:manage` `offers:approve` | Draft, send, approve, and withdraw offers |
+| `offers:manage` | Draft, edit and send offers |
+| `offers:approve` | Internal approval of an offer before it is sent |
+| `offers:decide` | Record the candidate's answer (accepted, declined) or withdraw an offer |
 | `templates:manage` | Email and offer templates |
 | `reports:read` | Pipeline and analytics reports |
 | `members:read` `members:invite` `members:edit` `members:remove` | Team management |
@@ -100,6 +118,17 @@ Permissions follow the pattern `resource:action`. The available permissions are:
 | `documents:read` `documents:manage` `documents:share` | Candidate documents |
 | `automations:manage` | Workflow automation rules |
 | `dsar:manage` | Review data subject requests, export consent records and the audit log |
+
+### Existing custom roles
+
+When `candidates:reject`, `offers:decide` and `candidates:export` were split out,
+a migration added them to every stored role that already held the permission
+they came from: `candidates:reject` to roles with `candidates:edit`,
+`offers:decide` to roles with `offers:manage` or `offers:approve`, and
+`candidates:export` to roles with `candidates:view`. Nothing was removed, so no
+role lost a capability. The last one keeps today's behaviour, where anyone who
+could view candidates could export them; remove **Export candidate data** from
+roles that should not. The built-in Hiring manager no longer exports by default.
 
 ### Who can export sensitive records
 

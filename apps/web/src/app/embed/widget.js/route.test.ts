@@ -47,4 +47,16 @@ describe("GET /embed/widget.js", () => {
     expect(script).toContain("consentGiven");
     expect(script).toContain('consentInput.type = "checkbox"');
   });
+
+  it("reads the documented data attributes and has no undefined free variables in boot", async () => {
+    const response = await GET(new Request("https://harly.example/embed/widget.js"));
+    const script = await response.text();
+
+    for (const attr of ["data-pk", "data-job", "data-theme", "data-accent", "data-department", "data-limit", "data-container"]) {
+      expect(script).toContain(`"${attr}"`);
+    }
+    // Regression: boot() once referenced an undeclared `workspace` and threw.
+    expect(script).not.toMatch(/\bworkspace\b\s*&&|!workspace/);
+    expect(() => new Function(script)).not.toThrow();
+  });
 });

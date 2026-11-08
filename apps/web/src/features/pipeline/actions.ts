@@ -168,7 +168,7 @@ async function getApplicationsForAction(
  * every application can belong to a different job assignment.
  */
 async function requireAllApplicationPermissions(
-  permission: "candidates:move" | "candidates:edit",
+  permission: "candidates:move" | "candidates:edit" | "candidates:reject",
   applicationIds: string[],
 ) {
   await Promise.all(
@@ -284,6 +284,14 @@ export async function moveApplicationInPipeline(
           const changedStage = application.currentStageId !== input.toStageId;
           const nextStatus = applicationStatusForStage(lockedTarget);
           const changedStatus = application.status !== nextStatus;
+          // Landing in a rejection stage rejects the application: that is
+          // candidates:reject, not just candidates:move.
+          if (nextStatus === "rejected" && changedStatus) {
+            await requireApplicationPermission(
+              "candidates:reject",
+              input.applicationId,
+            );
+          }
 
           const [updatedApplication] = await tx
             .update(applications)
@@ -674,6 +682,12 @@ export async function bulkMoveApplications(
 
           const toStageName = targetStage.name;
           const nextStatus = applicationStatusForStage(lockedTarget);
+          if (nextStatus === "rejected") {
+            await requireAllApplicationPermissions(
+              "candidates:reject",
+              uniqueApplicationIds,
+            );
+          }
           const stageEmailConfig = normalizeStageEmailConfig(
             targetStage.emailConfig,
           );
@@ -1082,15 +1096,18 @@ export async function updateApplicationStatus(
       return { success: false, error: "Invalid application status request." };
     }
 
-    await requirePermission("candidates:edit");
     const { organization: workspace, user } = await getWorkspaceContext();
 
     if (workspace.id !== input.workspaceId) {
       return { success: false, error: "Workspace access denied." };
     }
 
+    // Rejecting is its own permission; every other status change is an edit.
+    const statusPermission =
+      input.status === "rejected" ? "candidates:reject" : "candidates:edit";
+    await requirePermission(statusPermission);
     await requireAllApplicationPermissions(
-      "candidates:edit",
+      statusPermission,
       input.applicationIds,
     );
 

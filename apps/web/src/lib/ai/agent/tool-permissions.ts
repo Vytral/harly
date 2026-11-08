@@ -101,7 +101,7 @@ export const AGENT_READ_TOOL_PERMISSIONS: Record<string, Permission | null> = {
 export const AGENT_WRITE_TOOL_PERMISSIONS: Record<AgentWriteTool, Permission> = {
   undoAgentAction: "collab:write",
   moveCandidateStage: "candidates:move",
-  rejectCandidate: "candidates:delete",
+  rejectCandidate: "candidates:reject",
   createTask: "tasks:write",
   updateTask: "tasks:write",
   completeMyOpenTasks: "tasks:write",

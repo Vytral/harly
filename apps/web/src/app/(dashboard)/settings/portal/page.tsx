@@ -4,6 +4,10 @@ import { db, workspaceSettings } from "@harly/db";
 import { getWorkspaceContext } from "@/features/workspaces/context";
 import { requirePagePermission } from "@/features/workspaces/permissions-server";
 import { CandidatePortalCard } from "@/features/workspaces/CandidatePortalCard";
+import {
+  getPortalAuthRequirements,
+  getStoredPortalAuthConfig,
+} from "@/lib/portal-auth-methods";
 import { getWorkspaceEmailStatus } from "@/lib/email/config";
 import { getHarlyPublicOrigin } from "@/lib/public-origin";
 
@@ -14,7 +18,7 @@ export default async function PortalSettingsPage() {
   const { organization, role } = await getWorkspaceContext();
   const canEdit = role === "owner" || role === "admin";
 
-  const [[row], emailStatus] = await Promise.all([
+  const [[row], emailStatus, authConfig, authRequirements] = await Promise.all([
     db
       .select({
         candidatePortalEnabled: workspaceSettings.candidatePortalEnabled,
@@ -32,10 +36,14 @@ export default async function PortalSettingsPage() {
       .where(eq(workspaceSettings.organizationId, organization.id))
       .limit(1),
     getWorkspaceEmailStatus(organization.id),
+    getStoredPortalAuthConfig(organization.id),
+    getPortalAuthRequirements(organization.id),
   ]);
 
   return (
     <CandidatePortalCard
+      authConfig={authConfig}
+      authRequirements={authRequirements}
       enabled={row?.candidatePortalEnabled ?? false}
       emailEnabled={emailStatus.enabled}
       canEdit={canEdit}

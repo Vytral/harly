@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "version": "0.3.1",
+  "version": "0.3.3",
   "image": "ghcr.io/vytral/harly",
-  "digest": "sha256:7f3b28d5ca689f52194142bc031a5d66e851bdaae21df6c98f13f5475d33b2cb"
+  "digest": "sha256:b71b1020e7eda3bb76001e7d939642d7458010de57f603991a8f7367027afe6a"
 }

@@ -10,7 +10,9 @@ import {
   updateCustomRole,
 } from "@/features/workspaces/roles-actions";
 import {
+  BUILTIN_ROLE_DESCRIPTIONS,
   PERMISSION_GROUPS,
+  isBuiltinRole,
   type RoleScope,
   type Permission,
 } from "@/features/workspaces/permissions";
@@ -94,6 +96,11 @@ export function RolesManager({ roles }: { roles: RoleSummary[] }) {
                     {role.memberCount}{" "}
                     {role.memberCount === 1 ? "member" : "members"}
                   </p>
+                  {role.isBuiltin && isBuiltinRole(role.key) ? (
+                    <p className="mt-0.5 text-xs text-muted-foreground">
+                      {BUILTIN_ROLE_DESCRIPTIONS[role.key]}
+                    </p>
+                  ) : null}
                 </div>
               </div>
 

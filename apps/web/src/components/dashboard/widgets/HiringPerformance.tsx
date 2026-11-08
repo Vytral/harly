@@ -39,6 +39,13 @@ export function HiringPerformance({
     { label: "Offer acceptance", ...data.metrics.offerAcceptance },
   ];
 
+  // A brand-new workspace has nothing to chart. Show quiet dashes and one line
+  // of explanation instead of a flat zero line and "+0%" deltas.
+  const empty =
+    !data.metrics.applications.value &&
+    !data.metrics.interviews.value &&
+    !data.metrics.hires.value;
+
   return (
     <Tile className={className}>
       <div className="flex flex-wrap items-center justify-between gap-2 px-5 pt-5">
@@ -49,18 +56,23 @@ export function HiringPerformance({
           Hiring performance
         </h2>
         <div className="flex items-center gap-2">
-          <Select value={metric} onValueChange={(v) => setMetric(v as ChartMetric)}>
-            <SelectTrigger size="sm" className="w-[140px]">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {CHART_METRICS.map((m) => (
-                <SelectItem key={m.key} value={m.key}>
-                  {m.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          {empty ? null : (
+            <Select
+              value={metric}
+              onValueChange={(v) => setMetric(v as ChartMetric)}
+            >
+              <SelectTrigger size="sm" className="w-[140px]">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {CHART_METRICS.map((m) => (
+                  <SelectItem key={m.key} value={m.key}>
+                    {m.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
         </div>
       </div>
 
@@ -69,7 +81,7 @@ export function HiringPerformance({
           {kpis.map((kpi) => {
             // A null value or delta means "no data" (for example, no offers were
             // decided), so it renders as a dash rather than a misleading zero.
-            const delta = kpi.deltaPct;
+            const delta = empty ? null : kpi.deltaPct;
             const hasDelta = delta != null;
             const up = delta != null && delta >= 0;
             return (
@@ -77,9 +89,15 @@ export function HiringPerformance({
                 key={kpi.label}
                 className="rounded-[var(--radius-inner)] bg-card-inset p-4"
               >
-                <p className="truncate text-[12.5px] font-medium text-soft-ink">{kpi.label}</p>
+                <p className="truncate text-[12.5px] font-medium text-soft-ink">
+                  {kpi.label}
+                </p>
                 <p className="font-display mt-1.5 text-[28px] leading-none tabular-nums text-near-ink">
-                  {kpi.value == null ? "—" : kpi.isRate ? `${kpi.value}%` : kpi.value}
+                  {empty || kpi.value == null
+                    ? "—"
+                    : kpi.isRate
+                      ? `${kpi.value}%`
+                      : kpi.value}
                 </p>
                 <p
                   className={cn(
@@ -107,9 +125,11 @@ export function HiringPerformance({
                   ) : (
                     "—"
                   )}
-                  <span className="font-normal text-soft-ink">
-                    vs previous 14 days
-                  </span>
+                  {empty ? null : (
+                    <span className="font-normal text-soft-ink">
+                      vs previous 14 days
+                    </span>
+                  )}
                 </p>
               </div>
             );
@@ -117,7 +137,20 @@ export function HiringPerformance({
         </div>
 
         <div className="flex min-w-0 items-center">
-          <PerformanceChart points={data.series[metric]} />
+          {empty ? (
+            <div className="flex min-h-[184px] w-full flex-col items-center justify-center gap-2 rounded-[var(--radius-inner)] bg-warm-paper px-6 py-8 text-center">
+              <BarChart3 className="size-5 text-quiet-mist" strokeWidth={1.6} />
+              <p className="text-[14px] font-medium text-near-ink">
+                Trends appear with your first applications
+              </p>
+              <p className="max-w-[34ch] text-pretty text-[13px] text-soft-ink">
+                Once candidates apply, you will see applications, interviews and
+                hires over the last 14 days.
+              </p>
+            </div>
+          ) : (
+            <PerformanceChart points={data.series[metric]} />
+          )}
         </div>
       </div>
     </Tile>

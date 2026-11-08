@@ -11,14 +11,19 @@ import type { Permission } from "@/features/workspaces/permissions";
 export const API_SCOPE_PERMISSION: Record<ApiScope, Permission> = {
   "jobs:read": "jobs:view",
   "jobs:write": "jobs:edit",
+  "jobs:publish": "jobs:publish",
+  "jobs:delete": "jobs:delete",
   "candidates:read": "candidates:view",
   "candidates:write": "candidates:edit",
   "applications:read": "candidates:view",
   "applications:write": "candidates:move",
+  "applications:reject": "candidates:reject",
+  "applications:hire": "candidates:edit",
   "interviews:read": "interviews:feedback",
   "interviews:write": "interviews:manage",
   "offers:read": "offers:manage",
   "offers:write": "offers:manage",
+  "offers:decide": "offers:decide",
   "scorecards:read": "candidates:view",
   "scorecards:write": "collab:write",
   "tasks:read": "tasks:read",
@@ -42,6 +47,20 @@ export const API_SCOPE_PERMISSION: Record<ApiScope, Permission> = {
   "automations:write": "automations:manage",
 };
 
+/**
+ * Umbrella scopes keep covering what they covered before the finer scopes
+ * existed (see LEGACY_SCOPE_ALIASES), so minting one also needs the permissions
+ * of everything it still reaches. Existing keys are untouched; new ones cannot
+ * smuggle publish, delete, reject, hire or decide past a creator's role.
+ */
+export const LEGACY_SCOPE_EXTRA_PERMISSIONS: Partial<
+  Record<ApiScope, Permission[]>
+> = {
+  "jobs:write": ["jobs:publish", "jobs:delete"],
+  "applications:write": ["candidates:reject", "candidates:edit"],
+  "offers:write": ["offers:decide"],
+};
+
 export type MissingScopePermission = {
   scope: ApiScope;
   permission: Permission;
@@ -56,9 +75,14 @@ export function missingScopePermissions(
   const missing: MissingScopePermission[] = [];
   for (const scope of requested) {
     if (!isApiScope(scope)) continue;
-    const permission = API_SCOPE_PERMISSION[scope];
-    if (!heldSet.has(permission)) {
-      missing.push({ scope, permission });
+    for (const permission of [
+      API_SCOPE_PERMISSION[scope],
+      ...(LEGACY_SCOPE_EXTRA_PERMISSIONS[scope] ?? []),
+    ]) {
+      if (!heldSet.has(permission)) {
+        missing.push({ scope, permission });
+        break;
+      }
     }
   }
   return missing;

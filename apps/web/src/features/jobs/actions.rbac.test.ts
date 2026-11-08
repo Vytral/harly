@@ -48,7 +48,12 @@ vi.mock("next/navigation", () => ({
   redirect: vi.fn(),
 }));
 
-import { updateJobAction, updateJobStatusAction } from "./actions";
+import {
+  permanentlyDeleteJobAction,
+  restoreJobAction,
+  updateJobAction,
+  updateJobStatusAction,
+} from "./actions";
 
 const JOB_ID = "job-1";
 
@@ -109,5 +114,22 @@ describe("job action authorization", () => {
     await updateJobStatusAction(form);
     expect(mocks.requireJobPermission).toHaveBeenCalledWith("jobs:edit", JOB_ID);
     expect(mocks.updateJobStatus).toHaveBeenCalledWith(JOB_ID, "draft");
+  });
+
+  it("scopes restoring and purging a trashed job to the actor's jobs", async () => {
+    mocks.requireJobPermission.mockRejectedValue(
+      new Error("You are not assigned to this job."),
+    );
+
+    await expect(restoreJobAction(JOB_ID)).rejects.toThrow(
+      "You are not assigned to this job.",
+    );
+    await expect(permanentlyDeleteJobAction(JOB_ID)).rejects.toThrow(
+      "You are not assigned to this job.",
+    );
+
+    expect(mocks.requireJobPermission).toHaveBeenCalledWith("jobs:delete", JOB_ID, {
+      trashed: true,
+    });
   });
 });

@@ -6,12 +6,13 @@
  */
 
 export const CHECKLIST_ITEM_KEYS = [
-  "invite_teammate",
   "create_job",
   "publish_job",
   "pipeline_candidates",
+  "invite_teammate",
   "connect_email",
   "connect_calendar",
+  "connect_ai",
   "automate_workflow",
 ] as const;
 
@@ -31,6 +32,8 @@ export type ChecklistFacts = {
   automationCount: number;
   /** A second member exists, or an invitation is outstanding. */
   teammateInvited: boolean;
+  /** An AI provider is enabled, keyed and decryptable for this workspace. */
+  aiConfigured: boolean;
 };
 
 export type ChecklistPreferences = {
@@ -76,14 +79,6 @@ type ItemDefinition = {
 
 export const CHECKLIST_DEFINITIONS: readonly ItemDefinition[] = [
   {
-    key: "invite_teammate",
-    title: "Invite a teammate",
-    value: "Hiring goes faster with a second pair of eyes on every candidate.",
-    href: "/settings/members",
-    optional: true,
-    done: (facts) => facts.teammateInvited,
-  },
-  {
     key: "create_job",
     title: "Create your first job",
     value: "Describe the role once, then share it from your careers page.",
@@ -108,6 +103,14 @@ export const CHECKLIST_DEFINITIONS: readonly ItemDefinition[] = [
     done: (facts) => facts.applicationCount > 0,
   },
   {
+    key: "invite_teammate",
+    title: "Invite a teammate",
+    value: "Hiring goes faster with a second pair of eyes on every candidate.",
+    href: "/settings/members",
+    optional: true,
+    done: (facts) => facts.teammateInvited,
+  },
+  {
     key: "connect_email",
     title: "Connect email",
     value: "Send and track candidate emails from one inbox.",
@@ -122,6 +125,14 @@ export const CHECKLIST_DEFINITIONS: readonly ItemDefinition[] = [
     href: "/settings/integrations",
     optional: true,
     done: (facts) => facts.calendarConnected,
+  },
+  {
+    key: "connect_ai",
+    title: "Connect AI (optional)",
+    value: "Bring your own provider to screen candidates and draft messages. Harly works fully without it.",
+    href: "/settings/ai",
+    optional: true,
+    done: (facts) => facts.aiConfigured,
   },
   {
     key: "automate_workflow",

@@ -117,6 +117,8 @@ jobs:
       # scanned is byte for byte what gets tagged. A finding fails this job,
       # its digest is never recorded, and `image` never tags the version; the
       # untagged digest left in the registry is not installable by any name.
+      - name: Install Trivy
+        uses: ./.github/actions/install-trivy
       - name: Block HIGH and CRITICAL vulnerabilities before tagging
         uses: aquasecurity/trivy-action@v0.36.0
         env:
@@ -124,6 +126,7 @@ jobs:
           # linux/amd64 and cannot find it in the arm64 image.
           TRIVY_PLATFORM: ${{ matrix.platform }}
         with:
+          skip-setup-trivy: true
           image-ref: ghcr.io/vytral/harly@${{ steps.build.outputs.digest }}
           format: table
           severity: HIGH,CRITICAL

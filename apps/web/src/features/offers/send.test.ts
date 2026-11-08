@@ -17,6 +17,7 @@ const mocks = vi.hoisted(() => {
     updateCalls,
     transactionImpl,
     requirePermission: vi.fn(),
+    getWorkspaceEmailSender: vi.fn(),
     processEmailOutbox: vi.fn(),
     enqueueEmailOutbox: vi.fn(),
     renderActiveEmailTemplate: vi.fn(),
@@ -49,7 +50,7 @@ vi.mock("@harly/db", () => {
       update: vi.fn(() => ({
         set: (set: Record<string, unknown>) => {
           mocks.updateCalls.push({ set });
-          return { where: () => ({}) };
+          return { where: () => ({ returning: async () => mocks.selectQueue.shift() ?? [] }) };
         },
       })),
       transaction: (fn: (tx: unknown) => Promise<unknown>) =>
@@ -84,6 +85,7 @@ vi.mock("@/lib/email/outbox-processor", () => ({
 }));
 vi.mock("@/lib/email", () => ({
   sendWorkspaceEmail: vi.fn(),
+  getWorkspaceEmailSender: mocks.getWorkspaceEmailSender,
   getWorkspaceEmailBranding: vi.fn(),
 }));
 vi.mock("@/features/email-templates/data", () => ({
@@ -154,6 +156,8 @@ describe("F1-13 offer delivery via durable outbox", () => {
     mocks.enqueueEmailOutbox.mockResolvedValue("outbox-1");
     mocks.renderActiveEmailTemplate.mockReset();
     mocks.getWorkspaceEmailBranding.mockResolvedValue({});
+    mocks.getWorkspaceEmailSender.mockReset();
+    mocks.getWorkspaceEmailSender.mockResolvedValue({ send: vi.fn() });
     mocks.requirePermission.mockReset();
     mocks.requirePermission.mockResolvedValue({
       user: { id: "user-1" },
@@ -253,5 +257,18 @@ describe("F1-13 offer delivery via durable outbox", () => {
     const secondId = mocks.processEmailOutbox.mock.calls[1]?.[0]?.ids?.[0];
     expect(firstId).toBe("outbox-1");
     expect(secondId).toBe("outbox-1");
+  });
+
+  it("marks the offer sent without queuing email when no provider is configured", async () => {
+    mocks.getWorkspaceEmailSender.mockResolvedValue(null);
+    mocks.selectQueue.push([OFFER], [APPLICATION_ACTIVE], [RECIPIENT], [{ id: OFFER.id }]);
+
+    const result = await sendOffer({ offerId: OFFER.id });
+
+    expect(result.success).toBe(true);
+    expect(result.warning ?? "").toMatch(/not configured/i);
+    expect(mocks.updateCalls.some((c) => c.set.status === "sent")).toBe(true);
+    expect(mocks.enqueueEmailOutbox).not.toHaveBeenCalled();
+    expect(mocks.processEmailOutbox).not.toHaveBeenCalled();
   });
 });

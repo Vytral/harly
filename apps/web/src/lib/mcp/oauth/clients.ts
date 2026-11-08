@@ -130,20 +130,23 @@ export function parseDcrRequest(body: unknown): { name: string; redirectUris: st
     const problem = validateRedirectUriForRegistration(uri);
     if (problem) throw new DcrError("invalid_redirect_uri", problem);
   }
-  const grantTypes = input.grant_types;
-  if (grantTypes !== undefined) {
-    if (
-      !Array.isArray(grantTypes) ||
-      !grantTypes.every((g) => g === "authorization_code" || g === "refresh_token")
-    ) {
-      throw new DcrError("invalid_client_metadata", "Only authorization_code and refresh_token grants are supported.");
+  // RFC 7591 section 2: a server may ignore or substitute metadata it does not
+  // support instead of refusing. Real clients send extras (client_credentials,
+  // implicit, client_secret_post...); we always answer with what we actually
+  // do (public client, code + refresh), and the token endpoint enforces it.
+  for (const field of ["grant_types", "response_types"] as const) {
+    const value = input[field];
+    if (value !== undefined && !Array.isArray(value)) {
+      throw new DcrError("invalid_client_metadata", `${field} must be an array of strings.`);
     }
   }
-  const responseTypes = input.response_types;
-  if (responseTypes !== undefined) {
-    if (!Array.isArray(responseTypes) || !responseTypes.every((t) => t === "code")) {
-      throw new DcrError("invalid_client_metadata", "Only the code response type is supported.");
-    }
+  const grantTypes = input.grant_types as unknown[] | undefined;
+  if (grantTypes && grantTypes.length > 0 && !grantTypes.includes("authorization_code")) {
+    throw new DcrError("invalid_client_metadata", "grant_types must include authorization_code; this server only issues tokens through the authorization code flow.");
+  }
+  const responseTypes = input.response_types as unknown[] | undefined;
+  if (responseTypes && responseTypes.length > 0 && !responseTypes.includes("code")) {
+    throw new DcrError("invalid_client_metadata", "response_types must include code.");
   }
   const rawName = typeof input.client_name === "string" ? sanitizeClientName(input.client_name) : "";
   const https = (value: unknown) => {
@@ -219,4 +222,23 @@ export async function purgeExpiredClients(): Promise<void> {
         or(lt(mcpOauthClients.expiresAt, new Date(now.getTime() - 24 * 3600 * 1000))),
       ),
     );
+}
+
+export type ClientFailureReason = "client_unknown" | "client_expired" | "client_blocked" | "client_metadata_unverifiable";
+
+/**
+ * Why a client_id did not resolve, for logs and the (fixed-copy) error page.
+ * Only called after `resolveOAuthClient` returned null.
+ */
+export async function explainClientFailure(clientId: string): Promise<ClientFailureReason> {
+  if (isCimdClientId(clientId)) return "client_metadata_unverifiable";
+  const [row] = await db
+    .select({ source: mcpOauthClients.source, expiresAt: mcpOauthClients.expiresAt, blockedAt: mcpOauthClients.blockedAt })
+    .from(mcpOauthClients)
+    .where(eq(mcpOauthClients.clientId, clientId))
+    .limit(1);
+  if (!row || row.source !== "dcr") return "client_unknown";
+  if (row.blockedAt) return "client_blocked";
+  if (row.expiresAt && row.expiresAt <= new Date()) return "client_expired";
+  return "client_unknown";
 }

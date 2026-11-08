@@ -34,6 +34,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { SecretInput } from "@/components/ui/secret-input";
 import { Label } from "@/components/ui/label";
 import { SettingRow } from "@/components/ui/setting-row";
 import { Switch } from "@/components/ui/switch";
@@ -316,9 +317,8 @@ function CaptchaConnectForm({
 
         <div className="space-y-2">
           <Label htmlFor="captcha-secret">Secret key</Label>
-          <Input
+          <SecretInput
             id="captcha-secret"
-            type="password"
             value={secretKey}
             onChange={(event) => setSecretKey(event.target.value)}
             placeholder={
@@ -326,7 +326,6 @@ function CaptchaConnectForm({
                 ? "•••••••• (stored, leave blank to keep)"
                 : meta.sitePlaceholder
             }
-            autoComplete="off"
             className="font-mono text-xs"
           />
           <p className="text-xs text-muted-foreground">{meta.secretHint}</p>

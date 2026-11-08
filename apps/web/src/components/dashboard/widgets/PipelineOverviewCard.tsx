@@ -92,7 +92,9 @@ export function PipelineOverviewCard({
         ) : (
           <EmptyHint
             icon={GitBranch}
-            text="No open jobs yet. Publish a role to start a pipeline."
+            title="Your pipeline starts with a job"
+            text="Publish a role and every applicant lands here, stage by stage."
+            action={{ label: "Create a job", href: "/dashboard/jobs/new" as Route }}
           />
         )}
       </div>

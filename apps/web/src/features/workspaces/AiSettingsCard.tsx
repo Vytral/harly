@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import type { Route } from "next";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -12,16 +12,24 @@ import {
   saveAiAutoScoreAction,
   saveAiDuplicateCheckAction,
   saveAiResumeAnonymizationAction,
-  searchOpenRouterModelsAction,
+  listProviderModelsAction,
   testAiConnectionAction,
 } from "@/features/workspaces/ai-settings-actions";
 import {
   AI_PROVIDERS,
   formatModelLabel,
   getProvider,
+  isAiProviderId,
   type AiProviderId,
-  type OpenRouterModel,
 } from "@/lib/ai/providers";
+import {
+  buildModelOptions,
+  describeModelSource,
+  type ProviderModelsResult,
+} from "@/lib/ai/model-options";
+import { ProviderLogo } from "@/features/workspaces/provider-logos";
+import { ModelCombobox, ToolCallingWarning } from "@/features/workspaces/ModelCombobox";
+import { SecretInput } from "@/components/ui/secret-input";
 import type { WorkspaceAiStatus } from "@/lib/ai/config";
 import {
   BrandTile,
@@ -30,24 +38,15 @@ import {
   StatusPill,
 } from "@/features/workspaces/settings-ui";
 import { DrawerLayout } from "@/features/candidates/DrawerLayout";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { CopyCheck, EyeOff, Gauge, ScanText, Wand2 } from "lucide-react";
-import {
-  ClaudeLogo,
-  GeminiLogo,
-  OpenAiLogo,
-  OpenRouterLogo,
-  XaiLogo,
-} from "@/components/ui/icons/brands";
+import { CopyCheck, EyeOff, Gauge, RefreshCw, ScanText, Wand2 } from "lucide-react";
 import {
   CheckIcon,
   GlobeIcon,
   KeyDuotoneIcon,
   LightningIcon,
   RobotDuotoneIcon,
-  SearchIcon,
   SpinnerIcon,
 } from "@/components/ui/icons/phosphor";
 import { Input } from "@/components/ui/input";
@@ -63,17 +62,6 @@ import { SettingRow, SettingRows } from "@/components/ui/setting-row";
 import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
 
-const PROVIDER_LOGO: Record<
-  AiProviderId,
-  React.ComponentType<{ className?: string }>
-> = {
-  openai: OpenAiLogo,
-  anthropic: ClaudeLogo,
-  google: GeminiLogo,
-  xai: XaiLogo,
-  openrouter: OpenRouterLogo,
-};
-
 function providerLabel(id: string | null) {
   return id ? (getProvider(id)?.label ?? id) : null;
 }
@@ -87,10 +75,6 @@ export function AiSettingsCard({
 }) {
   const router = useRouter();
   const [togglePending, startToggle] = useTransition();
-
-  const ActiveLogo = status.provider
-    ? (PROVIDER_LOGO[status.provider as AiProviderId] ?? null)
-    : null;
 
   function toggleEnabled(next: boolean) {
     if (!status.hasApiKey && next) {
@@ -174,7 +158,7 @@ export function AiSettingsCard({
           {status.hasApiKey ? (
             <div className="mt-4 grid grid-cols-1 divide-y border-t bg-muted/20 sm:grid-cols-3 sm:divide-x sm:divide-y-0">
               <StatCell label="Provider">
-                {ActiveLogo ? <ActiveLogo className="size-4" /> : null}
+                {status.provider ? <ProviderLogo id={status.provider} className="size-4" /> : null}
                 {providerLabel(status.provider)}
               </StatCell>
               <StatCell label="Model">
@@ -225,13 +209,13 @@ export function AiSettingsCard({
             Works with your provider
           </h3>
           <p className="mt-1 max-w-prose text-sm text-muted-foreground">
-            Bring a key from any major provider, or route through OpenRouter for
-            hundreds of models, including free ones. Keys are encrypted at rest.
+            Bring a key from any major provider, run a local model with Ollama,
+            or point Harly at any OpenAI-compatible endpoint. Keys are encrypted
+            at rest.
           </p>
         </div>
-        <div className="grid grid-cols-2 gap-2.5 px-6 sm:grid-cols-3 lg:grid-cols-5">
+        <div className="grid grid-cols-1 gap-2.5 px-6 min-[480px]:grid-cols-2 sm:grid-cols-3 lg:grid-cols-4">
           {AI_PROVIDERS.map((provider) => {
-            const Logo = PROVIDER_LOGO[provider.id];
             const isActive =
               status.provider === provider.id && status.hasApiKey;
             return (
@@ -245,7 +229,7 @@ export function AiSettingsCard({
                 )}
               >
                 <BrandTile className="size-8 rounded-lg">
-                  <Logo className="size-4" />
+                  <ProviderLogo id={provider.id} className="size-4" />
                 </BrandTile>
                 <span className="min-w-0">
                   <span className="block truncate text-sm font-medium">
@@ -255,13 +239,15 @@ export function AiSettingsCard({
                     <span className="block text-[11px] font-medium text-pine">
                       Connected
                     </span>
-                  ) : provider.supportsModelSearch ? (
-                    <span className="block text-[11px] text-muted-foreground">
-                      100s of models
-                    </span>
                   ) : (
-                    <span className="block text-[11px] text-muted-foreground">
-                      {provider.models.length} models
+                    <span className="block truncate text-[11px] text-muted-foreground">
+                      {provider.supportsModelSearch
+                        ? "100s of models"
+                        : provider.requiresBaseUrl
+                          ? "Your endpoint"
+                          : provider.allowPrivateHosts
+                            ? "Runs locally"
+                            : "Bring your key"}
                     </span>
                   )}
                 </span>
@@ -462,61 +448,87 @@ function ResumeAnonymizationFeatureCard({
   );
 }
 
-export function AiSettingsForm({ status }: { status: WorkspaceAiStatus }) {
+export function AiSettingsForm({
+  status,
+  allowLocalLlm = false,
+}: {
+  status: WorkspaceAiStatus;
+  /** Server has HARLY_ALLOW_LOCAL_LLM=1 (local / LAN model servers allowed). */
+  allowLocalLlm?: boolean;
+}) {
   const router = useRouter();
-  const initialProvider = (status.provider as AiProviderId) ?? "openai";
+  const initialProvider: AiProviderId = isAiProviderId(status.provider ?? "")
+    ? (status.provider as AiProviderId)
+    : "openai";
   const [provider, setProvider] = useState<AiProviderId>(initialProvider);
   const [modelId, setModelId] = useState<string>(status.modelId ?? "");
   const [apiKey, setApiKey] = useState("");
   const [enabled, setEnabled] = useState(status.enabled || !status.hasApiKey);
 
-  const [query, setQuery] = useState("");
-  const [results, setResults] = useState<OpenRouterModel[]>([]);
-  const [searching, startSearch] = useTransition();
+  const info = getProvider(provider);
+  const [customEndpoint, setCustomEndpoint] = useState(
+    status.provider === initialProvider ? (status.baseUrl ?? "") : "",
+  );
+  const [showCustomEndpoint, setShowCustomEndpoint] = useState(
+    Boolean(
+      info?.requiresBaseUrl || (status.provider === initialProvider && status.baseUrl),
+    ),
+  );
+
+  const [catalog, setCatalog] = useState<ProviderModelsResult | null>(null);
+  const [loadingModels, startLoadModels] = useTransition();
   const [testing, startTest] = useTransition();
   const [saving, startSave] = useTransition();
-  // Inline test-connection result so success reads clearly (not just a toast).
   const [testResult, setTestResult] = useState<
     | { state: "ok"; model: string }
     | { state: "error"; message: string }
     | null
   >(null);
+  const [saveError, setSaveError] = useState<string | null>(null);
 
-  const info = getProvider(provider);
+  const keyIsStoredForProvider = status.hasApiKey && status.provider === provider;
+  const endpointValue =
+    (info?.requiresBaseUrl || showCustomEndpoint) && customEndpoint.trim()
+      ? customEndpoint.trim()
+      : undefined;
+  const models = catalog?.models ?? [];
+  const selectedModel = models.find((model) => model.id === modelId);
+  const endpointLooksLocal = endpointValue
+    ? looksLocalOrPrivate(endpointValue)
+    : Boolean(info?.allowPrivateHosts && info.baseUrl && looksLocalOrPrivate(info.baseUrl));
 
-  const [customEndpoint, setCustomEndpoint] = useState(status.baseUrl ?? "");
-  const [showCustomEndpoint, setShowCustomEndpoint] = useState(
-    Boolean(status.baseUrl && status.baseUrl !== info?.baseUrl),
-  );
-  const isOpenRouter = info?.supportsModelSearch ?? false;
-  const displayBaseUrl =
-    showCustomEndpoint && customEndpoint
-      ? customEndpoint
-      : (info?.baseUrl ?? "");
-
-  function changeProvider(next: string) {
-    const id = next as AiProviderId;
-    setProvider(id);
-    const nextInfo = getProvider(id);
-    setModelId(nextInfo?.models[0]?.id ?? "");
-    setResults([]);
-    setQuery("");
-    setTestResult(null);
-    if (!showCustomEndpoint) {
-      setCustomEndpoint(nextInfo?.baseUrl ?? "");
-    }
-  }
-
-  function runSearch() {
-    startSearch(async () => {
-      const found = await searchOpenRouterModelsAction(query);
-      setResults(found);
-      if (found.length === 0) {
-        toast.message("No models found", {
-          description: "Try a different term.",
+  function loadModels(target: AiProviderId, forceRefresh = false) {
+    startLoadModels(async () => {
+      try {
+        const result = await listProviderModelsAction({ provider: target, forceRefresh });
+        setCatalog(result);
+      } catch {
+        // Offline / server hiccup: the picker still accepts any typed ID.
+        setCatalog({
+          models: buildModelOptions(getProvider(target) ?? { models: [] }, []),
+          source: "builtin",
+          fetchedAt: null,
         });
       }
     });
+  }
+
+  // Load the provider's model list on mount and when the provider changes.
+  useEffect(() => {
+    loadModels(provider);
+  }, [provider]);
+
+  function changeProvider(next: string) {
+    const id = next as AiProviderId;
+    const nextInfo = getProvider(id);
+    setProvider(id);
+    setModelId(nextInfo?.models[0]?.id ?? "");
+    setCatalog(null);
+    setTestResult(null);
+    setSaveError(null);
+    setApiKey("");
+    setCustomEndpoint("");
+    setShowCustomEndpoint(Boolean(nextInfo?.requiresBaseUrl));
   }
 
   function runTest() {
@@ -526,43 +538,38 @@ export function AiSettingsForm({ status }: { status: WorkspaceAiStatus }) {
         provider,
         modelId,
         apiKey: apiKey || undefined,
-        baseUrl:
-          showCustomEndpoint && customEndpoint ? customEndpoint : undefined,
+        baseUrl: endpointValue,
       });
       if (result.ok) {
         setTestResult({ state: "ok", model: modelId });
         toast.success("Connection OK");
       } else {
-        setTestResult({
-          state: "error",
-          message: result.error ?? "Connection failed.",
-        });
-        toast.error(result.error ?? "Connection failed.");
+        setTestResult({ state: "error", message: result.error ?? "Connection failed." });
       }
     });
   }
 
   function save() {
+    setSaveError(null);
     startSave(async () => {
       const result = await saveAiSettingsAction({
         provider,
         modelId,
         apiKey: apiKey || undefined,
-        baseUrl:
-          showCustomEndpoint && customEndpoint ? customEndpoint : undefined,
+        baseUrl: endpointValue,
         enabled,
       });
       if (!result.ok) {
-        toast.error(result.error ?? "Could not save.");
+        setSaveError(result.error ?? "Could not save.");
         return;
       }
       toast.success("AI settings saved");
-      // Guide the user back to the AI settings overview instead of leaving
-      // them on the same form (which reads as "nothing happened").
       router.push("/settings/ai" as Route);
       router.refresh();
     });
   }
+
+  const showEndpointField = Boolean(info?.requiresBaseUrl || showCustomEndpoint);
 
   return (
     <DrawerLayout
@@ -570,32 +577,31 @@ export function AiSettingsForm({ status }: { status: WorkspaceAiStatus }) {
       description="Your API key is encrypted at rest and never shown again."
       surface="page"
     >
-      <div className="space-y-5">
+      {/* autoComplete="off" + masked text inputs (no password field) keep
+          browsers and password managers from filling a saved login in here. */}
+      <form
+        autoComplete="off"
+        onSubmit={(event) => event.preventDefault()}
+        className="space-y-5"
+        data-form-type="other"
+      >
         <div className="space-y-2">
-          <Label>Provider</Label>
+          <Label htmlFor="ai-provider">Provider</Label>
           <Select value={provider} onValueChange={changeProvider}>
-            <SelectTrigger className="w-full">
+            <SelectTrigger id="ai-provider" className="w-full">
               <SelectValue>
-                {provider ? (
-                  <span className="flex items-center gap-2">
-                    {(() => {
-                      const Logo = PROVIDER_LOGO[provider];
-                      return Logo ? <Logo className="size-4 shrink-0" /> : null;
-                    })()}
-                    {getProvider(provider)?.label ?? provider}
-                  </span>
-                ) : (
-                  "Select a provider"
-                )}
+                <span className="flex items-center gap-2">
+                  <ProviderLogo id={provider} className="size-4 shrink-0" />
+                  {info?.label ?? provider}
+                </span>
               </SelectValue>
             </SelectTrigger>
             <SelectContent>
               {AI_PROVIDERS.map((option) => {
-                const Logo = PROVIDER_LOGO[option.id];
                 return (
                   <SelectItem key={option.id} value={option.id}>
                     <span className="flex items-center gap-2">
-                      <Logo className="size-4 shrink-0" />
+                      <ProviderLogo id={option.id} className="size-4 shrink-0" />
                       {option.label}
                     </span>
                   </SelectItem>
@@ -603,167 +609,145 @@ export function AiSettingsForm({ status }: { status: WorkspaceAiStatus }) {
               })}
             </SelectContent>
           </Select>
+          {info ? <p className="text-xs text-muted-foreground">{info.tagline}</p> : null}
         </div>
 
         <div className="space-y-2">
-          <Label htmlFor="ai-model">Model</Label>
-          <Input
+          <Label htmlFor="ai-model">{provider === "azure" ? "Deployment name" : "Model"}</Label>
+          <ModelCombobox
             id="ai-model"
             value={modelId}
-            onChange={(event) => {
-              setModelId(event.target.value);
+            onChange={(next) => {
+              setModelId(next);
               setTestResult(null);
             }}
+            models={models}
+            loading={loadingModels}
             placeholder={
-              isOpenRouter
-                ? "e.g. openai/gpt-4o"
-                : "Choose or enter any model ID"
+              info?.modelExample ? `e.g. ${info.modelExample}` : "Choose or enter any model ID"
             }
-            className="font-mono text-sm"
           />
-          {isOpenRouter ? (
-            <div className="space-y-2">
-              <div className="flex gap-2">
-                <Input
-                  value={query}
-                  onChange={(event) => setQuery(event.target.value)}
-                  placeholder="Search OpenRouter models (incl. free)…"
-                  onKeyDown={(event) => {
-                    if (event.key === "Enter") {
-                      event.preventDefault();
-                      runSearch();
-                    }
-                  }}
-                />
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={runSearch}
-                  disabled={searching}
-                >
-                  {searching ? (
-                    <SpinnerIcon className="size-4" />
-                  ) : (
-                    <SearchIcon className="size-4" />
-                  )}
-                </Button>
-              </div>
-              {results.length > 0 ? (
-                <div className="max-h-52 overflow-y-auto rounded-lg border">
-                  {results.map((model) => (
-                    <button
-                      key={model.id}
-                      type="button"
-                      onClick={() => {
-                        setModelId(model.id);
-                        setTestResult(null);
-                      }}
-                      className={cn(
-                        "flex w-full items-center justify-between gap-2 px-3 py-2 text-left text-sm hover:bg-muted/60",
-                        model.id === modelId && "bg-sage/40",
-                      )}
-                    >
-                      <span className="truncate">
-                        <span className="font-medium">{model.name}</span>
-                        <span className="ml-2 font-mono text-xs text-muted-foreground">
-                          {model.id}
-                        </span>
-                      </span>
-                      {model.free ? (
-                        <Badge className="bg-sage text-sage-ink">Free</Badge>
-                      ) : null}
-                    </button>
-                  ))}
-                </div>
-              ) : null}
-            </div>
-          ) : (
-            <div className="flex flex-wrap gap-1.5">
-              {info?.models.map((model) => (
-                <button
-                  key={model.id}
-                  type="button"
-                  onClick={() => {
-                    setModelId(model.id);
-                    setTestResult(null);
-                  }}
-                  className={cn(
-                    "rounded-full border px-2.5 py-1 text-xs font-medium transition hover:bg-muted",
-                    model.id === modelId
-                      ? "border-pine bg-sage text-sage-ink"
-                      : "text-muted-foreground",
-                  )}
-                >
-                  {model.label}
-                </button>
-              ))}
-            </div>
-          )}
-          {!isOpenRouter ? (
-            <p className="text-xs text-muted-foreground">
-              Choose a suggested model or enter any model ID supported by the
-              provider.
-            </p>
-          ) : null}
+          <ToolCallingWarning model={selectedModel} />
+          <div className="flex items-center justify-between gap-3 text-xs text-muted-foreground">
+            <span>
+              {catalog ? describeModelSource(catalog.source, catalog.fetchedAt) : "Loading models…"}
+              {" · "}
+              Any model ID works, even if it isn&apos;t listed.
+            </span>
+            {info?.catalogId ? (
+              <button
+                type="button"
+                onClick={() => loadModels(provider, true)}
+                disabled={loadingModels}
+                className="inline-flex shrink-0 items-center gap-1 font-medium text-foreground underline underline-offset-2 hover:text-pine disabled:opacity-50"
+              >
+                <RefreshCw className={cn("size-3", loadingModels && "animate-spin")} aria-hidden />
+                Refresh
+              </button>
+            ) : null}
+          </div>
         </div>
 
         <div className="space-y-2">
-          <Label htmlFor="ai-key">API key</Label>
-          <Input
+          <Label htmlFor="ai-key">
+            API key
+            {!info?.requiresKey ? (
+              <span className="ml-1 font-normal text-muted-foreground">(optional)</span>
+            ) : null}
+          </Label>
+          <SecretInput
             id="ai-key"
-            type="password"
+            name="ai_provider_secret"
             value={apiKey}
             onChange={(event) => {
               setApiKey(event.target.value);
               setTestResult(null);
             }}
             placeholder={
-              status.hasApiKey
+              keyIsStoredForProvider
                 ? "•••••••• (stored, leave blank to keep)"
-                : "Paste your API key"
+                : info?.requiresKey
+                  ? "Paste your API key"
+                  : "Leave blank if no key is needed"
             }
-            autoComplete="off"
           />
           {info ? (
             <p className="text-xs text-muted-foreground">
               {info.apiKeyHint}{" "}
-              <a
-                href={info.apiKeyUrl}
-                target="_blank"
-                rel="noreferrer"
-                className="font-medium text-foreground underline underline-offset-2 hover:text-pine"
-              >
-                Get a key
-              </a>
+              {info.requiresKey ? (
+                <a
+                  href={info.apiKeyUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="font-medium text-foreground underline underline-offset-2 hover:text-pine"
+                >
+                  Get a key
+                </a>
+              ) : null}
             </p>
           ) : null}
         </div>
 
         <div className="space-y-3">
-          <button
-            type="button"
-            onClick={() => setShowCustomEndpoint(!showCustomEndpoint)}
-            className="inline-flex items-center gap-1.5 text-xs font-medium text-muted-foreground transition hover:text-foreground"
-          >
-            <GlobeIcon className="size-3.5" />
-            {showCustomEndpoint
-              ? "Use default endpoint"
-              : "Custom API endpoint"}
-          </button>
-          {showCustomEndpoint ? (
-            <Input
-              value={customEndpoint}
-              onChange={(event) => {
-                setCustomEndpoint(event.target.value);
+          {!info?.requiresBaseUrl ? (
+            <button
+              type="button"
+              onClick={() => {
+                setShowCustomEndpoint(!showCustomEndpoint);
                 setTestResult(null);
               }}
-              placeholder={info?.baseUrl ?? "https://api.openai.com/v1"}
-              className="font-mono text-sm"
-            />
+              className="inline-flex items-center gap-1.5 text-xs font-medium text-muted-foreground transition hover:text-foreground"
+            >
+              <GlobeIcon className="size-3.5" />
+              {showCustomEndpoint ? "Use default endpoint" : "Custom API endpoint"}
+            </button>
+          ) : null}
+          {showEndpointField ? (
+            <div className="space-y-2">
+              <Label htmlFor="ai-base-url">
+                {info?.requiresBaseUrl ? "API endpoint" : "Custom API endpoint"}
+              </Label>
+              <Input
+                id="ai-base-url"
+                name="ai_base_url"
+                type="url"
+                inputMode="url"
+                autoComplete="off"
+                autoCapitalize="off"
+                spellCheck={false}
+                data-1p-ignore
+                data-lpignore="true"
+                data-bwignore="true"
+                data-form-type="other"
+                value={customEndpoint}
+                onChange={(event) => {
+                  setCustomEndpoint(event.target.value);
+                  setTestResult(null);
+                  setSaveError(null);
+                }}
+                placeholder={info?.baseUrl || "https://llm.example.com/v1"}
+                className="font-mono text-sm"
+              />
+              <p className="text-xs text-muted-foreground">{info?.baseUrlHelp}</p>
+              <EndpointGuidance
+                info={info}
+                allowLocalLlm={allowLocalLlm}
+                looksLocal={endpointLooksLocal}
+              />
+            </div>
           ) : (
-            <p className="rounded-lg bg-muted/30 px-3 py-2 font-mono text-xs text-muted-foreground">
-              {displayBaseUrl}
-            </p>
+            <div className="space-y-1">
+              <p className="rounded-lg bg-muted/30 px-3 py-2 font-mono text-xs text-muted-foreground">
+                {info?.baseUrl}
+              </p>
+              {info?.allowPrivateHosts && endpointLooksLocal ? (
+                <EndpointGuidance
+                  info={info}
+                  allowLocalLlm={allowLocalLlm}
+                  looksLocal={endpointLooksLocal}
+                />
+              ) : null}
+            </div>
           )}
         </div>
 
@@ -776,8 +760,6 @@ export function AiSettingsForm({ status }: { status: WorkspaceAiStatus }) {
           />
         </SettingRows>
 
-        {/* Test connection + inline result. Success is a clear green banner,
-            not just a transient toast. */}
         <div className="space-y-2.5">
           <Button
             type="button"
@@ -786,53 +768,110 @@ export function AiSettingsForm({ status }: { status: WorkspaceAiStatus }) {
             onClick={runTest}
             disabled={testing || !modelId.trim()}
           >
-            {testing ? (
-              <SpinnerIcon className="size-4" />
-            ) : (
-              <LightningIcon className="size-4" />
-            )}
+            {testing ? <SpinnerIcon className="size-4" /> : <LightningIcon className="size-4" />}
             Test connection
           </Button>
           {testResult?.state === "ok" ? (
-            <div className="flex items-start gap-2 rounded-xl border border-pine/20 bg-sage/30 px-3 py-2.5 text-sm text-pine">
+            <div
+              role="status"
+              className="flex items-start gap-2 rounded-xl border border-pine/20 bg-sage/30 px-3 py-2.5 text-sm text-pine"
+            >
               <CheckIcon className="mt-0.5 size-4 shrink-0" />
               <p>
                 <span className="font-medium">Connection healthy.</span>{" "}
                 <span className="text-pine/80">
                   {providerLabel(provider)} responded with{" "}
-                  <span className="font-mono text-[13px]">
-                    {testResult.model}
-                  </span>
-                  .
+                  <span className="font-mono text-[13px]">{testResult.model}</span>
+                  {endpointValue ? " through your endpoint" : ""}.
                 </span>
               </p>
             </div>
           ) : testResult?.state === "error" ? (
-            <div className="flex items-start gap-2 rounded-xl border border-clay/30 bg-clay/5 px-3 py-2.5 text-sm text-clay">
-              <GlobeIcon className="mt-0.5 size-4 shrink-0" />
-              <p>
-                <span className="font-medium">Couldn&apos;t connect.</span>{" "}
-                {testResult.message}
-              </p>
-            </div>
+            <ErrorBanner title="Couldn't connect.">{testResult.message}</ErrorBanner>
           ) : (
             <p className="text-center text-xs text-muted-foreground">
               Verify your key and model before saving.
             </p>
           )}
+          {saveError ? <ErrorBanner title="Couldn't save.">{saveError}</ErrorBanner> : null}
         </div>
 
-        {/* Save is inline at the end — scroll to it, no floating bar. */}
         <div className="flex items-center justify-end gap-2 border-t border-hairline pt-5">
           <Button asChild variant="outline">
             <Link href={"/settings/ai" as Route}>Cancel</Link>
           </Button>
-          <Button onClick={save} disabled={saving || !modelId.trim()}>
+          <Button type="button" onClick={save} disabled={saving || !modelId.trim()}>
             {saving ? <SpinnerIcon className="size-4" /> : null}
             Save changes
           </Button>
         </div>
-      </div>
+      </form>
     </DrawerLayout>
+  );
+}
+
+function ErrorBanner({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <div
+      role="alert"
+      className="flex items-start gap-2 rounded-xl border border-clay/30 bg-clay/5 px-3 py-2.5 text-sm text-clay"
+    >
+      <GlobeIcon className="mt-0.5 size-4 shrink-0" />
+      <p className="min-w-0 break-words">
+        <span className="font-medium">{title}</span> {children}
+      </p>
+    </div>
+  );
+}
+
+/** Best-effort client hint; the server check in assertSafeAiBaseUrl is authoritative. */
+function looksLocalOrPrivate(value: string): boolean {
+  try {
+    const host = new URL(value).hostname.toLowerCase();
+    return (
+      host === "localhost" ||
+      host.endsWith(".localhost") ||
+      host === "[::1]" ||
+      /^127\./.test(host) ||
+      /^10\./.test(host) ||
+      /^192\.168\./.test(host) ||
+      /^172\.(1[6-9]|2\d|3[01])\./.test(host) ||
+      host.endsWith(".local")
+    );
+  } catch {
+    return false;
+  }
+}
+
+function EndpointGuidance({
+  info,
+  allowLocalLlm,
+  looksLocal,
+}: {
+  info: ReturnType<typeof getProvider>;
+  allowLocalLlm: boolean;
+  looksLocal: boolean;
+}) {
+  if (!info) return null;
+  if (looksLocal) {
+    return allowLocalLlm ? (
+      <p className="text-xs text-pine">
+        Local and LAN endpoints are enabled on this server (
+        <code className="font-mono">HARLY_ALLOW_LOCAL_LLM=1</code>).
+      </p>
+    ) : (
+      <div className="rounded-lg border border-clay/30 bg-clay/5 px-3 py-2 text-xs text-clay">
+        Local and LAN endpoints are disabled on this server. Set{" "}
+        <code className="font-mono">HARLY_ALLOW_LOCAL_LLM=1</code> in the server environment and
+        restart Harly to use Ollama, LM Studio or vLLM.
+      </div>
+    );
+  }
+  return (
+    <p className="text-xs text-muted-foreground">
+      {info.allowPrivateHosts
+        ? "Use this for a gateway or proxy (LiteLLM, Azure API Management) or a model server such as Ollama, LM Studio or vLLM."
+        : `Use this for your own proxy or gateway in front of ${info.label}. Hosts outside ${info.label}'s own domain are rejected; pick OpenAI-compatible for those.`}
+    </p>
   );
 }

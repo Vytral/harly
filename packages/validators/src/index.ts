@@ -128,7 +128,7 @@ function refineJobSalary(
 
 const jobFields = z.object({
   title: z.string().trim().min(1).max(200),
-  description: z.string().trim().min(1).max(50_000),
+  description: z.string().trim().max(50_000),
   slug: z.string().trim().max(200).optional(),
   department: nullableString,
   location: nullableString,
@@ -143,7 +143,25 @@ const jobFields = z.object({
   currency: z.string().trim().max(8).nullish(),
   salaryPeriod: z.enum(["annual", "monthly"]).nullish(),
 });
-export const jobCreateSchema = jobFields.superRefine(refineJobSalary);
+// A job needs only a title to exist. Description is optional while drafting;
+// employment/workplace type fall back to sensible defaults. Publishing
+// (status "open") needs readable content, mirroring the dashboard rule.
+export const jobCreateSchema = jobFields
+  .extend({
+    description: z.string().trim().max(50_000).default(""),
+    employmentType: employmentType.default("full_time"),
+    workplaceType: workplaceType.default("remote"),
+  })
+  .superRefine(refineJobSalary)
+  .superRefine((values, ctx) => {
+    if (values.status === "open" && values.description.length === 0) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["description"],
+        message: "A description is required to publish a job.",
+      });
+    }
+  });
 export const jobUpdateSchema = jobFields.partial().superRefine(refineJobSalary);
 
 export const candidateCreateSchema = z.object({

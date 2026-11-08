@@ -81,16 +81,18 @@ export function withoutDemoBlockedTools<T extends Record<string, unknown>>(
 
 /**
  * Env-backed AI config for the demo workspace, or null when this is not a
- * demo instance, no demo key is configured, or the workspace is not the
- * pinned demo workspace.
+ * demo instance, no demo key is configured, or the workspace is neither the
+ * pinned demo workspace nor a live visitor sandbox. `sandbox` must come from
+ * the server-side sandbox marker on the workspace, never from the request.
  */
 export function getDemoAiModelConfig(
   workspaceId: string,
   source: Record<string, string | undefined> = process.env,
+  options: { sandbox?: boolean } = {},
 ): AiModelConfig | null {
   const settings = demoAiSettings(source);
   if (!settings) return null;
   const pinned = demoWorkspaceId(source);
-  if (pinned && pinned !== workspaceId) return null;
+  if (pinned && pinned !== workspaceId && !options.sandbox) return null;
   return { provider: "openai", modelId: settings.modelId, apiKey: settings.apiKey };
 }

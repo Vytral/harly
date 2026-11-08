@@ -44,7 +44,10 @@ import {
 } from "./release.js";
 import { pullWithProgress } from "./pull.js";
 import { updaterCommand, updaterHelp } from "./updater.js";
-import { installGlobalCli, isNpxInvocation, offerGlobalCliInstallation } from "./global-cli.js";
+import { installGlobalCli, offerGlobalCliInstallation } from "./global-cli.js";
+import { NPX_COMMAND, cliCommand, isNpxInvocation } from "./invocation.js";
+import { REFERRAL_OPTIONS, TELEMETRY_DISCLOSURE, reportInstall, resolveConsent, setTelemetryConsent, telemetryStatus, type Referral } from "./telemetry.js";
+import { readPrefs } from "./prefs.js";
 import { latestCliVersion, newerCliVersion, updateCheckEnabled } from "./cli-update-check.js";
 import { commandNameOf, groupEntries, renderCommandHelp, renderHelp, unknownCommandMessage, type HelpEntry } from "./help.js";
 import { errorHints } from "./hints.js";
@@ -183,8 +186,7 @@ setQuiet(quiet);
 const interactive = Boolean(
   !json && !flags.has("--non-interactive") && process.stdin.isTTY && process.stdout.isTTY && !process.env.CI,
 );
-const cliVersion = "0.6.0";
-const cliCommand = isNpxInvocation() ? "npx @harly/cli" : "harly";
+const cliVersion = "0.7.0";
 let jsonResultWritten = false;
 
 function humanOut(message: string): void {
@@ -371,7 +373,7 @@ async function installImage(override: string | undefined, dryRun: boolean): Prom
 function explicitReleaseImage(value: string): string {
   if (value === "edge" || value.startsWith("sha-")) {
     throw new CliError(
-      `${value} is not a Harly release. Run harly update for the current stable version, or pass --to 0.2.0.`,
+      `${value} is not a Harly release. Run ${cliCommand("update")} for the current stable version, or pass --to 0.2.0.`,
       2,
     );
   }
@@ -383,7 +385,7 @@ function explicitReleaseImage(value: string): string {
     !isReleaseVersion(version)
   ) {
     throw new CliError(
-      "Use a version like 0.2.0 or 0.2.0-beta.1. Run harly update with no --to for the current stable release.",
+      `Use a version like 0.2.0 or 0.2.0-beta.1. Run ${cliCommand("update")} with no --to for the current stable release.`,
       2,
     );
   }
@@ -411,6 +413,7 @@ const commandHelp: HelpEntry[] = [
   ["harly uninstall [directory] [--remove-data]", "Stop and remove Harly"],
   ["harly deploy <railway|fly|digitalocean>", "Generate a cloud-platform config"],
   ["harly install-global [--yes]", "Install the CLI globally so you can just type harly"],
+  ["harly telemetry <status|enable|disable>", "Anonymous, opt-in install statistics"],
 ];
 
 /** One line when a newer CLI is published, from a once-a-day cache. Never
@@ -419,7 +422,7 @@ async function updateNotice(refresh = false): Promise<string | undefined> {
   if (quiet || !updateCheckEnabled(process.env, interactive)) return undefined;
   const latest = newerCliVersion(cliVersion, await latestCliVersion(process.env, { refresh }));
   if (!latest) return undefined;
-  const how = cliCommand === "harly" ? "npm install -g @harly/cli@latest" : "npx @harly/cli@latest";
+  const how = cliCommand() === "harly" ? "npm install -g @harly/cli@latest" : `${NPX_COMMAND}@latest`;
   return `${accent("Update available")} ${soft(`v${cliVersion} → v${latest}`)}  ${soft(`run ${how}`)}`;
 }
 
@@ -1361,6 +1364,7 @@ x-env: &env
   METRICS_TOKEN: \${METRICS_TOKEN:-}
   HARLY_SETUP_SECRET: \${HARLY_SETUP_SECRET}
   HARLY_INITIAL_ADMIN_EMAIL: \${HARLY_INITIAL_ADMIN_EMAIL}
+  HARLY_ORG_NAME: \${HARLY_ORG_NAME:-}
   DOCUSEAL_URL: \${DOCUSEAL_URL:-}
   DOCUSEAL_API_TOKEN: \${DOCUSEAL_API_TOKEN:-}
   STORAGE_PROVIDER: \${STORAGE_PROVIDER:-local}
@@ -1379,6 +1383,18 @@ x-env: &env
   HARLY_RELEASE_MANIFEST_URL: \${HARLY_RELEASE_MANIFEST_URL:-}
   HARLY_DISABLE_UPDATE_CHECK: \${HARLY_DISABLE_UPDATE_CHECK:-false}
   MCP_ALLOWED_ORIGINS: \${MCP_ALLOWED_ORIGINS:-}
+  HARLY_DB_POOL_MAX: \${HARLY_DB_POOL_MAX:-}
+  HARLY_DB_LOCK_POOL_MAX: \${HARLY_DB_LOCK_POOL_MAX:-}
+  HARLY_DB_MAILBOX_LOCK_POOL_MAX: \${HARLY_DB_MAILBOX_LOCK_POOL_MAX:-}
+  DEMO_MODE: \${DEMO_MODE:-false}
+  DEMO_LOGIN_EMAIL: \${DEMO_LOGIN_EMAIL:-}
+  DEMO_WORKSPACE_ID: \${DEMO_WORKSPACE_ID:-}
+  DEMO_CDN_URL: \${DEMO_CDN_URL:-}
+  DEMO_SANDBOX_TTL_MINUTES: \${DEMO_SANDBOX_TTL_MINUTES:-}
+  DEMO_SANDBOX_MAX_ACTIVE: \${DEMO_SANDBOX_MAX_ACTIVE:-}
+  DEMO_AI_API_KEY: \${DEMO_AI_API_KEY:-}
+  DEMO_AI_MODEL: \${DEMO_AI_MODEL:-}
+  DEMO_AI_DAILY_REQUEST_LIMIT: \${DEMO_AI_DAILY_REQUEST_LIMIT:-}
 services:
   postgres:
     image: postgres:16-bookworm
@@ -1441,7 +1457,7 @@ services:
 volumes: { postgres-data: {}, uploads: {}, next-cache: {}, caddy-data: {}, caddy-config: {} }
 `;
 
-const envExample = `HARLY_IMAGE=ghcr.io/vytral/harly:<version-or-digest>\nHARLY_VERSION=<version>\nHARLY_URL=https://harly.example.com\nHARLY_PORT=3000\nHARLY_DOMAIN=harly.example.com\nCOMPOSE_PROFILES=proxy\nPOSTGRES_USER=harly\nPOSTGRES_PASSWORD=<secret>\nPOSTGRES_DB=harly\nBETTER_AUTH_SECRET=<secret>\nAI_ENCRYPTION_KEY=<secret>\nSTORAGE_UPLOAD_SECRET=<secret>\nCRON_SECRET=<secret>\nMETRICS_TOKEN=<independent-secret>\nHARLY_SETUP_SECRET=<secret>\nHARLY_INITIAL_ADMIN_EMAIL=owner@example.com\nSTORAGE_PROVIDER=local\nRESEND_API_KEY=\nEMAIL_FROM=\n# Optional resource tuning (defaults target a 4 GB VPS)\nHARLY_APP_MEMORY=1536m\nHARLY_POSTGRES_MEMORY=768m\nHARLY_SCHEDULER_MEMORY=256m\nHARLY_SCHEDULER_STALE_AFTER_SECONDS=300\nHARLY_CADDY_MEMORY=256m\nHARLY_CACHE_MAX_MB=512\nHARLY_CACHE_MAX_AGE_DAYS=7\nHARLY_LOG_MAX_SIZE=10m\nHARLY_LOG_MAX_FILES=3\n`;
+const envExample = `HARLY_IMAGE=ghcr.io/vytral/harly:<version-or-digest>\nHARLY_VERSION=<version>\nHARLY_URL=https://harly.example.com\nHARLY_PORT=3000\nHARLY_DOMAIN=harly.example.com\nCOMPOSE_PROFILES=proxy\nPOSTGRES_USER=harly\nPOSTGRES_PASSWORD=<secret>\nPOSTGRES_DB=harly\nBETTER_AUTH_SECRET=<secret>\nAI_ENCRYPTION_KEY=<secret>\nSTORAGE_UPLOAD_SECRET=<secret>\nCRON_SECRET=<secret>\nMETRICS_TOKEN=<independent-secret>\nHARLY_SETUP_SECRET=<secret>\nHARLY_INITIAL_ADMIN_EMAIL=owner@example.com\nHARLY_ORG_NAME=Acme Inc.\nSTORAGE_PROVIDER=local\nRESEND_API_KEY=\nEMAIL_FROM=\n# Optional resource tuning (defaults target a 4 GB VPS)\nHARLY_APP_MEMORY=1536m\nHARLY_POSTGRES_MEMORY=768m\nHARLY_SCHEDULER_MEMORY=256m\nHARLY_SCHEDULER_STALE_AFTER_SECONDS=300\nHARLY_CADDY_MEMORY=256m\nHARLY_CACHE_MAX_MB=512\nHARLY_CACHE_MAX_AGE_DAYS=7\nHARLY_LOG_MAX_SIZE=10m\nHARLY_LOG_MAX_FILES=3\n`;
 const envExampleWithEsign = `${envExample}# Optional DocuSeal global fallback (per-workspace config in Settings overrides)\nDOCUSEAL_URL=\nDOCUSEAL_API_TOKEN=\n# Set only when running the bundled DocuSeal service (--profile esign)\nDOCUSEAL_SECRET_KEY_BASE=\n`;
 
 async function init() {
@@ -1461,7 +1477,7 @@ async function init() {
     if (flags.has("--launch")) return resumeInstallation(directory);
     if (!interactive) {
       throw new CliError(
-        `Configuration already exists at ${directory}. Resume with \`npx @harly/cli resume ${shellQuote(directory)} --yes\`. Use --force only to regenerate configuration.`,
+        `Configuration already exists at ${directory}. Resume with \`${cliCommand("resume")} ${shellQuote(directory)} --yes\`. Use --force only to regenerate configuration.`,
         2,
         "INVALID_CONFIGURATION",
       );
@@ -1469,12 +1485,12 @@ async function init() {
     const config = await readConfig(directory);
     p.note(`${directory}\n${config.publicUrl}\nYour saved answers and secrets will be reused.`, "Existing installation found");
     if (flags.has("--no-launch")) {
-      p.outro("Saved configuration kept. Run harly resume when you are ready.");
+      p.outro(`Saved configuration kept. Run ${cliCommand("resume")} when you are ready.`);
       return;
     }
     const resume = unwrapPrompt(await p.confirm({ message: "Resume this installation?", initialValue: true }));
     if (resume) return resumeInstallation(directory, true);
-    p.outro("Saved configuration kept. Run harly resume when you are ready.");
+    p.outro(`Saved configuration kept. Run ${cliCommand("resume")} when you are ready.`);
     return;
   }
   const answers = interactive
@@ -1523,6 +1539,8 @@ async function init() {
         `CRON_SECRET=${envLine(secret())}`,
         `HARLY_SETUP_SECRET=${envLine(setupSecret)}`,
         `HARLY_INITIAL_ADMIN_EMAIL=${envLine(email)}`,
+        // Collected above so the web app can prefill the workspace name.
+        `HARLY_ORG_NAME=${envLine(organization.replaceAll("$", "$$$$"))}`,
         "DOCUSEAL_URL=",
         "DOCUSEAL_API_TOKEN=",
         `STORAGE_PROVIDER=${envLine(storage)}`,
@@ -1584,7 +1602,7 @@ async function init() {
       ["harly.config.json", `${JSON.stringify(config, null, 2)}\n`],
       [
         "README.md",
-        `# Harly self-host\n\nBefore launching Caddy, make sure ${url.hostname} has an A record pointing to this VPS and that TCP 80/443 plus UDP 443 are allowed by the firewall. If another reverse proxy owns those ports, use external proxy mode and forward it to 127.0.0.1:3000.\n\n- Open management: \`npx @harly/cli\`\n- Diagnose: \`npx @harly/cli doctor\`\n- Backup before every update.\n- Complete the first owner at ${url.origin}/setup using HARLY_SETUP_SECRET from .env.\n`,
+        `# Harly self-host\n\nBefore launching Caddy, make sure ${url.hostname} has an A record pointing to this VPS and that TCP 80/443 plus UDP 443 are allowed by the firewall. If another reverse proxy owns those ports, use external proxy mode and forward it to 127.0.0.1:3000.\n\n- Open management: \`${cliCommand()}\`\n- Diagnose: \`${cliCommand("doctor")}\`\n- ${cliCommand() === "harly" ? `If the harly command is not installed, use \`${NPX_COMMAND}\` instead.` : `After \`npm install -g @harly/cli\`, type \`harly\` instead of \`${NPX_COMMAND}\`.`}\n- Backup before every update.\n- Complete the first owner at ${url.origin}/setup using HARLY_SETUP_SECRET from .env.\n`,
       ],
     ];
     for (const [name, contents, modeBits] of templates) {
@@ -1628,6 +1646,8 @@ async function init() {
   }
   generationSpinner?.stop("Configuration ready");
 
+  let referral: Referral | undefined;
+  if (interactive) referral = await askTelemetryConsent();
   if (interactive) {
     const launchNow = flags.has("--launch")
       ? true
@@ -1636,6 +1656,9 @@ async function init() {
         : unwrapPrompt(await p.confirm({ message: "Install and launch Harly now?", initialValue: true }));
     if (launchNow) {
       await launch(directory, true, false);
+      // Offer the global CLI first so every hint below names the command the
+      // user can actually type from now on.
+      await offerCliInstallation(directory);
       printInstallOutro({
         url: url.origin,
         email,
@@ -1644,10 +1667,10 @@ async function init() {
         envWritten,
         directory,
       });
-      await offerCliInstallation(directory);
+      await reportTelemetry(mode, referral);
     } else {
       p.outro(
-        `Next: ${accent(`cd ${shellQuote(directory)} && npx @harly/cli`)}`,
+        `Next: ${accent(`cd ${shellQuote(directory)} && ${cliCommand()}`)}`,
       );
       if (setupSecret) {
         humanOut(
@@ -1659,6 +1682,7 @@ async function init() {
     if (flags.has("--launch")) {
       await launch(directory, true, false);
       if (jsonResultWritten) return;
+      await reportTelemetry(mode);
     }
     const result = resultOk("init", flags.has("--launch") ? "ready" : "generated", {
       directory,
@@ -1667,7 +1691,7 @@ async function init() {
       resourceProfile,
       image,
       artifacts: [".env", ".env.example", ".gitignore", "Caddyfile", "README.md", "compose.yaml", "harly.config.json"],
-      ...(flags.has("--launch") ? {} : { next: [`cd ${shellQuote(directory)} && npx @harly/cli launch --yes`] }),
+      ...(flags.has("--launch") ? {} : { next: [`cd ${shellQuote(directory)} && ${cliCommand("launch")} --yes`] }),
     });
     if (json) {
       writeResult(result);
@@ -1684,6 +1708,76 @@ async function init() {
       humanOut("\n");
     }
   }
+}
+
+
+/**
+ * Asks once, in a terminal, whether to share anonymous install statistics.
+ * Defaults to no. Returns the optional "how did you hear" answer, which is only
+ * asked after a yes. Never blocks the install: a cancelled prompt means "ask
+ * again next time" and nothing is saved.
+ */
+async function askTelemetryConsent(): Promise<Referral | undefined> {
+  try {
+    const prefs = await readPrefs();
+    const decision = resolveConsent({
+      prefs, noTelemetryFlag: flags.has("--no-telemetry"), telemetryFlag: flags.has("--telemetry"), interactive,
+    });
+    if (decision !== "ask") return prefs.telemetry?.referral;
+    p.note(TELEMETRY_DISCLOSURE, "Anonymous telemetry (optional)");
+    const answer = await p.confirm({ message: "Share anonymous install statistics?", initialValue: false });
+    if (typeof answer !== "boolean") return undefined;
+    if (!answer) {
+      await setTelemetryConsent(false);
+      return undefined;
+    }
+    const choice = await p.select<Referral>({
+      message: "How did you hear about Harly? (optional)",
+      initialValue: "skip",
+      options: REFERRAL_OPTIONS.map((entry) => ({ value: entry.value, label: entry.label })),
+    });
+    const referral = typeof choice === "string" ? choice : "skip";
+    await setTelemetryConsent(true, process.env, referral);
+    return referral;
+  } catch {
+    return undefined;
+  }
+}
+
+/** Sends the single anonymous install event when consent allows. Never throws. */
+async function reportTelemetry(mode: string, referral?: Referral): Promise<void> {
+  try {
+    await reportInstall({
+      prefs: await readPrefs(),
+      noTelemetryFlag: flags.has("--no-telemetry"),
+      telemetryFlag: flags.has("--telemetry"),
+      cliVersion,
+      deployMode: mode,
+      referral,
+    });
+  } catch {
+    // Telemetry must never affect the install.
+  }
+}
+
+async function telemetryCommand() {
+  const action = positionals[0] ?? "status";
+  if (positionals.length > 1 || !["status", "enable", "disable"].includes(action)) {
+    throw usageError("Usage: telemetry <status|enable|disable>.");
+  }
+  if (action !== "status") {
+    const saved = await setTelemetryConsent(action === "enable");
+    if (!saved.saved) throw new CliError("Could not save the telemetry choice to your config directory.", 1, "INTERNAL_ERROR");
+  }
+  const status = await telemetryStatus({ noTelemetryFlag: flags.has("--no-telemetry"), telemetryFlag: flags.has("--telemetry") });
+  if (json) {
+    writeResult(resultOk("telemetry", action === "status" ? "completed" : action === "enable" ? "enabled" : "disabled", {
+      enabled: status.enabled, reason: status.reason, endpoint: status.url, sideEffects: action !== "status",
+    }));
+    return;
+  }
+  humanOut(`Telemetry is ${status.enabled ? "ON" : "OFF"} (${status.reason}).\n`);
+  if (action === "status") humanOut(`\n${TELEMETRY_DISCLOSURE}\nEndpoint: ${status.url}\n`);
 }
 
 async function offerCliInstallation(directory: string, quietIfInstalled = false) {
@@ -1704,7 +1798,7 @@ async function offerCliInstallation(directory: string, quietIfInstalled = false)
     });
   } catch {
     spin.stop("Optional CLI installation did not complete");
-    p.log.warn(`Harly is still running. You can continue using npx @harly/cli or install the CLI manually with npm install -g @harly/cli@${cliVersion}.`);
+    p.log.warn(`Harly is still running. You can continue using ${NPX_COMMAND} or install the CLI manually with npm install -g @harly/cli@${cliVersion}.`);
   }
 }
 
@@ -1741,9 +1835,9 @@ function printInstallOutro(args: {
   lines.push("After setup:");
   lines.push(
     ...rows([
-      { label: accent(`${cliCommand} doctor`), detail: "verify the public route" },
-      { label: accent(`${cliCommand} backup`), detail: "write a private rollback point" },
-      { label: accent(`${cliCommand} update`), detail: "apply future upgrades safely" },
+      { label: accent(`${cliCommand()} doctor`), detail: "verify the public route" },
+      { label: accent(`${cliCommand()} backup`), detail: "write a private rollback point" },
+      { label: accent(`${cliCommand()} update`), detail: "apply future upgrades safely" },
     ]).map((row) => `  ${row}`),
   );
   if (mode === "caddy") {
@@ -1861,9 +1955,9 @@ async function harlyCheck(directory = process.cwd()) {
   process.stdout.write(`${output}\n\n`);
   if (interactive) {
     if (allOk) {
-      p.log.success("Your host is ready. Run `harly init` to install Harly.");
+      p.log.success(`Your host is ready. Run \`${cliCommand("init")}\` to install Harly.`);
     } else {
-      p.log.warn("Some checks need attention. Resolve them above, then run `harly init`.");
+      p.log.warn(`Some checks need attention. Resolve them above, then run \`${cliCommand("init")}\`.`);
     }
   } else {
     if (!allOk) process.exitCode = 1;
@@ -1879,7 +1973,7 @@ async function setupSecret(explicitDirectory?: string) {
     const installation = await findInstallation(directory);
     if (!installation) {
       throw new CliError(
-        `No .env file found at ${envPath}. Run \`harly init\` first.`,
+        `No .env file found at ${envPath}. Run \`${cliCommand("init")}\` first.`,
         1,
       );
     }
@@ -1941,7 +2035,7 @@ async function resumeInstallation(explicitDirectory?: string, confirmed = false)
     ? path.resolve(installation)
     : (await findInstallation() ?? await defaultInstallation())?.directory;
   if (!directory) {
-    throw new CliError("No saved installation found. Pass its directory to harly resume, or run harly init first.", 2, "INVALID_CONFIGURATION");
+    throw new CliError(`No saved installation found. Pass its directory to ${cliCommand("resume")}, or run ${cliCommand("init")} first.`, 2, "INVALID_CONFIGURATION");
   }
   for (const file of [".env", "compose.yaml"]) {
     if (!(await exists(path.join(directory, file)))) {
@@ -1955,7 +2049,7 @@ async function resumeInstallation(explicitDirectory?: string, confirmed = false)
     return;
   }
   await launch(directory, confirmed);
-  if (!json) humanOut(`Setup secret: ${cliCommand} setup-secret ${shellQuote(directory)}\n`);
+  if (!json) humanOut(`Setup secret: ${cliCommand()} setup-secret ${shellQuote(directory)}\n`);
   await offerCliInstallation(directory);
 }
 
@@ -2102,7 +2196,7 @@ async function launch(explicitDirectory?: string, confirmed = false, emit = true
   if (timeoutSeconds !== undefined && (!Number.isSafeInteger(timeoutSeconds) || timeoutSeconds <= 0 || timeoutSeconds > 86_400)) {
     throw usageError("--timeout must be a whole number of seconds between 1 and 86400.");
   }
-  const retryCommand = `npx @harly/cli resume ${shellQuote(directory)} --yes`;
+  const retryCommand = `${cliCommand("resume")} ${shellQuote(directory)} --yes`;
   if (interactive && !confirmed) {
     showBrand("Launch");
     const identity = describeImage(
@@ -2224,14 +2318,14 @@ async function launch(explicitDirectory?: string, confirmed = false, emit = true
       `One or more services did not become healthy:\n${results
         .filter((r) => !r.ready)
         .map((r) => `  - ${r.service}: ${r.detail}`)
-        .join("\n")}\nRun \`harly doctor ${directory}\` to inspect.${caddyHelp}\nResume with \`${retryCommand}\`.`,
+        .join("\n")}\nRun \`${cliCommand("doctor")} ${directory}\` to inspect.${caddyHelp}\nResume with \`${retryCommand}\`.`,
       1,
       "READINESS_TIMEOUT",
     );
   }
   if (interactive && !confirmed) {
     p.log.message(
-      `${accent(config.publicUrl)}\n${soft(`Run ${accent(`${cliCommand} doctor`)} from ${directory} to verify the installation.`)}`,
+      `${accent(config.publicUrl)}\n${soft(`Run ${accent(`${cliCommand()} doctor`)} from ${directory} to verify the installation.`)}`,
     );
     p.outro("Harly is ready");
   } else if (!interactive) {
@@ -2247,7 +2341,7 @@ async function launch(explicitDirectory?: string, confirmed = false, emit = true
       }));
     }
     humanOut(
-      `Harly is ready at ${config.publicUrl}. Run \`${cliCommand} doctor\` from ${directory} to verify.\n`,
+      `Harly is ready at ${config.publicUrl}. Run \`${cliCommand()} doctor\` from ${directory} to verify.\n`,
     );
   }
   if (command === "launch") await offerCliInstallation(directory);
@@ -2293,14 +2387,14 @@ async function runDoctorFix(directory: string, config: HarlyFileConfig) {
     const spin = p.spinner(spinnerStyle);
     spin.start(`Restarting ${stopped.join(", ")}`);
     compose(directory, ["restart", ...stopped]);
-    spin.stop(`Restart issued. Run \`harly doctor\` to verify.`);
+    spin.stop(`Restart issued. Run \`${cliCommand("doctor")}\` to verify.`);
     return;
   }
   if (action === "up") {
     const spin = p.spinner(spinnerStyle);
     spin.start("Starting services");
     compose(directory, ["up", "-d"]);
-    spin.stop("Services started. Run `harly doctor` to verify.");
+    spin.stop(`Services started. Run \`${cliCommand("doctor")}\` to verify.`);
   }
 }
 
@@ -2692,7 +2786,7 @@ async function restore() {
   const result = await doctor(directory, false);
   if (!result.ok)
     throw new CliError(
-      "Restore completed but Harly did not become healthy. Your safety backup was preserved; run `harly doctor` and inspect `docker compose logs` before retrying.",
+      `Restore completed but Harly did not become healthy. Your safety backup was preserved; run \`${cliCommand("doctor")}\` and inspect \`docker compose logs\` before retrying.`,
     );
   process.stdout.write("Restore complete. Harly is healthy.\n");
 }
@@ -2726,7 +2820,7 @@ async function upgrade(explicitDirectory?: string) {
   // refuses it here rather than installing a beta as though it were stable.
   if (tracksStable && !isStableVersion(release.version)) {
     throw new CliError(
-      `The release manifest names ${release.version}, which is a prerelease. harly update installs stable versions only. Pass --to ${release.version} to install it on purpose.`,
+      `The release manifest names ${release.version}, which is a prerelease. ${cliCommand("update")} installs stable versions only. Pass --to ${release.version} to install it on purpose.`,
       1,
     );
   }
@@ -3478,7 +3572,7 @@ async function installGlobal() {
   }
   const lines: Record<string, string> = {
     "dry-run": `Would run: ${result.npmCommand}. Nothing was installed.`,
-    declined: "Nothing installed. Run harly install-global whenever you want it.",
+    declined: `Nothing installed. Run ${cliCommand("install-global")} whenever you want it.`,
     "already-installed": `Harly CLI v${result.installedVersion ?? result.version} is already installed globally.`,
     installed: `Installed. Type ${cmd("harly")} to open the menu.`,
     updated: `Updated the global CLI to v${result.version}.`,
@@ -3548,9 +3642,9 @@ async function statusCommand(explicitDirectory?: string) {
   const certSoon = certificate !== null && certificate.daysLeft < 14;
 
   const steps: string[] = [];
-  if (!healthy) steps.push(`${cmd(`${cliCommand} doctor`)}  find out what is failing`, `${cmd(`${cliCommand} resume`)}  retry startup with the saved configuration`);
-  if (!backupInfo || backupStale) steps.push(`${cmd(`${cliCommand} backup`)}  ${backupInfo ? "the last backup is over a week old" : "no backup exists yet"}`);
-  if (version.updateAvailable) steps.push(`${cmd(`${cliCommand} update`)}  move to v${version.latest}`);
+  if (!healthy) steps.push(`${cmd(`${cliCommand()} doctor`)}  find out what is failing`, `${cmd(`${cliCommand()} resume`)}  retry startup with the saved configuration`);
+  if (!backupInfo || backupStale) steps.push(`${cmd(`${cliCommand()} backup`)}  ${backupInfo ? "the last backup is over a week old" : "no backup exists yet"}`);
+  if (version.updateAvailable) steps.push(`${cmd(`${cliCommand()} update`)}  move to v${version.latest}`);
 
   if (json) {
     writeResult(resultOk("status", healthy ? "ready" : "degraded", {
@@ -3749,8 +3843,8 @@ async function menu() {
   if (choice === "restore") {
     p.log.info(
       lastBackup
-        ? `Latest archive: ${lastBackup.file}\nRestore it with: ${cliCommand} restore ${shellQuote(lastBackup.file)} ${shellQuote(installation.directory)} --force\nRestore replaces current data, so take a backup first.`
-        : "Use `harly restore <archive> --force` for restore. Local rollback archives work without extra dependencies; encrypted `.age` archives are an advanced option.",
+        ? `Latest archive: ${lastBackup.file}\nRestore it with: ${cliCommand()} restore ${shellQuote(lastBackup.file)} ${shellQuote(installation.directory)} --force\nRestore replaces current data, so take a backup first.`
+        : `Use \`${cliCommand("restore")} <archive> --force\` for restore. Local rollback archives work without extra dependencies; encrypted \`.age\` archives are an advanced option.`,
     );
     return;
   }
@@ -3797,7 +3891,7 @@ async function deploy(provider?: string) {
       return cloudGuide("digitalocean");
     default:
       throw new CliError(
-        `harly deploy needs one of: railway, fly, digitalocean. Got: ${choice ?? "(none)"}.`,
+        `${cliCommand("deploy")} needs one of: railway, fly, digitalocean. Got: ${choice ?? "(none)"}.`,
         2,
       );
   }
@@ -3822,6 +3916,8 @@ async function main() {
       return statusCommand();
     case "install-global":
       return installGlobal();
+    case "telemetry":
+      return telemetryCommand();
     case "doctor":
       return doctor();
     case "setup-secret":

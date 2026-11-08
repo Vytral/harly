@@ -91,7 +91,7 @@ describe("tool registry shape", () => {
     const perm = Object.fromEntries(tools.map((t) => [t.name, t.permission]));
     expect(perm.interviews_schedule).toBe("interviews:manage");
     expect(perm.scorecards_submit).toBe("collab:write");
-    expect(perm.offers_record_decision).toBe("offers:approve");
+    expect(perm.offers_record_decision).toBe("offers:decide");
     expect(perm.offers_create).toBe("offers:manage");
     expect(perm.documents_set_access).toBe("documents:share");
     expect(perm.documents_send_for_signature).toBe("documents:manage");

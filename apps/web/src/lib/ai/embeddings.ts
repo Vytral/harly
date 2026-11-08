@@ -3,7 +3,8 @@ import "server-only";
 import { embed, cosineSimilarity as aiCosineSimilarity } from "ai";
 import { createOpenAI } from "@ai-sdk/openai";
 
-import type { AiModelConfig } from "@/lib/ai/providers";
+import { assertSafeAiBaseUrl } from "@/lib/ai/base-url";
+import { getProvider, type AiModelConfig } from "@/lib/ai/providers";
 
 /**
  * Semantic match needs one fixed embedding model shared across a workspace's
@@ -17,11 +18,12 @@ export const EMBEDDING_MODEL_ID = "text-embedding-3-small";
 export function supportsEmbeddings(
   config: AiModelConfig | null,
 ): config is AiModelConfig {
-  return config?.provider === "openai";
+  return Boolean(config && getProvider(config.provider)?.supportsEmbeddings);
 }
 
 /** Embed a single piece of text. Caps input to keep cost and latency bounded. */
 export async function embedText(config: AiModelConfig, text: string): Promise<number[]> {
+  assertSafeAiBaseUrl(config.provider, config.baseUrl);
   const openai = createOpenAI({ apiKey: config.apiKey, baseURL: config.baseUrl });
   const { embedding } = await embed({
     model: openai.embeddingModel(EMBEDDING_MODEL_ID),

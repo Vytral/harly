@@ -1,0 +1,22 @@
+# TLS terminator for the collector. Access logging is disabled on purpose so no
+# IPs or user agents are written to disk. Do not enable `log` output for this site.
+telemetry.harly.dev {
+	encode zstd gzip
+
+	# Overwrite (never append to) the forwarded chain so clients cannot spoof the
+	# rate-limit origin. The collector only uses this value in memory, hashed.
+	reverse_proxy telemetry:8787 {
+		header_up X-Forwarded-For {remote_host}
+		header_up -X-Real-IP
+	}
+
+	# Defense in depth: reject oversized bodies before they reach the app.
+	request_body {
+		max_size 4KB
+	}
+
+	# Explicitly discard access logs for this site.
+	log {
+		output discard
+	}
+}

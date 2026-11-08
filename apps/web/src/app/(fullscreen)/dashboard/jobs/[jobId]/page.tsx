@@ -22,6 +22,7 @@ import { JobShareButton } from "@/features/jobs/JobShareButton";
 import { JobStatusActions } from "@/features/jobs/JobStatusActions";
 import { StageEditorTrigger } from "@/features/pipeline/stage-editor/StageEditorTrigger";
 import { getWorkspaceAiStatus } from "@/lib/ai/config";
+import { isAiUsable } from "@/lib/ai/availability-shared";
 import { getHarlyPublicOrigin } from "@/lib/public-origin";
 import { countCandidatePool } from "@/features/matching/data";
 import { getWorkspaceContext } from "@/features/workspaces/context";
@@ -79,7 +80,7 @@ export default async function DashboardJobPage({
       departments={departments}
       hiringTeam={hiringTeam}
       workspaceMembers={workspaceMembers}
-      aiConfigured={aiStatus.enabled && aiStatus.hasApiKey}
+      aiConfigured={isAiUsable(aiStatus)}
       candidatePoolCount={candidatePoolCount}
       eyebrow="Job detail"
       statusBadge={<JobStatusBadge status={job.status} />}

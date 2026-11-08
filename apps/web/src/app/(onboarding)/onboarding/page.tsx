@@ -9,6 +9,7 @@ import { customRoles, db, passkeys, user as userTable, workspaceSettings } from 
 import { auth } from "@/lib/auth";
 import { getWorkspaceContextOrNull } from "@/features/workspaces/context";
 import { getWorkspaceSecuritySettings } from "@/features/security/data";
+import { getWorkspaceAiStatus } from "@/lib/ai/config";
 import { organizationExists } from "@/lib/self-host";
 import { OwnerOnboarding } from "@/features/onboarding/OwnerOnboarding";
 import { RecruiterOnboarding } from "@/features/onboarding/RecruiterOnboarding";
@@ -18,6 +19,10 @@ const BUILTIN_ROLE_LABELS: Record<string, string> = {
   admin: "Admin",
   recruiter: "Recruiter",
   hiring_manager: "Hiring Manager",
+  coordinator: "Coordinator",
+  sourcer: "Sourcer",
+  interviewer: "Interviewer",
+  viewer: "Viewer",
 };
 
 /** Human label for the role assigned at invite time, used to pre-fill "Your
@@ -68,7 +73,13 @@ export default async function OnboardingPage() {
     // A workspace exists but this account isn't in it → needs an invite.
     if (await organizationExists()) redirect("/no-workspace" as Route);
     // Fresh deployment → this user bootstraps the one workspace (becomes owner).
-    return <OwnerOnboarding userName={firstName} />;
+    return (
+      <OwnerOnboarding
+        userName={firstName}
+        initialAvatar={userRow?.image ?? null}
+        suggestedCompanyName={process.env.HARLY_ORG_NAME?.trim() || null}
+      />
+    );
   }
 
   // Has a membership but hasn't finished setup.
@@ -82,10 +93,14 @@ export default async function OnboardingPage() {
       .where(eq(workspaceSettings.organizationId, context.organization.id))
       .limit(1);
 
+    const ai = await getWorkspaceAiStatus(context.organization.id);
+
     // Resume the owner setup against the workspace they already created.
     return (
       <OwnerOnboarding
         userName={firstName}
+        initialAvatar={userRow?.image ?? null}
+        aiConfigured={ai.enabled && ai.hasApiKey && ai.encryptionReady}
         initialOrg={{
           id: context.organization.id,
           name: context.organization.name,

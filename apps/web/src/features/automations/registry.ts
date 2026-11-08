@@ -26,7 +26,7 @@ import {
   workspaceSettings,
   normalizeStageName,
 } from "@harly/db";
-import { actorCanActOnApplication } from "./runtime/workflow-permissions";
+import { actorCanActOnApplication, actorHasPermission } from "./runtime/workflow-permissions";
 
 import { decryptSecret } from "@/lib/crypto";
 import { createLogger } from "@/lib/logger";
@@ -810,6 +810,22 @@ const setStatusHandler: ActionHandler<z.infer<typeof setStatusSchema>> = {
       applicationId,
     );
     if (!scope.ok) return { success: false, error: scope.reason };
+
+    // Rejecting is its own permission; the handler-level gate is candidates:edit.
+    if (input.status === "rejected") {
+      const allowed = await actorHasPermission(
+        database,
+        ctx.workspaceId,
+        ctx.actorUserId,
+        "candidates:reject",
+      );
+      if (!allowed.ok) {
+        return {
+          success: false,
+          error: allowed.reason ?? "Workflow actor lacks permission: candidates:reject.",
+        };
+      }
+    }
 
     if (input.status === "hired" || input.status === "rejected") {
       const updated = await (input.status === "hired"

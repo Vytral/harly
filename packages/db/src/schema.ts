@@ -871,6 +871,12 @@ export const workspaceSettings = pgTable("workspace_settings", {
   candidatePortalEnabled: boolean("candidate_portal_enabled")
     .default(false)
     .notNull(),
+  // Which candidate-portal sign-in methods the recruiter enabled:
+  // { password, magicLink, google, github, linkedin, passkey, accessCode }.
+  // NULL means "never configured": defaults to password + access code, which
+  // need no external service. Availability also depends on requirements (email,
+  // OAuth credentials); see getPortalAuthMethods().
+  portalAuthMethods: jsonb("portal_auth_methods"),
   // Portal OAuth — Google. Client secret encrypted at rest (AES-256-GCM).
   portalGoogleClientId: text("portal_google_client_id"),
   portalGoogleClientSecretCiphertext: text(
@@ -4781,6 +4787,106 @@ export const candidatePortalNotifications = pgTable(
     ),
   ],
 );
+
+// Candidate password credential (one per candidate). `passwordHash` is a
+// self-describing scrypt string; failed attempts drive a progressive lockout.
+export const candidatePortalCredentials = pgTable(
+  "candidate_portal_credentials",
+  {
+    candidateId: uuid("candidate_id")
+      .primaryKey()
+      .references(() => candidates.id, { onDelete: "cascade" }),
+    workspaceId: text("workspace_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    passwordHash: text("password_hash").notNull(),
+    failedAttempts: integer("failed_attempts").default(0).notNull(),
+    lockedUntil: timestamp("locked_until", { withTimezone: true }),
+    passwordChangedAt: timestamp("password_changed_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [
+    index("candidate_portal_credentials_workspace_idx").on(table.workspaceId),
+  ],
+);
+
+// One-use secrets that are not sessions: access codes (first sign-in without
+// email or password), recovery codes (generated at registration) and reset
+// codes (issued by a recruiter or by email). Only SHA-256 hashes are stored.
+export const candidatePortalCodes = pgTable(
+  "candidate_portal_codes",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    candidateId: uuid("candidate_id")
+      .notNull()
+      .references(() => candidates.id, { onDelete: "cascade" }),
+    workspaceId: text("workspace_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    kind: text("kind").notNull(), // "access" | "recovery" | "reset"
+    codeHash: text("code_hash").notNull().unique(),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    usedAt: timestamp("used_at", { withTimezone: true }),
+    // Recruiter (auth user id) who issued it, null when self-generated.
+    createdBy: text("created_by"),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [
+    index("candidate_portal_codes_candidate_kind_idx").on(
+      table.candidateId,
+      table.kind,
+    ),
+  ],
+);
+
+// WebAuthn credentials registered by candidates (separate from recruiter passkeys).
+export const candidatePortalPasskeys = pgTable(
+  "candidate_portal_passkeys",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    candidateId: uuid("candidate_id")
+      .notNull()
+      .references(() => candidates.id, { onDelete: "cascade" }),
+    workspaceId: text("workspace_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    credentialId: text("credential_id").notNull().unique(),
+    credentialPublicKey: text("credential_public_key").notNull(),
+    counter: integer("counter").default(0).notNull(),
+    deviceType: text("device_type").notNull(),
+    backedUp: boolean("backed_up").default(false).notNull(),
+    transports: text("transports"),
+    name: text("name").default("Passkey").notNull(),
+    lastUsedAt: timestamp("last_used_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [index("candidate_portal_passkeys_candidate_idx").on(table.candidateId)],
+);
+
+// Short-lived WebAuthn challenges for the portal (registration/login).
+export const candidatePortalChallenges = pgTable("candidate_portal_challenges", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  workspaceId: text("workspace_id")
+    .notNull()
+    .references(() => organization.id, { onDelete: "cascade" }),
+  candidateId: uuid("candidate_id").references(() => candidates.id, {
+    onDelete: "cascade",
+  }),
+  challenge: text("challenge").notNull(),
+  type: text("type").notNull(), // "registration" | "login"
+  expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true })
+    .defaultNow()
+    .notNull(),
+});
 
 // ---------------------------------------------------------------------------
 // GDPR / Consent records — proves consent was obtained (Art. 7 GDPR).

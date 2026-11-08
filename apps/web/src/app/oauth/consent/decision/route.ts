@@ -51,7 +51,7 @@ export async function POST(request: Request) {
     if (validation.kind === "redirect") return redirectTo(failureRedirectUrl(validation));
     return backToConsent(new URLSearchParams(), {
       request_error: validation.error,
-      request_error_description: validation.description,
+      request_error_reason: validation.reason,
     });
   }
 

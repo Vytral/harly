@@ -147,7 +147,7 @@ export const deleteJobContract = defineContract({
   summary: "Delete job",
   description: "Soft-delete a job. Reverts its status to closed.",
   tags: ["Jobs"],
-  auth: { scopes: ["jobs:write"] },
+  auth: { scopes: ["jobs:delete"] },
   parameters: { path: idPath },
   responses: {
     200: successEnvelopeSchema(z.object({ success: z.boolean() })),
@@ -164,7 +164,7 @@ export const publishJobContract = defineContract({
   summary: "Publish job",
   description: "Set job status to open and set publishedAt timestamp.",
   tags: ["Jobs"],
-  auth: { scopes: ["jobs:write"] },
+  auth: { scopes: ["jobs:publish"] },
   idempotent: true,
   parameters: { path: idPath },
   responses: {
@@ -182,7 +182,7 @@ export const closeJobContract = defineContract({
   summary: "Close job",
   description: "Set job status to closed.",
   tags: ["Jobs"],
-  auth: { scopes: ["jobs:write"] },
+  auth: { scopes: ["jobs:publish"] },
   idempotent: true,
   parameters: { path: idPath },
   responses: {

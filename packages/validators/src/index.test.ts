@@ -5,6 +5,7 @@ import {
   allowedResumeContentTypes,
   imageUploadRequestSchema,
   invitationSchema,
+  jobCreateSchema,
   inviteEmailSchema,
   maxImageFileSize,
   maxResumeFileSize,
@@ -492,6 +493,23 @@ describe("optionalNonNegativeIntSchema", () => {
 
   it("rejects a float", () => {
     const result = optionalNonNegativeIntSchema.safeParse(3.14);
+    expect(result.success).toBe(false);
+  });
+});
+
+describe("jobCreateSchema minimum", () => {
+  it("creates a job from a title alone, with defaults", () => {
+    const parsed = jobCreateSchema.parse({ title: "Support Engineer" });
+    expect(parsed.description).toBe("");
+    expect(parsed.employmentType).toBe("full_time");
+    expect(parsed.workplaceType).toBe("remote");
+  });
+
+  it("still requires content to publish", () => {
+    const result = jobCreateSchema.safeParse({
+      title: "Support Engineer",
+      status: "open",
+    });
     expect(result.success).toBe(false);
   });
 });

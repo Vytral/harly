@@ -121,6 +121,7 @@ export function HarlyAIProvider({
   // ⌘J / Ctrl+J toggles the panel from anywhere (⌘K stays search).
   useEffect(() => {
     function onKeyDown(event: KeyboardEvent) {
+      if (!aiEnabled) return;
       if ((event.metaKey || event.ctrlKey) && !event.shiftKey && !event.altKey && event.key.toLowerCase() === "j") {
         event.preventDefault();
         toggle();
@@ -128,16 +129,18 @@ export function HarlyAIProvider({
     }
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [toggle]);
+  }, [toggle, aiEnabled]);
 
   const value = useMemo(
-    () => ({ open, toggle, enabled: aiEnabled, ask, assistant }),
-    [open, toggle, aiEnabled, ask, assistant],
+    () => ({ open, toggle, enabled: aiEnabled, canConfigure: canConfigureAi, ask, assistant }),
+    [open, toggle, aiEnabled, canConfigureAi, ask, assistant],
   );
 
   return (
     <HarlyAIContext value={value}>
       {children}
+      {aiEnabled ? (
+      <>
       <HarlyAIPanel
         userName={userName}
         persistenceKey={persistenceKey}
@@ -151,6 +154,8 @@ export function HarlyAIProvider({
         surfaceContext={surfaceContext}
       />
       <HarlyAILauncher open={open} onToggle={toggle} />
+      </>
+      ) : null}
     </HarlyAIContext>
   );
 }

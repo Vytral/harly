@@ -6,6 +6,7 @@ import {
   buildLinkedInAuthUrl,
   getSinglePortalWorkspace,
 } from "@/lib/portal-auth";
+import { getPortalAuthMethods } from "@/lib/portal-auth-methods";
 import { createLogger } from "@/lib/logger";
 import { getHarlyPublicOrigin } from "@/lib/public-origin";
 import { createPortalOAuthState, PORTAL_OAUTH_STATE_COOKIE } from "@/lib/portal-oauth-state";
@@ -22,6 +23,16 @@ export async function GET(request: NextRequest) {
 
   if (!workspace) {
     return NextResponse.json({ error: "Portal not enabled." }, { status: 404 });
+  }
+
+  if (
+    provider !== "google" && provider !== "github" && provider !== "linkedin"
+  ) {
+    return NextResponse.json({ error: "Unknown provider." }, { status: 400 });
+  }
+  const methods = await getPortalAuthMethods(workspace.id);
+  if (!methods.oauth[provider]) {
+    return NextResponse.json({ error: "This sign-in method is unavailable." }, { status: 404 });
   }
 
   const state = createPortalOAuthState(next, workspace.id);

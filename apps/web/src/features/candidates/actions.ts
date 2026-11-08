@@ -125,7 +125,7 @@ export async function exportCandidateDirectoryAction(input: CandidateDirectoryFi
   const parsed = directoryExportSchema.safeParse(input);
   if (!parsed.success) return { success: false as const, error: "Invalid export filters." };
 
-  const context = await requirePermission("candidates:view");
+  const context = await requirePermission("candidates:export");
   const pageSize = 100;
   const first = await listCandidateDirectory({ ...parsed.data, page: 1, pageSize });
   const maxRows = 10_000;
@@ -189,7 +189,9 @@ export async function bulkUpdateCandidateStatusAction(input: {
     return { success: false, error: "Invalid selection." };
   }
 
-  await requirePermission("candidates:edit");
+  await requirePermission(
+    parsed.data.status === "rejected" ? "candidates:reject" : "candidates:edit",
+  );
 
   const { organization: workspace } = await getWorkspaceContext();
   const result = await updateApplicationStatus({
@@ -213,7 +215,7 @@ export async function bulkUpdateCandidateStatusAction(input: {
  * Reject one or more applications from RejectDialog: a reason is required,
  * the note is internal, and `sendEmail` decides whether candidates get the
  * rejection email (individually, with `templateId` or the active template).
- * Permissions match every other status change: candidates:edit, checked per
+ * Permission: candidates:reject, checked per
  * application inside updateApplicationStatus.
  */
 export async function rejectApplicationsAction(
@@ -227,7 +229,7 @@ export async function rejectApplicationsAction(
     };
   }
 
-  await requirePermission("candidates:edit");
+  await requirePermission("candidates:reject");
 
   const { organization: workspace } = await getWorkspaceContext();
   const { applicationIds, ...rejection } = parsed.data;

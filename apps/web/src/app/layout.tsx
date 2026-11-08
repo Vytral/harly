@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import localFont from "next/font/local";
 import { GeistMono } from "geist/font/mono";
 
@@ -27,6 +27,16 @@ const instrumentSans = localFont({
 });
 
 export const dynamic = "force-dynamic";
+
+// Browser chrome follows the device scheme until a stored preference overrides
+// it (the bootstrap script rewrites these metas). Colors are --warm-paper.
+export const viewport: Viewport = {
+  colorScheme: "light dark",
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#f5f5f4" },
+    { media: "(prefers-color-scheme: dark)", color: "#161614" },
+  ],
+};
 
 export async function generateMetadata(): Promise<Metadata> {
   return {

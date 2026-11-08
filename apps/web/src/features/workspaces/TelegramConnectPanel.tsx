@@ -30,6 +30,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { SecretInput } from "@/components/ui/secret-input";
 import { Label } from "@/components/ui/label";
 import { SettingRow } from "@/components/ui/setting-row";
 import { Switch } from "@/components/ui/switch";
@@ -294,9 +295,8 @@ function TelegramConnectForm({
 
         <div className="space-y-2">
           <Label htmlFor="tg-token">Bot token</Label>
-          <Input
+          <SecretInput
             id="tg-token"
-            type="password"
             value={botToken}
             onChange={(e) => setBotToken(e.target.value)}
             placeholder={
@@ -304,7 +304,6 @@ function TelegramConnectForm({
                 ? "•••••••• (stored, leave blank to keep)"
                 : "123456789:AAF3xkcyTgh…"
             }
-            autoComplete="off"
             className="font-mono text-xs"
           />
         </div>

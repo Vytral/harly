@@ -13,6 +13,7 @@
     "check:automation-capabilities": "tsx scripts/check-automation-capabilities.ts --check",
     "test": "vitest run",
     "e2e": "env DATABASE_URL=\"${HARLY_E2E_DATABASE_URL:-postgresql://harly:harly@localhost:5432/harly_e2e}\" NEXT_PUBLIC_TURNSTILE_SITE_KEY= TURNSTILE_SECRET_KEY= NEXT_PUBLIC_RECAPTCHA_SITE_KEY= RECAPTCHA_SECRET_KEY= NEXT_PUBLIC_HCAPTCHA_SITE_KEY= HCAPTCHA_SECRET_KEY= NEXT_PUBLIC_APP_URL=http://127.0.0.1:3000 BETTER_AUTH_URL=http://127.0.0.1:3000 HARLY_URL=http://127.0.0.1:3000 HARLY_E2E=true BETTER_AUTH_SECRET=harly-e2e-better-auth-secret-not-for-production-2026 STORAGE_UPLOAD_SECRET=harly-e2e-storage-upload-secret-not-for-production-2026 HARLY_SETUP_SECRET=harly-e2e-setup-secret-not-for-production-2026 HARLY_INITIAL_ADMIN_EMAIL=owner@harly-e2e.test CRON_SECRET=harly-e2e-cron-secret-not-for-production-2026 AI_ENCRYPTION_KEY=MDEyMzQ1Njc4OTAxMjM0NTY3ODkwMTIzNDU2Nzg5MDE= EMAIL_FROM=harly-e2e@harly-e2e.test sh -c 'pnpm build && playwright test'",
+    "ai:models:update": "tsx scripts/update-models-snapshot.ts",
     "ai:smoke": "LIVE_AI_SMOKE=1 vitest run src/lib/ai/live-smoke.test.ts",
     "ai:agent-smoke": "LIVE_AI_AGENT_SMOKE=1 vitest run src/lib/ai/live-agent-smoke.test.ts",
     "ai:write-smoke": "LIVE_AI_WRITE_SMOKE=1 vitest run src/lib/ai/live-write-smoke.test.ts",

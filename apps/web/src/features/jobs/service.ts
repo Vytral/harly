@@ -240,6 +240,14 @@ export async function updateJobForApi(input: {
   });
 
   const nextStatus = input.values.status ?? existing.status;
+  const nextDescription = input.values.description ?? existing.description;
+  if (
+    nextStatus === "open" &&
+    (existing.status !== "open" || input.values.description !== undefined) &&
+    !(nextDescription ?? "").trim()
+  ) {
+    throw ApiError.unprocessable("A description is required to publish a job.");
+  }
   if (nextStatus === "open") {
     const [pending] = await db.select({ id: jobApprovalRequests.id }).from(jobApprovalRequests).where(and(eq(jobApprovalRequests.workspaceId, input.workspaceId), eq(jobApprovalRequests.jobId, input.jobId), eq(jobApprovalRequests.status, "pending"))).limit(1);
     if (pending) throw ApiError.conflict("Job has a pending approval request.");
@@ -253,18 +261,18 @@ export async function updateJobForApi(input: {
       .update(jobs)
       .set({
       title: input.values.title ?? existing.title,
-      description: input.values.description ?? existing.description,
-      department: input.values.department ?? existing.department,
-      location: input.values.location ?? existing.location,
+      description: nextDescription,
+      department: input.values.department === undefined ? existing.department : input.values.department,
+      location: input.values.location === undefined ? existing.location : input.values.location,
       employmentType: input.values.employmentType ?? existing.employmentType,
       workplaceType: input.values.workplaceType ?? existing.workplaceType,
-      requirements: input.values.requirements ?? existing.requirements,
-      benefits: input.values.benefits ?? existing.benefits,
+      requirements: input.values.requirements === undefined ? existing.requirements : input.values.requirements,
+      benefits: input.values.benefits === undefined ? existing.benefits : input.values.benefits,
       keywords: input.values.keywords ?? (existing.keywords as string[]),
-      salaryMin: input.values.salaryMin ?? existing.salaryMin,
-      salaryMax: input.values.salaryMax ?? existing.salaryMax,
-      currency: input.values.currency ?? existing.currency,
-      salaryPeriod: input.values.salaryPeriod ?? existing.salaryPeriod,
+      salaryMin: input.values.salaryMin === undefined ? existing.salaryMin : input.values.salaryMin,
+      salaryMax: input.values.salaryMax === undefined ? existing.salaryMax : input.values.salaryMax,
+      currency: input.values.currency === undefined ? existing.currency : input.values.currency,
+      salaryPeriod: input.values.salaryPeriod === undefined ? existing.salaryPeriod : input.values.salaryPeriod,
       status: nextStatus,
       publishedAt:
         nextStatus === "open"

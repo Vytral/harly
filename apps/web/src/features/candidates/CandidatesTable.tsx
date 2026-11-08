@@ -160,7 +160,10 @@ export function CandidatesTable({
   initialFilters,
   filterOptions,
   emailTemplates = [],
+  access,
 }: {
+  /** What the viewer may do. Omitted means everything (the server still checks). */
+  access?: { canReject?: boolean; canDelete?: boolean; canExport?: boolean };
   rows: CandidateRow[];
   pageInfo?: { page: number; pageSize: number; total: number; hasNextPage: boolean };
   filterOptions?: {
@@ -191,6 +194,9 @@ export function CandidatesTable({
   };
 }) {
   const router = useRouter();
+  const canReject = access?.canReject !== false;
+  const canDelete = access?.canDelete !== false;
+  const canExport = access?.canExport !== false;
   const [query, setQuery] = useState(initialFilters?.query ?? "");
   const [sortKey, setSortKey] = useState<SortKey>((initialFilters?.sort as SortKey) ?? "recent");
   const [dept, setDept] = useState(initialFilters?.dept ?? FILTER_ALL);
@@ -611,15 +617,17 @@ export function CandidatesTable({
             }}
             allValue="recent"
           />
-          <Button
-            variant="soft"
-            className="ml-auto h-9 rounded-full"
-            onClick={exportCsv}
-            disabled={isPending}
-          >
-            <Download className="size-4" />
-            {selectedCount > 0 ? `Export selected (${selectedCount})` : "Export CSV"}
-          </Button>
+          {canExport ? (
+            <Button
+              variant="soft"
+              className="ml-auto h-9 rounded-full"
+              onClick={exportCsv}
+              disabled={isPending}
+            >
+              <Download className="size-4" />
+              {selectedCount > 0 ? `Export selected (${selectedCount})` : "Export CSV"}
+            </Button>
+          ) : null}
         </FilterBar>
 
         <TotalLine
@@ -787,6 +795,8 @@ export function CandidatesTable({
                           }
                           onStatus={(next) => runRowStatus(row, next)}
                           onDelete={() => runDelete(row)}
+                          canReject={canReject}
+                          canDelete={canDelete}
                           onTogglePool={() => runTogglePool(row)}
                         />
                       </td>
@@ -827,18 +837,22 @@ export function CandidatesTable({
           <CheckCircle2 />
           Mark hired
         </BulkAction>
-        <BulkAction disabled={isPending} onClick={() => runBulk("rejected")}>
-          <XCircle />
-          Reject
-        </BulkAction>
+        {canReject ? (
+          <BulkAction disabled={isPending} onClick={() => runBulk("rejected")}>
+            <XCircle />
+            Reject
+          </BulkAction>
+        ) : null}
         <BulkAction disabled={isPending} onClick={() => runBulk("active")}>
           <RotateCcw />
           Reactivate
         </BulkAction>
-        <BulkAction danger disabled={isPending} onClick={runBulkDelete}>
-          <Trash2 />
-          Delete
-        </BulkAction>
+        {canDelete ? (
+          <BulkAction danger disabled={isPending} onClick={runBulkDelete}>
+            <Trash2 />
+            Delete
+          </BulkAction>
+        ) : null}
       </BulkActionBar>
 
       <BulkEmailDrawer
@@ -869,8 +883,12 @@ function RowActions({
   onView,
   onStatus,
   onDelete,
+  canReject,
+  canDelete,
   onTogglePool,
 }: {
+  canReject: boolean;
+  canDelete: boolean;
   row: CandidateRow;
   disabled: boolean;
   onView: () => void;
@@ -901,13 +919,15 @@ function RowActions({
           <CheckCircle2 className="size-4 text-primary" />
           Mark hired
         </DropdownMenuItem>
-        <DropdownMenuItem
-          variant="destructive"
-          onSelect={() => onStatus("rejected")}
-        >
-          <XCircle className="size-4" />
-          Reject
-        </DropdownMenuItem>
+        {canReject ? (
+          <DropdownMenuItem
+            variant="destructive"
+            onSelect={() => onStatus("rejected")}
+          >
+            <XCircle className="size-4" />
+            Reject
+          </DropdownMenuItem>
+        ) : null}
         <DropdownMenuItem onSelect={() => onStatus("active")}>
           <RotateCcw className="size-4" />
           Reactivate
@@ -919,11 +939,15 @@ function RowActions({
           />
           {row.inPool ? "Remove from Pool" : "Add to Pool"}
         </DropdownMenuItem>
-        <DropdownMenuSeparator />
-        <DropdownMenuItem variant="destructive" onSelect={onDelete}>
-          <Trash2 className="size-4" />
-          Delete
-        </DropdownMenuItem>
+        {canDelete ? (
+          <>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem variant="destructive" onSelect={onDelete}>
+              <Trash2 className="size-4" />
+              Delete
+            </DropdownMenuItem>
+          </>
+        ) : null}
       </DropdownMenuContent>
     </DropdownMenu>
   );

@@ -244,6 +244,14 @@ export function AiAgentsSettings(props: {
           </Callout>
         ) : null}
 
+        {enabled && !settings.allowDcr ? (
+          <Callout tone="warning" title="Claude and ChatGPT can't connect yet">
+            {props.canManage
+              ? "Automatic app registration is off, so claude.ai and ChatGPT cannot register with this workspace. Turn it on under Workspace controls."
+              : "Automatic app registration is off, so Claude and ChatGPT cannot connect. Ask a workspace admin to turn it on."}
+          </Callout>
+        ) : null}
+
         {props.canUse ? (
           <>
             <div>
@@ -343,7 +351,7 @@ export function AiAgentsSettings(props: {
             </SettingRow>
             <SettingRow
               title="Allow automatic app registration"
-              description="Lets apps register themselves when they first connect (needed by some clients, such as older Claude Code and Gemini versions). Turn off to accept only apps that publish a client metadata document."
+              description="Lets apps register themselves when they first connect. Claude (claude.ai) and ChatGPT need this: with it off they cannot connect, even if &ldquo;Any MCP app&rdquo; is selected above. Turn off only to accept apps that publish a client metadata document."
               htmlFor="mcp-dcr"
               control={
                 <Switch

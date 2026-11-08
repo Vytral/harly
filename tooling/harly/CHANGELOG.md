@@ -1,5 +1,33 @@
 # Changelog
 
+## 0.7.0 — 2026-11-07
+
+### Telemetry (opt-in)
+
+- `harly init` asks once, in an interactive terminal, whether to share anonymous
+  usage data. The default is no. If you agree, it can also ask how you heard
+  about Harly. The payload is a random instance id, the CLI version, the OS and
+  architecture, the deployment mode and the optional answer. It never includes
+  your domain, email, organization name or IP address.
+- Turn it off with `--no-telemetry`, `HARLY_TELEMETRY=0` or `DO_NOT_TRACK=1`;
+  these win over a saved "yes". Non-interactive runs send nothing unless you pass
+  `--telemetry` or set `HARLY_TELEMETRY=1`.
+- `harly telemetry status | enable | disable` manages the saved choice. The
+  endpoint can be changed with `HARLY_TELEMETRY_URL`. The payload contract is in
+  the README.
+
+### Fixed
+
+- The commands printed at the end of `harly init` and in the generated README
+  said `npx @harly/cli` even when the CLI was installed globally. Every hint now
+  names the command you actually used, and says `harly` after you accept the
+  global install. `init` offers the global install before the final summary.
+
+### Added
+
+- `harly init` writes `HARLY_ORG_NAME` to `.env`, so the setup wizard does not
+  ask for the company name again.
+
 ## 0.6.0 — 2026-10-31
 
 ### A more guided CLI

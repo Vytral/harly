@@ -6,6 +6,7 @@ import { AiSettingsForm } from "@/features/workspaces/AiSettingsCard";
 import { getWorkspaceContext } from "@/features/workspaces/context";
 import { requirePagePermission } from "@/features/workspaces/permissions-server";
 import { getWorkspaceAiStatus } from "@/lib/ai/config";
+import { isLocalLlmAllowed } from "@/lib/ai/local-llm";
 
 export const dynamic = "force-dynamic";
 
@@ -22,7 +23,7 @@ export default async function ConfigureAiSettingsPage() {
           AI settings
         </Link>
       </Button>
-      <AiSettingsForm status={status} />
+      <AiSettingsForm status={status} allowLocalLlm={isLocalLlmAllowed()} />
     </div>
   );
 }

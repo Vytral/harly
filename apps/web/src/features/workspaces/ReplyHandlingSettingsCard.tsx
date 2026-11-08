@@ -36,6 +36,7 @@ import { EnvelopeIcon } from "@/components/ui/icons/settings";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { SecretInput } from "@/components/ui/secret-input";
 import { Label } from "@/components/ui/label";
 import {
   Select,
@@ -448,13 +449,11 @@ function SharedMailboxFields({
           />
         </Field>
         <Field label="Password" htmlFor="reply-imap-password">
-          <Input
+          <SecretInput
             id="reply-imap-password"
-            type="password"
             value={form.imapPassword}
             onChange={(event) => set("imapPassword", event.target.value)}
             placeholder={passwordPlaceholder(status.hasImapPassword)}
-            autoComplete="off"
           />
         </Field>
         <Field label="Source folder" htmlFor="reply-source-folder">
@@ -510,13 +509,11 @@ function SharedMailboxFields({
           />
         </Field>
         <Field label="Password" htmlFor="reply-smtp-password">
-          <Input
+          <SecretInput
             id="reply-smtp-password"
-            type="password"
             value={form.smtpPassword}
             onChange={(event) => set("smtpPassword", event.target.value)}
             placeholder={passwordPlaceholder(status.hasSmtpPassword)}
-            autoComplete="off"
           />
         </Field>
         <Field label="Sent folder" htmlFor="reply-sent-folder">
@@ -640,9 +637,8 @@ function ThreadedReplyFields({
         }
         htmlFor="reply-webhook-secret"
       >
-        <Input
+        <SecretInput
           id="reply-webhook-secret"
-          type="password"
           value={webhookSecret}
           onChange={(event) => onWebhookSecretChange(event.target.value)}
           placeholder={
@@ -652,7 +648,6 @@ function ThreadedReplyFields({
                 ? "Set this as the URL's Basic Auth password"
                 : "whsec_…"
           }
-          autoComplete="off"
         />
         <p className="text-xs text-muted-foreground">
           {provider === "postmark"
@@ -663,9 +658,8 @@ function ThreadedReplyFields({
 
       {provider === "resend" ? (
         <Field label="Resend API key" htmlFor="reply-resend-key">
-          <Input
+          <SecretInput
             id="reply-resend-key"
-            type="password"
             value={resendApiKey}
             onChange={(event) => onResendApiKeyChange(event.target.value)}
             placeholder={
@@ -673,7 +667,6 @@ function ThreadedReplyFields({
                 ? "•••••••• (stored, leave blank to keep)"
                 : "re_…"
             }
-            autoComplete="off"
           />
           <p className="text-xs text-muted-foreground">
             Used to fetch the email body after the webhook fires. Needs the

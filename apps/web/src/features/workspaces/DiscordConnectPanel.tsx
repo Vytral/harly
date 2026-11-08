@@ -26,7 +26,7 @@ import {
 } from "@/components/ui/icons/phosphor";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
+import { SecretInput } from "@/components/ui/secret-input";
 import { Label } from "@/components/ui/label";
 import { SettingRow } from "@/components/ui/setting-row";
 import { Switch } from "@/components/ui/switch";
@@ -269,9 +269,8 @@ function DiscordConnectForm({
       <div className="space-y-5">
         <div className="space-y-2">
           <Label htmlFor="discord-webhook">Incoming webhook URL</Label>
-          <Input
+          <SecretInput
             id="discord-webhook"
-            type="password"
             value={webhookUrl}
             onChange={(e) => setWebhookUrl(e.target.value)}
             placeholder={
@@ -279,7 +278,6 @@ function DiscordConnectForm({
                 ? "•••••••• (stored, leave blank to keep)"
                 : "https://discord.com/api/webhooks/000/xxxx"
             }
-            autoComplete="off"
             className="font-mono text-xs"
           />
           <p className="text-xs text-muted-foreground">

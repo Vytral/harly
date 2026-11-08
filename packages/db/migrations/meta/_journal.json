@@ -1156,6 +1156,20 @@
       "when": 1793500186718,
       "tag": "0164_mcp_oauth",
       "breakpoints": true
+    },
+    {
+      "idx": 165,
+      "version": "7",
+      "when": 1794104723129,
+      "tag": "0165_fancy_maelstrom",
+      "breakpoints": true
+    },
+    {
+      "idx": 166,
+      "version": "7",
+      "when": 1794105851603,
+      "tag": "0166_role_permission_split",
+      "breakpoints": true
     }
   ]
 }

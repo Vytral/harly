@@ -7,27 +7,16 @@ import Link from "next/link";
 import { motion, useReducedMotion } from "motion/react";
 
 import { authClient } from "@harly/auth/client";
-import { InviteTeammatesSheet } from "@/features/workspaces/InviteTeammatesSheet";
-import type { AssignableRole } from "@/features/workspaces/InviteTeammatesSheet";
 import {
   completeOnboardingAction,
-  saveOnboardingAboutAction,
   saveOnboardingAvatarAction,
   saveOnboardingBrandingAction,
-  setRequire2faAction,
+  saveUserRoleAction,
 } from "@/features/onboarding/actions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Switch } from "@/components/ui/switch";
 import { FileDropzone } from "@/components/ui/FileDropzone";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { BuildingsIcon } from "@/components/ui/icons/settings";
 import {
   CaretRightIcon,
@@ -36,11 +25,9 @@ import {
   MagicWandDuotoneIcon,
   MegaphoneDuotoneIcon,
   PaletteDuotoneIcon,
-  PlugsConnectedIcon,
   RobotDuotoneIcon,
   SealCheckDuotoneIcon,
-  ShieldCheckDuotoneIcon,
-  UserPlusIcon,
+  UserCircleIcon,
   UsersThreeDuotoneIcon,
 } from "@/components/ui/icons/phosphor";
 import { cn, slugify } from "@/lib/utils";
@@ -54,37 +41,24 @@ import {
 
 const PINE = "#3f6212";
 
-const STEPS: OnboardingStepMeta[] = [
-  { key: "workspace", label: "Company", desc: "Name your hiring workspace", icon: BuildingsIcon },
-  { key: "branding", label: "Branding", desc: "Logo, color & tagline", icon: MagicWandDuotoneIcon },
-  { key: "about", label: "About you", desc: "Your role & how you found us", icon: MegaphoneDuotoneIcon },
-  { key: "security", label: "Security", desc: "Protect your team's data", icon: ShieldCheckDuotoneIcon },
-  { key: "team", label: "Invite team", desc: "Bring in teammates", icon: UsersThreeDuotoneIcon },
-];
-
-const ACQUISITION = [
-  "Search engine",
-  "Social media",
-  "Friend or colleague",
-  "GitHub / Open source",
-  "Blog or article",
-  "Other",
-] as const;
-
-// Structured self-described role, persisted to user.onboardingRole (enum).
-const SELF_ROLES = [
-  { value: "founder", label: "Founder / CEO" },
-  { value: "recruiter", label: "Recruiter" },
-  { value: "hr_manager", label: "HR / People manager" },
-  { value: "hiring_manager", label: "Hiring manager" },
-  { value: "other", label: "Something else" },
-] as const;
-
-const INVITE_ROLES = [
-  { value: "recruiter", label: "Recruiter" },
-  { value: "hiring_manager", label: "Hiring Manager" },
-  { value: "admin", label: "Admin" },
-] as const;
+const COMPANY_STEP: OnboardingStepMeta = {
+  key: "workspace",
+  label: "Company",
+  desc: "Name your hiring workspace",
+  icon: BuildingsIcon,
+};
+const BRANDING_STEP: OnboardingStepMeta = {
+  key: "branding",
+  label: "Branding",
+  desc: "Logo, color & tagline",
+  icon: MagicWandDuotoneIcon,
+};
+const PROFILE_STEP: OnboardingStepMeta = {
+  key: "profile",
+  label: "You",
+  desc: "Photo & job title",
+  icon: UserCircleIcon,
+};
 
 // Balanced accent palette with evergreen, cool, warm and neutral options.
 const SWATCHES = [
@@ -100,17 +74,16 @@ const SWATCHES = [
   "#1f2937",
 ];
 
-const INVITE_ROLE_OPTIONS: AssignableRole[] = INVITE_ROLES.map((role) => ({
-  key: role.value,
-  name: role.label,
-}));
-
 export function OwnerOnboarding({
   userName,
   initialOrg,
+  initialAvatar,
+  aiConfigured = false,
+  suggestedCompanyName,
 }: {
   userName: string;
-  /** Set when resuming setup for an owner whose workspace already exists. */
+  /** Set when the workspace already exists (created by setup or a resumed
+   *  onboarding). Its name is never asked again. */
   initialOrg?: {
     id: string;
     name: string;
@@ -119,119 +92,111 @@ export function OwnerOnboarding({
     tagline?: string | null;
     primaryColor?: string | null;
   };
+  initialAvatar?: string | null;
+  /** Hides the "Connect AI" suggestion when a provider already works. */
+  aiConfigured?: boolean;
+  /** Name the operator gave at install (HARLY_ORG_NAME). When set, the company
+   *  step is skipped and the workspace is created with it. */
+  suggestedCompanyName?: string | null;
 }) {
   const router = useRouter();
-  // Resuming an existing workspace? Skip the create step.
-  const [step, setStep] = useState(initialOrg ? 1 : 0);
+  // The company step exists only when no workspace does yet. Every step after
+  // it is optional, so nothing here can block reaching the app.
+  const steps = useMemo(
+    () => (initialOrg || suggestedCompanyName ? [BRANDING_STEP, PROFILE_STEP] : [COMPANY_STEP, BRANDING_STEP, PROFILE_STEP]),
+    [initialOrg, suggestedCompanyName],
+  );
+  const [step, setStep] = useState(0);
   const [done, setDone] = useState(false);
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
+  const [saved, setSaved] = useState({ branding: false, profile: false });
 
-  // Step 1, company
-  const [name, setName] = useState(initialOrg?.name ?? "");
+  const [name, setName] = useState(initialOrg?.name ?? suggestedCompanyName?.trim() ?? "");
   const [orgId, setOrgId] = useState<string | null>(initialOrg?.id ?? null);
 
-  // Step 2, branding
   const [logoUrl, setLogoUrl] = useState(initialOrg?.logo ?? "");
   const [tagline, setTagline] = useState(initialOrg?.tagline ?? "");
   const [color, setColor] = useState(initialOrg?.primaryColor ?? PINE);
 
-  // Step 3, about
-  const [selfRole, setSelfRole] = useState<string>("");
-  const [source, setSource] = useState<string>("");
   const [jobTitle, setJobTitle] = useState("");
-  const [avatar, setAvatar] = useState("");
+  const [avatar, setAvatar] = useState(initialAvatar ?? "");
 
-  // Step 4, security
-  const [require2fa, setRequire2fa] = useState(false);
+  const key = steps[step]?.key;
+  const isLast = step === steps.length - 1;
 
-  // Step 5, invites
-  const isLast = step === STEPS.length - 1;
-
-  function goNext() {
-    setError(null);
-    if (step === 0) return createWorkspace();
-    if (isLast) return finish();
-    void persistCurrent();
-    setStep((s) => s + 1);
-  }
-
-  // Create the org as soon as the name is set, so later steps persist against
-  // it (and an abandoned setup is resumable because the owner already exists).
-  // The slug is derived silently from the company name. Harly is single-tenant,
-  // so there is no public /board/<slug> to choose. The board lives at the root.
-  function createWorkspace() {
-    const trimmed = name.trim();
-    if (!trimmed) return setError("Enter your company name.");
-    const slug = slugify(trimmed);
-    if (!slug) return setError("Company name needs at least one letter or number.");
-    startTransition(async () => {
-      if (!orgId) {
-        const response = await fetch("/api/setup/complete", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ name: trimmed, slug }),
-        });
-        const created = (await response.json()) as { id?: string; error?: string };
-        if (!response.ok || !created.id) {
-          return setError(created.error ?? "Couldn't create your workspace.");
-        }
-        setOrgId(created.id);
-        await authClient.organization.setActive({ organizationId: created.id });
-      }
-      setStep(1);
+  // Create the org as soon as the company step is confirmed (or skipped), so
+  // later steps persist against it. The slug is derived silently from the name.
+  // Harly is single-tenant: the careers board lives at the root.
+  async function ensureWorkspace(): Promise<boolean> {
+    if (orgId) return true;
+    const trimmed = name.trim() || `${userName}'s workspace`;
+    const slug = slugify(trimmed) || "workspace";
+    const response = await fetch("/api/setup/complete", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: trimmed, slug }),
     });
+    const created = (await response.json()) as { id?: string; error?: string };
+    if (!response.ok || !created.id) {
+      setError(created.error ?? "Couldn't create your workspace.");
+      return false;
+    }
+    setOrgId(created.id);
+    setName(trimmed);
+    await authClient.organization.setActive({ organizationId: created.id });
+    return true;
   }
 
-  // Persist the current step's data. Awaited where the user is leaving the step
-  // via Continue; surfaces the error instead of silently dropping data.
+  // Persist the current step. Untouched steps write nothing, so the wizard
+  // never overwrites values the install or an earlier visit already set.
   async function persistCurrent(): Promise<boolean> {
-    if (step === 1) {
+    if (key === "workspace") return ensureWorkspace();
+    if (key === "branding") {
+      const touched =
+        logoUrl !== (initialOrg?.logo ?? "") ||
+        tagline !== (initialOrg?.tagline ?? "") ||
+        color !== (initialOrg?.primaryColor ?? PINE);
+      if (!touched) return true;
       const res = await saveOnboardingBrandingAction({ logoUrl, tagline, primaryColor: color });
       if (!res.ok) { setError(res.error ?? "Couldn't save branding."); return false; }
+      setSaved((s) => ({ ...s, branding: true }));
     }
-    if (step === 2) {
-      const res = await saveOnboardingAboutAction({
-        role: selfRole || undefined,
-        jobTitle: jobTitle.trim() || undefined,
-        source: source || undefined,
-      });
-      if (!res.ok) { setError(res.error ?? "Couldn't save your details."); return false; }
-      const avatarRes = await saveOnboardingAvatarAction(avatar || null);
-      if (!avatarRes.ok) { setError(avatarRes.error ?? "Couldn't save your photo."); return false; }
-    }
-    if (step === 3) {
-      const res = await setRequire2faAction(require2fa);
-      if (!res.ok) { setError(res.error ?? "Couldn't save security settings."); return false; }
+    if (key === "profile") {
+      const title = jobTitle.trim();
+      if (title) {
+        const res = await saveUserRoleAction(title);
+        if (!res.ok) { setError(res.error ?? "Couldn't save your job title."); return false; }
+      }
+      if (avatar && avatar !== (initialAvatar ?? "")) {
+        const res = await saveOnboardingAvatarAction(avatar);
+        if (!res.ok) { setError(res.error ?? "Couldn't save your photo."); return false; }
+      }
+      if (title || avatar !== (initialAvatar ?? "")) setSaved((s) => ({ ...s, profile: true }));
     }
     return true;
   }
 
-  function skip() {
-    setError(null);
-    startTransition(async () => {
-      if (await persistCurrent()) setStep((s) => s + 1);
-    });
+  async function finish() {
+    const res = await completeOnboardingAction();
+    if (!res.ok) { setError(res.error ?? "Couldn't finish setup."); return; }
+    setDone(true);
   }
 
-  function next() {
-    if (step === 0 || isLast) return goNext();
+  function advance(save: boolean) {
     setError(null);
     startTransition(async () => {
-      if (await persistCurrent()) setStep((s) => s + 1);
-    });
-  }
-
-  function finish() {
-    startTransition(async () => {
-      // Security already persisted on navigation; persist again defensively,
-      // then mark onboarding complete.
-      const sec = await setRequire2faAction(require2fa);
-      if (!sec.ok) return setError(sec.error ?? "Couldn't save security settings.");
-
-      const res = await completeOnboardingAction();
-      if (!res.ok) return setError(res.error ?? "Couldn't finish setup.");
-      setDone(true);
+      if (key === "workspace") {
+        // The workspace itself is the one thing a later step needs.
+        if (!(await ensureWorkspace())) return;
+        setStep((s) => s + 1);
+        return;
+      }
+      // Name already known (install or env): create the workspace silently.
+      if (!(await ensureWorkspace())) return;
+      if (save && !(await persistCurrent())) return;
+      if (isLast) return finish();
+      setStep((s) => s + 1);
     });
   }
 
@@ -239,7 +204,9 @@ export function OwnerOnboarding({
     return (
       <Launchpad
         workspaceName={name}
-        require2fa={require2fa}
+        brandingSaved={saved.branding}
+        profileSaved={saved.profile}
+        aiConfigured={aiConfigured}
         onEnter={() => { router.replace("/dashboard"); router.refresh(); }}
       />
     );
@@ -248,22 +215,23 @@ export function OwnerOnboarding({
   return (
     <OnboardingShell
       railTitle="Get set up"
-      railFootnote="Takes about 2 minutes. You can change everything later in Settings."
-      steps={STEPS}
+      railFootnote="Every step is optional and takes seconds. You can change everything later in Settings."
+      steps={steps}
       current={step}
       onJump={(i) => { if (i < step) { setStep(i); setError(null); } }}
       error={error}
       pending={pending}
       isLast={isLast}
       onBack={() => { setStep((s) => s - 1); setError(null); }}
-      onNext={next}
-      onSkip={step >= 1 && step < STEPS.length - 1 ? skip : undefined}
+      onNext={() => advance(true)}
+      onSkip={() => advance(false)}
       nextLabel={isLast ? "Finish setup" : "Continue"}
+      minHeight="min-h-[28rem]"
     >
-      {step === 0 && (
+      {key === "workspace" && (
         <StepCompany userName={userName} name={name} onName={setName} locked={Boolean(orgId)} />
       )}
-      {step === 1 && (
+      {key === "branding" && (
         <StepBranding
           logoUrl={logoUrl}
           onLogo={setLogoUrl}
@@ -273,21 +241,13 @@ export function OwnerOnboarding({
           onColor={setColor}
         />
       )}
-      {step === 2 && (
-        <StepAbout
-          selfRole={selfRole}
-          onSelfRole={setSelfRole}
-          source={source}
-          onSource={setSource}
+      {key === "profile" && (
+        <StepProfile
           jobTitle={jobTitle}
           onJobTitle={setJobTitle}
           avatar={avatar}
           onAvatar={setAvatar}
         />
-      )}
-      {step === 3 && <StepSecurity require2fa={require2fa} onToggle={setRequire2fa} />}
-      {step === 4 && (
-        <StepInvite assignableRoles={INVITE_ROLE_OPTIONS} />
       )}
     </OnboardingShell>
   );
@@ -300,7 +260,7 @@ function StepCompany({ userName, name, onName, locked }: { userName: string; nam
         <StepHeading
           eyebrow={`Welcome, ${userName}`}
           title="What's your company called?"
-          subtitle="This is the name candidates see on your careers page and in application emails."
+          subtitle="Candidates see this on your careers page and in emails. Skip it and we'll use a placeholder you can rename later."
         />
       </StepField>
       <StepField className="mt-7 space-y-3">
@@ -311,6 +271,7 @@ function StepCompany({ userName, name, onName, locked }: { userName: string; nam
           placeholder="Acme Recruiting"
           className="h-11"
           disabled={locked}
+          aria-label="Company name"
         />
       </StepField>
     </StepStagger>
@@ -395,13 +356,13 @@ function StepBranding({ logoUrl, onLogo, tagline, onTagline, color, onColor }: {
   );
 }
 
-function StepAbout({ selfRole, onSelfRole, source, onSource, jobTitle, onJobTitle, avatar, onAvatar }: { selfRole: string; onSelfRole: (v: string) => void; source: string; onSource: (v: string) => void; jobTitle: string; onJobTitle: (v: string) => void; avatar: string; onAvatar: (v: string) => void }) {
+function StepProfile({ jobTitle, onJobTitle, avatar, onAvatar }: { jobTitle: string; onJobTitle: (v: string) => void; avatar: string; onAvatar: (v: string) => void }) {
   return (
     <StepStagger>
       <StepField>
         <StepHeading
-          title="Tell us about you"
-          subtitle="Helps us tailor Harly. Optional. Skip anything you'd rather not share."
+          title="Put a face to the name"
+          subtitle="Your photo and title show next to your activity and to the hiring team. Optional."
         />
       </StepField>
       <StepField className="mt-7 flex items-center gap-5">
@@ -419,15 +380,6 @@ function StepAbout({ selfRole, onSelfRole, source, onSource, jobTitle, onJobTitl
         </div>
       </StepField>
       <StepField className="mt-6 space-y-2">
-        <Label>What best describes you?</Label>
-        <Select value={selfRole} onValueChange={onSelfRole}>
-          <SelectTrigger className="w-full"><SelectValue placeholder="Choose one" /></SelectTrigger>
-          <SelectContent>
-            {SELF_ROLES.map((r) => <SelectItem key={r.value} value={r.value}>{r.label}</SelectItem>)}
-          </SelectContent>
-        </Select>
-      </StepField>
-      <StepField className="mt-5 space-y-2">
         <Label htmlFor="ob-title">Your job title</Label>
         <Input
           id="ob-title"
@@ -436,69 +388,6 @@ function StepAbout({ selfRole, onSelfRole, source, onSource, jobTitle, onJobTitl
           placeholder="Head of Talent"
           maxLength={80}
         />
-        <p className="text-xs text-muted-foreground">Shown on your profile and to the hiring team.</p>
-      </StepField>
-      <StepField className="mt-5 space-y-2">
-        <Label>How did you hear about us?</Label>
-        <Select value={source} onValueChange={onSource}>
-          <SelectTrigger className="w-full"><SelectValue placeholder="Choose one" /></SelectTrigger>
-          <SelectContent>
-            {ACQUISITION.map((a) => <SelectItem key={a} value={a}>{a}</SelectItem>)}
-          </SelectContent>
-        </Select>
-      </StepField>
-    </StepStagger>
-  );
-}
-
-function StepSecurity({ require2fa, onToggle }: { require2fa: boolean; onToggle: (v: boolean) => void }) {
-  return (
-    <StepStagger>
-      <StepField>
-        <StepHeading
-          title="Secure your workspace"
-          subtitle="Recommended for teams handling candidate data."
-        />
-      </StepField>
-      <StepField>
-        <label className="mt-7 flex items-start justify-between gap-4 rounded-xl border bg-card px-4 py-3.5">
-          <span className="flex items-start gap-3">
-            <ShieldCheckDuotoneIcon className="mt-0.5 size-5 text-pine" />
-            <span>
-              <span className="block text-sm font-medium text-foreground">Require 2FA for all members</span>
-              <span className="mt-0.5 block text-xs text-muted-foreground">Everyone must set up two-factor auth before accessing the dashboard. You can enable your own 2FA from your account.</span>
-            </span>
-          </span>
-          <Switch checked={require2fa} onCheckedChange={onToggle} aria-label="Require 2FA" />
-        </label>
-      </StepField>
-    </StepStagger>
-  );
-}
-
-function StepInvite({ assignableRoles }: { assignableRoles: AssignableRole[] }) {
-  return (
-    <StepStagger>
-      <StepField>
-        <StepHeading
-          title="Invite your team"
-          subtitle="Invite one person or a whole team. You can also do this later from Settings."
-        />
-      </StepField>
-      <StepField className="mt-7 space-y-3">
-        <InviteTeammatesSheet
-          assignableRoles={assignableRoles}
-          refreshOnSuccess={false}
-          trigger={
-            <Button type="button" variant="secondary">
-              <UserPlusIcon className="size-4" />
-              Invite teammates
-            </Button>
-          }
-        />
-        <p className="text-xs text-muted-foreground">
-          Add emails one by one, paste a list, or import a CSV file.
-        </p>
       </StepField>
     </StepStagger>
   );
@@ -506,27 +395,41 @@ function StepInvite({ assignableRoles }: { assignableRoles: AssignableRole[] }) 
 
 // ─── Launchpad (all set) ──────────────────────────────────────────────────────
 
-function Launchpad({ workspaceName, require2fa, onEnter }: { workspaceName: string; require2fa: boolean; onEnter: () => void }) {
+function Launchpad({
+  workspaceName,
+  brandingSaved,
+  profileSaved,
+  aiConfigured,
+  onEnter,
+}: {
+  workspaceName: string;
+  brandingSaved: boolean;
+  profileSaved: boolean;
+  aiConfigured: boolean;
+  onEnter: () => void;
+}) {
   const reduceMotion = useReducedMotion();
-  // The first hour starts with a job: everything else (candidates, email,
-  // automations) is pointless until a role exists to apply to.
-  const nextSteps = useMemo(
-    () => [
+  // The first hour starts with a job. AI is offered last, only when it is not
+  // configured, and is plainly optional.
+  const nextSteps = useMemo(() => {
+    const list: { icon: typeof MegaphoneDuotoneIcon; label: string; hint: string; href: Route; primary: boolean }[] = [
       { icon: MegaphoneDuotoneIcon, label: "Create your first job", hint: "Describe the role, then publish it", href: "/dashboard/jobs/new" as Route, primary: true },
-      { icon: RobotDuotoneIcon, label: "Connect an AI provider", hint: "Auto-screen & draft outreach", href: "/settings/ai" as Route, primary: false },
-      { icon: PlugsConnectedIcon, label: "Connect integrations", hint: "Cal.com, Slack, Discord", href: "/settings/integrations" as Route, primary: false },
-      { icon: DownloadDuotoneIcon, label: "Import candidates", hint: "From CSV or Greenhouse", href: "/dashboard/candidates" as Route, primary: false },
-    ],
-    [],
-  );
-  const done = [
+      { icon: UsersThreeDuotoneIcon, label: "Invite your team", hint: "Optional. Add teammates any time", href: "/settings/members" as Route, primary: false },
+      { icon: DownloadDuotoneIcon, label: "Import candidates", hint: "From a CSV file", href: "/dashboard/candidates" as Route, primary: false },
+    ];
+    if (!aiConfigured) {
+      list.push({ icon: RobotDuotoneIcon, label: "Connect AI (optional)", hint: "Bring your own provider to screen and draft", href: "/settings/ai" as Route, primary: false });
+    }
+    return list;
+  }, [aiConfigured]);
+  const doneItems = [
     "Workspace created",
-    "Careers page branded",
-    require2fa ? "2FA required for everyone" : null,
+    brandingSaved ? "Careers page branded" : null,
+    profileSaved ? "Profile updated" : null,
   ].filter(Boolean) as string[];
 
   return (
-    <div className="w-full max-w-lg overflow-hidden rounded-3xl border border-border/70 bg-card p-8 text-center shadow-[0_12px_32px_-12px_rgba(31,41,38,0.12)] lg:p-10">
+    <div className="w-full max-w-lg overflow-hidden rounded-3xl border border-border/70 bg-card p-6 text-center shadow-[0_12px_32px_-12px_rgba(31,41,38,0.12)] sm:p-8 lg:p-10">
       <motion.span
         initial={reduceMotion ? false : { scale: 0.6, opacity: 0 }}
         animate={{ scale: 1, opacity: 1 }}
@@ -539,11 +442,11 @@ function Launchpad({ workspaceName, require2fa, onEnter }: { workspaceName: stri
         {workspaceName || "Your workspace"} is ready
       </h2>
       <p className="mx-auto mt-2 max-w-sm text-sm text-muted-foreground">
-        You&apos;re all set to start hiring. Here&apos;s what you&apos;ve done and a few things worth doing next.
+        You can start hiring right away. Here is what is done and what is worth doing next.
       </p>
 
       <div className="mt-7 space-y-2 text-left">
-        {done.map((d) => (
+        {doneItems.map((d) => (
           <div key={d} className="flex items-center gap-2.5 rounded-xl border border-pine/15 bg-sage/30 px-4 py-2.5">
             <CheckIcon className="size-4 text-pine" />
             <span className="text-sm font-medium text-foreground">{d}</span>
@@ -553,12 +456,12 @@ function Launchpad({ workspaceName, require2fa, onEnter }: { workspaceName: stri
           const Icon = s.icon;
           return (
             <Link key={s.label} href={s.href} className={cn("group flex items-center gap-3 rounded-xl border px-4 py-2.5 transition-colors hover:border-pine/30 hover:bg-muted/40", s.primary ? "border-pine/30 bg-sage/40" : "bg-card")}>
-              <Icon className={cn("size-5", s.primary ? "text-pine" : "text-muted-foreground")} />
-              <span className="flex-1">
+              <Icon className={cn("size-5 shrink-0", s.primary ? "text-pine" : "text-muted-foreground")} />
+              <span className="min-w-0 flex-1">
                 <span className="block text-sm font-medium text-foreground">{s.label}</span>
                 <span className="block text-xs text-muted-foreground">{s.hint}</span>
               </span>
-              <CaretRightIcon className="size-4 text-muted-foreground transition-transform group-hover:translate-x-0.5" />
+              <CaretRightIcon className="size-4 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5" />
             </Link>
           );
         })}

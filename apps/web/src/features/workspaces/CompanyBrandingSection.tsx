@@ -92,9 +92,12 @@ function Segmented<T extends string>({
 export function CompanyBrandingSection({
   workspace,
   currentRole,
+  afterIdentity,
 }: {
   workspace: WorkspaceBranding;
   currentRole: WorkspaceRole;
+  /** Rendered between Identity and Brand on small screens (see grid order). */
+  afterIdentity?: React.ReactNode;
 }) {
   const canEdit = currentRole === "owner" || currentRole === "admin";
 
@@ -156,7 +159,7 @@ export function CompanyBrandingSection({
   return (
     <div className="grid w-full gap-6 lg:grid-cols-2 items-start">
       {/* ── Identity ─────────────────────────────────────────────────── */}
-      <Card className="gap-6 p-6 sm:p-8">
+      <Card className="order-1 gap-6 p-6 sm:p-8">
         <SectionHeader
           icon={BuildingsIcon}
           title="Identity"
@@ -289,8 +292,14 @@ export function CompanyBrandingSection({
         </form>
       </Card>
 
+      {/* Optional full-width card (Gravatar). Stacks right under Identity on
+          small screens; on lg it spans both columns below Identity + Brand. */}
+      {afterIdentity ? (
+        <div className="order-2 min-w-0 lg:order-3 lg:col-span-2">{afterIdentity}</div>
+      ) : null}
+
       {/* ── Brand & links ────────────────────────────────────────────── */}
-      <Card className="gap-6 p-6 sm:p-8">
+      <Card className="order-3 gap-6 p-6 sm:p-8 lg:order-2">
         <SectionHeader
           icon={PaletteDuotoneIcon}
           title="Brand & links"

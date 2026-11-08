@@ -12,29 +12,13 @@ import { AiButton } from "@/components/ui/AiButton";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import {
-  ClaudeLogo,
-  GeminiLogo,
-  OpenAiLogo,
-  OpenRouterLogo,
-  XaiLogo,
-} from "@/components/ui/icons/brands";
 import { HarlyAILogoMark } from "@/components/ui/icons/HarlyAILogoMark";
 import { RelativeTime } from "@/lib/date-hydration";
-import { formatModelLabel, type AiProviderId } from "@/lib/ai/providers";
+import { formatModelLabel } from "@/lib/ai/providers";
+import { ProviderLogo } from "@/features/workspaces/provider-logos";
 import { cn } from "@/lib/utils";
 import { scoreBand } from "@/lib/evaluation/score-band";
 
-const PROVIDER_LOGO: Record<
-  AiProviderId,
-  React.ComponentType<{ className?: string }>
-> = {
-  openai: OpenAiLogo,
-  anthropic: ClaudeLogo,
-  google: GeminiLogo,
-  xai: XaiLogo,
-  openrouter: OpenRouterLogo,
-};
 
 const RECOMMENDATION_META = {
   strong_yes: { label: "Strong yes", className: "bg-success-olive/12 text-success-olive" },
@@ -437,10 +421,7 @@ export function AiScoreCard({
 
               <div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-t pt-3 text-xs text-muted-foreground">
                 <Badge variant="outline" className="gap-1.5 font-normal">
-                  {(() => {
-                    const Logo = PROVIDER_LOGO[evaluation.provider as AiProviderId];
-                    return Logo ? <Logo className="size-3.5" /> : null;
-                  })()}
+                  <ProviderLogo id={evaluation.provider} className="size-3.5" />
                   {evaluation.source === "rules"
                     ? `Harly Algorithm · ${evaluation.modelId || "rules-v4"}`
                     : formatModelLabel(evaluation.modelId)}

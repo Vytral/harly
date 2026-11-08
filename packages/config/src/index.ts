@@ -48,6 +48,8 @@ const envSchema = z
     CRON_SECRET: optionalString,
     HARLY_SETUP_SECRET: optionalString,
     HARLY_INITIAL_ADMIN_EMAIL: optionalEmail,
+    /** Company name the operator typed in `harly init`; prefills the first-run workspace name. */
+    HARLY_ORG_NAME: optionalString,
     HARLY_VERSION: z.string().trim().default("0.1.0-dev"),
     STORAGE_PROVIDER: z.enum(["local", "s3"]).default("local"),
     UPLOADS_DIR: z.string().trim().default("uploads"),

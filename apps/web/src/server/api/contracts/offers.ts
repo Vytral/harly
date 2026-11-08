@@ -128,7 +128,7 @@ export const decideOfferContract = defineContract({
   operationId: "decideOffer",
   summary: "Decide offer",
   tags: ["Offers"],
-  auth: { scopes: ["offers:write"] },
+  auth: { scopes: ["offers:decide"] },
   idempotent: true,
   parameters: { path: offerIdPath },
   requestBody: offerDecisionSchema,
@@ -147,7 +147,7 @@ export const withdrawOfferContract = defineContract({
   operationId: "withdrawOffer",
   summary: "Withdraw offer",
   tags: ["Offers"],
-  auth: { scopes: ["offers:write"] },
+  auth: { scopes: ["offers:decide"] },
   idempotent: true,
   parameters: { path: offerIdPath },
   responses: {

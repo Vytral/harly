@@ -7,14 +7,21 @@
 export const API_SCOPES = [
   "jobs:read",
   "jobs:write",
+  // Finer scopes split out of the umbrella write scopes. A key that holds the
+  // umbrella scope keeps working (see LEGACY_SCOPE_ALIASES).
+  "jobs:publish",
+  "jobs:delete",
   "candidates:read",
   "candidates:write",
   "applications:read",
   "applications:write",
+  "applications:reject",
+  "applications:hire",
   "interviews:read",
   "interviews:write",
   "offers:read",
   "offers:write",
+  "offers:decide",
   "scorecards:read",
   "scorecards:write",
   "tasks:read",
@@ -40,6 +47,19 @@ export const API_SCOPES = [
 ] as const;
 
 export type ApiScope = (typeof API_SCOPES)[number];
+
+/**
+ * Keys minted before the finer scopes existed hold only the umbrella scope, and
+ * it must keep covering what it covered. A required scope is satisfied by itself
+ * or by any scope listed here for it.
+ */
+export const LEGACY_SCOPE_ALIASES: Partial<Record<ApiScope, ApiScope[]>> = {
+  "jobs:publish": ["jobs:write"],
+  "jobs:delete": ["jobs:write"],
+  "applications:reject": ["applications:write"],
+  "applications:hire": ["applications:write"],
+  "offers:decide": ["offers:write"],
+};
 
 export type ApiKeyType = "publishable" | "secret";
 

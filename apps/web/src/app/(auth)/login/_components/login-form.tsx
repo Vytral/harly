@@ -484,7 +484,7 @@ export function LoginForm({
                 type="button"
                 onClick={() => signInWithPasskey()}
                 disabled={isBusy}
-                className="flex w-full items-center justify-center gap-2.5 rounded-xl border border-mist-border bg-white py-3 text-sm font-medium text-foreground transition-colors hover:bg-soft-kraft disabled:cursor-not-allowed disabled:opacity-50"
+                className="flex w-full items-center justify-center gap-2.5 rounded-xl border border-mist-border bg-card py-3 text-sm font-medium text-foreground transition-colors hover:bg-soft-kraft disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {pending === "passkey" ? <AuthSpinner /> : <PasskeyIcon />}
                 Continue with passkey
@@ -498,7 +498,7 @@ export function LoginForm({
                 Use an older passkey
               </button>
               {showLegacyPasskey ? (
-                <form className="space-y-3 rounded-xl border border-mist-border bg-white p-4" onSubmit={signInWithLegacyPasskey}>
+                <form className="space-y-3 rounded-xl border border-mist-border bg-card p-4" onSubmit={signInWithLegacyPasskey}>
                   <label htmlFor="legacy-passkey-email" className="block text-xs font-medium text-foreground">
                     Email used with your account
                   </label>

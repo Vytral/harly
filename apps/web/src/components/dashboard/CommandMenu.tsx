@@ -485,7 +485,7 @@ export function CommandMenu({
               </div>
             ) : null}
 
-            {hasQuery ? (
+            {hasQuery && harly.enabled ? (
               <CommandGroup>
                 <CommandItem
                   value={`ask-harly-${state.query}`}
@@ -608,6 +608,7 @@ export function CommandMenu({
                     <span className="flex-1">Keyboard shortcuts</span>
                     <kbd className="font-chrome text-[11px] text-quiet-mist">?</kbd>
                   </CommandItem>
+                  {harly.enabled ? (
                   <CommandItem
                     value="action-ask-harly"
                     onSelect={() => askHarly("")}
@@ -617,6 +618,7 @@ export function CommandMenu({
                     <span className="flex-1">Ask {harly.assistant.name}</span>
                     <kbd className="font-chrome text-[11px] text-quiet-mist">⌘J</kbd>
                   </CommandItem>
+                  ) : null}
                   <CommandItem
                     value="action-new-job"
                     onSelect={() => go("/dashboard/jobs/new")}

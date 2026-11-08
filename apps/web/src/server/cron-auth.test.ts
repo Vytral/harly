@@ -4,11 +4,20 @@ const state = vi.hoisted(() => ({
   lockResult: true,
   queries: [] as string[],
   release: vi.fn(),
+  scopes: [] as string[],
 }));
 
 vi.mock("@harly/db", () => ({
+  // The app pool must never be reserved for a lock: fail loudly if it is.
   sql: {
     reserve: async () => {
+      throw new Error("cron locks must not reserve from the app pool");
+    },
+  },
+  advisoryLockSql: (scope: string) => ({
+    scope,
+    reserve: async () => {
+      state.scopes.push(scope);
       const connection = async (strings: TemplateStringsArray) => {
         state.queries.push(strings.join(" "));
         return [{ locked: state.lockResult }];
@@ -16,7 +25,7 @@ vi.mock("@harly/db", () => ({
       connection.release = state.release;
       return connection;
     },
-  },
+  }),
 }));
 
 vi.mock("@/lib/logger", () => ({
@@ -38,6 +47,7 @@ beforeEach(() => {
   state.lockResult = true;
   state.queries.length = 0;
   state.release.mockReset();
+  state.scopes.length = 0;
 });
 
 describe("authorizeCron", () => {
@@ -85,6 +95,8 @@ describe("authorizeCron", () => {
     if (result.ok) await result.release();
     expect(state.queries).toHaveLength(2);
     expect(state.release).toHaveBeenCalledOnce();
+    // Cron locks live in their own scope, apart from the nested mailbox lock.
+    expect(state.scopes).toEqual(["cron"]);
   });
 
   it("fails closed when the cron secret is not configured", async () => {

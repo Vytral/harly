@@ -6,6 +6,7 @@ import {
   ForYouTodayCard,
   type ForYouItem,
 } from "@/components/dashboard/widgets/ForYouTodayCard";
+import { FirstRunWelcome } from "@/components/dashboard/widgets/FirstRunWelcome";
 import { HiringPerformance } from "@/components/dashboard/widgets/HiringPerformance";
 import { HomeGreeting } from "@/components/dashboard/widgets/HomeGreeting";
 import { InboxCard } from "@/components/dashboard/widgets/InboxCard";
@@ -75,6 +76,16 @@ export default async function DashboardPage({
       setupReads.checklist ? getSetupChecklist() : null,
       setupReads.sampleStatus ? getSampleDataStatus(organization.id) : null,
     ]);
+  // A brand-new workspace: no real job and no real applicant yet. Sample rows do
+  // not count, so loading sample data keeps the welcome until real work starts.
+  const firstRun =
+    !!setup &&
+    setup.visible &&
+    !setup.items.some(
+      (item) =>
+        (item.key === "create_job" || item.key === "pipeline_candidates") && item.done,
+    );
+  const aiConfigured = !!setup?.items.find((item) => item.key === "connect_ai")?.done;
   const sampleDataActive = setup?.sampleDataActive ?? sampleStatus?.active ?? false;
 
   const forYou: ForYouItem[] = [];
@@ -100,11 +111,15 @@ export default async function DashboardPage({
       <HomeGreeting
         name={firstName}
         hour={new Date().getHours()}
-        subline={buildSubline({
-          toReview: review.total,
-          waitingOverWeek: review.waitingOverWeek,
-          interviewsToday: interviews.total,
-        })}
+        subline={
+          firstRun
+            ? "Let's get your first role live. Everything else follows from there."
+            : buildSubline({
+                toReview: review.total,
+                waitingOverWeek: review.waitingOverWeek,
+                interviewsToday: interviews.total,
+              })
+        }
       />
 
       {/* Quiet notice while sample records exist; anyone on the team may see it. */}
@@ -112,6 +127,10 @@ export default async function DashboardPage({
         <div className="mt-5">
           <SampleDataBanner canManage={canManageSetup} />
         </div>
+      ) : null}
+
+      {firstRun && setup ? (
+        <FirstRunWelcome checklist={setup} aiConfigured={aiConfigured} />
       ) : null}
 
       {/* Collapsed by default; hidden when dismissed or nothing is left to do. */}

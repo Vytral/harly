@@ -229,7 +229,12 @@ export function createApplicationFormSchema(
       "Address is required.",
     ),
     // Legacy client compatibility: older custom forms still submit `location`.
-    location: optionalText,
+    // A disabled address field must not be accepted through the legacy alias.
+    location: textFieldForConfig(
+      isFieldEnabled(personal.address),
+      false,
+      "Address is required.",
+    ),
     headline: textFieldForConfig(
       isFieldEnabled(personal.headline),
       isFieldRequired(personal.headline),
@@ -274,7 +279,24 @@ export function createApplicationFormSchema(
       isFieldEnabled(profile.resume),
       isFieldRequired(profile.resume),
     ),
-    questionAnswers: z.record(z.string(), z.string()).default({}),
+    questionAnswers: z.record(z.string(), z.string().max(10_000)).default({}),
+    // Derived from the parsed resume; previously stripped by the schema.
+    skills: z.preprocess(
+      (value) =>
+        Array.isArray(value)
+          ? value
+              .filter((item): item is string => typeof item === "string")
+              .map((item) => item.trim().slice(0, 60))
+              .filter(Boolean)
+              .slice(0, 50)
+          : undefined,
+      z.array(z.string()).optional(),
+    ),
+    experienceYears: z.preprocess(
+      (value) =>
+        typeof value === "number" && value >= 0 && value <= 80 ? value : undefined,
+      z.number().optional(),
+    ),
   });
 }
 

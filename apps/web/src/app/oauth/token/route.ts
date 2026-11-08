@@ -14,6 +14,17 @@ function toResponse(result: TokenResult) {
     : oauthError(result.error, result.description, result.status);
 }
 
+function basicClientId(request: Request): string | undefined {
+  const match = /^Basic\s+(\S+)$/i.exec(request.headers.get("authorization") ?? "");
+  if (!match) return undefined;
+  try {
+    const [id, secret] = Buffer.from(match[1]!, "base64").toString("utf8").split(":");
+    return id && !secret ? decodeURIComponent(id) : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 export async function POST(request: Request) {
   const limited = await limitByIp(request, "token", 60, 60 * 1000);
   if (limited) return limited;
@@ -22,7 +33,9 @@ export async function POST(request: Request) {
   if (!body) return oauthError("invalid_request", "Malformed request body.");
 
   // Public clients only: a client_id in the body is the whole identity.
-  const clientId = body.client_id;
+  // client_secret_basic habit: some clients put the public client_id in an
+  // Authorization: Basic header (empty secret) instead of the body.
+  const clientId = body.client_id ?? basicClientId(request);
   if (!clientId) return oauthError("invalid_client", "client_id is required.", 401);
   if (body.client_secret || body.client_assertion) {
     return oauthError("invalid_client", "Confidential client authentication is not supported.", 401);

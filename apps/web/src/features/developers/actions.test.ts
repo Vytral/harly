@@ -7,7 +7,8 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
-vi.mock("@harly/db", () => ({ db: {}, webhookDeliveries: {} }));
+vi.mock("@harly/db", () => ({ db: {}, webhookDeliveries: {}, webhookDeliveryAttempts: {} }));
+vi.mock("@/server/api/ratelimit", () => ({ enforceRateLimit: vi.fn() }));
 vi.mock("@/lib/logger", () => ({
   createLogger: () => ({ error: vi.fn(), warn: vi.fn(), info: vi.fn() }),
 }));

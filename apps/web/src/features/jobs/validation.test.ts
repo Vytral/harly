@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 
-import { jobFormSchema, jobStatusSchema } from "./validation";
+import {
+  getPublishBlockers,
+  jobFormSchema,
+  jobStatusSchema,
+} from "./validation";
 
 describe("jobFormSchema", () => {
   it("accepts valid input", () => {
@@ -14,13 +18,8 @@ describe("jobFormSchema", () => {
     expect(result.success).toBe(true);
   });
 
-  it("rejects short title", () => {
-    const result = jobFormSchema.safeParse({
-      title: "AB",
-      employmentType: "full_time",
-      workplaceType: "remote",
-      description: "We are looking for a senior engineer to join our team.",
-    });
+  it("rejects an empty title", () => {
+    const result = jobFormSchema.safeParse({ title: "   " });
 
     expect(result.success).toBe(false);
     if (!result.success) {
@@ -28,18 +27,41 @@ describe("jobFormSchema", () => {
     }
   });
 
-  it("rejects short description", () => {
+  it("creates a job with only a title (empty-instance minimum)", () => {
+    // Mirrors what FormData yields for an untouched form: absent keys are null.
+    const result = jobFormSchema.safeParse({
+      title: "QA",
+      slug: null,
+      department: null,
+      employmentType: null,
+      workplaceType: null,
+      education: null,
+      evaluationMode: null,
+      keywordsJson: null,
+      description: null,
+      contentSectionsJson: null,
+      applicationQuestionsJson: null,
+    });
+
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.employmentType).toBe("full_time");
+      expect(result.data.workplaceType).toBe("remote");
+      expect(result.data.evaluationMode).toBe("balanced");
+      expect(result.data.description).toBe("");
+      expect(result.data.keywords).toEqual([]);
+      expect(result.data.contentSections).toEqual([]);
+      expect(result.data.education).toBeUndefined();
+    }
+  });
+
+  it("does not require a description to save", () => {
     const result = jobFormSchema.safeParse({
       title: "Senior Engineer",
-      employmentType: "full_time",
-      workplaceType: "remote",
       description: "Short",
     });
 
-    expect(result.success).toBe(false);
-    if (!result.success) {
-      expect(result.error.flatten().fieldErrors.description).toBeDefined();
-    }
+    expect(result.success).toBe(true);
   });
 
   it("rejects invalid employment type", () => {
@@ -186,5 +208,31 @@ describe("jobStatusSchema", () => {
 
   it("rejects invalid status", () => {
     expect(jobStatusSchema.safeParse("archived").success).toBe(false);
+  });
+});
+
+describe("getPublishBlockers", () => {
+  it("blocks an empty or placeholder-only job", () => {
+    expect(getPublishBlockers({ description: "" })).toHaveLength(1);
+    expect(
+      getPublishBlockers({
+        description:
+          "<p>Describe the role, the team, and the impact this person will have.</p>",
+      }),
+    ).toHaveLength(1);
+  });
+
+  it("passes with a description or a filled section", () => {
+    expect(
+      getPublishBlockers({
+        description: "<p>We are hiring a senior engineer.</p>",
+      }),
+    ).toEqual([]);
+    expect(
+      getPublishBlockers({
+        description: "",
+        contentSections: [{ id: "a", title: "Requirements", body: "<p>TS</p>" }],
+      }),
+    ).toEqual([]);
   });
 });

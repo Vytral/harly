@@ -29,6 +29,7 @@ import { EnvelopeIcon } from "@/components/ui/icons/settings";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { SecretInput } from "@/components/ui/secret-input";
 import { Label } from "@/components/ui/label";
 import {
   Select,
@@ -280,9 +281,8 @@ export function EmailSettingsForm({ status }: {
         {provider === "resend" ? (
           <div className="space-y-2">
             <Label htmlFor="email-api-key">Resend API key</Label>
-            <Input
+            <SecretInput
               id="email-api-key"
-              type="password"
               value={apiKey}
               onChange={(event) => setApiKey(event.target.value)}
               placeholder={
@@ -290,7 +290,6 @@ export function EmailSettingsForm({ status }: {
                   ? "•••••••• (stored, leave blank to keep)"
                   : "re_xxxxxxxxxxxxxxxxxxxx"
               }
-              autoComplete="off"
             />
             <p className="text-xs text-muted-foreground">
               Resend → API Keys. Needs permission to send from your domain.
@@ -334,9 +333,8 @@ export function EmailSettingsForm({ status }: {
 
             <div className="space-y-2">
               <Label htmlFor="email-smtp-pass">Password</Label>
-              <Input
+              <SecretInput
                 id="email-smtp-pass"
-                type="password"
                 value={apiKey}
                 onChange={(event) => setApiKey(event.target.value)}
                 placeholder={
@@ -344,7 +342,6 @@ export function EmailSettingsForm({ status }: {
                     ? "•••••••• (stored, leave blank to keep)"
                     : "SMTP password"
                 }
-                autoComplete="off"
               />
             </div>
 

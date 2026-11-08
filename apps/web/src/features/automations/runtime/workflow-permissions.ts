@@ -16,10 +16,10 @@ import {
   BUILTIN_ROLE_PERMISSIONS,
   withLegacyRoleDefaults,
   PERMISSIONS,
+  builtinRoleDefaultScope,
+  builtinRoleScope,
   isBuiltinRole,
-  normalizeRoleScope,
   roleIsAllPowerful,
-  unrestrictedRoleScope,
   type BuiltinRole,
   type RoleScope,
 } from "@/features/workspaces/permissions";
@@ -84,7 +84,9 @@ export async function actorCanActOnApplication(
     .from(customRoles)
     .where(and(eq(customRoles.workspaceId, workspaceId), eq(customRoles.key, membership.role)))
     .limit(1);
-  const scope: RoleScope = custom ? normalizeRoleScope(custom.scope) : unrestrictedRoleScope();
+  const scope: RoleScope = custom
+    ? builtinRoleScope(membership.role, custom.scope)
+    : builtinRoleDefaultScope(membership.role);
   if (isUnrestrictedScope(scope)) return { ok: true };
 
   const [target] = await database

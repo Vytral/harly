@@ -5,6 +5,7 @@ import { randomUUID } from "node:crypto";
 import { db, mcpAuthorizationCodes, mcpGrants } from "@harly/db";
 
 import { logAuditEvent } from "@/lib/audit-log";
+import { createLogger } from "@/lib/logger";
 
 import {
   MCP_AUTH_CODE_PREFIX,
@@ -13,11 +14,13 @@ import {
   mcpIssuer,
   mcpResource,
 } from "./config";
-import { markClientUsed, resolveOAuthClient, type ResolvedOAuthClient } from "./clients";
+import { explainClientFailure, markClientUsed, resolveOAuthClient, type ResolvedOAuthClient } from "./clients";
 import { generateOpaqueToken, isValidCodeChallenge, sha256Hex } from "./crypto";
 import { buildRedirect, matchRedirectUri, redirectDisplayHost } from "./redirect";
 import { parseRequestedScopes } from "./scopes";
 import type { McpScope } from "../types";
+
+const log = createLogger("mcp-oauth");
 
 export type ValidAuthorizeRequest = {
   client: ResolvedOAuthClient;
@@ -29,10 +32,22 @@ export type ValidAuthorizeRequest = {
 };
 
 export type AuthorizeFailure =
-  /** client_id / redirect_uri are untrusted: show an error page, never redirect. */
-  | { kind: "page"; error: string; description: string }
+  /**
+   * client_id / redirect_uri are untrusted: show an error page, never redirect
+   * (RFC 6749 section 4.1.2.1). `reason` is a fixed code the page maps to copy.
+   */
+  | { kind: "page"; error: string; description: string; reason: AuthorizePageReason }
   /** Safe to report back to the client's redirect_uri. */
   | { kind: "redirect"; redirectUri: string; state: string | undefined; error: string; description: string };
+
+export type AuthorizePageReason =
+  | "client_id_missing"
+  | "client_unknown"
+  | "client_expired"
+  | "client_blocked"
+  | "client_metadata_unverifiable"
+  | "redirect_uri_missing"
+  | "redirect_uri_mismatch";
 
 export type AuthorizeValidation =
   | { ok: true; request: ValidAuthorizeRequest }
@@ -43,6 +58,36 @@ export function normalizeResource(value: string): string {
   return value.replace(/\/+$/, "");
 }
 
+/**
+ * Does the client's `resource` name this server's MCP endpoint? The host is
+ * case-insensitive, and the bare origin counts too: some clients send the
+ * server origin they were pointed at instead of the full /mcp URL.
+ */
+export function resourceMatches(requested: string, canonical: string): boolean {
+  if (normalizeResource(requested) === normalizeResource(canonical)) return true;
+  try {
+    const want = new URL(canonical);
+    const got = new URL(requested);
+    if (got.search || got.hash || got.origin.toLowerCase() !== want.origin.toLowerCase()) return false;
+    const path = normalizeResource(got.pathname);
+    return path === "" || path === normalizeResource(want.pathname);
+  } catch {
+    return false;
+  }
+}
+
+function pageFailure(reason: AuthorizePageReason, error: string, description: string, extra: Record<string, unknown> = {}): AuthorizeValidation {
+  log.warn({ reason, ...extra }, "oauth authorize refused");
+  return { ok: false, kind: "page", error, description, reason };
+}
+
+const CLIENT_FAILURE_COPY: Record<string, string> = {
+  client_unknown: "This application is not registered with this Harly instance. Remove the connection in the app and add it again so it registers itself.",
+  client_expired: "This application's registration expired. Remove the connection in the app and add it again.",
+  client_blocked: "This application has been blocked by an administrator.",
+  client_metadata_unverifiable: "This application's client metadata document could not be fetched or verified.",
+};
+
 export async function validateAuthorizeRequest(
   params: URLSearchParams,
   deps: { resolveClient?: (clientId: string) => Promise<ResolvedOAuthClient | null>; resource?: string } = {},
@@ -52,14 +97,22 @@ export async function validateAuthorizeRequest(
   const get = (key: string) => params.get(key) ?? undefined;
 
   const clientId = get("client_id");
-  if (!clientId) return { ok: false, kind: "page", error: "invalid_request", description: "client_id is required." };
+  if (!clientId) return pageFailure("client_id_missing", "invalid_request", "client_id is required.");
   const client = await resolveClient(clientId);
   if (!client) {
-    return { ok: false, kind: "page", error: "invalid_client", description: "This application is not registered or its metadata could not be verified." };
+    const reason = deps.resolveClient ? "client_unknown" : await explainClientFailure(clientId).catch(() => "client_unknown" as const);
+    // The client_id is public (it travels in the URL); it is safe to log, truncated.
+    return pageFailure(reason, "invalid_client", CLIENT_FAILURE_COPY[reason] ?? CLIENT_FAILURE_COPY.client_unknown!, { clientId: clientId.slice(0, 80) });
   }
   const redirectUri = get("redirect_uri");
-  if (!redirectUri || !matchRedirectUri(redirectUri, client.redirectUris)) {
-    return { ok: false, kind: "page", error: "invalid_request", description: "redirect_uri does not match the application's registration." };
+  if (!redirectUri) return pageFailure("redirect_uri_missing", "invalid_request", "redirect_uri is required.", { clientId: clientId.slice(0, 80) });
+  if (!matchRedirectUri(redirectUri, client.redirectUris)) {
+    return pageFailure(
+      "redirect_uri_mismatch",
+      "invalid_request",
+      "redirect_uri does not match the application's registration.",
+      { clientId: clientId.slice(0, 80), requestedHost: redirectDisplayHost(redirectUri), registeredHosts: client.redirectUris.map(redirectDisplayHost) },
+    );
   }
   const state = get("state");
   const fail = (error: string, description: string): AuthorizeValidation => ({
@@ -79,8 +132,9 @@ export async function validateAuthorizeRequest(
   if (get("code_challenge_method") !== "S256") return fail("invalid_request", "code_challenge_method must be S256.");
 
   const resource = get("resource");
-  if (resource !== undefined && normalizeResource(resource) !== normalizeResource(canonicalResource)) {
-    return fail("invalid_target", "resource must be this server's MCP endpoint.");
+  if (resource !== undefined && !resourceMatches(resource, canonicalResource)) {
+    log.warn({ reason: "resource_mismatch", clientId: client.clientId.slice(0, 80), resource: resource.slice(0, 200), expected: canonicalResource }, "oauth authorize refused");
+    return fail("invalid_target", `resource must be ${canonicalResource}.`);
   }
   const scopes = parseRequestedScopes(get("scope"));
   if (!scopes) return fail("invalid_scope", "None of the requested scopes are supported.");

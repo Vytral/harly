@@ -7,6 +7,7 @@ import {
   ApiError,
   hashApiKey,
   isApiScope,
+  LEGACY_SCOPE_ALIASES,
   parseApiKey,
   type ApiKeyType,
   type ApiScope,
@@ -50,9 +51,16 @@ export function hasApiScope(
   if (scopes.includes(requiredScope)) return true;
   // `webhooks:manage` predates split read/write scopes. Keep existing keys
   // working while new integrations can request least-privilege scopes.
-  return (
+  if (
     (requiredScope === "webhooks:read" || requiredScope === "webhooks:write") &&
     scopes.includes("webhooks:manage")
+  ) {
+    return true;
+  }
+  // Finer scopes split out of an umbrella scope: keys that only hold the
+  // umbrella keep their old reach.
+  return (LEGACY_SCOPE_ALIASES[requiredScope] ?? []).some((alias) =>
+    scopes.includes(alias),
   );
 }
 

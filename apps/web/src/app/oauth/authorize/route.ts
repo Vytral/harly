@@ -14,10 +14,11 @@ function consentUrl(params: URLSearchParams): string {
   return `${toHarlyPublicUrl("/oauth/consent")}?${params.toString()}`;
 }
 
-function errorPage(error: string, description: string): NextResponse {
+function errorPage(error: string, reason: string): NextResponse {
   const url = new URL(toHarlyPublicUrl("/oauth/consent"));
   url.searchParams.set("request_error", error);
-  url.searchParams.set("request_error_description", description);
+  // A fixed code, never free text: the consent page maps it to its own copy.
+  url.searchParams.set("request_error_reason", reason);
   return NextResponse.redirect(url, 303);
 }
 
@@ -28,7 +29,7 @@ export async function GET(request: Request) {
   const params = new URL(request.url).searchParams;
   const validation = await validateAuthorizeRequest(params);
   if (!validation.ok) {
-    if (validation.kind === "page") return errorPage(validation.error, validation.description);
+    if (validation.kind === "page") return errorPage(validation.error, validation.reason);
     return NextResponse.redirect(failureRedirectUrl(validation), 303);
   }
 

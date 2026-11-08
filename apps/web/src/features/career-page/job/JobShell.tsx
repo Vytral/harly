@@ -261,6 +261,7 @@ export function JobShell({
           )}
         >
           <h1
+            data-preview-section="title"
             className={cn(
               "text-2xl font-semibold tracking-tight sm:text-3xl",
               reveal,
@@ -273,6 +274,7 @@ export function JobShell({
           <div className="mt-8 grid gap-x-12 gap-y-8 lg:grid-cols-[232px_minmax(0,1fr)]">
             {/* Meta column */}
             <aside
+              data-preview-section="meta"
               className={cn("lg:sticky lg:top-8 lg:self-start", reveal)}
               style={{ animationDelay: "80ms" }}
             >
@@ -438,11 +440,15 @@ function JoinJobContent({
 
   return (
     <div className={cn("mx-auto w-full flex-1 px-6 pb-20 pt-10", widthClass)}>
-      <h1 className={cn("text-2xl font-semibold tracking-tight sm:text-3xl", reveal)}>
+      <h1
+        data-preview-section="title"
+        className={cn("text-2xl font-semibold tracking-tight sm:text-3xl", reveal)}
+      >
         {title}
       </h1>
 
       <div
+        data-preview-section="meta"
         className={cn("mt-3 flex flex-wrap items-center gap-x-4 gap-y-1.5 text-sm text-soft-ink", reveal)}
         style={{ animationDelay: "40ms" }}
       >

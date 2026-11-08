@@ -444,3 +444,27 @@ describe("validateApplicationQuestionAnswers", () => {
     expect(validateApplicationQuestionAnswers({}, [info])).toEqual({});
   });
 });
+
+describe("audit: skills and experienceYears", () => {
+  const base = {
+    firstName: "A",
+    lastName: "B",
+    email: "a@b.co",
+    resumeUrl: "/uploads/x.pdf",
+    resumeKey: "k",
+    resumeFileName: "x.pdf",
+    resumeFileType: "application/pdf",
+    resumeFileSize: 10,
+  };
+
+  it("keeps sanitized skills and experienceYears instead of stripping them", () => {
+    const parsed = applicationFormSchema.parse({
+      ...base,
+      skills: [" TS ", 5, ""],
+      experienceYears: 4,
+    });
+    expect(parsed.skills).toEqual(["TS"]);
+    expect(parsed.experienceYears).toBe(4);
+    expect(applicationFormSchema.parse({ ...base, experienceYears: -3 }).experienceYears).toBeUndefined();
+  });
+});

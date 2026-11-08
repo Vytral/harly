@@ -65,16 +65,22 @@ export function JobOverviewBody({
     ? `https://maps.google.com/maps?q=${encodeURIComponent(job.officeAddress)}&z=14&output=embed`
     : null;
 
+  // A draft may have no description yet (sections-only or title-only).
+  const hasDescription =
+    job.description.replace(/<[^>]*>/g, "").trim().length > 0;
+
   return (
     <article className="space-y-10 text-base leading-7 text-zinc-600 dark:text-zinc-300">
-      <section>
-        <Heading>About this role</Heading>
-        <JobContent content={job.description} />
-      </section>
+      {hasDescription ? (
+        <section data-preview-section="description">
+          <Heading>About this role</Heading>
+          <JobContent content={job.description} />
+        </section>
+      ) : null}
 
       {sections.length > 0 ? (
         sections.map((section) => (
-          <section key={section.id}>
+          <section key={section.id} data-preview-section={`section:${section.id}`}>
             {section.title ? <Heading>{section.title}</Heading> : null}
             <JobContent content={section.body} />
           </section>
@@ -97,7 +103,7 @@ export function JobOverviewBody({
       )}
 
       {mapSrc || officePhotos.length > 0 ? (
-        <section>
+        <section data-preview-section="office">
           <Heading>Office</Heading>
           {job.officeAddress ? (
             <p className="mt-2 text-zinc-600 dark:text-zinc-400">{job.officeAddress}</p>
@@ -139,7 +145,7 @@ export function JobOverviewBody({
       ) : null}
 
       {keywords.length > 0 ? (
-        <section>
+        <section data-preview-section="keywords">
           <div className="flex flex-wrap gap-2">
             {keywords.map((kw) => (
               <span

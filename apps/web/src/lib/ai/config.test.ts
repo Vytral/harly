@@ -1,8 +1,9 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
   select: vi.fn(),
   getDemoAiModelConfig: vi.fn(),
+  isLiveSandboxWorkspace: vi.fn(),
   consumeDemoAiDailyBudget: vi.fn(),
 }));
 
@@ -34,6 +35,10 @@ vi.mock("@/lib/crypto", () => ({
 
 vi.mock("./demo", () => ({
   getDemoAiModelConfig: mocks.getDemoAiModelConfig,
+}));
+
+vi.mock("@/features/demo/sandbox-state", () => ({
+  isLiveSandboxWorkspace: mocks.isLiveSandboxWorkspace,
 }));
 
 vi.mock("./demo-budget", () => ({
@@ -94,5 +99,46 @@ describe("getWorkspaceAiConfig resumeAnonymization", () => {
   it("returns null without a config when AI is disabled", async () => {
     mocks.select.mockImplementation(() => selectReturning([{ ...WORKSPACE_ROW, aiEnabled: false }]));
     expect(await getWorkspaceAiConfig("ws-1")).toBeNull();
+  });
+});
+
+describe("getWorkspaceAiConfig demo sandboxes", () => {
+  const DEMO_CFG = { provider: "openai", modelId: "gpt-6-luna", apiKey: "sk-demo" };
+
+  beforeEach(() => {
+    vi.stubEnv("DEMO_MODE", "true");
+    vi.stubEnv("DEMO_WORKSPACE_ID", "ws-demo");
+    mocks.getDemoAiModelConfig.mockImplementation(
+      (_id: string, _env: unknown, opts?: { sandbox?: boolean }) => (opts?.sandbox ? DEMO_CFG : null),
+    );
+    mocks.select.mockImplementation(() => selectReturning([]));
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  it("uses the demo key in a live visitor sandbox", async () => {
+    mocks.isLiveSandboxWorkspace.mockResolvedValue(true);
+    await expect(getWorkspaceAiConfig("ws-sandbox")).resolves.toMatchObject(DEMO_CFG);
+    expect(mocks.isLiveSandboxWorkspace).toHaveBeenCalledWith("ws-sandbox");
+    expect(mocks.consumeDemoAiDailyBudget).toHaveBeenCalled();
+  });
+
+  it("does not use the demo key for an expired or non-sandbox workspace", async () => {
+    mocks.isLiveSandboxWorkspace.mockResolvedValue(false);
+    await expect(getWorkspaceAiConfig("ws-other")).resolves.toBeNull();
+  });
+
+  it("returns null in a live sandbox once the daily budget is exhausted", async () => {
+    mocks.isLiveSandboxWorkspace.mockResolvedValue(true);
+    mocks.consumeDemoAiDailyBudget.mockResolvedValue(false);
+    await expect(getWorkspaceAiConfig("ws-sandbox")).resolves.toBeNull();
+  });
+
+  it("skips the sandbox lookup outside demo mode", async () => {
+    vi.stubEnv("DEMO_MODE", "false");
+    await getWorkspaceAiConfig("ws-sandbox");
+    expect(mocks.isLiveSandboxWorkspace).not.toHaveBeenCalled();
   });
 });

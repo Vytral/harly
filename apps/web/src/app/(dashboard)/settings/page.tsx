@@ -23,8 +23,11 @@ export default async function SettingsPage() {
 
   return (
     <div className="space-y-6">
-      <CompanyBrandingSection workspace={branding} currentRole={context.role} />
-      <GravatarSettingsCard enabled={branding.gravatarEnabled} />
+      <CompanyBrandingSection
+        workspace={branding}
+        currentRole={context.role}
+        afterIdentity={<GravatarSettingsCard enabled={branding.gravatarEnabled} />}
+      />
       <RejectionReasonsCard reasons={rejectionReasons} />
     </div>
   );

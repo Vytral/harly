@@ -255,7 +255,7 @@ test.describe("candidate-to-hire native signing flow", () => {
       .locator('input[name="email"]')
       .fill(FIXTURE.candidateEmail);
     await candidatePage
-      .getByRole("button", { name: "Continue with email", exact: true })
+      .getByRole("button", { name: "Email me a sign-in link", exact: true })
       .click();
     await expect(
       candidatePage.getByText("Check your inbox", { exact: true }),
