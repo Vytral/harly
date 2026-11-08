@@ -2,15 +2,18 @@ import { createJobAction } from "@/features/jobs/actions";
 import { listWorkspaceDepartments } from "@/features/jobs/data";
 import { getCareerPageData } from "@/features/career-page/data";
 import { JobForm } from "@/features/jobs/JobForm";
+import { getWorkspaceAiStatus } from "@/lib/ai/config";
+import { isAiUsable } from "@/lib/ai/availability-shared";
 import { getWorkspaceContext } from "@/features/workspaces/context";
 
 export const dynamic = "force-dynamic";
 
 export default async function NewJobPage() {
   const { organization: workspace } = await getWorkspaceContext();
-  const [departments, careerPageData] = await Promise.all([
+  const [departments, careerPageData, aiStatus] = await Promise.all([
     listWorkspaceDepartments(),
     getCareerPageData(workspace.slug),
+    getWorkspaceAiStatus(workspace.id),
   ]);
 
   return (
@@ -18,6 +21,7 @@ export default async function NewJobPage() {
       action={createJobAction}
       submitLabel="Publish"
       departments={departments}
+      aiConfigured={isAiUsable(aiStatus)}
       previewWorkspace={careerPageData?.workspace ?? null}
       previewConfig={careerPageData?.config ?? null}
     />

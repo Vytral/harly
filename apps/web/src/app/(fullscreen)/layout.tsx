@@ -9,6 +9,10 @@
  * inherited from the root layout. Builder chrome used to load Cal Sans as a
  * third display face , `.font-cal` now resolves to Onest 600 tight in
  * globals.css, so existing call sites keep working without a second download.
+ *
+ * `overflow-clip`, not `hidden`: a hidden box is still programmatically
+ * scrollable (focus(), scrollIntoView(), caret moves), which shifted the whole
+ * editor up and left a blank page. Clip cannot be scrolled at all.
  */
 export default function FullscreenLayout({
   children,
@@ -16,6 +20,6 @@ export default function FullscreenLayout({
   children: React.ReactNode;
 }) {
   return (
-    <div className="h-dvh w-full overflow-hidden bg-paper">{children}</div>
+    <div className="relative h-dvh w-full overflow-clip bg-paper">{children}</div>
   );
 }

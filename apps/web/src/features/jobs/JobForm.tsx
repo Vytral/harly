@@ -3,6 +3,7 @@
 import {
   useCallback,
   useEffect,
+  useMemo,
   useRef,
   useState,
   useTransition,
@@ -19,7 +20,15 @@ import {
   parseOfficePhotos,
   type JobContentSection,
 } from "./config";
-import { jobFormSchema } from "./validation";
+import { getPublishBlockers, jobFormSchema } from "./validation";
+import {
+  readFormPreviewFields,
+  sameFormPreviewFields,
+  visibilityFromConfig,
+  type FormPreviewFields,
+} from "./preview-draft";
+import type { StepDraft } from "./JobStepPreview";
+import { scrollWithinEditor, EDITOR_SCROLL_ROOT_ATTR } from "./scroll";
 import type {
   HiringTeamMember,
   WorkspaceMemberOption,
@@ -32,11 +41,16 @@ import { AdvancedSection } from "./sections/AdvancedSection";
 import { ReviewSection } from "./sections/ReviewSection";
 import { JobEditorTopBar } from "./JobEditorTopBar";
 import { JobEditorRail, type EditorRailSection } from "./JobEditorRail";
-import { JobLivePreview, type PreviewJobDraft } from "./JobLivePreview";
+import {
+  JobLivePreview,
+  usePreviewDocked,
+  type PreviewFocus,
+  type PreviewJobDraft,
+} from "./JobLivePreview";
 import { FocusModeShell } from "@/components/focus-mode/FocusModeShell";
 import { useUnsavedChangesGuard } from "@/components/focus-mode/useUnsavedChangesGuard";
 import { UnsavedChangesDialog } from "@/components/focus-mode/UnsavedChangesDialog";
-import { ArrowLeft, ArrowRight } from "lucide-react";
+import { ArrowLeft, ArrowRight, Eye } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
@@ -160,22 +174,37 @@ const FIELD_TO_SECTION: Record<string, SectionKey> = {
   officePhotosJson: "advanced",
 };
 
+/** Preview anchor each editor section points at when it becomes active. */
+const SECTION_PREVIEW_TARGET: Partial<Record<SectionKey, string>> = {
+  essentials: "title",
+  description: "description",
+  compensation: "meta",
+  advanced: "keywords",
+};
+
+/** Preview anchor for a focused control, by its name/id (else by section). */
+const FIELD_PREVIEW_TARGET: Record<string, string> = {
+  title: "title",
+  department: "meta",
+  location: "meta",
+  employmentType: "meta",
+  workplaceType: "meta",
+  jobLocationCountry: "meta",
+  jobLocationRegion: "meta",
+  remoteEligibleCountries: "meta",
+  experienceLevel: "meta",
+  salaryMin: "meta",
+  salaryMax: "meta",
+  currency: "meta",
+  salaryPeriod: "meta",
+  officeAddress: "office",
+};
+
 const RAIL_SECTIONS: EditorRailSection[] = SECTIONS.map((s) => ({
   key: s.key,
   label: s.label,
 }));
 
-type ExtraPreviewFields = {
-  department: string;
-  location: string;
-  employmentType: string;
-  experienceLevel: string;
-  salaryMin?: number;
-  salaryMax?: number;
-  currency: string;
-  salaryPeriod: string;
-  officeAddress: string;
-};
 
 export function JobForm({
   action,
@@ -206,10 +235,9 @@ export function JobForm({
     job?.workplaceType ?? "remote",
   );
 
-  const [description, setDescription] = useState(
-    job?.description ??
-      "<p>Describe the role, the team, and the impact this person will have.</p>",
-  );
+  // Empty for new jobs: the editor shows its own placeholder, and nothing fake
+  // is ever submitted as the description.
+  const [description, setDescription] = useState(job?.description ?? "");
   const [sections, setSections] = useState<JobContentSection[]>(() =>
     initialSectionsFor(job),
   );
@@ -227,6 +255,7 @@ export function JobForm({
 
   const [flashSection, setFlashSection] = useState<SectionKey | null>(null);
   const [activeSection, setActiveSection] = useState<SectionKey>(SECTIONS[0].key);
+  const activeSectionRef = useRef<string>(SECTIONS[0].key);
   const [reviewInView, setReviewInView] = useState(job?.status === "open");
   const reviewSectionRef = useRef<HTMLDivElement>(null);
 
@@ -252,17 +281,35 @@ export function JobForm({
   // Read straight off the form via a single bubbling listener instead of
   // lifting every remaining field to controlled state , keeps every section
   // file's existing uncontrolled/FormData submission mechanics untouched.
-  const [extraFields, setExtraFields] = useState<ExtraPreviewFields>({
+  const [extraFields, setExtraFields] = useState<FormPreviewFields>({
     department: job?.department ?? "",
     location: job?.location ?? "",
     employmentType: job?.employmentType ?? "full_time",
     experienceLevel: job?.experienceLevel ?? "",
+    education: job?.education ?? "",
     salaryMin: job?.salaryMin ?? undefined,
     salaryMax: job?.salaryMax ?? undefined,
     currency: job?.currency ?? "USD",
     salaryPeriod: job?.salaryPeriod ?? "annual",
     officeAddress: job?.officeAddress ?? "",
+    jobLocationCountry: job?.jobLocationCountry ?? "",
+    jobLocationRegion: job?.jobLocationRegion ?? "",
+    remoteEligibleCountries: (
+      (job?.remoteEligibleCountries as string[] | undefined) ?? []
+    ).join(", "),
+    validThrough: job?.validThrough
+      ? job.validThrough.toISOString().slice(0, 10)
+      : "",
+    slug: job?.slug ?? "",
+    evaluationMode: job?.evaluationMode ?? "balanced",
+    visibility: visibilityFromConfig(applicationConfig),
+    questions: applicationConfig.questions as FormPreviewFields["questions"],
   });
+
+  const extraRef = useRef(extraFields);
+  useEffect(() => {
+    extraRef.current = extraFields;
+  }, [extraFields]);
 
   useEffect(() => {
     const form = formRef.current;
@@ -272,20 +319,9 @@ export function JobForm({
     const sync = () => {
       cancelAnimationFrame(raf);
       raf = requestAnimationFrame(() => {
-        const fd = new FormData(form);
-        const minRaw = fd.get("salaryMin");
-        const maxRaw = fd.get("salaryMax");
-        setExtraFields({
-          department: String(fd.get("department") ?? ""),
-          location: String(fd.get("location") ?? ""),
-          employmentType: String(fd.get("employmentType") ?? "full_time"),
-          experienceLevel: String(fd.get("experienceLevel") ?? ""),
-          salaryMin: minRaw ? Number(minRaw) : undefined,
-          salaryMax: maxRaw ? Number(maxRaw) : undefined,
-          currency: String(fd.get("currency") ?? "USD"),
-          salaryPeriod: String(fd.get("salaryPeriod") ?? "annual"),
-          officeAddress: String(fd.get("officeAddress") ?? ""),
-        });
+        const next = readFormPreviewFields(new FormData(form), extraRef.current);
+        // Same values -> same state object -> no re-render of the whole form.
+        setExtraFields((prev) => (sameFormPreviewFields(prev, next) ? prev : next));
       });
       // Skip the sync triggered by mounting/hydration , only real user edits
       // should flip the "unsaved changes" guard on.
@@ -302,24 +338,99 @@ export function JobForm({
     };
   }, []);
 
-  const previewJob: PreviewJobDraft = {
-    slug: job?.slug || "draft-preview",
-    title,
-    description,
-    department: extraFields.department,
-    location: extraFields.location,
-    employmentType: extraFields.employmentType,
-    workplaceType: workplace,
-    experienceLevel: extraFields.experienceLevel || undefined,
-    salaryMin: extraFields.salaryMin,
-    salaryMax: extraFields.salaryMax,
-    currency: extraFields.currency,
-    salaryPeriod: extraFields.salaryPeriod,
-    officeAddress: extraFields.officeAddress || undefined,
-    contentSections: sections,
-    officePhotos: photos,
-    keywords,
-  };
+  const previewJob = useMemo<PreviewJobDraft>(
+    () => ({
+      slug: job?.slug || "draft-preview",
+      title,
+      description,
+      department: extraFields.department,
+      location: extraFields.location,
+      employmentType: extraFields.employmentType,
+      workplaceType: workplace,
+      experienceLevel: extraFields.experienceLevel || undefined,
+      salaryMin: extraFields.salaryMin,
+      salaryMax: extraFields.salaryMax,
+      currency: extraFields.currency,
+      salaryPeriod: extraFields.salaryPeriod,
+      officeAddress: extraFields.officeAddress || undefined,
+      contentSections: sections,
+      officePhotos: photos,
+      keywords,
+    }),
+    [
+      job?.slug,
+      title,
+      description,
+      extraFields,
+      workplace,
+      sections,
+      photos,
+      keywords,
+    ],
+  );
+
+  const stepDraft = useMemo<StepDraft>(
+    () => ({
+      title,
+      description,
+      sections,
+      keywords,
+      photos,
+      workplace,
+      fields: extraFields,
+    }),
+    [title, description, sections, keywords, photos, workplace, extraFields],
+  );
+
+  // ── Preview: docked column from xl, sheet below ──
+  const previewDocked = usePreviewDocked();
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const [previewFocus, setPreviewFocus] = useState<PreviewFocus>({
+    target: null,
+    field: null,
+    tick: 0,
+  });
+  const pointPreviewAt = useCallback(
+    (target: string | null, field: string | null = null) => {
+      setPreviewFocus((prev) => ({ target, field, tick: prev.tick + 1 }));
+    },
+    [],
+  );
+
+  // The section scrolled into view drives the preview (see handleActiveChange)
+
+  // ...and a focused control refines it to the exact block being edited.
+  const handleFocusCapture = useCallback(
+    (event: React.FocusEvent<HTMLElement>) => {
+      const el = event.target as HTMLElement;
+      const explicit = el
+        .closest<HTMLElement>("[data-preview-target]")
+        ?.getAttribute("data-preview-target");
+      const named = FIELD_PREVIEW_TARGET[el.getAttribute("name") ?? el.id];
+      const target = explicit ?? named;
+      // A focused control also fixes the step (the scrollspy can lag behind
+      // on short sections or keyboard navigation).
+      const sectionId = el.closest("section[id]")?.id;
+      if (sectionId && SECTIONS.some((x) => x.key === sectionId)) {
+        activeSectionRef.current = sectionId;
+        setActiveSection(sectionId as SectionKey);
+      }
+      const field = explicit ?? (el.getAttribute("name") || el.id || null);
+      if (target || field) pointPreviewAt(target ?? null, field);
+    },
+    [pointPreviewAt],
+  );
+
+  // Publishing needs readable content; saving a draft only needs a title.
+  const publishBlockers = useMemo(
+    () => getPublishBlockers({ description, contentSections: sections }),
+    [description, sections],
+  );
+  const publishHint =
+    (!job || job.status === "open") && publishBlockers.length > 0
+      ? publishBlockers[0]
+      : null;
+  const aiOn = Boolean(aiConfigured);
 
   async function handleExit() {
     if (!(await confirmDiscard())) return;
@@ -329,7 +440,9 @@ export function JobForm({
   function jumpToSection(key: SectionKey) {
     const el = document.getElementById(key);
     if (!el) return;
-    el.scrollIntoView({ behavior: "smooth", block: "start" });
+    // Scroll only the editor column: native scrollIntoView also scrolls the
+    // clipped shell ancestors and leaves the page blank.
+    scrollWithinEditor(el, { align: "start", topInset: 16 });
     setFlashSection(key);
     window.setTimeout(
       () => setFlashSection((current) => (current === key ? null : current)),
@@ -380,10 +493,22 @@ export function JobForm({
       applicationQuestionsJson: fd.get("applicationQuestionsJson"),
     });
 
-    if (result.success) return;
+    const intent = (event.currentTarget as HTMLButtonElement).value;
+    const publishing =
+      intent !== "draft" && (!job || job.status === "open");
+    const blockers = publishing
+      ? getPublishBlockers({
+          description: String(fd.get("description") ?? ""),
+          contentSections: fd.get("contentSectionsJson"),
+        })
+      : [];
+
+    if (result.success && blockers.length === 0) return;
 
     event.preventDefault();
-    const issue = result.error.issues[0];
+    const issue = result.success
+      ? { message: blockers[0], path: ["description"] }
+      : result.error.issues[0];
     if (!issue) return;
 
     toast.error(issue.message);
@@ -395,7 +520,21 @@ export function JobForm({
     if (fieldName === "title") {
       setTitleError(true);
     }
-  }, []);
+  }, [job]);
+
+  const handleActiveChange = useCallback(
+    (key: string) => {
+      setActiveSection((prev) => {
+        if (prev === key) return prev;
+        return key as SectionKey;
+      });
+      if (key !== activeSectionRef.current) {
+        activeSectionRef.current = key;
+        pointPreviewAt(SECTION_PREVIEW_TARGET[key as SectionKey] ?? null);
+      }
+    },
+    [pointPreviewAt],
+  );
 
   const activeIndex = SECTIONS.findIndex((s) => s.key === activeSection);
   const previousSection = activeIndex > 0 ? SECTIONS[activeIndex - 1].key : null;
@@ -429,7 +568,12 @@ export function JobForm({
   );
 
   return (
-    <form ref={formRef} action={action} className="contents">
+    <form
+      ref={formRef}
+      action={action}
+      className="contents"
+      onFocusCapture={handleFocusCapture}
+    >
       {job ? <input type="hidden" name="jobId" value={job.id} /> : null}
       <input
         type="hidden"
@@ -464,14 +608,15 @@ export function JobForm({
           sections={RAIL_SECTIONS}
           scrollRootRef={scrollRef}
           active={activeSection}
-          onActiveChange={(key) => setActiveSection(key as SectionKey)}
+          onActiveChange={handleActiveChange}
           onSelect={(key) => jumpToSection(key as SectionKey)}
           secondaryActions={railActions}
         />
 
         <div
           ref={scrollRef}
-          className="flex w-full min-w-0 max-w-2xl shrink-0 flex-col overflow-y-auto"
+          {...{ [EDITOR_SCROLL_ROOT_ATTR]: "" }}
+          className="relative mx-auto flex w-full min-w-0 max-w-2xl flex-1 flex-col overflow-y-auto overscroll-contain xl:mx-0 xl:w-[34rem] xl:flex-none 2xl:w-[40rem]"
         >
           {/*
             No `min-h-full` here on purpose , percentage min-height on a flex
@@ -532,6 +677,8 @@ export function JobForm({
                       keywords={keywords}
                       aiPending={aiPending}
                       startAi={startAi}
+                      aiConfigured={aiOn}
+                      publishHint={publishHint}
                     />
                   ) : null}
 
@@ -545,7 +692,9 @@ export function JobForm({
                     <Card className="p-5">
                       <ApplicationSection
                         applicationConfig={applicationConfig}
-                        aiContext={{ title, description, keywords }}
+                        aiContext={
+                          aiOn ? { title, description, keywords } : undefined
+                        }
                       />
                     </Card>
                   ) : null}
@@ -559,6 +708,7 @@ export function JobForm({
                         setKeywords={setKeywords}
                         photos={photos}
                         setPhotos={setPhotos}
+                        aiConfigured={aiOn}
                       />
                     </Card>
                   ) : null}
@@ -587,15 +737,27 @@ export function JobForm({
           {/* Sticky wizard bar: Back (ghost) and Continue (ink) walk the steps;
               the last step swaps Continue for the real submit actions. */}
           <div className="sticky bottom-0 z-10 mt-auto flex items-center flex-wrap justify-between gap-2 border-t border-hairline bg-pure-snow/90 px-4 py-3 backdrop-blur-sm sm:px-6">
-            <Button
-              type="button"
-              variant="ghost"
-              onClick={() => previousSection && jumpToSection(previousSection)}
-              disabled={!previousSection}
-            >
-              <ArrowLeft className="size-4" />
-              Back
-            </Button>
+            <div className="flex items-center gap-1">
+              <Button
+                type="button"
+                variant="ghost"
+                onClick={() => previousSection && jumpToSection(previousSection)}
+                disabled={!previousSection}
+              >
+                <ArrowLeft className="size-4" />
+                Back
+              </Button>
+              {!previewDocked ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setPreviewOpen(true)}
+                >
+                  <Eye className="size-4" />
+                  Preview
+                </Button>
+              ) : null}
+            </div>
             {nextSection ? (
               <Button type="button" onClick={() => jumpToSection(nextSection)}>
                 Continue
@@ -611,6 +773,14 @@ export function JobForm({
           job={previewJob}
           workspace={previewWorkspace ?? null}
           config={previewConfig ?? null}
+          focus={previewFocus}
+          docked={previewDocked}
+          open={previewOpen}
+          onClose={() => setPreviewOpen(false)}
+          step={activeSection}
+          draft={stepDraft}
+          status={job?.status ?? "draft"}
+          aiConfigured={aiOn}
         />
       </FocusModeShell>
       <UnsavedChangesDialog

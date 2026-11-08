@@ -29,6 +29,12 @@ const optionalText = z.preprocess(
     .transform((value) => (value.length > 0 ? value : undefined)),
 );
 
+// Raw string fields (JSON blobs, HTML): FormData.get yields null when absent.
+const optionalRaw = z.preprocess(
+  (value) => (value == null ? undefined : value),
+  z.string().optional(),
+);
+
 const optionalAmount = z.preprocess(
   (value) => (value === "" || value == null ? undefined : value),
   z.coerce.number().int().nonnegative().optional(),
@@ -58,24 +64,32 @@ const fieldVisibility = (defaultValue: ApplicationFieldVisibility) =>
 
 export const jobFormSchema = z
   .object({
-    title: z.string().trim().min(3, "Title must be at least 3 characters."),
+    title: z.string().trim().min(1, "Add a job title to continue."),
     slug: optionalSlug,
     department: optionalText,
     sector: optionalText,
     location: optionalText,
-    employmentType: z.enum([
-      "full_time",
-      "part_time",
-      "contract",
-      "internship",
-    ]),
-    workplaceType: z.enum(["remote", "hybrid", "onsite"]),
+    // Structural columns: sensible defaults so a title alone is enough.
+    employmentType: z.preprocess(
+      (value) => (value == null || value === "" ? undefined : value),
+      z
+        .enum(["full_time", "part_time", "contract", "internship"])
+        .default("full_time"),
+    ),
+    workplaceType: z.preprocess(
+      (value) => (value == null || value === "" ? undefined : value),
+      z.enum(["remote", "hybrid", "onsite"]).default("remote"),
+    ),
     experienceLevel: optionalText,
     education: optionalText,
-    evaluationMode: z.enum(EVALUATION_MODES).default(DEFAULT_EVALUATION_MODE),
-    keywordsJson: z.string().optional(),
-    description: z.string().optional(),
-    contentSectionsJson: z.string().optional(),
+    // Absent (field hidden when AI isn't configured) or null -> default.
+    evaluationMode: z.preprocess(
+      (value) => (value == null || value === "" ? undefined : value),
+      z.enum(EVALUATION_MODES).default(DEFAULT_EVALUATION_MODE),
+    ),
+    keywordsJson: optionalRaw,
+    description: optionalRaw,
+    contentSectionsJson: optionalRaw,
     salaryMin: optionalAmount,
     salaryMax: optionalAmount,
     currency: optionalText,
@@ -88,7 +102,7 @@ export const jobFormSchema = z
     jobLocationRegion: optionalText,
     remoteEligibleCountries: optionalText,
     validThrough: optionalDate,
-    officePhotosJson: z.string().optional(),
+    officePhotosJson: optionalRaw,
     applicationPhoneVisibility: fieldVisibility(
       defaultJobApplicationConfig.sections.personal.phone.visibility,
     ),
@@ -122,28 +136,9 @@ export const jobFormSchema = z
     applicationCoverLetterVisibility: fieldVisibility(
       defaultJobApplicationConfig.sections.details.coverLetter.visibility,
     ),
-    applicationQuestionsJson: z.string().optional(),
+    applicationQuestionsJson: optionalRaw,
   })
   .superRefine((values, ctx) => {
-    const strippedDescription = (values.description ?? "")
-      .replace(/<[^>]*>/g, "")
-      .trim();
-    const isPlaceholder =
-      strippedDescription.toLowerCase() ===
-      "describe the role, the team, and the impact this person will have.";
-    const hasDescription =
-      !isPlaceholder && strippedDescription.length >= 10;
-    const hasSections =
-      parseJobContentSections(values.contentSectionsJson).length > 0;
-    if (!hasDescription && !hasSections) {
-      ctx.addIssue({
-        code: "custom",
-        path: ["description"],
-        message:
-          "Add a description or fill in at least one section (requirements, responsibilities, or benefits).",
-      });
-    }
-
     if (
       values.salaryMin != null &&
       values.salaryMax != null &&
@@ -253,6 +248,32 @@ export const jobFormSchema = z
       boardConfig,
     };
   });
+
+const DESCRIPTION_PLACEHOLDER =
+  "describe the role, the team, and the impact this person will have.";
+
+/**
+ * Publish-time requirements. Saving a draft only needs a title; a posting that
+ * goes public needs something for candidates to read: a description or at
+ * least one filled section. Shared by the form (inline hint), the create /
+ * status actions and tests.
+ */
+export function getPublishBlockers(input: {
+  description?: string | null;
+  contentSections?: unknown;
+}): string[] {
+  const stripped = (input.description ?? "").replace(/<[^>]*>/g, "").trim();
+  const hasDescription =
+    stripped.length >= 10 && stripped.toLowerCase() !== DESCRIPTION_PLACEHOLDER;
+  const hasSections = parseJobContentSections(input.contentSections).some(
+    (section) => section.body.replace(/<[^>]*>/g, "").trim().length > 0,
+  );
+  return hasDescription || hasSections
+    ? []
+    : [
+        "Add a description or fill in at least one section before publishing. You can still save a draft without it.",
+      ];
+}
 
 export const jobStatusSchema = z.enum(["draft", "open", "closed"]);
 

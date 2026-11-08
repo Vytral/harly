@@ -8,13 +8,18 @@ import { db, workspaceSettings } from "@harly/db";
 
 import {
   createJob,
+  getDashboardJob,
   permanentlyDeleteJob,
   restoreJob,
   trashJob,
   updateJob,
   updateJobStatus,
 } from "./data";
-import { jobFormSchema, jobStatusSchema } from "./validation";
+import {
+  getPublishBlockers,
+  jobFormSchema,
+  jobStatusSchema,
+} from "./validation";
 import {
   requireJobPermission,
   requirePermission,
@@ -83,6 +88,16 @@ export type JobActionState = {
 export async function createJobAction(formData: FormData) {
   const context = await requirePermission("jobs:create");
   const values = parseJobFormData(formData);
+  // Only a draft can be saved with just a title. Publishing on creation needs
+  // content candidates can read (the form explains this inline beforehand).
+  const publishing = formData.get("intent") !== "draft";
+  if (publishing) {
+    const blockers = getPublishBlockers({
+      description: values.description,
+      contentSections: values.contentSections,
+    });
+    if (blockers.length > 0) throw new Error(blockers[0]);
+  }
   const job = await createJob(values);
 
   await logAuditEvent({
@@ -151,6 +166,15 @@ export async function updateJobStatusAction(formData: FormData) {
   );
   if (status === "open" && await getPendingJobApproval(jobId)) {
     throw new Error("Job has a pending approval request.");
+  }
+  if (status === "open") {
+    const current = await getDashboardJob(jobId);
+    if (!current) notFound();
+    const blockers = getPublishBlockers({
+      description: current.job.description,
+      contentSections: current.job.contentSections,
+    });
+    if (blockers.length > 0) throw new Error(blockers[0]);
   }
   const job = await updateJobStatus(jobId, status);
 

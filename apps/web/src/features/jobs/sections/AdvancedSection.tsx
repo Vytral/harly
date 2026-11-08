@@ -26,6 +26,7 @@ export function AdvancedSection({
   setKeywords,
   photos,
   setPhotos,
+  aiConfigured,
 }: {
   job?: Job;
   workplace: string;
@@ -33,6 +34,7 @@ export function AdvancedSection({
   setKeywords: React.Dispatch<React.SetStateAction<string[]>>;
   photos: string[];
   setPhotos: React.Dispatch<React.SetStateAction<string[]>>;
+  aiConfigured: boolean;
 }) {
   const [keywordDraft, setKeywordDraft] = useState("");
   const [photoDraft, setPhotoDraft] = useState("");
@@ -97,6 +99,9 @@ export function AdvancedSection({
           />
         </FieldBox>
 
+        {/* The evaluation style only steers AI scoring: without a provider it
+            is hidden, and the stored value is preserved via a hidden input. */}
+        {aiConfigured ? (
         <FieldBox
           className="sm:col-span-2"
           label="AI evaluation style"
@@ -117,10 +122,17 @@ export function AdvancedSection({
             </SelectContent>
           </Select>
         </FieldBox>
+        ) : (
+          <input
+            type="hidden"
+            name="evaluationMode"
+            value={job?.evaluationMode ?? "balanced"}
+          />
+        )}
       </div>
 
       {/* Keywords */}
-      <div className="space-y-3">
+      <div className="space-y-3" data-preview-target="keywords">
         <Label>Keywords</Label>
         <p className="text-xs text-muted-foreground">
           Tags that help candidates and search find this role.
@@ -168,7 +180,10 @@ export function AdvancedSection({
 
       {/* Office (conditional) */}
       {showOffice ? (
-        <div className="space-y-4 rounded-[var(--radius-inner)] bg-card-inset p-4">
+        <div
+          data-preview-target="office"
+          className="space-y-4 rounded-[var(--radius-inner)] bg-card-inset p-4"
+        >
           <FieldBox
             label="Office address"
             htmlFor="officeAddress"

@@ -47,6 +47,7 @@ export function PreviewFrame({
   background,
   children,
   onLinkClick,
+  onDocumentReady,
   className,
 }: {
   device: PreviewDevice;
@@ -54,6 +55,8 @@ export function PreviewFrame({
   children: React.ReactNode;
   /** Called with the absolute href of a blocked link click. */
   onLinkClick?: (href: string) => void;
+  /** Called with the frame document once prepared (and `null` on teardown). */
+  onDocumentReady?: (doc: Document | null) => void;
   className?: string;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -61,9 +64,11 @@ export function PreviewFrame({
   const [mountNode, setMountNode] = useState<HTMLElement | null>(null);
   const [box, setBox] = useState({ width: 0, height: 0 });
   const onLinkClickRef = useRef(onLinkClick);
+  const onReadyRef = useRef(onDocumentReady);
   useEffect(() => {
     onLinkClickRef.current = onLinkClick;
-  }, [onLinkClick]);
+    onReadyRef.current = onDocumentReady;
+  }, [onLinkClick, onDocumentReady]);
 
   const designWidth = PREVIEW_DEVICE_WIDTH[device];
 
@@ -96,11 +101,15 @@ export function PreviewFrame({
     cleanupRef.current?.();
     cleanupRef.current = prepareFrameDocument(doc, (href) => onLinkClickRef.current?.(href));
     setMountNode(doc.body);
+    onReadyRef.current?.(doc);
   }, []);
   useEffect(() => {
     if (!mounted) return;
     setup();
-    return () => cleanupRef.current?.();
+    return () => {
+      cleanupRef.current?.();
+      onReadyRef.current?.(null);
+    };
   }, [mounted, setup]);
 
   const scale = box.width > 0 ? Math.min(1, box.width / designWidth) : 1;
