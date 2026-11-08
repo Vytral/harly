@@ -51,7 +51,10 @@ more ways to sign in. Contains two database migrations (`0165`, `0166`); run
   installations start with password and access code, which need nothing
   external; existing ones keep the methods they already used.
 - Password accounts for candidates (scrypt, progressive lockout, session
-  rotation) with account recovery that does not need email: one-time recovery
+  rotation), set up after proving access through a sign-in provider, magic link
+  or a recruiter-issued access or password setup link. Unverified registration
+  cannot reserve another person's email and gain access to future applications.
+  Account recovery does not need email: one-time recovery
   codes shown once, and reset or access links a recruiter issues from the
   candidate's record. With email configured, candidates can also request a
   reset link.

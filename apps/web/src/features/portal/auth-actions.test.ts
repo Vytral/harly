@@ -9,6 +9,7 @@ const m = vi.hoisted(() => ({
     oauth: { google: false, github: false, linkedin: false },
   } as Record<string, unknown>,
   rateOk: true,
+  session: null as { candidateId: string; workspaceId: string; email: string } | null,
   verifyPasswordLogin: vi.fn(),
   createPortalCandidate: vi.fn(),
   setCandidatePassword: vi.fn(),
@@ -24,7 +25,7 @@ const m = vi.hoisted(() => ({
 }));
 
 vi.mock("next/headers", () => ({
-  cookies: async () => ({ get: () => undefined, set: vi.fn(), delete: vi.fn() }),
+  cookies: async () => ({ get: () => m.session ? { value: "verified-session" } : undefined, set: vi.fn(), delete: vi.fn() }),
   headers: async () => new Headers({ "user-agent": "vitest" }),
 }));
 vi.mock("react", async (orig) => ({ ...(await orig<typeof import("react")>()), createElement: vi.fn() }));
@@ -36,7 +37,7 @@ vi.mock("@harly/emails", () => ({
 vi.mock("@/lib/portal-auth", () => ({
   PORTAL_SESSION_COOKIE: "harly_portal_session",
   getSinglePortalWorkspace: async () => ({ id: "ws1", slug: "acme" }),
-  resolvePortalSession: vi.fn(async () => null),
+  resolvePortalSession: vi.fn(async () => m.session),
   revokeOtherPortalSessions: vi.fn(),
 }));
 vi.mock("@/lib/portal-auth-methods", () => ({ getPortalAuthMethods: async () => m.methods }));
@@ -73,6 +74,8 @@ import {
 beforeEach(() => {
   vi.clearAllMocks();
   m.rateOk = true;
+  m.session = null;
+  m.hasCandidatePassword.mockResolvedValue(false);
   m.methods = {
     password: true,
     accessCode: true,
@@ -121,20 +124,37 @@ describe("loginPortalPasswordAction", () => {
 describe("registerPortalPasswordAction", () => {
   const input = { email: "new@x.com", password: "a-decent-password", firstName: "Nia", lastName: "L" };
 
-  it("creates the account, returns recovery codes once and signs in", async () => {
-    m.createPortalCandidate.mockResolvedValue("c9");
+  it("sets a password only after identity proof, returns recovery codes and rotates the session", async () => {
+    m.session = { candidateId: "c9", workspaceId: "ws1", email: input.email };
     const r = await registerPortalPasswordAction(input);
     expect(r).toMatchObject({ ok: true, recoveryCodes: ["AAAA-BBBB-CCCC-DDDD"] });
     expect(m.setCandidatePassword).toHaveBeenCalledWith("c9", "ws1", "a-decent-password");
     expect(m.establishPortalSession).toHaveBeenCalled();
   });
 
-  it("never lets self-registration take over an existing candidate record", async () => {
-    m.createPortalCandidate.mockResolvedValue(null);
+  it("never reserves an unverified email for access to future applications", async () => {
+    m.createPortalCandidate.mockResolvedValue("c9");
     const r = await registerPortalPasswordAction(input);
     expect(r.ok).toBe(false);
     expect(m.setCandidatePassword).not.toHaveBeenCalled();
     expect(m.establishPortalSession).not.toHaveBeenCalled();
+    expect(m.createPortalCandidate).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    { candidateId: "c9", workspaceId: "other", email: input.email },
+    { candidateId: "c9", workspaceId: "ws1", email: "someone-else@x.com" },
+  ])("rejects a session for another workspace or email", async (session) => {
+    m.session = session;
+    expect((await registerPortalPasswordAction(input)).ok).toBe(false);
+    expect(m.setCandidatePassword).not.toHaveBeenCalled();
+  });
+
+  it("cannot replace an existing password without the current password", async () => {
+    m.session = { candidateId: "c9", workspaceId: "ws1", email: input.email };
+    m.hasCandidatePassword.mockResolvedValue(true);
+    expect((await registerPortalPasswordAction(input)).ok).toBe(false);
+    expect(m.setCandidatePassword).not.toHaveBeenCalled();
   });
 
   it("rejects weak passwords before creating anything", async () => {

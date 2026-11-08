@@ -24,7 +24,6 @@ import {
   consumeOneTimeCode,
   consumeRecoveryCode,
   countRecoveryCodes,
-  createPortalCandidate,
   findActiveCandidateByEmail,
   hasCandidatePassword,
   issueOneTimeCode,
@@ -92,7 +91,7 @@ export async function registerPortalPasswordAction(
   if (!parsed.success) {
     return { ok: false, error: "Check your name, email and password." };
   }
-  const { email, password, firstName, lastName } = parsed.data;
+  const { email, password } = parsed.data;
   const workspace = await requireWorkspace();
   if (!workspace) return { ok: false, error: "This candidate portal is unavailable." };
   const methods = await getPortalAuthMethods(workspace.id);
@@ -111,20 +110,20 @@ export async function registerPortalPasswordAction(
   const policy = validatePasswordPolicy(password, { email });
   if (!policy.ok) return { ok: false, error: policy.error };
 
-  const candidateId = await createPortalCandidate({
-    workspaceId: workspace.id,
-    email,
-    firstName,
-    lastName,
-  });
-  if (!candidateId) {
-    // An existing candidate record is never claimable by self-registering: no
-    // email is verified here, so that would let anyone take over its history.
+  // Public applications and recruiter imports join candidates by email. An
+  // unverified registration could reserve somebody else's email and receive
+  // their future applications. Only a proven portal identity may set a password.
+  const current = await currentSession();
+  if (!current || current.session.workspaceId !== workspace.id || current.session.email.toLowerCase() !== email) {
     return {
       ok: false,
       error:
-        "We couldn't create an account with those details. If you already applied, sign in, or ask the company for an access code.",
+        "Verify your access first: use a sign-in link or connected account, or ask the company for an access or password setup link.",
     };
+  }
+  const candidateId = current.session.candidateId;
+  if (await hasCandidatePassword(candidateId)) {
+    return { ok: false, error: "You already have a password. Change it from your profile." };
   }
   await setCandidatePassword(candidateId, workspace.id, password);
   const recoveryCodes = await regenerateRecoveryCodes(candidateId, workspace.id);
