@@ -418,7 +418,7 @@ export function JobForm({
       const field = explicit ?? (el.getAttribute("name") || el.id || null);
       if (target || field) pointPreviewAt(target ?? null, field);
     },
-    [pointPreviewAt],
+    [pointPreviewAt, setActiveSection],
   );
 
   // Publishing needs readable content; saving a draft only needs a title.
@@ -533,7 +533,7 @@ export function JobForm({
         pointPreviewAt(SECTION_PREVIEW_TARGET[key as SectionKey] ?? null);
       }
     },
-    [pointPreviewAt],
+    [pointPreviewAt, setActiveSection],
   );
 
   const activeIndex = SECTIONS.findIndex((s) => s.key === activeSection);
