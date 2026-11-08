@@ -2,7 +2,11 @@
 
 import { revalidatePath } from "next/cache";
 
-import { db, webhookDeliveries } from "@harly/db";
+import { randomUUID } from "node:crypto";
+
+import { eq, inArray } from "drizzle-orm";
+
+import { db, webhookDeliveries, webhookDeliveryAttempts } from "@harly/db";
 
 import {
   getRolePermissions,
@@ -10,6 +14,7 @@ import {
 } from "@/features/workspaces/permissions-server";
 import { missingScopePermissions } from "@/features/developers/api-key-permissions";
 import { createLogger } from "@/lib/logger";
+import { enforceRateLimit } from "@/server/api/ratelimit";
 import { dispatchDueWebhooks } from "@/server/webhooks/dispatch";
 
 const log = createLogger("developers");
@@ -188,7 +193,13 @@ export async function rotateWebhookSecretAction(
 
 export async function listWebhookDeliveriesAction(
   endpointId: string,
-): Promise<DevActionResult & { deliveries?: ReturnType<typeof serializeDelivery>[] }> {
+): Promise<
+  DevActionResult & {
+    deliveries?: Array<
+      ReturnType<typeof serializeDelivery> & { durationMs: number | null }
+    >;
+  }
+> {
   try {
     const { organization } = await requirePermission("integrations:manage");
     await getWebhookEndpoint({ workspaceId: organization.id, id: endpointId });
@@ -197,7 +208,14 @@ export async function listWebhookDeliveriesAction(
       endpointId,
       limit: 20,
     });
-    return { ok: true, deliveries: deliveries.map(serializeDelivery) };
+    const durations = await lastAttemptDurations(deliveries.map((d) => d.id));
+    return {
+      ok: true,
+      deliveries: deliveries.map((delivery) => ({
+        ...serializeDelivery(delivery),
+        durationMs: durations.get(delivery.id) ?? null,
+      })),
+    };
   } catch (error) {
     return {
       ok: false,
@@ -228,9 +246,42 @@ export async function replayWebhookDeliveryAction(input: {
   }
 }
 
-export async function testWebhookAction(
-  id: string,
-): Promise<DevActionResult & { status?: string }> {
+/** Duration (ms) of the most recent attempt per delivery, from the attempt log. */
+async function lastAttemptDurations(
+  deliveryIds: string[],
+): Promise<Map<string, number>> {
+  const result = new Map<string, number>();
+  if (deliveryIds.length === 0) return result;
+  const rows = await db
+    .select({
+      deliveryId: webhookDeliveryAttempts.deliveryId,
+      attempt: webhookDeliveryAttempts.attempt,
+      startedAt: webhookDeliveryAttempts.startedAt,
+      finishedAt: webhookDeliveryAttempts.finishedAt,
+    })
+    .from(webhookDeliveryAttempts)
+    .where(inArray(webhookDeliveryAttempts.deliveryId, deliveryIds));
+  const latest = new Map<string, number>();
+  for (const row of rows) {
+    if (!row.finishedAt) continue;
+    if ((latest.get(row.deliveryId) ?? 0) >= row.attempt) continue;
+    latest.set(row.deliveryId, row.attempt);
+    result.set(row.deliveryId, row.finishedAt.getTime() - row.startedAt.getTime());
+  }
+  return result;
+}
+
+export type WebhookTestResult = DevActionResult & {
+  status?: string;
+  responseStatus?: number | null;
+  durationMs?: number | null;
+  detail?: string | null;
+};
+
+/** At most 5 test pings per endpoint per minute. */
+const TEST_LIMIT = { limit: 5, windowMs: 60_000 } as const;
+
+export async function testWebhookAction(id: string): Promise<WebhookTestResult> {
   assertNotDemo();
   try {
     const { organization } = await requirePermission("integrations:manage");
@@ -238,30 +289,51 @@ export async function testWebhookAction(
       workspaceId: organization.id,
       id,
     });
+    if (!endpoint.enabled) {
+      return {
+        ok: false,
+        error: "This endpoint is paused. Resume it to send a test event.",
+      };
+    }
+    await enforceRateLimit(`webhook-test:${organization.id}:${endpoint.id}`, TEST_LIMIT);
+
     const [delivery] = await db
       .insert(webhookDeliveries)
       .values({
         workspaceId: organization.id,
         endpointId: endpoint.id,
-        event: "application.created",
+        event: "webhook.test",
         payload: {
-          event: "application.created",
+          event: "webhook.test",
+          eventId: randomUUID(),
+          eventVersion: 1,
+          schemaVersion: 1,
           created: Math.floor(Date.now() / 1000),
           workspace: organization.id,
-          data: { test: true, message: "Harly webhook test ping." },
+          data: { test: true, message: "Harly webhook test event." },
         },
         status: "pending",
       })
       .returning();
     const summary = await dispatchDueWebhooks(1, [delivery.id]);
-    const status = summary.success > 0
-      ? "success"
-      : summary.failed > 0
-        ? "failed"
-        : "pending";
+    const [row] = await db
+      .select()
+      .from(webhookDeliveries)
+      .where(eq(webhookDeliveries.id, delivery.id))
+      .limit(1);
+    const durations = await lastAttemptDurations([delivery.id]);
+    const status =
+      row?.status ??
+      (summary.success > 0 ? "success" : summary.failed > 0 ? "failed" : "pending");
     revalidatePath(SETTINGS_PATH);
-    return { ok: status === "success", status };
+    return {
+      ok: status === "success",
+      status,
+      responseStatus: row?.responseStatus ?? null,
+      durationMs: durations.get(delivery.id) ?? null,
+      detail: row?.lastError ?? null,
+    };
   } catch (error) {
-    return { ok: false, error: errorMessage(error, "Could not send test.") };
+    return { ok: false, error: errorMessage(error, "Could not send test event.") };
   }
 }

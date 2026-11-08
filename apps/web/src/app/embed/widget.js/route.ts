@@ -22,6 +22,9 @@ export const runtime = "nodejs";
  *   data-container  target element id (default "harly-jobs-container")
  *   data-job        render ONLY this job's apply form (skip the board)
  *   data-theme      auto | light | dark  (default auto → inherits host)
+ *   data-accent     #rrggbb accent colour (overrides the workspace brand colour)
+ *   data-department preselect a department in the board filter
+ *   data-limit      show at most N roles in the board (1-100)
  *
  * Theming: every color is a CSS custom property scoped to `.oh-root`, so the
  * host can override any of them from its own stylesheet:
@@ -41,6 +44,10 @@ const WIDGET = String.raw`(function () {
   var containerId = script.getAttribute("data-container") || "harly-jobs-container";
   var singleJobSlug = script.getAttribute("data-job") || "";
   var theme = (script.getAttribute("data-theme") || "auto").toLowerCase();
+  var accentAttr = script.getAttribute("data-accent") || "";
+  var departmentPref = script.getAttribute("data-department") || "";
+  var limitAttr = parseInt(script.getAttribute("data-limit") || "", 10);
+  var maxRoles = limitAttr > 0 ? Math.min(limitAttr, 100) : 0;
 
   function api(path) {
     var url = origin + path;
@@ -123,6 +130,11 @@ const WIDGET = String.raw`(function () {
       // Pick readable ink for the accent (simple luminance test).
       root.style.setProperty("--oh-accent-ink", accentInk(board.accentColor));
     }
+    // An explicit data-accent on the script tag wins over the workspace brand.
+    if (/^#[0-9a-f]{6}$/i.test(accentAttr)) {
+      root.style.setProperty("--oh-accent", accentAttr);
+      root.style.setProperty("--oh-accent-ink", accentInk(accentAttr));
+    }
   }
 
   function accentInk(hex) {
@@ -155,6 +167,7 @@ const WIDGET = String.raw`(function () {
     Object.keys(depts).sort().forEach(function (d) { deptSelect.appendChild(new Option(d, d)); });
     controls.appendChild(search);
     if (Object.keys(depts).length) controls.appendChild(deptSelect);
+    if (departmentPref && depts[departmentPref]) deptSelect.value = departmentPref;
     root.appendChild(controls);
 
     var list = el("div", "oh-list");
@@ -170,6 +183,7 @@ const WIDGET = String.raw`(function () {
         if (q && (j.title + " " + (j.location || "")).toLowerCase().indexOf(q) === -1) return false;
         return true;
       });
+      if (maxRoles) shown = shown.slice(0, maxRoles);
       if (!shown.length) { list.appendChild(el("div", "oh-empty", "No open roles right now.")); return; }
       shown.forEach(function (job) {
         var card = el("div", "oh-card");
@@ -449,11 +463,8 @@ const WIDGET = String.raw`(function () {
     var container = document.getElementById(containerId);
     if (!container) return;
     injectStyles();
-    if (!workspace && !pk) {
-      container.innerHTML = "";
-      container.appendChild(el("div", "oh-error", "Harly widget is not configured."));
-      return;
-    }
+    // data-pk is optional: without it the public API serves this instance's
+    // own workspace.
 
     // Single-job mode: deep-link to hosted job details (overview), never the
     // apply form directly — candidates should land on the real job page.
