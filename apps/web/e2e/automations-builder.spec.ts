@@ -1,4 +1,4 @@
-import { randomUUID } from "node:crypto";
+import { createCipheriv, randomBytes, randomUUID } from "node:crypto";
 
 import { and, eq } from "drizzle-orm";
 import { expect, test, type Page } from "./test-fixtures";
@@ -7,12 +7,13 @@ import {
   automationAiProposals,
   createDatabaseClient,
   workflowDefinitions,
+  workspaceSettings,
 } from "@harly/db";
 
 import { semanticGraphHash } from "../src/features/automations/definition/hash";
 import type { WorkflowGraphV2 } from "../src/features/automations/definition/schema-v2";
 
-import { E2E_DATABASE_URL, FIXTURE } from "./constants";
+import { E2E_AI_ENCRYPTION_KEY, E2E_DATABASE_URL, FIXTURE } from "./constants";
 
 async function login(page: Page, email: string, password: string) {
   let lastError: unknown;
@@ -58,15 +59,9 @@ test.describe("automations builder", () => {
     await expect(
       page.getByRole("textbox", { name: "Automation name" }),
     ).toBeVisible();
-    await page
-      .getByRole("button", { name: "Ask Harly AI", exact: true })
-      .click();
-    await expect(page.getByText(/^How can I help, /)).toBeVisible();
-    await expect(page.getByPlaceholder("Ask Harly AI…")).toBeVisible();
-    await page
-      .getByRole("dialog", { name: "Harly AI", exact: true })
-      .getByRole("button", { name: "Close Harly AI", exact: true })
-      .click();
+    // Fresh workspaces have no AI provider: the builder remains usable while
+    // the launcher stays hidden. The proposal story below enables a test key.
+    await expect(page.getByRole("button", { name: "Ask Harly AI", exact: true })).toHaveCount(0);
     const searchBlocks = page.getByRole("searchbox", { name: "Search steps" });
     await searchBlocks.fill("Add note");
     const addNote = page.getByRole("button", { name: /^Add note/ });
@@ -262,6 +257,19 @@ test.describe("automations builder", () => {
     });
 
     try {
+      // The chat response is intercepted above; this encrypted dummy key only
+      // makes the workspace's AI entry point available. No provider is called.
+      const iv = randomBytes(12);
+      const cipher = createCipheriv("aes-256-gcm", Buffer.from(E2E_AI_ENCRYPTION_KEY, "base64"), iv);
+      const ciphertext = Buffer.concat([cipher.update("e2e-dummy-key", "utf8"), cipher.final()]);
+      await db.update(workspaceSettings).set({
+        aiEnabled: true,
+        aiProvider: "openai",
+        aiModelId: "e2e-model",
+        aiApiKeyCiphertext: ciphertext.toString("base64"),
+        aiApiKeyIv: iv.toString("base64"),
+        aiApiKeyTag: cipher.getAuthTag().toString("base64"),
+      }).where(eq(workspaceSettings.organizationId, FIXTURE.workspaceId));
       await login(page, FIXTURE.recruiterEmail, FIXTURE.recruiterPassword);
       await page.goto("/dashboard/automations/new", { timeout: 90_000 });
       await expect(
@@ -335,6 +343,14 @@ test.describe("automations builder", () => {
         .limit(1);
       expect(draft).toEqual({ enabled: false, status: "draft" });
     } finally {
+      await db.update(workspaceSettings).set({
+        aiEnabled: false,
+        aiProvider: null,
+        aiModelId: null,
+        aiApiKeyCiphertext: null,
+        aiApiKeyIv: null,
+        aiApiKeyTag: null,
+      }).where(eq(workspaceSettings.organizationId, FIXTURE.workspaceId));
       const [applied] = await db
         .select({ workflowId: automationAiProposals.workflowId })
         .from(automationAiProposals)

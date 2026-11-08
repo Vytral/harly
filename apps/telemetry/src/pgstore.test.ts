@@ -33,9 +33,11 @@ describe.skipIf(!url)("PgStore (real Postgres)", () => {
     await Promise.all([store, ...others].map((s) => s.migrate()));
     await Promise.all(others.map((s) => s.close()));
     const pool = new pg.Pool({ connectionString: url, max: 1 });
-    const v = await pool.query("SELECT version FROM telemetry_schema");
+    const v = await pool.query("SELECT version FROM telemetry_schema ORDER BY version");
+    const index = await pool.query("SELECT indexname FROM pg_indexes WHERE tablename = 'events' AND indexname = 'events_last_seen_idx'");
     await pool.end();
-    expect(v.rows).toEqual([{ version: 1 }]);
+    expect(v.rows).toEqual([{ version: 1 }, { version: 2 }]);
+    expect(index.rows).toEqual([{ indexname: "events_last_seen_idx" }]);
     await expect(store.ping()).resolves.toBeUndefined();
   });
 

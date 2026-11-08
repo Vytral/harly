@@ -2,7 +2,6 @@ import pg from "pg";
 import type { Payload } from "./schema.js";
 import { ACTIVE_WINDOW_MS, type Counts, type EventStore, type Stats } from "./store.js";
 
-const SCHEMA_VERSION = 1;
 const LOCK_KEY = 727_001; // arbitrary app-wide advisory lock id for migrations
 
 const MIGRATIONS: string[] = [
@@ -61,7 +60,7 @@ export class PgStore implements EventStore {
       await client.query("CREATE TABLE IF NOT EXISTS telemetry_schema (version INTEGER NOT NULL)");
       const current = await client.query<{ version: number }>("SELECT MAX(version) AS version FROM telemetry_schema");
       const from = current.rows[0]?.version ?? 0;
-      for (let v = from; v < SCHEMA_VERSION; v++) {
+      for (let v = from; v < MIGRATIONS.length; v++) {
         await client.query(MIGRATIONS[v]!);
         await client.query("INSERT INTO telemetry_schema (version) VALUES ($1)", [v + 1]);
       }

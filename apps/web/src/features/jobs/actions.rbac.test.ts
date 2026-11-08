@@ -7,6 +7,8 @@ const mocks = vi.hoisted(() => ({
   updateJobStatus: vi.fn(),
   jobFormParse: vi.fn(),
   jobStatusParse: vi.fn(),
+  getDashboardJob: vi.fn(),
+  getPublishBlockers: vi.fn(),
 }));
 
 vi.mock("@harly/db", () => ({
@@ -20,10 +22,12 @@ vi.mock("./data", () => ({
   trashJob: vi.fn(),
   updateJob: mocks.updateJob,
   updateJobStatus: mocks.updateJobStatus,
+  getDashboardJob: mocks.getDashboardJob,
 }));
 vi.mock("./validation", () => ({
   jobFormSchema: { parse: mocks.jobFormParse },
   jobStatusSchema: { parse: mocks.jobStatusParse },
+  getPublishBlockers: mocks.getPublishBlockers,
 }));
 vi.mock("./approval", () => ({ getPendingJobApproval: vi.fn() }));
 vi.mock("@/features/workspaces/permissions-server", () => ({
@@ -131,5 +135,16 @@ describe("job action authorization", () => {
     expect(mocks.requireJobPermission).toHaveBeenCalledWith("jobs:delete", JOB_ID, {
       trashed: true,
     });
+  });
+
+  it("refuses to remove all readable content from a published job", async () => {
+    mocks.requireJobPermission.mockResolvedValue({ organization: { id: "ws" } });
+    mocks.jobFormParse.mockReturnValue({ title: "Engineer", description: "" });
+    mocks.getDashboardJob.mockResolvedValue({ job: { status: "open" } });
+    mocks.getPublishBlockers.mockReturnValue(["Add content before publishing."]);
+    const form = new FormData();
+    form.set("jobId", JOB_ID);
+    await expect(updateJobAction(form)).rejects.toThrow("Add content before publishing.");
+    expect(mocks.updateJob).not.toHaveBeenCalled();
   });
 });
