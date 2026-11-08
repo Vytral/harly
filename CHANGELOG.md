@@ -106,6 +106,8 @@ more ways to sign in. Contains two database migrations (`0165`, `0166`); run
   are allowed before enabling AI.
 - The fullscreen automation builder can open Harly AI when a provider is
   configured; it no longer reads an unavailable dashboard context.
+- The bundled OpenAPI documents match the current contracts, including the
+  finer API key scopes and title-only job drafts.
 - A job could not be created on a new instance. Only the title is required; the
   description, education, keywords and a teammate are optional. Publishing a
   job still needs a description or at least one section, in the app and in the
