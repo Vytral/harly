@@ -77,6 +77,22 @@ export async function getConfiguredLoginMethods(): Promise<AvailableLoginMethods
 }
 
 /**
+ * Whether this deployment can deliver staff auth emails (password reset,
+ * magic link). Used to stop screens from promising an email that never leaves.
+ * Fails open (true) on a lookup error so a transient DB hiccup does not hide
+ * the reset form from instances that do have email.
+ */
+export async function isStaffEmailDeliveryConfigured(): Promise<boolean> {
+  try {
+    const { configured } = await resolveLoginMethodState();
+    return configured.magicLink;
+  } catch (error) {
+    log.error(error, "isStaffEmailDeliveryConfigured failed; assuming configured");
+    return true;
+  }
+}
+
+/**
  * Shared resolution: reads the single workspace row once and computes both the
  * configured method set and the parsed admin allow-list.
  */

@@ -41,6 +41,8 @@ export function themeBootstrapScript(storageKey: string = THEME_STORAGE_KEY): st
     'root.classList.remove("light","dark");',
     "root.classList.add(resolved);",
     "root.style.colorScheme=resolved;",
+    "try{var bg=resolved==='dark'?'#161614':'#f5f5f4';var metas=document.querySelectorAll('meta[name=\"theme-color\"]');",
+    "for(var i=0;i!==metas.length;i++){metas[i].setAttribute('content',bg);metas[i].removeAttribute('media');}}catch(e){}",
     "}catch(e){}",
     "})();",
   ].join("");
