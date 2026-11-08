@@ -1,201 +1,421 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { useSearchParams } from "next/navigation";
-import { toast } from "@/lib/notification-island/toast";
+import { useRouter, useSearchParams } from "next/navigation";
+import type { Route } from "next";
+import { startAuthentication } from "@simplewebauthn/browser";
 
+import { sendPortalMagicLinkAction } from "@/features/portal/actions";
 import {
-  sendPortalMagicLinkAction,
-  sendPortalMagicLinkFormAction,
-} from "@/features/portal/actions";
+  loginPortalPasswordAction,
+  recoverPortalPasswordAction,
+  registerPortalPasswordAction,
+  requestPortalPasswordResetEmailAction,
+  redeemPortalAccessCodeAction,
+} from "@/features/portal/auth-actions";
+import {
+  PortalField,
+  PortalFormError,
+  RecoveryCodesPanel,
+  portalInputClass,
+  portalLinkButtonClass,
+  portalPrimaryButtonClass,
+  portalSecondaryButtonClass,
+} from "@/features/portal/portal-form-ui";
 import { cn } from "@/lib/utils";
 
 const ERROR_MESSAGES: Record<string, string> = {
   oauth_denied: "Sign-in was cancelled.",
   oauth_failed: "Sign-in failed. Try again.",
+  oauth_state: "Sign-in expired. Try again.",
   invalid_token: "The link has expired or already been used.",
   missing_token: "Invalid sign-in link.",
   no_workspace: "Workspace not found.",
+  method_disabled: "That sign-in method isn't available.",
 };
 
-export function PortalLoginForm({
-  hasGoogle,
-  hasGitHub,
-  hasLinkedIn,
-}: {
-  hasGoogle: boolean;
-  hasGitHub: boolean;
-  hasLinkedIn: boolean;
-}) {
+export type PortalLoginMethods = {
+  password: boolean;
+  magicLink: boolean;
+  google: boolean;
+  github: boolean;
+  linkedin: boolean;
+  passkey: boolean;
+  accessCode: boolean;
+  /** Email reset links need outgoing email. */
+  emailReset: boolean;
+};
+
+type View = "signin" | "register" | "recover" | "forgot" | "access" | "magic-sent" | "codes";
+
+export function PortalLoginForm({ methods }: { methods: PortalLoginMethods }) {
   const params = useSearchParams();
-  const error = params.get("error");
+  const router = useRouter();
+  const urlError = params.get("error");
   const next = params.get("next") ?? "/portal/dashboard";
 
-  const [email, setEmail] = useState("");
-  const [sent, setSent] = useState(false);
-  const [isPending, start] = useTransition();
+  const [view, setView] = useState<View>("signin");
+  const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+  const [sentTo, setSentTo] = useState("");
+  const [codes, setCodes] = useState<string[]>([]);
+  const [pending, start] = useTransition();
 
-  function submitMagicLink(e: React.SyntheticEvent<HTMLFormElement>) {
+  const anyOAuth = methods.google || methods.github || methods.linkedin;
+  const goto = (path: string) => router.push(path as Route);
+
+  function show(v: View) {
+    setView(v);
+    setError(null);
+    setNotice(null);
+  }
+
+  function formValues(e: React.SyntheticEvent<HTMLFormElement>) {
     e.preventDefault();
-    // Browser autofill does not reliably fire React's change event. Read the
-    // native form value so a visibly-filled email can always be submitted.
-    const submittedEmail = new FormData(e.currentTarget).get("email");
-    const emailValue = typeof submittedEmail === "string" ? submittedEmail : "";
+    // Autofill doesn't always fire React change events; read the native values.
+    const data = new FormData(e.currentTarget);
+    return (name: string) => {
+      const v = data.get(name);
+      return typeof v === "string" ? v : "";
+    };
+  }
+
+  function onSignIn(e: React.SyntheticEvent<HTMLFormElement>) {
+    const get = formValues(e);
+    setError(null);
     start(async () => {
-      const result = await sendPortalMagicLinkAction(emailValue);
-      if (!result.ok) {
-        toast.error(result.error);
-        return;
-      }
-      setEmail(emailValue);
-      setSent(true);
+      const r = await loginPortalPasswordAction({
+        email: get("email"),
+        password: get("password"),
+        next,
+      });
+      if (!r.ok) return setError(r.error);
+      goto(r.redirectTo ?? "/portal/dashboard");
     });
   }
 
-  function oauthHref(provider: "google" | "github" | "linkedin") {
-    return `/api/portal/auth?provider=${provider}&next=${encodeURIComponent(next)}`;
+  function onRegister(e: React.SyntheticEvent<HTMLFormElement>) {
+    const get = formValues(e);
+    setError(null);
+    if (get("password") !== get("confirm")) {
+      return setError("The passwords don't match.");
+    }
+    start(async () => {
+      const r = await registerPortalPasswordAction({
+        email: get("email"),
+        password: get("password"),
+        firstName: get("firstName"),
+        lastName: get("lastName"),
+      });
+      if (!r.ok) return setError(r.error);
+      if (r.recoveryCodes?.length) {
+        setCodes(r.recoveryCodes);
+        setView("codes");
+        return;
+      }
+      goto(r.redirectTo ?? "/portal/dashboard");
+    });
   }
 
-  if (sent) {
+  function onRecover(e: React.SyntheticEvent<HTMLFormElement>) {
+    const get = formValues(e);
+    setError(null);
+    start(async () => {
+      const r = await recoverPortalPasswordAction({
+        email: get("email"),
+        recoveryCode: get("recoveryCode"),
+        newPassword: get("newPassword"),
+      });
+      if (!r.ok) return setError(r.error);
+      goto(r.redirectTo ?? "/portal/dashboard");
+    });
+  }
+
+  function onForgot(e: React.SyntheticEvent<HTMLFormElement>) {
+    const get = formValues(e);
+    setError(null);
+    start(async () => {
+      const r = await requestPortalPasswordResetEmailAction({ email: get("email") });
+      if (!r.ok) return setError(r.error);
+      setNotice(r.message ?? "Check your inbox.");
+    });
+  }
+
+  function onAccess(e: React.SyntheticEvent<HTMLFormElement>) {
+    const get = formValues(e);
+    setError(null);
+    start(async () => {
+      const r = await redeemPortalAccessCodeAction({ code: extractCode(get("code")) });
+      if (!r.ok) return setError(r.error);
+      goto(r.redirectTo ?? "/portal/dashboard");
+    });
+  }
+
+  function onMagic(e: React.SyntheticEvent<HTMLFormElement>) {
+    const get = formValues(e);
+    setError(null);
+    start(async () => {
+      const r = await sendPortalMagicLinkAction(get("email"));
+      if (!r.ok) return setError(r.error);
+      setSentTo(get("email"));
+      setView("magic-sent");
+    });
+  }
+
+  function onPasskey() {
+    setError(null);
+    start(async () => {
+      try {
+        const res = await fetch("/api/portal/passkey/login");
+        if (!res.ok) throw new Error("unavailable");
+        const { challengeId, ...optionsJSON } = await res.json();
+        const assertion = await startAuthentication({ optionsJSON });
+        const verify = await fetch("/api/portal/passkey/login", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ ...assertion, challengeId }),
+        });
+        if (!verify.ok) throw new Error("rejected");
+        goto(next);
+      } catch (err) {
+        const cancelled = err instanceof Error && err.name === "NotAllowedError";
+        setError(
+          cancelled
+            ? "Passkey sign-in was cancelled."
+            : "We couldn't sign you in with a passkey. Try another method.",
+        );
+      }
+    });
+  }
+
+  const oauthHref = (p: "google" | "github" | "linkedin") =>
+    `/api/portal/auth?provider=${p}&next=${encodeURIComponent(next)}`;
+
+  if (view === "codes") {
+    return <RecoveryCodesPanel codes={codes} onDone={() => goto("/portal/dashboard")} />;
+  }
+
+  if (view === "magic-sent") {
     return (
-      <div className="flex flex-col items-center gap-5 py-4 text-center">
-        <div className="flex size-14 items-center justify-center rounded-2xl bg-muted">
-          <svg className="size-7 text-muted-foreground" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M21.75 6.75v10.5a2.25 2.25 0 0 1-2.25 2.25h-15a2.25 2.25 0 0 1-2.25-2.25V6.75m19.5 0A2.25 2.25 0 0 0 19.5 4.5h-15a2.25 2.25 0 0 0-2.25 2.25m19.5 0v.243a2.25 2.25 0 0 1-1.07 1.916l-7.5 4.615a2.25 2.25 0 0 1-2.36 0L3.32 8.91a2.25 2.25 0 0 1-1.07-1.916V6.75" />
-          </svg>
-        </div>
-        <div>
-          <p className="text-base font-semibold text-foreground">Check your inbox</p>
-          <p className="mt-1.5 text-sm text-muted-foreground">
-            We sent a sign-in link to{" "}
-            <span className="font-medium text-foreground">{email}</span>.
-            <br />
-            It expires in 15 minutes.
-          </p>
-        </div>
-        <button
-          type="button"
-          onClick={() => setSent(false)}
-          className="text-sm text-muted-foreground underline-offset-2 hover:underline hover:text-foreground transition-colors"
-        >
-          Use a different email
+      <div className="space-y-4 py-4 text-center" role="status">
+        <p className="text-base font-semibold text-foreground">Check your inbox</p>
+        <p className="text-sm text-muted-foreground">
+          If <span className="font-medium text-foreground">{sentTo}</span> can
+          sign in, a link is on its way. It expires in 15 minutes.
+        </p>
+        <button type="button" className={portalLinkButtonClass} onClick={() => show("signin")}>
+          Use a different method
         </button>
       </div>
     );
   }
 
+  const urlMessage = urlError ? (ERROR_MESSAGES[urlError] ?? "Something went wrong.") : null;
+  const submitLabel = (idle: string, busy: string) => (pending ? busy : idle);
+
   return (
-    <div className="space-y-4">
-      {error ? (
-        <p
-          role="alert"
-          className="rounded-xl border border-destructive/30 bg-destructive/5 px-3.5 py-2.5 text-sm text-destructive"
-        >
-          {ERROR_MESSAGES[error] ?? "Something went wrong."}
+    <div className="space-y-5">
+      <PortalFormError message={error ?? urlMessage} />
+      {notice ? (
+        <p role="status" className="rounded-xl border bg-muted/40 px-3.5 py-2.5 text-sm text-foreground">
+          {notice}
         </p>
       ) : null}
 
-      {(hasGoogle || hasGitHub || hasLinkedIn) && (
-        <div className="space-y-2.5">
-          {hasGoogle && (
-            <a
-              href={oauthHref("google")}
-              className={cn(
-                "flex w-full items-center justify-center gap-3 rounded-xl border border-border",
-                "bg-card px-4 py-2.5 text-sm font-medium text-foreground",
-                "transition-all duration-150 hover:bg-muted hover:border-border active:scale-[0.98] shadow-sm",
-              )}
-            >
-              {/* eslint-disable-next-line @next/next/no-img-element -- static CDN icon */}
-              <img
-                src="https://cdn.jsdelivr.net/gh/glincker/thesvg@main/public/icons/google/default.svg"
-                alt="Google"
-                className="size-4 shrink-0"
-              />
-              Continue with Google
-            </a>
-          )}
-          {hasGitHub && (
-            <a
-              href={oauthHref("github")}
-              className={cn(
-                "flex w-full items-center justify-center gap-3 rounded-xl border border-border",
-                "bg-foreground px-4 py-2.5 text-sm font-medium text-background",
-                "transition-all duration-150 hover:bg-foreground/90 active:scale-[0.98] shadow-sm",
-              )}
-            >
-              {/* eslint-disable-next-line @next/next/no-img-element -- static CDN icon */}
-              <img
-                src="https://cdn.jsdelivr.net/gh/glincker/thesvg@main/public/icons/github/light.svg"
-                alt="GitHub"
-                className="size-4 shrink-0"
-              />
-              Continue with GitHub
-            </a>
-          )}
-          {hasLinkedIn && (
-            <a
-              href={oauthHref("linkedin")}
-              className={cn(
-                "flex w-full items-center justify-center gap-3 rounded-xl border border-border",
-                "bg-[#0A66C2] px-4 py-2.5 text-sm font-medium text-white",
-                "transition-all duration-150 hover:bg-[#0A66C2]/90 active:scale-[0.98] shadow-sm",
-              )}
-            >
-              <svg className="size-4 shrink-0" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M19 3a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2zm-.5 15.5v-5.3a3.26 3.26 0 0 0-3.26-3.26c-.85 0-1.84.52-2.32 1.3v-1.11h-2.79v8.37h2.79v-4.93c0-.77.62-1.4 1.39-1.4a1.4 1.4 0 0 1 1.4 1.4v4.93zM6.88 8.56a1.68 1.68 0 0 0 1.68-1.68c0-.93-.75-1.69-1.68-1.69a1.69 1.69 0 0 0-1.69 1.69c0 .93.76 1.68 1.69 1.68m1.39 9.94v-8.37H5.5v8.37z" />
-              </svg>
-              Continue with LinkedIn
-            </a>
-          )}
-        </div>
-      )}
+      {view === "signin" ? (
+        <>
+          {anyOAuth ? (
+            <div className="space-y-2.5">
+              {methods.google ? (
+                <a href={oauthHref("google")} className={portalSecondaryButtonClass}>
+                  Continue with Google
+                </a>
+              ) : null}
+              {methods.github ? (
+                <a href={oauthHref("github")} className={portalSecondaryButtonClass}>
+                  Continue with GitHub
+                </a>
+              ) : null}
+              {methods.linkedin ? (
+                <a href={oauthHref("linkedin")} className={portalSecondaryButtonClass}>
+                  Continue with LinkedIn
+                </a>
+              ) : null}
+            </div>
+          ) : null}
 
-      {(hasGoogle || hasGitHub || hasLinkedIn) && (
-        <div className="flex items-center gap-3">
-          <div className="h-px flex-1 bg-border" />
-          <span className="text-xs font-medium text-muted-foreground">or</span>
-          <div className="h-px flex-1 bg-border" />
-        </div>
-      )}
+          {methods.passkey ? (
+            <button type="button" onClick={onPasskey} disabled={pending} className={portalSecondaryButtonClass}>
+              Sign in with a passkey
+            </button>
+          ) : null}
 
-      <form
-          action={sendPortalMagicLinkFormAction}
-        onSubmit={submitMagicLink}
-        className="space-y-3"
-      >
-        <input
-          type="email"
-          name="email"
-          placeholder="you@example.com"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          required
-          autoComplete="email"
-          className={cn(
-            "h-11 w-full rounded-xl border border-border",
-            "bg-card px-3.5 text-base sm:text-sm text-foreground",
-            "placeholder:text-muted-foreground",
-            "outline-none focus:ring-2 focus:ring-ring focus:border-transparent",
-            "transition-shadow",
-          )}
-        />
-        <button
-          type="submit"
-          disabled={isPending}
-          className={cn(
-            "h-11 w-full rounded-xl bg-foreground text-sm font-semibold text-background",
-            "transition-all duration-150 hover:bg-foreground/90 active:scale-[0.98]",
-            "disabled:opacity-40 disabled:cursor-not-allowed disabled:active:scale-100 shadow-sm",
-          )}
-        >
-          {isPending ? "Sending…" : "Continue with email"}
-        </button>
-      </form>
+          {methods.password ? (
+            <form onSubmit={onSignIn} className="space-y-3" aria-busy={pending}>
+              <Divider show={anyOAuth || methods.passkey} />
+              <PortalField label="Email">
+                {(p) => (
+                  <input {...p} name="email" type="email" required autoComplete="username" placeholder="you@example.com" className={portalInputClass} />
+                )}
+              </PortalField>
+              <PortalField label="Password">
+                {(p) => (
+                  <input {...p} name="password" type="password" required autoComplete="current-password" className={portalInputClass} />
+                )}
+              </PortalField>
+              <button type="submit" disabled={pending} className={portalPrimaryButtonClass}>
+                {submitLabel("Sign in", "Signing in…")}
+              </button>
+              <div className="flex justify-between">
+                <button type="button" className={portalLinkButtonClass} onClick={() => show("register")}>
+                  Create an account
+                </button>
+                <button type="button" className={portalLinkButtonClass} onClick={() => show(methods.emailReset ? "forgot" : "recover")}>
+                  Forgot password?
+                </button>
+              </div>
+            </form>
+          ) : null}
 
-      <p className="text-center text-xs text-muted-foreground">
-        We&apos;ll send a magic link. No password needed.
-      </p>
+          {methods.magicLink ? (
+            <form onSubmit={onMagic} className="space-y-3" aria-busy={pending}>
+              <Divider show={methods.password || anyOAuth || methods.passkey} label="or get a sign-in link" />
+              <PortalField label="Email">
+                {(p) => (
+                  <input {...p} name="email" type="email" required autoComplete="email" placeholder="you@example.com" className={portalInputClass} />
+                )}
+              </PortalField>
+              <button type="submit" disabled={pending} className={methods.password ? portalSecondaryButtonClass : portalPrimaryButtonClass}>
+                {submitLabel("Email me a sign-in link", "Sending…")}
+              </button>
+            </form>
+          ) : null}
+
+          {methods.accessCode ? (
+            <p className="text-center">
+              <button type="button" className={portalLinkButtonClass} onClick={() => show("access")}>
+                I have an access code
+              </button>
+            </p>
+          ) : null}
+        </>
+      ) : null}
+
+      {view === "register" ? (
+        <form onSubmit={onRegister} className="space-y-3" aria-busy={pending}>
+          <h3 className="text-base font-semibold text-foreground">Create your account</h3>
+          <div className="grid grid-cols-2 gap-3">
+            <PortalField label="First name">
+              {(p) => <input {...p} name="firstName" required autoComplete="given-name" className={portalInputClass} />}
+            </PortalField>
+            <PortalField label="Last name">
+              {(p) => <input {...p} name="lastName" autoComplete="family-name" className={portalInputClass} />}
+            </PortalField>
+          </div>
+          <PortalField label="Email">
+            {(p) => <input {...p} name="email" type="email" required autoComplete="username" className={portalInputClass} />}
+          </PortalField>
+          <PortalField label="Password" hint="At least 10 characters.">
+            {(p) => <input {...p} name="password" type="password" required minLength={10} autoComplete="new-password" className={portalInputClass} />}
+          </PortalField>
+          <PortalField label="Confirm password">
+            {(p) => <input {...p} name="confirm" type="password" required minLength={10} autoComplete="new-password" className={portalInputClass} />}
+          </PortalField>
+          <button type="submit" disabled={pending} className={portalPrimaryButtonClass}>
+            {submitLabel("Create account", "Creating…")}
+          </button>
+          <BackLink onClick={() => show("signin")} />
+        </form>
+      ) : null}
+
+      {view === "recover" ? (
+        <form onSubmit={onRecover} className="space-y-3" aria-busy={pending}>
+          <h3 className="text-base font-semibold text-foreground">Reset with a recovery code</h3>
+          <p className="text-sm text-muted-foreground">
+            Use one of the codes you saved when you created your account. No
+            code? Ask the company for a password reset link.
+          </p>
+          <PortalField label="Email">
+            {(p) => <input {...p} name="email" type="email" required autoComplete="username" className={portalInputClass} />}
+          </PortalField>
+          <PortalField label="Recovery code">
+            {(p) => <input {...p} name="recoveryCode" required autoComplete="off" placeholder="XXXX-XXXX-XXXX-XXXX" className={cn(portalInputClass, "font-mono")} />}
+          </PortalField>
+          <PortalField label="New password" hint="At least 10 characters.">
+            {(p) => <input {...p} name="newPassword" type="password" required minLength={10} autoComplete="new-password" className={portalInputClass} />}
+          </PortalField>
+          <button type="submit" disabled={pending} className={portalPrimaryButtonClass}>
+            {submitLabel("Set new password", "Saving…")}
+          </button>
+          <BackLink onClick={() => show("signin")} />
+        </form>
+      ) : null}
+
+      {view === "forgot" ? (
+        <form onSubmit={onForgot} className="space-y-3" aria-busy={pending}>
+          <h3 className="text-base font-semibold text-foreground">Reset your password</h3>
+          <PortalField label="Email">
+            {(p) => <input {...p} name="email" type="email" required autoComplete="username" className={portalInputClass} />}
+          </PortalField>
+          <button type="submit" disabled={pending} className={portalPrimaryButtonClass}>
+            {submitLabel("Email me a reset link", "Sending…")}
+          </button>
+          <p className="text-center">
+            <button type="button" className={portalLinkButtonClass} onClick={() => show("recover")}>
+              Use a recovery code instead
+            </button>
+          </p>
+          <BackLink onClick={() => show("signin")} />
+        </form>
+      ) : null}
+
+      {view === "access" ? (
+        <form onSubmit={onAccess} className="space-y-3" aria-busy={pending}>
+          <h3 className="text-base font-semibold text-foreground">Enter your access code</h3>
+          <p className="text-sm text-muted-foreground">
+            Paste the code or link the company gave you.
+          </p>
+          <PortalField label="Access code">
+            {(p) => <input {...p} name="code" required autoComplete="off" spellCheck={false} className={cn(portalInputClass, "font-mono")} />}
+          </PortalField>
+          <button type="submit" disabled={pending} className={portalPrimaryButtonClass}>
+            {submitLabel("Continue", "Checking…")}
+          </button>
+          <BackLink onClick={() => show("signin")} />
+        </form>
+      ) : null}
     </div>
+  );
+}
+
+/** Accepts either the bare code or the full /portal/access?code=... link. */
+export function extractCode(input: string): string {
+  const trimmed = input.trim();
+  try {
+    const url = new URL(trimmed);
+    return url.searchParams.get("code") ?? trimmed;
+  } catch {
+    return trimmed;
+  }
+}
+
+function Divider({ show, label = "or" }: { show: boolean; label?: string }) {
+  if (!show) return null;
+  return (
+    <div className="flex items-center gap-3" aria-hidden="true">
+      <div className="h-px flex-1 bg-border" />
+      <span className="text-xs font-medium text-muted-foreground">{label}</span>
+      <div className="h-px flex-1 bg-border" />
+    </div>
+  );
+}
+
+function BackLink({ onClick }: { onClick: () => void }) {
+  return (
+    <p className="text-center">
+      <button type="button" className={portalLinkButtonClass} onClick={onClick}>
+        Back to sign in
+      </button>
+    </p>
   );
 }

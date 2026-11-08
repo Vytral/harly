@@ -1,15 +1,15 @@
-import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { type NextRequest } from "next/server";
 import type { Route } from "next";
 
 import {
-  PORTAL_SESSION_COOKIE,
   consumeMagicLinkToken,
-  createPortalSession,
   findOrCreateCandidateByEmail,
   isPortalEnabled,
 } from "@/lib/portal-auth";
+import { auditPortalEvent } from "@/lib/portal-credentials";
+import { establishPortalSession } from "@/lib/portal-session";
+import { getPortalAuthMethods } from "@/lib/portal-auth-methods";
 
 export const runtime = "nodejs";
 
@@ -27,6 +27,10 @@ export async function GET(request: NextRequest) {
     redirect("/portal/login?error=no_workspace" as Route);
   }
 
+  if (!(await getPortalAuthMethods(workspaceId)).magicLink) {
+    redirect("/portal/login?error=method_disabled" as Route);
+  }
+
   let candidateId: string;
   try {
     candidateId = await findOrCreateCandidateByEmail(
@@ -38,15 +42,13 @@ export async function GET(request: NextRequest) {
   }
 
   const ua = request.headers.get("user-agent") ?? undefined;
-  const raw = await createPortalSession(candidateId, workspaceId, ua);
-
-  const cookieStore = await cookies();
-  cookieStore.set(PORTAL_SESSION_COOKIE, raw, {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
-    sameSite: "lax",
-    path: "/",
-    maxAge: 60 * 60 * 24 * 30,
+  await establishPortalSession(candidateId, workspaceId, ua);
+  await auditPortalEvent({
+    workspaceId,
+    candidateId,
+    email: result!.email,
+    action: "portal.login",
+    metadata: { method: "magic_link" },
   });
 
   redirect("/portal/dashboard" as Route);

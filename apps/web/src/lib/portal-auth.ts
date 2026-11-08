@@ -2,7 +2,7 @@ import "server-only";
 
 import { createHash, randomBytes } from "node:crypto";
 
-import { and, eq, gt, isNull, lt } from "drizzle-orm";
+import { and, eq, gt, isNull, lt, ne } from "drizzle-orm";
 
 import {
   candidatePortalMagicLinks,
@@ -265,6 +265,23 @@ export async function deletePortalSession(rawToken: string): Promise<void> {
   await db
     .delete(candidatePortalSessions)
     .where(eq(candidatePortalSessions.tokenHash, hashToken(rawToken)));
+}
+
+/** Signs a candidate out everywhere except (optionally) the session being kept. */
+export async function revokeOtherPortalSessions(
+  candidateId: string,
+  keepRawToken?: string,
+): Promise<void> {
+  await db
+    .delete(candidatePortalSessions)
+    .where(
+      keepRawToken
+        ? and(
+            eq(candidatePortalSessions.candidateId, candidateId),
+            ne(candidatePortalSessions.tokenHash, hashToken(keepRawToken)),
+          )
+        : eq(candidatePortalSessions.candidateId, candidateId),
+    );
 }
 
 export async function findOrCreateCandidateByEmail(

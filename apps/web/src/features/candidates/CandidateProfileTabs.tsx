@@ -27,6 +27,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ActivityTimeline } from "./candidate-profile/ActivityTimeline";
 import { ConversationThread } from "./candidate-profile/ConversationThread";
 import { InterviewCard } from "./candidate-profile/InterviewCard";
+import { CandidatePortalAccessCard } from "@/features/portal/CandidatePortalAccessCard";
 import { PrivacyRequestCard } from "./candidate-profile/PrivacyRequestCard";
 import { ScorecardList } from "./candidate-profile/ScorecardList";
 import { EmptySection, TabCount } from "./candidate-profile/shared";
@@ -76,6 +77,7 @@ export function CandidateProfileTabs({
   aiEvaluations,
   aiConfigured,
   offers,
+  offerAccess,
   offerSignatureChannel,
   emailTemplates = [],
   emailTemplateValues = {},
@@ -86,6 +88,9 @@ export function CandidateProfileTabs({
   privacyRequests = [],
   canFulfilErasure = false,
 }: CandidateProfileTabsProps) {
+  const showOffers = offerAccess
+    ? offerAccess.canManage || offerAccess.canDecide
+    : true;
   const [tab, setTab] = useState("profile");
   const [generateOpen, setGenerateOpen] = useState(false);
   const conversations = groupIntoConversations(messages);
@@ -122,10 +127,12 @@ export function CandidateProfileTabs({
           Evaluation
           <TabCount value={scorecards.length} />
         </TabsTrigger>
-        <TabsTrigger value="offers">
-          Offers
-          <TabCount value={offers.length} />
-        </TabsTrigger>
+        {showOffers ? (
+          <TabsTrigger value="offers">
+            Offers
+            <TabCount value={offers.length} />
+          </TabsTrigger>
+        ) : null}
         <TabsTrigger value="activity">
           Activity
           <TabCount value={activity.length + notes.length} />
@@ -312,14 +319,17 @@ export function CandidateProfileTabs({
       </TabsContent>
 
       {/* ── Offers ── */}
+      {showOffers ? (
       <TabsContent value="offers" className="mt-4">
         <OffersPanel
           offers={offers}
+          access={offerAccess}
           applications={jobOptions}
           documents={relatedDocuments}
           offerSignatureChannel={offerSignatureChannel}
         />
       </TabsContent>
+      ) : null}
 
       {/* ── Activity , notes and timeline ── */}
       <TabsContent value="activity" className="mt-4 space-y-4">
@@ -335,6 +345,8 @@ export function CandidateProfileTabs({
             members={members}
           />
         </div>
+
+        <CandidatePortalAccessCard candidateId={candidateId} />
 
         {activity.length > 0 ? (
           <div>

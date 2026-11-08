@@ -24,6 +24,10 @@ const ROLE_LABELS: Record<string, string> = {
   admin: "Admin",
   hiring_manager: "Hiring Manager",
   recruiter: "Recruiter",
+  coordinator: "Coordinator",
+  sourcer: "Sourcer",
+  interviewer: "Interviewer",
+  viewer: "Viewer",
 };
 
 export function WorkspaceInvitation({

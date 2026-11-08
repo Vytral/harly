@@ -36,6 +36,7 @@ import {
   resolvePortalSession,
 } from "@/lib/portal-auth";
 import { getWorkspaceEmailSender } from "@/lib/email";
+import { getPortalAuthMethods } from "@/lib/portal-auth-methods";
 import { createLogger } from "@/lib/logger";
 import { normalizeJobApplicationConfig } from "@/features/jobs/config";
 import { validatePortalApplication } from "@/features/portal/application-validation";
@@ -86,6 +87,12 @@ export async function sendPortalMagicLinkAction(
     return { ok: false, error: "This candidate portal is unavailable." };
   }
   const workspaceId = workspace.id;
+  // The server decides: a magic link is only sent when the recruiter enabled it
+  // and outgoing email actually exists.
+  const methods = await getPortalAuthMethods(workspaceId);
+  if (!methods.magicLink) {
+    return { ok: false, error: "Email sign-in links aren't available for this portal." };
+  }
 
   const requestHeaders = await headers();
   const ip = clientIp(

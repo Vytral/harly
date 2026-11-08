@@ -8,11 +8,20 @@ import { PORTAL_SESSION_COOKIE, resolvePortalSession } from "@/lib/portal-auth";
 import { PortalShell } from "@/features/portal/PortalShellServer";
 import { PortalProfileForm } from "@/features/portal/PortalProfileForm";
 import { PortalAvatarEdit } from "@/features/portal/PortalAvatarEdit";
+import { PortalSecurityCard } from "@/features/portal/PortalSecurityCard";
+import { getPortalAuthMethods } from "@/lib/portal-auth-methods";
+import { countRecoveryCodes, hasCandidatePassword } from "@/lib/portal-credentials";
+import { listCandidatePasskeys } from "@/lib/portal-passkey";
 import { PortalPrivacyControls } from "@/features/portal/PortalPrivacyControls";
 
 export const dynamic = "force-dynamic";
 
-export default async function PortalProfilePage() {
+export default async function PortalProfilePage({
+  searchParams,
+}: {
+  searchParams: Promise<{ setup?: string }>;
+}) {
+  const { setup } = await searchParams;
   const cookieStore = await cookies();
   const token = cookieStore.get(PORTAL_SESSION_COOKIE)?.value;
   if (!token) redirect("/portal/login" as Route);
@@ -50,6 +59,13 @@ export default async function PortalProfilePage() {
     .orderBy(desc(dsarRequests.createdAt))
     .limit(1);
 
+  const [methods, hasPassword, passkeys, recoveryRemaining] = await Promise.all([
+    getPortalAuthMethods(session.workspaceId),
+    hasCandidatePassword(session.candidateId),
+    listCandidatePasskeys(session.candidateId),
+    countRecoveryCodes(session.candidateId),
+  ]);
+
   const fullName = `${candidate.firstName ?? ""} ${candidate.lastName ?? ""}`.trim();
 
   return (
@@ -76,6 +92,19 @@ export default async function PortalProfilePage() {
           <h2 className="mb-5 text-sm font-semibold text-foreground">Edit profile</h2>
           <PortalProfileForm profile={candidate} />
         </div>
+        <PortalSecurityCard
+          hasPassword={hasPassword}
+          passwordEnabled={methods.password}
+          passkeyEnabled={methods.passkey}
+          passkeys={passkeys.map((k) => ({
+            id: k.id,
+            name: k.name,
+            createdAt: k.createdAt.toISOString(),
+            lastUsedAt: k.lastUsedAt?.toISOString() ?? null,
+          }))}
+          recoveryRemaining={recoveryRemaining}
+          highlightSetup={setup === "password"}
+        />
         <PortalPrivacyControls erasureRequest={erasureRequest ?? null} />
       </div>
     </PortalShell>
