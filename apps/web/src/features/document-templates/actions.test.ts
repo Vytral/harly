@@ -1,7 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-vi.mock("next-intl/server", async () => (await import("@/test-support/intl-server-mock")).intlServerMock);
-
 const mocks = vi.hoisted(() => ({
   audit: vi.fn(),
   requirePermission: vi.fn(),
@@ -41,6 +39,8 @@ import {
   createWorkflowDocumentTemplate,
   updateWorkflowDocumentTemplate,
 } from "./actions";
+
+vi.mock("next-intl/server", async () => (await import("@/test-support/intl-server-mock")).intlServerMock);
 
 const templateId = "11111111-1111-4111-8111-111111111111";
 const base = {

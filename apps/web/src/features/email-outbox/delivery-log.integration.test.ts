@@ -79,7 +79,7 @@ describe.skipIf(!runPipelineIntegration)("delivery log", () => {
     expect(failed.rows.every((row) => row.status === "failed")).toBe(true);
     expect(failed.rows.find((row) => row.id === failedId)).toMatchObject({
       kindLabel: "Stage update",
-      summary: "Engineer — moved to Interview",
+      summary: "Engineer: moved to Interview",
       canRetry: true,
       canCancel: true,
     });

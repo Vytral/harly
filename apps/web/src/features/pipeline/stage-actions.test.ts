@@ -17,7 +17,6 @@ vi.mock("@/features/workspaces/permissions-server", () => ({
 }));
 
 vi.mock("next/cache", () => ({ revalidatePath: mocks.revalidatePath }));
-vi.mock("next-intl/server", async () => (await import("@/test-support/intl-server-mock")).intlServerMock);
 
 vi.mock("@/lib/logger", () => ({
   createLogger: () => ({ error: mocks.logError, info: vi.fn(), warn: vi.fn() }),
@@ -43,6 +42,8 @@ import {
   reorderJobStagesAction,
   updateJobStageAction,
 } from "./stage-actions";
+
+vi.mock("next-intl/server", async () => (await import("@/test-support/intl-server-mock")).intlServerMock);
 
 const WORKSPACE_ID = "workspace-1";
 const JOB_ID = "22222222-2222-4222-8222-222222222222";

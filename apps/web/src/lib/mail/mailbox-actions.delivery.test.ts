@@ -12,7 +12,6 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock("server-only", () => ({}));
-vi.mock("next-intl/server", async () => (await import("@/test-support/intl-server-mock")).intlServerMock);
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 vi.mock("@/features/mailbox/compose-shared", async () => {
   const { z } = await import("zod");
@@ -95,6 +94,8 @@ import {
   replyMailboxThreadAction,
   resolveUnknownMailDeliveryAction,
 } from "@/features/mailbox/actions";
+
+vi.mock("next-intl/server", async () => (await import("@/test-support/intl-server-mock")).intlServerMock);
 
 const THREAD_ID = "00000000-0000-4000-8000-000000000001";
 const THREAD = {

@@ -8,8 +8,6 @@ const m = vi.hoisted(() => ({
   createElement: vi.fn(),
   portalMagicLinkSubject: vi.fn(() => "localized-subject"),
 }));
-
-vi.mock("next-intl/server", async () => (await import("@/test-support/intl-server-mock")).intlServerMock);
 vi.mock("next/headers", () => ({
   cookies: async () => ({}),
   headers: async () => new Headers(),
@@ -63,6 +61,8 @@ vi.mock("@/server/webhooks/emit", () => ({}));
 vi.mock("@/features/offers/core", () => ({}));
 
 import { sendPortalMagicLinkAction } from "./actions";
+
+vi.mock("next-intl/server", async () => (await import("@/test-support/intl-server-mock")).intlServerMock);
 
 beforeEach(() => {
   vi.clearAllMocks();

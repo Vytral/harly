@@ -6,8 +6,6 @@ const mocks = vi.hoisted(() => ({
   previewWorkflowPayload: vi.fn(),
   requirePermission: vi.fn(),
 }));
-
-vi.mock("next-intl/server", async () => (await import("@/test-support/intl-server-mock")).intlServerMock);
 vi.mock("./data", () => ({ createWorkflow: mocks.createWorkflow }));
 vi.mock("./builder-data", () => ({
   dryRunWorkflow: mocks.dryRunWorkflow,
@@ -30,6 +28,8 @@ import {
   dryRunWorkflowAction,
   previewWorkflowPayloadAction,
 } from "./actions";
+
+vi.mock("next-intl/server", async () => (await import("@/test-support/intl-server-mock")).intlServerMock);
 
 describe("automation server actions in public demo", () => {
   afterEach(() => {

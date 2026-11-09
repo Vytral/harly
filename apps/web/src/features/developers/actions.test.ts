@@ -5,8 +5,6 @@ const mocks = vi.hoisted(() => ({
   getRolePermissions: vi.fn(),
   createApiKey: vi.fn(),
 }));
-
-vi.mock("next-intl/server", async () => (await import("@/test-support/intl-server-mock")).intlServerMock);
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 vi.mock("@harly/db", () => ({ db: {}, webhookDeliveries: {}, webhookDeliveryAttempts: {} }));
 vi.mock("@/server/api/ratelimit", () => ({ enforceRateLimit: vi.fn() }));
@@ -33,6 +31,8 @@ vi.mock("@/features/developers/data", () => ({
 }));
 
 import { createApiKeyAction } from "./actions";
+
+vi.mock("next-intl/server", async () => (await import("@/test-support/intl-server-mock")).intlServerMock);
 
 describe("createApiKeyAction scope ceiling", () => {
   beforeEach(() => {

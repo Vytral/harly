@@ -12,8 +12,6 @@ const mocks = vi.hoisted(() => ({
   safeFetchHttp: vi.fn(),
   revalidatePath: vi.fn(),
 }));
-
-vi.mock("next-intl/server", async () => (await import("@/test-support/intl-server-mock")).intlServerMock);
 vi.mock("next/cache", () => ({ revalidatePath: mocks.revalidatePath }));
 vi.mock("drizzle-orm", () => ({ eq: vi.fn(() => "where") }));
 vi.mock("@/features/integrations/health/repository", () => ({
@@ -45,6 +43,8 @@ import {
   saveEsignSettingsAction,
   testEsignAction,
 } from "./esign-settings-actions";
+
+vi.mock("next-intl/server", async () => (await import("@/test-support/intl-server-mock")).intlServerMock);
 
 describe("DocuSeal outbound security", () => {
   beforeEach(() => {

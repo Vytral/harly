@@ -54,10 +54,11 @@ vi.mock("@/lib/email", () => ({
 vi.mock("@/server/webhooks/emit", () => ({
   emitWebhookEvent: vi.fn(),
 }));
-vi.mock("next-intl/server", async () => (await import("@/test-support/intl-server-mock")).intlServerMock);
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 
 import { moveApplicationInPipeline } from "./actions";
+
+vi.mock("next-intl/server", async () => (await import("@/test-support/intl-server-mock")).intlServerMock);
 
 const WORKSPACE_ID = "ws-1";
 

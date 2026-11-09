@@ -10,8 +10,6 @@ const mocks = vi.hoisted(() => ({
   verifyCalConnection: vi.fn(),
   dbInsert: vi.fn(),
 }));
-
-vi.mock("next-intl/server", async () => (await import("@/test-support/intl-server-mock")).intlServerMock);
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 vi.mock("drizzle-orm", () => ({ eq: vi.fn(() => "where") }));
 vi.mock("@harly/db", () => ({
@@ -41,6 +39,8 @@ import {
   saveCalSettingsAction,
   testCalConnectionAction,
 } from "./cal-settings-actions";
+
+vi.mock("next-intl/server", async () => (await import("@/test-support/intl-server-mock")).intlServerMock);
 
 describe("Cal outbound security", () => {
   beforeEach(() => {

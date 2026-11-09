@@ -89,7 +89,6 @@ vi.mock("./deletion-jobs", () => ({
   startCandidateDeletionJob: vi.fn(),
 }));
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
-vi.mock("next-intl/server", async () => (await import("@/test-support/intl-server-mock")).intlServerMock);
 
 import {
   bulkTrashCandidatesAction,
@@ -100,6 +99,8 @@ import {
   refineScorecardTextAction,
   suggestScorecardAttributesAction,
 } from "./actions";
+
+vi.mock("next-intl/server", async () => (await import("@/test-support/intl-server-mock")).intlServerMock);
 
 describe("candidate AI authorization", () => {
   beforeEach(() => {

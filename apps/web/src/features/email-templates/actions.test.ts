@@ -12,8 +12,6 @@ const mocks = vi.hoisted(() => {
   };
 });
 
-vi.mock("next-intl/server", async () => (await import("@/test-support/intl-server-mock")).intlServerMock);
-
 vi.mock("@harly/db", () => {
   const query = () => {
     const result: Record<string, unknown> = {};
@@ -73,6 +71,8 @@ import {
   setActiveEmailTemplate,
   updateEmailTemplate,
 } from "./actions";
+
+vi.mock("next-intl/server", async () => (await import("@/test-support/intl-server-mock")).intlServerMock);
 
 const templateId = "11111111-1111-4111-8111-111111111111";
 const base = {

@@ -1,7 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-vi.mock("next-intl/server", async () => (await import("@/test-support/intl-server-mock")).intlServerMock);
-
 const mocks = vi.hoisted(() => ({
   resolveSearchActor: vi.fn(),
   searchWorkspaceForActor: vi.fn(),
@@ -24,6 +22,8 @@ import {
   visibleRecentsAction,
 } from "./actions";
 import { emptyWorkspaceSearchResults } from "./results";
+
+vi.mock("next-intl/server", async () => (await import("@/test-support/intl-server-mock")).intlServerMock);
 
 const scopedActor = {
   workspaceId: "ws-1",

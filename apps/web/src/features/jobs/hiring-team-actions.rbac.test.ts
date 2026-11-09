@@ -1,8 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const requireJobPermission = vi.hoisted(() => vi.fn());
-
-vi.mock("next-intl/server", async () => (await import("@/test-support/intl-server-mock")).intlServerMock);
 vi.mock("@harly/db", () => ({
   db: {},
   jobHiringTeam: {},
@@ -19,6 +17,8 @@ import {
   removeHiringTeamMember,
   updateHiringTeamRole,
 } from "./hiring-team-actions";
+
+vi.mock("next-intl/server", async () => (await import("@/test-support/intl-server-mock")).intlServerMock);
 
 const JOB_ID = "job-1";
 

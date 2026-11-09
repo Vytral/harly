@@ -11650,7 +11650,7 @@
         "invalidApplicationStatus": "That status change isn't valid.",
         "applicationsNotFound": "One or more applications couldn't be found.",
         "invalidRejectionDetails": "The rejection details aren't valid.",
-        "chooseRejectionReason": "Choose a rejection reason.",
+        "chooseRejectionReason": "Choose a valid rejection reason.",
         "emailTemplateUnavailable": "That email template is no longer available.",
         "stageNotFoundOrArchived": "That stage couldn't be found, or it has been archived.",
         "unableToUpdateStatus": "Couldn't update the status. Try again.",

@@ -1,7 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-vi.mock("next-intl/server", async () => (await import("@/test-support/intl-server-mock")).intlServerMock);
-
 const mocks = vi.hoisted(() => ({
   select: vi.fn(),
   update: vi.fn(),
@@ -67,6 +65,8 @@ vi.mock("@/server/events/emit", () => ({
 vi.mock("@/server/webhooks/emit", () => ({ emitWebhookEvent: mocks.emitWebhookEvent }));
 
 import { createNativeSigningLink, rotateNativePortalSigningLink } from "./remote";
+
+vi.mock("next-intl/server", async () => (await import("@/test-support/intl-server-mock")).intlServerMock);
 
 function query(value: unknown) {
   const builder = new Proxy(function () {}, {

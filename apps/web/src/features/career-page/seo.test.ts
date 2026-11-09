@@ -1,9 +1,9 @@
 import { describe, expect, it, vi } from "vitest";
 
-vi.mock("next-intl/server", async () => (await import("@/test-support/intl-server-mock")).intlServerMock);
-
 import { normalizeCareerPageConfig } from "./config";
 import { publicBoardMetadata, serializeJsonLd } from "./seo";
+
+vi.mock("next-intl/server", async () => (await import("@/test-support/intl-server-mock")).intlServerMock);
 
 describe("career page SEO", () => {
   it("escapes script terminators in JSON-LD", () => {

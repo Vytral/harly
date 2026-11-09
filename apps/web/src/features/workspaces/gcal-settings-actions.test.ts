@@ -4,8 +4,6 @@ const updateWhere = vi.hoisted(() => vi.fn().mockResolvedValue([]));
 const updateSet = vi.hoisted(() => vi.fn(() => ({ where: updateWhere })));
 const update = vi.hoisted(() => vi.fn(() => ({ set: updateSet })));
 const listCalendars = vi.hoisted(() => vi.fn());
-
-vi.mock("next-intl/server", async () => (await import("@/test-support/intl-server-mock")).intlServerMock);
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 vi.mock("drizzle-orm", () => ({ eq: vi.fn(() => "where") }));
 vi.mock("@harly/db", () => ({
@@ -40,6 +38,8 @@ vi.mock("@/lib/logger", () => ({
 }));
 
 import { testGCalConnectionAction } from "./gcal-settings-actions";
+
+vi.mock("next-intl/server", async () => (await import("@/test-support/intl-server-mock")).intlServerMock);
 
 describe("Google Calendar settings connection errors", () => {
   beforeEach(() => {

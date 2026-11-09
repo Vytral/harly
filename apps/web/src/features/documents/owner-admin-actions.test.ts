@@ -1,7 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-vi.mock("next-intl/server", async () => (await import("@/test-support/intl-server-mock")).intlServerMock);
-
 const mocks = vi.hoisted(() => ({
   getWorkspaceContext: vi.fn(),
 }));
@@ -33,6 +31,8 @@ vi.mock("@/server/events/emit", () => ({ persistDomainEvent: vi.fn(), publishPer
 vi.mock("@/lib/logger", () => ({ createLogger: () => ({ error: vi.fn(), info: vi.fn(), warn: vi.fn() }) }));
 
 import { bulkDeleteDocuments, deleteDocument } from "./actions";
+
+vi.mock("next-intl/server", async () => (await import("@/test-support/intl-server-mock")).intlServerMock);
 
 const DOCUMENT_ID = "00000000-0000-4000-8000-000000000001";
 
