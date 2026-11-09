@@ -1,5 +1,6 @@
 import Link from "next/link";
 import type { Route } from "next";
+import { useTranslations } from "next-intl";
 
 export function DocumentsWorkspaceTabs({
   active,
@@ -10,9 +11,10 @@ export function DocumentsWorkspaceTabs({
   canReadDocuments: boolean;
   canManageTemplates: boolean;
 }) {
+  const t = useTranslations("features.documents.documentsWorkspaceTabs");
   return (
     <nav
-      aria-label="Documents workspace"
+      aria-label={t("label")}
       className="flex w-fit gap-1 rounded-full bg-soft-kraft p-1"
     >
       {canReadDocuments ? (
@@ -25,7 +27,7 @@ export function DocumentsWorkspaceTabs({
               : "rounded-full px-3.5 py-1.5 text-sm text-soft-ink transition-colors hover:text-near-ink"
           }
         >
-          Files
+          {t("files")}
         </Link>
       ) : null}
       {canManageTemplates ? (
@@ -38,7 +40,7 @@ export function DocumentsWorkspaceTabs({
               : "rounded-full px-3.5 py-1.5 text-sm text-soft-ink transition-colors hover:text-near-ink"
           }
         >
-          Workflow templates
+          {t("workflowTemplates")}
         </Link>
       ) : null}
     </nav>

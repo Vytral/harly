@@ -1,3 +1,5 @@
+import { getTranslations } from "next-intl/server";
+
 import { Card } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 
@@ -6,10 +8,11 @@ import { Skeleton } from "@/components/ui/skeleton";
  * (header with actions + provider stat strip), an "AI features" card of
  * switch rows, and the "Works with your provider" tile card.
  */
-export default function AiSettingsLoading() {
+export default async function AiSettingsLoading() {
+  const t = await getTranslations("pages.settingsAi.loading");
   return (
     <div aria-busy="true" className="space-y-5">
-      <span className="sr-only">Loading…</span>
+      <span className="sr-only">{t("label")}</span>
 
       <Card className="gap-0 overflow-hidden p-0">
         <div className="p-6">

@@ -296,6 +296,7 @@ export const getTodayInterviews = cache(async () => {
       scheduledAt: r.scheduledAt,
       type: r.type,
       label: r.title ?? interviewTypeLabel(r.type),
+      hasCustomTitle: r.title !== null,
       candidateId: r.candidateId,
       candidate: `${r.first} ${r.last}`,
       job: r.jobTitle,
@@ -392,27 +393,32 @@ export const getJobsAtRisk = cache(async () => {
         : Infinity;
 
       let reason: string | null = null;
+      let reasonCode: "noApplications" | "noApplicationsWeek" | "noHires" | "lowConversion" | null = null;
       let severity: "critical" | "danger" | "warning" = "danger";
       if (lastAppDays >= 7) {
         if (total === 0) {
           reason = "No applications yet";
+          reasonCode = "noApplications";
           severity = "critical";
         } else {
           reason = "No applications in 7 days";
+          reasonCode = "noApplicationsWeek";
           severity = "danger";
         }
       } else if (ageDays >= RISK_WINDOW_DAYS && hiresLast30 === 0) {
         reason = "No hires in 30+ days";
+        reasonCode = "noHires";
         severity = "danger";
       } else if (total >= 5 && hiresEver / total < 0.1) {
         reason = "Low conversion rate";
+        reasonCode = "lowConversion";
         severity = "warning";
       }
 
-      return reason ? { id: r.id, title: r.title, reason, severity } : null;
+      return reason && reasonCode ? { id: r.id, title: r.title, reason, reasonCode, severity } : null;
     })
     .filter(
-      (r): r is { id: string; title: string; reason: string; severity: "critical" | "danger" | "warning" } =>
+      (r): r is { id: string; title: string; reason: string; reasonCode: "noApplications" | "noApplicationsWeek" | "noHires" | "lowConversion"; severity: "critical" | "danger" | "warning" } =>
         r !== null,
     )
     .slice(0, 4);

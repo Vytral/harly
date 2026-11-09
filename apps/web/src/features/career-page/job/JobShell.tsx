@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import type { Route } from "next";
 import { ArrowLeft, Briefcase, Building2, Check, Link2, MapPin, Wallet } from "lucide-react";
+import { useLocale, useTranslations } from "next-intl";
 
 import { cn, copyText } from "@/lib/utils";
 import { formatEmploymentType, formatWorkplaceType } from "@/lib/format";
@@ -47,6 +48,9 @@ export function JobShell({
   portalEnabled?: boolean;
   children: React.ReactNode;
 }) {
+  const t = useTranslations("features.careerPage.jobShell");
+  const tMeta = useTranslations("labels.careerPage.jobMeta");
+  const locale = useLocale();
   const theme = careerTheme(config, workspace.primaryColor);
   const { accent, onAccent, accentText } = theme;
   const base = boardBase(boardRoot);
@@ -59,7 +63,7 @@ export function JobShell({
         : "max-w-4xl";
   const overviewHref = `${base}/jobs/${job.slug}` as Route;
   const applyHref = `${base}/apply/${job.slug}` as Route;
-  const meta = buildJobMeta(job);
+  const meta = buildJobMeta(job, locale, tMeta);
   // Honour hero.logoType here too, so the wordmark choice carries to job pages.
   const logo =
     config.hero.logoType === "fullLogo"
@@ -149,8 +153,8 @@ export function JobShell({
   }, [activeTab, job.slug]);
 
   const tabs = [
-    { tab: "overview", label: "Overview", href: overviewHref },
-    { tab: "application", label: "Application", href: applyHref },
+    { tab: "overview", label: t("tabsOverview"), href: overviewHref },
+    { tab: "application", label: t("tabsApplication"), href: applyHref },
   ] as const;
 
   return (
@@ -294,7 +298,7 @@ export function JobShell({
                 <dl className="pt-1">
                   <div className="border-t border-hairline py-3.5">
                     <dt className="text-xs font-medium uppercase tracking-wide text-soft-ink">
-                      Position
+                      {t("position")}
                     </dt>
                     <dd className="mt-1 text-sm font-medium leading-snug text-near-ink">
                       {job.title}
@@ -311,7 +315,7 @@ export function JobShell({
                   )}
                   style={{ backgroundColor: accent, color: onAccent }}
                 >
-                  Apply for this role
+                  {t("applyForRole")}
                 </Link>
               ) : null}
             </aside>
@@ -325,15 +329,15 @@ export function JobShell({
                 ref={navRef}
                 className="relative flex gap-8 border-b border-hairline text-sm font-medium"
               >
-                {tabs.map((t) => {
-                  const on = activeTab === t.tab;
+                {tabs.map((tab) => {
+                  const on = activeTab === tab.tab;
                   return (
                     <Link
-                      key={t.tab}
+                      key={tab.tab}
                       ref={(el) => {
-                        tabRefs.current[t.tab] = el;
+                        tabRefs.current[tab.tab] = el;
                       }}
-                      href={t.href}
+                      href={tab.href}
                       className={cn(
                         "pb-3 transition-colors",
                         on
@@ -343,7 +347,7 @@ export function JobShell({
                       aria-current={on ? "page" : undefined}
                       style={on ? { color: accentText } : undefined}
                     >
-                      {t.label}
+                      {tab.label}
                     </Link>
                   );
                 })}
@@ -369,11 +373,11 @@ export function JobShell({
         {variant === "join" && (
           <div className={cn("mx-auto px-6 pt-6 text-xs text-soft-ink", widthClass)}>
             <Link href={(boardRoot || "/") as Route} className="hover:text-near-ink">
-              Home
+              {t("home")}
             </Link>
             <span className="mx-1.5">/</span>
             <Link href={(boardRoot || "/") as Route} className="hover:text-near-ink">
-              Jobs at {workspace.name}
+              {t("jobsAt", { name: workspace.name })}
             </Link>
             <span className="mx-1.5">/</span>
             <span>{job.title}</span>
@@ -422,8 +426,11 @@ function JoinJobContent({
   overviewHref: Route;
   children: React.ReactNode;
 }) {
+  const t = useTranslations("features.careerPage.jobShell");
+  const tMeta = useTranslations("labels.careerPage.jobMeta");
+  const locale = useLocale();
   const [copied, setCopied] = useState(false);
-  const comp = formatCompensation(job);
+  const comp = formatCompensation(job, locale, tMeta);
 
   async function copyLink() {
     try {
@@ -483,14 +490,14 @@ function JoinJobContent({
           {activeTab === "overview" ? (
             <>
               <p className="text-xs font-semibold uppercase tracking-wide text-soft-ink">
-                Interested?
+                {t("interested")}
               </p>
               <Link
                 href={applyHref}
                 className="mt-3 inline-flex h-10 w-full items-center justify-center rounded-full px-5 text-sm font-semibold transition-transform duration-150 active:scale-[0.98] motion-reduce:transition-none"
                 style={{ backgroundColor: accent, color: onAccent }}
               >
-                Apply now
+                {t("applyNow")}
               </Link>
             </>
           ) : (
@@ -499,12 +506,12 @@ function JoinJobContent({
               className="inline-flex items-center gap-1.5 text-sm font-medium text-soft-ink transition-colors hover:text-near-ink"
             >
               <ArrowLeft className="size-3.5" strokeWidth={1.8} />
-              Back to job
+              {t("backToJob")}
             </Link>
           )}
 
           <p className="mt-6 text-xs font-semibold uppercase tracking-wide text-soft-ink">
-            Share this job
+            {t("shareThisJob")}
           </p>
           <button
             type="button"
@@ -516,12 +523,12 @@ function JoinJobContent({
             {copied ? (
               <>
                 <Check className="size-3.5" strokeWidth={2} />
-                Copied
+                {t("copied")}
               </>
             ) : (
               <>
                 <Link2 className="size-3.5" strokeWidth={1.8} />
-                Copy link
+                {t("copyLink")}
               </>
             )}
           </button>

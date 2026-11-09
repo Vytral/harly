@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { randomUUID } from "node:crypto";
 
 import { eq, inArray } from "drizzle-orm";
+import { getTranslations } from "@/i18n/server";
 
 import { db, webhookDeliveries, webhookDeliveryAttempts } from "@harly/db";
 
@@ -48,6 +49,7 @@ export async function createApiKeyAction(input: {
   expiresInDays?: number | null;
 }): Promise<DevActionResult & { raw?: string }> {
   assertNotDemo();
+  const t = await getTranslations("server.developers.actions");
   try {
     const { organization, user, roleKey } = await requirePermission(
       "integrations:manage",
@@ -59,7 +61,7 @@ export async function createApiKeyAction(input: {
       const names = missing.map((item) => item.scope).join(", ");
       return {
         ok: false,
-        error: `Your role cannot grant these scopes: ${names}.`,
+        error: t("scopesNotGrantable", { names }),
       };
     }
     const expiresAt =
@@ -79,7 +81,7 @@ export async function createApiKeyAction(input: {
     return { ok: true, raw };
   } catch (error) {
     log.error(error, "developer action failed");
-    return { ok: false, error: errorMessage(error, "Could not create key.") };
+    return { ok: false, error: errorMessage(error, t("createKeyFailed")) };
   }
 }
 
@@ -87,13 +89,14 @@ export async function revokeApiKeyAction(
   keyId: string,
 ): Promise<DevActionResult> {
   assertNotDemo();
+  const t = await getTranslations("server.developers.actions");
   try {
     const { organization } = await requirePermission("integrations:manage");
     await revokeApiKey({ workspaceId: organization.id, keyId });
     revalidatePath(SETTINGS_PATH);
     return { ok: true };
   } catch (error) {
-    return { ok: false, error: errorMessage(error, "Could not revoke key.") };
+    return { ok: false, error: errorMessage(error, t("revokeKeyFailed")) };
   }
 }
 
@@ -103,6 +106,7 @@ export async function createWebhookAction(input: {
   description?: string;
 }): Promise<DevActionResult & { secret?: string }> {
   assertNotDemo();
+  const t = await getTranslations("server.developers.actions");
   try {
     const { organization, user } = await requirePermission(
       "integrations:manage",
@@ -119,7 +123,7 @@ export async function createWebhookAction(input: {
   } catch (error) {
     return {
       ok: false,
-      error: errorMessage(error, "Could not create webhook."),
+      error: errorMessage(error, t("createWebhookFailed")),
     };
   }
 }
@@ -132,6 +136,7 @@ export async function updateWebhookAction(input: {
   description?: string | null;
 }): Promise<DevActionResult> {
   assertNotDemo();
+  const t = await getTranslations("server.developers.actions");
   try {
     const { organization } = await requirePermission("integrations:manage");
     await updateWebhookEndpoint({
@@ -149,7 +154,7 @@ export async function updateWebhookAction(input: {
   } catch (error) {
     return {
       ok: false,
-      error: errorMessage(error, "Could not update webhook."),
+      error: errorMessage(error, t("updateWebhookFailed")),
     };
   }
 }
@@ -158,6 +163,7 @@ export async function deleteWebhookAction(
   id: string,
 ): Promise<DevActionResult> {
   assertNotDemo();
+  const t = await getTranslations("server.developers.actions");
   try {
     const { organization } = await requirePermission("integrations:manage");
     await deleteWebhookEndpoint({ workspaceId: organization.id, id });
@@ -166,7 +172,7 @@ export async function deleteWebhookAction(
   } catch (error) {
     return {
       ok: false,
-      error: errorMessage(error, "Could not delete webhook."),
+      error: errorMessage(error, t("deleteWebhookFailed")),
     };
   }
 }
@@ -175,6 +181,7 @@ export async function rotateWebhookSecretAction(
   id: string,
 ): Promise<DevActionResult & { secret?: string }> {
   assertNotDemo();
+  const t = await getTranslations("server.developers.actions");
   try {
     const { organization } = await requirePermission("integrations:manage");
     const { secret } = await rotateWebhookSecret({
@@ -186,7 +193,7 @@ export async function rotateWebhookSecretAction(
   } catch (error) {
     return {
       ok: false,
-      error: errorMessage(error, "Could not rotate secret."),
+      error: errorMessage(error, t("rotateSecretFailed")),
     };
   }
 }
@@ -200,6 +207,7 @@ export async function listWebhookDeliveriesAction(
     >;
   }
 > {
+  const t = await getTranslations("server.developers.actions");
   try {
     const { organization } = await requirePermission("integrations:manage");
     await getWebhookEndpoint({ workspaceId: organization.id, id: endpointId });
@@ -219,7 +227,7 @@ export async function listWebhookDeliveriesAction(
   } catch (error) {
     return {
       ok: false,
-      error: errorMessage(error, "Could not load deliveries."),
+      error: errorMessage(error, t("loadDeliveriesFailed")),
     };
   }
 }
@@ -229,6 +237,7 @@ export async function replayWebhookDeliveryAction(input: {
   deliveryId: string;
 }): Promise<DevActionResult> {
   assertNotDemo();
+  const t = await getTranslations("server.developers.actions");
   try {
     const { organization } = await requirePermission("integrations:manage");
     await replayWebhookDelivery({
@@ -241,7 +250,7 @@ export async function replayWebhookDeliveryAction(input: {
   } catch (error) {
     return {
       ok: false,
-      error: errorMessage(error, "Could not replay delivery."),
+      error: errorMessage(error, t("replayDeliveryFailed")),
     };
   }
 }
@@ -283,6 +292,7 @@ const TEST_LIMIT = { limit: 5, windowMs: 60_000 } as const;
 
 export async function testWebhookAction(id: string): Promise<WebhookTestResult> {
   assertNotDemo();
+  const t = await getTranslations("server.developers.actions");
   try {
     const { organization } = await requirePermission("integrations:manage");
     const endpoint = await getWebhookEndpoint({
@@ -292,7 +302,7 @@ export async function testWebhookAction(id: string): Promise<WebhookTestResult> 
     if (!endpoint.enabled) {
       return {
         ok: false,
-        error: "This endpoint is paused. Resume it to send a test event.",
+        error: t("endpointPaused"),
       };
     }
     await enforceRateLimit(`webhook-test:${organization.id}:${endpoint.id}`, TEST_LIMIT);
@@ -334,6 +344,6 @@ export async function testWebhookAction(id: string): Promise<WebhookTestResult> 
       detail: row?.lastError ?? null,
     };
   } catch (error) {
-    return { ok: false, error: errorMessage(error, "Could not send test event.") };
+    return { ok: false, error: errorMessage(error, t("sendTestFailed")) };
   }
 }

@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { and, eq } from "drizzle-orm";
+import { getTranslations } from "@/i18n/server";
 import { z } from "zod";
 
 import { logAuditEvent } from "@/lib/audit-log";
@@ -37,11 +38,15 @@ const roleScopeSchema = z.object({
   regions: z.array(z.string().trim().min(1).max(120)).max(100).default([]),
 });
 
-const roleSchema = z.object({
-  name: z.string().trim().min(2, "Name is too short.").max(40),
-  permissions: z.array(permissionEnum).max(PERMISSIONS.length),
-  scope: roleScopeSchema.optional(),
-});
+type Translate = (key: string, values?: Record<string, string | number>) => string;
+
+function buildRoleSchema(t: Translate) {
+  return z.object({
+    name: z.string().trim().min(2, t("nameTooShort")).max(40),
+    permissions: z.array(permissionEnum).max(PERMISSIONS.length),
+    scope: roleScopeSchema.optional(),
+  });
+}
 
 export async function createCustomRole(input: {
   name: string;
@@ -50,10 +55,11 @@ export async function createCustomRole(input: {
 }): Promise<RoleActionResult> {
   await assertNotDemoOutsideSandbox();
   const context = await requirePermission("roles:manage");
+  const t = await getTranslations("server.workspaces.rolesActions");
 
-  const parsed = roleSchema.safeParse(input);
+  const parsed = buildRoleSchema(t).safeParse(input);
   if (!parsed.success) {
-    return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid role." };
+    return { ok: false, error: parsed.error.issues[0]?.message ?? t("invalidRole") };
   }
 
   const privilegeError = await grantRolePolicyPrivilegeError(
@@ -67,10 +73,10 @@ export async function createCustomRole(input: {
 
   const key = slugify(parsed.data.name);
   if (!key) {
-    return { ok: false, error: "Enter a valid role name." };
+    return { ok: false, error: t("invalidRoleName") };
   }
   if (isBuiltinRole(key)) {
-    return { ok: false, error: "That name collides with a built-in role." };
+    return { ok: false, error: t("collidesWithBuiltin") };
   }
 
   try {
@@ -83,7 +89,7 @@ export async function createCustomRole(input: {
     });
   } catch (error) {
     log.error(error, "createCustomRole failed");
-    return { ok: false, error: "A role with that name already exists." };
+    return { ok: false, error: t("roleNameTaken") };
   }
 
   await logAuditEvent({
@@ -111,14 +117,15 @@ export async function updateCustomRole(input: {
 }): Promise<RoleActionResult> {
   await assertNotDemoOutsideSandbox();
   const context = await requirePermission("roles:manage");
+  const t = await getTranslations("server.workspaces.rolesActions");
 
   // Owner is the locked keyholder , never editable.
   if (input.key === "owner") {
-    return { ok: false, error: "The Owner role can't be edited." };
+    return { ok: false, error: t("ownerNotEditable") };
   }
-  const parsed = roleSchema.safeParse(input);
+  const parsed = buildRoleSchema(t).safeParse(input);
   if (!parsed.success) {
-    return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid role." };
+    return { ok: false, error: parsed.error.issues[0]?.message ?? t("invalidRole") };
   }
 
   const privilegeError = await grantRolePolicyPrivilegeError(
@@ -182,9 +189,10 @@ export async function deleteCustomRole(input: {
 }): Promise<RoleActionResult> {
   await assertNotDemoOutsideSandbox();
   const context = await requirePermission("roles:manage");
+  const t = await getTranslations("server.workspaces.rolesActions");
 
   if (isBuiltinRole(input.key)) {
-    return { ok: false, error: "Built-in roles can't be deleted." };
+    return { ok: false, error: t("builtinNotDeletable") };
   }
 
   const privilegeError = await manageMemberRolePrivilegeError(
@@ -194,7 +202,7 @@ export async function deleteCustomRole(input: {
   if (privilegeError) return { ok: false, error: privilegeError };
   const reassignmentError = await assignRolePrivilegeError(context, "recruiter");
   if (reassignmentError) {
-    return { ok: false, error: "Members cannot be moved to a role above your privileges." };
+    return { ok: false, error: t("membersAbovePrivileges") };
   }
 
   await db.transaction(async (tx) => {

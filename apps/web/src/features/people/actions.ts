@@ -10,6 +10,7 @@ import { getWorkspaceContext } from "@/features/workspaces/context";
 import { requirePermission } from "@/features/workspaces/permissions-server";
 import {
   updateProfileSchema,
+  updateEmailPreferenceSchema,
   usernameSchema,
   type UpdateProfileInput,
 } from "./validators";
@@ -28,6 +29,7 @@ const PROFILE_COLUMNS = {
   websiteUrl: schema.user.websiteUrl,
   username: schema.user.username,
   timezone: schema.user.timezone,
+  preferredEmailLocale: schema.user.preferredEmailLocale,
   specialties: schema.user.specialties,
   languages: schema.user.languages,
   weeklyAvailability: schema.user.weeklyAvailability,
@@ -47,6 +49,22 @@ export async function getOwnProfileAction(): Promise<PersonProfile | null> {
     .where(eq(schema.user.id, context.user.id))
     .limit(1);
   return row ?? null;
+}
+
+/** Update the signed-in person's email language preference. The database
+ * predicate is always the current user's id; no target id comes from the client. */
+export async function updateOwnEmailPreferenceAction(data: unknown) {
+  assertNotDemo();
+  const context = await getWorkspaceContext();
+  const parsed = updateEmailPreferenceSchema.parse(data);
+
+  await db
+    .update(schema.user)
+    .set({ preferredEmailLocale: parsed.preferredEmailLocale })
+    .where(eq(schema.user.id, context.user.id));
+
+  revalidatePath("/account");
+  return { success: true } as const;
 }
 
 export async function updateOwnProfileAction(data: UpdateProfileInput) {

@@ -1,6 +1,7 @@
 "use client";
 
 import { type ComponentType, type SVGProps } from "react";
+import { useTranslations } from "next-intl";
 
 import { cn } from "@/lib/utils";
 
@@ -19,14 +20,14 @@ export type { BuilderSection } from "./types";
 
 type IconComponent = ComponentType<SVGProps<SVGSVGElement> & { strokeWidth?: number | string }>;
 
-const NAV_ITEMS: { id: BuilderSection; label: string; icon: IconComponent }[] = [
-  { id: "template", label: "Template", icon: TemplateIcon },
-  { id: "content", label: "Content", icon: ContentIcon },
-  { id: "sections", label: "Sections", icon: LayersIcon },
-  { id: "jobs", label: "Jobs", icon: JobsIcon },
-  { id: "design", label: "Style", icon: PaletteIcon },
-  { id: "footer", label: "Footer", icon: FooterIcon },
-  { id: "discovery", label: "SEO", icon: GlobeIcon },
+const NAV_ITEMS: { id: BuilderSection; icon: IconComponent }[] = [
+  { id: "template", icon: TemplateIcon },
+  { id: "content", icon: ContentIcon },
+  { id: "sections", icon: LayersIcon },
+  { id: "jobs", icon: JobsIcon },
+  { id: "design", icon: PaletteIcon },
+  { id: "footer", icon: FooterIcon },
+  { id: "discovery", icon: GlobeIcon },
 ];
 
 /**
@@ -43,9 +44,10 @@ export function BuilderSidebar({
   onChange: (section: BuilderSection) => void;
   errorCounts?: Partial<Record<BuilderSection, number>>;
 }) {
+  const t = useTranslations("features.careerPage.builderSidebar");
   return (
     <nav
-      aria-label="Builder sections"
+      aria-label={t("navLabel")}
       className={cn(
         "flex shrink-0 gap-1 border-hairline bg-warm-paper",
         // Phones: a horizontal strip above the editor.
@@ -58,13 +60,14 @@ export function BuilderSidebar({
         const Icon = item.icon;
         const isActive = active === item.id;
         const errors = errorCounts[item.id] ?? 0;
+        const label = t(`section.${item.id}`);
         return (
           <button
             key={item.id}
             type="button"
             onClick={() => onChange(item.id)}
             aria-current={isActive ? "page" : undefined}
-            aria-label={errors > 0 ? `${item.label}, ${errors} to fix` : undefined}
+            aria-label={errors > 0 ? t("sectionErrors", { label, count: errors }) : undefined}
             className={cn(
               "relative flex shrink-0 items-center gap-2 rounded-[var(--radius-btn)] px-3 py-2 text-[13px] font-medium transition-colors duration-150",
               "md:w-[60px] md:flex-col md:gap-1 md:px-0 md:py-2.5 md:text-[11px]",
@@ -76,7 +79,7 @@ export function BuilderSidebar({
             )}
           >
             <Icon className="size-[18px] shrink-0" strokeWidth={1.7} />
-            <span className="leading-none">{item.label}</span>
+            <span className="leading-none">{label}</span>
             {errors > 0 ? (
               <span
                 aria-hidden

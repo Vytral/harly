@@ -6,6 +6,7 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import type { Route } from "next";
+import { useLocale, useTranslations } from "next-intl";
 import {
   Archive,
   ArchiveRestore,
@@ -102,6 +103,7 @@ const TONE_TO_PILL = {
 } as const;
 
 function DocumentPreview({ document }: { document: DocumentDetailBundle["document"] }) {
+  const t = useTranslations("features.documents.documentPreview");
   const url = `/api/documents/${document.id}`;
   if (document.mimeType === "application/pdf")
     return (
@@ -128,7 +130,7 @@ function DocumentPreview({ document }: { document: DocumentDetailBundle["documen
     );
   return (
     <div className="flex min-h-40 items-center justify-center rounded-[var(--radius-inner)] bg-card-inset text-sm text-soft-ink">
-      Preview is not available for this file type.
+      {t("unavailable")}
     </div>
   );
 }
@@ -140,12 +142,14 @@ function ExpiresAtField({
   document: DocumentDetailBundle["document"];
   editable: boolean;
 }) {
+  const t = useTranslations("features.documents.expiresAtField");
   const router = useRouter();
   const saved = document.expiresAt ? document.expiresAt.slice(0, 10) : "";
   const [value, setValue] = useState(saved);
   const [isPending, startTransition] = useTransition();
   const dirty = value !== saved;
-  const hint = describeExpiry(document.expiresAt);
+  const tLabels = useTranslations("labels.documents");
+  const hint = describeExpiry(document.expiresAt, tLabels);
   function save(next: string) {
     startTransition(async () => {
       const result = await setDocumentExpiresAt({
@@ -153,11 +157,11 @@ function ExpiresAtField({
         expiresAt: next || null,
       });
       if (!result.ok) {
-        toast.error(result.error ?? "Could not save the date.");
+        toast.error(result.error ?? t("fallbackError"));
         return;
       }
       setValue(next);
-      toast.success(next ? "Date saved" : "Date cleared");
+      toast.success(next ? t("saved") : t("cleared"));
       router.refresh();
     });
   }
@@ -166,7 +170,7 @@ function ExpiresAtField({
       <div className="flex flex-wrap items-center gap-2 sm:justify-end">
         <Input
           type="date"
-          aria-label="Expiration date"
+          aria-label={t("ariaLabel")}
           value={value}
           disabled={!editable || isPending}
           onChange={(event) => setValue(event.target.value)}
@@ -174,17 +178,17 @@ function ExpiresAtField({
         />
         {dirty ? (
           <Button size="sm" onClick={() => save(value)} disabled={isPending}>
-            {isPending ? "Saving…" : "Save"}
+            {isPending ? t("saving") : t("save")}
           </Button>
         ) : saved && editable ? (
           <Button size="sm" variant="ghost" onClick={() => save("")} disabled={isPending}>
-            Clear
+            {t("clear")}
           </Button>
         ) : null}
       </div>
       {hint && !dirty ? (
         <p className={`text-[12px] ${hint.tone === "danger" ? "text-danger-rust" : hint.tone === "warning" ? "text-warning-clay" : "text-soft-ink"}`}>
-          {hint.days < 0 ? `Passed ${hint.label}` : `Expires ${hint.label}`}
+          {hint.days < 0 ? t("passed", { label: hint.label }) : t("expires", { label: hint.label })}
         </p>
       ) : null}
     </div>
@@ -200,6 +204,9 @@ export function DocumentDetailView({
   documentsHref?: string;
   signatureTimeline?: SignatureTimelineData | null;
 }) {
+  const t = useTranslations("features.documents.documentDetailView");
+  const tLabels = useTranslations("labels.documents");
+  const locale = useLocale();
   const { data, document, versions, signature } = bundle;
   const router = useRouter();
   const confirm = useConfirm();
@@ -215,7 +222,7 @@ export function DocumentDetailView({
   const [tab, setTab] = useState("preview");
   const [isPending, startTransition] = useTransition();
 
-  const state = documentStateMeta(document);
+  const state = documentStateMeta(document, tLabels);
   const isArchived = document.status === "archived";
   const activeHolds = document.legalHolds.filter((hold) => !hold.releasedAt);
   const activeHold = activeHolds[0] ?? null;
@@ -235,9 +242,12 @@ export function DocumentDetailView({
   const versionLocked =
     status === "signed" || status === "pending"
       ? status === "signed"
-        ? "Signed documents are final. Upload the revised file as a new document."
-        : "A signature request is in progress. Void it before uploading a new version."
+        ? t("versionLockedSigned")
+        : t("versionLockedPending")
       : null;
+  const assignmentLabel = (assignmentType: "owner" | "reviewer") =>
+    assignmentType === "owner" ? t("responsible") : t("reviewer");
+  const accessRuleTotal = document.accessRoles.length + document.accessMembers.length;
 
   function run(
     action: () => Promise<{ ok: boolean; error?: string }>,
@@ -246,7 +256,7 @@ export function DocumentDetailView({
     startTransition(async () => {
       const result = await action();
       if (!result.ok) {
-        toast.error(result.error ?? "Could not update document.");
+        toast.error(result.error ?? t("updateError"));
         return;
       }
       toast.success(success);
@@ -258,19 +268,19 @@ export function DocumentDetailView({
       !data.canDelete ||
       !(await confirm({
         tone: "destructive",
-        title: `Delete “${document.name}” permanently?`,
-        description: "The document and its version history are removed for everyone. This cannot be undone.",
-        confirmLabel: "Delete document",
+        title: t("deleteConfirmTitle", { name: document.name }),
+        description: t("deleteConfirmDescription"),
+        confirmLabel: t("deleteConfirmLabel"),
       }))
     )
       return;
     startTransition(async () => {
       const result = await deleteDocument({ documentId: document.id });
       if (!result.ok) {
-        toast.error(result.error ?? "Could not delete document.");
+        toast.error(result.error ?? t("deleteError"));
         return;
       }
-      toast.success("Document deleted");
+      toast.success(t("deleted"));
       router.push(documentsHref as Route);
     });
   }
@@ -278,14 +288,14 @@ export function DocumentDetailView({
     document.assignments.find((assignment) => assignment.assignmentType === assignmentType)?.userId ?? "none";
 
   const sendChannels = [
-    ...(nativeChannel ? [{ key: "native", label: "Send for signature", run: () => setNativeSendOpen(true) }] : []),
-    ...(docusealChannel ? [{ key: "docuseal", label: "Send with DocuSeal", run: () => setSendSignOpen(true) }] : []),
+    ...(nativeChannel ? [{ key: "native", label: t("sendForSignature"), run: () => setNativeSendOpen(true) }] : []),
+    ...(docusealChannel ? [{ key: "docuseal", label: t("sendWithDocuSeal"), run: () => setSendSignOpen(true) }] : []),
   ];
   const signNow = () => router.push(`/dashboard/documents/${document.id}/sign` as Route);
 
   // One primary action, driven by the document's state.
   let primary: React.ReactNode = null;
-  const sendLabel = status === "unsigned" ? "Send for signature" : "Send again";
+  const sendLabel = status === "unsigned" ? t("sendForSignature") : t("sendAgain");
   const startOptions = sendChannels.length + (isPdf ? 1 : 0);
   if (canStartSignature && startOptions === 1) {
     primary = sendChannels[0] ? (
@@ -296,7 +306,7 @@ export function DocumentDetailView({
     ) : (
       <Button onClick={signNow}>
         <LockKeyhole />
-        Sign myself
+        {t("signMyself")}
       </Button>
     );
   } else if (canStartSignature && startOptions > 1) {
@@ -318,7 +328,7 @@ export function DocumentDetailView({
           {isPdf ? (
             <DropdownMenuItem onSelect={signNow}>
               <LockKeyhole />
-              Sign myself
+              {t("signMyself")}
             </DropdownMenuItem>
           ) : null}
         </DropdownMenuContent>
@@ -328,13 +338,13 @@ export function DocumentDetailView({
     primary = (
       <Button disabled={signerActions.busyId === currentSigner.id} onClick={() => signerActions.remind(currentSigner)}>
         <BellRing />
-        Remind {currentSigner.name.split(" ")[0]}
+        {t("remind", { name: currentSigner.name.split(" ")[0] })}
       </Button>
     );
   } else if (canManageThis && !isArchived && status === "pending") {
     primary = (
       <Button variant="outline" onClick={() => setVoidOpen(true)}>
-        Void request
+        {t("voidRequest")}
       </Button>
     );
   } else {
@@ -342,7 +352,7 @@ export function DocumentDetailView({
       <Button variant={status === "signed" ? "default" : "outline"} asChild>
         <a href={`/api/documents/${document.id}?download=1`}>
           <Download />
-          {status === "signed" ? "Download signed copy" : "Download"}
+          {status === "signed" ? t("downloadSigned") : t("download")}
         </a>
       </Button>
     );
@@ -351,7 +361,7 @@ export function DocumentDetailView({
   const overflow = (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button variant="outline" size="icon" aria-label="More actions">
+        <Button variant="outline" size="icon" aria-label={t("moreActions")}>
           <MoreHorizontal />
         </Button>
       </DropdownMenuTrigger>
@@ -359,30 +369,30 @@ export function DocumentDetailView({
         <DropdownMenuItem asChild>
           <a href={`/api/documents/${document.id}?download=1`}>
             <Download />
-            Download
+            {t("download")}
           </a>
         </DropdownMenuItem>
         {canManageThis ? (
           <>
             <DropdownMenuItem disabled={isArchived} onSelect={() => setRenameOpen(true)}>
               <Pencil />
-              Rename
+              {t("rename")}
             </DropdownMenuItem>
             <DropdownMenuItem disabled={isArchived || Boolean(versionLocked)} onSelect={() => setVersionOpen(true)}>
               <Upload />
-              Upload new version
+              {t("uploadNewVersion")}
             </DropdownMenuItem>
             <DropdownMenuItem
               disabled={isPending}
               onSelect={() =>
                 run(
                   () => setDocumentStatus({ documentId: document.id, status: isArchived ? "active" : "archived" }),
-                  isArchived ? "Document restored" : "Document archived",
+                  isArchived ? t("documentRestored") : t("documentArchived"),
                 )
               }
             >
               {isArchived ? <ArchiveRestore /> : <Archive />}
-              {isArchived ? "Restore" : "Archive"}
+              {isArchived ? t("restore") : t("archive")}
             </DropdownMenuItem>
           </>
         ) : null}
@@ -391,7 +401,7 @@ export function DocumentDetailView({
             <DropdownMenuSeparator />
             <DropdownMenuItem variant="destructive" disabled={isPending} onSelect={() => void deleteCurrentDocument()}>
               <Trash2 />
-              Delete
+              {t("delete")}
             </DropdownMenuItem>
           </>
         ) : null}
@@ -399,13 +409,28 @@ export function DocumentDetailView({
     </DropdownMenu>
   );
 
+  const typeLabel = documentTypeLabel(document.mimeType, tLabels);
+  const sizeLabel = formatDocumentSize(document.sizeBytes);
+  const headerDescription = document.category
+    ? t("headerDescriptionWithCategory", {
+        type: typeLabel,
+        size: sizeLabel,
+        version: document.currentVersion,
+        category: document.category.name,
+      })
+    : t("headerDescription", {
+        type: typeLabel,
+        size: sizeLabel,
+        version: document.currentVersion,
+      });
+
   return (
     <div className="space-y-5 duration-500 animate-in fade-in slide-in-from-bottom-1">
       <Breadcrumb>
         <BreadcrumbList>
           <BreadcrumbItem>
             <BreadcrumbLink asChild>
-              <Link href={documentsHref as Route}>Documents</Link>
+              <Link href={documentsHref as Route}>{t("documents")}</Link>
             </BreadcrumbLink>
           </BreadcrumbItem>
           <BreadcrumbSeparator />
@@ -420,7 +445,7 @@ export function DocumentDetailView({
         titleBadge={
           <StatusPill tone={TONE_TO_PILL[state.tone]}>{state.label}</StatusPill>
         }
-        description={`${documentTypeLabel(document.mimeType)} · ${formatDocumentSize(document.sizeBytes)} · v${document.currentVersion}${document.category ? ` · ${document.category.name}` : ""}`}
+        description={headerDescription}
         actions={
           <>
             {primary}
@@ -431,18 +456,17 @@ export function DocumentDetailView({
 
       {restrictedByAcl ? (
         <Callout tone="warning" icon={<ShieldAlert />}>
-          An access rule limits you to read-only on this document, so management
-          actions are unavailable even though you can manage documents in general.
+          {t("restrictedByAcl")}
         </Callout>
       ) : null}
       {activeHolds.length > 0 ? (
-        <Callout tone="warning" icon={<Gavel />} title="This document is under legal hold">
-          {activeHolds.map((hold) => hold.reason).join(" · ")}. It cannot be archived until every hold is released.
+        <Callout tone="warning" icon={<Gavel />} title={t("legalHoldTitle")}>
+          {t("legalHoldBody", { reasons: activeHolds.map((hold) => hold.reason).join(" · ") })}
         </Callout>
       ) : null}
       {isArchived ? (
         <Callout tone="info" icon={<Archive />}>
-          Archived documents are read-only. Restore it from the menu to edit or send it.
+          {t("archivedNotice")}
         </Callout>
       ) : null}
 
@@ -470,9 +494,9 @@ export function DocumentDetailView({
                 variant="line"
                 className="w-full justify-start gap-5 border-b border-hairline [&>button]:flex-none [&>button]:px-0.5"
               >
-                <TabsTrigger value="preview">Preview</TabsTrigger>
-                <TabsTrigger value="versions">Versions ({versions.length})</TabsTrigger>
-                <TabsTrigger value="activity">Activity ({document.activity.length})</TabsTrigger>
+                <TabsTrigger value="preview">{t("tabs.preview")}</TabsTrigger>
+                <TabsTrigger value="versions">{t("tabs.versions", { count: versions.length })}</TabsTrigger>
+                <TabsTrigger value="activity">{t("tabs.activity", { count: document.activity.length })}</TabsTrigger>
               </TabsList>
               <TabsContent value="preview" className="mt-4">
                 {isPreviewable(document.mimeType) ? (
@@ -480,11 +504,11 @@ export function DocumentDetailView({
                 ) : (
                   <div className="flex min-h-40 flex-col items-center justify-center gap-3 rounded-[var(--radius-inner)] bg-card-inset text-sm text-soft-ink">
                     <FileText className="size-6" />
-                    Preview is not available for this file type.
+                    {t("previewUnavailable")}
                     <Button size="sm" variant="outline" asChild>
                       <a href={`/api/documents/${document.id}?download=1`}>
                         <Download />
-                        Download
+                        {t("download")}
                       </a>
                     </Button>
                   </div>
@@ -501,14 +525,14 @@ export function DocumentDetailView({
               </TabsContent>
               <TabsContent value="activity" className="mt-4">
                 {document.activity.length === 0 ? (
-                  <p className="py-6 text-center text-sm text-soft-ink">No activity yet.</p>
+                  <p className="py-6 text-center text-sm text-soft-ink">{t("noActivity")}</p>
                 ) : (
                   <ul className="divide-y divide-hairline">
                     {document.activity.map((event) => (
                       <li key={event.id} className="py-3 text-sm first:pt-0 last:pb-0">
-                        <p className="font-medium text-near-ink">{formatActivityType(event.type)}</p>
+                        <p className="font-medium text-near-ink">{formatActivityType(event.type, t)}</p>
                         <p className="mt-0.5 text-xs text-soft-ink">
-                          {event.actorName ?? "System"} · {formatDate(event.createdAt)}
+                          {event.actorName ?? t("systemActor")} · {formatDate(event.createdAt, locale)}
                         </p>
                       </li>
                     ))}
@@ -522,31 +546,31 @@ export function DocumentDetailView({
         <div className="space-y-5 lg:col-start-2 lg:row-start-2">
           <Card className="gap-3">
             <CardHeader>
-              <CardTitle>Details</CardTitle>
+              <CardTitle>{t("details")}</CardTitle>
             </CardHeader>
             <CardContent className="space-y-3">
               <InfoRows>
-                <InfoRow label="Linked to" value={document.associationLabels.join(" · ") || "Workspace"} />
+                <InfoRow label={t("linkedTo")} value={document.associationLabels.join(" · ") || t("workspace")} />
                 <InfoRow
-                  label="Owner"
+                  label={t("owner")}
                   value={
                     document.ownerId ? (
                       <span className="inline-flex items-center gap-2">
-                        <UserAvatar name={document.ownerName ?? "Workspace"} src={document.ownerImage} size="sm" />
+                        <UserAvatar name={document.ownerName ?? t("workspace")} src={document.ownerImage} size="sm" />
                         {document.ownerName}
                       </span>
                     ) : (
-                      "Workspace"
+                      t("workspace")
                     )
                   }
                 />
-                <InfoRow label="Updated" value={formatDate(document.updatedAt)} />
-                <InfoRow label="Checksum" value={<span className="font-mono text-[12px]" title={document.checksum}>{document.checksum.slice(0, 12)}…</span>} />
+                <InfoRow label={t("updated")} value={formatDate(document.updatedAt, locale)} />
+                <InfoRow label={t("checksum")} value={<span className="font-mono text-[12px]" title={document.checksum}>{document.checksum.slice(0, 12)}…</span>} />
               </InfoRows>
             </CardContent>
             <SettingRows className="border-t border-hairline">
               <SettingRow
-                title="Category"
+                title={t("category")}
                 control={
                   <Select
                     value={document.category?.id ?? "none"}
@@ -554,15 +578,15 @@ export function DocumentDetailView({
                     onValueChange={(value) =>
                       run(
                         () => setDocumentCategory({ documentId: document.id, categoryId: value === "none" ? null : value }),
-                        "Category updated",
+                        t("categoryUpdated"),
                       )
                     }
                   >
-                    <SelectTrigger size="sm" className="w-44" aria-label="Category">
+                    <SelectTrigger size="sm" className="w-44" aria-label={t("category")}>
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent position="popper" align="end">
-                      <SelectItem value="none">No category</SelectItem>
+                      <SelectItem value="none">{t("noCategory")}</SelectItem>
                       {data.categories
                         .filter((category) => category.active)
                         .map((category) => (
@@ -575,8 +599,8 @@ export function DocumentDetailView({
                 }
               />
               <SettingRow
-                title="Effective / expiration date"
-                description="A reminder date for the paperwork itself, separate from the signature."
+                title={t("expiryTitle")}
+                description={t("expiryDescription")}
                 align="start"
                 control={<ExpiresAtField document={document} editable={canManageThis && !isArchived} />}
               />
@@ -585,13 +609,13 @@ export function DocumentDetailView({
 
           <Card className="gap-0 py-2">
             <CardHeader className="pt-3 pb-1">
-              <CardTitle>People</CardTitle>
+              <CardTitle>{t("people")}</CardTitle>
             </CardHeader>
             <SettingRows>
               {(["owner", "reviewer"] as const).map((assignmentType) => (
                 <SettingRow
                   key={assignmentType}
-                  title={assignmentType === "owner" ? "Responsible" : "Reviewer"}
+                  title={assignmentLabel(assignmentType)}
                   control={
                     <Select
                       value={assignmentFor(assignmentType)}
@@ -604,15 +628,15 @@ export function DocumentDetailView({
                               userId: value === "none" ? null : value,
                               assignmentType,
                             }),
-                          `${assignmentType === "owner" ? "Responsible" : "Reviewer"} updated`,
+                          t("assignmentUpdated", { role: assignmentLabel(assignmentType) }),
                         )
                       }
                     >
-                      <SelectTrigger size="sm" className="w-44" aria-label={assignmentType === "owner" ? "Responsible" : "Reviewer"}>
+                      <SelectTrigger size="sm" className="w-44" aria-label={assignmentLabel(assignmentType)}>
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent position="popper" align="end" className="max-h-64">
-                        <SelectItem value="none">Not assigned</SelectItem>
+                        <SelectItem value="none">{t("notAssigned")}</SelectItem>
                         {data.members.map((member) => (
                           <SelectItem key={member.id} value={member.id}>
                             {member.name}
@@ -629,17 +653,17 @@ export function DocumentDetailView({
           <Card className="gap-0 py-2">
             <SettingRow
               icon={<ShieldCheck />}
-              title="Access"
+              title={t("access")}
               description={
-                document.accessRoles.length + document.accessMembers.length === 0
-                  ? "Follows the workspace Documents permission."
-                  : `${document.accessRoles.length + document.accessMembers.length} explicit rule${document.accessRoles.length + document.accessMembers.length === 1 ? "" : "s"}. The owner and admins always keep access.`
+                accessRuleTotal === 0
+                  ? t("accessFollowsWorkspace")
+                  : t("accessRuleCount", { count: accessRuleTotal })
               }
               control={
                 data.canShare ? (
                   <Button size="sm" variant="outline" disabled={isArchived} onClick={() => setAccessOpen(true)}>
                     <Users />
-                    Manage
+                    {t("manage")}
                   </Button>
                 ) : undefined
               }
@@ -650,12 +674,12 @@ export function DocumentDetailView({
             <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-5 py-4 text-[15px] font-semibold tracking-[-0.01em] [&::-webkit-details-marker]:hidden">
               <span className="flex items-center gap-2">
                 <Gavel className="size-4 text-soft-ink" />
-                Governance
+                {t("governance")}
               </span>
               <span className="flex items-center gap-2">
                 {activeHolds.length > 0 ? (
                   <StatusPill size="sm" tone="warning">
-                    {activeHolds.length} hold{activeHolds.length === 1 ? "" : "s"}
+                    {t("holdCount", { count: activeHolds.length })}
                   </StatusPill>
                 ) : null}
                 <ChevronDown className="size-4 text-soft-ink transition-transform group-open:rotate-180" />
@@ -663,19 +687,19 @@ export function DocumentDetailView({
             </summary>
             <div className="space-y-3 px-5 pb-5">
               <p className="text-[12.5px] leading-snug text-soft-ink">
-                Preservation notices and signed evidence stay workspace-scoped and ACL-protected.
+                {t("governanceNote")}
               </p>
               <div className="flex flex-wrap gap-2">
                 <Button size="sm" variant="outline" asChild>
                   <a href={`/api/documents/${document.id}/evidence`}>
                     <Download />
-                    Export evidence
+                    {t("exportEvidence")}
                   </a>
                 </Button>
                 {canManageThis ? (
                   <Button size="sm" variant="outline" disabled={isArchived && !activeHold} onClick={() => setHoldOpen(true)}>
                     <Gavel />
-                    {activeHold ? "Release legal hold" : "Place legal hold"}
+                    {activeHold ? t("releaseLegalHold") : t("placeLegalHold")}
                   </Button>
                 ) : null}
               </div>
@@ -684,7 +708,7 @@ export function DocumentDetailView({
                   {activeHolds.map((hold) => (
                     <li key={hold.id} className="rounded-[var(--radius-inner)] bg-card-inset px-3 py-2">
                       {hold.reason}
-                      {hold.reference ? <span className="block text-quiet-mist">Ref {hold.reference}</span> : null}
+                      {hold.reference ? <span className="block text-quiet-mist">{t("holdReference", { reference: hold.reference })}</span> : null}
                     </li>
                   ))}
                 </ul>

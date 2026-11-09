@@ -2,6 +2,7 @@
 
 import { useId, useState, type FormEvent } from "react";
 import { Plus } from "lucide-react";
+import { useTranslations } from "next-intl";
 import type { StageKind } from "@harly/db/stage-kind";
 
 import { Button } from "@/components/ui/button";
@@ -10,9 +11,9 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 import {
-  KIND_DESCRIPTIONS,
   KIND_OPTIONS,
   checkStageName,
+  nameErrorMessage,
   positionOptions,
   type EditorStage,
 } from "./model";
@@ -31,13 +32,16 @@ export function AddStageForm({
   onCreate: (input: { name: string; kind: StageKind; position: number }) => Promise<boolean>;
 }) {
   const ids = useId();
+  const t = useTranslations("features.pipeline.AddStageForm");
+  const labels = useTranslations("labels.pipeline.stageEditor");
+  const kindNames = useTranslations("labels.pipeline.stageKinds");
   const [name, setName] = useState("");
   const [kind, setKind] = useState<StageKind>("custom");
   const [chosenPosition, setChosenPosition] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const active = stages.filter((stage) => !stage.archivedAt);
-  const slots = positionOptions(active, kind);
+  const slots = positionOptions(active, kind, labels);
   const position: number =
     chosenPosition !== null && slots.options.some((option) => option.value === chosenPosition)
       ? chosenPosition
@@ -47,7 +51,7 @@ export function AddStageForm({
     event.preventDefault();
     const check = checkStageName(name, active);
     if (!check.ok) {
-      setError(check.error);
+      setError(nameErrorMessage(check, labels));
       return;
     }
     setError(null);
@@ -61,19 +65,19 @@ export function AddStageForm({
   return (
     <form onSubmit={submit} className="space-y-3 rounded-[var(--radius-inner)] bg-card-inset p-4" noValidate>
       <div>
-        <h3 className="text-sm font-medium text-foreground">Add a stage</h3>
-        <p className="text-xs text-muted-foreground">New stages start as custom steps unless you pick a kind.</p>
+        <h3 className="text-sm font-medium text-foreground">{t("heading")}</h3>
+        <p className="text-xs text-muted-foreground">{t("helper")}</p>
       </div>
 
       <div className="grid gap-3 sm:grid-cols-2">
         <div className="space-y-1.5 sm:col-span-2">
-          <Label htmlFor={`${ids}-name`}>Stage name</Label>
+          <Label htmlFor={`${ids}-name`}>{t("stageName")}</Label>
           <Input
             id={`${ids}-name`}
             value={name}
             maxLength={200}
             disabled={busy}
-            placeholder="For example, Technical test"
+            placeholder={t("namePlaceholder")}
             aria-invalid={error ? true : undefined}
             aria-describedby={error ? `${ids}-error` : `${ids}-kind-help`}
             onChange={(event) => {
@@ -89,7 +93,7 @@ export function AddStageForm({
         </div>
 
         <div className="space-y-1.5">
-          <Label htmlFor={`${ids}-kind`}>Kind</Label>
+          <Label htmlFor={`${ids}-kind`}>{t("kind")}</Label>
           <Select
             value={kind}
             disabled={busy}
@@ -103,19 +107,19 @@ export function AddStageForm({
             </SelectTrigger>
             <SelectContent>
               {KIND_OPTIONS.map((option) => (
-                <SelectItem key={option.value} value={option.value}>
-                  {option.label}
+                <SelectItem key={option} value={option}>
+                  {kindNames(option)}
                 </SelectItem>
               ))}
             </SelectContent>
           </Select>
           <p id={`${ids}-kind-help`} className="text-xs leading-5 text-muted-foreground">
-            {KIND_DESCRIPTIONS[kind]}
+            {labels(`kindDescriptions.${kind}`)}
           </p>
         </div>
 
         <div className="space-y-1.5">
-          <Label htmlFor={`${ids}-position`}>Position</Label>
+          <Label htmlFor={`${ids}-position`}>{t("position")}</Label>
           <Select
             value={String(position)}
             disabled={busy}
@@ -138,7 +142,7 @@ export function AddStageForm({
       <div className="flex justify-end">
         <Button type="submit" disabled={busy || name.trim() === ""}>
           <Plus className="size-4" aria-hidden="true" />
-          Add stage
+          {t("submit")}
         </Button>
       </div>
     </form>

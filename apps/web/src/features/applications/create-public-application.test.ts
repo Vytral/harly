@@ -261,7 +261,7 @@ describe("F1-07 re-application duplicate detection order", () => {
       [],
       [],
       [],
-      [{ email: "owner@example.com" }],
+      [{ email: "owner@example.com", preferredEmailLocale: "de" }],
     ];
     const calls = { update: 0, insert: 0 };
     const runnable = new Proxy(
@@ -317,6 +317,9 @@ describe("F1-07 re-application duplicate detection order", () => {
       email: {
         candidateName: "Canonical Profile",
         candidateEmail: "retry@example.com",
+        ownerRecipients: [
+          { email: "owner@example.com", preferredEmailLocale: "de" },
+        ],
       },
     });
     expect(calls.update).toBe(0);
@@ -388,7 +391,11 @@ describe("F1-07 re-application duplicate detection order", () => {
       },
     );
 
-    expect(result).toEqual({ ok: false, message: "Resume upload is invalid." });
+    expect(result).toEqual({
+      ok: false,
+      code: "resumeInvalid",
+      message: "Resume upload is invalid.",
+    });
     expect(calls.insert).toBe(0);
   });
 
@@ -411,7 +418,11 @@ describe("F1-07 re-application duplicate detection order", () => {
       },
     );
 
-    expect(result).toEqual({ ok: false, message: "Resume upload is invalid." });
+    expect(result).toEqual({
+      ok: false,
+      code: "resumeInvalid",
+      message: "Resume upload is invalid.",
+    });
     expect(calls.insert).toBe(0);
   });
 });

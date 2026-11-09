@@ -1,8 +1,10 @@
+vi.mock("next-intl/server", async () => (await import("@/test-support/intl-server-mock")).intlServerMock);
+
 import { createHash, randomUUID } from "node:crypto";
 import { mkdtemp, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { and, desc, eq, inArray, sql as expression } from "drizzle-orm";
 import { PDFDocument } from "pdf-lib";
 import {
@@ -1222,7 +1224,7 @@ describe.skipIf(!url)("Postgres graph leases", () => {
         expectedRevision: draft.draftRevision,
         database: client!.db,
       }),
-    ).rejects.toThrow(/isn't ready to publish/i);
+    ).rejects.toThrow(/not ready to publish/i);
   });
 
   it("dispatches a worker-originated event into the injected database", async () => {

@@ -3,6 +3,7 @@
 import { useTransition } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { useTranslations } from "next-intl";
 import { toast } from "@/lib/notification-island/toast";
 
 import { saveOfferSignatureChannelAction } from "@/features/workspaces/esign-settings-actions";
@@ -30,6 +31,7 @@ export function HarlySignConnectPanel({
   description: string;
   docusealConnected: boolean;
 }) {
+  const t = useTranslations("features.workspaces.harlySignConnectPanel");
   const router = useRouter();
   const [savingChannel, startSaveChannel] = useTransition();
 
@@ -37,15 +39,15 @@ export function HarlySignConnectPanel({
     startSaveChannel(async () => {
       const result = await saveOfferSignatureChannelAction(channel);
       if (!result.ok) {
-        toast.error(result.error ?? "Could not update offer signature settings.");
+        toast.error(result.error ?? t("updateFailed"));
         return;
       }
       toast.success(
         channel === "esign"
-          ? "DocuSeal enabled for offers"
+          ? t("docusealEnabled")
           : channel === "native"
-            ? "Native signing enabled for offers"
-            : "Email enabled for offers",
+            ? t("nativeEnabled")
+            : t("emailEnabled"),
       );
       router.refresh();
     });
@@ -58,13 +60,13 @@ export function HarlySignConnectPanel({
         tileClassName={tileClassName}
         name="Harly Sign"
         description={description}
-        statusLabel="Connected"
+        statusLabel={t("connected")}
         statusTone="on"
         action={
           <Button variant="outline" asChild>
             <Link href="/settings/signature">
               <GearSixIcon className="size-4" />
-              Signature settings
+              {t("signatureSettings")}
             </Link>
           </Button>
         }
@@ -73,19 +75,19 @@ export function HarlySignConnectPanel({
       {canEdit ? (
         <Card className="space-y-4 p-5">
           <div>
-            <h2 className="font-display text-base font-semibold tracking-tight">Offer signature delivery</h2>
-            <p className="text-sm text-muted-foreground">Choose how candidates receive offers by default.</p>
+            <h2 className="font-display text-base font-semibold tracking-tight">{t("offerSignatureDelivery")}</h2>
+            <p className="text-sm text-muted-foreground">{t("description")}</p>
           </div>
           <div className="flex flex-wrap gap-2">
-            <Button variant={status.offerSignatureChannel === "email" ? "default" : "outline"} disabled={savingChannel} onClick={() => setChannel("email")}>Email</Button>
-            <Button variant={status.offerSignatureChannel === "native" ? "default" : "outline"} disabled={savingChannel} onClick={() => setChannel("native")}>Native (built-in)</Button>
+            <Button variant={status.offerSignatureChannel === "email" ? "default" : "outline"} disabled={savingChannel} onClick={() => setChannel("email")}>{t("email")}</Button>
+            <Button variant={status.offerSignatureChannel === "native" ? "default" : "outline"} disabled={savingChannel} onClick={() => setChannel("native")}>{t("native")}</Button>
             <Button
               variant={status.offerSignatureChannel === "esign" ? "default" : "outline"}
               disabled={savingChannel || !docusealConnected}
-              title={docusealConnected ? undefined : "Connect DocuSeal first"}
+              title={docusealConnected ? undefined : t("connectDocuSealFirst")}
               onClick={() => setChannel("esign")}
             >
-              DocuSeal{docusealConnected ? "" : " (not connected)"}
+              {docusealConnected ? "DocuSeal" : t("docusealNotConnected")}
             </Button>
           </div>
         </Card>

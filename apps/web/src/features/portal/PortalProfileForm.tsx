@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import { toast } from "@/lib/notification-island/toast";
 import { useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 
 import { cn } from "@/lib/utils";
 
@@ -107,6 +108,7 @@ function IdentificationIcon({ className }: { className?: string }) {
 }
 
 export function PortalProfileForm({ profile }: { profile: ProfileData }) {
+  const t = useTranslations("features.portal.portalProfileForm");
   const router = useRouter();
   const [form, setForm] = useState(profile);
   const [isPending, start] = useTransition();
@@ -124,7 +126,7 @@ export function PortalProfileForm({ profile }: { profile: ProfileData }) {
         toast.error(result.error);
         return;
       }
-      toast.success("Profile updated");
+      toast.success(t("profileUpdated"));
       router.refresh();
     });
   }
@@ -134,10 +136,10 @@ export function PortalProfileForm({ profile }: { profile: ProfileData }) {
       {/* Basic info */}
       <fieldset className="space-y-4">
         <legend className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
-          Basic info
+          {t("basicInfo")}
         </legend>
         <div className="grid gap-4 sm:grid-cols-2">
-          <Field label="First name" id="firstName">
+          <Field label={t("firstName")} id="firstName">
             <input
               id="firstName"
               className={inputClass}
@@ -146,7 +148,7 @@ export function PortalProfileForm({ profile }: { profile: ProfileData }) {
               required
             />
           </Field>
-          <Field label="Last name" id="lastName">
+          <Field label={t("lastName")} id="lastName">
             <input
               id="lastName"
               className={inputClass}
@@ -156,11 +158,11 @@ export function PortalProfileForm({ profile }: { profile: ProfileData }) {
           </Field>
         </div>
 
-        <Field label="Email" hint="Email cannot be changed here.">
+        <Field label={t("email")} hint={t("emailHint")}>
           <div className={readonlyClass}>{form.email}</div>
         </Field>
 
-        <Field label="Headline" id="headline">
+        <Field label={t("headline")} id="headline">
           <div className="relative">
             <div className="pointer-events-none absolute inset-y-0 left-3 flex items-center">
               <IdentificationIcon className="size-4 text-muted-foreground" />
@@ -170,13 +172,13 @@ export function PortalProfileForm({ profile }: { profile: ProfileData }) {
               className={cn(inputClass, "pl-9")}
               value={form.headline ?? ""}
               onChange={(e) => set("headline", e.target.value)}
-              placeholder="e.g. Senior Software Engineer"
+              placeholder={t("headlinePlaceholder")}
             />
           </div>
         </Field>
 
         <div className="grid gap-4 sm:grid-cols-2">
-          <Field label="Phone" id="phone">
+          <Field label={t("phone")} id="phone">
             <div className="relative">
               <div className="pointer-events-none absolute inset-y-0 left-3 flex items-center">
                 <PhoneIcon className="size-4 text-muted-foreground" />
@@ -187,11 +189,11 @@ export function PortalProfileForm({ profile }: { profile: ProfileData }) {
                 className={cn(inputClass, "pl-9")}
                 value={form.phone ?? ""}
                 onChange={(e) => set("phone", e.target.value)}
-                placeholder="+1 555 000 0000"
+                placeholder={t("phonePlaceholder")}
               />
             </div>
           </Field>
-          <Field label="Location" id="location">
+          <Field label={t("location")} id="location">
             <div className="relative">
               <div className="pointer-events-none absolute inset-y-0 left-3 flex items-center">
                 <MapPinIcon className="size-4 text-muted-foreground" />
@@ -201,7 +203,7 @@ export function PortalProfileForm({ profile }: { profile: ProfileData }) {
                 className={cn(inputClass, "pl-9")}
                 value={form.location ?? ""}
                 onChange={(e) => set("location", e.target.value)}
-                placeholder="City, Country"
+                placeholder={t("locationPlaceholder")}
               />
             </div>
           </Field>
@@ -213,10 +215,10 @@ export function PortalProfileForm({ profile }: { profile: ProfileData }) {
       {/* Online profiles */}
       <fieldset className="space-y-4">
         <legend className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
-          Online profiles
+          {t("onlineProfiles")}
         </legend>
 
-        <Field label="LinkedIn" id="linkedin">
+        <Field label={t("linkedin")} id="linkedin">
           <div className="relative">
             <div className="pointer-events-none absolute inset-y-0 left-3 flex items-center">
               <LinkedInIcon className="size-4 text-[#0A66C2]" />
@@ -233,7 +235,7 @@ export function PortalProfileForm({ profile }: { profile: ProfileData }) {
         </Field>
 
         <div className="grid gap-4 sm:grid-cols-2">
-          <Field label="GitHub" id="github">
+          <Field label={t("github")} id="github">
             <div className="relative">
               <div className="pointer-events-none absolute inset-y-0 left-3 flex items-center">
                 <GitHubIcon className="size-4 text-foreground" />
@@ -248,7 +250,7 @@ export function PortalProfileForm({ profile }: { profile: ProfileData }) {
               />
             </div>
           </Field>
-          <Field label="Website" id="website">
+          <Field label={t("website")} id="website">
             <div className="relative">
               <div className="pointer-events-none absolute inset-y-0 left-3 flex items-center">
                 <GlobeIcon className="size-4 text-muted-foreground" />
@@ -277,7 +279,7 @@ export function PortalProfileForm({ profile }: { profile: ProfileData }) {
             "disabled:opacity-40 disabled:cursor-not-allowed disabled:active:scale-100",
           )}
         >
-          {isPending ? "Saving…" : "Save profile"}
+          {isPending ? t("saving") : t("saveProfile")}
         </button>
       </div>
     </form>

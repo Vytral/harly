@@ -1,5 +1,7 @@
 "use client";
 
+import { useTranslations } from "next-intl";
+
 import {
   isLightColor,
   MODE_BG,
@@ -13,23 +15,24 @@ import { ColorField } from "../primitives";
 import { Group, PanelHeader, Segmented } from "./PanelKit";
 
 export function DesignPanel({ config, update, workspace }: SectionProps) {
+  const t = useTranslations("features.careerPage.DesignPanel");
   const accent = config.theme.accent ?? workspace.primaryColor;
   const fonts: { value: FontFamily; label: string }[] = [
-    { value: "sans", label: "Sans" },
-    { value: "serif", label: "Serif" },
-    { value: "mono", label: "Mono" },
+    { value: "sans", label: t("fontSans") },
+    { value: "serif", label: t("fontSerif") },
+    { value: "mono", label: t("fontMono") },
   ];
   // "Display" currently resolves to the same face as Sans; only offer it to
   // pages that already use it so the choice stays visible.
-  if (config.theme.font === "display") fonts.splice(1, 0, { value: "display", label: "Display" });
+  if (config.theme.font === "display") fonts.splice(1, 0, { value: "display", label: t("fontDisplay") });
 
   return (
     <div className="space-y-4">
-      <PanelHeader title="Style" subtitle="Colours and type for the whole page." />
+      <PanelHeader title={t("title")} subtitle={t("subtitle")} />
 
-      <Group title="Colour" description="Mode, canvas and brand accent" defaultOpen errorPrefix="theme.">
+      <Group title={t("colour")} description={t("colourDescription")} defaultOpen errorPrefix="theme.">
         <Segmented
-          label="Mode"
+          label={t("mode")}
           value={config.theme.mode}
           onChange={(mode: ColorMode) =>
             update((d) => {
@@ -40,29 +43,25 @@ export function DesignPanel({ config, update, workspace }: SectionProps) {
             })
           }
           options={[
-            { value: "light", label: "Light" },
-            { value: "dark", label: "Dark" },
+            { value: "light", label: t("light") },
+            { value: "dark", label: t("dark") },
           ]}
         />
         <ColorField
-          label="Background"
+          label={t("background")}
           path="theme.background"
           value={config.theme.background}
           fallback={MODE_BG[config.theme.mode]}
           nullable={false}
-          hint={
-            config.theme.mode === "dark"
-              ? "Dark mode keeps a dark canvas; light colours are replaced."
-              : "Light mode keeps a light canvas; dark colours are replaced."
-          }
+          hint={config.theme.mode === "dark" ? t("backgroundHintDark") : t("backgroundHintLight")}
           onChange={(c) => c && update((d) => void (d.theme.background = c))}
         />
         <ColorField
-          label="Accent"
+          label={t("accent")}
           path="theme.accent"
           value={config.theme.accent}
           fallback={workspace.primaryColor}
-          hint={config.theme.accent ? "Buttons, links and highlights." : "Empty uses your brand colour from Settings."}
+          hint={config.theme.accent ? t("accentHint") : t("accentHintEmpty")}
           onChange={(c) => update((d) => void (d.theme.accent = c))}
         >
           <ContrastNotice
@@ -73,9 +72,9 @@ export function DesignPanel({ config, update, workspace }: SectionProps) {
         </ColorField>
       </Group>
 
-      <Group title="Typography" defaultOpen>
+      <Group title={t("typography")} defaultOpen>
         <Segmented
-          label="Font"
+          label={t("font")}
           value={config.theme.font}
           onChange={(font) => update((d) => void (d.theme.font = font))}
           options={fonts}

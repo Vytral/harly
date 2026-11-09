@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { and, eq, notInArray } from "drizzle-orm";
 import { z } from "zod";
+import { getTranslations } from "@/i18n/server";
 import { aiEngineVersion, sourceScopedEvaluationFields } from "@/features/evaluations/source-fields";
 
 import {
@@ -56,9 +57,10 @@ export type GenerateAiEvaluationResult =
 export async function generateAiEvaluationAction(input: {
   applicationId: string;
 }): Promise<GenerateAiEvaluationResult> {
+  const t = await getTranslations("server.candidates.ai");
   const parsed = generateSchema.safeParse(input);
   if (!parsed.success) {
-    return { success: false, error: "Invalid application." };
+    return { success: false, error: t("invalidApplication") };
   }
 
   let context;
@@ -70,7 +72,7 @@ export async function generateAiEvaluationAction(input: {
   } catch {
     return {
       success: false,
-      error: "You do not have permission to run automatic evaluations.",
+      error: t("noPermissionAutoEvaluate"),
     };
   }
   const workspaceId = context.organization.id;
@@ -82,7 +84,7 @@ export async function generateAiEvaluationAction(input: {
   } catch {
     return {
       success: false,
-      error: "Too many scoring requests. Slow down and try again shortly.",
+      error: t("tooManyScoringRequests"),
     };
   }
 
@@ -129,7 +131,7 @@ export async function generateAiEvaluationAction(input: {
     .limit(1);
 
   if (!row) {
-    return { success: false, error: "Application not found." };
+    return { success: false, error: t("applicationNotFound") };
   }
 
   const aiConfig = await getWorkspaceAiConfig(workspaceId);
@@ -308,7 +310,7 @@ export async function generateAiEvaluationAction(input: {
     return {
       success: false,
       error:
-        "The automatic evaluation failed. Check the evaluation configuration and try again.",
+        t("autoEvaluationFailed"),
     };
   }
 }
@@ -337,16 +339,17 @@ const bulkSchema = z.object({ jobId: z.uuid() });
 export async function bulkGenerateAiEvaluationsForJobAction(input: {
   jobId: string;
 }): Promise<BulkGenerateResult> {
+  const t = await getTranslations("server.candidates.ai");
   const parsed = bulkSchema.safeParse(input);
   if (!parsed.success) {
-    return { success: false, error: "Invalid job." };
+    return { success: false, error: t("invalidJob") };
   }
 
   let context;
   try {
     context = await requireJobPermission("collab:write", parsed.data.jobId);
   } catch {
-    return { success: false, error: "Permission denied." };
+    return { success: false, error: t("permissionDenied") };
   }
   const workspaceId = context.organization.id;
 
@@ -360,7 +363,7 @@ export async function bulkGenerateAiEvaluationsForJobAction(input: {
   } catch {
     return {
       success: false,
-      error: "Too many bulk scoring requests. Slow down and try again shortly.",
+      error: t("tooManyBulkScoringRequests"),
     };
   }
 
@@ -417,7 +420,7 @@ export async function bulkGenerateAiEvaluationsForJobAction(input: {
       ),
     );
   } catch {
-    return { success: false, error: "Permission denied." };
+    return { success: false, error: t("permissionDenied") };
   }
 
   const remaining = Math.max(0, unscoredApps.length - BULK_BATCH_SIZE);
@@ -466,9 +469,10 @@ const detectSchema = z.object({ candidateId: z.uuid() });
 export async function detectCandidateDuplicatesAction(input: {
   candidateId: string;
 }): Promise<DetectDuplicatesResult> {
+  const t = await getTranslations("server.candidates.ai");
   const parsed = detectSchema.safeParse(input);
   if (!parsed.success) {
-    return { ok: false, error: "Invalid candidate." };
+    return { ok: false, error: t("invalidCandidate") };
   }
 
   let context;
@@ -488,20 +492,20 @@ export async function detectCandidateDuplicatesAction(input: {
     ) {
       return {
         ok: false,
-        error: "Duplicate detection requires workspace-wide candidate access.",
+        error: t("duplicateDetectionNeedsAccess"),
       };
     }
   } catch {
     return {
       ok: false,
-      error: "You do not have permission to run AI duplicate detection.",
+      error: t("noPermissionDuplicateDetection"),
     };
   }
   const workspaceId = context.organization.id;
 
   const aiConfig = await getWorkspaceAiConfig(workspaceId);
   if (!aiConfig) {
-    return { ok: false, error: "AI is not configured for this workspace." };
+    return { ok: false, error: t("aiNotConfigured") };
   }
   if (aiConfig.resumeAnonymization) {
     return { ok: false, error: ANONYMIZATION_BLOCKED_MESSAGES.duplicateDetection };
@@ -518,7 +522,7 @@ export async function detectCandidateDuplicatesAction(input: {
     console.error("Duplicate detection AI call failed", error);
     return {
       ok: false,
-      error: "AI duplicate detection failed. Try again later.",
+      error: t("duplicateDetectionFailed"),
     };
   }
 }

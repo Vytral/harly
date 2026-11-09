@@ -3,6 +3,18 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 
 vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: vi.fn() }) }));
+vi.mock("next-intl", () => ({
+  useTranslations: (namespace: string) => (key: string, values?: Record<string, string | number>) => {
+    const english: Record<string, string> = {
+      "candidates.actionBar.applicationToUpdate": "Application to update",
+      "candidates.actionBar.decideFor": "Decide for",
+    };
+    return Object.entries(values ?? {}).reduce(
+      (message, [name, value]) => message.replace(`{${name}}`, String(value)),
+      english[`${namespace}.${key}`] ?? `${namespace}.${key}`,
+    );
+  },
+}));
 vi.mock("lucide-react", () => ({
   Briefcase: () => null,
   Check: () => null,

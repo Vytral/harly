@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useSyncExternalStore } from "react";
+import { useTranslations } from "next-intl";
 import { AlertTriangle, Check, Loader2, Sparkles } from "lucide-react";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { TextMorph } from "torph/react";
@@ -10,8 +11,6 @@ import { cn } from "@/lib/utils";
 
 
 const DEMO_SEEN_KEY = "harly:demo-island-seen";
-const DEMO_MESSAGE =
-  "Your private demo sandbox — only you see your changes. It's deleted after a few hours.";
 const DEMO_AUTO_HIDE_MS = 5200;
 
 // Same dark pill as the sonner toasts: near-ink fill (flips with the theme),
@@ -36,6 +35,7 @@ export function NotificationIsland({
 }: {
   demoMode?: boolean;
 }) {
+  const t = useTranslations("shell.notificationIsland");
   const state = useSyncExternalStore(subscribeIsland, getIslandState, getIslandState);
   const reduceMotion = useReducedMotion();
   const item = state.item;
@@ -117,7 +117,7 @@ export function NotificationIsland({
             className="flex h-10 max-w-[min(92vw,460px)] items-center gap-2.5 rounded-full bg-near-ink px-4 text-pure-snow shadow-[var(--shadow-float)]"
           >
             <Sparkles className="size-4 shrink-0 text-chartreuse-signal" strokeWidth={2} />
-            <span className="truncate text-[13px] font-medium">{DEMO_MESSAGE}</span>
+            <span className="truncate text-[13px] font-medium">{t("demoNotice")}</span>
           </motion.div>
         ) : null}
       </AnimatePresence>

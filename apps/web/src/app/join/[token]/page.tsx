@@ -1,4 +1,5 @@
 import Image from "next/image";
+import { getTranslations } from "next-intl/server";
 import Link from "next/link";
 import { headers } from "next/headers";
 import { notFound } from "next/navigation";
@@ -12,6 +13,12 @@ type JoinPageProps = {
 };
 
 export default async function JoinPage({ params }: JoinPageProps) {
+  const t = await getTranslations("accessInvitation");
+  const roles: Record<string, string> = {
+    owner: t("roleOwner"), admin: t("roleAdmin"), recruiter: t("roleRecruiter"),
+    hiring_manager: t("roleHiringManager"), coordinator: t("roleCoordinator"),
+    sourcer: t("roleSourcer"), interviewer: t("roleInterviewer"), viewer: t("roleViewer"),
+  };
   const { token } = await params;
   const workspace = await getWorkspaceByInviteToken(token);
 
@@ -32,7 +39,7 @@ export default async function JoinPage({ params }: JoinPageProps) {
             href={`/login?redirect=${encodeURIComponent(`/join/${token}`)}`}
             className="text-sm font-medium text-muted-foreground transition hover:text-foreground"
           >
-            Sign in
+            {t("signIn")}
           </Link>
         ) : null}
       </header>
@@ -53,17 +60,13 @@ export default async function JoinPage({ params }: JoinPageProps) {
 
         <div className="w-full max-w-sm">
           <p className="text-center text-[11px] font-semibold uppercase tracking-[0.12em] text-pine">
-            Invitation
+            {t("invitation")}
           </p>
           <h1 className="mt-3 text-center font-display text-3xl tracking-tight text-foreground">
-            Join {workspace.organizationName}
+            {t("joinName", {name: workspace.organizationName})}
           </h1>
           <p className="mt-2 text-center text-sm leading-6 text-muted-foreground">
-            You&apos;ll join as{" "}
-            <span className="font-semibold capitalize text-foreground">
-              {workspace.role.replace("_", " ")}
-            </span>
-            .
+            {t.rich("joinRole", {role: roles[workspace.role] ?? workspace.role.replace("_", " "), strong: (chunks) => <span className="font-semibold capitalize text-foreground">{chunks}</span>})}
           </p>
 
           <div className="mt-10">
@@ -73,10 +76,10 @@ export default async function JoinPage({ params }: JoinPageProps) {
                   href={`/login?redirect=${encodeURIComponent(`/join/${token}`)}`}
                   className="block w-full rounded-lg bg-primary py-3.5 text-center text-sm font-semibold text-primary-foreground transition hover:bg-pine-strong"
                 >
-                  Sign in to join
+                  {t("signInJoin")}
                 </Link>
                 <p className="text-center text-xs text-muted-foreground">
-                  Sign in or create an account to join this workspace.
+                  {t("signInJoinHelp")}
                 </p>
               </div>
             ) : (

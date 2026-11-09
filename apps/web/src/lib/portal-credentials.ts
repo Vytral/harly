@@ -43,6 +43,7 @@ export async function findActiveCandidateByEmail(
       email: candidates.email,
       firstName: candidates.firstName,
       lastName: candidates.lastName,
+      preferredEmailLocale: candidates.preferredEmailLocale,
     })
     .from(candidates)
     .where(

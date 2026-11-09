@@ -1,5 +1,7 @@
 "use client";
 
+import { useTranslations } from "next-intl";
+
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import type { Route } from "next";
@@ -90,11 +92,11 @@ const GROUP_ORDER: readonly SearchGroupKey[] = [
 ];
 
 const GROUP_HEADINGS: Record<SearchGroupKey, string> = {
-  jobs: "Jobs",
-  candidates: "Candidates",
-  applications: "Applications",
-  tasks: "Tasks",
-  people: "People",
+  jobs: "jobs",
+  candidates: "candidates",
+  applications: "applications",
+  tasks: "tasks",
+  people: "people",
 };
 
 const SKELETON_ROWS = 4;
@@ -129,6 +131,8 @@ export function CommandMenu({
 }) {
   // The rail only shows five destinations now, so the palette carries the full
   // index: it is the fast path to everything that moved behind More.
+  const navText = useTranslations("shell.nav");
+  const t = useTranslations("shell.commandMenu");
   const navItems = allNavItems().filter((item) =>
     hasNavPermission(item, userPermissions),
   );
@@ -310,11 +314,11 @@ export function CommandMenu({
 
   const announcement =
     state.status === "error"
-      ? (state.error ?? "Search didn't load.")
+      ? (state.error ?? t("searchError"))
       : state.status === "loading" && hasQuery
-        ? "Searching"
+        ? t("searching")
         : hasQuery && state.status === "ready"
-          ? `${totalHits} ${totalHits === 1 ? "result" : "results"}`
+          ? t("resultsCount", { count: totalHits })
           : "";
 
   const seeAllHref =
@@ -333,9 +337,9 @@ export function CommandMenu({
         className="top-0 left-0 h-dvh max-h-dvh w-screen max-w-none translate-x-0 translate-y-0 gap-0 rounded-none p-0 shadow-2xl duration-150 motion-reduce:animate-none sm:top-[12%] sm:left-[50%] sm:h-auto sm:max-h-[85dvh] sm:w-full sm:max-w-2xl sm:translate-x-[-50%] sm:translate-y-0 sm:rounded-[28px]"
       >
         <DialogHeader className="sr-only">
-          <DialogTitle>Search</DialogTitle>
+          <DialogTitle>{t("search")}</DialogTitle>
           <DialogDescription>
-            Search jobs, candidates, applications, tasks and people, or jump to a page.
+            {t("description")}
           </DialogDescription>
         </DialogHeader>
         <Command
@@ -345,7 +349,7 @@ export function CommandMenu({
         >
           <CommandInput
             icon={<MagnifyingGlassIcon className="size-5 shrink-0 text-ink-soft" />}
-            placeholder="Search jobs, candidates, tasks, or jump to…"
+            placeholder={t("placeholder")}
             value={input}
             onValueChange={handleInputChange}
             className="text-base"
@@ -366,7 +370,7 @@ export function CommandMenu({
                   variant="outline"
                   onClick={() => controller.retry()}
                 >
-                  Retry
+                  {t("retry")}
                 </Button>
               </div>
             ) : null}
@@ -390,7 +394,7 @@ export function CommandMenu({
             ) : null}
 
             {showRecents ? (
-              <CommandGroup heading="Recent">
+              <CommandGroup heading={t("recent")}>
                 {recents.map((item) => (
                   <div key={`${item.group}:${item.id}`} className="group relative">
                     <CommandItem
@@ -407,7 +411,7 @@ export function CommandMenu({
                     </CommandItem>
                     <button
                       type="button"
-                      aria-label={`Remove ${item.primary} from recent searches`}
+                      aria-label={t("removeRecent", { name: item.primary })}
                       onClick={() => dropRecent(item)}
                       className="absolute top-1/2 right-2 flex size-8 -translate-y-1/2 items-center justify-center rounded-xl text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
                     >
@@ -430,7 +434,7 @@ export function CommandMenu({
                   const section = results.groups[group];
                   if (!section || section.hits.length === 0) return null;
                   return (
-                    <CommandGroup key={group} heading={GROUP_HEADINGS[group]}>
+                    <CommandGroup key={group} heading={t(GROUP_HEADINGS[group])}>
                       {section.hits.map((hit) => {
                         const content = (
                           <>
@@ -475,12 +479,12 @@ export function CommandMenu({
             {showEmpty ? (
               <div className="spotlight-item-enter px-2 pt-3 pb-2 text-sm">
                 <p className="text-muted-foreground">
-                  No matches for &ldquo;{state.query}&rdquo;.
+                  {t("noMatches", { query: state.query })}
                 </p>
                 <ul className="mt-2 list-disc space-y-1 ps-5 text-muted-foreground">
-                  <li>Check the spelling, or use fewer words.</li>
-                  <li>Search by a candidate&rsquo;s name or email, or by a job title.</li>
-                  <li>Tasks match on their title.</li>
+                  <li>{t("checkSpelling")}</li>
+                  <li>{t("searchHint")}</li>
+                  <li>{t("taskHint")}</li>
                 </ul>
               </div>
             ) : null}
@@ -494,7 +498,7 @@ export function CommandMenu({
                 >
                   <AssistantAvatar avatarUrl={harly.assistant.avatarUrl} size={16} className="size-4 shrink-0 rounded-full" />
                   <span className="min-w-0 flex-1 truncate">
-                    Ask {harly.assistant.name} &ldquo;{state.query}&rdquo;
+                    {t("askQuery", { name: harly.assistant.name, query: state.query })}
                   </span>
                   <kbd className="font-chrome text-[11px] text-quiet-mist">AI</kbd>
                 </CommandItem>
@@ -509,7 +513,7 @@ export function CommandMenu({
                   className="gap-3 rounded-2xl"
                 >
                   <MagnifyingGlassIcon className="size-4 shrink-0 text-ink-soft" />
-                  See all results for &ldquo;{state.query}&rdquo;
+                  {t("seeAll", { query: state.query })}
                 </CommandItem>
               </CommandGroup>
             ) : null}
@@ -520,21 +524,21 @@ export function CommandMenu({
 
             {!showSkeleton ? (
               <>
-                <CommandGroup heading="Navigate">
+                <CommandGroup heading={t("navigate")}>
                   {navItems.map((item) => (
                     <CommandItem
                       key={item.href}
-                      value={`nav-${item.label}`}
+                      value={`nav-${navText(item.messageKey)}`}
                       onSelect={() => go(item.href)}
                       className="gap-3 rounded-2xl"
                     >
                       <item.icon className="size-4" strokeWidth={1.8} />
-                      {item.label}
+                      {navText(item.messageKey)}
                     </CommandItem>
                   ))}
                 </CommandGroup>
                 {candidateItems.length > 0 ? (
-                  <CommandGroup heading="This candidate">
+                  <CommandGroup heading={t("thisCandidate")}>
                     {candidateItems.map((item) => {
                       const entry = candidateActions[item.id];
                       if (!entry) return null;
@@ -557,7 +561,7 @@ export function CommandMenu({
                     })}
                   </CommandGroup>
                 ) : null}
-                <CommandGroup heading="Actions">
+                <CommandGroup heading={t("actions")}>
                   {can("candidates:edit") ? (
                     <>
                       <CommandItem
@@ -566,7 +570,7 @@ export function CommandMenu({
                         className="gap-3 rounded-2xl"
                       >
                         <UserPlus className="size-4" strokeWidth={1.8} />
-                        New candidate
+                        {t("newCandidate")}
                       </CommandItem>
                       <CommandItem
                         value="action-import-candidates"
@@ -574,7 +578,7 @@ export function CommandMenu({
                         className="gap-3 rounded-2xl"
                       >
                         <FileUp className="size-4" strokeWidth={1.8} />
-                        Import candidates
+                        {t("importCandidates")}
                       </CommandItem>
                     </>
                   ) : null}
@@ -585,7 +589,7 @@ export function CommandMenu({
                       className="gap-3 rounded-2xl"
                     >
                       <ListTodo className="size-4" strokeWidth={1.8} />
-                      New task
+                      {t("newTask")}
                     </CommandItem>
                   ) : null}
                   {can("candidates:view") ? (
@@ -595,7 +599,7 @@ export function CommandMenu({
                       className="gap-3 rounded-2xl"
                     >
                       <ScanSearch className="size-4" strokeWidth={1.8} />
-                      <span className="flex-1">Go to my review queue</span>
+                      <span className="flex-1">{t("reviewQueue")}</span>
                       <kbd className="font-chrome text-[11px] text-quiet-mist">G R</kbd>
                     </CommandItem>
                   ) : null}
@@ -605,7 +609,7 @@ export function CommandMenu({
                     className="gap-3 rounded-2xl"
                   >
                     <Keyboard className="size-4" strokeWidth={1.8} />
-                    <span className="flex-1">Keyboard shortcuts</span>
+                    <span className="flex-1">{t("shortcuts")}</span>
                     <kbd className="font-chrome text-[11px] text-quiet-mist">?</kbd>
                   </CommandItem>
                   {harly.enabled ? (
@@ -615,7 +619,7 @@ export function CommandMenu({
                     className="gap-3 rounded-2xl"
                   >
                     <AssistantAvatar avatarUrl={harly.assistant.avatarUrl} size={16} className="size-4 shrink-0 rounded-full" />
-                    <span className="flex-1">Ask {harly.assistant.name}</span>
+                    <span className="flex-1">{t("ask", { name: harly.assistant.name })}</span>
                     <kbd className="font-chrome text-[11px] text-quiet-mist">⌘J</kbd>
                   </CommandItem>
                   ) : null}
@@ -625,7 +629,7 @@ export function CommandMenu({
                     className="gap-3 rounded-2xl"
                   >
                     <PlusCircleIcon />
-                    Create new job
+                    {t("newJob")}
                   </CommandItem>
                   <CommandItem
                     value="action-account"
@@ -633,7 +637,7 @@ export function CommandMenu({
                     className="gap-3 rounded-2xl"
                   >
                     <UserCircleIcon />
-                    Account settings
+                    {t("accountSettings")}
                   </CommandItem>
                 </CommandGroup>
               </>
@@ -647,13 +651,13 @@ export function CommandMenu({
           <div className="hidden items-center gap-3 border-t px-4 py-2.5 text-xs text-muted-foreground sm:flex">
             <span className="flex items-center gap-1">
               <Kbd>↑</Kbd>
-              <Kbd>↓</Kbd> navigate
+              <Kbd>↓</Kbd> {t("navigateAction")}
             </span>
             <span className="flex items-center gap-1">
-              <Kbd>↵</Kbd> select
+              <Kbd>↵</Kbd> {t("select")}
             </span>
             <span className="ms-auto flex items-center gap-1">
-              <Kbd>esc</Kbd> close
+              <Kbd>esc</Kbd> {t("close")}
             </span>
           </div>
         </Command>

@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { eq } from "drizzle-orm";
 import { z } from "zod";
+import { getTranslations } from "@/i18n/server";
 
 import { db, mailboxes } from "@harly/db";
 
@@ -36,13 +37,14 @@ export async function saveMailboxSettingsAction(
 ): Promise<MailboxActionResult> {
   assertNotDemo();
   const context = await requirePermission("integrations:manage");
+  const t = await getTranslations("server.workspaces.mailboxSettingsActions");
   if (!isEncryptionConfigured())
-    return { ok: false, error: "Server encryption is not configured." };
+    return { ok: false, error: t("encryptionNotConfigured") };
   const parsed = schema.safeParse(input);
   if (!parsed.success)
     return {
       ok: false,
-      error: parsed.error.issues[0]?.message ?? "Invalid mailbox settings.",
+      error: parsed.error.issues[0]?.message ?? t("invalidSettings"),
     };
   const value = parsed.data;
   const [existing] = await db
@@ -51,7 +53,7 @@ export async function saveMailboxSettingsAction(
     .where(eq(mailboxes.workspaceId, context.organization.id))
     .limit(1);
   if (!existing && (!value.imapPassword || !value.smtpPassword))
-    return { ok: false, error: "Add both mailbox passwords before saving." };
+    return { ok: false, error: t("passwordsRequired") };
   const imap = value.imapPassword ? encryptSecret(value.imapPassword) : null;
   const smtp = value.smtpPassword ? encryptSecret(value.smtpPassword) : null;
   const columns = {
@@ -108,6 +110,7 @@ export async function saveMailboxSettingsAction(
 export async function testMailboxConnectionAction(): Promise<MailboxActionResult> {
   assertNotDemo();
   const context = await requirePermission("integrations:manage");
+  const t = await getTranslations("server.workspaces.mailboxSettingsActions");
   try {
     await syncMailbox(context.organization.id);
     revalidatePath("/settings/email");
@@ -115,7 +118,7 @@ export async function testMailboxConnectionAction(): Promise<MailboxActionResult
   } catch (error) {
     return {
       ok: false,
-      error: error instanceof Error ? error.message : "Connection test failed.",
+      error: error instanceof Error ? error.message : t("connectionTestFailed"),
     };
   }
 }

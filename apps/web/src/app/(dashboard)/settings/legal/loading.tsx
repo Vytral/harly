@@ -1,3 +1,5 @@
+import { getTranslations } from "next-intl/server";
+
 import { Card } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 
@@ -7,10 +9,11 @@ import { Skeleton } from "@/components/ui/skeleton";
  * Retention and Consent cards, the Legal Pages tabbed editor card, and the
  * Requests list below.
  */
-export default function LegalSettingsLoading() {
+export default async function LegalSettingsLoading() {
+  const t = await getTranslations("pages.settingsLegal.loading");
   return (
     <div aria-busy="true" className="space-y-6">
-      <span className="sr-only">Loading…</span>
+      <span className="sr-only">{t("label")}</span>
 
       <div className="space-y-4">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">

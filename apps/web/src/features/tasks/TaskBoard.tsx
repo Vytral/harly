@@ -15,10 +15,10 @@ import {
   type DragStartEvent,
 } from "@dnd-kit/core";
 import { Plus } from "lucide-react";
+import { useTranslations } from "next-intl";
 
 import { cn } from "@/lib/utils";
 import type { TaskItem, TaskStatus } from "./shared";
-import { TASK_STATUS_LABELS } from "./shared";
 import { TaskCard, TaskCardOverlay } from "./TaskCard";
 import { STATUS_ACCENT, STATUS_COLOR, STATUS_ICON, type TaskHandlers } from "./task-ui";
 
@@ -35,6 +35,8 @@ function Column({
 }) {
   const { isOver, setNodeRef } = useDroppable({ id: status, data: { status } });
   const Icon = STATUS_ICON[status];
+  const t = useTranslations("features.tasks.TaskBoard");
+  const tStatus = useTranslations("features.tasks.TaskBoard.statuses");
 
   return (
     <section className="flex min-w-0 flex-col gap-2.5">
@@ -43,14 +45,14 @@ function Column({
         style={{ borderTopColor: STATUS_ACCENT[status], borderTopWidth: 2 }}
       >
         <Icon className={cn("size-4 shrink-0", STATUS_COLOR[status])} strokeWidth={2} />
-        <h2 className="truncate text-sm font-semibold">{TASK_STATUS_LABELS[status]}</h2>
+        <h2 className="truncate text-sm font-semibold">{tStatus(status)}</h2>
         <span className="rounded-full bg-muted px-1.5 text-xs font-medium tabular-nums text-muted-foreground">
           {tasks.length}
         </span>
         <button
           type="button"
           onClick={() => handlers.add(status)}
-          aria-label={`Add task to ${TASK_STATUS_LABELS[status]}`}
+          aria-label={t("addTaskTo", { status: tStatus(status) })}
           className="ml-auto rounded-md p-1 text-muted-foreground transition hover:bg-muted hover:text-foreground"
         >
           <Plus className="size-4" />
@@ -68,7 +70,7 @@ function Column({
           <div className="flex flex-1 flex-col items-center justify-center gap-1.5 py-12 text-center">
             <Icon className="size-5 text-muted-foreground/40" strokeWidth={1.5} />
             <p className="text-xs text-muted-foreground">
-              {isOver ? "Drop here" : "Drag a card here"}
+              {isOver ? t("dropHere") : t("dragCardHere")}
             </p>
           </div>
         ) : (

@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { normalizeEmailLocale } from "@harly/config/email-locale";
 
 import {
   RESERVED_USERNAMES,
@@ -98,6 +99,27 @@ export const capacityHoursPerWeekSchema = z
   .max(168)
   .optional()
   .nullable();
+
+export const preferredEmailLocaleSchema = z.union([
+  z.string().trim().transform((value, ctx) => {
+    const locale = normalizeEmailLocale(value);
+    if (!locale) {
+      ctx.addIssue({
+        code: "custom",
+        message: "Choose one of the supported email languages.",
+      });
+      return z.NEVER;
+    }
+    return locale;
+  }),
+  z.null(),
+]);
+
+export const updateEmailPreferenceSchema = z.object({
+  preferredEmailLocale: preferredEmailLocaleSchema,
+});
+
+export type UpdateEmailPreferenceInput = z.input<typeof updateEmailPreferenceSchema>;
 
 export const updateProfileSchema = z.object({
   name: z.string().trim().min(1).max(200),

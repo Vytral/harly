@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { and, eq, isNull, max, sql } from "drizzle-orm";
+import { getTranslations } from "@/i18n/server";
 import { z } from "zod";
 
 import { db, rejectionReasons } from "@harly/db";
@@ -39,6 +40,7 @@ export type RejectDialogData = {
 export async function getRejectDialogDataAction(): Promise<
   { ok: true; data: RejectDialogData } | { ok: false; error: string }
 > {
+  const t = await getTranslations("server.rejectionReasons.actions");
   try {
     const context = await requirePermission("candidates:reject");
     const workspaceId = context.organization.id;
@@ -57,7 +59,7 @@ export async function getRejectDialogDataAction(): Promise<
       },
     };
   } catch {
-    return { ok: false, error: "Could not load rejection options." };
+    return { ok: false, error: t("couldNotLoadOptions") };
   }
 }
 
@@ -73,8 +75,9 @@ export async function previewRejectionEmailAction(input: {
 }): Promise<
   { ok: true; preview: RejectionEmailPreview } | { ok: false; error: string }
 > {
+  const t = await getTranslations("server.rejectionReasons.actions");
   const parsed = previewSchema.safeParse(input);
-  if (!parsed.success) return { ok: false, error: "Invalid preview request." };
+  if (!parsed.success) return { ok: false, error: t("invalidPreviewRequest") };
   try {
     const context = await requireApplicationPermission(
       "candidates:edit",
@@ -89,10 +92,10 @@ export async function previewRejectionEmailAction(input: {
       applicationId: parsed.data.applicationId,
       templateId,
     });
-    if (!preview) return { ok: false, error: "Preview unavailable." };
+    if (!preview) return { ok: false, error: t("previewUnavailable") };
     return { ok: true, preview };
   } catch {
-    return { ok: false, error: "Preview unavailable." };
+    return { ok: false, error: t("previewUnavailable") };
   }
 }
 
@@ -122,14 +125,15 @@ export async function addRejectionReasonAction(
 ): Promise<RejectionReasonActionResult> {
   assertNotDemo();
   const context = await requirePermission("settings:edit");
+  const t = await getTranslations("server.rejectionReasons.actions");
   const parsed = rejectionReasonLabelSchema.safeParse(label);
   if (!parsed.success) {
-    return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid name." };
+    return { ok: false, error: label.trim() ? t("labelTooLong") : t("labelRequired") };
   }
   const workspaceId = context.organization.id;
   await ensureRejectionReasons(workspaceId);
   if (await labelTaken(workspaceId, parsed.data)) {
-    return { ok: false, error: "A reason with that name already exists." };
+    return { ok: false, error: t("labelTaken") };
   }
 
   const existingCodes = new Set(
@@ -177,15 +181,16 @@ export async function renameRejectionReasonAction(
 ): Promise<RejectionReasonActionResult> {
   assertNotDemo();
   const context = await requirePermission("settings:edit");
+  const t = await getTranslations("server.rejectionReasons.actions");
   const parsedCode = codeSchema.safeParse(code);
   const parsedLabel = rejectionReasonLabelSchema.safeParse(label);
-  if (!parsedCode.success) return { ok: false, error: "Unknown reason." };
+  if (!parsedCode.success) return { ok: false, error: t("unknownReason") };
   if (!parsedLabel.success) {
-    return { ok: false, error: parsedLabel.error.issues[0]?.message ?? "Invalid name." };
+    return { ok: false, error: label.trim() ? t("labelTooLong") : t("labelRequired") };
   }
   const workspaceId = context.organization.id;
   if (await labelTaken(workspaceId, parsedLabel.data, parsedCode.data)) {
-    return { ok: false, error: "A reason with that name already exists." };
+    return { ok: false, error: t("labelTaken") };
   }
   const updated = await db
     .update(rejectionReasons)
@@ -197,7 +202,7 @@ export async function renameRejectionReasonAction(
       ),
     )
     .returning({ id: rejectionReasons.id });
-  if (updated.length === 0) return { ok: false, error: "Unknown reason." };
+  if (updated.length === 0) return { ok: false, error: t("unknownReason") };
   await logAuditEvent({
     workspaceId,
     actorId: context.user.id,
@@ -217,8 +222,9 @@ export async function setRejectionReasonArchivedAction(
 ): Promise<RejectionReasonActionResult> {
   assertNotDemo();
   const context = await requirePermission("settings:edit");
+  const t = await getTranslations("server.rejectionReasons.actions");
   const parsedCode = codeSchema.safeParse(code);
-  if (!parsedCode.success) return { ok: false, error: "Unknown reason." };
+  if (!parsedCode.success) return { ok: false, error: t("unknownReason") };
   const workspaceId = context.organization.id;
 
   if (archived) {
@@ -232,7 +238,7 @@ export async function setRejectionReasonArchivedAction(
         ),
       );
     if (active.length <= 1 && active[0]?.code === parsedCode.data) {
-      return { ok: false, error: "Keep at least one active reason." };
+      return { ok: false, error: t("keepOneActive") };
     }
   }
 
@@ -246,7 +252,7 @@ export async function setRejectionReasonArchivedAction(
       ),
     )
     .returning({ id: rejectionReasons.id });
-  if (updated.length === 0) return { ok: false, error: "Unknown reason." };
+  if (updated.length === 0) return { ok: false, error: t("unknownReason") };
   await logAuditEvent({
     workspaceId,
     actorId: context.user.id,

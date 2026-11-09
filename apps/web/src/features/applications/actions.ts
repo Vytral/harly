@@ -1,6 +1,7 @@
 "use server";
 
 import { eq } from "drizzle-orm";
+import { getTranslations } from "@/i18n/server";
 import { revalidatePath } from "next/cache";
 import { headers } from "next/headers";
 import { after } from "next/server";
@@ -237,12 +238,13 @@ export async function submitApplicationAction(
   _previousState: ApplyJobActionState,
   formData: FormData,
 ): Promise<ApplyJobActionState> {
+  const t = await getTranslations("server.applications.actions");
   const jobContext = await getPublicJobApplicationContext(input);
 
   if (!jobContext) {
     return {
       status: "error",
-      message: "Job not available.",
+      message: t("failures.jobUnavailable"),
     };
   }
 
@@ -275,7 +277,7 @@ export async function submitApplicationAction(
   } catch {
     return {
       status: "error",
-      message: "Too many attempts. Please try again in a minute.",
+      message: t("tooManyAttempts"),
     };
   }
 
@@ -288,7 +290,7 @@ export async function submitApplicationAction(
   if (!captchaValid) {
     return {
       status: "error",
-      message: "Bot verification failed. Please try again.",
+      message: t("botVerificationFailed"),
     };
   }
 
@@ -351,7 +353,7 @@ export async function submitApplicationAction(
     const split = splitEntryErrors(parsed.error, values);
     return {
       status: "error",
-      message: "Review the highlighted fields and try again.",
+      message: t("reviewFields"),
       fieldErrors: split.fieldErrors,
       educationErrors: split.educationErrors,
       experienceErrors: split.experienceErrors,
@@ -366,7 +368,7 @@ export async function submitApplicationAction(
   if (Object.keys(questionErrors).length > 0) {
     return {
       status: "error",
-      message: "Review the highlighted fields and try again.",
+      message: t("reviewFields"),
       questionErrors,
     };
   }
@@ -388,8 +390,7 @@ export async function submitApplicationAction(
   if (settings?.legalConfigured && !consentGiven) {
     return {
       status: "error",
-      message:
-        "You must agree to the privacy policy to submit your application.",
+      message: t("failures.consentRequired"),
     };
   }
   if (settings?.consentCheckboxText) {
@@ -410,7 +411,7 @@ export async function submitApplicationAction(
     if (!result.ok) {
       return {
         status: "error",
-        message: result.message,
+        message: t(`failures.${result.code}`),
       };
     }
 
@@ -430,16 +431,14 @@ export async function submitApplicationAction(
     revalidatePath("/dashboard/candidates");
     return {
       status: "success",
-      message:
-        "Application received. The hiring team will review it and follow up if there is a fit.",
+      message: t("received"),
     };
   } catch (error) {
     console.error("Failed to submit application", error);
 
     return {
       status: "error",
-      message:
-        "We couldn't submit your application. Please try again in a moment.",
+      message: t("submitFailed"),
     };
   }
 }

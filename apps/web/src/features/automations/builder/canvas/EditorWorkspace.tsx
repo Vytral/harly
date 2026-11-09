@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useReducer, useRef, useState } from "react";
+import { useTranslations } from "next-intl";
 import { Copy, Redo2, Trash2, Undo2 } from "lucide-react";
 
 import {
@@ -70,6 +71,8 @@ export function EditorWorkspace({
   state?: EditorState;
   dispatch?: React.Dispatch<EditorAction>;
 }) {
+  const t = useTranslations("features.automations.editorWorkspace");
+  const tl = useTranslations("labels.automations");
   const [internalState, internalDispatch] = useReducer(editorReducer, undefined, () =>
     initialEditorState(graph, layout),
   );
@@ -224,15 +227,13 @@ export function EditorWorkspace({
       const positions = await layoutGraph(state.graph);
       if (graphRef.current === state.graph)
         dispatch({ type: "apply-layout", positions });
-      else setLayoutError("The workflow changed while arranging. Try again.");
+      else setLayoutError(t("layoutChanged"));
     } catch {
-      setLayoutError(
-        "Could not arrange the workflow. Your positions have been preserved.",
-      );
+      setLayoutError(t("layoutFailed"));
     } finally {
       arranging.current = false;
     }
-  }, [dispatch, state.graph]);
+  }, [dispatch, state.graph, t]);
 
   const hasTrigger = state.graph.nodes.some((node) => node.type === "trigger");
   const selectedId = state.selection.nodeIds[0];
@@ -280,56 +281,56 @@ export function EditorWorkspace({
         <div className="flex flex-wrap items-center justify-between gap-2 border-b border-hairline-c bg-warm-paper px-4 py-2 text-xs">
           <div className="flex items-center gap-2 text-soft-ink">
             <span className="font-chrome rounded-full bg-soft-kraft px-2 py-0.5 text-[11px] font-medium text-foreground">
-              {state.graph.nodes.length} {state.graph.nodes.length === 1 ? "step" : "steps"}
+              {t("stepCount", { count: state.graph.nodes.length })}
             </span>
             <span>·</span>
-            <span>{state.graph.edges.length} {state.graph.edges.length === 1 ? "connection" : "connections"}</span>
+            <span>{t("connectionCount", { count: state.graph.edges.length })}</span>
           </div>
           <div className="flex items-center gap-1 rounded-xl border border-border/80 bg-pure-snow p-1 shadow-2xs">
             <button
               type="button"
               onClick={() => dispatch({ type: "undo" })}
               disabled={!state.past.length}
-              title="Undo (Cmd+Z)"
-              aria-label="Undo"
+              title={t("undoShortcut")}
+              aria-label={t("undo")}
               className="flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-xs font-medium text-foreground transition-colors hover:bg-soft-kraft disabled:opacity-30"
             >
               <Undo2 className="size-3.5" />
-              <span className="hidden sm:inline">Undo</span>
+              <span className="hidden sm:inline">{t("undo")}</span>
             </button>
             <button
               type="button"
               onClick={() => dispatch({ type: "redo" })}
               disabled={!state.future.length}
-              title="Redo (Cmd+Shift+Z)"
-              aria-label="Redo"
+              title={t("redoShortcut")}
+              aria-label={t("redo")}
               className="flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-xs font-medium text-foreground transition-colors hover:bg-soft-kraft disabled:opacity-30"
             >
               <Redo2 className="size-3.5" />
-              <span className="hidden sm:inline">Redo</span>
+              <span className="hidden sm:inline">{t("redo")}</span>
             </button>
             <div className="mx-1 h-3.5 w-px bg-hairline-c" aria-hidden />
             <button
               type="button"
               onClick={() => dispatch({ type: "duplicate-selection" })}
               disabled={!selectedId}
-              title="Duplicate selected step (Cmd+D)"
-              aria-label="Duplicate selected step"
+              title={t("duplicateShortcut")}
+              aria-label={t("duplicateSelectedStep")}
               className="flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-xs font-medium text-foreground transition-colors hover:bg-soft-kraft disabled:opacity-30"
             >
               <Copy className="size-3.5" />
-              <span className="hidden sm:inline">Duplicate</span>
+              <span className="hidden sm:inline">{t("duplicate")}</span>
             </button>
             <button
               type="button"
               onClick={() => dispatch({ type: "delete-selection" })}
               disabled={!selectedId && !state.selection.edgeIds.length}
-              title="Delete selected (Backspace / Delete)"
-              aria-label="Delete selected"
+              title={t("deleteShortcut")}
+              aria-label={t("deleteSelected")}
               className="flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-xs font-medium text-danger-rust transition-colors hover:bg-danger-rust/10 disabled:opacity-30"
             >
               <Trash2 className="size-3.5" />
-              <span className="hidden sm:inline">Delete</span>
+              <span className="hidden sm:inline">{t("delete")}</span>
             </button>
           </div>
         </div>
@@ -339,26 +340,26 @@ export function EditorWorkspace({
             className="rounded-lg border border-border px-2.5 py-1 text-xs font-medium"
             onClick={() => setLibraryOpen(true)}
           >
-            Blocks
+            {t("blocks")}
           </button>
           <button
             type="button"
             className="rounded-lg border border-border px-2.5 py-1 text-xs font-medium xl:hidden"
             onClick={() => setShowCanvas((open) => !open)}
           >
-            {showCanvas ? "Steps" : "Canvas"}
+            {showCanvas ? t("steps") : t("canvas")}
           </button>
           <button
             type="button"
             className="rounded-lg border border-border px-2.5 py-1 text-xs font-medium md:hidden"
             onClick={() => setInspectorOpen(true)}
           >
-            Configure
+            {t("configure")}
           </button>
         </div>
         {state.lastError ? (
           <p className="border-b border-danger-rust/20 bg-danger-rust/5 px-3 py-2 text-xs text-danger-rust">
-            {state.lastError}
+            {tl(state.lastError.key, state.lastError.values)}
           </p>
         ) : null}
         {layoutError ? (
@@ -427,9 +428,9 @@ export function EditorWorkspace({
           className="w-[264px] bg-warm-paper p-0 sm:max-w-[264px]"
         >
           <SheetHeader className="sr-only">
-            <SheetTitle>Blocks</SheetTitle>
+            <SheetTitle>{t("blocks")}</SheetTitle>
             <SheetDescription>
-              Choose a block to add to this workflow.
+              {t("blocksDescription")}
             </SheetDescription>
           </SheetHeader>
           {library}
@@ -445,9 +446,9 @@ export function EditorWorkspace({
           className="w-full bg-warm-paper p-0 sm:max-w-[360px]"
         >
           <SheetHeader className="sr-only">
-            <SheetTitle>Configure step</SheetTitle>
+            <SheetTitle>{t("configureStep")}</SheetTitle>
             <SheetDescription>
-              Configure the selected workflow step.
+              {t("configureStepDescription")}
             </SheetDescription>
           </SheetHeader>
           {inspector}

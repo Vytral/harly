@@ -8,6 +8,7 @@ import {
   duplicateNodes,
   insertOnEdge,
   moveNodes,
+  type BuilderMessage,
   type EditorSnapshot,
   updateNode,
 } from "./commands";
@@ -22,7 +23,7 @@ export type EditorState = EditorSnapshot & {
   selection: EditorSelection;
   past: EditorSnapshot[];
   future: EditorSnapshot[];
-  lastError: string | null;
+  lastError: BuilderMessage | null;
 };
 
 export type EditorAction =

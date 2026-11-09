@@ -3,6 +3,7 @@
 import { randomUUID } from "node:crypto";
 
 import { revalidatePath } from "next/cache";
+import { getTranslations } from "@/i18n/server";
 import { and, asc, eq, inArray, isNull, sql } from "drizzle-orm";
 
 import { db } from "@harly/db";
@@ -178,6 +179,27 @@ async function requireAllApplicationPermissions(
   );
 }
 
+type PipelineActionFailureKey =
+  | "workspaceAccessDenied"
+  | "unableToMoveApplication"
+  | "invalidApplicationMove"
+  | "unableToMoveApplications"
+  | "invalidApplicationStatus"
+  | "applicationsNotFound"
+  | "invalidRejectionDetails"
+  | "chooseRejectionReason"
+  | "emailTemplateUnavailable"
+  | "stageNotFoundOrArchived"
+  | "unableToUpdateStatus"
+  | "unableToUpdateStageEmail"
+  | "concurrencyConflict";
+
+/** Failed result with its message translated for the recruiter's locale. */
+async function failure(key: PipelineActionFailureKey) {
+  const t = await getTranslations("server.pipeline.actions");
+  return { success: false, error: t(key) };
+}
+
 export async function moveApplicationInPipeline(
   input: MoveApplicationInPipelineInput,
 ): Promise<{ success: boolean; error?: string; emailWarning?: string }> {
@@ -186,7 +208,7 @@ export async function moveApplicationInPipeline(
 
   try {
     if (workspace.id !== input.workspaceId) {
-      return { success: false, error: "Workspace access denied." };
+      return failure("workspaceAccessDenied");
     }
 
     const [portalSettings] = await db
@@ -581,9 +603,9 @@ export async function moveApplicationInPipeline(
   } catch (error) {
     log.error(error, "moveApplicationInPipeline failed");
     if (isConcurrencyConflict(error) && error instanceof Error) {
-      return { success: false, error: error.message };
+      return failure("concurrencyConflict");
     }
-    return { success: false, error: "Unable to move application." };
+    return failure("unableToMoveApplication");
   }
 }
 
@@ -606,7 +628,7 @@ export async function bulkMoveApplications(
       input.applicationIds.length > 100 ||
       new Set(input.applicationIds).size !== input.applicationIds.length
     ) {
-      return { success: false, error: "Invalid application move request." };
+      return failure("invalidApplicationMove");
     }
     const uniqueApplicationIds = [...new Set(input.applicationIds)];
 
@@ -614,7 +636,7 @@ export async function bulkMoveApplications(
     const { organization: workspace, user } = await getWorkspaceContext();
 
     if (workspace.id !== input.workspaceId) {
-      return { success: false, error: "Workspace access denied." };
+      return failure("workspaceAccessDenied");
     }
 
     await requireAllApplicationPermissions(
@@ -1075,9 +1097,9 @@ export async function bulkMoveApplications(
   } catch (error) {
     log.error(error, "bulkMoveApplications failed");
     if (isConcurrencyConflict(error) && error instanceof Error) {
-      return { success: false, error: error.message };
+      return failure("concurrencyConflict");
     }
-    return { success: false, error: "Unable to move applications." };
+    return failure("unableToMoveApplications");
   }
 }
 
@@ -1093,13 +1115,13 @@ export async function updateApplicationStatus(
       new Set(input.applicationIds).size !== input.applicationIds.length ||
       !["active", "hired", "rejected", "withdrawn"].includes(input.status)
     ) {
-      return { success: false, error: "Invalid application status request." };
+      return failure("invalidApplicationStatus");
     }
 
     const { organization: workspace, user } = await getWorkspaceContext();
 
     if (workspace.id !== input.workspaceId) {
-      return { success: false, error: "Workspace access denied." };
+      return failure("workspaceAccessDenied");
     }
 
     // Rejecting is its own permission; every other status change is an edit.
@@ -1118,10 +1140,7 @@ export async function updateApplicationStatus(
     const applicationIds = applicationRows.map((application) => application.id);
 
     if (applicationIds.length !== input.applicationIds.length) {
-      return {
-        success: false,
-        error: "One or more applications were not found.",
-      };
+      return failure("applicationsNotFound");
     }
 
     // Rejection decision: reason (catalog-validated), internal note, and
@@ -1135,12 +1154,7 @@ export async function updateApplicationStatus(
       if (input.rejection !== undefined) {
         const parsedDecision = rejectionDecisionSchema.safeParse(input.rejection);
         if (!parsedDecision.success) {
-          return {
-            success: false,
-            error:
-              parsedDecision.error.issues[0]?.message ??
-              "Invalid rejection details.",
-          };
+          return failure("invalidRejectionDetails");
         }
         decision = parsedDecision.data;
       }
@@ -1149,7 +1163,7 @@ export async function updateApplicationStatus(
         decision?.reasonCode,
       );
       if (!rejectionReason) {
-        return { success: false, error: "Choose a valid rejection reason." };
+        return failure("chooseRejectionReason");
       }
       rejectionNote = decision?.note ?? null;
       sendRejectionEmail = decision?.sendEmail ?? true;
@@ -1160,7 +1174,7 @@ export async function updateApplicationStatus(
           rejectionTemplateId,
         );
         if (!template) {
-          return { success: false, error: "That email template is no longer available." };
+          return failure("emailTemplateUnavailable");
         }
       }
     }
@@ -1495,9 +1509,9 @@ export async function updateApplicationStatus(
   } catch (error) {
     log.error(error, "updateApplicationStatus failed");
     if (isConcurrencyConflict(error) && error instanceof Error) {
-      return { success: false, error: error.message };
+      return failure("concurrencyConflict");
     }
-    return { success: false, error: "Unable to update status." };
+    return failure("unableToUpdateStatus");
   }
 }
 
@@ -1512,7 +1526,7 @@ export async function updateStageEmailSettings(
     const { organization: workspace } = await getWorkspaceContext();
 
     if (workspace.id !== input.workspaceId) {
-      return { success: false, error: "Workspace access denied." };
+      return failure("workspaceAccessDenied");
     }
 
     const [updatedStage] = await db
@@ -1534,7 +1548,7 @@ export async function updateStageEmailSettings(
       .returning({ id: jobStages.id });
 
     if (!updatedStage) {
-      return { success: false, error: "Stage not found, or it is archived." };
+      return failure("stageNotFoundOrArchived");
     }
 
     revalidatePath("/dashboard/pipeline");
@@ -1542,6 +1556,6 @@ export async function updateStageEmailSettings(
     return { success: true };
   } catch (error) {
     log.error(error, "updateStageEmailSettings failed");
-    return { success: false, error: "Unable to update stage email." };
+    return failure("unableToUpdateStageEmail");
   }
 }

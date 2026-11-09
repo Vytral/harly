@@ -19,6 +19,7 @@ import {
 } from "@/lib/gcal/config";
 import { listCalendars } from "@/lib/gcal/client";
 import { createLogger } from "@/lib/logger";
+import { getTranslations } from "@/i18n/server";
 
 const log = createLogger("workspace-gcal-settings");
 
@@ -28,10 +29,8 @@ const SETTINGS_PATH = "/settings/integrations";
 
 export type GCalCalendar = { id: string; name: string; primary: boolean };
 
-const RECONNECT_MESSAGE =
-  "Google revoked this connection. Disconnect and reconnect Google Calendar.";
-const INVALID_CLIENT_MESSAGE =
-  "Google OAuth credentials are invalid. Update GOOGLE_CLIENT_ID/GOOGLE_CLIENT_SECRET and reconnect Google Calendar.";
+type Translate = (key: string, values?: Record<string, string | number>) => string;
+
 
 /** True when Google rejected the stored refresh token (revoked/expired). */
 function isInvalidGrant(err: unknown): boolean {
@@ -45,9 +44,9 @@ function isInvalidClient(err: unknown): boolean {
   return msg.includes("invalid_client");
 }
 
-function googleAuthFailureMessage(err: unknown): string | null {
-  if (isInvalidClient(err)) return INVALID_CLIENT_MESSAGE;
-  if (isInvalidGrant(err)) return RECONNECT_MESSAGE;
+function googleAuthFailureMessage(err: unknown, t: Translate): string | null {
+  if (isInvalidClient(err)) return t("invalidClient");
+  if (isInvalidGrant(err)) return t("revokedReconnect");
   return null;
 }
 
@@ -66,9 +65,10 @@ export async function listGCalCalendarsAction(): Promise<
 > {
   assertNotDemo();
   const context = await requirePermission("integrations:manage");
+  const t = await getTranslations("server.workspaces.gcalSettingsActions");
   const config = await getWorkspaceGCalConfig(context.organization.id);
   if (!config) {
-    return { ok: false, error: "Google Calendar not connected." };
+    return { ok: false, error: t("notConnected") };
   }
 
   try {
@@ -84,7 +84,7 @@ export async function listGCalCalendarsAction(): Promise<
     };
   } catch (err) {
     log.error(err, "listGCalCalendarsAction failed");
-    const authFailure = googleAuthFailureMessage(err);
+    const authFailure = googleAuthFailureMessage(err, t);
     if (authFailure) {
       await clearGCalToken(context.organization.id, err);
       return { ok: false, error: authFailure };
@@ -100,10 +100,11 @@ export async function saveGCalSettingsAction(input: {
 }): Promise<GCalActionResult> {
   assertNotDemo();
   const context = await requirePermission("integrations:manage");
+  const t = await getTranslations("server.workspaces.gcalSettingsActions");
   const calendarId = input.calendarId.trim();
 
   if (!calendarId) {
-    return { ok: false, error: "Calendar ID is required." };
+    return { ok: false, error: t("calendarIdRequired") };
   }
 
   await db
@@ -152,9 +153,10 @@ export async function disconnectGCalAction(): Promise<GCalActionResult> {
 export async function testGCalConnectionAction(): Promise<GCalActionResult> {
   assertNotDemo();
   const context = await requirePermission("integrations:manage");
+  const t = await getTranslations("server.workspaces.gcalSettingsActions");
   const config = await getWorkspaceGCalConfig(context.organization.id);
   if (!config) {
-    return { ok: false, error: "Google Calendar not connected." };
+    return { ok: false, error: t("notConnected") };
   }
 
   try {
@@ -163,7 +165,7 @@ export async function testGCalConnectionAction(): Promise<GCalActionResult> {
     return { ok: true };
   } catch (err) {
     log.error(err, "testGCalConnectionAction failed");
-    const authFailure = googleAuthFailureMessage(err);
+    const authFailure = googleAuthFailureMessage(err, t);
     if (authFailure) {
       await clearGCalToken(context.organization.id, err);
       return { ok: false, error: authFailure };

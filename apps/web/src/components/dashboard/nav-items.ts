@@ -23,15 +23,14 @@ import type { Permission } from "@/features/workspaces/permissions";
 export type NavBadge = "inbox" | "tasks";
 
 export type NavItem = {
-  label: string;
+  messageKey: string;
   href: Route;
   icon: LucideIcon;
   exact?: boolean;
   badge?: NavBadge;
   /** When set, the item is hidden unless the viewer holds this permission. */
   requiredPermission?: Permission | Permission[];
-  /** One short line for the More grid (tooltip / aria). */
-  hint?: string;
+  hintKey?: string;
   /**
    * The page at exactly this href has no heading of its own, so the shell
    * renders the label as the page title (see ShellPageHeading).
@@ -59,29 +58,29 @@ export type ResolvedNavGroup = {
  * Home and Reports are single destinations (no children).
  */
 export const primaryNav: NavItem[] = [
-  { label: "Home", href: "/dashboard", icon: Home, exact: true },
+  { messageKey: "home", href: "/dashboard", icon: Home, exact: true },
   {
-    label: "Hiring",
+    messageKey: "hiring",
     href: "/dashboard/jobs",
     icon: Briefcase,
     // Jobs first: it works out of the box. Inbox needs a mailbox connected
     // first, so it sits last.
     children: [
       {
-        label: "Jobs",
+        messageKey: "jobs",
         href: "/dashboard/jobs",
         icon: Briefcase,
         requiredPermission: "jobs:view",
       },
       {
-        label: "Pipeline",
+        messageKey: "pipeline",
         shellTitle: true,
         href: "/dashboard/pipeline",
         icon: KanbanSquare,
         requiredPermission: "candidates:view",
       },
       {
-        label: "Inbox",
+        messageKey: "inbox",
         shellTitle: true,
         href: "/dashboard/inbox",
         icon: Inbox,
@@ -91,25 +90,25 @@ export const primaryNav: NavItem[] = [
     ],
   },
   {
-    label: "People",
+    messageKey: "people",
     href: "/dashboard/candidates",
     icon: Users,
     children: [
       {
-        label: "Candidates",
+        messageKey: "candidates",
         href: "/dashboard/candidates",
         icon: Users,
         requiredPermission: "candidates:view",
       },
       {
-        label: "Talent Pool",
+        messageKey: "talentPool",
         shellTitle: true,
         href: "/dashboard/talent-pool",
         icon: Bookmark,
         requiredPermission: "candidates:view",
       },
       {
-        label: "Team",
+        messageKey: "team",
         href: "/people" as Route,
         icon: UserRound,
         requiredPermission: "members:read",
@@ -117,19 +116,19 @@ export const primaryNav: NavItem[] = [
     ],
   },
   {
-    label: "Work",
+    messageKey: "work",
     href: "/dashboard/tasks",
     icon: ListTodo,
     children: [
       {
-        label: "Tasks",
+        messageKey: "tasks",
         href: "/dashboard/tasks",
         icon: ListTodo,
         badge: "tasks",
         requiredPermission: "tasks:read",
       },
       {
-        label: "Calendar",
+        messageKey: "calendar",
         shellTitle: true,
         href: "/dashboard/calendars",
         icon: CalendarDays,
@@ -138,7 +137,7 @@ export const primaryNav: NavItem[] = [
     ],
   },
   {
-    label: "Reports",
+    messageKey: "reports",
     href: "/dashboard/reports",
     icon: BarChart3,
     requiredPermission: "reports:read",
@@ -148,39 +147,39 @@ export const primaryNav: NavItem[] = [
 /** The "More" pill: a flat grid of occasional, set-up surfaces. */
 export const moreNav: NavItem[] = [
   {
-    label: "Career Page",
+    messageKey: "careerPage",
     href: "/dashboard/career-page",
     icon: Globe,
     requiredPermission: "settings:edit",
-    hint: "Your public job board",
+    hintKey: "careerPageHint",
   },
   {
-    label: "Templates",
+    messageKey: "templates",
     shellTitle: true,
     href: "/dashboard/templates",
     icon: FileText,
     requiredPermission: "templates:manage",
-    hint: "Emails and scorecards",
+    hintKey: "templatesHint",
   },
   {
-    label: "Automations",
+    messageKey: "automations",
     href: "/dashboard/automations" as Route,
     icon: Workflow,
     requiredPermission: "automations:manage",
-    hint: "Run work automatically",
+    hintKey: "automationsHint",
   },
   {
-    label: "Documents",
+    messageKey: "documents",
     href: "/dashboard/documents" as Route,
     icon: NotebookTabs,
     requiredPermission: ["documents:read", "templates:manage"],
-    hint: "Files and signatures",
+    hintKey: "documentsHint",
   },
 ];
 
 /** Settings is rail chrome pinned to the bottom, not a primary destination. */
 export const settingsNav: NavItem = {
-  label: "Settings",
+  messageKey: "settings",
   href: "/settings",
   icon: Settings,
   requiredPermission: ["settings:edit", "dsar:manage"],

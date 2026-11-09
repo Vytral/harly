@@ -12,6 +12,7 @@ import {
   pruneSaved,
   settleWrite,
   type BoardOperation,
+  type BoardTranslator,
   type QueueEntry,
   type Settlement,
   type SettledToast,
@@ -124,9 +125,10 @@ export class BoardWriteQueue {
     };
   }
 
-  enqueue(operation: BoardOperation) {
+  /** `t` renders the outcome messages for this write and the ones queued behind it. */
+  enqueue(operation: BoardOperation, t: BoardTranslator) {
     this.replace(enqueue(this.entries, operation));
-    this.pump();
+    this.pump(t);
   }
 
   /** Saved writes are part of the server data now; drop them from the overlay. */
@@ -140,7 +142,7 @@ export class BoardWriteQueue {
     for (const listener of this.listeners) listener();
   }
 
-  private pump() {
+  private pump(t: BoardTranslator) {
     if (this.running) return;
     const head = nextQueued(this.entries);
     if (!head) return;
@@ -150,7 +152,7 @@ export class BoardWriteQueue {
 
     void this.write(head.operation).then((outcome) => {
       this.running = false;
-      const settlement = settleWrite(this.entries, head.operation, outcome);
+      const settlement = settleWrite(this.entries, head.operation, outcome, t);
       this.replace(settlement.entries);
       if (this.sink) {
         this.sink.onSettled(head.operation, settlement);
@@ -159,7 +161,7 @@ export class BoardWriteQueue {
         // to reach the person, so it goes out as a toast from here.
         for (const item of settlement.toasts) showSettledToast(item);
       }
-      this.pump();
+      this.pump(t);
     });
   }
 }

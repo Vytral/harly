@@ -1,6 +1,8 @@
 import { describe, expect, it, vi } from "vitest";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
+import { NextIntlClientProvider } from "next-intl";
+import en from "../../../messages/en.json";
 
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ replace: vi.fn(), refresh: vi.fn() }),
@@ -30,7 +32,7 @@ const baseProps = {
 
 describe("UserMenu", () => {
   it("renders a Radix dropdown trigger that is closed and labelled", () => {
-    const markup = renderToStaticMarkup(createElement(UserMenu, baseProps));
+    const markup = renderToStaticMarkup(<NextIntlClientProvider locale="en" messages={en}><UserMenu {...baseProps} /></NextIntlClientProvider>);
     expect(markup).toContain('aria-label="Account menu"');
     expect(markup).toContain('aria-haspopup="menu"');
     expect(markup).toContain('aria-expanded="false"');
@@ -41,7 +43,7 @@ describe("UserMenu", () => {
 
   it("renders the same closed trigger in demo mode", () => {
     const markup = renderToStaticMarkup(
-      createElement(UserMenu, { ...baseProps, demoMode: true }),
+      <NextIntlClientProvider locale="en" messages={en}><UserMenu {...baseProps} demoMode /></NextIntlClientProvider>,
     );
     expect(markup).toContain('aria-haspopup="menu"');
   });

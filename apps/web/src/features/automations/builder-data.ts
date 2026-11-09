@@ -1,5 +1,6 @@
 import "server-only";
 
+import { getTranslations } from "@/i18n/server";
 import { and, asc, desc, eq, ilike, isNull, or, sql } from "drizzle-orm";
 
 import {
@@ -673,12 +674,13 @@ export async function previewWorkflowPayload(input: {
   candidateId?: string;
   trigger: Trigger;
 }): Promise<Record<string, unknown>> {
+  const t = await getTranslations("server.automations.builderData");
   const context = await getWorkspaceContext();
   const sample = await resolveSample(
     context.organization.id,
     input.candidateId,
   );
-  if (!sample) throw new Error("No candidate found to preview.");
+  if (!sample) throw new Error(t("noCandidateToPreview"));
 
   const [candidate] = await db
     .select({
@@ -696,7 +698,7 @@ export async function previewWorkflowPayload(input: {
       ),
     )
     .limit(1);
-  if (!candidate) throw new Error("Candidate not found.");
+  if (!candidate) throw new Error(t("candidateNotFound"));
 
   const [application] = sample.applicationId
     ? await db
@@ -854,29 +856,34 @@ export type DryRunResult = {
   error?: string;
 };
 
-function titleForNode(node: WorkflowNode): string {
+type Translator = Awaited<ReturnType<typeof getTranslations>>;
+
+function titleForNode(node: WorkflowNode, t: Translator): string {
   if (node.name?.trim()) return node.name.trim();
-  if (node.type === "trigger") return "Trigger";
-  if (node.type === "condition") return "Condition";
+  if (node.type === "trigger") return t("titles.trigger");
+  if (node.type === "condition") return t("titles.condition");
   if (node.type === "action") return node.actionType;
-  if (node.type === "delay") return "Wait";
-  if (node.type === "approval") return "Approval";
+  if (node.type === "delay") return t("titles.wait");
+  if (node.type === "approval") return t("titles.approval");
   if (node.type === "wait")
-    return node.kind === "document_package" ? "Document package" : "Event wait";
-  return "End";
+    return node.kind === "document_package"
+      ? t("titles.documentPackage")
+      : t("titles.eventWait");
+  return t("titles.end");
 }
 
 function stepsFromSimulation(
+  t: Translator,
   graph: WorkflowGraphV2,
   simulation: ReturnType<typeof simulate>,
 ): DryRunStep[] {
   if (simulation.type === "invalid") {
     return graph.nodes.map((node) => ({
       nodeId: node.id,
-      title: titleForNode(node),
+      title: titleForNode(node, t),
       type: node.type,
       status: "skipped",
-      detail: "The graph is invalid, so no step was simulated.",
+      detail: t("details.graphInvalid"),
     }));
   }
   const visited = new Set(simulation.trace.map((row) => row.nodeId));
@@ -896,20 +903,20 @@ function stepsFromSimulation(
     if (node.id === needsFixtureId) {
       return {
         nodeId: node.id,
-        title: titleForNode(node),
+        title: titleForNode(node, t),
         type: node.type,
         status: "needs_fixture",
-        detail: "This step needs an explicit simulation result.",
+        detail: t("details.needsFixture"),
         virtualTime: trace?.virtualTime,
       };
     }
     if (!visited.has(node.id)) {
       return {
         nodeId: node.id,
-        title: titleForNode(node),
+        title: titleForNode(node, t),
         type: node.type,
         status: "skipped",
-        detail: "Not reached by the selected branch.",
+        detail: t("details.notReached"),
       };
     }
     if (node.type === "condition") {
@@ -922,52 +929,52 @@ function stepsFromSimulation(
       );
       return {
         nodeId: node.id,
-        title: titleForNode(node),
+        title: titleForNode(node, t),
         type: node.type,
         status: "matched",
         detail: matched
-          ? "Condition matched; followed the true branch."
-          : "Condition did not match; followed the false branch.",
+          ? t("details.conditionMatched")
+          : t("details.conditionNotMatched"),
         virtualTime: trace?.virtualTime,
       };
     }
     if (outcome?.status === "uncertain") {
       return {
         nodeId: node.id,
-        title: titleForNode(node),
+        title: titleForNode(node, t),
         type: node.type,
         status: "uncertain",
-        detail: `Stopped safely: ${outcome.code}.`,
+        detail: t("details.stoppedSafely", { code: outcome.code }),
         virtualTime: trace?.virtualTime,
       };
     }
     if (outcome?.status === "failed") {
       return {
         nodeId: node.id,
-        title: titleForNode(node),
+        title: titleForNode(node, t),
         type: node.type,
         status: "failed",
-        detail: `Simulated failure: ${outcome.code}.`,
+        detail: t("details.simulatedFailure", { code: outcome.code }),
         virtualTime: trace?.virtualTime,
       };
     }
     if (node.type === "trigger")
       return {
         nodeId: node.id,
-        title: titleForNode(node),
+        title: titleForNode(node, t),
         type: node.type,
         status: "matched",
-        detail: "Trigger matched the sample event.",
+        detail: t("details.triggerMatched"),
         virtualTime: trace?.virtualTime,
       };
     return {
       nodeId: node.id,
-      title: titleForNode(node),
+      title: titleForNode(node, t),
       type: node.type,
       status: "simulated",
       detail: trace?.waitedMs
-        ? `Would run here; virtual clock advanced ${Math.round(trace.waitedMs / 60000)} min. No external side effect was performed.`
-        : "Would run here; no external side effect was performed.",
+        ? t("details.wouldRunClock", { minutes: Math.round(trace.waitedMs / 60000) })
+        : t("details.wouldRun"),
       virtualTime: trace?.virtualTime,
       waitedMs: trace?.waitedMs,
     };
@@ -988,6 +995,7 @@ export async function dryRunWorkflow(input: {
   fixtures?: Record<string, NodeOutcome>;
   startedAt?: string;
 }): Promise<DryRunResult> {
+  const t = await getTranslations("server.automations.builderData");
   let context;
   try {
     context = await getWorkspaceContext();
@@ -997,7 +1005,7 @@ export async function dryRunWorkflow(input: {
       triggerMatched: false,
       steps: [],
       terminal: "invalid",
-      error: "Not authenticated.",
+      error: t("notAuthenticated"),
     };
   }
 
@@ -1010,7 +1018,7 @@ export async function dryRunWorkflow(input: {
       triggerMatched: false,
       steps: [],
       terminal: "invalid",
-      error: error instanceof Error ? error.message : "Invalid workflow draft.",
+      error: error instanceof Error ? error.message : t("invalidDraft"),
     };
   }
 
@@ -1024,7 +1032,7 @@ export async function dryRunWorkflow(input: {
         triggerMatched: false,
         steps: [],
         terminal: "invalid",
-        error: "Virtual start must be a valid date and time.",
+        error: t("virtualStartInvalid"),
       };
     }
     // The simulator is effect-free, but it must still reject a graph that the
@@ -1043,14 +1051,14 @@ export async function dryRunWorkflow(input: {
         triggerMatched: false,
         steps: graph.nodes.map((node) => ({
           nodeId: node.id,
-          title: titleForNode(node),
+          title: titleForNode(node, t),
           type: node.type,
           status: "skipped",
           detail:
-            "The graph contains an action that is not available in this runtime.",
+            t("details.actionUnavailable"),
         })),
         terminal: "invalid",
-        error: `Unavailable action${unavailable.length === 1 ? "" : "s"}: ${unavailable.join(", ")}.`,
+        error: t("unavailableActions", { count: unavailable.length, list: unavailable.join(", ") }),
       };
     }
     const triggerNode = graph.nodes.find((node) => node.type === "trigger");
@@ -1060,7 +1068,7 @@ export async function dryRunWorkflow(input: {
         triggerMatched: false,
         steps: [],
         terminal: "invalid",
-        error: "The graph has no trigger.",
+        error: t("noTrigger"),
       };
     }
 
@@ -1076,7 +1084,7 @@ export async function dryRunWorkflow(input: {
         triggerMatched: false,
         steps: [],
         terminal: "invalid",
-        error: "No candidate found to test against. Create a candidate first.",
+        error: t("noCandidateToTest"),
       };
     }
 
@@ -1093,7 +1101,7 @@ export async function dryRunWorkflow(input: {
           steps: [],
           terminal: "invalid",
           error:
-            "Save the workflow and choose its inbound endpoint before testing a webhook trigger.",
+            t("saveBeforeWebhookTest"),
         };
       }
 
@@ -1118,7 +1126,7 @@ export async function dryRunWorkflow(input: {
           steps: [],
           terminal: "invalid",
           error:
-            "The selected webhook endpoint does not belong to this workflow.",
+            t("endpointNotOwned"),
         };
       }
 
@@ -1146,7 +1154,7 @@ export async function dryRunWorkflow(input: {
           terminal: "invalid",
           error:
             schemaResult.kind === "schema"
-              ? "The selected endpoint has an invalid payload schema."
+              ? t("endpointSchemaInvalid")
               : `Webhook payload does not match the endpoint schema: ${schemaResult.issues.join("; ")}`,
         };
       }
@@ -1175,10 +1183,10 @@ export async function dryRunWorkflow(input: {
         triggerMatched: false,
         steps: graph.nodes.map((node) => ({
           nodeId: node.id,
-          title: titleForNode(node),
+          title: titleForNode(node, t),
           type: node.type,
           status: "skipped",
-          detail: "The sample event did not pass the trigger filter.",
+          detail: t("details.sampleFilterMismatch"),
         })),
         terminal: "stopped",
       };
@@ -1259,7 +1267,7 @@ export async function dryRunWorkflow(input: {
         ),
       startedAt: input.startedAt,
     });
-    const steps = stepsFromSimulation(graph, simulation);
+    const steps = stepsFromSimulation(t, graph, simulation);
     const matched =
       simulation.type !== "invalid" && simulation.type !== "needs_fixture";
     return {
@@ -1282,7 +1290,7 @@ export async function dryRunWorkflow(input: {
       triggerMatched: false,
       steps: [],
       terminal: "invalid",
-      error: error instanceof Error ? error.message : "Dry-run failed.",
+      error: error instanceof Error ? error.message : t("dryRunFailed"),
     };
   }
 }

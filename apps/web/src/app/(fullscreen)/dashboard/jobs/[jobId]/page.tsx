@@ -27,6 +27,7 @@ import { getHarlyPublicOrigin } from "@/lib/public-origin";
 import { countCandidatePool } from "@/features/matching/data";
 import { getWorkspaceContext } from "@/features/workspaces/context";
 import { can, requirePagePermission } from "@/features/workspaces/permissions-server";
+import { getTranslations } from "next-intl/server";
 
 export const dynamic = "force-dynamic";
 
@@ -41,6 +42,7 @@ export default async function DashboardJobPage({
   params,
   searchParams,
 }: DashboardJobPageProps) {
+  const t = await getTranslations("jobs.form");
   await requirePagePermission("jobs:view");
   const { jobId } = await params;
   const justPublished = (await searchParams)?.published === "1";
@@ -76,13 +78,13 @@ export default async function DashboardJobPage({
     <JobForm
       action={updateJobAction}
       job={job}
-      submitLabel="Save changes"
+      submitLabel={t("saveChanges")}
       departments={departments}
       hiringTeam={hiringTeam}
       workspaceMembers={workspaceMembers}
       aiConfigured={isAiUsable(aiStatus)}
       candidatePoolCount={candidatePoolCount}
-      eyebrow="Job detail"
+      eyebrow={t("jobDetail")}
       statusBadge={<JobStatusBadge status={job.status} />}
       previewWorkspace={careerPageData?.workspace ?? null}
       previewConfig={careerPageData?.config ?? null}
@@ -104,7 +106,7 @@ export default async function DashboardJobPage({
           <Button key="view" asChild variant="outline" size="sm" className="w-full justify-start">
             <a href={`/jobs/${job.slug}`} target="_blank" rel="noreferrer">
               <ExternalLink className="size-4" />
-              View job
+              {t("viewJob")}
             </a>
           </Button>
           <JobShareButton

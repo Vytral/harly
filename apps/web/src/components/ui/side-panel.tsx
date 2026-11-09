@@ -3,6 +3,7 @@
 import * as React from "react"
 import { XIcon } from "lucide-react"
 import { Drawer as DrawerPrimitive } from "vaul"
+import { useTranslations } from "next-intl"
 
 import { Button } from "@/components/ui/button"
 import {
@@ -134,13 +135,14 @@ function PanelFooter({ children }: { children: React.ReactNode }) {
 }
 
 function CloseButton(props: React.ComponentProps<typeof Button>) {
+  const t = useTranslations("ui.sidePanel")
   return (
     <Button
       type="button"
       variant="ghost"
       size="icon"
       className="size-8"
-      aria-label="Close panel"
+      aria-label={t("closePanel")}
       {...props}
     >
       <XIcon className="size-4" />

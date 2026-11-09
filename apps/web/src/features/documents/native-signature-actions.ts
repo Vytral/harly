@@ -1,6 +1,7 @@
 "use server";
 
 import { z } from "zod";
+import { getTranslations } from "@/i18n/server";
 
 import { requirePermission } from "@/features/workspaces/permissions-server";
 import { getWorkspaceContext } from "@/features/workspaces/context";
@@ -32,10 +33,11 @@ export async function getDocumentVoidImpact(documentId: string): Promise<NativeV
 
 /** Manual "Remind now" for whoever is currently expected to sign. */
 export async function remindDocumentSigner(documentId: string): Promise<{ ok: true; recipientName: string; recipientEmail: string } | { ok: false; error: string }> {
-  if (!idSchema.safeParse(documentId).success) return { ok: false, error: "Invalid document." };
+  const t = await getTranslations("server.documents.nativeSignatureActions");
+  if (!idSchema.safeParse(documentId).success) return { ok: false, error: t("invalidDocument") };
   let context: Awaited<ReturnType<typeof requirePermission>>;
-  try { context = await requirePermission("documents:manage"); } catch { return { ok: false, error: "You cannot send reminders for this document." }; }
+  try { context = await requirePermission("documents:manage"); } catch { return { ok: false, error: t("cannotRemind") }; }
   const access = await resolveDocumentAccessInScope({ documentId, workspaceId: context.organization.id, userId: context.user.id, roleKey: context.roleKey });
-  if (!access || access.level !== "manage") return { ok: false, error: "You cannot send reminders for this document." };
+  if (!access || access.level !== "manage") return { ok: false, error: t("cannotRemind") };
   return remindNativeSigner({ workspaceId: context.organization.id, documentId, actorId: context.user.id });
 }

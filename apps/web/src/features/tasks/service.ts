@@ -50,6 +50,35 @@ export type TaskLinks = Pick<
   "candidateId" | "applicationId" | "jobId" | "interviewId"
 >;
 
+export type TaskMessageKey =
+  | "actorNotMember"
+  | "ownerNotMember"
+  | "candidateNotInWorkspace"
+  | "applicationNotInWorkspace"
+  | "jobNotInWorkspace"
+  | "interviewNotInWorkspace"
+  | "applicationMismatch"
+  | "interviewMismatch"
+  | "notFound";
+
+/**
+ * An API error whose English message is the REST contract. The key lets the
+ * dashboard actions show the same failure in the viewer's language without
+ * matching on message text.
+ */
+export class TaskMessageError extends ApiError {
+  readonly key: TaskMessageKey;
+
+  constructor(
+    key: TaskMessageKey,
+    message: string,
+    code: ConstructorParameters<typeof ApiError>[0] = "unprocessable",
+  ) {
+    super(code, message);
+    this.key = key;
+  }
+}
+
 export function serializeTask(task: Task) {
   return {
     id: task.id,
@@ -211,7 +240,8 @@ export async function assertWorkspaceMember(input: {
     .limit(1);
 
   if (!membership) {
-    throw ApiError.unprocessable(
+    throw new TaskMessageError(
+      input.label === "Actor" ? "actorNotMember" : "ownerNotMember",
       `${input.label} must be a member of this workspace.`,
     );
   }
@@ -285,16 +315,16 @@ export async function assertTaskLinks(
   ]);
 
   if (links.candidateId && !candidate[0]) {
-    throw ApiError.unprocessable("Candidate does not belong to this workspace.");
+    throw new TaskMessageError("candidateNotInWorkspace", "Candidate does not belong to this workspace.");
   }
   if (links.applicationId && !application[0]) {
-    throw ApiError.unprocessable("Application does not belong to this workspace.");
+    throw new TaskMessageError("applicationNotInWorkspace", "Application does not belong to this workspace.");
   }
   if (links.jobId && !job[0]) {
-    throw ApiError.unprocessable("Job does not belong to this workspace.");
+    throw new TaskMessageError("jobNotInWorkspace", "Job does not belong to this workspace.");
   }
   if (links.interviewId && !interview[0]) {
-    throw ApiError.unprocessable("Interview does not belong to this workspace.");
+    throw new TaskMessageError("interviewNotInWorkspace", "Interview does not belong to this workspace.");
   }
 
   const applicationLink = application[0];
@@ -304,7 +334,8 @@ export async function assertTaskLinks(
     ((links.candidateId && applicationLink.candidateId !== links.candidateId) ||
       (links.jobId && applicationLink.jobId !== links.jobId))
   ) {
-    throw ApiError.unprocessable(
+    throw new TaskMessageError(
+      "applicationMismatch",
       "Application must match the linked candidate and job.",
     );
   }
@@ -314,7 +345,8 @@ export async function assertTaskLinks(
       (links.applicationId && interviewLink.applicationId !== links.applicationId) ||
       (links.jobId && interviewLink.jobId !== links.jobId))
   ) {
-    throw ApiError.unprocessable(
+    throw new TaskMessageError(
+      "interviewMismatch",
       "Interview must match the linked candidate, application, and job.",
     );
   }

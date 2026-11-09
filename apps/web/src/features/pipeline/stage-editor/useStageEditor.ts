@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useReducer, useRef } from "react";
+import { useTranslations } from "next-intl";
 import { toast } from "sonner";
 
 import type { StageKind } from "@harly/db/stage-kind";
@@ -37,10 +38,6 @@ import {
  * last saw with a fresh read after any failure.
  */
 
-const LOAD_FAILED = "The stages could not be loaded. Try again.";
-const SAVE_FAILED = "The pipeline could not be updated. Try again.";
-const REORDER_FAILED_TOAST = "Stage order was not saved. The previous order is back.";
-
 type Outcome = { success: true } | { success: false; error: string };
 
 async function fetchStages(jobId: string): Promise<EditorStage[] | null> {
@@ -60,6 +57,7 @@ export function useStageEditor({
   /** Called after a mutation is saved, so the surrounding page can refresh. */
   onMutated?: () => void;
 }) {
+  const t = useTranslations("labels.pipeline.stageEditor");
   const [state, dispatch] = useReducer(editorReducer, initialEditorState);
 
   // Refs read by async callbacks: the latest stages (for announcements), the
@@ -82,12 +80,12 @@ export function useStageEditor({
     dispatch({ type: "load_started" });
     const stages = await fetchStages(jobId);
     if (!stages) {
-      dispatch({ type: "load_failed", message: LOAD_FAILED });
+      dispatch({ type: "load_failed", message: t("loadFailed") });
       return;
     }
     syncedRef.current = stages;
     dispatch({ type: "loaded", stages });
-  }, [jobId]);
+  }, [jobId, t]);
 
   /**
    * Run one mutation. Busy-guarded, with an optional optimistic step applied
@@ -111,7 +109,7 @@ export function useStageEditor({
         try {
           result = await input.work();
         } catch {
-          result = { success: false, error: SAVE_FAILED };
+          result = { success: false, error: t("saveFailed") };
         }
 
         if (result.success) {
@@ -126,7 +124,12 @@ export function useStageEditor({
         if (fresh) {
           syncedRef.current = fresh;
           if (before && !sameStageState(before, fresh)) {
-            dispatch({ type: "conflict", stages: fresh, detail: result.error });
+            dispatch({
+              type: "conflict",
+              stages: fresh,
+              message: t("conflict"),
+              detail: result.error,
+            });
             return false;
           }
         }
@@ -137,7 +140,7 @@ export function useStageEditor({
         busyRef.current = false;
       }
     },
-    [jobId, load],
+    [jobId, load, t],
   );
 
   const reorder = useCallback(
@@ -148,13 +151,13 @@ export function useStageEditor({
           dispatch({ type: "reorder_previewed", ids });
           dispatch({
             type: "announced",
-            text: reorderAnnouncement(stagesRef.current, stageId, ids),
+            text: reorderAnnouncement(stagesRef.current, stageId, ids, t),
           });
         },
         work: () => reorderJobStagesAction({ jobId, stageIds: ids }),
-        failureToast: REORDER_FAILED_TOAST,
+        failureToast: t("reorderFailedToast"),
       }),
-    [jobId, runOperation],
+    [jobId, runOperation, t],
   );
 
   const rename = useCallback(
@@ -203,9 +206,9 @@ export function useStageEditor({
       runOperation({
         pending: { kind: "create" },
         work: () => createJobStageAction({ jobId, ...input }),
-        announcement: `Added ${input.name}.`,
+        announcement: t("added", { name: input.name }),
       }),
-    [jobId, runOperation],
+    [jobId, runOperation, t],
   );
 
   const archive = useCallback(

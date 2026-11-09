@@ -40,7 +40,13 @@ describe("F1-14 application-received emails use the durable outbox", () => {
       .mockResolvedValueOnce("out-owner-b");
     mocks.processEmailOutbox.mockResolvedValue({ processed: 3, sent: 3, failed: 0 });
 
-    await sendApplicationReceivedEmails(EMAIL as never);
+    await sendApplicationReceivedEmails({
+      ...EMAIL,
+      ownerRecipients: [
+        { email: "owner-a@example.com", preferredEmailLocale: "de" },
+        { email: "owner-b@example.com", preferredEmailLocale: "fr" },
+      ],
+    } as never);
 
     expect(mocks.enqueueEmailOutbox).toHaveBeenCalledTimes(3);
 
@@ -63,6 +69,11 @@ describe("F1-14 application-received emails use the durable outbox", () => {
     expect(recruiterPayload).toMatchObject({
       ownerEmail: "owner-a@example.com",
       candidateName: "Candi Date",
+      recipientLocale: "de",
+    });
+    expect(mocks.enqueueEmailOutbox.mock.calls[2]?.[2]).toMatchObject({
+      ownerEmail: "owner-b@example.com",
+      recipientLocale: "fr",
     });
 
     expect(mocks.processEmailOutbox).toHaveBeenCalledTimes(1);

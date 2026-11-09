@@ -2,7 +2,9 @@
 
 import { useEffect, useState, useTransition, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
+import { useLocale, useTranslations } from "next-intl";
 import { formatDistanceToNow } from "date-fns";
+import { dateFnsLocale } from "@/lib/date-fns-locale";
 
 import {
   createWebhookAction,
@@ -98,31 +100,34 @@ type DeliveryRow = {
 
 const HEALTH_PILL: Record<
   EndpointHealth,
-  { label: string; tone: "on" | "off" | "warn" | "neutral"; className?: string }
+  { tone: "on" | "off" | "warn" | "neutral"; className?: string }
 > = {
-  active: { label: "Active", tone: "on" },
-  paused: { label: "Paused", tone: "off" },
+  active: { tone: "on" },
+  paused: { tone: "off" },
   failing: {
-    label: "Failing",
     tone: "warn",
     className: "bg-danger-rust/10 text-danger-rust",
   },
-  new: { label: "Waiting for first event", tone: "neutral" },
+  new: { tone: "neutral" },
 };
 
 const MAX_CHIPS = 4;
 
-function when(iso: string): string {
-  return formatDistanceToNow(new Date(iso), { addSuffix: true });
+type Translator = ReturnType<typeof useTranslations>;
+
+function when(iso: string, locale: string): string {
+  return formatDistanceToNow(new Date(iso), { addSuffix: true, locale: dateFnsLocale(locale) });
 }
 
-function lastDeliveryText(last: DeliveryLike): string {
-  if (!last) return "No deliveries yet";
-  const at = when(last.deliveredAt ?? last.createdAt);
-  const http = last.responseStatus ? ` · HTTP ${last.responseStatus}` : "";
-  if (last.status === "success") return `Last delivered ${at}${http}`;
-  if (last.status === "pending" || last.status === "processing") return "Delivery in progress";
-  return `Last attempt failed ${at}${http}`;
+function lastDeliveryText(last: DeliveryLike, t: Translator, locale: string): string {
+  if (!last) return t("noDeliveriesYet");
+  const at = when(last.deliveredAt ?? last.createdAt, locale);
+  const status = last.responseStatus;
+  if (last.status === "success") {
+    return status ? t("lastDeliveredHttp", { at, status }) : t("lastDelivered", { at });
+  }
+  if (last.status === "pending" || last.status === "processing") return t("deliveryInProgress");
+  return status ? t("lastAttemptFailedHttp", { at, status }) : t("lastAttemptFailed", { at });
 }
 
 export function WebhooksSection({
@@ -135,6 +140,7 @@ export function WebhooksSection({
   events: EventOption[];
 }) {
   const router = useRouter();
+  const t = useTranslations("features.developers.webhooksSection");
   const [pending, startTransition] = useTransition();
   const [formFor, setFormFor] = useState<WebhookView | "new" | null>(null);
   const [secretDialog, setSecretDialog] = useState<{ title: string; secret: string } | null>(null);
@@ -156,9 +162,9 @@ export function WebhooksSection({
   function setEnabled(hook: WebhookView, enabled: boolean) {
     startTransition(async () => {
       const result = await updateWebhookAction({ id: hook.id, enabled });
-      if (!result.ok) toast.error(result.error ?? "Could not update endpoint.");
+      if (!result.ok) toast.error(result.error ?? t("updateEndpointFailed"));
       else {
-        toast.success(enabled ? "Endpoint resumed" : "Endpoint paused");
+        toast.success(enabled ? t("endpointResumed") : t("endpointPaused"));
         router.refresh();
       }
     });
@@ -168,10 +174,10 @@ export function WebhooksSection({
     if (!toDelete) return;
     const result = await deleteWebhookAction(toDelete.id);
     if (!result.ok) {
-      toast.error(result.error ?? "Could not delete endpoint.");
+      toast.error(result.error ?? t("deleteEndpointFailed"));
       throw new Error(result.error);
     }
-    toast.success("Endpoint deleted");
+    toast.success(t("endpointDeleted"));
     router.refresh();
   }
 
@@ -179,10 +185,10 @@ export function WebhooksSection({
     if (!toRotate) return;
     const result = await rotateWebhookSecretAction(toRotate.id);
     if (!result.ok || !result.secret) {
-      toast.error(result.error ?? "Could not rotate the secret.");
+      toast.error(result.error ?? t("rotateSecretFailed"));
       throw new Error(result.error);
     }
-    setSecretDialog({ title: "New signing secret", secret: result.secret });
+    setSecretDialog({ title: t("newSigningSecret"), secret: result.secret });
     router.refresh();
   }
 
@@ -190,16 +196,16 @@ export function WebhooksSection({
     <Card className="gap-5 p-6">
       <SectionHeader
         icon={WebhooksDuotoneIcon}
-        title="Webhooks"
-        description="Harly sends a signed HTTPS POST to your server whenever something changes, such as a new application, a hire or an interview. Use it to sync your HRIS, notify Slack or trigger your own automations."
+        title={t("webhooksTitle")}
+        description={t("sectionDescription")}
         action={
           <>
             <Button variant="outline" onClick={() => setGuideOpen(true)}>
-              <ShieldCheckDuotoneIcon className="size-4" /> Verify signatures
+              <ShieldCheckDuotoneIcon className="size-4" /> {t("verifySignatures")}
             </Button>
             {canManage ? (
               <Button onClick={() => setFormFor("new")}>
-                <PlusIcon className="size-4" /> Add endpoint
+                <PlusIcon className="size-4" /> {t("addEndpoint")}
               </Button>
             ) : null}
           </>
@@ -207,26 +213,26 @@ export function WebhooksSection({
       />
 
       <p className="-mt-1 text-[12.5px] text-soft-ink">
-        Want the full payload reference?{" "}
+        {t("payloadReferenceQuestion")}{" "}
         <a
           href="/docs/api"
           target="_blank"
           rel="noopener noreferrer"
           className="inline-flex items-center gap-0.5 font-medium text-near-ink underline-offset-2 hover:underline"
         >
-          Open the API reference <ArrowUpRightIcon className="size-3" />
+          {t("openApiReference")} <ArrowUpRightIcon className="size-3" />
         </a>
       </p>
 
       {webhooks.length === 0 ? (
         <EmptyRow
           icon={WebhooksDuotoneIcon}
-          title="No endpoints yet"
-          description="Add the URL of your server and pick the events you care about. We'll show a signing secret once so you can verify every request."
+          title={t("emptyTitle")}
+          description={t("emptyDescription")}
           action={
             canManage ? (
               <Button onClick={() => setFormFor("new")}>
-                <PlusIcon className="size-4" /> Add your first endpoint
+                <PlusIcon className="size-4" /> {t("addFirstEndpoint")}
               </Button>
             ) : undefined
           }
@@ -263,7 +269,7 @@ export function WebhooksSection({
         target={formFor}
         events={events}
         onClose={() => setFormFor(null)}
-        onCreated={(secret) => setSecretDialog({ title: "Endpoint created", secret })}
+        onCreated={(secret) => setSecretDialog({ title: t("endpointCreated"), secret })}
       />
 
       <SecretDialog value={secretDialog} onClose={() => setSecretDialog(null)} />
@@ -271,10 +277,8 @@ export function WebhooksSection({
       <Dialog open={guideOpen} onOpenChange={setGuideOpen}>
         <DialogContent size="lg">
           <DialogHeader>
-            <DialogTitle>Verify webhook signatures</DialogTitle>
-            <DialogDescription>
-              Check every request came from Harly before you trust it.
-            </DialogDescription>
+            <DialogTitle>{t("verifyDialogTitle")}</DialogTitle>
+            <DialogDescription>{t("verifyDialogDescription")}</DialogDescription>
           </DialogHeader>
           <VerifyGuide />
         </DialogContent>
@@ -286,15 +290,12 @@ export function WebhooksSection({
         open={toDelete !== null}
         onOpenChange={(open) => !open && setToDelete(null)}
         tone="destructive"
-        title="Delete this endpoint?"
-        description={
-          <>
-            Harly stops sending events to{" "}
-            <span className="font-mono text-near-ink">{toDelete ? shortUrl(toDelete.url, 48) : ""}</span>{" "}
-            and its delivery history is removed. This can&apos;t be undone.
-          </>
-        }
-        confirmLabel="Delete endpoint"
+        title={t("deleteEndpointTitle")}
+        description={t.rich("deleteEndpointDescription", {
+          url: toDelete ? shortUrl(toDelete.url, 48) : "",
+          code: (chunks) => <span className="font-mono text-near-ink">{chunks}</span>,
+        })}
+        confirmLabel={t("deleteEndpoint")}
         onConfirm={confirmDelete}
       />
 
@@ -302,9 +303,9 @@ export function WebhooksSection({
         open={toRotate !== null}
         onOpenChange={(open) => !open && setToRotate(null)}
         tone="warning"
-        title="Rotate the signing secret?"
-        description="The old secret stops working immediately. Update your server with the new one right away, or it will reject Harly's requests."
-        confirmLabel="Rotate secret"
+        title={t("rotateSecretTitle")}
+        description={t("rotateSecretDescription")}
+        confirmLabel={t("rotateSecret")}
         onConfirm={confirmRotate}
       />
     </Card>
@@ -338,6 +339,9 @@ function EndpointRow({
   onToggle: () => void;
   onDelete: () => void;
 }) {
+  const t = useTranslations("features.developers.webhooksSection");
+  const tUi = useTranslations("features.developers.developersUi");
+  const locale = useLocale();
   const health = endpointHealth(hook.enabled, hook.lastDelivery);
   const pill = HEALTH_PILL[health];
   const label = (value: string) => events.find((e) => e.value === value)?.label ?? value;
@@ -351,7 +355,7 @@ function EndpointRow({
         <div className="min-w-0 flex-1 space-y-2">
           <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1.5">
             <StatusPill tone={pill.tone} className={pill.className}>
-              {pill.label}
+              {t(`health.${health}`)}
             </StatusPill>
             <span
               title={hook.url}
@@ -361,8 +365,8 @@ function EndpointRow({
             </span>
             <button
               type="button"
-              onClick={() => copy(hook.url)}
-              aria-label="Copy endpoint URL"
+              onClick={() => copy(hook.url, tUi)}
+              aria-label={t("copyEndpointUrl")}
               className="grid size-6 shrink-0 place-items-center rounded-md text-soft-ink transition-colors hover:bg-row-wash hover:text-near-ink focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-near-ink/10"
             >
               <CopyIcon className="size-3.5" />
@@ -372,7 +376,7 @@ function EndpointRow({
             <p className="text-[12.5px] text-soft-ink [overflow-wrap:anywhere]">{hook.description}</p>
           ) : null}
 
-          <div className="flex flex-wrap items-center gap-1.5" aria-label="Subscribed events">
+          <div className="flex flex-wrap items-center gap-1.5" aria-label={t("subscribedEvents")}>
             {shown.map((event) => (
               <span
                 key={event}
@@ -389,12 +393,12 @@ function EndpointRow({
                     type="button"
                     className="rounded-full px-2 py-0.5 text-[11.5px] font-medium text-near-ink underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-near-ink/10"
                   >
-                    +{more} more
+                    {t("moreEvents", { count: more })}
                   </button>
                 </PopoverTrigger>
                 <PopoverContent align="start" className="w-72 p-3">
                   <p className="text-[11px] font-medium uppercase tracking-wide text-soft-ink">
-                    All subscribed events ({hook.events.length})
+                    {t("allSubscribedEvents", { count: hook.events.length })}
                   </p>
                   <ul className="mt-2 max-h-60 space-y-1 overflow-y-auto">
                     {hook.events.map((event) => (
@@ -410,12 +414,12 @@ function EndpointRow({
           </div>
 
           <p className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[12px] tabular-nums text-soft-ink">
-            <span>{lastDeliveryText(hook.lastDelivery)}</span>
+            <span>{lastDeliveryText(hook.lastDelivery, t, locale)}</span>
             {hook.recent.total > 0 ? (
               <span>
-                Last {hook.recent.total}: {hook.recent.success} delivered
+                {t("recentSummary", { total: hook.recent.total, success: hook.recent.success })}
                 {hook.recent.failed > 0 ? (
-                  <span className="text-danger-rust"> · {hook.recent.failed} failed</span>
+                  <span className="text-danger-rust"> · {t("recentFailed", { failed: hook.recent.failed })}</span>
                 ) : null}
               </span>
             ) : null}
@@ -430,10 +434,10 @@ function EndpointRow({
               ) : (
                 <PaperPlaneDuotoneIcon className="size-3.5" />
               )}
-              Send test event
+              {t("sendTestEvent")}
             </Button>
             <Button size="sm" variant="outline" onClick={onDeliveries}>
-              Deliveries
+              {t("deliveries")}
             </Button>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
@@ -441,20 +445,20 @@ function EndpointRow({
                   size="icon"
                   variant="ghost"
                   className="text-muted-foreground"
-                  aria-label={`Actions for ${shortUrl(hook.url, 32)}`}
+                  aria-label={t("actionsFor", { name: shortUrl(hook.url, 32) })}
                 >
                   <DotsThreeVerticalIcon className="size-4" />
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
-                <DropdownMenuItem onClick={onEdit}>Edit endpoint</DropdownMenuItem>
-                <DropdownMenuItem onClick={onRotate}>Rotate signing secret</DropdownMenuItem>
+                <DropdownMenuItem onClick={onEdit}>{t("editEndpoint")}</DropdownMenuItem>
+                <DropdownMenuItem onClick={onRotate}>{t("rotateSigningSecret")}</DropdownMenuItem>
                 <DropdownMenuItem onClick={onToggle}>
-                  {hook.enabled ? "Pause deliveries" : "Resume deliveries"}
+                  {hook.enabled ? t("pauseDeliveries") : t("resumeDeliveries")}
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem variant="destructive" onClick={onDelete}>
-                  Delete endpoint
+                  {t("deleteEndpoint")}
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
@@ -468,6 +472,7 @@ function EndpointRow({
 }
 
 function TestResult({ result, onDismiss }: { result: WebhookTestResult; onDismiss: () => void }) {
+  const t = useTranslations("features.developers.webhooksSection");
   const ok = result.ok;
   return (
     <div
@@ -486,13 +491,13 @@ function TestResult({ result, onDismiss }: { result: WebhookTestResult; onDismis
       )}
       <div className="min-w-0 flex-1 space-y-0.5">
         <p className="font-medium">
-          {ok ? "Test event delivered" : result.error ? "Test event not sent" : "Your server did not accept the test event"}
+          {ok ? t("testDelivered") : result.error ? t("testNotSent") : t("testNotAccepted")}
         </p>
         <p className="tabular-nums text-soft-ink [overflow-wrap:anywhere]">
           {result.error
             ? result.error
             : [
-                result.responseStatus ? `HTTP ${result.responseStatus}` : "No response",
+                result.responseStatus ? t("httpStatus", { status: result.responseStatus }) : t("noResponse"),
                 formatDuration(result.durationMs),
                 result.detail,
               ]
@@ -501,7 +506,7 @@ function TestResult({ result, onDismiss }: { result: WebhookTestResult; onDismis
         </p>
         {!ok && !result.error ? (
           <p className="text-soft-ink">
-            Return a 2xx status within 10 seconds. The event is <code className="font-mono">webhook.test</code>.
+            {t.rich("testRetryHint", { code: (chunks) => <code className="font-mono">{chunks}</code> })}
           </p>
         ) : null}
       </div>
@@ -510,7 +515,7 @@ function TestResult({ result, onDismiss }: { result: WebhookTestResult; onDismis
         onClick={onDismiss}
         className="shrink-0 rounded-md px-1.5 py-0.5 text-xs font-medium text-soft-ink hover:text-near-ink focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-near-ink/10"
       >
-        Dismiss
+        {t("dismiss")}
       </button>
     </div>
   );
@@ -560,24 +565,26 @@ function EndpointForm({
   onCreated: (secret: string) => void;
 }) {
   const router = useRouter();
+  const t = useTranslations("features.developers.webhooksSection");
   const [pending, startTransition] = useTransition();
   const [url, setUrl] = useState(editing?.url ?? "");
   const [description, setDescription] = useState(editing?.description ?? "");
   const [selected, setSelected] = useState<string[]>(editing?.events ?? []);
   const [error, setError] = useState<string | null>(null);
 
-  const groups = groupWebhookEvents(events);
+  const tEvents = useTranslations("labels.developers.webhooks");
+  const groups = groupWebhookEvents(events, tEvents);
   const allValues = events.map((e) => e.value);
   const allState = selectionState(selected, allValues);
 
   function submit() {
     setError(null);
     if (!/^https?:\/\/\S+$/i.test(url.trim())) {
-      setError("Enter a full URL starting with https://");
+      setError(t("enterValidUrl"));
       return;
     }
     if (selected.length === 0) {
-      setError("Pick at least one event to subscribe to.");
+      setError(t("pickOneEvent"));
       return;
     }
     startTransition(async () => {
@@ -589,10 +596,10 @@ function EndpointForm({
           description: description.trim() || null,
         });
         if (!result.ok) {
-          setError(result.error ?? "Could not update endpoint.");
+          setError(result.error ?? t("updateEndpointFailed"));
           return;
         }
-        toast.success("Endpoint updated");
+        toast.success(t("endpointUpdated"));
         onClose();
         router.refresh();
         return;
@@ -603,7 +610,7 @@ function EndpointForm({
         description: description.trim() || undefined,
       });
       if (!result.ok || !result.secret) {
-        setError(result.error ?? "Could not create endpoint.");
+        setError(result.error ?? t("createEndpointFailed"));
         return;
       }
       onClose();
@@ -615,15 +622,13 @@ function EndpointForm({
   return (
     <>
       <DialogHeader>
-        <DialogTitle>{editing ? "Edit endpoint" : "Add endpoint"}</DialogTitle>
-        <DialogDescription>
-          Harly will POST a JSON payload to this URL for each event you select.
-        </DialogDescription>
+        <DialogTitle>{editing ? t("editEndpoint") : t("addEndpoint")}</DialogTitle>
+        <DialogDescription>{t("endpointFormDescription")}</DialogDescription>
       </DialogHeader>
 
       <div className="space-y-5">
         <div className="space-y-1.5">
-          <Label htmlFor="webhook-url">Endpoint URL</Label>
+          <Label htmlFor="webhook-url">{t("endpointUrl")}</Label>
           <Input
             id="webhook-url"
             type="url"
@@ -632,31 +637,31 @@ function EndpointForm({
             spellCheck={false}
             value={url}
             onChange={(e) => setUrl(e.target.value)}
-            placeholder="https://example.com/webhooks/harly"
+            placeholder={t("endpointUrlPlaceholder")}
             className="font-mono text-sm"
             aria-describedby="webhook-url-help"
           />
           <p id="webhook-url-help" className="text-[12px] text-soft-ink">
-            Must be a public HTTPS address. Private and local addresses are blocked.
+            {t("endpointUrlHelp")}
           </p>
         </div>
 
         <div className="space-y-1.5">
-          <Label htmlFor="webhook-description">Description (optional)</Label>
+          <Label htmlFor="webhook-description">{t("descriptionOptional")}</Label>
           <Input
             id="webhook-description"
             value={description}
             onChange={(e) => setDescription(e.target.value)}
-            placeholder="e.g. Slack notifier"
+            placeholder={t("descriptionPlaceholder")}
           />
         </div>
 
         <fieldset className="space-y-2">
           <div className="flex items-center justify-between gap-3">
             <legend className="text-sm font-medium text-near-ink">
-              Events{" "}
+              {t("events")}{" "}
               <span className="font-normal tabular-nums text-soft-ink">
-                ({selected.length} of {allValues.length})
+                {t("selectedCount", { selected: selected.length, total: allValues.length })}
               </span>
             </legend>
             <button
@@ -664,7 +669,7 @@ function EndpointForm({
               onClick={() => setSelected(setAll(selected, allValues, allState !== "all"))}
               className="rounded-md px-1.5 py-0.5 text-[12.5px] font-medium text-near-ink underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-near-ink/10"
             >
-              {allState === "all" ? "Clear all" : "Select all"}
+              {allState === "all" ? t("clearAll") : t("selectAll")}
             </button>
           </div>
 
@@ -678,7 +683,7 @@ function EndpointForm({
                     <Checkbox
                       checked={state === "all" ? true : state === "some" ? "indeterminate" : false}
                       onCheckedChange={() => setSelected(setAll(selected, values, state !== "all"))}
-                      aria-label={`All ${group.label.toLowerCase()} events`}
+                      aria-label={t("allGroupEvents", { group: group.label.toLowerCase() })}
                     />
                     <span className="text-[13px] font-semibold text-near-ink">{group.label}</span>
                     <span className="hidden truncate text-[12px] text-soft-ink sm:inline">
@@ -724,11 +729,11 @@ function EndpointForm({
 
       <DialogFooter>
         <Button variant="outline" onClick={onClose} disabled={pending}>
-          Cancel
+          {t("cancel")}
         </Button>
         <Button onClick={submit} disabled={pending}>
           {pending ? <SpinnerIcon className="size-4 animate-spin" /> : null}
-          {editing ? "Save changes" : "Create endpoint"}
+          {editing ? t("saveChanges") : t("createEndpoint")}
         </Button>
       </DialogFooter>
     </>
@@ -744,6 +749,7 @@ function SecretDialog({
   value: { title: string; secret: string } | null;
   onClose: () => void;
 }) {
+  const t = useTranslations("features.developers.webhooksSection");
   return (
     <Dialog open={value !== null} onOpenChange={(open) => !open && onClose()}>
       {value ? (
@@ -751,14 +757,15 @@ function SecretDialog({
           <DialogHeader>
             <DialogTitle>{value.title}</DialogTitle>
             <DialogDescription>
-              Store this signing secret on your server, for example as{" "}
-              <code className="font-mono">HARLY_WEBHOOK_SECRET</code>. It&apos;s shown only once.
+              {t.rich("signingSecretDescription", {
+                code: (chunks) => <code className="font-mono">{chunks}</code>,
+              })}
             </DialogDescription>
           </DialogHeader>
-          <SecretField value={value.secret} label="Signing secret" defaultRevealed />
+          <SecretField value={value.secret} label={t("signingSecret")} defaultRevealed />
           <VerifyGuide />
           <DialogFooter>
-            <Button onClick={onClose}>I&apos;ve saved the secret</Button>
+            <Button onClick={onClose}>{t("savedSecret")}</Button>
           </DialogFooter>
         </DialogContent>
       ) : null}
@@ -767,24 +774,18 @@ function SecretDialog({
 }
 
 function VerifyGuide() {
+  const t = useTranslations("features.developers.webhooksSection");
   const [lang, setLang] = useState<VerifyLanguage>("node");
+  const code = (chunks: ReactNode) => <code className="font-mono">{chunks}</code>;
   return (
     <div className="min-w-0 space-y-4">
       <ol className="space-y-2 text-[13px] text-near-ink">
-        <Step n={1}>
-          Read the <code className="font-mono">X-Harly-Signature-256</code> header. It looks like{" "}
-          <code className="font-mono">t=1735689600,v1=9f2c…</code>.
-        </Step>
-        <Step n={2}>
-          Compute <code className="font-mono">HMAC-SHA256</code> with your signing secret over{" "}
-          <code className="font-mono">{"{t}.{raw body}"}</code>, as hex. Use the raw body, not re-serialized JSON.
-        </Step>
-        <Step n={3}>
-          Compare it with <code className="font-mono">v1</code> in constant time and reject timestamps older than 5 minutes.
-        </Step>
+        <Step n={1}>{t.rich("step1", { code })}</Step>
+        <Step n={2}>{t.rich("step2", { code, payload: "{t}.{raw body}" })}</Step>
+        <Step n={3}>{t.rich("step3", { code })}</Step>
       </ol>
 
-      <div className="inline-flex rounded-[var(--radius-btn)] bg-card-inset p-1" role="tablist" aria-label="Language">
+      <div className="inline-flex rounded-[var(--radius-btn)] bg-card-inset p-1" role="tablist" aria-label={t("languageLabel")}>
         {(["node", "python"] as const).map((key) => (
           <button
             key={key}
@@ -803,10 +804,8 @@ function VerifyGuide() {
       </div>
       <CodePanel code={VERIFY_SNIPPETS[lang]} language={lang === "node" ? "JavaScript" : "Python"} />
 
-      <Callout tone="info" title="Delivery rules">
-        Answer with any 2xx status within 10 seconds. Failed deliveries are retried with growing delays, from 1 minute up
-        to 24 hours, then marked as failed. Other headers: <code className="font-mono">X-Harly-Event</code> and{" "}
-        <code className="font-mono">X-Harly-Delivery</code> (use it to de-duplicate).
+      <Callout tone="info" title={t("deliveryRules")}>
+        {t.rich("deliveryRulesBody", { code })}
       </Callout>
     </div>
   );
@@ -839,9 +838,10 @@ function DeliveriesDialog({ hook, onClose }: { hook: WebhookView | null; onClose
 
 function DeliveriesBody({ hook, onClose }: { hook: WebhookView; onClose: () => void }) {
   const router = useRouter();
+  const t = useTranslations("features.developers.webhooksSection");
   const [, startTransition] = useTransition();
   const [state, setState] = useState<
-    { kind: "loading" } | { kind: "error"; message: string } | { kind: "ready"; rows: DeliveryRow[] }
+    { kind: "loading" } | { kind: "error"; message: string | null } | { kind: "ready"; rows: DeliveryRow[] }
   >({ kind: "loading" });
   const [retrying, setRetrying] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
@@ -851,7 +851,7 @@ function DeliveriesBody({ hook, onClose }: { hook: WebhookView; onClose: () => v
     listWebhookDeliveriesAction(hook.id).then((result) => {
       if (cancelled) return;
       if (!result.ok || !result.deliveries) {
-        setState({ kind: "error", message: result.error ?? "Could not load deliveries." });
+        setState({ kind: "error", message: result.error ?? null });
       } else {
         setState({ kind: "ready", rows: result.deliveries });
       }
@@ -872,10 +872,10 @@ function DeliveriesBody({ hook, onClose }: { hook: WebhookView; onClose: () => v
       const result = await replayWebhookDeliveryAction({ endpointId: hook.id, deliveryId });
       setRetrying(null);
       if (!result.ok) {
-        toast.error(result.error ?? "Could not retry delivery.");
+        toast.error(result.error ?? t("retryDeliveryFailed"));
         return;
       }
-      toast.success("Retry queued");
+      toast.success(t("retryQueued"));
       router.refresh();
       window.setTimeout(load, 1200);
     });
@@ -886,7 +886,7 @@ function DeliveriesBody({ hook, onClose }: { hook: WebhookView; onClose: () => v
   return (
     <>
       <DialogHeader>
-        <DialogTitle>Delivery history</DialogTitle>
+        <DialogTitle>{t("deliveryHistory")}</DialogTitle>
         <DialogDescription className="font-mono text-[12px] [overflow-wrap:anywhere]">
           {hook.url}
         </DialogDescription>
@@ -894,32 +894,32 @@ function DeliveriesBody({ hook, onClose }: { hook: WebhookView; onClose: () => v
 
       {summary && summary.total > 0 ? (
         <p className="text-[12.5px] tabular-nums text-soft-ink">
-          Latest {summary.total}: {summary.success} delivered
-          {summary.failed > 0 ? <span className="text-danger-rust"> · {summary.failed} failed</span> : null}
+          {t("latestSummary", { total: summary.total, success: summary.success })}
+          {summary.failed > 0 ? (
+            <span className="text-danger-rust"> · {t("recentFailed", { failed: summary.failed })}</span>
+          ) : null}
         </p>
       ) : null}
 
       <div className="space-y-2">
         {state.kind === "loading" ? (
-          <div className="space-y-2" aria-busy="true" aria-label="Loading deliveries">
+          <div className="space-y-2" aria-busy="true" aria-label={t("loadingDeliveries")}>
             {[0, 1, 2].map((i) => (
               <Skeleton key={i} className="h-[62px] w-full rounded-[var(--radius-inner)]" />
             ))}
           </div>
         ) : state.kind === "error" ? (
           <div className="flex flex-col items-center gap-2 py-8 text-center">
-            <p className="text-sm font-medium text-near-ink">Couldn&apos;t load deliveries</p>
-            <p className="text-[12.5px] text-soft-ink">{state.message}</p>
+            <p className="text-sm font-medium text-near-ink">{t("couldNotLoadDeliveries")}</p>
+            <p className="text-[12.5px] text-soft-ink">{state.message ?? t("loadDeliveriesFailed")}</p>
             <Button size="sm" variant="outline" onClick={load}>
-              Try again
+              {t("tryAgain")}
             </Button>
           </div>
         ) : state.rows.length === 0 ? (
           <div className="py-8 text-center">
-            <p className="text-sm font-medium text-near-ink">No deliveries yet</p>
-            <p className="mt-1 text-[12.5px] text-soft-ink">
-              Send a test event, or wait for a subscribed event to happen.
-            </p>
+            <p className="text-sm font-medium text-near-ink">{t("noDeliveriesYet")}</p>
+            <p className="mt-1 text-[12.5px] text-soft-ink">{t("deliveriesEmptyHint")}</p>
           </div>
         ) : (
           <ul className="space-y-2">
@@ -932,7 +932,7 @@ function DeliveriesBody({ hook, onClose }: { hook: WebhookView; onClose: () => v
 
       <DialogFooter>
         <Button variant="outline" onClick={onClose}>
-          Close
+          {t("close")}
         </Button>
       </DialogFooter>
     </>
@@ -948,16 +948,18 @@ function DeliveryItem({
   retrying: boolean;
   onRetry: () => void;
 }) {
+  const t = useTranslations("features.developers.webhooksSection");
+  const locale = useLocale();
   const ok = row.status === "success";
   const inFlight = row.status === "pending" || row.status === "processing";
   const failed = !ok && !inFlight;
   const statusLabel = ok
-    ? "Delivered"
+    ? t("statusDelivered")
     : inFlight
-      ? "In progress"
+      ? t("statusInProgress")
       : row.status === "dead_letter"
-        ? "Gave up"
-        : "Failed";
+        ? t("statusGaveUp")
+        : t("statusFailed");
   return (
     <li className="rounded-[var(--radius-inner)] bg-card-inset px-3.5 py-3">
       <div className="flex items-start justify-between gap-3">
@@ -972,15 +974,15 @@ function DeliveryItem({
             <code className="truncate font-mono text-[12px] text-near-ink">{row.event}</code>
           </div>
           <p className="flex flex-wrap gap-x-2 text-[12px] tabular-nums text-soft-ink">
-            <span>{row.responseStatus ? `HTTP ${row.responseStatus}` : "No response"}</span>
+            <span>{row.responseStatus ? t("httpStatus", { status: row.responseStatus }) : t("noResponse")}</span>
             <span aria-hidden="true">·</span>
             <span>{formatDuration(row.durationMs)}</span>
             <span aria-hidden="true">·</span>
-            <span>{when(row.deliveredAt ?? row.createdAt)}</span>
+            <span>{when(row.deliveredAt ?? row.createdAt, locale)}</span>
             {row.attempts > 1 ? (
               <>
                 <span aria-hidden="true">·</span>
-                <span>{row.attempts} attempts</span>
+                <span>{t("attempts", { count: row.attempts })}</span>
               </>
             ) : null}
           </p>
@@ -988,7 +990,7 @@ function DeliveryItem({
             <p className="text-[12px] text-danger-rust [overflow-wrap:anywhere]">{row.lastError}</p>
           ) : null}
           {failed && row.nextRetryAt ? (
-            <p className="text-[12px] text-soft-ink">Next automatic retry {when(row.nextRetryAt)}</p>
+            <p className="text-[12px] text-soft-ink">{t("nextAutomaticRetry", { when: when(row.nextRetryAt, locale) })}</p>
           ) : null}
         </div>
         <Button size="sm" variant="outline" disabled={retrying || inFlight} onClick={onRetry}>
@@ -997,7 +999,7 @@ function DeliveryItem({
           ) : (
             <ArrowsClockwiseIcon className="size-3.5" />
           )}
-          Retry
+          {t("retry")}
         </Button>
       </div>
     </li>

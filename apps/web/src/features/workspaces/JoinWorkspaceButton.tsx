@@ -1,6 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { useTransition } from "react";
 import { toast } from "@/lib/notification-island/toast";
 
@@ -8,6 +9,7 @@ import { joinViaInviteLinkAction } from "@/features/workspaces/actions";
 import { authClient } from "@/lib/auth-client";
 
 export function JoinWorkspaceButton({ token }: { token: string }) {
+  const t = useTranslations("accessInvitation");
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
 
@@ -21,7 +23,7 @@ export function JoinWorkspaceButton({ token }: { token: string }) {
           const result = await joinViaInviteLinkAction(token);
 
           if (!result.success || !result.organizationId) {
-            toast.error(result.error ?? "Unable to join workspace.");
+            toast.error(result.error ?? t("joinFailed"));
             return;
           }
 
@@ -34,7 +36,7 @@ export function JoinWorkspaceButton({ token }: { token: string }) {
         });
       }}
     >
-      {isPending ? "Joining…" : "Join workspace"}
+      {isPending ? t("joining") : t("joinWorkspace")}
     </button>
   );
 }

@@ -3,6 +3,7 @@
 import { useState, useTransition, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { AlertTriangle } from "lucide-react";
+import { useTranslations } from "next-intl";
 import { toast } from "@/lib/notification-island/toast";
 
 import { rescheduleInterview } from "@/features/interviews/actions";
@@ -41,6 +42,7 @@ export function RescheduleDrawer({
   currentLocation: string | null;
   trigger: ReactNode;
 }) {
+  const t = useTranslations("features.candidates.rescheduleDrawer");
   const router = useRouter();
   const [open, setOpen] = useState(false);
 
@@ -68,12 +70,12 @@ export function RescheduleDrawer({
       const end = new Date(start.getTime() + Number(duration) * 60_000);
       const result = await checkAvailability({ timeMin: start, timeMax: end, excludeInterviewId: interviewId });
       if (result.gcalAvailability === "unknown") {
-        setAvailabilityWarning("Google Calendar availability could not be checked for this time.");
+        setAvailabilityWarning(t("calendarUnchecked"));
         return;
       }
       if (result.gcalBusy.length > 0) {
         setAvailabilityWarning(
-          `This time overlaps with ${result.gcalBusy.length} existing event${result.gcalBusy.length > 1 ? "s" : ""} on your calendar.`,
+          t("overlap", { count: result.gcalBusy.length }),
         );
       } else {
         setAvailabilityWarning(null);
@@ -91,7 +93,7 @@ export function RescheduleDrawer({
 
   function submit() {
     if (!date || !time) {
-      toast.error("Pick a date and time.");
+      toast.error(t("pickDateTime"));
       return;
     }
     startTransition(async () => {
@@ -104,13 +106,13 @@ export function RescheduleDrawer({
         location: location.trim() || null,
       });
       if (!result.success) {
-        toast.error(result.error ?? "Could not reschedule.");
+        toast.error(result.error ?? t("rescheduleError"));
         return;
       }
       if (result.warning) toast.warning(result.warning);
       const emailNote = unshownEmailWarning(result);
       if (emailNote) toast.warning(emailNote);
-      toast.success("Interview rescheduled");
+      toast.success(t("rescheduled"));
       setOpen(false);
       router.refresh();
     });
@@ -121,15 +123,15 @@ export function RescheduleDrawer({
       open={open}
       onOpenChange={setOpen}
       trigger={trigger}
-        title="Reschedule interview"
-        description="Update the date, time, or duration. Google Calendar will be updated automatically."
+        title={t("title")}
+        description={t("description")}
         footer={
           <>
             <Button variant="outline" disabled={isPending} onClick={() => setOpen(false)}>
-              Cancel
+              {t("cancel")}
             </Button>
             <Button onClick={submit} disabled={isPending}>
-              {isPending ? "Saving…" : "Save changes"}
+              {isPending ? t("saving") : t("save")}
             </Button>
           </>
         }
@@ -141,7 +143,7 @@ export function RescheduleDrawer({
                 htmlFor="reschedule-date"
                 className="text-[13px] font-medium tracking-tight text-foreground/90"
               >
-                Date
+                {t("date")}
               </label>
               <Input
                 id="reschedule-date"
@@ -158,7 +160,7 @@ export function RescheduleDrawer({
                 htmlFor="reschedule-time"
                 className="text-[13px] font-medium tracking-tight text-foreground/90"
               >
-                Time
+                {t("time")}
               </label>
               <Input
                 id="reschedule-time"
@@ -179,12 +181,12 @@ export function RescheduleDrawer({
             </div>
           ) : null}
           {checkingAvailability ? (
-            <p className="text-xs text-muted-foreground">Checking availability…</p>
+            <p className="text-xs text-muted-foreground">{t("checkingAvailability")}</p>
           ) : null}
 
           <div className="space-y-2">
             <label className="text-[13px] font-medium tracking-tight text-foreground/90">
-              Duration
+              {t("duration")}
             </label>
             <Select
               value={durationMins}
@@ -199,7 +201,7 @@ export function RescheduleDrawer({
               <SelectContent>
                 {DURATIONS.map((d) => (
                   <SelectItem key={d} value={String(d)}>
-                    {d} min
+                    {t("minutes", { count: d })}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -211,13 +213,13 @@ export function RescheduleDrawer({
               htmlFor="reschedule-location"
               className="text-[13px] font-medium tracking-tight text-foreground/90"
             >
-              Location
+              {t("location")}
             </label>
             <Input
               id="reschedule-location"
               value={location}
               onChange={(e) => setLocation(e.target.value)}
-              placeholder="Meeting link or address…"
+              placeholder={t("locationPlaceholder")}
             />
           </div>
         </div>

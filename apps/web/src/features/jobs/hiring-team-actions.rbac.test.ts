@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const requireJobPermission = vi.hoisted(() => vi.fn());
 
+vi.mock("next-intl/server", async () => (await import("@/test-support/intl-server-mock")).intlServerMock);
 vi.mock("@harly/db", () => ({
   db: {},
   jobHiringTeam: {},
@@ -30,13 +31,14 @@ describe("hiring-team authorization", () => {
   });
 
   it.each([
-    ["add", () => addHiringTeamMember({ jobId: JOB_ID, userId: "user-1", role: "recruiter" })],
-    ["update", () => updateHiringTeamRole({ id: "member-1", jobId: JOB_ID, role: "recruiter" })],
-    ["remove", () => removeHiringTeamMember({ id: "member-1", jobId: JOB_ID })],
-  ])("requires job scope before %s", async (_name, action) => {
+    ["add", "addMemberFailed", () => addHiringTeamMember({ jobId: JOB_ID, userId: "user-1", role: "recruiter" })],
+    ["update", "updateRoleFailed", () => updateHiringTeamRole({ id: "member-1", jobId: JOB_ID, role: "recruiter" })],
+    ["remove", "removeMemberFailed", () => removeHiringTeamMember({ id: "member-1", jobId: JOB_ID })],
+  ])("requires job scope before %s", async (_name, code, action) => {
     await expect(action()).resolves.toEqual({
       success: false,
-      error: expect.stringContaining("Unable"),
+      code,
+      error: expect.any(String),
     });
     expect(requireJobPermission).toHaveBeenCalledWith(
       "hiring_team:manage",

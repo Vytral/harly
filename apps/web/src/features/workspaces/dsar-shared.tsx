@@ -16,32 +16,29 @@ export type DsarStatus =
   | "denied";
 export type DsarType = "export" | "erasure";
 
+// Labels are translated at render time from `labels.workspaces.dsar`
+// (status.<status>, type.<type>) so the maps stay locale-free.
 export const DSAR_STATUS_META: Record<
   DsarStatus,
-  { label: string; tone: StatusPillTone; accentClassName: string }
+  { tone: StatusPillTone; accentClassName: string }
 > = {
   pending: {
-    label: "Pending",
     tone: "warning",
     accentClassName: "bg-clay",
   },
   processing: {
-    label: "In progress",
     tone: "info",
     accentClassName: "bg-slate-info",
   },
   blocked: {
-    label: "Blocked by legal hold",
     tone: "warning",
     accentClassName: "bg-clay",
   },
   completed: {
-    label: "Completed",
     tone: "success",
     accentClassName: "bg-lime",
   },
   denied: {
-    label: "Denied",
     tone: "danger",
     accentClassName: "bg-destructive",
   },
@@ -49,15 +46,13 @@ export const DSAR_STATUS_META: Record<
 
 export const DSAR_TYPE_META: Record<
   DsarType,
-  { label: string; icon: typeof Download; className: string }
+  { icon: typeof Download; className: string }
 > = {
   export: {
-    label: "Data export request",
     icon: Download,
     className: "bg-slate-info/10 text-slate-info",
   },
   erasure: {
-    label: "Erasure request",
     icon: Trash2,
     className: "bg-destructive/10 text-destructive",
   },
@@ -65,15 +60,17 @@ export const DSAR_TYPE_META: Record<
 
 export function DsarStatusBadge({
   status,
+  label,
   className,
 }: {
   status: DsarStatus;
+  label: string;
   className?: string;
 }) {
   const meta = DSAR_STATUS_META[status];
   return (
     <StatusPill tone={meta.tone} className={className}>
-      {meta.label}
+      {label}
     </StatusPill>
   );
 }

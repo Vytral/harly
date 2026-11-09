@@ -1,3 +1,5 @@
+import { getTranslations } from "next-intl/server";
+
 import { Skeleton } from "@/components/ui/skeleton";
 
 /** Stat tiles; the last one has no delta badge, like the real offer-acceptance tile. */
@@ -18,10 +20,12 @@ function CardHead({ titleClass }: { titleClass: string }) {
 const SOFT_CARD =
   "flex min-w-0 flex-col gap-5 rounded-[var(--radius-card)] bg-pure-snow p-5 shadow-[var(--shadow-card)]";
 
-export default function ReportsLoading() {
+export default async function ReportsLoading() {
+  const t = await getTranslations("pages.dashboardReports.loading");
+
   return (
     <div className="space-y-5" aria-busy="true">
-      <span className="sr-only">Loading…</span>
+      <span className="sr-only">{t("label")}</span>
 
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div className="space-y-2">

@@ -37,15 +37,20 @@ export function resolveInterviewTimeZone(
   return DEFAULT_INTERVIEW_TIME_ZONE;
 }
 
-/** `Tue, 4 Nov 2026, 3:00 PM (Europe/Madrid)`; invalid/missing zones use UTC. */
+/**
+ * `Tue, 4 Nov 2026, 3:00 PM (Europe/Madrid)`; invalid/missing zones use UTC.
+ * `locale` picks the month and weekday names and whether the clock is 12 or
+ * 24 hours. The layout stays "weekday, day month year, time (zone)".
+ */
 export function formatInterviewWhen(
   when: Date,
   timeZone?: string | null,
+  locale = "en-US",
 ): string {
   const zone = isValidTimeZone(timeZone)
     ? timeZone
     : DEFAULT_INTERVIEW_TIME_ZONE;
-  const parts = new Intl.DateTimeFormat("en-US", {
+  const parts = new Intl.DateTimeFormat(locale, {
     timeZone: zone,
     weekday: "short",
     day: "numeric",
@@ -53,9 +58,11 @@ export function formatInterviewWhen(
     year: "numeric",
     hour: "numeric",
     minute: "2-digit",
-    hour12: true,
+    hour12: locale.toLowerCase().startsWith("en"),
   }).formatToParts(when);
   const pick = (type: Intl.DateTimeFormatPartTypes) =>
     parts.find((part) => part.type === type)?.value ?? "";
-  return `${pick("weekday")}, ${pick("day")} ${pick("month")} ${pick("year")}, ${pick("hour")}:${pick("minute")} ${pick("dayPeriod")} (${zone})`;
+  const dayPeriod = pick("dayPeriod");
+  const clock = `${pick("hour")}:${pick("minute")}${dayPeriod ? ` ${dayPeriod}` : ""}`;
+  return `${pick("weekday")}, ${pick("day")} ${pick("month")} ${pick("year")}, ${clock} (${zone})`;
 }

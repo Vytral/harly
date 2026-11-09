@@ -7,6 +7,7 @@ const mocks = vi.hoisted(() => ({
   requirePermission: vi.fn(),
 }));
 
+vi.mock("next-intl/server", async () => (await import("@/test-support/intl-server-mock")).intlServerMock);
 vi.mock("./data", () => ({ createWorkflow: mocks.createWorkflow }));
 vi.mock("./builder-data", () => ({
   dryRunWorkflow: mocks.dryRunWorkflow,

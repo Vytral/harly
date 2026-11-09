@@ -1,4 +1,5 @@
 import { notFound } from "next/navigation";
+import { getTranslations } from "next-intl/server";
 import { isDemoMode } from "@harly/config";
 
 import { DemoLockedNotice } from "@/features/demo/DemoLockedNotice";
@@ -31,11 +32,12 @@ export default async function UpdatesSettingsPage() {
 
   const overview = await getUpdateOverview(organization.id);
   const { settings } = overview;
+  const t = await getTranslations("pages.settingsUpdates.page");
 
   return (
     <div className="space-y-6">
       {isDemoMode() ? (
-        <DemoLockedNotice>Updates are managed by the demo host and are locked here.</DemoLockedNotice>
+        <DemoLockedNotice>{t("demoLocked")}</DemoLockedNotice>
       ) : null}
       <UpdatesPanel
         view={{

@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { and, eq, isNull, sql } from "drizzle-orm";
 import { z } from "zod";
+import { getTranslations } from "@/i18n/server";
 import { db } from "@harly/db";
 import {
   applications,
@@ -13,10 +14,7 @@ import {
 } from "@harly/db";
 import { requirePermission } from "@/features/workspaces/permissions-server";
 import { resolveEntryStage } from "@/features/pipeline/stage-resolver";
-import {
-  ACTIVE_POOL_ENTRY_CONFLICT_MESSAGE,
-  isActivePoolEntryUniqueViolation,
-} from "@/features/pool/errors";
+import { isActivePoolEntryUniqueViolation } from "@/features/pool/errors";
 
 export type PoolActionState = { success: boolean; error?: string };
 
@@ -33,8 +31,9 @@ export async function addToPoolAction(input: {
   jobId?: string;
   reason?: string;
 }): Promise<PoolActionState> {
+  const t = await getTranslations("server.pool.actions");
   const parsed = addToPoolSchema.safeParse(input);
-  if (!parsed.success) return { success: false, error: "Invalid input." };
+  if (!parsed.success) return { success: false, error: t("invalidInput") };
 
   const { user, organization: workspace } = await requirePermission("candidates:edit");
 
@@ -49,7 +48,7 @@ export async function addToPoolAction(input: {
       ),
     )
     .limit(1);
-  if (!candidate) return { success: false, error: "Candidate not found." };
+  if (!candidate) return { success: false, error: t("candidateNotFound") };
 
   // Check if already in pool
   const [existing] = await db
@@ -65,7 +64,7 @@ export async function addToPoolAction(input: {
     .limit(1);
 
   if (existing) {
-    return { success: false, error: ACTIVE_POOL_ENTRY_CONFLICT_MESSAGE };
+    return { success: false, error: t("alreadyInPool") };
   }
 
   try {
@@ -79,7 +78,7 @@ export async function addToPoolAction(input: {
     });
   } catch (error) {
     if (isActivePoolEntryUniqueViolation(error)) {
-      return { success: false, error: ACTIVE_POOL_ENTRY_CONFLICT_MESSAGE };
+      return { success: false, error: t("alreadyInPool") };
     }
     throw error;
   }
@@ -96,8 +95,9 @@ const removeFromPoolSchema = z.object({
 export async function removeFromPoolAction(input: {
   candidateId: string;
 }): Promise<PoolActionState> {
+  const t = await getTranslations("server.pool.actions");
   const parsed = removeFromPoolSchema.safeParse(input);
-  if (!parsed.success) return { success: false, error: "Invalid input." };
+  if (!parsed.success) return { success: false, error: t("invalidInput") };
 
   const { organization: workspace } = await requirePermission("candidates:edit");
 
@@ -114,7 +114,7 @@ export async function removeFromPoolAction(input: {
     .limit(1);
 
   if (!entry) {
-    return { success: false, error: "Candidate is not in the pool." };
+    return { success: false, error: t("notInPool") };
   }
 
   await db
@@ -134,8 +134,9 @@ const bulkRemoveFromPoolSchema = z.object({
 export async function bulkRemoveFromPoolAction(input: {
   candidateIds: string[];
 }): Promise<PoolActionState> {
+  const t = await getTranslations("server.pool.actions");
   const parsed = bulkRemoveFromPoolSchema.safeParse(input);
-  if (!parsed.success) return { success: false, error: "Invalid selection." };
+  if (!parsed.success) return { success: false, error: t("invalidSelection") };
 
   const { organization: workspace } = await requirePermission("candidates:edit");
 
@@ -155,7 +156,7 @@ export async function bulkRemoveFromPoolAction(input: {
   );
 
   if (entriesToRemove.length === 0) {
-    return { success: false, error: "No candidates found in pool." };
+    return { success: false, error: t("noCandidatesInPool") };
   }
 
   const now = new Date();
@@ -179,8 +180,9 @@ export async function assignFromPoolToJobAction(input: {
   candidateId: string;
   jobId: string;
 }): Promise<PoolActionState> {
+  const t = await getTranslations("server.pool.actions");
   const parsed = assignFromPoolSchema.safeParse(input);
-  if (!parsed.success) return { success: false, error: "Invalid input." };
+  if (!parsed.success) return { success: false, error: t("invalidInput") };
 
   const { organization: workspace } = await requirePermission("candidates:edit");
 
@@ -198,7 +200,7 @@ export async function assignFromPoolToJobAction(input: {
     .limit(1);
 
   if (!candidate) {
-    return { success: false, error: "Candidate not found." };
+    return { success: false, error: t("candidateNotFound") };
   }
 
   // Verify job exists and is open
@@ -216,7 +218,7 @@ export async function assignFromPoolToJobAction(input: {
     .limit(1);
 
   if (!job) {
-    return { success: false, error: "Job is not open or was not found." };
+    return { success: false, error: t("jobNotOpen") };
   }
 
   // Check for duplicate application
@@ -233,7 +235,7 @@ export async function assignFromPoolToJobAction(input: {
     .limit(1);
 
   if (duplicate) {
-    return { success: false, error: "Candidate already has an application for this job." };
+    return { success: false, error: t("alreadyApplied") };
   }
 
   // Get first stage of the job
@@ -245,7 +247,7 @@ export async function assignFromPoolToJobAction(input: {
   if (!firstStage) {
     return {
       success: false,
-      error: "This job has no open pipeline stage to receive applications.",
+      error: t("noOpenStage"),
     };
   }
 
@@ -299,7 +301,7 @@ export async function assignFromPoolToJobAction(input: {
   if (!created) {
     return {
       success: false,
-      error: "Candidate already has an application for this job.",
+      error: t("alreadyApplied"),
     };
   }
 
@@ -319,8 +321,9 @@ export async function bulkAssignFromPoolToJobAction(input: {
   candidateIds: string[];
   jobId: string;
 }): Promise<PoolActionState & { assigned?: number; failed?: number }> {
+  const t = await getTranslations("server.pool.actions");
   const parsed = bulkAssignFromPoolSchema.safeParse(input);
-  if (!parsed.success) return { success: false, error: "Invalid input." };
+  if (!parsed.success) return { success: false, error: t("invalidInput") };
 
   let assigned = 0;
   let failed = 0;

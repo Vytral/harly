@@ -13,6 +13,7 @@ import {
   offers,
   organization,
 } from "@harly/db";
+import { resolveEmailLocale } from "@harly/config/email-locale";
 import {
   DeliveryOutcomeUnknownError,
   ApplicationReceivedCandidate,
@@ -809,6 +810,12 @@ export async function enqueueEmailOutbox(
   database: typeof db = db,
   options?: EnqueueOptions,
 ): Promise<string> {
+  const snapshotPayload = await snapshotRecipientLocale(
+    workspaceId,
+    kind,
+    payload,
+    database,
+  );
   const resolvedDedupeKey =
     dedupeKey ??
     createHash("sha256")
@@ -819,7 +826,7 @@ export async function enqueueEmailOutbox(
     .values({
       workspaceId,
       kind,
-      payload,
+      payload: snapshotPayload,
       dedupeKey: resolvedDedupeKey,
       actorId: actorId ?? null,
     })
@@ -865,6 +872,62 @@ export async function enqueueEmailOutbox(
       );
   }
   return existing.id;
+}
+
+/** Freeze the candidate's explicit preference into the durable row. Retries
+ * render from this snapshot even if the candidate changes their preference. */
+async function snapshotRecipientLocale(
+  workspaceId: string,
+  kind: string,
+  payload: Record<string, unknown>,
+  database: typeof db,
+): Promise<Record<string, unknown>> {
+  const candidateEmail =
+    typeof payload.candidateEmail === "string" ? payload.candidateEmail : null;
+  const offerId = typeof payload.offerId === "string" ? payload.offerId : null;
+  const candidateFacingKind =
+    kind === "application.received.candidate" ||
+    kind === "offer.extended" ||
+    kind === "offer.withdrawn" ||
+    kind.startsWith("pipeline.") ||
+    kind.startsWith("interview.");
+  if (!candidateFacingKind) return payload;
+
+  let preferredEmailLocale: string | null | undefined;
+  if (kind === "offer.extended" && offerId) {
+    const [recipient] = await database
+      .select({ preferredEmailLocale: candidates.preferredEmailLocale })
+      .from(offers)
+      .innerJoin(
+        candidates,
+        and(
+          eq(candidates.id, offers.candidateId),
+          eq(candidates.workspaceId, workspaceId),
+          isNull(candidates.deletedAt),
+        ),
+      )
+      .where(and(eq(offers.workspaceId, workspaceId), eq(offers.id, offerId)))
+      .limit(1);
+    preferredEmailLocale = recipient?.preferredEmailLocale;
+  } else if (candidateEmail) {
+    const [recipient] = await database
+      .select({ preferredEmailLocale: candidates.preferredEmailLocale })
+      .from(candidates)
+      .where(
+        and(
+          eq(candidates.workspaceId, workspaceId),
+          sql`lower(${candidates.email}) = ${candidateEmail.trim().toLowerCase()}`,
+          isNull(candidates.deletedAt),
+        ),
+      )
+      .limit(1);
+    preferredEmailLocale = recipient?.preferredEmailLocale;
+  }
+
+  return {
+    ...payload,
+    recipientLocale: resolveEmailLocale(preferredEmailLocale),
+  };
 }
 
 export type EnqueueOptions = {
@@ -965,6 +1028,7 @@ async function deliverOffer(row: OutboxRow, database: typeof db = db): Promise<b
   const payload = row.payload as {
     offerId?: string;
     terms?: unknown;
+    recipientLocale?: string | null;
   } | null;
   const offerId = payload?.offerId;
   if (!offerId) {
@@ -1065,6 +1129,7 @@ async function deliverOffer(row: OutboxRow, database: typeof db = db): Promise<b
   }
 
   let delivered: Awaited<ReturnType<typeof sendWorkspaceEmail>> = false;
+  const recipientLocale = resolveEmailLocale(payload?.recipientLocale);
   let offerSubject = "";
   const startDate = formatOfferDate(frozenTerms.startDate);
   const expiresAt = formatOfferDate(frozenTerms.expiresAt);
@@ -1126,6 +1191,7 @@ async function deliverOffer(row: OutboxRow, database: typeof db = db): Promise<b
       : offerExtendedSubject({
           companyName: recipient.companyName,
           jobTitle: frozenTerms.title,
+          locale: recipientLocale,
         });
     offerSubject = offerSubjectValue;
 
@@ -1163,6 +1229,7 @@ async function deliverOffer(row: OutboxRow, database: typeof db = db): Promise<b
               expiresAt,
               equity: frozenTerms.equity ?? undefined,
               offerUrl,
+              locale: recipientLocale,
             }),
             ...deliveryOptions(row),
             attachments,
@@ -1300,6 +1367,7 @@ async function deliverApplicationReceived(
     workspaceSlug?: string;
     applicationId?: string;
     portalEnabled?: boolean;
+    recipientLocale?: string | null;
   } | null;
 
   const branding = await getWorkspaceEmailBranding(row.workspaceId);
@@ -1315,6 +1383,7 @@ async function deliverApplicationReceived(
       await markFailed(row.id, "The candidate is no longer active.", database);
       return false;
     }
+    const recipientLocale = resolveEmailLocale(p.recipientLocale);
     const jobBoardUrl = `${appBaseUrl()}/board/${p.workspaceSlug ?? ""}`;
     const portalUrl = p.portalEnabled && p.applicationId
       ? `${appBaseUrl()}/portal/applications/${p.applicationId}`
@@ -1323,12 +1392,14 @@ async function deliverApplicationReceived(
     candidateSubject = applicationReceivedCandidateSubject({
       jobTitle: p.jobTitle ?? "",
       companyName: p.workspaceName ?? "",
+      locale: recipientLocale,
     });
     delivered = await sendRecorded(row, database, {
       to: p.candidateEmail,
       subject: candidateSubject,
       react: createElement(ApplicationReceivedCandidate, {
         candidateName: p.candidateFirstName ?? "",
+        locale: recipientLocale,
         jobTitle: p.jobTitle ?? "",
         companyName: p.workspaceName ?? "",
         companyLogoUrl: branding.logoUrl ?? undefined,
@@ -1358,15 +1429,18 @@ async function deliverApplicationReceived(
       await markFailed(row.id, "The candidate is no longer active.", database);
       return false;
     }
+    const recipientLocale = resolveEmailLocale(p.recipientLocale);
     const dashboardUrl = `${appBaseUrl()}/dashboard/candidates`;
     delivered = await sendRecorded(row, database, {
       to: p.ownerEmail,
       subject: applicationReceivedRecruiterSubject({
         candidateName: p.candidateName ?? "",
         jobTitle: p.jobTitle ?? "",
+        locale: recipientLocale,
       }),
       react: createElement(ApplicationReceivedRecruiter, {
         candidateName: p.candidateName ?? "",
+        locale: recipientLocale,
         candidateEmail: p.candidateEmail ?? "",
         jobTitle: p.jobTitle ?? "",
         dashboardUrl,
@@ -1408,6 +1482,7 @@ async function deliverPipelineEmail(row: OutboxRow, database: typeof db = db): P
     type?: "stage" | "rejected";
     /** Rejection only: chosen template id, `null` = built-in, absent = active. */
     templateId?: string | null;
+    recipientLocale?: string | null;
   } | null;
 
   if (!p?.candidateEmail) {
@@ -1420,6 +1495,7 @@ async function deliverPipelineEmail(row: OutboxRow, database: typeof db = db): P
   }
 
   const branding = await getWorkspaceEmailBranding(row.workspaceId);
+  const recipientLocale = resolveEmailLocale(p.recipientLocale);
   const { first, last } = splitName(p.candidateName ?? "");
   const isStage = p.type === "stage";
   const templateType = isStage ? "stage_change" : "rejection";
@@ -1459,10 +1535,12 @@ async function deliverPipelineEmail(row: OutboxRow, database: typeof db = db): P
       ? candidateStageUpdateSubject({
           jobTitle: p.jobTitle ?? "",
           stageName: p.stageName ?? "",
+          locale: recipientLocale,
         })
       : candidateRejectedSubject({
           jobTitle: p.jobTitle ?? "",
           companyName: p.workspaceName ?? "",
+          locale: recipientLocale,
         });
 
   let delivered: Awaited<ReturnType<typeof sendWorkspaceEmail>> = false;
@@ -1505,6 +1583,7 @@ async function deliverPipelineEmail(row: OutboxRow, database: typeof db = db): P
             portalUrl: p.applicationId
               ? `${appBaseUrl()}/portal/applications/${p.applicationId}`
               : undefined,
+            locale: recipientLocale,
           }),
           ...deliveryOptions(row),
         },
@@ -1528,6 +1607,7 @@ async function deliverPipelineEmail(row: OutboxRow, database: typeof db = db): P
             portalUrl: p.applicationId
               ? `${appBaseUrl()}/portal/applications/${p.applicationId}`
               : undefined,
+            locale: recipientLocale,
           }),
           ...deliveryOptions(row),
         },
@@ -1575,6 +1655,7 @@ type InterviewEmailPayload = {
   notes?: string;
   replyTo?: string | null;
   interviewerName?: string;
+  recipientLocale?: string | null;
 };
 
 async function deliverInterviewEmail(row: OutboxRow, database: typeof db = db): Promise<boolean> {
@@ -1597,11 +1678,13 @@ async function deliverInterviewEmail(row: OutboxRow, database: typeof db = db): 
   const timeZone = resolveInterviewTimeZone(payload.timeZone);
   const whenLabel = formatInterviewWhen(when, timeZone);
   const branding = await getWorkspaceEmailBranding(row.workspaceId);
+  const recipientLocale = resolveEmailLocale(payload.recipientLocale);
   const [firstName, ...lastName] = (payload.candidateName ?? "")
     .trim()
     .split(/\s+/);
   const common = {
     candidateName: firstName ?? "",
+    locale: recipientLocale,
     companyName: payload.companyName,
     companyLogoUrl: branding.logoUrl ?? undefined,
     hideBranding: branding.hideBranding,
@@ -1638,6 +1721,7 @@ async function deliverInterviewEmail(row: OutboxRow, database: typeof db = db): 
         : interviewScheduledSubject({
             companyName: payload.companyName,
             jobTitle: payload.jobTitle,
+            locale: recipientLocale,
           });
       delivered = await sendRecorded(
         row,
@@ -1671,6 +1755,7 @@ async function deliverInterviewEmail(row: OutboxRow, database: typeof db = db): 
                 startIso: when.toISOString(),
                 durationMins: payload.durationMins,
                 notes: payload.notes,
+                locale: recipientLocale,
               }),
               ...deliveryOptions(row),
             },
@@ -1680,6 +1765,7 @@ async function deliverInterviewEmail(row: OutboxRow, database: typeof db = db): 
       interviewSubject = interviewRescheduledSubject({
         companyName: payload.companyName,
         jobTitle: payload.jobTitle,
+        locale: recipientLocale,
       });
       delivered = await sendRecorded(
         row,
@@ -1706,6 +1792,7 @@ async function deliverInterviewEmail(row: OutboxRow, database: typeof db = db): 
       interviewSubject = interviewCanceledSubject({
         companyName: payload.companyName,
         jobTitle: payload.jobTitle,
+        locale: recipientLocale,
       });
       delivered = await sendRecorded(
         row,
@@ -1759,6 +1846,7 @@ async function deliverOfferWithdrawn(row: OutboxRow, database: typeof db = db): 
     candidateName?: string;
     companyName?: string;
     jobTitle?: string;
+    recipientLocale?: string | null;
   } | null;
   if (!payload?.candidateEmail || !payload.companyName || !payload.jobTitle) {
     await markFailed(
@@ -1773,9 +1861,11 @@ async function deliverOfferWithdrawn(row: OutboxRow, database: typeof db = db): 
     return false;
   }
   const branding = await getWorkspaceEmailBranding(row.workspaceId);
+  const recipientLocale = resolveEmailLocale(payload.recipientLocale);
   const withdrawnSubject = offerWithdrawnSubject({
     companyName: payload.companyName,
     jobTitle: payload.jobTitle,
+    locale: recipientLocale,
   });
   const delivered = await sendRecorded(
     row,
@@ -1791,6 +1881,7 @@ async function deliverOfferWithdrawn(row: OutboxRow, database: typeof db = db): 
         accentColor: branding.primaryColor ?? undefined,
         socialLinks: branding.socialLinks,
         jobTitle: payload.jobTitle,
+        locale: recipientLocale,
       }),
       ...deliveryOptions(row),
     },

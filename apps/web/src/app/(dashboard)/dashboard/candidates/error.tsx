@@ -1,6 +1,7 @@
 "use client";
 
 import { RouteError } from "@/components/ui/route-error";
+import { useTranslations } from "next-intl";
 
 export default function CandidatesError({
   error,
@@ -9,5 +10,6 @@ export default function CandidatesError({
   error: Error & { digest?: string };
   reset: () => void;
 }) {
-  return <RouteError error={error} reset={reset} title="Candidates could not load" />;
+  const t = useTranslations("pages.dashboardCandidates.error");
+  return <RouteError error={error} reset={reset} title={t("title")} />;
 }

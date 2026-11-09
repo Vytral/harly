@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { and, eq, exists, getTableColumns, isNull, or, sql } from "drizzle-orm";
 import { z } from "zod";
+import { getTranslations } from "@/i18n/server";
 
 import {
   activityEvents,
@@ -66,25 +67,40 @@ import {
 
 const log = createLogger("offers");
 
-const offerFieldsSchema = z.object({
-  title: z.string().trim().min(1, "Offer title is required.").max(200),
-  salaryAmount: z.number().int().positive().max(100_000_000).nullable(),
-  currency: z.string().trim().max(8).nullable(),
-  salaryPeriod: z.enum(["annual", "monthly"]).nullable(),
-  equity: z.string().trim().max(120).nullable(),
-  startDate: z.iso.datetime().nullable(),
-  expiresAt: z.iso.datetime().nullable(),
-  notes: z.string().trim().max(5000).nullable(),
-});
+type Translate = Awaited<ReturnType<typeof getTranslations>>;
 
-const createOfferSchema = offerFieldsSchema.extend({
-  applicationId: z.uuid(),
-  documentIds: z.array(z.uuid()).max(20).optional().default([]),
-});
+/** A business rule that stops an action. `key` is under `server.offers.actions`. */
+class OfferRuleError extends Error {
+  constructor(readonly key: string) {
+    super(key);
+  }
+}
 
-const updateOfferSchema = offerFieldsSchema.extend({
-  offerId: z.uuid(),
-});
+function offerFieldsSchema(t: Translate) {
+  return z.object({
+    title: z.string().trim().min(1, t("titleRequired")).max(200),
+    salaryAmount: z.number().int().positive().max(100_000_000).nullable(),
+    currency: z.string().trim().max(8).nullable(),
+    salaryPeriod: z.enum(["annual", "monthly"]).nullable(),
+    equity: z.string().trim().max(120).nullable(),
+    startDate: z.iso.datetime().nullable(),
+    expiresAt: z.iso.datetime().nullable(),
+    notes: z.string().trim().max(5000).nullable(),
+  });
+}
+
+function buildCreateOfferSchema(t: Translate) {
+  return offerFieldsSchema(t).extend({
+    applicationId: z.uuid(),
+    documentIds: z.array(z.uuid()).max(20).optional().default([]),
+  });
+}
+
+function buildUpdateOfferSchema(t: Translate) {
+  return offerFieldsSchema(t).extend({
+    offerId: z.uuid(),
+  });
+}
 
 type ActionResult = { success: boolean; error?: string; warning?: string };
 type CreateOfferResult = ActionResult & { offerId?: string };
@@ -215,11 +231,12 @@ export async function createOffer(input: {
   notes: string | null;
   documentIds?: string[];
 }): Promise<CreateOfferResult> {
-  const parsed = createOfferSchema.safeParse(input);
+  const t = await getTranslations("server.offers.actions");
+  const parsed = buildCreateOfferSchema(t).safeParse(input);
   if (!parsed.success) {
     return {
       success: false,
-      error: parsed.error.issues[0]?.message ?? "Invalid offer.",
+      error: parsed.error.issues[0]?.message ?? t("invalidOffer"),
     };
   }
 
@@ -231,7 +248,7 @@ export async function createOffer(input: {
     expiresAt: parsed.data.expiresAt ? new Date(parsed.data.expiresAt) : null,
   });
   if (!terms.ok) {
-    return { success: false, error: terms.message };
+    return { success: false, error: t(`terms.${terms.code}`) };
   }
 
   let context;
@@ -244,7 +261,7 @@ export async function createOffer(input: {
     log.error(error, "createOffer failed");
     return {
       success: false,
-      error: "You do not have permission to manage offers.",
+      error: t("noPermission"),
     };
   }
   const workspaceId = context.organization.id;
@@ -266,12 +283,12 @@ export async function createOffer(input: {
     .limit(1);
 
   if (!application) {
-    return { success: false, error: "Application not found." };
+    return { success: false, error: t("applicationNotFound") };
   }
   if (application.status !== "active") {
     return {
       success: false,
-      error: "Only active applications can receive an offer.",
+      error: t("applicationNotActive"),
     };
   }
 
@@ -289,7 +306,7 @@ export async function createOffer(input: {
     if (accessible.some((document) => !document)) {
       return {
         success: false,
-        error: "One or more selected documents are not accessible.",
+        error: t("documentsNotAccessible"),
       };
     }
   }
@@ -313,7 +330,7 @@ export async function createOffer(input: {
       .for("update")
       .limit(1);
     if (!lockedApplication || lockedApplication.status !== "active") {
-      throw new Error("Only active applications can receive an offer.");
+      throw new OfferRuleError("applicationNotActive");
     }
 
     const [existingActiveOffer] = await tx
@@ -328,9 +345,7 @@ export async function createOffer(input: {
       )
       .limit(1);
     if (existingActiveOffer) {
-      throw new Error(
-        `An active offer (${existingActiveOffer.status}) already exists for this application.`,
-      );
+      throw new OfferRuleError("activeOfferExists");
     }
 
     const [createdOffer] = await tx
@@ -379,7 +394,7 @@ export async function createOffer(input: {
   })
     .then(() => null)
     .catch((error: unknown) =>
-      error instanceof Error ? error.message : "Unable to create offer.",
+      error instanceof OfferRuleError ? t(error.key) : t("unableToCreate"),
     );
   if (transactionError) return { success: false, error: transactionError };
 
@@ -399,11 +414,12 @@ export async function updateOffer(input: {
   expiresAt: string | null;
   notes: string | null;
 }): Promise<ActionResult> {
-  const parsed = updateOfferSchema.safeParse(input);
+  const t = await getTranslations("server.offers.actions");
+  const parsed = buildUpdateOfferSchema(t).safeParse(input);
   if (!parsed.success) {
     return {
       success: false,
-      error: parsed.error.issues[0]?.message ?? "Invalid offer.",
+      error: parsed.error.issues[0]?.message ?? t("invalidOffer"),
     };
   }
 
@@ -415,7 +431,7 @@ export async function updateOffer(input: {
     expiresAt: parsed.data.expiresAt ? new Date(parsed.data.expiresAt) : null,
   });
   if (!terms.ok) {
-    return { success: false, error: terms.message };
+    return { success: false, error: t(`terms.${terms.code}`) };
   }
 
   let context;
@@ -428,15 +444,15 @@ export async function updateOffer(input: {
     log.error(error, "updateOffer failed");
     return {
       success: false,
-      error: "You do not have permission to manage offers.",
+      error: t("noPermission"),
     };
   }
   const workspaceId = context.organization.id;
 
   const offer = await getOfferRow(workspaceId, parsed.data.offerId);
-  if (!offer) return { success: false, error: "Offer not found." };
+  if (!offer) return { success: false, error: t("offerNotFound") };
   if (offer.status !== "draft") {
-    return { success: false, error: "Only draft offers can be edited." };
+    return { success: false, error: t("onlyDraftEdit") };
   }
 
   const [inFlightSend] = await db
@@ -454,7 +470,7 @@ export async function updateOffer(input: {
   if (inFlightSend) {
     return {
       success: false,
-      error: "This offer is being sent. Wait for delivery before editing its terms.",
+      error: t("beingSent"),
     };
   }
 
@@ -481,7 +497,7 @@ export async function updateOffer(input: {
     )
     .returning({ id: offers.id });
   if (!updated) {
-    return { success: false, error: "Offer changed while you were editing it. Refresh and try again." };
+    return { success: false, error: t("changedWhileEditing") };
   }
 
   revalidatePath(`/dashboard/candidates/${offer.candidateId}`);
@@ -494,8 +510,9 @@ const transitionSchema = z.object({ offerId: z.uuid() });
 export async function sendOffer(input: {
   offerId: string;
 }): Promise<ActionResult> {
+  const t = await getTranslations("server.offers.actions");
   const parsed = transitionSchema.safeParse(input);
-  if (!parsed.success) return { success: false, error: "Invalid offer." };
+  if (!parsed.success) return { success: false, error: t("invalidOffer") };
 
   let context;
   try {
@@ -507,20 +524,20 @@ export async function sendOffer(input: {
     log.error(error, "sendOffer failed");
     return {
       success: false,
-      error: "You do not have permission to manage offers.",
+      error: t("noPermission"),
     };
   }
   const workspaceId = context.organization.id;
 
   const offer = await getOfferRow(workspaceId, parsed.data.offerId);
-  if (!offer) return { success: false, error: "Offer not found." };
+  if (!offer) return { success: false, error: t("offerNotFound") };
   if (offer.status !== "draft") {
-    return { success: false, error: "Only draft offers can be sent." };
+    return { success: false, error: t("onlyDraftSend") };
   }
   if (offerHasExpired(offer.expiresAt)) {
     return {
       success: false,
-      error: "This offer has expired and can no longer be sent.",
+      error: t("expiredSend"),
     };
   }
 
@@ -537,7 +554,7 @@ export async function sendOffer(input: {
   if (!application || application.status !== "active") {
     return {
       success: false,
-      error: "Only active applications can receive an offer.",
+      error: t("applicationNotActive"),
     };
   }
 
@@ -545,7 +562,7 @@ export async function sendOffer(input: {
   if (!recipient?.email) {
     return {
       success: false,
-      error: "The candidate does not have an email address.",
+      error: t("candidateNoEmail"),
     };
   }
 
@@ -565,7 +582,7 @@ export async function sendOffer(input: {
       return {
         success: false,
         error:
-          "Could not create the signature request. Check the DocuSeal connection and try again.",
+          t("docusealFailed"),
       };
     }
   } else if (esignStatus.offerSignatureChannel === "native") {
@@ -574,13 +591,13 @@ export async function sendOffer(input: {
       if (!prepared) {
         return {
           success: false,
-          error: "Could not prepare the offer letter for signing.",
+          error: t("prepareLetterFailed"),
         };
       }
       if (!isSignableNativeFieldsSnapshot(prepared.fieldsSnapshot)) {
         return {
           success: false,
-          error: "Place at least one required signature field before sending the offer.",
+          error: t("signatureFieldRequired"),
         };
       }
       await ensureNativeOfferEnvelope({
@@ -596,7 +613,7 @@ export async function sendOffer(input: {
       );
       return {
         success: false,
-        error: "Could not prepare the offer letter for signing.",
+        error: t("prepareLetterFailed"),
       };
     }
   }
@@ -638,7 +655,7 @@ export async function sendOffer(input: {
     return {
       success: true,
       warning:
-        "Email is not configured, so the candidate was not notified. The offer is marked as sent; share the portal link with them directly.",
+        t("emailNotConfigured"),
     };
   }
 
@@ -674,7 +691,7 @@ export async function sendOffer(input: {
   if (updated?.status !== "sent") {
     return {
       success: false,
-      error: offerSendOutcomeMessage(updated?.status ?? "missing"),
+      error: offerSendOutcomeMessage(updated?.status ?? "missing", await getTranslations("server.emailDelivery")),
     };
   }
 
@@ -699,12 +716,13 @@ async function notifyCandidateOfferSent(input: {
   applicationId: string;
   title: string;
 }): Promise<void> {
+  const t = await getTranslations("server.offers.actions");
   try {
     await createCandidatePortalNotification({
       workspaceId: input.workspaceId,
       candidateId: input.candidateId,
       type: "offer.sent",
-      title: "You have a new offer",
+      title: t("candidateOfferTitle"),
       body: input.title,
       href: `/portal/applications/${input.applicationId}`,
       metadata: { applicationId: input.applicationId },
@@ -749,9 +767,10 @@ const saveFieldsAndSendSchema = z.object({
 export async function saveOfferSignatureFieldsAndSend(
   input: unknown,
 ): Promise<ActionResult> {
+  const t = await getTranslations("server.offers.actions");
   const parsed = saveFieldsAndSendSchema.safeParse(input);
   if (!parsed.success) {
-    return { success: false, error: "Invalid field placement." };
+    return { success: false, error: t("invalidFieldPlacement") };
   }
 
   let context;
@@ -761,20 +780,20 @@ export async function saveOfferSignatureFieldsAndSend(
     log.error(error, "saveOfferSignatureFieldsAndSend failed");
     return {
       success: false,
-      error: "You do not have permission to manage offers.",
+      error: t("noPermission"),
     };
   }
   const workspaceId = context.organization.id;
 
   const offer = await getOfferRow(workspaceId, parsed.data.offerId);
-  if (!offer) return { success: false, error: "Offer not found." };
+  if (!offer) return { success: false, error: t("offerNotFound") };
   if (offer.status !== "draft") {
-    return { success: false, error: "Only draft offers can be sent." };
+    return { success: false, error: t("onlyDraftSend") };
   }
   if (offerHasExpired(offer.expiresAt)) {
     return {
       success: false,
-      error: "This offer has expired and can no longer be sent.",
+      error: t("expiredSend"),
     };
   }
 
@@ -782,7 +801,7 @@ export async function saveOfferSignatureFieldsAndSend(
   if (esignStatus.offerSignatureChannel !== "native") {
     return {
       success: false,
-      error: "Field placement is only available for native e-signature offers.",
+      error: t("fieldPlacementNative"),
     };
   }
 
@@ -790,7 +809,7 @@ export async function saveOfferSignatureFieldsAndSend(
   if (!prepared) {
     return {
       success: false,
-      error: "Could not prepare the offer letter for signing.",
+      error: t("prepareLetterFailed"),
     };
   }
 
@@ -803,7 +822,7 @@ export async function saveOfferSignatureFieldsAndSend(
         .for("update")
         .limit(1);
       if (!locked || locked.status !== "draft") {
-        throw new Error("This offer is no longer a draft.");
+        throw new OfferRuleError("offerNotDraft");
       }
 
       await tx
@@ -861,9 +880,9 @@ export async function saveOfferSignatureFieldsAndSend(
     return {
       success: false,
       error:
-        error instanceof Error
-          ? error.message
-          : "Could not save the field placement.",
+        error instanceof OfferRuleError
+          ? t(error.key)
+          : t("fieldsSaveFailed"),
     };
   }
 
@@ -878,10 +897,11 @@ export async function decideOffer(input: {
   offerId: string;
   decision: "accepted" | "declined";
 }): Promise<ActionResult> {
+  const t = await getTranslations("server.offers.actions");
   const parsed = transitionSchema
     .extend({ decision: z.enum(["accepted", "declined"]) })
     .safeParse(input);
-  if (!parsed.success) return { success: false, error: "Invalid offer." };
+  if (!parsed.success) return { success: false, error: t("invalidOffer") };
 
   let context;
   try {
@@ -893,20 +913,20 @@ export async function decideOffer(input: {
     log.error(error, "decideOffer failed");
     return {
       success: false,
-      error: "You do not have permission to manage offers.",
+      error: t("noPermission"),
     };
   }
   const workspaceId = context.organization.id;
 
   const offer = await getOfferRow(workspaceId, parsed.data.offerId);
-  if (!offer) return { success: false, error: "Offer not found." };
+  if (!offer) return { success: false, error: t("offerNotFound") };
   if (offer.status !== "sent") {
-    return { success: false, error: "Only sent offers can be decided." };
+    return { success: false, error: t("onlySentDecide") };
   }
   if (offerHasExpired(offer.expiresAt)) {
     return {
       success: false,
-      error: "This offer has expired and can no longer be decided.",
+      error: t("expiredDecide"),
     };
   }
 
@@ -929,12 +949,12 @@ export async function decideOffer(input: {
       )
       .limit(1);
     if (!application) {
-      return { success: false, error: "Application not found." };
+      return { success: false, error: t("applicationNotFound") };
     }
     if (application.status !== "active") {
       return {
         success: false,
-        error: "This application is no longer active. Refresh and try again.",
+        error: t("applicationNoLongerActive"),
       };
     }
   }
@@ -1093,9 +1113,12 @@ export async function decideOffer(input: {
     actorName: context.user.name,
     jobId: offer.jobId,
     candidateId: offer.candidateId,
-    candidateName: decisionRecipient?.firstName ?? "Candidate",
+    candidateName: decisionRecipient?.firstName ?? t("candidateFallback"),
     type: decision === "accepted" ? "offer.accepted" : "offer.declined",
-    title: `Offer ${decision}, ${offer.title}`,
+    title: t("hiringTeamTitle", {
+      decision: t(`decisions.${decision}`),
+      title: offer.title,
+    }),
   });
 
   revalidatePath(`/dashboard/candidates/${offer.candidateId}`);
@@ -1107,8 +1130,9 @@ export async function decideOffer(input: {
 export async function withdrawOffer(input: {
   offerId: string;
 }): Promise<ActionResult> {
+  const t = await getTranslations("server.offers.actions");
   const parsed = transitionSchema.safeParse(input);
-  if (!parsed.success) return { success: false, error: "Invalid offer." };
+  if (!parsed.success) return { success: false, error: t("invalidOffer") };
 
   let context;
   try {
@@ -1120,15 +1144,15 @@ export async function withdrawOffer(input: {
     log.error(error, "withdrawOffer failed");
     return {
       success: false,
-      error: "You do not have permission to manage offers.",
+      error: t("noPermission"),
     };
   }
   const workspaceId = context.organization.id;
 
   const offer = await getOfferRow(workspaceId, parsed.data.offerId);
-  if (!offer) return { success: false, error: "Offer not found." };
+  if (!offer) return { success: false, error: t("offerNotFound") };
   if (offer.status !== "draft" && offer.status !== "sent") {
-    return { success: false, error: "This offer can no longer be withdrawn." };
+    return { success: false, error: t("cannotWithdraw") };
   }
 
   await db.transaction(async (tx) => {
@@ -1148,7 +1172,7 @@ export async function withdrawOffer(input: {
       .for("update")
       .limit(1);
     if (!lockedOffer || (lockedOffer.status !== "draft" && lockedOffer.status !== "sent")) {
-      throw new Error("This offer can no longer be withdrawn.");
+      throw new Error(t("cannotWithdraw"));
     }
 
     if (lockedOffer.status === "sent") {

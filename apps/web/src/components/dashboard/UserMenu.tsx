@@ -3,6 +3,7 @@
 import type { Route } from "next";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
+import { useTranslations } from "next-intl";
 import {
   BookOpen,
   Building2,
@@ -60,6 +61,7 @@ const itemClass =
 
 /** Theme toggle; only mounts while the menu is open, inside ThemeProvider. */
 function ThemeItem() {
+  const t = useTranslations("shell.userMenu");
   const { resolvedTheme, setTheme } = useTheme();
   const dark = resolvedTheme === "dark";
   return (
@@ -72,7 +74,7 @@ function ThemeItem() {
       ) : (
         <Moon className="size-4 text-muted-foreground" strokeWidth={1.5} />
       )}
-      {dark ? "Light mode" : "Dark mode"}
+      {dark ? t("lightMode") : t("darkMode")}
     </DropdownMenuItem>
   );
 }
@@ -89,6 +91,7 @@ export function UserMenu({
   demoMode = false,
   onInvite,
 }: UserMenuProps) {
+  const t = useTranslations("shell.userMenu");
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [isPending, startTransition] = useTransition();
@@ -137,7 +140,7 @@ export function UserMenu({
         <button
           type="button"
           className="flex shrink-0 items-center rounded-full ring-2 ring-pure-snow/70 transition duration-150 ease-out hover:ring-pure-snow focus-visible:outline-none focus-visible:ring-near-ink data-[state=open]:ring-pure-snow"
-          aria-label="Account menu"
+          aria-label={t("accountMenu")}
         >
           <UserAvatar name={user.name} src={user.image} size="md" priority />
         </button>
@@ -163,7 +166,7 @@ export function UserMenu({
             variant="secondary"
             className="shrink-0 text-[11px] font-normal"
           >
-            {formatRole(role)}
+            {t.has(`roles.${role}`) ? t(`roles.${role}`) : formatRole(role)}
           </Badge>
         </div>
 
@@ -175,7 +178,7 @@ export function UserMenu({
 
             <div className="px-3 py-3">
               <p className="mb-2 px-1 text-[11px] font-medium uppercase tracking-widest text-muted-foreground">
-                Workspace
+                {t("workspace")}
               </p>
               <div className="space-y-0.5">
                 {workspaceOptions.map((ws) => (
@@ -217,7 +220,7 @@ export function UserMenu({
                   className="size-4 text-muted-foreground"
                   strokeWidth={1.5}
                 />
-                View profile
+                {t("viewProfile")}
               </Link>
             </DropdownMenuItem>
           )}
@@ -227,7 +230,7 @@ export function UserMenu({
                 className="size-4 text-muted-foreground"
                 strokeWidth={1.5}
               />
-              Account settings
+              {t("accountSettings")}
             </Link>
           </DropdownMenuItem>
           <DropdownMenuItem asChild className={itemClass}>
@@ -236,7 +239,7 @@ export function UserMenu({
                 className="size-4 text-muted-foreground"
                 strokeWidth={1.5}
               />
-              Organization settings
+              {t("organizationSettings")}
             </Link>
           </DropdownMenuItem>
           {onInvite ? (
@@ -248,7 +251,7 @@ export function UserMenu({
                 className="size-4 text-muted-foreground"
                 strokeWidth={1.5}
               />
-              Invite teammates
+              {t("inviteTeammates")}
             </DropdownMenuItem>
           ) : null}
           <ThemeItem />
@@ -266,7 +269,7 @@ export function UserMenu({
                 className="size-4 text-muted-foreground"
                 strokeWidth={1.5}
               />
-              Show setup checklist
+              {t("showSetupChecklist")}
             </DropdownMenuItem>
           ) : null}
         </div>
@@ -279,7 +282,7 @@ export function UserMenu({
           <DropdownMenuItem asChild className={itemClass}>
             <a href={REPO_URL} target="_blank" rel="noreferrer">
               <GithubIcon className="size-4 text-muted-foreground" />
-              <span className="flex-1">Star on GitHub</span>
+              <span className="flex-1">{t("starOnGithub")}</span>
               <ExternalLink className="size-3 text-muted-foreground/60" />
             </a>
           </DropdownMenuItem>
@@ -294,7 +297,7 @@ export function UserMenu({
             <div className="px-3 py-2">
               <div className="flex items-center justify-between px-2 py-1.5">
                 <Badge variant="outline" className="text-[11px] font-normal">
-                  Public beta
+                  {t("publicBeta")}
                 </Badge>
                 {VERSION ? (
                   <span className="font-mono text-[0.65rem] text-muted-foreground">
@@ -305,14 +308,14 @@ export function UserMenu({
               <DropdownMenuItem asChild className={itemClass}>
                 <a href={DOCS_URL} target="_blank" rel="noreferrer">
                   <BookOpen className="size-4 text-muted-foreground" strokeWidth={1.5} />
-                  <span className="flex-1">Documentation</span>
+                  <span className="flex-1">{t("documentation")}</span>
                   <ExternalLink className="size-3 text-muted-foreground/60" />
                 </a>
               </DropdownMenuItem>
               <DropdownMenuItem asChild className={itemClass}>
                 <a href={ISSUES_URL} target="_blank" rel="noreferrer">
                   <MessageSquare className="size-4 text-muted-foreground" strokeWidth={1.5} />
-                  <span className="flex-1">Report an issue</span>
+                  <span className="flex-1">{t("reportIssue")}</span>
                   <ExternalLink className="size-3 text-muted-foreground/60" />
                 </a>
               </DropdownMenuItem>
@@ -335,7 +338,7 @@ export function UserMenu({
             className="gap-2.5 rounded-lg px-2 py-2 text-sm"
           >
             <LogOut className="size-4" strokeWidth={1.5} />
-            {isPending ? "Signing out…" : "Sign out"}
+            {isPending ? t("signingOut") : t("signOut")}
           </DropdownMenuItem>
         </div>
       </DropdownMenuContent>

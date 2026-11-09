@@ -14,6 +14,7 @@ import {
   Info,
   Clock,
 } from "lucide-react";
+import { useLocale, useTranslations } from "next-intl";
 
 import { cn } from "@/lib/utils";
 
@@ -82,6 +83,9 @@ export function DryRunPanel({
   onScenarioChange?: (scenario: DryRunScenario) => void;
 }) {
   const [pending, startRun] = useTransition();
+  const t = useTranslations("features.automations.dryRunPanel");
+  const tl = useTranslations("labels.automations");
+  const locale = useLocale();
   const [candidateId, setCandidateId] = useState(candidates[0]?.id ?? "");
   const [webhookPayloadText, setWebhookPayloadText] = useState("{}\n");
   const [webhookPayloadError, setWebhookPayloadError] = useState<string | null>(
@@ -175,14 +179,14 @@ export function DryRunPanel({
       }
       if (!selectedEndpoint) {
         setWebhookPayloadError(
-          "Choose an inbound endpoint in the trigger step before testing.",
+          t("chooseEndpointTest"),
         );
         setResult(null);
         return;
       }
       webhookPayload = parsedPayload.payload;
     }
-    const parsed = parseFixtureDrafts(fixtureNodes, fixtures);
+    const parsed = parseFixtureDrafts(t, fixtureNodes, fixtures);
     if (parsed.error) {
       setFixtureError(parsed.error);
       setResult(null);
@@ -190,7 +194,7 @@ export function DryRunPanel({
     }
     const virtualStart = new Date(startedAt);
     if (!startedAt || !Number.isFinite(virtualStart.getTime())) {
-      setFixtureError("Choose a valid virtual start date and time.");
+      setFixtureError(t("invalidStart"));
       setResult(null);
       return;
     }
@@ -221,7 +225,7 @@ export function DryRunPanel({
           triggerMatched: false,
           terminal: "invalid",
           steps: [],
-          error: r.error ?? "Could not run dry-run.",
+          error: r.error ?? t("runFailed"),
         });
       }
     });
@@ -251,7 +255,7 @@ export function DryRunPanel({
       }
       if (!selectedEndpoint) {
         setWebhookPayloadError(
-          "Choose an inbound endpoint in the trigger step before previewing.",
+          t("chooseEndpointPreview"),
         );
         setPayload(null);
         return;
@@ -273,7 +277,7 @@ export function DryRunPanel({
       setPayload(
         r.ok
           ? (r.payload ?? null)
-          : { error: r.error ?? "Could not preview payload." },
+          : { error: r.error ?? t("previewFailed") },
       );
     });
   }
@@ -284,22 +288,19 @@ export function DryRunPanel({
       <div className="rounded-2xl border border-border bg-pure-snow p-5 shadow-sm">
         <div className="space-y-1.5 text-sm">
           <p className="text-soft-ink">
-            <span className="font-semibold text-foreground">Trigger:</span>{" "}
-            {triggerMeta(trigger.event).label}
+            <span className="font-semibold text-foreground">{t("triggerLabel")}</span>{" "}
             {trigger.filter && Object.keys(trigger.filter).length > 0
-              ? " (with configured filters)"
-              : ""}
+              ? t("triggerWithFilters", { label: triggerMeta(trigger.event, tl).label })
+              : triggerMeta(trigger.event, tl).label}
           </p>
           <p className="text-soft-ink">
-            <span className="font-semibold text-foreground">Simulation:</span>{" "}
-            Safely walks through each step using sample candidate data without
-            modifying real records. (No email, webhook, task, meeting, document,
-            or candidate is changed.)
+            <span className="font-semibold text-foreground">{t("simulationLabel")}</span>{" "}
+            {t("simulationDescription")}
           </p>
           {selectedCandidate ? (
             <p className="text-xs text-soft-ink">
               <span className="font-medium text-foreground">
-                Testing candidate:
+                {t("testingCandidate")}
               </span>{" "}
               {selectedCandidate.name}{" "}
               <span className="text-soft-ink/80">({selectedCandidate.email})</span>
@@ -307,9 +308,9 @@ export function DryRunPanel({
           ) : (
             <p className="text-xs text-soft-ink">
               <span className="font-medium text-foreground">
-                Sample candidate:
+                {t("sampleCandidate")}
               </span>{" "}
-              Using synthetic sample data (no real candidates in workspace).
+              {t("syntheticSample")}
             </p>
           )}
         </div>
@@ -321,14 +322,14 @@ export function DryRunPanel({
               htmlFor="dry-run-candidate-select"
               className="text-xs font-medium text-soft-ink shrink-0"
             >
-              Test candidate
+              {t("testCandidate")}
             </label>
             <div className="min-w-56">
               <ScopedSearchSelect
                 kind="candidates"
                 value={candidateId}
-                placeholder="Most recently updated"
-                emptyLabel="Most recently updated"
+                placeholder={t("mostRecentlyUpdated")}
+                emptyLabel={t("mostRecentlyUpdated")}
                 initialItems={candidates.map((candidate) => ({
                   id: candidate.id,
                   label: candidate.name,
@@ -341,7 +342,7 @@ export function DryRunPanel({
 
           <div className="flex items-center gap-2">
             <label className="text-xs font-medium text-soft-ink shrink-0">
-              Scenario
+              {t("scenario")}
             </label>
             <BuilderSelect
               value={scenario}
@@ -351,9 +352,9 @@ export function DryRunPanel({
               disabled={pending}
               className="rounded-lg border border-border bg-warm-paper px-2.5 py-1.5 text-xs text-foreground outline-none transition-colors duration-150 ease-out focus:border-foreground/40"
             >
-              <option value="success">All steps succeed</option>
-              <option value="action_failure">Action failure</option>
-              <option value="uncertain_wait">Uncertain wait</option>
+              <option value="success">{t("scenarioSuccess")}</option>
+              <option value="action_failure">{t("scenarioActionFailure")}</option>
+              <option value="uncertain_wait">{t("scenarioUncertainWait")}</option>
             </BuilderSelect>
           </div>
 
@@ -365,9 +366,7 @@ export function DryRunPanel({
               className="inline-flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-xs font-medium text-foreground hover:bg-soft-kraft transition-colors duration-150 disabled:opacity-50"
             >
               <FileCode className="size-3.5 text-soft-ink" />
-              {webhookTrigger
-                ? "Preview webhook event"
-                : "Preview event payload"}
+              {webhookTrigger ? t("previewWebhook") : t("previewPayload")}
             </button>
 
             <button
@@ -384,12 +383,12 @@ export function DryRunPanel({
               {pending ? (
                 <>
                   <Loader2 className="size-3.5 animate-spin" />
-                  Simulating…
+                  {t("simulating")}
                 </>
               ) : (
                 <>
                   <Play className="size-3.5 fill-current" />
-                  Simulate workflow
+                  {t("simulateWorkflow")}
                 </>
               )}
             </button>
@@ -402,20 +401,17 @@ export function DryRunPanel({
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div>
                 <h3 className="text-sm font-semibold text-foreground">
-                  Webhook request body
+                  {t("webhookBodyTitle")}
                 </h3>
                 <p className="mt-1 max-w-2xl text-xs leading-relaxed text-soft-ink">
-                  Paste the JSON body your integration will send. Harly checks it
-                  against the selected endpoint schema; this test makes no request
-                  and has no external side effects.
+                  {t("webhookBodyDescription")}
                 </p>
               </div>
               {selectedEndpoint ? (
                 <span className="rounded-full border border-border bg-warm-paper px-2.5 py-1 text-xs text-soft-ink">
-                  {selectedEndpoint.name}
-                  {selectedEndpoint.enabled
-                    ? " · active"
-                    : " · disabled for live requests"}
+                  {t(selectedEndpoint.enabled ? "endpointActive" : "endpointDisabled", {
+                    name: selectedEndpoint.name,
+                  })}
                 </span>
               ) : null}
             </div>
@@ -424,16 +420,15 @@ export function DryRunPanel({
                 role="alert"
                 className="mt-3 rounded-lg border border-warning/30 bg-warning/10 px-3 py-2 text-xs text-soft-ink"
               >
-                Choose an inbound endpoint in the Trigger step before testing this
-                webhook.
+                {t("chooseEndpointAlert")}
               </p>
             ) : null}
             <label className="mt-3 block">
               <span className="mb-1 block text-xs font-medium text-foreground">
-                Payload JSON
+                {t("payloadJson")}
               </span>
               <textarea
-                aria-label="Webhook request body JSON"
+                aria-label={t("webhookBodyAria")}
                 aria-describedby="webhook-payload-help"
                 value={webhookPayloadText}
                 onChange={(event) => {
@@ -451,8 +446,7 @@ export function DryRunPanel({
               id="webhook-payload-help"
               className="mt-1 text-[11px] text-soft-ink"
             >
-              Enter a JSON object up to 32 KB. The schema is enforced again on the
-              server.
+              {t("payloadHelp")}
             </p>
             {webhookPayloadError ? (
               <p
@@ -465,7 +459,7 @@ export function DryRunPanel({
             {selectedEndpoint ? (
               <details className="mt-3 rounded-lg border border-border bg-warm-paper/70 px-3 py-2">
                 <summary className="cursor-pointer text-xs font-medium text-foreground">
-                  View endpoint payload schema
+                  {t("viewSchema")}
                 </summary>
                 <pre className="mt-2 max-h-48 overflow-auto text-[11px] leading-relaxed text-soft-ink">
                   {JSON.stringify(selectedEndpoint.payloadSchema, null, 2)}
@@ -484,8 +478,7 @@ export function DryRunPanel({
         >
           <Info className="size-4 shrink-0 text-warning" />
           <span>
-            The workflow steps have changed since this simulation was run. Run
-            simulation again to test the latest changes.
+            {t("outdated")}
           </span>
         </div>
       ) : null}
@@ -494,16 +487,15 @@ export function DryRunPanel({
       {result && (
         <section
           role="status"
-          aria-label="Simulation results"
+          aria-label={t("resultsTitle")}
           className="rounded-2xl border border-border bg-pure-snow p-5 shadow-sm space-y-4"
         >
           <div className="flex items-center justify-between">
             <h3 className="text-sm font-semibold text-foreground">
-              Simulation Results
+              {t("resultsTitle")}
             </h3>
             <span className="text-xs text-soft-ink">
-              {result.steps.length} {result.steps.length === 1 ? "step" : "steps"}{" "}
-              evaluated
+              {t("stepsEvaluated", { count: result.steps.length })}
             </span>
           </div>
 
@@ -514,7 +506,7 @@ export function DryRunPanel({
             >
               <XCircle className="size-4 shrink-0 mt-0.5" />
               <div>
-                <p className="font-semibold">Simulation encountered an error</p>
+                <p className="font-semibold">{t("errorTitle")}</p>
                 <p className="mt-0.5">{result.error}</p>
               </div>
             </div>
@@ -541,13 +533,13 @@ export function DryRunPanel({
                 <div className="min-w-0">
                   <p className="font-semibold">
                     {result.triggerMatched
-                      ? `Simulation finished: ${result.terminal.replaceAll("_", " ")}.`
-                      : "The sample event did not pass the trigger filter."}
+                      ? t("finished", { terminal: result.terminal.replaceAll("_", " ") })
+                      : t("triggerNotMatched")}
                   </p>
                   <p className="mt-0.5 text-[11px] opacity-90">
                     {result.triggerMatched
-                      ? "All evaluated steps completed without modifying real records or sending live communications."
-                      : "The simulated candidate attributes did not match the condition set on this trigger."}
+                      ? t("completedDescription")
+                      : t("notMatchedDescription")}
                   </p>
                 </div>
               </div>
@@ -598,9 +590,7 @@ export function DryRunPanel({
                                   : "bg-danger-rust/10 text-danger-rust",
                             )}
                           >
-                            {step.status === "simulated" || step.status === "matched"
-                              ? "Simulated"
-                              : step.status}
+                            {stepStatusLabel(t, step.status)}
                           </span>
                         </div>
                         <p className="mt-1 text-soft-ink leading-relaxed">
@@ -610,8 +600,9 @@ export function DryRunPanel({
                           <p className="mt-1.5 flex items-center gap-1 text-[10px] text-quiet-mist">
                             <Clock className="size-3" />
                             <span>
-                              Virtual time ·{" "}
-                              {new Date(step.virtualTime).toLocaleString()}
+                              {t("virtualTime", {
+                                time: new Date(step.virtualTime).toLocaleString(locale),
+                              })}
                             </span>
                           </p>
                         )}
@@ -630,14 +621,14 @@ export function DryRunPanel({
         <div className="rounded-2xl border border-border bg-pure-snow p-5 shadow-sm space-y-2">
           <div className="flex items-center justify-between">
             <h4 className="text-xs font-semibold text-foreground">
-              Evaluated Event Payload
+              {t("evaluatedPayload")}
             </h4>
             <button
               type="button"
               onClick={() => setPayload(null)}
               className="text-xs text-soft-ink hover:text-foreground"
             >
-              Dismiss
+              {t("dismiss")}
             </button>
           </div>
           <pre className="max-h-64 overflow-auto rounded-lg border border-border bg-warm-paper p-3 text-[11px] font-mono leading-relaxed text-soft-ink">
@@ -650,9 +641,9 @@ export function DryRunPanel({
       <details className="group rounded-2xl border border-border bg-soft-kraft/20 p-4 transition-all">
         <summary className="flex cursor-pointer select-none items-center justify-between text-xs font-semibold text-soft-ink hover:text-foreground">
           <div className="flex items-center gap-2">
-            <span>Advanced simulation settings</span>
+            <span>{t("advancedSettings")}</span>
             <span className="rounded-full border border-border bg-warm-paper px-2 py-0.5 text-[10px] font-normal text-soft-ink">
-              Virtual time & step fixtures
+              {t("advancedSettingsBadge")}
             </span>
           </div>
           <span className="text-[11px] text-soft-ink group-open:rotate-180 transition-transform duration-150">
@@ -663,7 +654,7 @@ export function DryRunPanel({
         <div className="mt-4 space-y-4 border-t border-border pt-4">
           {/* Virtual Start Control */}
           <label className="flex flex-wrap items-center gap-2 text-xs font-medium text-soft-ink">
-            Virtual start
+            {t("virtualStart")}
             <input
               type="datetime-local"
               value={startedAt}
@@ -675,8 +666,7 @@ export function DryRunPanel({
               })}
             />
             <span className="font-normal text-quiet-mist">
-              Used to make delays and local-time waits reproducible in the
-              simulator.
+              {t("virtualStartHelp")}
             </span>
           </label>
 
@@ -685,11 +675,10 @@ export function DryRunPanel({
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div>
                 <h3 className="text-sm font-semibold text-foreground">
-                  Step outcomes
+                  {t("stepOutcomes")}
                 </h3>
                 <p className="mt-0.5 text-xs text-soft-ink">
-                  Simulated step responses: Choose how external tools respond in
-                  this test. No real emails or messages are sent.
+                  {t("stepOutcomesDescription")}
                 </p>
               </div>
               <button
@@ -699,15 +688,14 @@ export function DryRunPanel({
                 className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-warm-paper px-2.5 py-1 text-xs font-medium text-soft-ink hover:bg-soft-kraft disabled:opacity-50"
               >
                 <RotateCcw className="size-3" />
-                Reset fixtures
+                {t("resetFixtures")}
               </button>
             </div>
 
             <div className="space-y-2">
               {fixtureNodes.length === 0 ? (
                 <p className="rounded-lg border border-dashed border-border px-3 py-4 text-xs text-soft-ink">
-                  Add an action or wait to the graph to configure its simulated
-                  result.
+                  {t("noFixtureNodes")}
                 </p>
               ) : (
                 fixtureNodes.map((node) => (
@@ -743,6 +731,24 @@ export function DryRunPanel({
   );
 }
 
+type Translator = ReturnType<typeof useTranslations>;
+
+function stepStatusLabel(t: Translator, status: DryRunStep["status"]): string {
+  switch (status) {
+    case "simulated":
+    case "matched":
+      return t("stepStatus.simulated");
+    case "failed":
+      return t("stepStatus.failed");
+    case "uncertain":
+      return t("stepStatus.uncertain");
+    case "skipped":
+      return t("stepStatus.skipped");
+    case "needs_fixture":
+      return t("stepStatus.needsFixture");
+  }
+}
+
 type FixtureDraft = {
   status: NodeOutcome["status"];
   outputText: string;
@@ -773,16 +779,22 @@ function toFixtureDraft(
   };
 }
 
-function fixtureLabel(node: WorkflowGraphV2["nodes"][number]): string {
+function fixtureLabel(
+  t: Translator,
+  node: WorkflowGraphV2["nodes"][number],
+): string {
   if (node.name?.trim()) return node.name.trim();
   if (node.type === "action") return node.actionType.replaceAll("_", " ");
   if (node.type === "wait")
-    return node.kind === "document_package" ? "Document package" : "Event wait";
-  if (node.type === "approval") return "Approval";
-  return "Wait";
+    return node.kind === "document_package"
+      ? t("documentPackage")
+      : t("eventWait");
+  if (node.type === "approval") return t("approval");
+  return t("wait");
 }
 
 function parseFixtureDrafts(
+  t: Translator,
   nodes: WorkflowGraphV2["nodes"],
   drafts: Record<string, FixtureDraft | null>,
 ): { fixtures?: Record<string, NodeOutcome>; error?: string } {
@@ -803,12 +815,12 @@ function parseFixtureDrafts(
         };
       } catch {
         return {
-          error: `The result payload for “${fixtureLabel(node)}” must be valid JSON.`,
+          error: t("resultPayloadInvalid", { label: fixtureLabel(t, node) }),
         };
       }
     } else if (draft.status === "failed") {
       if (!draft.code.trim())
-        return { error: `Add an error code for “${fixtureLabel(node)}”.` };
+        return { error: t("errorCodeMissing", { label: fixtureLabel(t, node) }) };
       result[node.id] = {
         status: "failed",
         code: draft.code.trim(),
@@ -820,7 +832,7 @@ function parseFixtureDrafts(
     } else {
       if (!draft.code.trim())
         return {
-          error: `Add an uncertainty code for “${fixtureLabel(node)}”.`,
+          error: t("uncertaintyCodeMissing", { label: fixtureLabel(t, node) }),
         };
       result[node.id] = { status: "uncertain", code: draft.code.trim() };
     }
@@ -839,6 +851,7 @@ function FixtureEditor({
   disabled: boolean;
   onChange: (value: FixtureDraft | null) => void;
 }) {
+  const t = useTranslations("features.automations.dryRunPanel");
   const ports = outputPorts(node);
   const update = (patch: Partial<FixtureDraft>) =>
     onChange(value ? { ...value, ...patch } : toFixtureDraft(node, "success"));
@@ -847,10 +860,10 @@ function FixtureEditor({
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="min-w-0">
           <p className="truncate text-xs font-semibold capitalize text-foreground">
-            {fixtureLabel(node)}
+            {fixtureLabel(t, node)}
           </p>
           <p className="mt-0.5 text-[11px] text-soft-ink">
-            Simulated response · Safe test
+            {t("simulatedResponse")}
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -871,12 +884,12 @@ function FixtureEditor({
               compact: true,
               surface: "warm-paper",
             })}
-            aria-label={`Synthetic outcome for ${fixtureLabel(node)}`}
+            aria-label={t("syntheticOutcome", { label: fixtureLabel(t, node) })}
           >
-            <option value="succeeded">Succeeds</option>
-            <option value="failed">Fails</option>
-            <option value="uncertain">Uncertain</option>
-            <option value="missing">No fixture (show missing)</option>
+            <option value="succeeded">{t("optionSucceeds")}</option>
+            <option value="failed">{t("optionFails")}</option>
+            <option value="uncertain">{t("optionUncertain")}</option>
+            <option value="missing">{t("optionMissing")}</option>
           </BuilderSelect>
           <button
             type="button"
@@ -884,7 +897,7 @@ function FixtureEditor({
             disabled={disabled || !value}
             className="text-[11px] font-medium text-soft-ink hover:text-danger-rust disabled:opacity-40"
           >
-            Clear
+            {t("clear")}
           </button>
         </div>
       </div>
@@ -892,7 +905,7 @@ function FixtureEditor({
         <div className="mt-3 grid grid-cols-1 gap-2 md:grid-cols-[minmax(0,1fr)_180px]">
           <label className="block">
             <span className="mb-1 block text-[11px] font-medium text-soft-ink">
-              Result payload (JSON)
+              {t("resultPayload")}
             </span>
             <textarea
               value={value.outputText}
@@ -905,7 +918,7 @@ function FixtureEditor({
           </label>
           <label className="block">
             <span className="mb-1 block text-[11px] font-medium text-soft-ink">
-              Continue through
+              {t("continueThrough")}
             </span>
             <BuilderSelect
               value={value.port}
@@ -913,7 +926,7 @@ function FixtureEditor({
               disabled={disabled}
               className={builderFieldClass({ surface: "warm-paper" })}
             >
-              <option value="">Default success port</option>
+              <option value="">{t("defaultSuccessPort")}</option>
               {ports.map((port) => (
                 <option key={port} value={port}>
                   {port}
@@ -926,7 +939,7 @@ function FixtureEditor({
         <div className="mt-3 grid grid-cols-1 gap-2 md:grid-cols-[minmax(0,1fr)_auto]">
           <label className="block">
             <span className="mb-1 block text-[11px] font-medium text-soft-ink">
-              {value.status === "failed" ? "Error code" : "Uncertainty code"}
+              {value.status === "failed" ? t("errorCode") : t("uncertaintyCode")}
             </span>
             <input
               value={value.code}
@@ -945,25 +958,25 @@ function FixtureEditor({
                 }
                 disabled={disabled}
               />
-              Retryable
+              {t("retryable")}
             </label>
           ) : null}
         </div>
       ) : (
         <p className="mt-2 text-[11px] text-warning">
-          The simulator will stop here and report that this fixture is missing.
+          {t("missingFixture")}
         </p>
       )}
       {value && value.status !== "uncertain" && (
         <label className="mt-2 block">
           <span className="mb-1 block text-[11px] font-medium text-soft-ink">
-            Provider reference <span className="font-normal">(optional)</span>
+            {t("providerReference")} <span className="font-normal">{t("optional")}</span>
           </span>
           <input
             value={value.providerRef}
             onChange={(event) => update({ providerRef: event.target.value })}
             disabled={disabled}
-            placeholder="e.g. slack:message:demo-123"
+            placeholder={t("providerReferencePlaceholder")}
             className={builderFieldClass({
               compact: true,
               surface: "warm-paper",

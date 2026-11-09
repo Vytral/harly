@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { getTranslations } from "next-intl/server";
 
 import { getAvailableLoginMethods } from "@/features/auth/login-methods.server";
 import { getAuthBranding } from "@/features/auth/branding.server";
@@ -13,10 +14,11 @@ export default async function SignupPage() {
   // bootstraps it; afterwards signups are invite-only (enforced in
   // enforceInviteOnly). Anyone landing here directly gets the message
   // instead of a form that can only fail.
-  const [methods, branding, inviteOnly] = await Promise.all([
+  const [methods, branding, inviteOnly, t] = await Promise.all([
     getAvailableLoginMethods(),
     getAuthBranding(),
     organizationExists(),
+    getTranslations("accessSignup"),
   ]);
   const googleEnabled = methods.social.includes("google");
 
@@ -28,31 +30,26 @@ export default async function SignupPage() {
           href="/login"
           className="font-medium text-muted-foreground transition-colors hover:text-foreground"
         >
-          Sign in
+          {t("signIn")}
         </Link>
       }
     >
       <AuthCard
-        title="Create your account"
-        subtitle="Set up your ATS in minutes. No credit card required."
+        title={t("title")}
+        subtitle={t("subtitle")}
         footer={
-          <>
-            Already have an account?{" "}
-            <Link href="/login" className="font-semibold text-foreground hover:underline">
-              Sign in
-            </Link>
-          </>
+          t.rich("already", { link: (chunks) => (
+            <Link href="/login" className="font-semibold text-foreground hover:underline">{chunks}</Link>
+          ) })
         }
       >
         {inviteOnly ? (
           <div className="rounded-lg bg-muted px-4 py-3">
             <p className="text-sm font-medium text-foreground">
-              Signups are invite-only.
+              {t("inviteOnly")}
             </p>
             <p className="mt-1 text-sm leading-6 text-muted-foreground">
-              This Harly workspace is already set up. Ask an admin to
-              invite you — your invite link drops you straight into the
-              right role.
+              {t("inviteHelp")}
             </p>
           </div>
         ) : (

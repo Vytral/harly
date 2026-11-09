@@ -16,6 +16,7 @@ import { JobIdentity } from "@/features/jobs/JobIdentity";
 import { TrashJobActions } from "@/features/jobs/TrashJobActions";
 import { cn } from "@/lib/utils";
 import { requirePagePermission } from "@/features/workspaces/permissions-server";
+import { getTranslations } from "next-intl/server";
 
 export const dynamic = "force-dynamic";
 
@@ -24,6 +25,7 @@ type JobsPageProps = {
 };
 
 export default async function DashboardJobsPage({ searchParams }: JobsPageProps) {
+  const t = await getTranslations("jobs.list");
   await requirePagePermission("jobs:view");
   const { view } = await searchParams;
   const isTrash = view === "trash";
@@ -45,12 +47,12 @@ export default async function DashboardJobsPage({ searchParams }: JobsPageProps)
           page action; the Jobs nav item's shellTitle flag must be off. */}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h1 className="font-display text-[28px] leading-9 tracking-tight text-near-ink">
-          Jobs
+          {t("title")}
         </h1>
         <Button asChild>
           <Link href="/dashboard/jobs/new">
             <Plus className="size-4" />
-            Create job
+            {t("create")}
           </Link>
         </Button>
       </div>
@@ -58,32 +60,32 @@ export default async function DashboardJobsPage({ searchParams }: JobsPageProps)
       {!isTrash && jobs.length > 0 ? (
         <Card className="p-3">
           <section
-            aria-label="Jobs overview"
+            aria-label={t("overview")}
             className="grid grid-cols-2 gap-2 lg:grid-cols-4"
           >
             <StatTile
-              label={<StatusPill tone="neutral">Draft</StatusPill>}
+              label={<StatusPill tone="neutral">{t("draft")}</StatusPill>}
               value={draftRoles}
               muted={draftRoles === 0}
-              hint="not published"
+              hint={t("notPublished")}
             />
             <StatTile
-              label={<StatusPill tone="success">Open</StatusPill>}
+              label={<StatusPill tone="success">{t("open")}</StatusPill>}
               value={openRoles}
               muted={openRoles === 0}
-              hint="accepting applicants"
+              hint={t("acceptingApplicants")}
             />
             <StatTile
-              label={<StatusPill tone="warning">Closed</StatusPill>}
+              label={<StatusPill tone="warning">{t("closed")}</StatusPill>}
               value={closedRoles}
               muted={closedRoles === 0}
-              hint="no longer hiring"
+              hint={t("noLongerHiring")}
             />
             <StatTile
-              label={<StatusPill tone="accent">Candidates</StatusPill>}
+              label={<StatusPill tone="accent">{t("candidates")}</StatusPill>}
               value={totalApplicants}
               muted={totalApplicants === 0}
-              hint={newApplicants > 0 ? `${newApplicants} new this week` : "across all roles"}
+              hint={newApplicants > 0 ? t("newThisWeek", { count: newApplicants }) : t("acrossAllRoles")}
             />
           </section>
         </Card>
@@ -91,16 +93,16 @@ export default async function DashboardJobsPage({ searchParams }: JobsPageProps)
 
       <div
         role="tablist"
-        aria-label="Jobs view"
+        aria-label={t("view")}
         className="flex w-fit items-center gap-1.5"
       >
         <Tab href="/dashboard/jobs" active={!isTrash}>
-          Active
+          {t("active")}
           <span className="tabular-nums opacity-70">{jobs.length}</span>
         </Tab>
         <Tab href="/dashboard/jobs?view=trash" active={isTrash}>
           <Trash2 className="size-3.5" />
-          Trash
+          {t("trash")}
           <span className="tabular-nums opacity-70">{trashed.length}</span>
         </Tab>
       </div>
@@ -118,8 +120,8 @@ export default async function DashboardJobsPage({ searchParams }: JobsPageProps)
         ) : (
           <EmptyState
             icon={Trash2}
-            title="Trash is empty"
-            description="Jobs you move to the trash show up here and can be restored."
+            title={t("trashEmptyTitle")}
+            description={t("trashEmptyDescription")}
           />
         )
       ) : jobs.length > 0 ? (
@@ -127,9 +129,9 @@ export default async function DashboardJobsPage({ searchParams }: JobsPageProps)
       ) : (
         <EmptyState
           icon={Briefcase}
-          title="No jobs yet"
-          description="Create your first opening. Harly adds the default hiring stages automatically."
-          action={{ href: "/dashboard/jobs/new", label: "Create job" }}
+          title={t("emptyTitle")}
+          description={t("emptyDescription")}
+          action={{ href: "/dashboard/jobs/new", label: t("create") }}
         />
       )}
     </div>

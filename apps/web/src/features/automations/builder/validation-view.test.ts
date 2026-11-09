@@ -1,13 +1,16 @@
 import { describe, expect, it } from "vitest";
 
+import { makeT } from "@/test-support/translator";
 import { emptyCanvasGraph } from "../definition/schema-v2";
 import { createBlock } from "./state/blocks";
 import { looksLikeRawJson, requiredConfigIssues, visibleIssues } from "./validation-view";
 
+const t = makeT("labels.automations");
+
 describe("T02 — validation is readable and does not block drafts", () => {
   it("lists missing connections in traversal order with human text", () => {
     const graph = emptyCanvasGraph();
-    const issues = visibleIssues(graph);
+    const issues = visibleIssues(graph, t);
     expect(issues.length).toBeGreaterThan(0);
     expect(issues.every((issue) => !looksLikeRawJson(issue.message))).toBe(true);
     expect(issues[0]?.message.toLowerCase()).not.toContain("{");
@@ -17,7 +20,7 @@ describe("T02 — validation is readable and does not block drafts", () => {
     const action = createBlock("action", { actionType: "add_note" });
     const graph = emptyCanvasGraph();
     graph.nodes.push(action);
-    const required = requiredConfigIssues(graph);
+    const required = requiredConfigIssues(graph, t);
     expect(required.some((issue) => issue.message.includes("Note"))).toBe(true);
   });
 });

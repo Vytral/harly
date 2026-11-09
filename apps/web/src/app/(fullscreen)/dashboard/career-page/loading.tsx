@@ -1,3 +1,5 @@
+import { getTranslations } from "next-intl/server";
+
 import { Skeleton } from "@/components/ui/skeleton";
 
 /**
@@ -5,10 +7,12 @@ import { Skeleton } from "@/components/ui/skeleton";
  * top bar (exit, title, status, publish), the section rail (compact below
  * 1400px), the editor column of setting cards, and the device preview pane.
  */
-export default function CareerPageLoading() {
+export default async function CareerPageLoading() {
+  const t = await getTranslations("pages.careerPage.loading");
+
   return (
     <div aria-busy="true" className="flex h-dvh w-full flex-col overflow-hidden bg-warm-paper">
-      <span className="sr-only">Loading…</span>
+      <span className="sr-only">{t("label")}</span>
 
       <header className="flex h-12 shrink-0 items-center gap-3 border-b border-hairline bg-pure-snow/80 px-3">
         <div className="flex min-w-0 flex-1 items-center gap-3">

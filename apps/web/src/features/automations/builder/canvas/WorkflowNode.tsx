@@ -2,6 +2,7 @@
 
 import { Handle, Position, type Node, type NodeProps } from "@xyflow/react";
 import { motion, useReducedMotion } from "motion/react";
+import { useTranslations } from "next-intl";
 
 import { cn } from "@/lib/utils";
 import { getNodeVisualMeta, nodeCaption, nodeTitle } from "../node-visuals";
@@ -13,9 +14,11 @@ export function WorkflowCanvasNode({ data, selected }: NodeProps<Node<CanvasNode
   const ports = sourcePorts(node);
   const isDropTarget = data.isDropTarget === true;
   const isNew = data.isNew === true;
-  const { kindLabel, badgeClass, iconBgClass, Icon } = getNodeVisualMeta(node);
-  const caption = nodeCaption(node);
-  const title = nodeTitle(node);
+  const tl = useTranslations("labels.automations");
+  const { kindKey, badgeClass, iconBgClass, Icon } = getNodeVisualMeta(node);
+  const kindLabel = tl(kindKey);
+  const caption = nodeCaption(node, tl);
+  const title = nodeTitle(node, tl);
   const hasCustomTitle = Boolean(node.name?.trim() && node.name.trim() !== caption);
   const reduceMotion = useReducedMotion();
 

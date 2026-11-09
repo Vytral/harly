@@ -4,6 +4,7 @@ import Link from "next/link";
 import type { Route } from "next";
 import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { useLocale, useTranslations } from "next-intl";
 import {
   AtSign,
   CalendarDays,
@@ -67,15 +68,6 @@ const WEEKDAYS: (keyof WeeklyAvailability)[] = [
   "saturday",
   "sunday",
 ];
-const DAY_LABELS: Record<keyof WeeklyAvailability, string> = {
-  monday: "Mon",
-  tuesday: "Tue",
-  wednesday: "Wed",
-  thursday: "Thu",
-  friday: "Fri",
-  saturday: "Sat",
-  sunday: "Sun",
-};
 
 function emptyWeek(): WeeklyAvailability {
   return {
@@ -90,7 +82,7 @@ function emptyWeek(): WeeklyAvailability {
 }
 
 /** "09:00-17:00, 18:00-19:00" -> TimeRange[]; throws on malformed input. */
-function parseDayRanges(text: string) {
+function parseDayRanges(text: string, t: Translator) {
   const trimmed = text.trim();
   if (!trimmed) return [];
   return trimmed.split(",").map((chunk) => {
@@ -102,7 +94,7 @@ function parseDayRanges(text: string) {
       !/^\d{2}:\d{2}$/.test(start ?? "") ||
       !/^\d{2}:\d{2}$/.test(end ?? "")
     ) {
-      throw new Error(`Invalid range "${chunk.trim()}". Use HH:mm-HH:mm.`);
+      throw new Error(t("invalidRange", { range: chunk.trim() }));
     }
     return { start, end };
   });
@@ -111,6 +103,8 @@ function parseDayRanges(text: string) {
 function formatDayRanges(ranges: { start: string; end: string }[]) {
   return ranges.map((r) => `${r.start}-${r.end}`).join(", ");
 }
+
+type Translator = ReturnType<typeof useTranslations>;
 
 type AccountUser = {
   id: string;
@@ -133,9 +127,13 @@ type AccountUser = {
   createdAt?: Date;
 };
 
-function formatDate(date: Date | undefined) {
-  if (!date) return "Not set";
-  return new Intl.DateTimeFormat("en-US", {
+function formatDate(
+  date: Date | undefined,
+  t: Translator,
+  locale: string,
+) {
+  if (!date) return t("notSet");
+  return new Intl.DateTimeFormat(locale, {
     month: "long",
     year: "numeric",
   }).format(new Date(date));
@@ -212,6 +210,7 @@ function PasswordField({
   icon: React.ComponentType<{ className?: string }>;
 }) {
   const [visible, setVisible] = useState(false);
+  const t = useTranslations("features.account.accountSettingsPanel");
 
   return (
     <div className="space-y-2">
@@ -231,7 +230,7 @@ function PasswordField({
         <button
           type="button"
           onClick={() => setVisible((v) => !v)}
-          aria-label={visible ? "Hide password" : "Show password"}
+          aria-label={visible ? t("hidePassword") : t("showPassword")}
           className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground transition hover:text-foreground"
         >
           {visible ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
@@ -324,6 +323,8 @@ export function AccountSettingsPanel({
 }) {
   const router = useRouter();
   const avatarInputRef = useRef<HTMLInputElement>(null);
+  const t = useTranslations("features.account.accountSettingsPanel");
+  const locale = useLocale();
 
   const initialName = splitPersonName(user.name);
   const [firstName, setFirstName] = useState(initialName.firstName);
@@ -419,10 +420,10 @@ export function AccountSettingsPanel({
     startUsername(async () => {
       const result = await changeUsernameAction(username.trim());
       if (!result.success) {
-        toast.error(result.error ?? "Could not update username.");
+        toast.error(result.error ?? t("usernameUpdateFailed"));
         return;
       }
-      toast.success("Username updated.");
+      toast.success(t("usernameUpdated"));
       setUsernameStatus("idle");
       router.refresh();
     });
@@ -432,11 +433,11 @@ export function AccountSettingsPanel({
     let weeklyAvailability: WeeklyAvailability;
     try {
       weeklyAvailability = Object.fromEntries(
-        WEEKDAYS.map((day) => [day, parseDayRanges(availabilityText[day])]),
+        WEEKDAYS.map((day) => [day, parseDayRanges(availabilityText[day], t)]),
       ) as WeeklyAvailability;
     } catch (error) {
       toast.error(
-        error instanceof Error ? error.message : "Invalid availability.",
+        error instanceof Error ? error.message : t("invalidAvailability"),
       );
       throw error;
     }
@@ -477,7 +478,7 @@ export function AccountSettingsPanel({
       const result = await updateOwnProfileAction(payload);
 
       if (!result.success) {
-        toast.error("Could not update profile.");
+        toast.error(t("profileUpdateFailed"));
         return;
       }
 
@@ -486,7 +487,7 @@ export function AccountSettingsPanel({
         image: image.trim() || undefined,
       });
 
-      toast.success("Profile updated.");
+      toast.success(t("profileUpdated"));
       setProfileDirty(false);
       router.refresh();
     });
@@ -519,7 +520,7 @@ export function AccountSettingsPanel({
         const result = await updateOwnProfileAction(payload);
 
         if (!result.success) {
-          toast.error("Could not update avatar.");
+          toast.error(t("avatarUpdateFailed"));
           return;
         }
 
@@ -528,10 +529,10 @@ export function AccountSettingsPanel({
           image: url,
         });
 
-        toast.success("Avatar updated.");
+        toast.success(t("avatarUpdated"));
         router.refresh();
       } catch {
-        toast.error("Upload failed.");
+        toast.error(t("uploadFailed"));
       } finally {
         if (cropSrc) URL.revokeObjectURL(cropSrc);
         setCropSrc(null);
@@ -551,12 +552,12 @@ export function AccountSettingsPanel({
       const result = await updateOwnProfileAction(payload);
 
       if (!result.success) {
-        toast.error("Could not remove avatar.");
+        toast.error(t("avatarRemoveFailed"));
         return;
       }
 
       await authClient.updateUser({ name: displayName, image: undefined });
-      toast.success("Avatar removed.");
+      toast.success(t("avatarRemoved"));
       router.refresh();
     });
   }
@@ -567,9 +568,9 @@ export function AccountSettingsPanel({
     startEmail(async () => {
       const result = await authClient.changeEmail({ newEmail: email });
       if (result.error) {
-        toast.error(result.error.message ?? "Could not change email.");
+        toast.error(result.error.message ?? t("emailUpdateFailed"));
       } else {
-        toast.success("Email updated.");
+        toast.success(t("emailUpdated"));
         setNewEmail("");
         router.refresh();
       }
@@ -578,9 +579,7 @@ export function AccountSettingsPanel({
 
   function savePassword() {
     if (!canSavePassword) {
-      toast.error(
-        "Enter your current password and a matching new one (8+ chars).",
-      );
+      toast.error(t("passwordRequirements"));
       return;
     }
     startPassword(async () => {
@@ -590,9 +589,9 @@ export function AccountSettingsPanel({
         revokeOtherSessions: true,
       });
       if (result.error) {
-        toast.error(result.error.message ?? "Could not change password.");
+        toast.error(result.error.message ?? t("passwordChangeFailed"));
       } else {
-        toast.success("Password changed.");
+        toast.success(t("passwordChanged"));
         setCurrentPassword("");
         setNewPassword("");
         setConfirmPassword("");
@@ -612,7 +611,7 @@ export function AccountSettingsPanel({
     startSignOut(async () => {
       const result = await revokeMySessionAction(sessionId);
       if (!result.ok) {
-        toast.error(result.error ?? "Could not revoke session.");
+        toast.error(result.error ?? t("sessionRevokeFailed"));
         return;
       }
       if (result.current) {
@@ -620,7 +619,7 @@ export function AccountSettingsPanel({
         router.replace("/login");
         router.refresh();
       } else {
-        toast.success("Session revoked.");
+        toast.success(t("sessionRevoked"));
         router.refresh();
       }
     });
@@ -629,7 +628,7 @@ export function AccountSettingsPanel({
   async function copyUserId() {
     try {
       await copyText(user.id);
-      toast.success("Account ID copied.");
+      toast.success(t("accountIdCopied"));
     } catch {
       // silent
     }
@@ -639,7 +638,7 @@ export function AccountSettingsPanel({
     <div className="mx-auto max-w-3xl space-y-8">
       {demoLocked ? (
         <DemoLockedNotice>
-          Account identity changes are locked in the demo so the shared login stays usable for everyone.
+          {t("demoLocked")}
         </DemoLockedNotice>
       ) : null}
       {/* ─── Profile header ─── */}
@@ -655,7 +654,7 @@ export function AccountSettingsPanel({
             type="button"
             onClick={() => avatarInputRef.current?.click()}
             disabled={demoLocked || savingProfile}
-            aria-label="Change avatar"
+            aria-label={t("changeAvatar")}
             className="absolute inset-0 flex items-center justify-center rounded-full bg-black/0 text-white/0 transition-all duration-150 ease-out hover:bg-black/40 hover:text-white/90 focus-visible:bg-black/40 focus-visible:text-white/90 focus-visible:outline-none active:scale-[0.97]"
           >
             <Camera className="size-5" strokeWidth={1.8} />
@@ -664,7 +663,7 @@ export function AccountSettingsPanel({
             <button
               type="button"
               onClick={removeAvatar}
-              aria-label="Remove avatar"
+              aria-label={t("removeAvatar")}
               className="absolute -right-1 -top-1 flex size-5 items-center justify-center rounded-full border bg-card text-muted-foreground shadow-sm transition-colors hover:bg-destructive/10 hover:text-destructive"
             >
               <span className="text-xs leading-none">×</span>
@@ -697,7 +696,7 @@ export function AccountSettingsPanel({
           <div className="mt-2.5 flex flex-wrap items-center justify-center gap-x-4 gap-y-1 text-xs text-muted-foreground sm:justify-start">
             <span className="flex items-center gap-1.5">
               <CalendarDays className="size-3.5" />
-              Member since {formatDate(user.createdAt)}
+              {t("memberSince", { date: formatDate(user.createdAt, t, locale) })}
             </span>
             <button
               type="button"
@@ -714,21 +713,21 @@ export function AccountSettingsPanel({
 
       <Tabs defaultValue="profile">
         <TabsList>
-          <TabsTrigger value="profile">Profile</TabsTrigger>
-          <TabsTrigger value="security">Security</TabsTrigger>
-          <TabsTrigger value="session">Session</TabsTrigger>
+          <TabsTrigger value="profile">{t("tabProfile")}</TabsTrigger>
+          <TabsTrigger value="security">{t("tabSecurity")}</TabsTrigger>
+          <TabsTrigger value="session">{t("tabSession")}</TabsTrigger>
         </TabsList>
 
         {/* ─── PROFILE TAB ─── */}
         <TabsContent value="profile" className="mt-6 space-y-6">
           <SectionCard
-            title="Personal info"
-            description="Your name and how others see you on the platform."
+            title={t("personalInfoTitle")}
+            description={t("personalInfoDescription")}
           >
             <div className="space-y-5">
               <div className="grid gap-4 sm:grid-cols-2">
                 <div className="space-y-2">
-                  <Label htmlFor="acc-first-name">First name</Label>
+                  <Label htmlFor="acc-first-name">{t("firstName")}</Label>
                   <Input
                     id="acc-first-name"
                     value={firstName}
@@ -740,7 +739,7 @@ export function AccountSettingsPanel({
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="acc-last-name">Last name</Label>
+                  <Label htmlFor="acc-last-name">{t("lastName")}</Label>
                   <Input
                     id="acc-last-name"
                     value={lastName}
@@ -754,7 +753,7 @@ export function AccountSettingsPanel({
               </div>
               <div className="grid gap-4 sm:grid-cols-2">
                 <div className="space-y-2">
-                  <Label htmlFor="acc-job-title">Job title</Label>
+                  <Label htmlFor="acc-job-title">{t("jobTitle")}</Label>
                   <IconInput
                     icon={UserRound}
                     id="acc-job-title"
@@ -763,11 +762,11 @@ export function AccountSettingsPanel({
                       setJobTitle(e.target.value);
                       markDirty();
                     }}
-                    placeholder="e.g. Engineering Manager"
+                    placeholder={t("jobTitlePlaceholder")}
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="acc-phone">Phone</Label>
+                  <Label htmlFor="acc-phone">{t("phone")}</Label>
                   <IconInput
                     icon={Phone}
                     id="acc-phone"
@@ -783,7 +782,7 @@ export function AccountSettingsPanel({
               </div>
               <div className="grid gap-4 sm:grid-cols-2">
                 <div className="space-y-2">
-                  <Label htmlFor="acc-location">Location</Label>
+                  <Label htmlFor="acc-location">{t("location")}</Label>
                   <IconInput
                     icon={MapPin}
                     id="acc-location"
@@ -800,8 +799,8 @@ export function AccountSettingsPanel({
           </SectionCard>
 
           <SectionCard
-            title="Bio"
-            description="A short description shown on your profile and hiring team views."
+            title={t("bio")}
+            description={t("bioDescription")}
           >
             <Textarea
               id="acc-bio"
@@ -810,14 +809,14 @@ export function AccountSettingsPanel({
                 setBio(e.target.value);
                 markDirty();
               }}
-              placeholder="Tell your team a bit about yourself…"
+              placeholder={t("bioPlaceholder")}
               className="min-h-[100px] resize-y"
             />
           </SectionCard>
 
           <SectionCard
-            title="Links"
-            description="Connected profiles and personal links."
+            title={t("linksTitle")}
+            description={t("linksDescription")}
           >
             <div className="space-y-4">
               <SocialLinkField
@@ -842,7 +841,7 @@ export function AccountSettingsPanel({
               />
               <SocialLinkField
                 icon={Globe}
-                label="Website"
+                label={t("website")}
                 placeholder="https://yoursite.com"
                 value={websiteUrl}
                 onChange={(v) => {
@@ -854,8 +853,8 @@ export function AccountSettingsPanel({
           </SectionCard>
 
           <SectionCard
-            title="Username"
-            description="Your internal profile URL. Changing it keeps the old link working via a redirect."
+            title={t("usernameTitle")}
+            description={t("usernameDescription")}
             action={
               <Button
                 variant="outline"
@@ -866,7 +865,7 @@ export function AccountSettingsPanel({
                   username.trim() === (user.username ?? "")
                 }
               >
-                {savingUsername ? "Saving…" : "Save username"}
+                {savingUsername ? t("saving") : t("saveUsername")}
               </Button>
             }
           >
@@ -908,28 +907,28 @@ export function AccountSettingsPanel({
               >
                 {usernameError ??
                   (user.username
-                    ? `Your profile: /people/${user.username}`
-                    : "Pick a username to get a public internal profile.")}
+                    ? t("yourProfile", { path: `/people/${user.username}` })
+                    : t("pickUsername"))}
               </p>
               {user.username && (
                 <Link
                   href={`/people/${user.username}` as Route}
                   className="inline-block text-xs text-primary hover:underline"
                 >
-                  View public profile
+                  {t("viewPublicProfile")}
                 </Link>
               )}
             </div>
           </SectionCard>
 
           <SectionCard
-            title="Operational details"
-            description="Specialties, languages, and timezone shown on your internal profile."
+            title={t("operationalTitle")}
+            description={t("operationalDescription")}
           >
             <div className="space-y-4">
               <div className="grid gap-4 sm:grid-cols-2">
                 <div className="space-y-2">
-                  <Label htmlFor="acc-timezone">Timezone</Label>
+                  <Label htmlFor="acc-timezone">{t("timezone")}</Label>
                   <IconInput
                     icon={Globe}
                     id="acc-timezone"
@@ -942,7 +941,7 @@ export function AccountSettingsPanel({
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="acc-capacity">Capacity (hrs/week)</Label>
+                  <Label htmlFor="acc-capacity">{t("capacity")}</Label>
                   <IconInput
                     icon={Clock}
                     id="acc-capacity"
@@ -959,7 +958,7 @@ export function AccountSettingsPanel({
                 </div>
               </div>
               <div className="space-y-2">
-                <Label htmlFor="acc-specialties">Specialties</Label>
+                <Label htmlFor="acc-specialties">{t("specialties")}</Label>
                 <IconInput
                   icon={Sparkles}
                   id="acc-specialties"
@@ -968,14 +967,14 @@ export function AccountSettingsPanel({
                     setSpecialtiesText(e.target.value);
                     markDirty();
                   }}
-                  placeholder="Technical sourcing, Executive search"
+                  placeholder={t("specialtiesPlaceholder")}
                 />
                 <p className="text-xs text-muted-foreground">
-                  Comma-separated.
+                  {t("commaSeparated")}
                 </p>
               </div>
               <div className="space-y-2">
-                <Label htmlFor="acc-languages">Languages</Label>
+                <Label htmlFor="acc-languages">{t("languages")}</Label>
                 <IconInput
                   icon={Languages}
                   id="acc-languages"
@@ -984,18 +983,18 @@ export function AccountSettingsPanel({
                     setLanguagesText(e.target.value);
                     markDirty();
                   }}
-                  placeholder="English, Spanish"
+                  placeholder={t("languagesPlaceholder")}
                 />
                 <p className="text-xs text-muted-foreground">
-                  Comma-separated.
+                  {t("commaSeparated")}
                 </p>
               </div>
             </div>
           </SectionCard>
 
           <SectionCard
-            title="Weekly availability"
-            description="Ranges in HH:mm-HH:mm, comma-separated for multiple ranges per day."
+            title={t("availabilityTitle")}
+            description={t("availabilityDescription")}
           >
             <div className="space-y-3">
               {WEEKDAYS.map((day) => (
@@ -1007,7 +1006,7 @@ export function AccountSettingsPanel({
                     htmlFor={`acc-avail-${day}`}
                     className="text-xs text-muted-foreground"
                   >
-                    {DAY_LABELS[day]}
+                    {t(`days.${day}`)}
                   </Label>
                   <Input
                     id={`acc-avail-${day}`}
@@ -1030,7 +1029,7 @@ export function AccountSettingsPanel({
           {profileDirty ? (
             <div className="sticky bottom-4 z-10 flex items-center justify-between rounded-xl border border-pine/30 bg-card px-5 py-3.5 shadow-[0_8px_24px_-12px_rgba(31,41,38,0.25)]">
               <p className="text-sm text-muted-foreground">
-                You have unsaved changes.
+                {t("unsavedChanges")}
               </p>
               <div className="flex items-center gap-2">
                 <Button
@@ -1069,7 +1068,7 @@ export function AccountSettingsPanel({
                   }}
                   disabled={demoLocked || savingProfile}
                 >
-                  Discard
+                  {t("discard")}
                 </Button>
                 <Button
                   size="sm"
@@ -1077,7 +1076,7 @@ export function AccountSettingsPanel({
                   disabled={demoLocked || savingProfile}
                 >
                   <PencilLine className="size-4" />
-                  {savingProfile ? "Saving…" : "Save profile"}
+                  {savingProfile ? t("saving") : t("saveProfile")}
                 </Button>
               </div>
             </div>
@@ -1087,15 +1086,15 @@ export function AccountSettingsPanel({
         {/* ─── SECURITY TAB ─── */}
         <TabsContent value="security" className="mt-6 space-y-6">
           <SectionCard
-            title="Email address"
-            description="Your primary email used for sign-in and notifications."
+            title={t("emailTitle")}
+            description={t("emailDescription")}
             action={
               <Button
                 variant="outline"
                 onClick={saveEmail}
                 disabled={demoLocked || savingEmail || !newEmail.trim()}
               >
-                {savingEmail ? "Updating…" : "Update email"}
+                {savingEmail ? t("updating") : t("updateEmail")}
               </Button>
             }
           >
@@ -1104,11 +1103,11 @@ export function AccountSettingsPanel({
                 <AtSign className="size-4 shrink-0 text-muted-foreground" />
                 <span className="flex-1 text-sm font-medium">{user.email}</span>
                 <Badge variant="secondary" className="shrink-0">
-                  Current
+                  {t("currentBadge")}
                 </Badge>
               </div>
               <div className="space-y-2">
-                <Label htmlFor="acc-email">New email</Label>
+                <Label htmlFor="acc-email">{t("newEmail")}</Label>
                 <IconInput
                   icon={Mail}
                   id="acc-email"
@@ -1122,22 +1121,22 @@ export function AccountSettingsPanel({
           </SectionCard>
 
           <SectionCard
-            title="Password"
-            description="Changing your password signs out every other session."
+            title={t("passwordTitle")}
+            description={t("passwordDescription")}
             action={
               <Button
                 variant="outline"
                 onClick={savePassword}
                 disabled={demoLocked || savingPassword || !canSavePassword}
               >
-                {savingPassword ? "Saving…" : "Change password"}
+                {savingPassword ? t("saving") : t("changePassword")}
               </Button>
             }
           >
             <div className="space-y-4">
               <PasswordField
                 id="acc-current"
-                label="Current password"
+                label={t("currentPassword")}
                 value={currentPassword}
                 onChange={setCurrentPassword}
                 autoComplete="current-password"
@@ -1146,7 +1145,7 @@ export function AccountSettingsPanel({
               <div className="grid gap-4 sm:grid-cols-2">
                 <PasswordField
                   id="acc-new"
-                  label="New password"
+                  label={t("newPassword")}
                   value={newPassword}
                   onChange={setNewPassword}
                   autoComplete="new-password"
@@ -1154,7 +1153,7 @@ export function AccountSettingsPanel({
                 />
                 <PasswordField
                   id="acc-confirm"
-                  label="Confirm new password"
+                  label={t("confirmPassword")}
                   value={confirmPassword}
                   onChange={setConfirmPassword}
                   autoComplete="new-password"
@@ -1170,8 +1169,8 @@ export function AccountSettingsPanel({
                 )}
               >
                 {passwordsMismatch
-                  ? "New password and confirmation don't match."
-                  : "Use 8+ characters."}
+                  ? t("passwordMismatch")
+                  : t("passwordHint")}
               </p>
             </div>
           </SectionCard>
@@ -1181,20 +1180,19 @@ export function AccountSettingsPanel({
 
         {/* ─── SESSION TAB ─── */}
         <TabsContent value="session" className="mt-6 space-y-6">
-          <SectionCard title="Active sessions">
+          <SectionCard title={t("activeSessions")}>
             <div className="space-y-3">
               {sessions.map((item) => (
                 <div key={item.id} className="flex items-center gap-3 rounded-lg border bg-muted/20 px-4 py-3">
                   <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary"><Globe className="size-4" /></span>
-                  <div className="min-w-0 flex-1"><p className="text-sm font-medium">{item.current ? "Current browser" : "Other device"}</p><p className="truncate text-xs text-muted-foreground">{item.userAgent ?? "Unknown browser"}{item.ipAddress ? ` · ${item.ipAddress}` : ""}</p><p className="text-[11px] text-muted-foreground">Last active {item.updatedAt.toLocaleString()}</p></div>
-                  {item.current ? <Badge variant="secondary" className="shrink-0">This device</Badge> : <Button type="button" size="sm" variant="outline" onClick={() => revokeSession(item.id)}>Revoke</Button>}
+                  <div className="min-w-0 flex-1"><p className="text-sm font-medium">{item.current ? t("currentBrowser") : t("otherDevice")}</p><p className="truncate text-xs text-muted-foreground">{item.userAgent ?? t("unknownBrowser")}{item.ipAddress ? ` · ${item.ipAddress}` : ""}</p><p className="text-[11px] text-muted-foreground">{t("lastActive", { date: item.updatedAt.toLocaleString(locale) })}</p></div>
+                  {item.current ? <Badge variant="secondary" className="shrink-0">{t("thisDevice")}</Badge> : <Button type="button" size="sm" variant="outline" onClick={() => revokeSession(item.id)}>{t("revoke")}</Button>}
                 </div>
               ))}
               <p className="text-xs text-muted-foreground">
-                Signing out will end this session. Use &ldquo;Sign out
-                everywhere&rdquo; from settings to revoke all sessions.
+                {t("signOutEverywhereHint")}
               </p>
-              {sessions.some((item) => !item.current) ? <Button type="button" variant="outline" onClick={() => startSignOut(async () => { const result = await revokeOtherMySessionsAction(); if (result.ok) { toast.success("Other sessions revoked."); router.refresh(); } })}>Sign out everywhere else</Button> : null}
+              {sessions.some((item) => !item.current) ? <Button type="button" variant="outline" onClick={() => startSignOut(async () => { const result = await revokeOtherMySessionsAction(); if (result.ok) { toast.success(t("otherSessionsRevoked")); router.refresh(); } })}>{t("signOutEverywhereElse")}</Button> : null}
             </div>
           </SectionCard>
 
@@ -1202,16 +1200,16 @@ export function AccountSettingsPanel({
             <CardHeader className="border-b border-destructive/10 bg-destructive/[0.03] px-6 py-3">
               <CardTitle className="flex items-center gap-2 text-base text-destructive">
                 <LogOut className="size-4" />
-                Danger zone
+                {t("dangerTitle")}
               </CardTitle>
               <CardDescription>
-                End your current session on this device.
+                {t("dangerDescription")}
               </CardDescription>
             </CardHeader>
             <CardContent className="px-6 py-3">
               <div className="flex items-center justify-between gap-4">
                 <p className="text-sm text-muted-foreground">
-                  You&apos;ll need to sign in again to access your account.
+                  {t("signInAgain")}
                 </p>
                 <Button
                   variant="outline"
@@ -1220,7 +1218,7 @@ export function AccountSettingsPanel({
                   disabled={signingOut}
                 >
                   <LogOut className="size-4" />
-                  {signingOut ? "Signing out…" : "Sign out"}
+                  {signingOut ? t("signingOut") : t("signOut")}
                 </Button>
               </div>
             </CardContent>

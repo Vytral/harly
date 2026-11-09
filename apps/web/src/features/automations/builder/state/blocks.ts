@@ -58,10 +58,11 @@ export function createBlock(
   }
 }
 
-export const CONTROL_BLOCKS: Array<{ kind: BlockKind; label: string; blurb: string }> = [
-  { kind: "condition", label: "Condition", blurb: "Split the path if / if not." },
-  { kind: "delay", label: "Wait", blurb: "Pause until a time or duration." },
-  { kind: "approval", label: "Approval", blurb: "Ask a person before continuing." },
-  { kind: "wait", label: "Wait for event", blurb: "Resume when something happens." },
-  { kind: "end", label: "End", blurb: "Finish this path." },
+/** Control blocks shown in the library. Labels live in `library.blocks.<kind>`. */
+export const CONTROL_BLOCKS: Array<{ kind: BlockKind }> = [
+  { kind: "condition" },
+  { kind: "delay" },
+  { kind: "approval" },
+  { kind: "wait" },
+  { kind: "end" },
 ];

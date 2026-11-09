@@ -5,6 +5,7 @@ const updateSet = vi.hoisted(() => vi.fn(() => ({ where: updateWhere })));
 const update = vi.hoisted(() => vi.fn(() => ({ set: updateSet })));
 const listCalendars = vi.hoisted(() => vi.fn());
 
+vi.mock("next-intl/server", async () => (await import("@/test-support/intl-server-mock")).intlServerMock);
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 vi.mock("drizzle-orm", () => ({ eq: vi.fn(() => "where") }));
 vi.mock("@harly/db", () => ({
@@ -55,7 +56,7 @@ describe("Google Calendar settings connection errors", () => {
     expect(result).toEqual({
       ok: false,
       error:
-        "Google OAuth credentials are invalid. Update GOOGLE_CLIENT_ID/GOOGLE_CLIENT_SECRET and reconnect Google Calendar.",
+        "Google OAuth credentials are invalid. Update GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET, then reconnect Google Calendar.",
     });
     // The dead token is cleared through the shared helper, which keeps the
     // enabled intent and records the reason (it is mocked here).

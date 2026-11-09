@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useTranslations } from "next-intl";
 import { LayoutGroup, motion, useReducedMotion } from "motion/react";
 
 import { spring } from "@/lib/motion";
@@ -27,6 +28,7 @@ export function SubNav({
   pathname: string;
   counts: Record<string, number>;
 }) {
+  const t = useTranslations("shell.nav");
   const reduceMotion = useReducedMotion();
   return (
     <div className="grid h-12 grid-cols-[minmax(0,1fr)] items-center px-3 md:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] md:gap-4 md:px-5">
@@ -37,7 +39,7 @@ export function SubNav({
         {label}
       </p>
     <nav
-      aria-label={`${label} sections`}
+      aria-label={t("sections", { label })}
       className="scrollbar-hide flex min-w-0 items-center gap-1 overflow-x-auto"
     >
       {/* One group per section so the pill never flies between sections. */}
@@ -68,7 +70,7 @@ export function SubNav({
               />
             ) : null}
             <Icon className="relative size-4 shrink-0" strokeWidth={1.8} />
-            <span className="relative">{item.label}</span>
+            <span className="relative">{t(item.messageKey)}</span>
             {count > 0 ? (
               <span className="font-chrome relative rounded-full bg-chartreuse-signal px-1.5 text-[11px] leading-[17px] text-chartreuse-ink">
                 {count > 99 ? "99+" : count}

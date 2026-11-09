@@ -1,3 +1,4 @@
+import { getTranslations } from "next-intl/server";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { eq } from "drizzle-orm";
@@ -9,6 +10,7 @@ import { ChangePasswordForm } from "./_components/change-password-form";
 export const dynamic = "force-dynamic";
 
 export default async function ChangePasswordPage() {
+  const t = await getTranslations("accessChangePassword");
   const session = await auth.api.getSession({ headers: await headers() });
   if (!session?.user) {
     redirect("/login?redirect=/change-password");
@@ -37,14 +39,13 @@ export default async function ChangePasswordPage() {
       <main className="relative z-10 flex min-h-screen flex-col items-center justify-center px-6 pb-20">
         <div className="w-full max-w-sm">
           <p className="text-center text-[11px] font-semibold uppercase tracking-[0.12em] text-pine">
-            Action required
+            {t("required")}
           </p>
           <h1 className="mt-3 text-center font-display text-3xl tracking-tight text-foreground">
-            Choose a new password
+            {t("heading")}
           </h1>
           <p className="mt-2 text-center text-sm leading-6 text-muted-foreground">
-            Your account was set up with a temporary password. Pick a new one to
-            continue.
+            {t("intro")}
           </p>
 
           <div className="mt-10">

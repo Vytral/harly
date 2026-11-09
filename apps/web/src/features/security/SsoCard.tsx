@@ -1,6 +1,7 @@
 "use client";
 
 import { useTransition } from "react";
+import { useTranslations } from "next-intl";
 
 import { authClient } from "@harly/auth/client";
 import { SectionHeader, StatusPill, BrandTile } from "@/features/workspaces/settings-ui";
@@ -58,6 +59,7 @@ export function SsoCard({
   ssoProviders?: SSOProviderConfig[];
 }) {
   const [isPending, startTransition] = useTransition();
+  const t = useTranslations("features.security.ssoCard");
 
   function connect(provider: OAuthProvider) {
     startTransition(async () => {
@@ -97,13 +99,13 @@ export function SsoCard({
     <Card className="gap-5 p-6">
       <SectionHeader
         icon={SsoDuotoneIcon}
-        title="Single Sign-On"
-        description="Allow team members to authenticate via OAuth providers or enterprise SSO."
+        title={t("title")}
+        description={t("description")}
         badge={
           anyConfigured || hasEnterpriseSso ? (
-            <StatusPill tone="on">SSO configured</StatusPill>
+            <StatusPill tone="on">{t("configuredBadge")}</StatusPill>
           ) : (
-            <StatusPill tone="off">No SSO configured</StatusPill>
+            <StatusPill tone="off">{t("notConfiguredBadge")}</StatusPill>
           )
         }
       />
@@ -125,16 +127,11 @@ export function SsoCard({
                 <div>
                   <p className="text-sm font-medium">{provider.name}</p>
                   <p className="text-xs text-muted-foreground">
-                    {isConfigured ? (
-                      <>
-                        Configured
-                        {source === "env" && (
-                          <span className="ml-1 text-muted-foreground">(via env vars)</span>
-                        )}
-                      </>
-                    ) : (
-                      "Not configured"
-                    )}
+                    {isConfigured
+                      ? source === "env"
+                        ? t("configuredViaEnv")
+                        : t("configured")
+                      : t("notConfigured")}
                   </p>
                 </div>
               </div>
@@ -147,7 +144,7 @@ export function SsoCard({
                     className="inline-flex items-center gap-1.5 rounded-lg border border-pine/20 bg-sage/30 px-2.5 py-1 text-xs font-medium text-pine transition-colors hover:bg-sage/50 disabled:opacity-50"
                   >
                     <CheckIcon className="size-3" />
-                    Test sign-in
+                    {t("testSignIn")}
                   </button>
                 ) : null}
                 <SsoConfigDrawer
@@ -161,17 +158,16 @@ export function SsoCard({
       </div>
 
       <p className="text-xs text-muted-foreground">
-        You can configure OAuth credentials here or via environment variables. 
-        Database configuration takes precedence over env vars.
+        {t("credentialsHint")}
       </p>
 
       {/* Enterprise SSO Section */}
       <div className="border-t pt-5">
         <div className="flex items-center justify-between mb-4">
           <div>
-            <h3 className="text-sm font-medium">Enterprise SSO</h3>
+            <h3 className="text-sm font-medium">{t("enterpriseTitle")}</h3>
             <p className="text-xs text-muted-foreground">
-              Configure SAML 2.0 or OpenID Connect for enterprise single sign-on.
+              {t("enterpriseDescription")}
             </p>
           </div>
           <SsoProviderDrawer />
@@ -203,10 +199,10 @@ export function SsoCard({
                 </div>
                 <div className="flex items-center gap-2">
                   <StatusPill tone={provider.enabled ? "on" : "off"}>
-                    {provider.enabled ? "Active" : "Disabled"}
+                    {provider.enabled ? t("active") : t("disabled")}
                   </StatusPill>
                   <StatusPill tone={provider.domainVerified ? "on" : "off"}>
-                    {provider.domainVerified ? "Domain verified" : "Domain unverified"}
+                    {provider.domainVerified ? t("domainVerified") : t("domainUnverified")}
                   </StatusPill>
                   <SsoProviderDrawer existingProvider={provider} />
                 </div>
@@ -216,10 +212,10 @@ export function SsoCard({
         ) : (
           <div className="rounded-lg border border-dashed p-4 text-center">
             <p className="text-sm text-muted-foreground">
-              No enterprise SSO providers configured.
+              {t("noProviders")}
             </p>
             <p className="text-xs text-muted-foreground mt-1">
-              Add a provider to enable SAML or OIDC authentication for your organization.
+              {t("addProviderHint")}
             </p>
           </div>
         )}

@@ -17,6 +17,7 @@ import { createLogger } from "@/lib/logger";
 import { DEFAULT_JITSI_BASE_URL } from "@/lib/jitsi/config";
 import { safeFetchWebhook } from "@/lib/ssrf";
 import { eq } from "drizzle-orm";
+import { getTranslations } from "@/i18n/server";
 
 const log = createLogger("workspace-jitsi-settings");
 
@@ -29,24 +30,28 @@ const SETTINGS_PATH = "/settings/integrations";
  * server-side fetch besides the explicit test action), but keep it strict:
  * https, parseable, no embedded credentials, no query/hash.
  */
-function validateBaseUrl(raw: string): { url?: string; error?: string } {
+function validateBaseUrl(raw: string, t: Translate): { url?: string; error?: string } {
   const trimmed = raw.trim().replace(/\/+$/, "");
-  if (!URL.canParse(trimmed)) return { error: "Enter a valid URL." };
+  if (!URL.canParse(trimmed)) return { error: t("invalidUrl") };
   const parsed = new URL(trimmed);
-  if (parsed.protocol !== "https:") return { error: "Base URL must use https." };
+  if (parsed.protocol !== "https:") return { error: t("httpsRequired") };
   if (parsed.username || parsed.password) {
-    return { error: "Base URL must not contain credentials." };
+    return { error: t("noCredentials") };
   }
   if (parsed.search || parsed.hash) {
-    return { error: "Base URL must not contain a query string or fragment." };
+    return { error: t("noQueryOrFragment") };
   }
   return { url: trimmed };
 }
 
-const saveSchema = z.object({
-  enabled: z.boolean(),
-  baseUrl: z.string().trim().min(1, "Base URL is required.").max(300),
-});
+type Translate = (key: string, values?: Record<string, string | number>) => string;
+
+function buildSaveSchema(t: Translate) {
+  return z.object({
+    enabled: z.boolean(),
+    baseUrl: z.string().trim().min(1, t("baseUrlRequired")).max(300),
+  });
+}
 
 export async function saveJitsiSettingsAction(input: {
   enabled: boolean;
@@ -55,15 +60,16 @@ export async function saveJitsiSettingsAction(input: {
   assertNotDemo();
   const context = await requirePermission("integrations:manage");
 
-  const parsed = saveSchema.safeParse(input);
+  const t = await getTranslations("server.workspaces.jitsiSettingsActions");
+  const parsed = buildSaveSchema(t).safeParse(input);
   if (!parsed.success) {
     return {
       ok: false,
-      error: parsed.error.issues[0]?.message ?? "Invalid input.",
+      error: parsed.error.issues[0]?.message ?? t("invalidInput"),
     };
   }
 
-  const { url, error } = validateBaseUrl(parsed.data.baseUrl);
+  const { url, error } = validateBaseUrl(parsed.data.baseUrl, t);
   if (!url) return { ok: false, error };
 
   const set = {
@@ -124,6 +130,7 @@ export async function testJitsiConnectionAction(input: {
 }): Promise<JitsiActionResult> {
   assertNotDemo();
   const context = await requirePermission("integrations:manage");
+  const t = await getTranslations("server.workspaces.jitsiSettingsActions");
 
   let target = input.baseUrl?.trim() || null;
   if (!target) {
@@ -135,7 +142,7 @@ export async function testJitsiConnectionAction(input: {
     target = row?.jitsiBaseUrl ?? DEFAULT_JITSI_BASE_URL;
   }
 
-  const { url, error } = validateBaseUrl(target);
+  const { url, error } = validateBaseUrl(target, t);
   if (!url) return { ok: false, error };
 
   // Only the saved instance is health-tracked; an unsaved URL is just a check.
@@ -158,7 +165,7 @@ export async function testJitsiConnectionAction(input: {
         if (workspaceId) await recordIntegrationFailure(workspaceId, "jitsi", failure);
         return {
           ok: false,
-          error: `Instance responded with HTTP ${res.status}.`,
+          error: t("instanceReturnedStatus", { status: res.status }),
         };
       }
       if (workspaceId) await recordIntegrationSuccess(workspaceId, "jitsi");
@@ -173,8 +180,8 @@ export async function testJitsiConnectionAction(input: {
       ok: false,
       error:
         err instanceof Error && err.name === "AbortError"
-          ? "Instance did not respond within 5 seconds."
-          : "Could not reach that instance.",
+          ? t("instanceTimedOut")
+          : t("cannotReach"),
     };
   }
 }

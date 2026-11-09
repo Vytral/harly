@@ -3,25 +3,19 @@
 import type { Job } from "@harly/db";
 import { Archive, FileEdit, Send } from "lucide-react";
 import { useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { useTransition } from "react";
 import { toast } from "@/lib/notification-island/toast";
 
 import { updateJobStatusAction } from "./actions";
+import { getJobActionErrorKey } from "./action-errors";
 import { Button } from "@/components/ui/button";
 
-const actionMeta: Record<string, { label: string; icon: typeof Send }> = {
-  draft: { label: "Move to draft", icon: FileEdit },
-  open: { label: "Publish", icon: Send },
-  closed: { label: "Close", icon: Archive },
-};
-
-const statusLabel: Record<string, string> = {
-  draft: "Draft",
-  open: "Open",
-  closed: "Closed",
-};
-
 export function JobStatusActions({ job }: { job: Job }) {
+  const t = useTranslations("jobs.status");
+  const tErrors = useTranslations("jobs.errors");
+  const statusLabels = { draft: t("draft"), open: t("open"), closed: t("closed") };
+  const actionLabels = { draft: t("moveToDraft"), open: t("publish"), closed: t("close") };
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const actions = (["draft", "open", "closed"] as const).filter(
@@ -35,11 +29,12 @@ export function JobStatusActions({ job }: { job: Job }) {
       formData.set("status", status);
       try {
         await updateJobStatusAction(formData);
-        toast.success(`Job status updated to ${statusLabel[status] ?? status}.`);
+        toast.success(t("updated", { status: statusLabels[status as keyof typeof statusLabels] ?? status }));
         router.refresh();
       } catch (error) {
+        const errorKey = getJobActionErrorKey(error instanceof Error ? error.message : null);
         toast.error(
-          error instanceof Error ? error.message : "Could not update job status.",
+          errorKey ? tErrors(errorKey) : t("updateError"),
         );
       }
     });
@@ -48,8 +43,7 @@ export function JobStatusActions({ job }: { job: Job }) {
   return (
     <div className="flex flex-col gap-1.5">
       {actions.map((status) => {
-        const meta = actionMeta[status];
-        const Icon = meta.icon;
+        const Icon = status === "draft" ? FileEdit : status === "open" ? Send : Archive;
         return (
           <Button
             key={status}
@@ -61,7 +55,7 @@ export function JobStatusActions({ job }: { job: Job }) {
             onClick={() => changeStatus(status)}
           >
             <Icon className="size-4" />
-            {meta.label}
+            {actionLabels[status as keyof typeof actionLabels]}
           </Button>
         );
       })}

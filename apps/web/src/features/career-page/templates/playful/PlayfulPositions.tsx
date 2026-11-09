@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import Link from "next/link";
 import type { Route } from "next";
 import { ArrowUpRight } from "lucide-react";
+import { useTranslations } from "next-intl";
 
 import { cn } from "@/lib/utils";
 import { formatEmploymentType, formatWorkplaceType } from "@/lib/format";
@@ -22,10 +23,10 @@ function facet(jobs: Job[], pick: (j: Job) => string | null): string[] {
   return Array.from(set).sort();
 }
 
-const FILTER_META: Record<FilterKind, { label: string; pick: (j: Job) => string | null }> = {
-  department: { label: "Department", pick: (j) => j.department },
-  location: { label: "Location", pick: (j) => j.location ?? formatWorkplaceType(j.workplaceType) },
-  type: { label: "Type", pick: (j) => formatEmploymentType(j.employmentType) },
+const FILTER_META: Record<FilterKind, { pick: (j: Job) => string | null }> = {
+  department: { pick: (j) => j.department },
+  location: { pick: (j) => j.location ?? formatWorkplaceType(j.workplaceType) },
+  type: { pick: (j) => formatEmploymentType(j.employmentType) },
 };
 
 export function PlayfulPositions({
@@ -39,6 +40,8 @@ export function PlayfulPositions({
   accent: string;
   filters?: FilterKind[];
 }) {
+  const t = useTranslations("features.careerPage.playfulPositions");
+
   // Compute distinct values per enabled facet.
   const facetValues = useMemo(() => {
     const result: Record<FilterKind, string[]> = { department: [], location: [], type: [] };
@@ -99,7 +102,7 @@ export function PlayfulPositions({
                 : "text-zinc-500 hover:bg-zinc-100 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-100",
             )}
           >
-            All
+            {t("all")}
           </button>
           {facetValues[f].map((value) => {
             const on = sel[f].has(value);
@@ -124,7 +127,7 @@ export function PlayfulPositions({
 
       {shown.length === 0 ? (
         <p className="py-12 text-center text-sm text-zinc-500 dark:text-zinc-400">
-          No open positions match these filters.
+          {t("noMatches")}
         </p>
       ) : (
         <div className="divide-y divide-zinc-100 border-t border-zinc-100 dark:divide-zinc-800 dark:border-zinc-800">
@@ -142,13 +145,13 @@ export function PlayfulPositions({
                 />
               </span>
               <span className="text-sm text-zinc-500 dark:text-zinc-400">
-                {job.department ?? "Not specified"}
+                {job.department ?? t("notSpecified")}
               </span>
               <span className="text-sm text-zinc-500 dark:text-zinc-400">
                 {formatEmploymentType(job.employmentType)}
               </span>
               <span className="text-sm text-zinc-500 dark:text-zinc-400">
-                {job.location ?? formatWorkplaceType(job.workplaceType) ?? "Not specified"}
+                {job.location ?? formatWorkplaceType(job.workplaceType) ?? t("notSpecified")}
               </span>
             </Link>
           ))}

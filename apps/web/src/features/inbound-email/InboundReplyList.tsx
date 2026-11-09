@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useState, useTransition } from "react";
 import type { Route } from "next";
 import { CheckCheck, MailOpen, Paperclip, Reply } from "lucide-react";
+import { useTranslations } from "next-intl";
 
 import {
   markAllInboundRepliesRead,
@@ -20,6 +21,7 @@ import { cn } from "@/lib/utils";
 type Filter = "all" | "unread";
 
 export function InboundReplyList({ items }: { items: InboundReplyItem[] }) {
+  const t = useTranslations("features.inboundEmail.inboundReplyList");
   const [filter, setFilter] = useState<Filter>("all");
   const [isPending, startTransition] = useTransition();
   const unread = items.filter((item) => !item.read).length;
@@ -45,9 +47,9 @@ export function InboundReplyList({ items }: { items: InboundReplyItem[] }) {
           <span className="flex size-11 items-center justify-center rounded-xl bg-muted text-muted-foreground">
             <Reply className="size-5" />
           </span>
-          <p className="text-sm font-medium">No candidate replies yet</p>
+          <p className="text-sm font-medium">{t("emptyTitle")}</p>
           <p className="max-w-sm text-sm text-muted-foreground">
-            Replies sent to your configured inbound address will appear here.
+            {t("emptyDescription")}
           </p>
         </CardContent>
       </Card>
@@ -60,7 +62,7 @@ export function InboundReplyList({ items }: { items: InboundReplyItem[] }) {
         <div
           className="inline-flex rounded-lg border bg-card p-1"
           role="tablist"
-          aria-label="Reply filter"
+          aria-label={t("filterAria")}
         >
           {(["all", "unread"] as const).map((value) => (
             <Button
@@ -73,8 +75,10 @@ export function InboundReplyList({ items }: { items: InboundReplyItem[] }) {
               aria-selected={filter === value}
             >
               {value === "all"
-                ? "All replies"
-                : `Unread${unread ? ` (${unread})` : ""}`}
+                ? t("allReplies")
+                : unread
+                  ? t("unreadCount", { count: unread })
+                  : t("unread")}
             </Button>
           ))}
         </div>
@@ -86,7 +90,7 @@ export function InboundReplyList({ items }: { items: InboundReplyItem[] }) {
             disabled={isPending}
           >
             <CheckCheck className="size-4" />
-            Mark all as read
+            {t("markAllRead")}
           </Button>
         ) : null}
       </div>
@@ -95,8 +99,8 @@ export function InboundReplyList({ items }: { items: InboundReplyItem[] }) {
         <EmptyState
           variant="filtered"
           icon={CheckCheck}
-          title="No unread replies"
-          description="You're caught up. Switch off the unread filter to see the whole history."
+          title={t("noUnreadTitle")}
+          description={t("noUnreadDescription")}
         />
       ) : (
         <div className="overflow-hidden rounded-xl border bg-card">
@@ -127,7 +131,7 @@ export function InboundReplyList({ items }: { items: InboundReplyItem[] }) {
                   {!item.read ? (
                     <span
                       className="size-1.5 rounded-full bg-sky-500"
-                      aria-label="Unread"
+                      aria-label={t("unreadAria")}
                     />
                   ) : null}
                 </div>
@@ -137,10 +141,10 @@ export function InboundReplyList({ items }: { items: InboundReplyItem[] }) {
                     !item.read ? "font-medium" : "text-muted-foreground",
                   )}
                 >
-                  {item.subject || "(No subject)"}
+                  {item.subject || t("noSubject")}
                 </p>
                 <p className="mt-1 line-clamp-2 text-sm text-muted-foreground">
-                  {item.body || "No plain-text preview was included."}
+                  {item.body || t("noPreview")}
                 </p>
                 <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
                   <span>{item.fromEmail ?? item.candidateEmail}</span>

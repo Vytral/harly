@@ -7,6 +7,7 @@ import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { useRouter } from "next/navigation";
 import { Star } from "lucide-react";
+import { useTranslations } from "next-intl";
 
 import { DotsSixVerticalIcon } from "@/components/ui/icons/phosphor";
 import { UserAvatar } from "@/components/ui/UserAvatar";
@@ -47,14 +48,14 @@ const STALE_AFTER_DAYS = 14;
  * the reasoning. A score is a suggestion; it should not out-shout the person's
  * name (DESIGN.md , "AI is optional guidance inside flows").
  */
-const recommendationLabel: Record<
+const recommendationLabelKey: Record<
   NonNullable<PipelineApplication["aiRecommendation"]>,
-  string
+  "fitStrong" | "fitGood" | "fitPossible" | "fitWeak"
 > = {
-  strong_yes: "Strong fit",
-  yes: "Good fit",
-  maybe: "Possible fit",
-  no: "Weak fit",
+  strong_yes: "fitStrong",
+  yes: "fitGood",
+  maybe: "fitPossible",
+  no: "fitWeak",
 };
 
 /** Dot colour per shared score band (lib/evaluation/score-band.ts). */
@@ -73,7 +74,8 @@ function AiFitNote({
   recommendation: PipelineApplication["aiRecommendation"];
   source: PipelineApplication["evaluationSource"];
 }) {
-  const label = recommendation ? recommendationLabel[recommendation] : "Scored";
+  const t = useTranslations("features.pipeline.CandidateCard");
+  const label = recommendation ? t(recommendationLabelKey[recommendation]) : t("scored");
 
   return (
     <Tooltip>
@@ -90,7 +92,7 @@ function AiFitNote({
         </span>
       </TooltipTrigger>
       <TooltipContent>
-        {source === "rules" ? "Harly Algorithm" : "Harly AI"} rates this a {score}/100 fit. A suggestion, not a decision.
+        {t("fitTooltip", { engine: source === "rules" ? "Harly Algorithm" : "Harly AI", score })}
       </TooltipContent>
     </Tooltip>
   );
@@ -98,6 +100,7 @@ function AiFitNote({
 
 /** Only speaks up once someone has been waiting too long. */
 function StageAge({ value }: { value: string }) {
+  const t = useTranslations("features.pipeline.CandidateCard");
   const days = useDaysSince(value);
   const stale = days >= STALE_AFTER_DAYS;
 
@@ -108,7 +111,7 @@ function StageAge({ value }: { value: string }) {
         stale ? "text-warning-clay" : "text-quiet-mist",
       )}
     >
-      {stale ? `Stuck ${days}d` : `${days}d`}
+      {stale ? t("stuckDays", { days }) : t("days", { days })}
     </span>
   );
 }
@@ -120,6 +123,7 @@ export function CandidateCard({
   onSelect,
 }: CandidateCardProps) {
   const router = useRouter();
+  const t = useTranslations("features.pipeline.CandidateCard");
   const pointerStartRef = useRef<{ x: number; y: number } | null>(null);
   const {
     attributes,
@@ -146,7 +150,7 @@ export function CandidateCard({
       ref={setNodeRef}
       role="link"
       tabIndex={0}
-      aria-label={`Open ${fullName} profile`}
+      aria-label={t("openProfile", { name: fullName })}
       aria-busy={pending || undefined}
       style={{ transform: CSS.Transform.toString(transform), transition }}
       onPointerDownCapture={(event) => {
@@ -198,7 +202,7 @@ export function CandidateCard({
             onCheckedChange={(checked) =>
               onSelect(application.id, checked === true)
             }
-            aria-label={`Select ${fullName}`}
+            aria-label={t("selectCandidate", { name: fullName })}
           />
         </span>
         <Link
@@ -229,13 +233,13 @@ export function CandidateCard({
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <span
-                      aria-label="Featured referral"
+                      aria-label={t("featuredReferral")}
                       className="inline-flex shrink-0 items-center text-warning-clay"
                     >
                       <Star className="size-3 fill-current" />
                     </span>
                   </TooltipTrigger>
-                  <TooltipContent>Featured referral</TooltipContent>
+                  <TooltipContent>{t("featuredReferral")}</TooltipContent>
                 </Tooltip>
               ) : null}
               {application.status !== "active" ? (
@@ -259,7 +263,7 @@ export function CandidateCard({
           data-pipeline-handle={application.id}
           onClick={(event) => event.stopPropagation()}
           className="shrink-0 touch-none cursor-grab rounded-md p-1 text-quiet-mist opacity-0 transition hover:text-near-ink group-hover:opacity-100 active:cursor-grabbing"
-          aria-label={`Drag ${fullName} to another stage`}
+          aria-label={t("dragCandidate", { name: fullName })}
         >
           <DotsSixVerticalIcon className="size-3.5" />
         </button>

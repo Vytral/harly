@@ -1,5 +1,6 @@
 "use server";
 
+import { getTranslations } from "@/i18n/server";
 import { revalidatePath } from "next/cache";
 import { db, workspaceSettings } from "@harly/db";
 import { isDemoMode } from "@harly/config";
@@ -25,11 +26,12 @@ export type SaveCareerPageResult = { success: boolean; error?: string };
 export async function saveCareerPageConfigAction(
   rawConfig: unknown,
 ): Promise<SaveCareerPageResult> {
+  const t = await getTranslations("server.careerPage.actions");
   let context;
   try {
     context = await requirePermission("settings:edit");
   } catch {
-    return { success: false, error: "You do not have permission to edit settings." };
+    return { success: false, error: t("noPermission") };
   }
 
   // The public board is served under the demo's own domain. Only a visitor's
@@ -37,12 +39,12 @@ export async function saveCareerPageConfigAction(
   // sandbox board is always kept out of search indexes.
   const sandbox = isDemoMode() && (await isLiveSandboxWorkspace(context.organization.id));
   if (isDemoMode() && !sandbox) {
-    return { success: false, error: "This action is disabled in the demo." };
+    return { success: false, error: t("demoDisabled") };
   }
 
   const parsed = careerPageConfigSchema.safeParse(rawConfig);
   if (!parsed.success) {
-    return { success: false, error: "Some fields are invalid. Check and retry." };
+    return { success: false, error: t("invalidFields") };
   }
 
   const normalized = normalizeCareerPageConfig(parsed.data);
@@ -64,7 +66,7 @@ export async function saveCareerPageConfigAction(
       });
   } catch (error) {
     log.error(error, "saveCareerPageConfigAction failed");
-    return { success: false, error: "Could not save. Try again." };
+    return { success: false, error: t("saveFailed") };
   }
 
   await logAuditEvent({

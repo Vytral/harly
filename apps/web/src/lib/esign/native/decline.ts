@@ -1,6 +1,7 @@
 import "server-only";
 
 import { and, eq } from "drizzle-orm";
+import { getTranslations } from "@/i18n/server";
 
 import {
   activityEvents,
@@ -30,6 +31,7 @@ export async function declineNativeSignature(
   target: NativeSigningTarget,
   input: { reason: string | null; ipAddress?: string | null; userAgent?: string | null },
 ): Promise<{ ok: true } | { ok: false; error: string }> {
+  const t = await getTranslations("server.esign.decline");
   const now = new Date();
   const reason = input.reason?.trim().slice(0, 500) || null;
   const outcome = await db.transaction(async (tx) => {
@@ -105,8 +107,10 @@ export async function declineNativeSignature(
         userId: notifyUserId,
         actorId: null,
         type: "document.signature_declined",
-        title: "Signature declined",
-        body: `${target.name} declined to sign "${target.documentName}".${reason ? ` Reason: ${reason}` : ""}`,
+        title: t("notificationTitle"),
+        body: reason
+          ? t("notificationBodyWithReason", { name: target.name, documentName: target.documentName, reason })
+          : t("notificationBody", { name: target.name, documentName: target.documentName }),
         href: `/dashboard/documents/${target.documentId}`,
         metadata: { documentId: target.documentId },
         dedupeKey: `sig-declined-${envelope.id}`,
@@ -114,7 +118,7 @@ export async function declineNativeSignature(
     }
     return { event, context, outboxIds, envelopeId: envelope.id };
   });
-  if (!outcome) return { ok: false, error: "This signing request is no longer open." };
+  if (!outcome) return { ok: false, error: t("noLongerOpen") };
 
   try {
     if (outcome.outboxIds.length) await processEmailOutbox({ ids: outcome.outboxIds, workspaceId: target.workspaceId });

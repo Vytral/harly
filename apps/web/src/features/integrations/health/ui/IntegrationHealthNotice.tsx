@@ -1,12 +1,12 @@
 "use client";
 
 import { AlertTriangle, RotateCw } from "lucide-react";
+import { useLocale, useTranslations } from "next-intl";
 
 import { Button } from "@/components/ui/button";
 import { StatusPill, type PillTone } from "@/features/workspaces/settings-ui";
 
 import {
-  INTEGRATION_STATE_LABEL,
   type IntegrationHealthState,
   type IntegrationHealthView,
 } from "../model";
@@ -20,9 +20,9 @@ const STATE_TONE: Record<IntegrationHealthState, PillTone> = {
 };
 
 /** "3 hours ago", "yesterday", … for the "Last working" line. */
-export function formatRelativeTime(iso: string, now: number = Date.now()): string {
+export function formatRelativeTime(iso: string, locale: string, now: number = Date.now()): string {
   const seconds = (new Date(iso).getTime() - now) / 1000;
-  const formatter = new Intl.RelativeTimeFormat("en", { numeric: "auto" });
+  const formatter = new Intl.RelativeTimeFormat(locale, { numeric: "auto" });
   const units: Array<[Intl.RelativeTimeFormatUnit, number]> = [
     ["year", 31_536_000],
     ["month", 2_592_000],
@@ -54,11 +54,13 @@ export function IntegrationHealthNotice({
   onReconnect?: () => void;
   reconnecting?: boolean;
 }) {
+  const t = useTranslations("features.integrations.integrationHealthNotice");
+  const locale = useLocale();
   if (health.state === "not_connected") return null;
 
   const issue = health.state !== "connected";
   const lastWorking = health.lastOkAt
-    ? formatRelativeTime(health.lastOkAt)
+    ? formatRelativeTime(health.lastOkAt, locale)
     : null;
 
   return (
@@ -69,11 +71,11 @@ export function IntegrationHealthNotice({
       <div className="min-w-0 space-y-1">
         <div className="flex flex-wrap items-center gap-2">
           <StatusPill tone={STATE_TONE[health.state]}>
-            {INTEGRATION_STATE_LABEL[health.state]}
+            {t(`states.${health.state}`)}
           </StatusPill>
           {lastWorking ? (
             <span className="text-xs text-muted-foreground" suppressHydrationWarning>
-              Last working {lastWorking}
+              {t("lastWorking", { time: lastWorking })}
             </span>
           ) : null}
         </div>
@@ -90,13 +92,13 @@ export function IntegrationHealthNotice({
           <Button asChild size="sm">
             <a href={reconnectHref}>
               <RotateCw className="size-4" aria-hidden="true" />
-              Reconnect
+              {t("reconnect")}
             </a>
           </Button>
         ) : onReconnect ? (
           <Button size="sm" onClick={onReconnect} disabled={reconnecting}>
             <RotateCw className="size-4" aria-hidden="true" />
-            {reconnecting ? "Reconnecting…" : "Reconnect"}
+            {reconnecting ? t("reconnecting") : t("reconnect")}
           </Button>
         ) : null
       ) : null}

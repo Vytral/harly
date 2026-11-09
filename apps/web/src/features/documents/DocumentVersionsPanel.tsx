@@ -1,5 +1,6 @@
 "use client";
 
+import { useLocale, useTranslations } from "next-intl";
 import { Download, Upload } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -23,16 +24,18 @@ export function DocumentVersionsPanel({
   lockedReason: string | null;
   onUpload: () => void;
 }) {
+  const t = useTranslations("features.documents.documentVersionsPanel");
+  const locale = useLocale();
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <p className="text-[13px] text-soft-ink">
-          {versions.length} version{versions.length === 1 ? "" : "s"}. Older versions stay available for audit.
+          {t("versionCount", { count: versions.length })}
         </p>
         {canUpload ? (
           <Button size="sm" variant="outline" disabled={Boolean(lockedReason)} onClick={onUpload}>
             <Upload />
-            New version
+            {t("newVersion")}
           </Button>
         ) : null}
       </div>
@@ -41,11 +44,11 @@ export function DocumentVersionsPanel({
         {versions.map((version) => (
           <li key={version.id} className="flex flex-wrap items-center gap-x-3 gap-y-1 px-4 py-3">
             <span className="w-9 shrink-0 font-display text-[17px] tabular-nums text-near-ink">
-              v{version.versionNumber}
+              {t("versionLabel", { number: version.versionNumber })}
             </span>
             <div className="min-w-0 flex-1">
               <p className="truncate text-[13.5px] font-medium text-near-ink">
-                {formatDate(version.createdAt)}
+                {formatDate(version.createdAt, locale)}
                 {version.uploadedByName ? ` · ${version.uploadedByName}` : ""}
               </p>
               <p className="truncate text-[12px] text-soft-ink">
@@ -54,13 +57,13 @@ export function DocumentVersionsPanel({
             </div>
             {version.isCurrent ? (
               <StatusPill size="sm" tone="accent">
-                Current
+                {t("current")}
               </StatusPill>
             ) : null}
             <Button size="icon-sm" variant="ghost" asChild>
               <a
                 href={`/api/documents/${documentId}/versions/${version.versionNumber}`}
-                aria-label={`Download version ${version.versionNumber}`}
+                aria-label={t("downloadVersion", { number: version.versionNumber })}
               >
                 <Download />
               </a>

@@ -43,6 +43,7 @@ import {
   type Permission,
   type RoleScope,
 } from "@/features/workspaces/permissions";
+import { getTranslations } from "@/i18n/server";
 
 /**
  * Resolve the permission set for a role key within a workspace.
@@ -127,6 +128,20 @@ export async function getActorPermissions(
   return getRolePermissions(workspaceId, row.role);
 }
 
+async function noPermissionMessage(): Promise<string> {
+  const t = await getTranslations("server.workspaces.permissions");
+  return t("noPermission");
+}
+
+async function denialMessage(
+  key: "ownerOrAdminOnly" | "ownerOnly",
+  message: string | undefined,
+): Promise<string> {
+  if (message) return message;
+  const t = await getTranslations("server.workspaces.permissions");
+  return t(key);
+}
+
 /**
  * Throw unless the specified actor holds `permission` in the workspace.
  */
@@ -137,7 +152,7 @@ export async function requireActorPermission(
 ): Promise<Permission[]> {
   const permissions = await getActorPermissions(workspaceId, actorId);
   if (!permissions.includes(permission)) {
-    throw ApiError.forbidden("You do not have permission to perform this action.");
+    throw ApiError.forbidden(await noPermissionMessage());
   }
   return permissions;
 }
@@ -223,7 +238,7 @@ export async function requirePermission(permission: Permission) {
     context.roleKey,
   );
   if (!perms.includes(permission)) {
-    throw new Error("You do not have permission to perform this action.");
+    throw new Error(await noPermissionMessage());
   }
   return context;
 }
@@ -502,12 +517,10 @@ export async function requireAnyPagePermission(
  * call site keep its own user-facing text. Throws `ApiError.forbidden`, so a
  * caller maps it to its own response shape.
  */
-export async function requireOwnerOrAdmin(
-  message = "Only workspace owners and admins can do this.",
-) {
+export async function requireOwnerOrAdmin(message?: string) {
   const context = await getWorkspaceContext();
   if (context.roleKey !== "owner" && context.roleKey !== "admin") {
-    throw ApiError.forbidden(message);
+    throw ApiError.forbidden(await denialMessage("ownerOrAdminOnly", message));
   }
   return context;
 }
@@ -517,12 +530,10 @@ export async function requireOwnerOrAdmin(
  * (for example, editing another member's sender identity) stay owner-only:
  * admins are rejected here, unlike {@link requireOwnerOrAdmin}.
  */
-export async function requireOwner(
-  message = "Only the workspace owner can do this.",
-) {
+export async function requireOwner(message?: string) {
   const context = await getWorkspaceContext();
   if (context.roleKey !== "owner") {
-    throw ApiError.forbidden(message);
+    throw ApiError.forbidden(await denialMessage("ownerOnly", message));
   }
   return context;
 }
@@ -541,14 +552,14 @@ export async function assignRolePrivilegeError(
 ): Promise<string | null> {
   if (roleIsAllPowerful(context.roleKey)) return null;
   if (roleIsAllPowerful(targetRoleKey)) {
-    return "Only an owner can grant the Owner role.";
+    return (await getTranslations("server.workspaces.permissions"))("onlyOwnerGrantsOwner");
   }
   const [actorPolicy, targetPolicy] = await Promise.all([
     getRolePolicy(context.organization.id, context.roleKey),
     getRolePolicy(context.organization.id, targetRoleKey),
   ]);
   if (!rolePolicyIsStrictlyBelow(actorPolicy, targetPolicy)) {
-    return "You can only assign a role with lower privileges than your own.";
+    return (await getTranslations("server.workspaces.permissions"))("lowerRoleAssignOnly");
   }
   return null;
 }
@@ -563,7 +574,7 @@ export async function manageMemberRolePrivilegeError(
     roleIsAllPowerful(targetRoleKey) &&
     targetUserId !== context.user.id
   ) {
-    return "Owners cannot modify another owner's account or role.";
+    return (await getTranslations("server.workspaces.permissions"))("ownersLocked");
   }
   if (roleIsAllPowerful(context.roleKey)) return null;
 
@@ -573,7 +584,7 @@ export async function manageMemberRolePrivilegeError(
   ]);
   return rolePolicyIsStrictlyBelow(actorPolicy, targetPolicy)
     ? null
-    : "You can only manage members with a lower-privilege role.";
+    : (await getTranslations("server.workspaces.permissions"))("lowerRoleManageOnly");
 }
 
 /**
@@ -592,7 +603,7 @@ export async function grantPermissionsPrivilegeError(
     context.roleKey,
   );
   if (exceedsPrivilege(actorPerms, permissions)) {
-    return "You can't grant permissions you don't have yourself.";
+    return (await getTranslations("server.workspaces.permissions"))("cannotGrantPermissions");
   }
   return null;
 }
@@ -608,7 +619,7 @@ export async function grantRolePolicyPrivilegeError(
   const actorPolicy = await getRolePolicy(context.organization.id, context.roleKey);
   return rolePolicyIsStrictlyBelow(actorPolicy, { permissions, scope })
     ? null
-    : "You can only grant a role with lower privileges than your own.";
+    : (await getTranslations("server.workspaces.permissions"))("lowerRoleGrantOnly");
 }
 
 export type WorkspaceRoleMember = {

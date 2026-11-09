@@ -1,4 +1,5 @@
 import { Skeleton } from "@/components/ui/skeleton";
+import { getTranslations } from "next-intl/server";
 
 const WEEKDAYS = Array.from({ length: 7 }, (_, i) => i);
 /** Events per day in the mobile agenda (the real list groups by day). */
@@ -6,10 +7,11 @@ const AGENDA_DAYS = [2, 1, 3];
 /** Six weeks, matching the month grid. */
 const GRID_CELLS = Array.from({ length: 42 }, (_, i) => i);
 
-export default function CalendarsLoading() {
+export default async function CalendarsLoading() {
+  const t = await getTranslations("pages.dashboardCalendars.loading");
   return (
     <div className="space-y-4" aria-busy="true">
-      <span className="sr-only">Loading…</span>
+      <span className="sr-only">{t("label")}</span>
 
       <header className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex flex-wrap items-center gap-2">

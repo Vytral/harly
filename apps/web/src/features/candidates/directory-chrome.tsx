@@ -3,6 +3,7 @@
 import Link from "next/link";
 import type { Route } from "next";
 import { useEffect, useState, type ReactNode } from "react";
+import { useLocale, useTranslations } from "next-intl";
 import { Search, SlidersHorizontal } from "lucide-react";
 
 import { Card } from "@/components/ui/card";
@@ -121,10 +122,11 @@ export function FilterBar({
   children: ReactNode;
   className?: string;
 }) {
+  const t = useTranslations("candidates.directoryChrome");
   return (
     <div
       role="group"
-      aria-label="Filters"
+      aria-label={t("filters")}
       className={cn(
         "relative flex flex-wrap items-center gap-2 px-5 py-4",
         // Phones: one swipeable row instead of four stacked rows of chips.
@@ -148,13 +150,15 @@ export function TotalLine({
   pluralNoun?: string;
   trailing?: ReactNode;
 }) {
+  const t = useTranslations("candidates.directoryChrome");
+  const locale = useLocale();
   const plural = pluralNoun ?? `${noun}s`;
   return (
     <div className="flex min-h-12 items-center justify-between gap-3 border-t border-hairline px-5 py-3 text-[13px] text-soft-ink">
       <p aria-live="polite">
-        Total{" "}
+        {t("total")} {" "}
         <span className="font-medium tabular-nums text-near-ink">
-          {total.toLocaleString()}
+          {new Intl.NumberFormat(locale).format(total)}
         </span>{" "}
         {total === 1 ? noun : plural}
       </p>
@@ -216,6 +220,7 @@ export function FilterCountButton({
   count: number;
   onClear: () => void;
 }) {
+  const t = useTranslations("candidates.directoryChrome");
   return (
     <button
       type="button"
@@ -223,10 +228,10 @@ export function FilterCountButton({
       disabled={count === 0}
       aria-label={
         count === 0
-          ? "No active filters"
-          : `Clear ${count} active filter${count === 1 ? "" : "s"}`
+          ? t("noActiveFilters")
+          : t("clearActiveFilters", { count })
       }
-      title={count === 0 ? undefined : "Clear filters"}
+      title={count === 0 ? undefined : t("clearFilters")}
       className={cn(
         "inline-flex h-9 items-center gap-1.5 rounded-full border bg-card px-3 text-[13px] font-medium outline-none transition-colors",
         "focus-visible:ring-2 focus-visible:ring-near-ink focus-visible:ring-offset-2 focus-visible:ring-offset-card",
@@ -275,9 +280,10 @@ export function FilterChip({
   allValue?: string;
   showValue?: boolean;
 }) {
+  const t = useTranslations("candidates.directoryChrome");
   const neutral = allValue ?? FILTER_ALL;
   const active = value !== neutral;
-  const display = value === FILTER_ALL ? "All" : (labelMap?.[value] ?? value);
+  const display = value === FILTER_ALL ? t("all") : (labelMap?.[value] ?? value);
 
   return (
     <Select value={value} onValueChange={onChange}>
@@ -297,7 +303,7 @@ export function FilterChip({
         ) : null}
       </SelectTrigger>
       <SelectContent position="popper" align="start" className="max-h-60">
-        {allValue === undefined ? <SelectItem value={FILTER_ALL}>All</SelectItem> : null}
+        {allValue === undefined ? <SelectItem value={FILTER_ALL}>{t("all")}</SelectItem> : null}
         {options.map((opt) => (
           <SelectItem key={opt} value={opt}>
             {labelMap?.[opt] ?? opt}
@@ -332,6 +338,7 @@ export function BulkActionBar({
   onClear: () => void;
   children: ReactNode;
 }) {
+  const t = useTranslations("candidates.directoryChrome");
   // Keep the bar mounted for the 140ms exit, showing the last real count.
   const [mounted, setMounted] = useState(count > 0);
   const [shownCount, setShownCount] = useState(count);
@@ -348,7 +355,7 @@ export function BulkActionBar({
     <div className="pointer-events-none fixed inset-x-0 bottom-6 z-40 flex justify-center px-4">
       <div
         role="toolbar"
-        aria-label="Bulk actions"
+        aria-label={t("bulkActions")}
         data-state={open ? "open" : "closed"}
         className={cn(
           "pointer-events-auto flex max-w-full flex-wrap items-center gap-1 rounded-[28px] bg-near-ink py-1.5 pr-2 pl-4 text-pure-snow shadow-[var(--shadow-float)] ease-out motion-reduce:animate-none",
@@ -361,11 +368,11 @@ export function BulkActionBar({
           className="mr-1 text-[13px] font-medium tabular-nums"
           aria-live="polite"
         >
-          {shownCount} selected
+          {t("selectedCount", { count: shownCount })}
         </span>
         {children}
-        <BulkAction onClick={onClear} aria-label="Clear selection">
-          Clear
+        <BulkAction onClick={onClear} aria-label={t("clearSelection")}>
+          {t("clear")}
         </BulkAction>
       </div>
     </div>

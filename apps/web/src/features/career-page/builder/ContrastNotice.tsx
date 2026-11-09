@@ -1,5 +1,7 @@
 "use client";
 
+import { useTranslations } from "next-intl";
+
 import type { CareerPageConfig } from "@/features/career-page/config";
 
 import { AlertIcon } from "./builder-icons";
@@ -21,7 +23,9 @@ export function ContrastNotice({
   onFix: (color: string) => void;
   checkBackground?: boolean;
 }) {
-  const warnings = accentContrastWarnings(config, color, { checkBackground });
+  const t = useTranslations("features.careerPage.ContrastNotice");
+  const tLogic = useTranslations("labels.careerPage.builderLogic");
+  const warnings = accentContrastWarnings(config, color, { checkBackground }, tLogic);
   if (warnings.length === 0) return null;
 
   return (
@@ -45,7 +49,7 @@ export function ContrastNotice({
                   className="size-3 rounded-full border border-hairline"
                   style={{ background: w.suggestion }}
                 />
-                Use readable shade {w.suggestion}
+                {t("useReadableShade", { color: w.suggestion })}
               </button>
             ) : null}
           </div>

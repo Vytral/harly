@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { useTranslations } from "next-intl";
 import type { Route } from "next";
 import { ClipboardCheck } from "lucide-react";
 
@@ -9,11 +10,6 @@ import { cn } from "@/lib/utils";
 import type { ReviewCandidates } from "@/features/dashboard/widgets";
 import { REVIEW_QUEUE_HREF, reviewApplicationHref } from "@/features/review/rules";
 import { Tile, TileHeader, TileLink, EmptyHint } from "./primitives";
-
-function agingLabel(days: number) {
-  if (days <= 0) return "Requested today";
-  return `Requested ${days} day${days === 1 ? "" : "s"} ago`;
-}
 
 /**
  * My pending reviews, longest-waiting first. The header count is the real
@@ -27,13 +23,14 @@ export function CandidatesNeedingReview({
   review: ReviewCandidates;
   className?: string;
 }) {
+  const t = useTranslations("shell.candidateReview");
   return (
     <Tile className={className}>
       <TileHeader
         icon={ClipboardCheck}
-        title="Candidates needing your review"
+        title={t("title")}
         count={review.total}
-        action={<TileLink href={REVIEW_QUEUE_HREF as Route}>View all</TileLink>}
+        action={<TileLink href={REVIEW_QUEUE_HREF as Route}>{t("viewAll")}</TileLink>}
       />
       <div className="flex flex-1 flex-col px-2 pb-3 pt-3">
         {review.items.length > 0 ? (
@@ -63,19 +60,19 @@ export function CandidatesNeedingReview({
                       {c.stage}
                     </Badge>
                     <div className="hidden w-36 shrink-0 text-right md:block">
-                      <p className="truncate text-sm font-medium">{c.action}</p>
+                      <p className="truncate text-sm font-medium">{t(c.action === "interviewFeedback" ? "interviewFeedback" : "resumeReview")}</p>
                       <p
                         className={cn(
                           "truncate text-xs",
                           c.ageDays > 3 ? "text-danger-rust" : "text-soft-ink",
                         )}
                       >
-                        {agingLabel(c.ageDays)}
+                        {c.ageDays <= 0 ? t("today") : t("ago", { count: c.ageDays })}
                       </p>
                     </div>
                   </Link>
                   <Button variant="outline" size="sm" className="shrink-0 max-md:hidden" asChild>
-                    <Link href={href}>Review</Link>
+                    <Link href={href}>{t("review")}</Link>
                   </Button>
                 </li>
               );
@@ -84,7 +81,7 @@ export function CandidatesNeedingReview({
         ) : (
           <EmptyHint
             icon={ClipboardCheck}
-            text="No reviews pending. Your team is on top of feedback."
+            text={t("empty")}
           />
         )}
         {review.total > review.items.length ? (
@@ -92,7 +89,7 @@ export function CandidatesNeedingReview({
             href={REVIEW_QUEUE_HREF as Route}
             className="mx-3 mt-1 rounded-[var(--radius-md)] px-3 py-2.5 text-center text-xs font-medium text-soft-ink transition hover:bg-row-wash"
           >
-            {review.total - review.items.length} more in your queue
+            {t("more", { count: review.total - review.items.length })}
           </Link>
         ) : null}
       </div>

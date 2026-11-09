@@ -12,6 +12,7 @@ import {
   Search,
   SlidersHorizontal,
 } from "lucide-react";
+import { useTranslations } from "next-intl";
 
 import { cn } from "@/lib/utils";
 import type { WorkspaceBoardBranding } from "@/features/workspaces/board";
@@ -67,10 +68,12 @@ export function AshbyTemplate({
   boardRoot: string;
   portalEnabled?: boolean;
 }) {
+  const t = useTranslations("features.careerPage.ashbyTemplate");
+  const tFacets = useTranslations("labels.careerPage.facets");
   const theme = careerTheme(config, workspace.primaryColor);
   const { accent, onAccent } = theme;
   const base = boardBase(boardRoot);
-  const headline = config.hero.headline || `Careers at ${workspace.name}`;
+  const headline = config.hero.headline || t("defaultHeadline", { name: workspace.name });
   const logo = workspace.logoUrl;
   const enabled = config.positions.filters;
   const searchId = useId();
@@ -85,12 +88,12 @@ export function AshbyTemplate({
         .filter((k) => enabled.includes(k))
         .map((k) => ({
           key: k,
-          label: FILTER_META[k].label,
+          label: tFacets(k),
           icon: ICONS[k],
           values: facet(jobs, FILTER_META[k].pick),
         }))
         .filter((g) => g.values.length > 0),
-    [jobs, enabled],
+    [jobs, enabled, tFacets],
   );
 
   function toggle(facetKey: FilterKind, value: string) {
@@ -103,7 +106,7 @@ export function AshbyTemplate({
   }
 
   const shown = useMemo(() => applyFacets(jobs, sel, query), [jobs, sel, query]);
-  const groups = useMemo(() => groupByDepartment(shown), [shown]);
+  const groups = useMemo(() => groupByDepartment(shown, tFacets("other")), [shown, tFacets]);
   const activeCount = sel.department.size + sel.location.size + sel.type.size;
 
   function reset() {
@@ -178,14 +181,14 @@ export function AshbyTemplate({
                   <div className="flex min-w-0 flex-1 items-center gap-2 rounded-[var(--career-r-inner,12px)] border border-hairline bg-pure-snow px-3 py-2 transition focus-within:border-near-ink">
                     <Search className="size-4 shrink-0 text-soft-ink" strokeWidth={1.8} aria-hidden />
                     <label htmlFor={searchId} className="sr-only">
-                      Search roles
+                      {t("searchRoles")}
                     </label>
                     <input
                       id={searchId}
                       type="search"
                       value={query}
                       onChange={(e) => setQuery(e.target.value)}
-                      placeholder="Search roles"
+                      placeholder={t("searchRoles")}
                       className="w-full bg-transparent text-base sm:text-sm text-near-ink outline-none placeholder:text-soft-ink"
                     />
                   </div>
@@ -198,7 +201,7 @@ export function AshbyTemplate({
                       className="inline-flex h-10 shrink-0 items-center gap-1.5 rounded-[var(--career-r-inner,12px)] border border-hairline bg-pure-snow px-3 text-sm font-medium text-near-ink lg:hidden"
                     >
                       <SlidersHorizontal className="size-4" strokeWidth={1.8} aria-hidden />
-                      Filters{activeCount > 0 ? ` (${activeCount})` : ""}
+                      {activeCount > 0 ? t("filtersWithCount", { count: activeCount }) : t("filters")}
                     </button>
                   )}
                 </div>
@@ -248,7 +251,7 @@ export function AshbyTemplate({
                       onClick={reset}
                       className="mt-6 text-sm font-medium text-soft-ink underline underline-offset-4 hover:text-near-ink"
                     >
-                      Clear filters
+                      {t("clearFilters")}
                     </button>
                   )}
                 </div>
@@ -257,7 +260,7 @@ export function AshbyTemplate({
               {/* Job list */}
               <div>
                 <p className="mb-4 text-sm text-soft-ink" aria-live="polite">
-                  {shown.length} open {shown.length === 1 ? "role" : "roles"}
+                  {t("openRoles", { count: shown.length })}
                 </p>
 
                 {groups.length === 0 ? (
@@ -273,7 +276,7 @@ export function AshbyTemplate({
                         <div className="flex items-baseline justify-between">
                           <h3 className="text-sm font-semibold text-near-ink">{dept}</h3>
                           <span className="text-xs tabular-nums text-soft-ink">
-                            {deptJobs.length} {deptJobs.length === 1 ? "role" : "roles"}
+                            {t("roleCount", { count: deptJobs.length })}
                           </span>
                         </div>
                         <div className="mt-3 divide-y divide-hairline overflow-hidden rounded-[var(--career-r-card,16px)] border border-hairline bg-pure-snow">

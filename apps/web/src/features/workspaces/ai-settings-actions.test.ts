@@ -9,6 +9,7 @@ const mocks = vi.hoisted(() => ({
   getProviderModels: vi.fn(),
 }));
 
+vi.mock("next-intl/server", async () => (await import("@/test-support/intl-server-mock")).intlServerMock);
 vi.mock("server-only", () => ({}));
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 vi.mock("@/features/demo/assert-not-demo", () => ({ assertNotDemo: vi.fn() }));

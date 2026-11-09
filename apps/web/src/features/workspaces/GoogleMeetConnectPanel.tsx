@@ -6,6 +6,7 @@ import { providerStatusLabel, providerStatusTone } from "@/features/integrations
 import Link from "next/link";
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { toast } from "@/lib/notification-island/toast";
 
 import {
@@ -50,6 +51,7 @@ export function GoogleMeetConnectPanel({
   tileClassName: string;
   description: string;
 }) {
+  const t = useTranslations("features.workspaces.googleMeetConnectPanel");
   const router = useRouter();
   const isConnected = status.hasRefreshToken;
   const [open, setOpen] = useState(isConnected);
@@ -59,9 +61,9 @@ export function GoogleMeetConnectPanel({
   const statusTone = providerStatusTone(health, isConnected ? (status.enabled ? "on" : "off") : "neutral");
   const statusLabel = providerStatusLabel(health, isConnected
     ? status.enabled
-      ? "Connected"
-      : "Disabled"
-    : "Not connected");
+      ? t("connected")
+      : t("disabled")
+    : t("notConnected"));
 
   const installUrl = `/api/integrations/google/install?ws=${workspaceId}`;
 
@@ -69,10 +71,10 @@ export function GoogleMeetConnectPanel({
     startDisconnect(async () => {
       const result = await disconnectGCalAction();
       if (!result.ok) {
-        toast.error(result.error ?? "Could not disconnect.");
+        toast.error(result.error ?? t("disconnectFailed"));
         return;
       }
-      toast.success("Google Meet disconnected");
+      toast.success(t("disconnected"));
       router.refresh();
     });
   }
@@ -81,9 +83,9 @@ export function GoogleMeetConnectPanel({
     startTest(async () => {
       const result = await testGCalConnectionAction();
       if (result.ok) {
-        toast.success("Connection is working!");
+        toast.success(t("connectionWorking"));
       } else {
-        toast.error(result.error ?? "Connection test failed.");
+        toast.error(result.error ?? t("testFailed"));
         // The server clears a revoked token on invalid_grant; refresh so the
         // panel immediately exposes the reconnect action.
         router.refresh();
@@ -109,19 +111,19 @@ export function GoogleMeetConnectPanel({
                 aria-expanded={open}
               >
                 <GearSixIcon className="size-4" />
-                {open ? "Hide settings" : "Manage"}
+                {open ? t("hideSettings") : t("manage")}
               </Button>
             ) : status.hasCredentials ? (
               <Button asChild>
                 <a href={installUrl}>
                   <GoogleCalendarLogo className="size-4" />
-                  Connect Google
+                  {t("connectGoogle")}
                 </a>
               </Button>
             ) : (
               <Button disabled>
                 <GoogleCalendarLogo className="size-4" />
-                Credentials not set
+                {t("credentialsNotSet")}
               </Button>
             )
           ) : null
@@ -133,9 +135,9 @@ export function GoogleMeetConnectPanel({
         <div className="flex items-start gap-2 rounded-xl border border-clay/30 bg-clay/5 px-3 py-2 text-sm text-clay">
           <WarningCircleIcon className="mt-0.5 size-4 shrink-0" />
           <p>
-            Set <code className="font-mono text-xs">GOOGLE_CLIENT_ID</code> and{" "}
-            <code className="font-mono text-xs">GOOGLE_CLIENT_SECRET</code> on
-            the server to enable Google Meet.
+            {t.rich("credentialsHelp", {
+              code: (chunks) => <code className="font-mono text-xs">{chunks}</code>,
+            })}
           </p>
         </div>
       ) : null}
@@ -143,21 +145,21 @@ export function GoogleMeetConnectPanel({
       {isConnected ? (
         <Card className="overflow-hidden p-0">
           <div className="grid grid-cols-1 divide-y sm:grid-cols-3 sm:divide-x sm:divide-y-0">
-            <StatCell label="Account">
+            <StatCell label={t("account")}>
               <GoogleCalendarLogo className="size-4" />
-              {status.accountEmail ?? "Not connected"}
+              {status.accountEmail ?? t("notConnected")}
             </StatCell>
-            <StatCell label="Meet">
+            <StatCell label={t("meet")}>
               {status.enabled ? (
                 <>
                   <SealCheckDuotoneIcon className="size-3.5 text-pine" />
-                  Ready
+                  {t("ready")}
                 </>
               ) : (
-                "Not enabled"
+                t("notEnabled")
               )}
             </StatCell>
-            <StatCell label="Status">
+            <StatCell label={t("status")}>
               <button
                 type="button"
                 onClick={testConnection}
@@ -169,7 +171,7 @@ export function GoogleMeetConnectPanel({
                 ) : (
                   <SealCheckDuotoneIcon className="size-3.5" />
                 )}
-                {testing ? "Testing…" : "Test connection"}
+                {testing ? t("testing") : t("testConnection")}
               </button>
             </StatCell>
           </div>
@@ -184,9 +186,7 @@ export function GoogleMeetConnectPanel({
                 Google Meet
               </h2>
               <p className="text-sm text-muted-foreground">
-                Meet creates a video link for every video interview scheduled
-                through Google Calendar. Calendar selection lives on the Google
-                Calendar card.
+                {t("description")}
               </p>
             </div>
 
@@ -200,11 +200,11 @@ export function GoogleMeetConnectPanel({
                 disabled={disconnecting}
               >
                 {disconnecting ? <SpinnerIcon className="size-3.5" /> : null}
-                Disconnect
+                {t("disconnect")}
               </Button>
               <Button asChild size="sm" variant="outline">
                 <Link href="/settings/integrations/google-calendar">
-                  Manage calendar
+                  {t("manageCalendar")}
                   <ArrowUpRightIcon className="size-3.5" />
                 </Link>
               </Button>

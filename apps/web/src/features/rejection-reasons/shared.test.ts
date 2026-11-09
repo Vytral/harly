@@ -1,15 +1,22 @@
 import { describe, expect, it } from "vitest";
 
+import { makeT } from "@/test-support/translator";
 import {
   DEFAULT_REJECTION_REASONS,
   LEGACY_REJECTION_REASON_CODE,
   rejectApplicationsSchema,
-  rejectDialogCopy,
+  rejectDialogCopy as rejectDialogCopyWith,
   rejectionDecisionSchema,
   rejectionReasonCodeFromLabel,
   rejectionReasonLabel,
   rejectionReasonLabelSchema,
 } from "./shared";
+
+const translator = makeT("labels.rejectionReasons.dialogCopy");
+
+function rejectDialogCopy(targets: Parameters<typeof rejectDialogCopyWith>[1]) {
+  return rejectDialogCopyWith(translator, targets);
+}
 
 const TEMPLATE_ID = "6f1c2b8e-4a5d-4c3b-9e2f-1a2b3c4d5e6f";
 

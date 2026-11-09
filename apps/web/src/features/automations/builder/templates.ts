@@ -8,24 +8,27 @@
  * and tag labels are placeholders the user edits after creating. They showcase
  * the shape of each construct (trigger, condition tree, action list) without
  * referencing real record ids.
+ *
+ * Gallery copy (name, description, category) is translated with
+ * `templateCopy`. The name and description inside `build()` are saved with the
+ * workflow as data, so they stay in English, as do the message bodies.
  */
 
 import type { WorkflowDefinitionInput } from "../schema";
+import type { BuilderT } from "./catalog";
+
+export type WorkflowTemplateCategory = "Pipeline" | "Notification" | "Triage" | "Onboarding";
 
 export type WorkflowTemplate = {
   id: string;
-  name: string;
-  description: string;
   /** Emoji-free category tag for the gallery. */
-  category: "Pipeline" | "Notification" | "Triage" | "Onboarding";
+  category: WorkflowTemplateCategory;
   build: () => WorkflowDefinitionInput;
 };
 
 export const WORKFLOW_TEMPLATES: WorkflowTemplate[] = [
   {
     id: "notify-slack-on-apply",
-    name: "Notify chat on new application",
-    description: "Post a message to your Slack/Discord channel every time a candidate applies.",
     category: "Notification",
     build: () => ({
       name: "Notify chat on new application",
@@ -44,8 +47,6 @@ export const WORKFLOW_TEMPLATES: WorkflowTemplate[] = [
   },
   {
     id: "auto-reject-juniors",
-    name: "Auto-reject under-qualified applicants",
-    description: "When a candidate applies, if the job seniority is 'junior' and the AI score is low, reject them.",
     category: "Triage",
     build: () => ({
       name: "Auto-reject under-qualified applicants",
@@ -77,8 +78,6 @@ export const WORKFLOW_TEMPLATES: WorkflowTemplate[] = [
   },
   {
     id: "screening-task-on-stage",
-    name: "Create screening task on stage change",
-    description: "When an application moves to 'Phone screen', assign a screening task to the owner.",
     category: "Pipeline",
     build: () => ({
       name: "Create screening task on stage change",
@@ -99,8 +98,6 @@ export const WORKFLOW_TEMPLATES: WorkflowTemplate[] = [
   },
   {
     id: "tag-vip-candidates",
-    name: "Tag high-fit candidates",
-    description: "When a candidate applies with an AI score above 80, tag them 'vip'.",
     category: "Triage",
     build: () => ({
       name: "Tag high-fit candidates",
@@ -126,8 +123,6 @@ export const WORKFLOW_TEMPLATES: WorkflowTemplate[] = [
   },
   {
     id: "note-on-reject",
-    name: "Log a note on rejection",
-    description: "When a candidate is rejected, add an internal note for the team.",
     category: "Pipeline",
     build: () => ({
       name: "Log a note on rejection",
@@ -146,8 +141,6 @@ export const WORKFLOW_TEMPLATES: WorkflowTemplate[] = [
   },
   {
     id: "interview-prep-task",
-    name: "Prep task on interview scheduled",
-    description: "When an interview is scheduled, create a prep task for the interviewer.",
     category: "Onboarding",
     build: () => ({
       name: "Prep task on interview scheduled",
@@ -166,8 +159,6 @@ export const WORKFLOW_TEMPLATES: WorkflowTemplate[] = [
   },
   {
     id: "notify-hire",
-    name: "Celebrate hires in chat",
-    description: "When a candidate is hired, post a celebratory message to the team channel.",
     category: "Notification",
     build: () => ({
       name: "Celebrate hires in chat",
@@ -186,8 +177,6 @@ export const WORKFLOW_TEMPLATES: WorkflowTemplate[] = [
   },
   {
     id: "tag-new-candidate",
-    name: "Tag new candidates by source",
-    description: "When a candidate is created, tag them with their source for downstream filtering.",
     category: "Triage",
     build: () => ({
       name: "Tag new candidates by source",
@@ -205,6 +194,25 @@ export const WORKFLOW_TEMPLATES: WorkflowTemplate[] = [
     }),
   },
 ];
+
+/** Translation key stem for a template: `notify-slack-on-apply` → `notifySlackOnApply`. */
+function templateKey(id: string): string {
+  return id.replace(/-([a-z0-9])/g, (_, char: string) => char.toUpperCase());
+}
+
+/** Translated gallery copy for a template. */
+export function templateCopy(template: WorkflowTemplate, t: BuilderT): {
+  name: string;
+  description: string;
+  category: string;
+} {
+  const key = `templates.items.${templateKey(template.id)}`;
+  return {
+    name: t(`${key}.name`),
+    description: t(`${key}.description`),
+    category: t(`templates.categories.${template.category.toLowerCase()}`),
+  };
+}
 
 export function getTemplate(id: string): WorkflowTemplate | undefined {
   return WORKFLOW_TEMPLATES.find((t) => t.id === id);

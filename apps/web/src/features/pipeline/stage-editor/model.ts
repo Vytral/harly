@@ -1,5 +1,6 @@
+import type { useTranslations } from "next-intl";
+
 import {
-  STAGE_KIND_LABELS,
   STAGE_KINDS,
   isTerminalStageKind,
   normalizeStageName,
@@ -7,6 +8,9 @@ import {
   type StageKind,
   type TerminalStageKind,
 } from "@harly/db/stage-kind";
+
+/** Translator for the `labels.pipeline.stageEditor` namespace. */
+export type EditorTranslator = ReturnType<typeof useTranslations>;
 
 /**
  * Pure rules behind the stage editor. The server enforces every rule here
@@ -50,41 +54,26 @@ export function toEditorStage(stage: Omit<EditorStage, "emailConfig"> & { emailC
   return { ...stage, emailConfig: normalizeEmailConfig(stage.emailConfig) };
 }
 
-/** One line per kind, written for a recruiter rather than for the schema. */
-export const KIND_DESCRIPTIONS: Record<StageKind, string> = {
-  applied: "New applications wait here for a first look.",
-  screening: "Early review: résumé checks and short phone screens.",
-  interview: "Candidates are in interviews or assessments.",
-  offer: "An offer is being prepared, sent or negotiated.",
-  hired: "An outcome. Candidates here are marked as hired.",
-  rejected: "An outcome. Candidates here are marked as rejected.",
-  withdrawn: "An outcome. The candidate has dropped out.",
-  custom: "Any other step. Candidates stay active while they are here.",
-};
-
-/** Shown for outcome kinds: what moving a candidate here does to their status. */
-export const OUTCOME_EXPLANATIONS: Record<TerminalStageKind, string> = {
-  hired: "Counts as a hire. Moving a candidate here marks them hired and closes the application.",
-  rejected:
-    "Counts as a rejection. Moving a candidate here marks them rejected and closes the application.",
-  withdrawn:
-    "Counts as a withdrawal. Moving a candidate here marks them withdrawn and closes the application.",
-};
-
-/** Colours the recruiter can pick. The first six are the defaults new jobs start with. */
-export const STAGE_SWATCHES: ReadonlyArray<{ value: string; label: string }> = [
-  { value: "#E0F2FE", label: "Sky" },
-  { value: "#F5F3FF", label: "Lavender" },
-  { value: "#FEF3C7", label: "Amber" },
-  { value: "#DCFCE7", label: "Mint" },
-  { value: "#CCFBF1", label: "Teal" },
-  { value: "#FEE2E2", label: "Rose" },
-  { value: "#FCE7F3", label: "Pink" },
-  { value: "#E4E4E7", label: "Stone" },
+/**
+ * Colours the recruiter can pick. The first six are the defaults new jobs start with.
+ * `id` names the colour in `labels.pipeline.stageEditor.swatches`.
+ */
+export const STAGE_SWATCHES: ReadonlyArray<{
+  value: string;
+  id: "sky" | "lavender" | "amber" | "mint" | "teal" | "rose" | "pink" | "stone";
+}> = [
+  { value: "#E0F2FE", id: "sky" },
+  { value: "#F5F3FF", id: "lavender" },
+  { value: "#FEF3C7", id: "amber" },
+  { value: "#DCFCE7", id: "mint" },
+  { value: "#CCFBF1", id: "teal" },
+  { value: "#FEE2E2", id: "rose" },
+  { value: "#FCE7F3", id: "pink" },
+  { value: "#E4E4E7", id: "stone" },
 ];
 
-export const KIND_OPTIONS: ReadonlyArray<{ value: StageKind; label: string }> =
-  STAGE_KINDS.map((kind) => ({ value: kind, label: STAGE_KIND_LABELS[kind] }));
+/** Kind ids in picker order. Labels are resolved at render from `labels.pipeline.stageEditor.kinds`. */
+export const KIND_OPTIONS: readonly StageKind[] = STAGE_KINDS;
 
 export function isOutcomeKind(kind: StageKind): kind is TerminalStageKind {
   return isTerminalStageKind(kind);
@@ -106,24 +95,17 @@ export function archivedStagesOf(stages: readonly EditorStage[]): EditorStage[] 
     .sort((a, b) => timeOf(b.archivedAt) - timeOf(a.archivedAt));
 }
 
-export function countLabel(count: number): string {
-  return count === 1 ? "1 candidate" : `${count} candidates`;
-}
-
-function holdLabel(count: number): string {
-  return count === 1 ? "1 candidate holds this stage" : `${count} candidates hold this stage`;
-}
-
 export function describeShapeIssue(
   issue: ReturnType<typeof validatePipelineShape>[number],
+  t: EditorTranslator,
 ): string {
   switch (issue.code) {
     case "no_active_stage":
-      return "A pipeline needs at least one active stage that is not hired, rejected or withdrawn, so new candidates have somewhere to enter.";
+      return t("shapeNoActiveStage");
     case "duplicate_name":
-      return `Stage name "${issue.name}" is used more than once. Stage names must be unique.`;
+      return t("shapeDuplicateName", { name: issue.name });
     case "empty_name":
-      return "Stage names cannot be empty.";
+      return t("shapeEmptyName");
   }
 }
 
@@ -131,7 +113,12 @@ export function describeShapeIssue(
 /* Names                                                                      */
 /* -------------------------------------------------------------------------- */
 
-export type NameCheck = { ok: true; name: string } | { ok: false; error: string };
+export type NameFailure =
+  | { ok: false; code: "empty" }
+  | { ok: false; code: "tooLong" }
+  | { ok: false; code: "duplicate"; existingName: string };
+
+export type NameCheck = { ok: true; name: string } | NameFailure;
 
 /**
  * Name rules the server also enforces: non-empty, at most 120 characters, and
@@ -144,13 +131,8 @@ export function checkStageName(
   exceptStageId?: string,
 ): NameCheck {
   const name = normalizeStageName(input);
-  if (!name) return { ok: false, error: "Enter a stage name." };
-  if (name.length > STAGE_NAME_MAX_LENGTH) {
-    return {
-      ok: false,
-      error: `Stage names can be ${STAGE_NAME_MAX_LENGTH} characters or fewer.`,
-    };
-  }
+  if (!name) return { ok: false, code: "empty" };
+  if (name.length > STAGE_NAME_MAX_LENGTH) return { ok: false, code: "tooLong" };
   const key = name.toLowerCase();
   const clash = activeList.find(
     (stage) =>
@@ -158,13 +140,20 @@ export function checkStageName(
       stage.id !== exceptStageId &&
       normalizeStageName(stage.name).toLowerCase() === key,
   );
-  if (clash) {
-    return {
-      ok: false,
-      error: `Another active stage is already named "${clash.name}". Stage names must be unique.`,
-    };
-  }
+  if (clash) return { ok: false, code: "duplicate", existingName: clash.name };
   return { ok: true, name };
+}
+
+/** The sentence for a failed name check. */
+export function nameErrorMessage(failure: NameFailure, t: EditorTranslator): string {
+  switch (failure.code) {
+    case "empty":
+      return t("nameEmpty");
+    case "tooLong":
+      return t("nameTooLong", { max: STAGE_NAME_MAX_LENGTH });
+    case "duplicate":
+      return t("nameDuplicate", { name: failure.existingName });
+  }
 }
 
 /* -------------------------------------------------------------------------- */
@@ -178,11 +167,14 @@ export type KindDecision = { allowed: true } | { allowed: false; reason: string 
  * `updateStage`: a kind change that touches an outcome is refused while the
  * stage holds candidates, and the pipeline must keep an active entry stage.
  */
-export function decideKindChange(input: {
-  stage: EditorStage;
-  stages: readonly EditorStage[];
-  nextKind: StageKind;
-}): KindDecision {
+export function decideKindChange(
+  input: {
+    stage: EditorStage;
+    stages: readonly EditorStage[];
+    nextKind: StageKind;
+  },
+  t: EditorTranslator,
+): KindDecision {
   const { stage, stages, nextKind } = input;
   if (nextKind === stage.kind) return { allowed: true };
 
@@ -192,7 +184,7 @@ export function decideKindChange(input: {
   ) {
     return {
       allowed: false,
-      reason: `${holdLabel(stage.applicationCount)}. Moving them to or from an outcome needs a merge, so archive the stage and merge into a stage of the same kind.`,
+      reason: t("kindChangeNeedsMerge", { count: stage.applicationCount }),
     };
   }
 
@@ -201,17 +193,15 @@ export function decideKindChange(input: {
     { ...stage, kind: nextKind },
   ];
   const [issue] = validatePipelineShape(next);
-  if (issue) return { allowed: false, reason: describeShapeIssue(issue) };
+  if (issue) return { allowed: false, reason: describeShapeIssue(issue, t) };
   return { allowed: true };
 }
 
 /** Why the kind select cannot offer outcomes (or leave one), when candidates are in the stage. */
-export function kindLockNote(stage: EditorStage): string | null {
+export function kindLockNote(stage: EditorStage, t: EditorTranslator): string | null {
   if (stage.applicationCount === 0) return null;
-  if (isOutcomeKind(stage.kind)) {
-    return "Candidates hold this outcome. Archive the stage with a merge to change it.";
-  }
-  return "Outcome kinds are locked while candidates are here. Archive the stage with a merge to make one.";
+  if (isOutcomeKind(stage.kind)) return t("kindLockedOutcome");
+  return t("kindLockedActive");
 }
 
 /* -------------------------------------------------------------------------- */
@@ -243,19 +233,24 @@ export type ArchivePlan =
     }
   | { mode: "blocked"; reason: string };
 
+/**
+ * `kindLabel` is the localized name of the stage's kind, used only in the
+ * outcome sentence. Pass the translation of `labels.pipeline.stageKinds`.
+ */
 export function planArchive(
   stage: EditorStage,
   stages: readonly EditorStage[],
+  t: EditorTranslator,
+  kindLabel: string,
 ): ArchivePlan {
   if (stage.applicationCount > 0) {
     const targets = validMergeTargets(stage, stages);
     if (targets.length === 0) {
-      const count = countLabel(stage.applicationCount);
       return {
         mode: "blocked",
         reason: isOutcomeKind(stage.kind)
-          ? `${count} would need another ${STAGE_KIND_LABELS[stage.kind]} stage to move to, so their outcome stays the same. Add one first.`
-          : `${count} need another active stage to move to. Add one first.`,
+          ? t("archiveBlockedOutcome", { count: stage.applicationCount, kind: kindLabel })
+          : t("archiveBlockedActive", { count: stage.applicationCount }),
       };
     }
     return { mode: "merge", targets, defaultTargetId: targets[0].id };
@@ -263,13 +258,13 @@ export function planArchive(
 
   const remaining = activeStagesOf(stages).filter((candidate) => candidate.id !== stage.id);
   const [issue] = validatePipelineShape(remaining);
-  if (issue) return { mode: "blocked", reason: describeShapeIssue(issue) };
+  if (issue) return { mode: "blocked", reason: describeShapeIssue(issue, t) };
   return { mode: "confirm" };
 }
 
 /** The sentence shown above the merge target select. */
-export function mergeMessage(applicationCount: number, targetName: string): string {
-  return `${countLabel(applicationCount)} will move to ${targetName}. History is kept.`;
+export function mergeMessage(applicationCount: number, targetName: string, t: EditorTranslator): string {
+  return t("mergeMessage", { count: applicationCount, target: targetName });
 }
 
 /* -------------------------------------------------------------------------- */
@@ -344,6 +339,7 @@ export function canStep(
 export function positionOptions(
   stages: readonly EditorStage[],
   kind: StageKind,
+  t: EditorTranslator,
 ): { options: Array<{ value: number; label: string }>; defaultValue: number } {
   const active = activeStagesOf(stages);
   const range = insertionRange(active, kind);
@@ -352,17 +348,26 @@ export function positionOptions(
     const before = active[index];
     options.push({
       value: index,
-      label: before ? `Before ${before.name}` : "At the end",
+      label: before ? t("beforeStage", { name: before.name }) : t("atTheEnd"),
     });
   }
   return { options, defaultValue: range.defaultIndex };
 }
 
 /** Screen-reader sentence for a successful reorder. */
-export function reorderAnnouncement(stages: readonly EditorStage[], stageId: string, ids: readonly string[]): string {
+export function reorderAnnouncement(
+  stages: readonly EditorStage[],
+  stageId: string,
+  ids: readonly string[],
+  t: EditorTranslator,
+): string {
   const stage = stages.find((candidate) => candidate.id === stageId);
   const position = ids.indexOf(stageId) + 1;
-  return `Moved ${stage?.name ?? "stage"} to position ${position} of ${ids.length}.`;
+  return t("reorderAnnouncement", {
+    name: stage?.name ?? t("stageFallback"),
+    position,
+    total: ids.length,
+  });
 }
 
 /* -------------------------------------------------------------------------- */

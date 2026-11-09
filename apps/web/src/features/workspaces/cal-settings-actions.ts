@@ -5,6 +5,7 @@ import { randomBytes } from "node:crypto";
 import { revalidatePath } from "next/cache";
 import { eq } from "drizzle-orm";
 import { z } from "zod";
+import { getTranslations } from "@/i18n/server";
 
 import { db, workspaceSettings } from "@harly/db";
 
@@ -25,39 +26,41 @@ const log = createLogger("workspace-cal-settings");
 
 export type CalSettingsActionResult = { ok: boolean; error?: string };
 
-const optionalUrl = z
-  .string()
-  .trim()
-  .transform((value) => (value.length > 0 ? value : null))
-  .refine((value) => !value || URL.canParse(value), "Enter a valid URL.");
+type Translate = (key: string, values?: Record<string, string | number>) => string;
 
-const saveSchema = z.object({
-  enabled: z.boolean(),
-  // Optional: when blank, the previously stored key is kept.
-  apiKey: z.string().trim().max(500).optional(),
-  baseUrl: optionalUrl,
-  bookingUrl: optionalUrl,
-  defaultEventTypeId: z
-    .union([z.coerce.number().int().positive(), z.literal("")])
-    .optional()
-    .transform((value) => (value === "" || value === undefined ? null : value)),
-});
+function buildSaveSchema(t: Translate) {
+  const optionalUrl = z
+    .string()
+    .trim()
+    .transform((value) => (value.length > 0 ? value : null))
+    .refine((value) => !value || URL.canParse(value), t("invalidUrl"));
 
-function normalizeCalBaseUrl(value: string): string {
+  return z.object({
+    enabled: z.boolean(),
+    // Optional: when blank, the previously stored key is kept.
+    apiKey: z.string().trim().max(500).optional(),
+    baseUrl: optionalUrl,
+    bookingUrl: optionalUrl,
+    defaultEventTypeId: z
+      .union([z.coerce.number().int().positive(), z.literal("")])
+      .optional()
+      .transform((value) => (value === "" || value === undefined ? null : value)),
+  });
+}
+
+function normalizeCalBaseUrl(value: string, t: Translate): string {
   const parsed = new URL(value.trim());
   if (parsed.protocol !== "https:") {
-    throw new Error("Cal.com URL must use HTTPS.");
+    throw new Error(t("httpsRequired"));
   }
   if (parsed.username || parsed.password || parsed.search || parsed.hash) {
-    throw new Error(
-      "Cal.com URL must not contain credentials, a query, or a fragment.",
-    );
+    throw new Error(t("noCredentialsInUrl"));
   }
   return parsed.toString().replace(/\/+$/, "");
 }
 
-async function validateCalBaseUrl(value: string): Promise<string> {
-  const normalized = normalizeCalBaseUrl(value);
+async function validateCalBaseUrl(value: string, t: Translate): Promise<string> {
+  const normalized = normalizeCalBaseUrl(value, t);
   await resolveSafeAddress(new URL(normalized).hostname);
   return normalized;
 }
@@ -71,19 +74,20 @@ export async function saveCalSettingsAction(input: {
 }): Promise<CalSettingsActionResult> {
   assertNotDemo();
   const context = await requirePermission("integrations:manage");
+  const t = await getTranslations("server.workspaces.calSettingsActions");
 
   if (!isEncryptionConfigured()) {
     return {
       ok: false,
-      error: "Server is missing AI_ENCRYPTION_KEY. Set it to store the Cal.com key.",
+      error: t("encryptionKeyMissing"),
     };
   }
 
-  const parsed = saveSchema.safeParse(input);
+  const parsed = buildSaveSchema(t).safeParse(input);
   if (!parsed.success) {
     return {
       ok: false,
-      error: parsed.error.issues[0]?.message ?? "Invalid settings.",
+      error: parsed.error.issues[0]?.message ?? t("invalidSettings"),
     };
   }
 
@@ -91,19 +95,19 @@ export async function saveCalSettingsAction(input: {
 
   let calBaseUrl: string;
   try {
-    calBaseUrl = await validateCalBaseUrl(baseUrl ?? DEFAULT_CAL_BASE_URL);
+    calBaseUrl = await validateCalBaseUrl(baseUrl ?? DEFAULT_CAL_BASE_URL, t);
   } catch (error) {
     return {
       ok: false,
       error:
-        error instanceof Error ? error.message : "Enter a safe Cal.com URL.",
+        error instanceof Error ? error.message : t("safeUrl"),
     };
   }
 
   const status = await getWorkspaceCalStatus(context.organization.id);
   const storedBaseUrl = (() => {
     try {
-      return normalizeCalBaseUrl(status.baseUrl);
+      return normalizeCalBaseUrl(status.baseUrl, t);
     } catch {
       return null;
     }
@@ -115,11 +119,11 @@ export async function saveCalSettingsAction(input: {
   ) {
     return {
       ok: false,
-      error: "Enter the Cal.com API key when changing the instance URL.",
+      error: t("apiKeyRequiredForUrlChange"),
     };
   }
   if (enabled && !apiKey && !status.hasApiKey) {
-    return { ok: false, error: "Add a Cal.com API key before enabling." };
+    return { ok: false, error: t("addApiKeyBeforeEnabling") };
   }
 
   const encrypted = apiKey ? encryptSecret(apiKey) : null;
@@ -187,6 +191,7 @@ export async function testCalConnectionAction(input: {
 }): Promise<CalSettingsActionResult> {
   assertNotDemo();
   const context = await requirePermission("integrations:manage");
+  const t = await getTranslations("server.workspaces.calSettingsActions");
 
   let apiKey = input.apiKey?.trim() || null;
   const stored = apiKey
@@ -196,7 +201,7 @@ export async function testCalConnectionAction(input: {
   let storedBaseUrl: string | null = null;
   try {
     storedBaseUrl = stored?.baseUrl
-      ? normalizeCalBaseUrl(stored.baseUrl)
+      ? normalizeCalBaseUrl(stored.baseUrl, t)
       : null;
   } catch (error) {
     return {
@@ -204,13 +209,13 @@ export async function testCalConnectionAction(input: {
       error:
         error instanceof Error
           ? error.message
-          : "Stored Cal.com URL is invalid.",
+          : t("storedUrlInvalid"),
     };
   }
   const requestedNormalized = requestedBaseUrl
     ? (() => {
         try {
-          return normalizeCalBaseUrl(requestedBaseUrl);
+          return normalizeCalBaseUrl(requestedBaseUrl, t);
         } catch {
           return null;
         }
@@ -218,7 +223,7 @@ export async function testCalConnectionAction(input: {
     : null;
 
   if (requestedBaseUrl && !requestedNormalized) {
-    return { ok: false, error: "Cal.com URL must use HTTPS." };
+    return { ok: false, error: t("httpsRequired") };
   }
 
   if (
@@ -229,7 +234,7 @@ export async function testCalConnectionAction(input: {
   ) {
     return {
       ok: false,
-      error: "Enter the Cal.com API key when changing the instance URL.",
+      error: t("apiKeyRequiredForUrlChange"),
     };
   }
 
@@ -239,19 +244,20 @@ export async function testCalConnectionAction(input: {
     apiKey = stored?.apiKey ?? null;
   }
   if (!apiKey) {
-    return { ok: false, error: "Enter an API key to test." };
+    return { ok: false, error: t("enterApiKeyToTest") };
   }
 
   let baseUrl: string;
   try {
     baseUrl = await validateCalBaseUrl(
       requestedNormalized ?? storedBaseUrl ?? DEFAULT_CAL_BASE_URL,
+      t,
     );
   } catch (error) {
     return {
       ok: false,
       error:
-        error instanceof Error ? error.message : "Enter a safe Cal.com URL.",
+        error instanceof Error ? error.message : t("safeUrl"),
     };
   }
 
@@ -265,7 +271,7 @@ export async function testCalConnectionAction(input: {
       error:
         error instanceof Error
           ? error.message
-          : "Could not reach Cal.com with that key.",
+          : t("cannotReachWithKey"),
     };
   }
 }
@@ -277,13 +283,14 @@ export async function testCalConnectionAction(input: {
 export async function registerCalWebhookAction(): Promise<CalSettingsActionResult> {
   assertNotDemo();
   const context = await requirePermission("integrations:manage");
+  const t = await getTranslations("server.workspaces.calSettingsActions");
 
   const config = await getWorkspaceCalConfig(context.organization.id);
   if (!config) {
-    return { ok: false, error: "Connect Cal.com (API key + enable) first." };
+    return { ok: false, error: t("connectFirst") };
   }
   if (!config.webhookSecret) {
-    return { ok: false, error: "Missing webhook secret. Save settings again." };
+    return { ok: false, error: t("missingWebhookSecret") };
   }
 
   try {
@@ -298,8 +305,8 @@ export async function registerCalWebhookAction(): Promise<CalSettingsActionResul
       ok: false,
       error:
         error instanceof Error
-          ? `Could not register webhook: ${error.message}`
-          : "Could not register webhook.",
+          ? t("webhookRegistrationFailedWithReason", { reason: error.message })
+          : t("webhookRegistrationFailed"),
     };
   }
 }

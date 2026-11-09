@@ -2,6 +2,7 @@
 
 import { and, eq, isNull } from "drizzle-orm";
 import { z } from "zod";
+import { getTranslations } from "@/i18n/server";
 
 import {
   db,
@@ -25,6 +26,7 @@ import {
 } from "./signature-vector";
 
 const log = createLogger("native-sign-actions");
+type ServerTranslator = Awaited<ReturnType<typeof getTranslations>>;
 const placementSchema = z.object({
   page: z.number().int().positive(),
   x: z.number().min(0).max(1),
@@ -53,12 +55,12 @@ export type NativeSignResult =
     }
   | { ok: false; error: string };
 
-function decodePng(value: string) {
+function decodePng(value: string, t: ServerTranslator) {
   const raw = value.startsWith("data:") ? value.slice(value.indexOf(",") + 1) : value;
   const bytes = Buffer.from(raw, "base64");
   const pngHeader = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]);
   if (bytes.length < pngHeader.length || !bytes.subarray(0, 8).equals(pngHeader)) {
-    throw new Error("Signature must be a valid PNG image.");
+    throw new Error(t("signaturePng"));
   }
   return bytes;
 }
@@ -68,13 +70,14 @@ async function resolveSignature(input: {
   userId: string;
   savedSignatureId?: string;
   signatureVectorBase64?: string;
-}): Promise<{ png?: Buffer; vector?: string }> {
+}, t: ServerTranslator): Promise<{ png?: Buffer; vector?: string }> {
+  const vectorT = await getTranslations("server.documents.signatureVector");
   if (input.signatureVectorBase64) {
-    const checked = validateVectorSaveInput({ vectorData: input.signatureVectorBase64 });
+    const checked = validateVectorSaveInput({ vectorData: input.signatureVectorBase64 }, vectorT);
     if (!checked.ok) throw new Error(checked.error);
     return { vector: checked.vectorData };
   }
-  if (!input.savedSignatureId) throw new Error("Choose or draw a signature.");
+  if (!input.savedSignatureId) throw new Error(t("chooseSignature"));
   const [saved] = await db
     .select({ storageKey: savedSignatures.storageKey, kind: savedSignatures.kind })
     .from(savedSignatures)
@@ -88,14 +91,14 @@ async function resolveSignature(input: {
       ),
     )
     .limit(1);
-  if (!saved) throw new Error("Saved signature not found.");
+  if (!saved) throw new Error(t("savedSignatureNotFound"));
   const bytes = await storage.read(saved.storageKey);
   if (saved.kind === "vector") {
-    const checked = validateVectorSaveInput({ vectorData: bytes.toString("utf8") });
+    const checked = validateVectorSaveInput({ vectorData: bytes.toString("utf8") }, vectorT);
     if (!checked.ok) throw new Error(checked.error);
     return { vector: checked.vectorData };
   }
-  return { png: decodePng(bytes.toString("base64")) };
+  return { png: decodePng(bytes.toString("base64"), t) };
 }
 
 /**
@@ -103,25 +106,26 @@ async function resolveSignature(input: {
  * same finalization helper once its token/OTP checks have completed.
  */
 export async function signDocumentNatively(input: unknown): Promise<NativeSignResult> {
+  const t = await getTranslations("server.documents.nativeSignActions");
   let context: Awaited<ReturnType<typeof requirePermission>>;
   try {
     context = await requirePermission("documents:manage");
   } catch {
-    return { ok: false, error: "You do not have permission to sign documents." };
+    return { ok: false, error: t("permissionSign") };
   }
   const parsed = inputSchema.safeParse(input);
-  if (!parsed.success) return { ok: false, error: "Invalid signature details." };
+  if (!parsed.success) return { ok: false, error: t("invalidSignature") };
   const access = await resolveDocumentAccessInScope({
     documentId: parsed.data.documentId,
     workspaceId: context.organization.id,
     userId: context.user.id,
     roleKey: context.roleKey,
   });
-  if (!access || access.level !== "manage") return { ok: false, error: "You cannot sign this document." };
-  if (access.document.status !== "active") return { ok: false, error: "Archived documents cannot be signed." };
+  if (!access || access.level !== "manage") return { ok: false, error: t("cannotSign") };
+  if (access.document.status !== "active") return { ok: false, error: t("archivedCannotSign") };
   // A declined or expired request can be edited and sent again.
-  if (!["unsigned", "declined", "expired"].includes(access.document.signatureStatus)) return { ok: false, error: "This document already has a signature workflow." };
-  if (access.document.mimeType !== "application/pdf") return { ok: false, error: "Native signing requires a PDF document." };
+  if (!["unsigned", "declined", "expired"].includes(access.document.signatureStatus)) return { ok: false, error: t("signatureWorkflowExists") };
+  if (access.document.mimeType !== "application/pdf") return { ok: false, error: t("pdfRequired") };
 
   try {
     const [settings] = await db
@@ -129,14 +133,14 @@ export async function signDocumentNatively(input: unknown): Promise<NativeSignRe
       .from(workspaceSettings)
       .where(eq(workspaceSettings.organizationId, context.organization.id))
       .limit(1);
-    if (!settings?.enabled) return { ok: false, error: "Native signing is not enabled for this workspace." };
+    if (!settings?.enabled) return { ok: false, error: t("notEnabled") };
 
     const signature = await resolveSignature({
       workspaceId: context.organization.id,
       userId: context.user.id,
       savedSignatureId: parsed.data.savedSignatureId,
       signatureVectorBase64: parsed.data.signatureVectorBase64,
-    });
+    }, t);
     const result = await finalizeNativeSignature({
       workspaceId: context.organization.id,
       documentId: parsed.data.documentId,
@@ -158,7 +162,7 @@ export async function signDocumentNatively(input: unknown): Promise<NativeSignRe
     };
   } catch (error) {
     log.error({ error, documentId: parsed.data.documentId }, "native signature failed");
-    return { ok: false, error: error instanceof Error ? error.message : "Could not sign the document." };
+    return { ok: false, error: error instanceof Error ? error.message : t("couldNotSign") };
   }
 }
 
@@ -169,20 +173,21 @@ export async function getNativeSignatureSettings() {
 }
 
 export async function sendDocumentForNativeSignature(input: unknown) {
+  const t = await getTranslations("server.documents.nativeSignActions");
   let context: Awaited<ReturnType<typeof requirePermission>>;
-  try { context = await requirePermission("documents:manage"); } catch { return { ok: false, error: "You do not have permission to send documents for signing." }; }
+  try { context = await requirePermission("documents:manage"); } catch { return { ok: false, error: t("permissionSend") }; }
   const parsed = z.object({ documentId: z.uuid(), recipientEmail: z.email().optional(), recipientName: z.string().trim().min(1).max(200).optional(), recipients: z.array(recipientSchema).min(1).max(10).optional(), subject: z.string().trim().max(255).optional(), message: z.string().trim().max(4000).nullable().optional(), expirationDays: z.number().int().min(3).max(365).optional() }).safeParse(input);
-  if (!parsed.success) return { ok: false, error: "Invalid recipient details." };
+  if (!parsed.success) return { ok: false, error: t("invalidRecipient") };
   const access = await resolveDocumentAccessInScope({ documentId: parsed.data.documentId, workspaceId: context.organization.id, userId: context.user.id, roleKey: context.roleKey });
-  if (!access || access.level !== "manage") return { ok: false, error: "You cannot send this document for signing." };
-  if (access.document.status !== "active") return { ok: false, error: "Archived documents cannot be sent for signing." };
-  if (!["unsigned", "declined", "expired"].includes(access.document.signatureStatus)) return { ok: false, error: "This document already has a signature workflow." };
+  if (!access || access.level !== "manage") return { ok: false, error: t("cannotSend") };
+  if (access.document.status !== "active") return { ok: false, error: t("archivedCannotSend") };
+  if (!["unsigned", "declined", "expired"].includes(access.document.signatureStatus)) return { ok: false, error: t("signatureWorkflowExists") };
   const recipients = parsed.data.recipients?.length
     ? parsed.data.recipients
     : parsed.data.recipientEmail && parsed.data.recipientName
       ? [{ email: parsed.data.recipientEmail, name: parsed.data.recipientName }]
       : [];
-  if (recipients.length === 0) return { ok: false, error: "Add at least one signing recipient." };
+  if (recipients.length === 0) return { ok: false, error: t("addRecipient") };
   return createNativeSigningLink({ workspaceId: context.organization.id, documentId: parsed.data.documentId, actorId: context.user.id, recipients, subject: parsed.data.subject, message: parsed.data.message, expirationDays: parsed.data.expirationDays });
 }
 
@@ -217,8 +222,9 @@ const recipientSchema = z.object({
  * already moved on and no-ops.
  */
 export async function saveDocumentSignatureFieldsAndSend(input: unknown) {
+  const t = await getTranslations("server.documents.nativeSignActions");
   let context: Awaited<ReturnType<typeof requirePermission>>;
-  try { context = await requirePermission("documents:manage"); } catch { return { ok: false, error: "You do not have permission to send documents for signing." }; }
+  try { context = await requirePermission("documents:manage"); } catch { return { ok: false, error: t("permissionSend") }; }
   const parsed = z.object({
     documentId: z.uuid(),
     fields: z.array(draftFieldSchema).min(1).max(40),
@@ -229,25 +235,25 @@ export async function saveDocumentSignatureFieldsAndSend(input: unknown) {
     message: z.string().trim().max(4000).nullable().optional(),
     expirationDays: z.number().int().min(3).max(365).optional(),
   }).safeParse(input);
-  if (!parsed.success) return { ok: false, error: "Invalid recipient or field details." };
+  if (!parsed.success) return { ok: false, error: t("invalidRecipientOrField") };
   const recipients = parsed.data.recipients?.length
     ? parsed.data.recipients
     : parsed.data.recipientEmail && parsed.data.recipientName
       ? [{ email: parsed.data.recipientEmail, name: parsed.data.recipientName }]
       : [];
-  if (recipients.length === 0) return { ok: false, error: "Add at least one signing recipient." };
+  if (recipients.length === 0) return { ok: false, error: t("addRecipient") };
   const recipientIndexes = new Set(parsed.data.fields.map((field) => field.recipientIndex));
   for (let index = 0; index < recipients.length; index += 1) {
     if (!parsed.data.fields.some((field) => field.recipientIndex === index && field.type === "signature" && field.required)) {
-      return { ok: false, error: `Recipient ${index + 1} needs at least one required signature field.` };
+      return { ok: false, error: t("recipientNeedsSignature", { number: index + 1 }) };
     }
   }
-  if ([...recipientIndexes].some((index) => index >= recipients.length)) return { ok: false, error: "Every field must be assigned to an existing recipient." };
+  if ([...recipientIndexes].some((index) => index >= recipients.length)) return { ok: false, error: t("fieldsUnassigned") };
 
   const access = await resolveDocumentAccessInScope({ documentId: parsed.data.documentId, workspaceId: context.organization.id, userId: context.user.id, roleKey: context.roleKey });
-  if (!access || access.level !== "manage") return { ok: false, error: "You cannot send this document for signing." };
-  if (access.document.status !== "active") return { ok: false, error: "Archived documents cannot be sent for signing." };
-  if (access.document.signatureStatus !== "unsigned") return { ok: false, error: "This document already has a signature workflow." };
+  if (!access || access.level !== "manage") return { ok: false, error: t("cannotSend") };
+  if (access.document.status !== "active") return { ok: false, error: t("archivedCannotSend") };
+  if (access.document.signatureStatus !== "unsigned") return { ok: false, error: t("signatureWorkflowExists") };
 
   try {
     await db.transaction(async (tx) => {
@@ -258,7 +264,7 @@ export async function saveDocumentSignatureFieldsAndSend(input: unknown) {
         .for("update")
         .limit(1);
       if (!locked || !["unsigned", "declined", "expired"].includes(locked.signatureStatus)) {
-        throw new Error("This document already has a signature workflow.");
+        throw new Error(t("signatureWorkflowExists"));
       }
 
       await tx.delete(signatureFields).where(eq(signatureFields.documentId, parsed.data.documentId));
@@ -304,7 +310,7 @@ export async function saveDocumentSignatureFieldsAndSend(input: unknown) {
     });
   } catch (error) {
     log.error({ error, documentId: parsed.data.documentId }, "saveDocumentSignatureFieldsAndSend: failed to save fields");
-    return { ok: false, error: error instanceof Error ? error.message : "Could not save the field placement." };
+    return { ok: false, error: error instanceof Error ? error.message : t("couldNotSaveFields") };
   }
 
   return createNativeSigningLink({ workspaceId: context.organization.id, documentId: parsed.data.documentId, actorId: context.user.id, recipients, subject: parsed.data.subject, message: parsed.data.message, expirationDays: parsed.data.expirationDays });

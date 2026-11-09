@@ -8,20 +8,24 @@ import { formatInterviewWhen } from "@/lib/email/interview-time";
 export const OUTBOX_FILTERS = ["all", "failed", "pending", "sent"] as const;
 export type OutboxFilter = (typeof OUTBOX_FILTERS)[number];
 
-export const KIND_LABELS: Record<string, string> = {
-  "pipeline.stage": "Stage update",
-  "pipeline.rejected": "Rejection",
-  "interview.scheduled": "Interview invitation",
-  "interview.rescheduled": "Interview rescheduled",
-  "interview.canceled": "Interview canceled",
-  "offer.extended": "Offer",
-  "offer.withdrawn": "Offer withdrawn",
-  "application.received.candidate": "Application confirmation",
-  "application.received.recruiter": "Recruiter notification",
-  "native.signature.invitation": "Signature request",
-  "native.signature.otp": "Signature code",
-  "report.scheduled": "Scheduled report",
-  "automation.email": "Automation email",
+/** Translator bound to the `labels.emailOutbox` namespace. */
+export type OutboxTranslator = (key: string, values?: Record<string, string | number | Date>) => string;
+
+/** Stable kind ids mapped to their message keys under `labels.emailOutbox.kinds`. */
+const KIND_KEYS: Record<string, string> = {
+  "pipeline.stage": "pipelineStage",
+  "pipeline.rejected": "pipelineRejected",
+  "interview.scheduled": "interviewScheduled",
+  "interview.rescheduled": "interviewRescheduled",
+  "interview.canceled": "interviewCanceled",
+  "offer.extended": "offerExtended",
+  "offer.withdrawn": "offerWithdrawn",
+  "application.received.candidate": "applicationReceivedCandidate",
+  "application.received.recruiter": "applicationReceivedRecruiter",
+  "native.signature.invitation": "nativeSignatureInvitation",
+  "native.signature.otp": "nativeSignatureOtp",
+  "report.scheduled": "reportScheduled",
+  "automation.email": "automationEmail",
 };
 
 function text(payload: Record<string, unknown>, key: string): string | null {
@@ -40,46 +44,56 @@ export function recipientOf(payload: Record<string, unknown>): string | null {
 }
 
 /** One line describing what the email is about. */
-export function summaryOf(kind: string, payload: Record<string, unknown>): string {
+export function summaryOf(
+  kind: string,
+  payload: Record<string, unknown>,
+  t: OutboxTranslator,
+  locale = "en-US",
+): string {
   const job = text(payload, "jobTitle");
   switch (kind) {
     case "pipeline.stage": {
       const stage = text(payload, "stageName");
-      return `${job ?? "Application"} — moved to ${stage ?? "a new stage"}`;
+      return t("summary.stageMoved", {
+        job: job ?? t("summary.applicationFallback"),
+        stage: stage ?? t("summary.stageFallback"),
+      });
     }
     case "pipeline.rejected":
-      return `${job ?? "Application"} — not moving forward`;
+      return t("summary.notMovingForward", { job: job ?? t("summary.applicationFallback") });
     case "interview.scheduled":
     case "interview.rescheduled":
     case "interview.canceled": {
       const scheduledAt = text(payload, "scheduledAt");
       const when = scheduledAt && !Number.isNaN(new Date(scheduledAt).getTime())
-        ? formatInterviewWhen(new Date(scheduledAt), text(payload, "timeZone"))
+        ? formatInterviewWhen(new Date(scheduledAt), text(payload, "timeZone"), locale)
         : null;
-      return `${job ?? "Interview"}${when ? ` — ${when}` : ""}`;
+      const jobName = job ?? t("summary.interviewFallback");
+      return when ? t("summary.interviewWithTime", { job: jobName, when }) : jobName;
     }
     case "offer.extended":
-      return `Offer for ${job ?? "the role"}`;
+      return t("summary.offerFor", { job: job ?? t("summary.roleFallback") });
     case "offer.withdrawn":
-      return `Offer withdrawn for ${job ?? "the role"}`;
+      return t("summary.offerWithdrawn", { job: job ?? t("summary.roleFallback") });
     case "application.received.candidate":
     case "application.received.recruiter":
-      return `Application for ${job ?? "the role"}`;
+      return t("summary.applicationFor", { job: job ?? t("summary.roleFallback") });
     case "report.scheduled":
-      return text(payload, "subject") ?? "Scheduled report";
+      return text(payload, "subject") ?? t("kinds.reportScheduled");
     case "automation.email":
-      return text(payload, "subject") ?? "Automation email";
+      return text(payload, "subject") ?? t("kinds.automationEmail");
     case "native.signature.invitation":
-      return text(payload, "documentName") ?? "Document to sign";
+      return text(payload, "documentName") ?? t("summary.documentFallback");
     case "native.signature.otp":
-      return "One-time signing code";
+      return t("summary.signingCode");
     default:
-      return KIND_LABELS[kind] ?? kind;
+      return kindLabelOf(kind, t);
   }
 }
 
-export function kindLabelOf(kind: string): string {
-  return KIND_LABELS[kind] ?? kind;
+export function kindLabelOf(kind: string, t: OutboxTranslator): string {
+  const key = KIND_KEYS[kind];
+  return key ? t(`kinds.${key}`) : kind;
 }
 
 /** Maps a filter to the stored statuses it shows. */

@@ -1,5 +1,7 @@
 "use client";
 
+import { useTranslations } from "next-intl";
+
 import {
   Tooltip,
   TooltipContent,
@@ -28,8 +30,11 @@ export function RejectionReasonTag({
   showStatus?: boolean;
   className?: string;
 }) {
+  const t = useTranslations("features.rejectionReasons.rejectionReasonTag");
   if (!rejection?.reasonLabel) return null;
-  const text = showStatus ? `Rejected · ${rejection.reasonLabel}` : rejection.reasonLabel;
+  const text = showStatus
+    ? t("rejectedWithReason", { reason: rejection.reasonLabel })
+    : rejection.reasonLabel;
   const base = cn("text-[13px] leading-5 text-soft-ink", className);
   if (!rejection.note) return <span className={base}>{text}</span>;
   return (
@@ -41,14 +46,14 @@ export function RejectionReasonTag({
             base,
             "rounded underline decoration-dotted underline-offset-4 outline-none hover:text-near-ink focus-visible:ring-[3px] focus-visible:ring-ring/50",
           )}
-          aria-label={`${text}. Internal note: ${rejection.note}`}
+          aria-label={t("ariaLabel", { text, note: rejection.note })}
         >
           {text}
         </button>
       </TooltipTrigger>
       <TooltipContent className="max-w-72 whitespace-pre-line">
         <span className="block text-[11px] font-medium uppercase tracking-wide opacity-70">
-          Internal note
+          {t("internalNote")}
         </span>
         {rejection.note}
       </TooltipContent>

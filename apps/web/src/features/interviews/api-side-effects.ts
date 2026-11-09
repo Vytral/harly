@@ -1,5 +1,6 @@
 import "server-only";
 
+import { getTranslations } from "@/i18n/server";
 import { isDemoMode } from "@harly/config";
 
 import { and, eq, isNull } from "drizzle-orm";
@@ -48,6 +49,11 @@ import {
   type InterviewEmailKind,
 } from "@/features/interviews/email-queue";
 import { createLogger } from "@/lib/logger";
+import {
+  interviewModeTitle,
+  interviewTypeTitle,
+  type LabelTranslator,
+} from "@/features/interviews/shared";
 
 import type { Interview } from "@harly/db";
 
@@ -62,19 +68,6 @@ export type ApiMeetingProvider =
   | "jitsi"
   | "external";
 
-const TYPE_LABEL: Record<string, string> = {
-  screening: "Screening interview",
-  culture_fit: "Culture fit interview",
-  technical: "Technical interview",
-  onsite: "On-site interview",
-  final: "Final interview",
-};
-
-const MODE_LABEL: Record<string, string> = {
-  video: "Video call",
-  phone: "Phone call",
-  onsite: "On-site",
-};
 
 type InterviewContext = {
   email: string | null;
@@ -165,6 +158,7 @@ async function sendInterviewEmail(
   });
   const revision = interview.updatedAt.getTime();
   const scheduledAt = interview.scheduledAt.toISOString();
+  const tl = await getTranslations("labels.interviews");
   const outboxId = await enqueueEmailOutbox(
     workspaceId,
     kind,
@@ -175,10 +169,10 @@ async function sendInterviewEmail(
       candidateName: `${context.firstName} ${context.lastName}`.trim(),
       companyName: context.companyName,
       jobTitle: context.jobTitle,
-      interviewType: TYPE_LABEL[interview.type] ?? "Interview",
+      interviewType: interviewTypeTitle(tl, interview.type),
       scheduledAt,
       timeZone,
-      mode: MODE_LABEL[interview.mode] ?? interview.mode,
+      mode: interviewModeTitle(tl, interview.mode),
       location: interview.meetLink ?? interview.location ?? undefined,
       durationMins: interview.durationMins,
       replyTo,
@@ -246,6 +240,7 @@ async function syncCalendarForApi(
     return;
   }
 
+  const tl = await getTranslations("labels.interviews");
   await trackInterviewSync({
     workspaceId,
     interviewId: interview.id,
@@ -255,7 +250,7 @@ async function syncCalendarForApi(
       syncInterviewToGCal({
         workspaceId,
         interviewId: interview.id,
-        summary: interview.title ?? TYPE_LABEL[interview.type] ?? "Interview",
+        summary: interview.title ?? interviewTypeTitle(tl, interview.type),
         start: interview.scheduledAt,
         durationMins: interview.durationMins,
         attendees: attendees.length > 0 ? attendees : undefined,
@@ -422,6 +417,7 @@ async function syncVideoForApi(input: {
     return "calendar";
   }
 
+  const tl = await getTranslations("labels.interviews");
   const [zoomToken, outlookConfig, gcalConfig, jitsiConfig] = await Promise.all(
     [
       getZoomToken(workspaceId),
@@ -430,7 +426,7 @@ async function syncVideoForApi(input: {
       getWorkspaceJitsiConfig(workspaceId),
     ],
   );
-  const summary = interview.title ?? TYPE_LABEL[interview.type] ?? "Interview";
+  const summary = interview.title ?? interviewTypeTitle(tl, interview.type);
 
   if (
     !previous?.teamsMeetingId &&
@@ -721,17 +717,31 @@ export async function runApiInterviewSideEffects(input: {
   }
 }
 
-export function interviewPortalNotification(input: {
-  action: ApiInterviewAction;
-  interview: Interview;
-}) {
+/** Translator for the candidate-facing copy this module writes. */
+export function interviewApiTranslator() {
+  return getTranslations("server.interviews.apiSideEffects");
+}
+
+export function interviewPortalNotification(
+  input: {
+    action: ApiInterviewAction;
+    interview: Interview;
+  },
+  t: LabelTranslator,
+) {
   const labels: Record<ApiInterviewAction, { title: string; type: string }> = {
-    scheduled: { title: "Interview scheduled", type: "interview_scheduled" },
+    scheduled: {
+      title: t("notifications.scheduledTitle"),
+      type: "interview_scheduled",
+    },
     rescheduled: {
-      title: "Interview rescheduled",
+      title: t("notifications.rescheduledTitle"),
       type: "interview_rescheduled",
     },
-    canceled: { title: "Interview canceled", type: "interview_canceled" },
+    canceled: {
+      title: t("notifications.canceledTitle"),
+      type: "interview_canceled",
+    },
   };
   const label = labels[input.action];
   return {
@@ -740,8 +750,10 @@ export function interviewPortalNotification(input: {
     title: label.title,
     body:
       input.action === "canceled"
-        ? "Your interview has been canceled."
-        : `${label.title} for ${input.interview.scheduledAt.toISOString()}.`,
+        ? t("notifications.canceledBody")
+        : t(`notifications.${input.action}Body`, {
+            when: input.interview.scheduledAt.toISOString(),
+          }),
     href: `/portal/applications/${input.interview.applicationId}`,
     metadata: {
       interviewId: input.interview.id,

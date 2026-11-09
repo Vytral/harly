@@ -25,6 +25,7 @@ import { isWebhookEvent } from "@/server/webhooks/events";
 import { logAuditEvent } from "@/lib/audit-log";
 import { dispatchDueSlack } from "@/server/notify/slack";
 import { assertNotDemo } from "@/features/demo/assert-not-demo";
+import { getTranslations } from "@/i18n/server";
 
 const log = createLogger("workspace-slack-settings");
 
@@ -43,9 +44,6 @@ export type SlackDeliveryView = {
   createdAt: string;
   deliveredAt: string | null;
 };
-
-const RECONNECT_MESSAGE =
-  "Slack revoked this connection. Disconnect and add Harly to Slack again.";
 
 /** Slack error codes that mean the stored bot token is permanently dead. */
 const DEAD_TOKEN_ERRORS = new Set([
@@ -100,16 +98,17 @@ export async function saveSlackCredentialsAction(input: {
 }): Promise<SlackActionResult> {
   assertNotDemo();
   const context = await requirePermission("integrations:manage");
+  const t = await getTranslations("server.workspaces.slackSettingsActions");
 
   if (!isEncryptionConfigured()) {
-    return { ok: false, error: "Server encryption key not configured." };
+    return { ok: false, error: t("encryptionKeyMissing") };
   }
 
   const clientId = input.clientId.trim();
   const clientSecret = input.clientSecret.trim();
 
   if (!clientId || !clientSecret) {
-    return { ok: false, error: "Both Client ID and Client Secret are required." };
+    return { ok: false, error: t("credentialsRequired") };
   }
 
   const encrypted = encryptSecret(clientSecret);
@@ -145,8 +144,9 @@ export async function listSlackChannelsAction(): Promise<
 > {
   assertNotDemo();
   const context = await requirePermission("integrations:manage");
+  const t = await getTranslations("server.workspaces.slackSettingsActions");
   const botToken = await getWorkspaceSlackBotToken(context.organization.id);
-  if (!botToken) return { ok: false, error: "Slack not connected." };
+  if (!botToken) return { ok: false, error: t("notConnected") };
 
   try {
     const client = new WebClient(botToken);
@@ -175,10 +175,10 @@ export async function listSlackChannelsAction(): Promise<
     log.error(error, "listSlackChannelsAction failed");
     if (isDeadSlackToken(error)) {
       await clearSlackToken(context.organization.id, error);
-      return { ok: false, error: RECONNECT_MESSAGE };
+      return { ok: false, error: t("revokedReconnect") };
     }
     await recordSlackFailure(context.organization.id, error);
-    return { ok: false, error: "Failed to fetch channels from Slack." };
+    return { ok: false, error: t("fetchChannelsFailed") };
   }
 }
 
@@ -191,30 +191,31 @@ export async function saveSlackSettingsAction(input: {
 }): Promise<SlackActionResult> {
   assertNotDemo();
   const context = await requirePermission("integrations:manage");
+  const t = await getTranslations("server.workspaces.slackSettingsActions");
 
   const cleanEvents = input.events.filter(isWebhookEvent);
   if (input.enabled && cleanEvents.length === 0) {
-    return { ok: false, error: "Select at least one Slack event before enabling notifications." };
+    return { ok: false, error: t("eventRequired") };
   }
 
   if (input.enabled) {
     const botToken = await getWorkspaceSlackBotToken(context.organization.id);
-    if (!botToken) return { ok: false, error: "Slack is not connected." };
+    if (!botToken) return { ok: false, error: t("notConnected") };
     try {
       const client = new WebClient(botToken);
       const result = await client.conversations.info({ channel: input.channelId });
       if (!result.channel?.id || result.channel.id !== input.channelId || result.channel.is_member !== true) {
-        return { ok: false, error: "The Harly bot must be a member of the selected channel." };
+        return { ok: false, error: t("botMustBeMember") };
       }
       input = { ...input, channelName: result.channel.name ?? input.channelName };
     } catch (error) {
       log.error(error, "saveSlackSettingsAction channel validation failed");
       if (isDeadSlackToken(error)) {
         await clearSlackToken(context.organization.id, error);
-        return { ok: false, error: RECONNECT_MESSAGE };
+        return { ok: false, error: t("revokedReconnect") };
       }
       await recordSlackFailure(context.organization.id, error);
-      return { ok: false, error: "Could not validate the selected Slack channel." };
+      return { ok: false, error: t("channelValidationFailed") };
     }
   }
 
@@ -290,26 +291,27 @@ export async function disconnectSlackAction(): Promise<SlackActionResult> {
 export async function testSlackAction(): Promise<SlackActionResult> {
   assertNotDemo();
   const context = await requirePermission("integrations:manage");
+  const t = await getTranslations("server.workspaces.slackSettingsActions");
   const config = await getWorkspaceSlackConfig(context.organization.id);
-  if (!config) return { ok: false, error: "Slack not connected." };
+  if (!config) return { ok: false, error: t("notConnected") };
 
   try {
     const client = new WebClient(config.botToken);
     await client.chat.postMessage({
       channel: config.channelId,
-      text: "Test message from Harly",
+      text: t("testMessageText"),
       blocks: [
         {
           type: "section",
           text: {
             type: "mrkdwn",
-            text: "👋 *Test from Harly*. Your Slack integration is working!",
+            text: t("testMessageHeading"),
           },
         },
         {
           type: "context",
           elements: [
-            { type: "mrkdwn", text: "This is a test notification. Real events will appear here." },
+            { type: "mrkdwn", text: t("testMessageContext") },
           ],
         },
       ],
@@ -320,7 +322,7 @@ export async function testSlackAction(): Promise<SlackActionResult> {
     log.error(err, "testSlackAction failed");
     if (isDeadSlackToken(err)) {
       await clearSlackToken(context.organization.id, err);
-      return { ok: false, error: RECONNECT_MESSAGE };
+      return { ok: false, error: t("revokedReconnect") };
     }
     await recordSlackFailure(context.organization.id, err);
     return { ok: false, error: sanitizeIntegrationError(err) };
@@ -362,16 +364,17 @@ export async function replaySlackDeliveryAction(
 ): Promise<SlackActionResult> {
   assertNotDemo();
   const context = await requirePermission("integrations:manage");
+  const t = await getTranslations("server.workspaces.slackSettingsActions");
   const [source] = await db
     .select()
     .from(slackDeliveries)
     .where(eq(slackDeliveries.id, deliveryId))
     .limit(1);
   if (!source || source.workspaceId !== context.organization.id) {
-    return { ok: false, error: "Slack delivery not found." };
+    return { ok: false, error: t("deliveryNotFound") };
   }
   if (source.status !== "failed" && source.status !== "dead_letter") {
-    return { ok: false, error: "Only failed Slack deliveries can be replayed." };
+    return { ok: false, error: t("onlyFailedReplayable") };
   }
 
   const [replay] = await db

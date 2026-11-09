@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { eq } from "drizzle-orm";
 import { generateText } from "ai";
 import { z } from "zod";
+import { getTranslations } from "@/i18n/server";
 
 import { db, organization, workspaceSettings } from "@harly/db";
 
@@ -33,14 +34,18 @@ import { assertNotDemo } from "@/features/demo/assert-not-demo";
 
 export type AiSettingsActionResult = { ok: boolean; error?: string };
 
-const saveSchema = z.object({
-  provider: z.string().min(1),
-  modelId: z.string().trim().min(1, "Choose a model.").max(200),
-  apiKey: z.string().trim().max(500).optional(),
-  baseUrl: z.string().trim().max(500).optional(),
-  enabled: z.boolean(),
-  autoScore: z.boolean().optional(),
-});
+type Translate = (key: string, values?: Record<string, string | number>) => string;
+
+function buildSaveSchema(t: Translate) {
+  return z.object({
+    provider: z.string().min(1),
+    modelId: z.string().trim().min(1, t("chooseModel")).max(200),
+    apiKey: z.string().trim().max(500).optional(),
+    baseUrl: z.string().trim().max(500).optional(),
+    enabled: z.boolean(),
+    autoScore: z.boolean().optional(),
+  });
+}
 
 export async function saveAiSettingsAction(input: {
   provider: string;
@@ -52,36 +57,37 @@ export async function saveAiSettingsAction(input: {
 }): Promise<AiSettingsActionResult> {
   assertNotDemo();
   const context = await requirePermission("settings:edit");
+  const t = await getTranslations("server.workspaces.aiSettingsActions");
 
   if (!isEncryptionConfigured()) {
     return {
       ok: false,
-      error: "Server is missing AI_ENCRYPTION_KEY. Set it to enable AI.",
+      error: t("encryptionKeyMissing"),
     };
   }
 
-  const parsed = saveSchema.safeParse(input);
+  const parsed = buildSaveSchema(t).safeParse(input);
   if (!parsed.success) {
     return {
       ok: false,
-      error: parsed.error.issues[0]?.message ?? "Invalid settings.",
+      error: parsed.error.issues[0]?.message ?? t("invalidSettings"),
     };
   }
 
   const { provider, modelId, apiKey, baseUrl, enabled, autoScore } = parsed.data;
   if (!isAiProviderId(provider)) {
-    return { ok: false, error: "Unknown provider." };
+    return { ok: false, error: t("unknownProvider") };
   }
 
   try {
     assertSafeAiBaseUrl(provider, resolveBaseUrl({ provider, baseUrl }));
   } catch (error) {
-    return { ok: false, error: error instanceof Error ? error.message : "Invalid AI baseUrl." };
+    return { ok: false, error: error instanceof Error ? error.message : t("invalidEndpointUrl") };
   }
 
   const info = getProvider(provider)!;
   if (info.requiresBaseUrl && !baseUrl) {
-    return { ok: false, error: `${info.label} needs an endpoint URL.` };
+    return { ok: false, error: t("needsEndpointUrl", { label: info.label }) };
   }
 
   const status = await getWorkspaceAiStatus(context.organization.id);
@@ -91,7 +97,9 @@ export async function saveAiSettingsAction(input: {
   if (!apiKey && !keyReusable && info.requiresKey) {
     return {
       ok: false,
-      error: `Add your ${info.label} API key${enabled ? " before enabling AI" : ""}.`,
+      error: enabled
+        ? t("addApiKeyBeforeEnabling", { label: info.label })
+        : t("addApiKey", { label: info.label }),
     };
   }
 
@@ -155,25 +163,26 @@ export async function testAiConnectionAction(input: {
 }): Promise<AiSettingsActionResult> {
   assertNotDemo();
   const context = await requirePermission("settings:edit");
+  const t = await getTranslations("server.workspaces.aiSettingsActions");
 
   if (!isEncryptionConfigured()) {
-    return { ok: false, error: "Server is missing AI_ENCRYPTION_KEY." };
+    return { ok: false, error: t("encryptionKeyMissingShort") };
   }
   if (!isAiProviderId(input.provider)) {
-    return { ok: false, error: "Unknown provider." };
+    return { ok: false, error: t("unknownProvider") };
   }
   if (!input.modelId.trim()) {
-    return { ok: false, error: "Choose a model first." };
+    return { ok: false, error: t("chooseModelFirst") };
   }
   try {
     assertSafeAiBaseUrl(input.provider, input.baseUrl?.trim() || undefined);
   } catch (error) {
-    return { ok: false, error: error instanceof Error ? error.message : "Invalid AI baseUrl." };
+    return { ok: false, error: error instanceof Error ? error.message : t("invalidEndpointUrl") };
   }
 
   const info = getProvider(input.provider)!;
   if (info.requiresBaseUrl && !input.baseUrl?.trim()) {
-    return { ok: false, error: `${info.label} needs an endpoint URL.` };
+    return { ok: false, error: t("needsEndpointUrl", { label: info.label }) };
   }
 
   let apiKey = input.apiKey?.trim();
@@ -184,7 +193,7 @@ export async function testAiConnectionAction(input: {
     } else if (!info.requiresKey) {
       apiKey = KEYLESS_PLACEHOLDER;
     } else {
-      return { ok: false, error: `Enter your ${info.label} API key to test.` };
+      return { ok: false, error: t("enterApiKeyToTest", { label: info.label }) };
     }
   }
 
@@ -202,17 +211,17 @@ export async function testAiConnectionAction(input: {
     });
     return text.trim()
       ? { ok: true }
-      : { ok: false, error: "The model returned an empty response." };
+      : { ok: false, error: t("emptyResponse") };
   } catch (error) {
     const raw =
-      error instanceof Error ? error.message : "Connection failed.";
+      error instanceof Error ? error.message : t("connectionFailed");
     // Redact any API-key material (e.g. "Incorrect API key provided: sk-***AB")
     // before surfacing the provider's error to the client (IA-13).
     const redacted = raw
       .replace(/(sk-)[A-Za-z0-9_-]{4,}/g, "$1***REDACTED***")
       .split(apiKey)
       .join("***REDACTED***");
-    return { ok: false, error: `Connection failed: ${redacted}` };
+    return { ok: false, error: t("connectionFailedWithReason", { reason: redacted }) };
   }
 }
 
@@ -298,12 +307,13 @@ export async function saveAssistantBrandingAction(
 ): Promise<AiSettingsActionResult> {
   assertNotDemo();
   const context = await requirePermission("settings:edit");
+  const t = await getTranslations("server.workspaces.aiSettingsActions");
 
   const parsed = assistantBrandingSchema.safeParse(input);
   if (!parsed.success) {
     return {
       ok: false,
-      error: parsed.error.issues[0]?.message ?? "Invalid assistant settings.",
+      error: parsed.error.issues[0]?.message ?? t("invalidAssistantSettings"),
     };
   }
 

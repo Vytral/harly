@@ -7,6 +7,7 @@ const mocks = vi.hoisted(() => ({
   transaction: vi.fn(),
 }));
 
+vi.mock("next-intl/server", async () => (await import("@/test-support/intl-server-mock")).intlServerMock);
 vi.mock("@harly/db", () => ({
   db: { select: mocks.select, transaction: mocks.transaction },
   domainEventOutbox: {},

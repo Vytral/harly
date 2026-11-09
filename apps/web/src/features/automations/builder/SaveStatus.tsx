@@ -2,6 +2,7 @@
 
 import { Check, Loader2 } from "lucide-react";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
+import { useLocale, useTranslations } from "next-intl";
 import { cn } from "@/lib/utils";
 
 import { formatSaveStatus, isDirty, type SaveState } from "./save-controller";
@@ -18,6 +19,8 @@ export function SaveStatus({
   isNew?: boolean;
 }) {
   const reduceMotion = useReducedMotion();
+  const tl = useTranslations("labels.automations");
+  const locale = useLocale();
   const isNeverSaved = !state.lastSavedAt || isNew;
   const canSave =
     !disabled &&
@@ -26,12 +29,12 @@ export function SaveStatus({
     (isDirty(state) || state.kind === "error" || isNeverSaved);
 
   const getButtonText = () => {
-    if (state.kind === "saving") return "Saving…";
+    if (state.kind === "saving") return tl("save.saving");
     if (state.kind === "error") return "Retry saving";
-    if (state.kind === "conflict") return "Conflict";
+    if (state.kind === "conflict") return tl("save.conflict");
     if (isNeverSaved) return "Save draft";
     if (isDirty(state)) return "Save draft";
-    return formatSaveStatus(state);
+    return formatSaveStatus(state, tl, locale);
   };
 
   const isSavedState = state.kind === "saved" && !isNeverSaved && !isDirty(state);

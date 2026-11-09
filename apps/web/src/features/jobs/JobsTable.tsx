@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { useTranslations } from "next-intl";
 import Link from "next/link";
 import type { Route } from "next";
 import { Search } from "lucide-react";
@@ -49,24 +50,14 @@ function uniqueSorted(values: (string | null)[]) {
 }
 
 const STATUS_OPTIONS = ["draft", "open", "closed"];
-const STATUS_LABELS: Record<string, string> = {
-  draft: "Draft",
-  open: "Open",
-  closed: "Closed",
-};
-
 const EMPLOYMENT_OPTIONS = ["full_time", "part_time", "contract", "internship"];
 const WORKPLACE_OPTIONS = ["remote", "hybrid", "onsite"];
 
 const SORT_OPTIONS = ["recent", "oldest", "applicants", "title"];
-const SORT_LABELS: Record<string, string> = {
-  recent: "Most recent",
-  oldest: "Oldest",
-  applicants: "Most applicants",
-  title: "Title A–Z",
-};
-
 export function JobsTable({ jobs }: { jobs: JobRow[] }) {
+  const t = useTranslations("jobs.table");
+  const statusLabels = { draft: t("draft"), open: t("open"), closed: t("closed") };
+  const sortLabels = { recent: t("mostRecent"), oldest: t("oldest"), applicants: t("mostApplicants"), title: t("titleAZ") };
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState(FILTER_ALL);
   const [dept, setDept] = useState(FILTER_ALL);
@@ -130,26 +121,26 @@ export function JobsTable({ jobs }: { jobs: JobRow[] }) {
           <Input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search jobs…"
-            aria-label="Search jobs"
+    placeholder={t("search")}
+            aria-label={t("search")}
             className="h-9 rounded-full border-transparent bg-card-inset pl-9 shadow-none"
           />
         </div>
         <FilterPill
-          label="Status"
+          label={t("status")}
           value={status}
           onChange={setStatus}
           options={STATUS_OPTIONS}
-          labelMap={STATUS_LABELS}
+          labelMap={statusLabels}
         />
         <FilterPill
-          label="Department"
+          label={t("department")}
           value={dept}
           onChange={setDept}
           options={departments}
         />
         <FilterPill
-          label="Type"
+          label={t("type")}
           value={employment}
           onChange={setEmployment}
           options={EMPLOYMENT_OPTIONS}
@@ -158,7 +149,7 @@ export function JobsTable({ jobs }: { jobs: JobRow[] }) {
           )}
         />
         <FilterPill
-          label="Workplace"
+          label={t("workplace")}
           value={workplace}
           onChange={setWorkplace}
           options={WORKPLACE_OPTIONS}
@@ -167,11 +158,11 @@ export function JobsTable({ jobs }: { jobs: JobRow[] }) {
           )}
         />
         <FilterPill
-          label="Sort"
+          label={t("sort")}
           value={sortKey}
           onChange={(v) => setSortKey(v as SortKey)}
           options={SORT_OPTIONS}
-          labelMap={SORT_LABELS}
+          labelMap={sortLabels}
           allValue="recent"
         />
         {filtersActive ? (
@@ -181,27 +172,27 @@ export function JobsTable({ jobs }: { jobs: JobRow[] }) {
             onClick={clearFilters}
             className="rounded-full text-soft-ink"
           >
-            Clear
+            {t("clear")}
           </Button>
         ) : null}
       </div>
 
       <p className="border-t border-hairline px-4 py-3 text-[13px] text-soft-ink sm:px-5" aria-live="polite">
-        Total{" "}
+        {t("total")} {" "}
         <span className="font-semibold tabular-nums text-near-ink">{filtered.length}</span>{" "}
-        {filtered.length === 1 ? "item" : "items"}
+        {t("items", { count: filtered.length })}
       </p>
 
       {filtered.length > 0 ? (
         <HumanTable className="px-2 pb-3">
           <HumanTableHead>
-            <Th>Job title</Th>
-            <Th className="hidden md:table-cell">Created</Th>
-            <Th className="hidden sm:table-cell">Type</Th>
-            <Th>Pending candidates</Th>
-            <Th className="hidden lg:table-cell">Candidates</Th>
-            <Th>Status</Th>
-            <Th srOnly>Actions</Th>
+            <Th>{t("jobTitle")}</Th>
+            <Th className="hidden md:table-cell">{t("created")}</Th>
+            <Th className="hidden sm:table-cell">{t("type")}</Th>
+            <Th>{t("pendingCandidates")}</Th>
+            <Th className="hidden lg:table-cell">{t("candidates")}</Th>
+            <Th>{t("status")}</Th>
+            <Th srOnly>{t("actions")}</Th>
           </HumanTableHead>
           <tbody>
             {filtered.map((job) => (
@@ -232,24 +223,24 @@ export function JobsTable({ jobs }: { jobs: JobRow[] }) {
                       href={`/dashboard/pipeline?jobId=${job.id}` as Route}
                       className="text-[13.5px] font-medium text-near-ink underline decoration-hairline decoration-2 underline-offset-4 hover:decoration-near-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-near-ink"
                     >
-                      Active ({job.activeApplicants})
+                      {t("active", { count: job.activeApplicants })}
                     </Link>
                   ) : (
-                    <span className="text-[13.5px] text-quiet-mist">None pending</span>
+                    <span className="text-[13.5px] text-quiet-mist">{t("nonePending")}</span>
                   )}
                   {job.newApplicants > 0 ? (
                     <span className="ml-2 text-[11.5px] font-medium text-success-olive">
-                      +{job.newApplicants} new
+                      {t("newCandidates", { count: job.newApplicants })}
                     </span>
                   ) : null}
                 </Td>
                 <Td className="hidden lg:table-cell">
                   <span
                     className="inline-flex items-center rounded-full bg-card-inset px-2.5 py-1 text-[12px] font-medium tabular-nums text-near-ink"
-                    title={`${job.applicants} ${job.applicants === 1 ? "candidate" : "candidates"}, ${job.activeApplicants} active`}
+                    title={t("candidateCounts", { total: job.applicants, active: job.activeApplicants })}
                   >
                     {job.activeApplicants}/{job.applicants}
-                    <span className="sr-only"> candidates active</span>
+                    <span className="sr-only">{t("candidatesActive")}</span>
                   </span>
                 </Td>
                 <Td>
@@ -265,10 +256,10 @@ export function JobsTable({ jobs }: { jobs: JobRow[] }) {
       ) : (
         <div className="flex flex-col items-center gap-2 px-6 py-16 text-center">
           <Search className="size-5 text-quiet-mist" />
-          <p className="text-sm text-soft-ink">No jobs match your filters.</p>
+          <p className="text-sm text-soft-ink">{t("noMatches")}</p>
           {filtersActive ? (
             <Button variant="outline" size="sm" onClick={clearFilters}>
-              Clear filters
+              {t("clearFilters")}
             </Button>
           ) : null}
         </div>

@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useTranslations } from "next-intl";
 import type { ReactNode } from "react";
 
 import { useHarlyAI } from "@/components/dashboard/HarlyAIContext";
@@ -32,17 +33,18 @@ export function AiOnly({
  */
 export function ConnectAiPrompt({ className }: { className?: string }) {
   const { canConfigure } = useHarlyAI();
+  const t = useTranslations("ui.aiAvailability");
   return (
     <p className={className ?? "text-sm text-muted-foreground"}>
-      AI features are optional.{" "}
-      {canConfigure ? (
-        <Link href="/settings/ai" className="underline underline-offset-2">
-          Connect an AI provider
-        </Link>
-      ) : (
-        "Ask an admin to connect an AI provider"
-      )}{" "}
-      to enable them.
+      {canConfigure
+        ? t.rich("connectPromptAdmin", {
+            link: (chunks) => (
+              <Link href="/settings/ai" className="underline underline-offset-2">
+                {chunks}
+              </Link>
+            ),
+          })
+        : t("connectPromptMember")}
     </p>
   );
 }

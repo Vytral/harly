@@ -1,6 +1,7 @@
 import "server-only";
 
 import { and, eq } from "drizzle-orm";
+import { getTranslations } from "@/i18n/server";
 
 import {
   activityEvents,
@@ -60,6 +61,7 @@ export type SendDocumentSignatureResult =
 export async function sendDocumentForEnvelope(
   input: SendDocumentSignatureInput,
 ): Promise<SendDocumentSignatureResult> {
+  const t = await getTranslations("server.esign.documentSigning");
   const [document] = await db
     .select({
       id: documents.id,
@@ -78,23 +80,23 @@ export async function sendDocumentForEnvelope(
       ),
     )
     .limit(1);
-  if (!document) return { ok: false, error: "Document not found." };
+  if (!document) return { ok: false, error: t("documentNotFound") };
   if (document.status !== "active") {
-    return { ok: false, error: "Archived documents cannot be sent for signature." };
+    return { ok: false, error: t("archived") };
   }
   if (["signed", "pending"].includes(document.signatureStatus)) {
     return {
       ok: false,
-      error: "This document already has an active signature request. Void it first, or create a new document.",
+      error: t("alreadyActive"),
     };
   }
   if (document.signatureProvider && document.signatureProvider !== "docuseal") {
-    return { ok: false, error: "This document is tied to another signature provider." };
+    return { ok: false, error: t("otherProvider") };
   }
   if (document.mimeType !== "application/pdf") {
     return {
       ok: false,
-      error: `E-signature needs a PDF. Convert ${document.mimeType} to PDF and try again.`,
+      error: t("needsPdf", { mimeType: document.mimeType }),
     };
   }
 
@@ -102,13 +104,13 @@ export async function sendDocumentForEnvelope(
   if (!config) {
     return {
       ok: false,
-      error: "DocuSeal is not connected. Connect it in Settings → Integrations first.",
+      error: t("notConnected"),
     };
   }
   if (!config.webhookSecret) {
     return {
       ok: false,
-      error: "Set the DocuSeal webhook secret in Settings → Integrations before sending for signature.",
+      error: t("webhookSecretMissing"),
     };
   }
 
@@ -118,19 +120,22 @@ export async function sendDocumentForEnvelope(
       { workspaceId: input.workspaceId, documentId: input.documentId },
       "sendDocumentForEnvelope: DocuSeal not connected",
     );
-    return { ok: false, error: "DocuSeal is not connected. Reconnect it in Settings → Integrations." };
+    return { ok: false, error: t("reconnectRequired") };
   }
 
   let bytes: Buffer;
   try {
     bytes = await storage.read(document.storageKey);
   } catch {
-    return { ok: false, error: "The document file could not be read from storage." };
+    return { ok: false, error: t("unreadable") };
   }
   if (bytes.byteLength > ENVELOPE_MAX_BYTES) {
     return {
       ok: false,
-      error: `Documents over 20 MB cannot be sent (this file is ${Math.round(bytes.byteLength / (1024 * 1024))} MB).`,
+      error: t("tooLarge", {
+        limitMb: Math.round(ENVELOPE_MAX_BYTES / (1024 * 1024)),
+        sizeMb: Math.round(bytes.byteLength / (1024 * 1024)),
+      }),
     };
   }
 
@@ -187,8 +192,8 @@ export async function sendDocumentForEnvelope(
       ok: false,
       error:
         error instanceof Error
-          ? `DocuSeal rejected the request: ${error.message}`
-          : "DocuSeal could not create the submission. Check the connection and try again.",
+          ? t("providerRejected", { message: error.message })
+          : t("submissionFailed"),
     };
   }
 

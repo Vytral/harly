@@ -1,6 +1,7 @@
 import "server-only";
 
 import { and, eq } from "drizzle-orm";
+import { getTranslations } from "@/i18n/server";
 
 import {
   activityEvents,
@@ -41,6 +42,7 @@ export type NativeVoidImpact = {
  * to say so.
  */
 export async function getNativeVoidImpact(input: { workspaceId: string; documentId: string }): Promise<NativeVoidImpact> {
+  const t = await getTranslations("server.esign.void");
   const [doc] = await db
     .select({ envelopeId: documents.signatureEnvelopeRefId, provider: documents.signatureProvider, status: documents.signatureStatus })
     .from(documents)
@@ -57,8 +59,8 @@ export async function getNativeVoidImpact(input: { workspaceId: string; document
   const signed = rows.filter((row) => row.status === "signed");
   const invited = rows.filter((row) => row.status === "sent" || row.status === "signed");
   const warning = signed.length
-    ? `${signed.map((row) => row.name).join(", ")} already signed. Their signatures stay in the audit record and the partially signed copy is kept, but they will not carry over: if you send this document again, everyone signs again. ${invited.length} ${invited.length === 1 ? "person" : "people"} will be emailed that the request was cancelled.`
-    : `${invited.length} ${invited.length === 1 ? "person" : "people"} will be emailed that the request was cancelled.`;
+    ? t("warningWithSigned", { names: signed.map((row) => row.name).join(", "), count: invited.length })
+    : t("warningNoneSigned", { count: invited.length });
   return { voidable: true, signers: rows.map((row) => ({ name: row.name, email: row.email, status: row.status, signedAt: row.signedAt })), signedCount: signed.length, warning };
 }
 
@@ -70,6 +72,7 @@ export async function voidNativeSignature(input: {
   actorName?: string | null;
   reason: string;
 }): Promise<{ ok: true; envelopeId: string } | { ok: false; error: string }> {
+  const t = await getTranslations("server.esign.void");
   const now = new Date();
   let outcome: Awaited<ReturnType<typeof run>>;
   async function run() {
@@ -80,7 +83,7 @@ export async function voidNativeSignature(input: {
         .where(and(eq(signatureEnvelopes.workspaceId, input.workspaceId), eq(signatureEnvelopes.id, input.envelopeId)))
         .for("update")
         .limit(1);
-      if (!envelope || envelope.status !== "sent") throw new Error("This signature request is already complete.");
+      if (!envelope || envelope.status !== "sent") throw new Error(t("alreadyComplete"));
       const signers = await loadEnvelopeSigners(tx, input.workspaceId, envelope.id);
       // Keep the partially signed copy as evidence instead of deleting it.
       await tx.update(signatureArtifacts).set({ kind: VOIDED_PARTIAL_KIND }).where(and(
@@ -161,7 +164,7 @@ export async function voidNativeSignature(input: {
     outcome = await run();
   } catch (error) {
     log.error({ error, documentId: input.documentId }, "native void failed");
-    return { ok: false, error: error instanceof Error ? error.message : "Could not void the signature request." };
+    return { ok: false, error: error instanceof Error ? error.message : t("voidFailed") };
   }
   try {
     if (outcome.outboxIds.length) await processEmailOutbox({ ids: outcome.outboxIds, workspaceId: input.workspaceId });

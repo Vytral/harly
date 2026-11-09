@@ -267,7 +267,7 @@ export function getPublishBlockers(input: {
   return hasDescription || hasSections
     ? []
     : [
-        "Add a description or fill in at least one section before publishing. You can still save a draft without it.",
+        "descriptionRequired",
       ];
 }
 

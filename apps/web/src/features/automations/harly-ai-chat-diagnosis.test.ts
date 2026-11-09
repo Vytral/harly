@@ -11,7 +11,8 @@ import {
   listAutomationToolManifests,
   registeredActionTypes,
 } from "@/features/automations/registry";
-import { ACTION_CATALOG } from "@/features/automations/builder/catalog";
+import { actionMeta } from "@/features/automations/builder/catalog";
+import { makeT } from "@/test-support/translator";
 import { WORKFLOW_EVENTS } from "@/features/automations/schema";
 import { WEBHOOK_EVENTS } from "@/server/webhooks/events";
 
@@ -42,7 +43,7 @@ describe("Harly AI chat diagnosis and automations integration", () => {
     });
 
     it("marks ai_score as available in the builder action catalog", () => {
-      const catalogEntry = ACTION_CATALOG.find((entry) => entry.type === "ai_score");
+      const catalogEntry = actionMeta("ai_score", makeT("labels.automations"));
       expect(catalogEntry).toBeDefined();
       expect(catalogEntry?.available).toBe(true);
       expect(catalogEntry?.label).toBe("AI evaluation");

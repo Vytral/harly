@@ -1,5 +1,5 @@
+vi.mock("next-intl/server", async () => (await import("@/test-support/intl-server-mock")).intlServerMock);
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { ApiError } from "@harly/api";
 
 const mocks = vi.hoisted(() => ({
   requirePermission: vi.fn(),
@@ -48,6 +48,13 @@ vi.mock("@/features/workspaces/permissions-server", () => ({
 }));
 vi.mock("./service", () => ({
   assertTaskReferences: mocks.assertTaskReferences,
+  TaskMessageError: class TaskMessageError extends Error {
+    readonly key: string;
+    constructor(key: string, message: string) {
+      super(message);
+      this.key = key;
+    }
+  },
 }));
 vi.mock("@/lib/audit-log", () => ({ logAuditEvent: vi.fn() }));
 vi.mock("@/lib/logger", () => ({
@@ -64,6 +71,7 @@ vi.mock("@/server/webhooks/emit", () => ({
 }));
 
 import { createTask, deleteTask, updateTask } from "./actions";
+import { TaskMessageError } from "./service";
 
 describe("Tasks actions , RBAC (F2-04 / readiness)", () => {
   beforeEach(() => {
@@ -125,7 +133,10 @@ describe("Tasks actions , RBAC (F2-04 / readiness)", () => {
 
   it("returns the validation error instead of attempting a task insert", async () => {
     mocks.assertTaskReferences.mockRejectedValue(
-      ApiError.unprocessable("Candidate does not belong to this workspace."),
+      new TaskMessageError(
+        "candidateNotInWorkspace",
+        "Candidate does not belong to this workspace.",
+      ),
     );
 
     const result = await createTask({ title: "T", ownerId: "u2" });
@@ -138,7 +149,10 @@ describe("Tasks actions , RBAC (F2-04 / readiness)", () => {
 
   it("validates a reassigned owner before updating the task", async () => {
     mocks.assertTaskReferences.mockRejectedValue(
-      ApiError.unprocessable("Task owner must be a member of this workspace."),
+      new TaskMessageError(
+        "ownerNotMember",
+        "Task owner must be a member of this workspace.",
+      ),
     );
 
     const result = await updateTask({

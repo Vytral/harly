@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { usePathname } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { Cookie, Shield, Info, X, ChevronDown, ChevronUp } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
@@ -83,6 +84,7 @@ function PrefRow({
   checked: boolean;
   onToggle: () => void;
 }) {
+  const t = useTranslations("ui.cookieConsentBanner");
   return (
     <div className="flex items-start justify-between gap-4 py-3.5 text-muted-foreground">
       <div className="min-w-0">
@@ -90,7 +92,7 @@ function PrefRow({
           {label}
           {locked && (
             <span className="rounded-full bg-muted px-1.5 py-[1px] text-[10px] font-medium tracking-wide text-muted-foreground">
-              REQUIRED
+              {t("required")}
             </span>
           )}
         </div>
@@ -102,19 +104,20 @@ function PrefRow({
         checked={checked}
         locked={locked}
         onToggle={() => !locked && onToggle()}
-        label={`${label} cookies`}
+        label={t("switchLabel", { label })}
       />
     </div>
   );
 }
 
 const CookiePanel = (props: CookiePanelProps) => {
+  const t = useTranslations("ui.cookieConsentBanner");
   const {
-    title = "Cookies on this site",
-    message = "Harly uses only the cookies needed to run the site. Videos, maps, and other embeds added by this organization stay off until you allow them.",
-    acceptText = "Accept all",
-    necessaryText = "Necessary only",
-    customizeText = "Manage preferences",
+    title = t("title"),
+    message = t("message"),
+    acceptText = t("acceptAll"),
+    necessaryText = t("necessaryOnly"),
+    customizeText = t("customize"),
     icon = "cookie",
     className,
     privacyHref = "/legal/privacy-policy",
@@ -193,7 +196,7 @@ const CookiePanel = (props: CookiePanelProps) => {
     <div
       role="dialog"
       aria-live="polite"
-      aria-label="Cookie consent"
+      aria-label={t("dialogLabel")}
       className={cn(
         "fixed inset-x-4 bottom-4 sm:inset-x-auto sm:right-6 sm:bottom-6",
         "z-50 sm:w-[380px]",
@@ -214,7 +217,7 @@ const CookiePanel = (props: CookiePanelProps) => {
           type="button"
           onClick={hide}
           className="absolute right-4 top-4 inline-flex size-7 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-          aria-label="Close"
+          aria-label={t("close")}
         >
           <X className="size-4" strokeWidth={2} aria-hidden="true" />
         </button>
@@ -230,21 +233,25 @@ const CookiePanel = (props: CookiePanelProps) => {
         </div>
 
         <p className="mt-2 text-[13.5px] leading-relaxed text-muted-foreground">
-          {message}{" "}
-          <a
-            href={cookieHref}
-            className="font-medium text-foreground underline decoration-border underline-offset-2 transition-colors hover:text-foreground/80"
-          >
-            Cookie Policy
-          </a>{" "}
-          and{" "}
-          <a
-            href={privacyHref}
-            className="font-medium text-foreground underline decoration-border underline-offset-2 transition-colors hover:text-foreground/80"
-          >
-            Privacy Policy
-          </a>
-          .
+          {t.rich("policyLinks", {
+            message,
+            cookiePolicy: (chunks) => (
+              <a
+                href={cookieHref}
+                className="font-medium text-foreground underline decoration-border underline-offset-2 transition-colors hover:text-foreground/80"
+              >
+                {chunks}
+              </a>
+            ),
+            privacyPolicy: (chunks) => (
+              <a
+                href={privacyHref}
+                className="font-medium text-foreground underline decoration-border underline-offset-2 transition-colors hover:text-foreground/80"
+              >
+                {chunks}
+              </a>
+            ),
+          })}
         </p>
 
         <div
@@ -257,15 +264,15 @@ const CookiePanel = (props: CookiePanelProps) => {
             className="mt-1 flex flex-col divide-y divide-border border-t border-border"
           >
             <PrefRow
-              label="Strictly necessary"
-              desc="Session when you sign in, and storing this choice. Always on."
+              label={t("strictlyNecessary")}
+              desc={t("strictlyNecessaryDescription")}
               locked
               checked
               onToggle={() => {}}
             />
             <PrefRow
-              label="Embedded content"
-              desc="Videos, maps, and other third-party embeds this organization adds."
+              label={t("embeddedContent")}
+              desc={t("embeddedContentDescription")}
               checked={prefs.embeds}
               onToggle={() => setPrefs((current) => ({ ...current, embeds: !current.embeds }))}
             />
@@ -314,7 +321,7 @@ const CookiePanel = (props: CookiePanelProps) => {
               "mt-2 w-full animate-in fade-in slide-in-from-top-1 duration-200",
             )}
           >
-            Save preferences
+            {t("savePreferences")}
           </button>
         )}
       </div>

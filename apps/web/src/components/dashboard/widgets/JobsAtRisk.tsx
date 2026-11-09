@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { useTranslations } from "next-intl";
 import type { Route } from "next";
 import { TriangleAlert } from "lucide-react";
 
@@ -15,12 +16,6 @@ const severityVariant: Record<
   warning: "warning",
 };
 
-const severityLabel: Record<RiskJob["severity"], string> = {
-  critical: "Critical",
-  danger: "At risk",
-  warning: "Needs attention",
-};
-
 export function JobsAtRisk({
   jobs,
   className,
@@ -28,12 +23,13 @@ export function JobsAtRisk({
   jobs: RiskJob[];
   className?: string;
 }) {
+  const t = useTranslations("shell.jobsAtRisk");
   return (
     <Tile className={className}>
       <TileHeader
         icon={TriangleAlert}
-        title="Jobs at risk"
-        action={<TileLink href="/dashboard/jobs">View all</TileLink>}
+        title={t("title")}
+        action={<TileLink href="/dashboard/jobs">{t("viewAll")}</TileLink>}
       />
       <div className="flex flex-1 flex-col px-2 pb-3 pt-3">
         {jobs.length > 0 ? (
@@ -47,14 +43,14 @@ export function JobsAtRisk({
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-sm font-medium">{job.title}</p>
                     <p className="truncate text-xs text-soft-ink">
-                      {job.reason}
+                      {t(job.reasonCode)}
                     </p>
                   </div>
                   <Badge
                     variant={severityVariant[job.severity]}
                     className="shrink-0"
                   >
-                    {severityLabel[job.severity]}
+                    {t(job.severity)}
                   </Badge>
                 </Link>
               </li>
@@ -63,7 +59,7 @@ export function JobsAtRisk({
         ) : (
           <EmptyHint
             icon={TriangleAlert}
-            text="Every open role is on track. Nice work."
+            text={t("empty")}
           />
         )}
       </div>

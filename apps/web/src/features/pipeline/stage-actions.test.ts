@@ -17,6 +17,7 @@ vi.mock("@/features/workspaces/permissions-server", () => ({
 }));
 
 vi.mock("next/cache", () => ({ revalidatePath: mocks.revalidatePath }));
+vi.mock("next-intl/server", async () => (await import("@/test-support/intl-server-mock")).intlServerMock);
 
 vi.mock("@/lib/logger", () => ({
   createLogger: () => ({ error: mocks.logError, info: vi.fn(), warn: vi.fn() }),
@@ -180,7 +181,7 @@ describe("pipeline stage server actions: results", () => {
       name: "Renamed",
     });
 
-    expect(result).toEqual({ success: false, error: "Archived stages cannot be edited." });
+    expect(result).toEqual({ success: false, error: "Archived stages can't be edited." });
     expect(mocks.revalidatePath).not.toHaveBeenCalled();
   });
 
@@ -206,7 +207,7 @@ describe("pipeline stage server actions: results", () => {
 
     expect(result).toEqual({
       success: false,
-      error: "The pipeline could not be updated. Try again.",
+      error: "The pipeline couldn't be updated. Try again.",
     });
     expect(mocks.logError).toHaveBeenCalled();
   });

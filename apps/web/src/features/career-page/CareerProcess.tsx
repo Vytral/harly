@@ -1,3 +1,5 @@
+import { useTranslations } from "next-intl";
+
 import { cn } from "@/lib/utils";
 
 import { accentPalette } from "./color";
@@ -50,6 +52,7 @@ export function CareerProcess({
   compact?: boolean;
   className?: string;
 }) {
+  const t = useTranslations("features.careerPage.careerProcess");
   const steps = visibleProcessSteps(process);
   if (steps.length === 0) return null;
 
@@ -95,7 +98,7 @@ export function CareerProcess({
               {String(i + 1).padStart(2, "0")}
             </span>
             <span className="min-w-0">
-              <span className="sr-only">Step {i + 1}: </span>
+              <span className="sr-only">{t("stepLabel", { number: i + 1 })} </span>
               <span className="block font-medium tracking-tight text-near-ink [overflow-wrap:anywhere]">
                 {step.title}
               </span>

@@ -4,9 +4,11 @@ import { useMemo, useState, useTransition } from "react";
 import { Plus, Trash2 } from "lucide-react";
 import { toast } from "@/lib/notification-island/toast";
 import { useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 
 import type { JobApplicationQuestion, JobQuestionType } from "./config";
 import { generateScreeningQuestionsAction } from "./actions";
+import { getJobActionErrorKey } from "./action-errors";
 import { AiButton } from "@/components/ui/AiButton";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -36,15 +38,6 @@ type JobQuestionBuilderProps = {
     keywords: string[];
   };
 };
-
-const questionTypes: Array<{ value: JobQuestionType; label: string }> = [
-  { value: "text", label: "Short text" },
-  { value: "textarea", label: "Long text" },
-  { value: "url", label: "URL" },
-  { value: "select", label: "Select" },
-  { value: "info", label: "Text / disclaimer" },
-  { value: "consent", label: "Agree / do not agree" },
-];
 
 function createQuestion(index: number): JobApplicationQuestion {
   return {
@@ -76,6 +69,16 @@ function textToDescriptions(value: string) {
 }
 
 export function JobQuestionBuilder({ initialQuestions, aiContext }: JobQuestionBuilderProps) {
+  const t = useTranslations("jobs.questions");
+  const tErrors = useTranslations("jobs.errors");
+  const questionTypes: Array<{ value: JobQuestionType; label: string }> = [
+    { value: "text", label: t("typeShortText") },
+    { value: "textarea", label: t("typeLongText") },
+    { value: "url", label: t("typeUrl") },
+    { value: "select", label: t("typeSelect") },
+    { value: "info", label: t("typeInfo") },
+    { value: "consent", label: t("typeConsent") },
+  ];
   const router = useRouter();
   const [questions, setQuestions] = useState<JobApplicationQuestion[]>(initialQuestions);
   const [suggestions, setSuggestions] = useState<SuggestedQuestion[]>([]);
@@ -129,7 +132,7 @@ export function JobQuestionBuilder({ initialQuestions, aiContext }: JobQuestionB
 
   function generateWithAI() {
     if (!aiContext?.title?.trim()) {
-      toast.error("Add a job title first.");
+      toast.error(t("titleRequired"));
       return;
     }
     startGenerate(async () => {
@@ -139,12 +142,13 @@ export function JobQuestionBuilder({ initialQuestions, aiContext }: JobQuestionB
         keywords: aiContext.keywords,
       });
       if (!result.ok) {
+        const errorKey = getJobActionErrorKey(result.code);
         if (result.reason === "not_configured") {
-          toast.error(result.error, {
-            action: { label: "Set up AI", onClick: () => router.push("/settings/ai") },
+          toast.error(errorKey ? tErrors(errorKey) : t("setUpAi"), {
+            action: { label: t("setUpAi"), onClick: () => router.push("/settings/ai") },
           });
         } else {
-          toast.error(result.error);
+          toast.error(errorKey ? tErrors(errorKey) : t("generationFailed"));
         }
         return;
       }
@@ -152,7 +156,7 @@ export function JobQuestionBuilder({ initialQuestions, aiContext }: JobQuestionB
         (s) => !questions.some((q) => q.label === s.label),
       );
       setSuggestions(fresh);
-      if (fresh.length === 0) toast.message("All suggested questions already added.");
+      if (fresh.length === 0) toast.message(t("allSuggestionsAdded"));
     });
   }
 
@@ -168,14 +172,14 @@ export function JobQuestionBuilder({ initialQuestions, aiContext }: JobQuestionB
         >
           <div className="flex items-center justify-between gap-2">
             <p className="text-[12px] font-semibold uppercase tracking-wide text-success-olive">
-              AI suggestions, click to add
+              {t("aiSuggestions")}
             </p>
             <button
               type="button"
               onClick={addAllSuggestions}
               className="text-[12px] font-medium text-near-ink underline-offset-2 hover:underline"
             >
-              Add all
+              {t("addAll")}
             </button>
           </div>
           <div className="flex flex-col gap-1.5">
@@ -205,7 +209,7 @@ export function JobQuestionBuilder({ initialQuestions, aiContext }: JobQuestionB
 
       {questions.length === 0 ? (
         <p className="rounded-[var(--radius-inner)] bg-card-inset p-4 text-sm text-soft-ink">
-          No custom questions. Candidates only see the default application fields.
+          {t("empty")}
         </p>
       ) : null}
 
@@ -215,20 +219,20 @@ export function JobQuestionBuilder({ initialQuestions, aiContext }: JobQuestionB
             <FieldBox
               label={
                 question.type === "info"
-                  ? "Heading"
+                  ? t("heading")
                   : question.type === "consent"
-                    ? "Agreement title"
-                    : "Question label"
+                    ? t("agreementTitle")
+                    : t("questionLabel")
               }
             >
               <Input
                 value={question.label}
                 onChange={(event) => updateQuestion(index, { label: event.target.value })}
-                placeholder="What makes you a strong fit?"
+                placeholder={t("questionPlaceholder")}
                 className={fieldBoxControlClassName}
               />
             </FieldBox>
-            <FieldBox label="Type">
+            <FieldBox label={t("type")}>
               <Select
                 value={question.type}
                 onValueChange={(value) =>
@@ -250,7 +254,7 @@ export function JobQuestionBuilder({ initialQuestions, aiContext }: JobQuestionB
           </div>
 
           {question.type === "info" || question.type === "consent" ? (
-            <FieldBox label={question.type === "info" ? "Text" : "Agreement details"}>
+            <FieldBox label={question.type === "info" ? t("text") : t("agreementDetails")}>
               <Textarea
                 value={question.description ?? ""}
                 onChange={(event) =>
@@ -259,8 +263,8 @@ export function JobQuestionBuilder({ initialQuestions, aiContext }: JobQuestionB
                 rows={question.type === "info" ? 4 : 6}
                 placeholder={
                   question.type === "info"
-                    ? "Share context, resources, or instructions with applicants."
-                    : "Write the full agreement or disclaimer applicants must review."
+                    ? t("infoPlaceholder")
+                    : t("agreementPlaceholder")
                 }
                 className={fieldBoxControlClassName}
               />
@@ -268,15 +272,15 @@ export function JobQuestionBuilder({ initialQuestions, aiContext }: JobQuestionB
           ) : null}
 
           {question.type !== "info" && question.type !== "consent" ? <div className="grid gap-3 md:grid-cols-2">
-            <FieldBox label="Placeholder">
+            <FieldBox label={t("placeholder")}>
               <Input
                 value={question.placeholder ?? ""}
                 onChange={(event) => updateQuestion(index, { placeholder: event.target.value })}
-                placeholder="Optional helper text"
+                placeholder={t("helperPlaceholder")}
                 className={fieldBoxControlClassName}
               />
             </FieldBox>
-            <FieldBox label="Minimum characters">
+            <FieldBox label={t("minimumCharacters")}>
               <Input
                 value={question.minLength ?? ""}
                 onChange={(event) =>
@@ -293,18 +297,18 @@ export function JobQuestionBuilder({ initialQuestions, aiContext }: JobQuestionB
 
           {question.type === "select" ? (
             <div className="grid gap-3 md:grid-cols-2">
-              <FieldBox label="Options">
+              <FieldBox label={t("options")}>
                 <Textarea
                   value={optionsToText(question.options)}
                   onChange={(event) =>
                     updateQuestion(index, { options: textToOptions(event.target.value) })
                   }
                   rows={4}
-                  placeholder={"One option per line\nRemote\nHybrid\nOn-site"}
+                  placeholder={t("optionsPlaceholder")}
                   className={fieldBoxControlClassName}
                 />
               </FieldBox>
-              <FieldBox label="Option descriptions (optional, same order)">
+              <FieldBox label={t("optionDescriptions")}>
                 <Textarea
                   value={descriptionsToText(question.optionDescriptions)}
                   onChange={(event) =>
@@ -313,7 +317,7 @@ export function JobQuestionBuilder({ initialQuestions, aiContext }: JobQuestionB
                     })
                   }
                   rows={4}
-                  placeholder={"One description per option\nWork from anywhere\nSplit time between home and office"}
+                  placeholder={t("descriptionsPlaceholder")}
                   className={fieldBoxControlClassName}
                 />
               </FieldBox>
@@ -322,16 +326,16 @@ export function JobQuestionBuilder({ initialQuestions, aiContext }: JobQuestionB
 
           {question.type === "consent" ? (
             <div className="grid gap-3 md:grid-cols-2">
-              <FieldBox label="Accept label">
+              <FieldBox label={t("acceptLabel")}>
                 <Input
-                  value={question.agreeLabel ?? "I agree"}
+                  value={question.agreeLabel ?? t("agree")}
                   onChange={(event) => updateQuestion(index, { agreeLabel: event.target.value })}
                   className={fieldBoxControlClassName}
                 />
               </FieldBox>
-              <FieldBox label="Decline label">
+              <FieldBox label={t("declineLabel")}>
                 <Input
-                  value={question.disagreeLabel ?? "I do not agree"}
+                  value={question.disagreeLabel ?? t("disagree")}
                   onChange={(event) => updateQuestion(index, { disagreeLabel: event.target.value })}
                   className={fieldBoxControlClassName}
                 />
@@ -348,7 +352,7 @@ export function JobQuestionBuilder({ initialQuestions, aiContext }: JobQuestionB
                     updateQuestion(index, { required: checked === true })
                   }
                 />
-                {question.type === "consent" ? "Require agreement" : "Required"}
+                {question.type === "consent" ? t("requireAgreement") : t("required")}
               </label>
             ) : <span />}
             <Button
@@ -359,7 +363,7 @@ export function JobQuestionBuilder({ initialQuestions, aiContext }: JobQuestionB
               onClick={() => removeQuestion(index)}
             >
               <Trash2 className="size-4" />
-              Remove
+              {t("remove")}
             </Button>
           </div>
         </div>
@@ -375,7 +379,7 @@ export function JobQuestionBuilder({ initialQuestions, aiContext }: JobQuestionB
           }
         >
           <Plus className="size-4" />
-          Add question
+          {t("addQuestion")}
         </Button>
         {aiContext ? (
           <AiButton
@@ -384,9 +388,9 @@ export function JobQuestionBuilder({ initialQuestions, aiContext }: JobQuestionB
             variant="ghost"
             onClick={generateWithAI}
             loading={isGenerating}
-            loadingText="Suggesting"
+            loadingText={t("suggesting")}
           >
-            Suggest with AI
+            {t("suggestWithAi")}
           </AiButton>
         ) : null}
       </div>

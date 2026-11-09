@@ -1,3 +1,4 @@
+import { getTranslations } from "next-intl/server";
 import { isDemoMode } from "@harly/config";
 import { CalendarClock, ClipboardCheck, FileCheck, ListChecks } from "lucide-react";
 
@@ -15,7 +16,6 @@ import { MyTasksCard } from "@/components/dashboard/widgets/MyTasksCard";
 import { PipelineOverviewCard } from "@/components/dashboard/widgets/PipelineOverviewCard";
 import { SetupChecklistCard } from "@/components/dashboard/widgets/SetupChecklistCard";
 import { TodayInterviews } from "@/components/dashboard/widgets/TodayInterviews";
-import { buildSubline } from "@/features/dashboard/GreetingHeader";
 import {
   getCandidatesNeedingReview,
   getDashboardWidgetAccess,
@@ -51,10 +51,11 @@ export default async function DashboardPage({
 }: {
   searchParams: Promise<{ job?: string }>;
 }) {
+  const t = await getTranslations("shell.homePage");
   const { job } = await searchParams;
   const { user, organization, role } = await getWorkspaceContext();
   const canManageSetup = role === "owner" || role === "admin";
-  const firstName = (user.name ?? "").trim().split(/\s+/)[0] || "there";
+  const firstName = (user.name ?? "").trim().split(/\s+/)[0] || "";
   // The public demo is pre-configured and its settings are locked, so the
   // setup checklist would only send visitors to screens they cannot change.
   const demo = isDemoMode();
@@ -90,17 +91,23 @@ export default async function DashboardPage({
 
   const forYou: ForYouItem[] = [];
   if (access.reviewCandidates) {
-    forYou.push({ label: "Candidates to review", count: review.total, href: REVIEW_QUEUE_HREF, icon: ClipboardCheck, action: "Review" });
+    forYou.push({ label: t("candidatesToReview"), count: review.total, href: REVIEW_QUEUE_HREF, icon: ClipboardCheck, action: t("review") });
   }
   if (access.approvals) {
-    forYou.push({ label: "Jobs to approve", count: inbox.total, href: "/dashboard/jobs", icon: FileCheck, action: "Open" });
+    forYou.push({ label: t("jobsToApprove"), count: inbox.total, href: "/dashboard/jobs", icon: FileCheck, action: t("open") });
   }
   if (access.tasks) {
-    forYou.push({ label: "Tasks due", count: myTasks.dueNow, href: "/dashboard/tasks?owner=me&due=overdue,today", icon: ListChecks, action: "View" });
+    forYou.push({ label: t("tasksDue"), count: myTasks.dueNow, href: "/dashboard/tasks?owner=me&due=overdue,today", icon: ListChecks, action: t("view") });
   }
   if (access.todayInterviews && interviews.date) {
-    forYou.push({ label: "Interviews today", count: interviews.total, href: `/dashboard/calendars?date=${interviews.date}`, icon: CalendarClock, action: "View" });
+    forYou.push({ label: t("interviewsToday"), count: interviews.total, href: `/dashboard/calendars?date=${interviews.date}`, icon: CalendarClock, action: t("view") });
   }
+
+  const summary = [
+    review.total > 0 ? t("reviewCount", { count: review.total }) : null,
+    review.waitingOverWeek > 0 ? t("waitingCount", { count: review.waitingOverWeek }) : null,
+    interviews.total > 0 ? t("interviewCount", { count: interviews.total }) : null,
+  ].filter(Boolean).join(" · ");
 
   const hasLeftColumn = forYou.length > 0 || access.reviewCandidates || access.pipeline || access.tasks;
   const showApprovals = access.approvals && inbox.total > 0;
@@ -113,12 +120,8 @@ export default async function DashboardPage({
         hour={new Date().getHours()}
         subline={
           firstRun
-            ? "Let's get your first role live. Everything else follows from there."
-            : buildSubline({
-                toReview: review.total,
-                waitingOverWeek: review.waitingOverWeek,
-                interviewsToday: interviews.total,
-              })
+            ? t("firstRun")
+            : summary ? t("summary", { summary }) : t("nothingPending")
         }
       />
 

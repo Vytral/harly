@@ -1,6 +1,7 @@
 "use client";
 
 import { RouteError } from "@/components/ui/route-error";
+import { useTranslations } from "next-intl";
 
 export default function InboxError({
   error,
@@ -9,5 +10,6 @@ export default function InboxError({
   error: Error & { digest?: string };
   reset: () => void;
 }) {
-  return <RouteError error={error} reset={reset} title="The inbox could not load" />;
+  const t = useTranslations("pages.dashboardInbox.error");
+  return <RouteError error={error} reset={reset} title={t("title")} />;
 }

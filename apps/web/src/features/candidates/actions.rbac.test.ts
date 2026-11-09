@@ -36,7 +36,7 @@ vi.mock("@/lib/ai/surfaces/parse-resume", () => ({
   parseResumeStructured: vi.fn(),
 }));
 vi.mock("@/features/mailbox/compose-shared", () => ({
-  composerAttachmentsSchema: z.array(z.unknown()).optional(),
+  composerAttachmentsSchema: () => z.array(z.unknown()).optional(),
   decodeComposerAttachments: vi.fn(),
   richBodyReact: vi.fn(),
 }));
@@ -89,6 +89,7 @@ vi.mock("./deletion-jobs", () => ({
   startCandidateDeletionJob: vi.fn(),
 }));
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
+vi.mock("next-intl/server", async () => (await import("@/test-support/intl-server-mock")).intlServerMock);
 
 import {
   bulkTrashCandidatesAction,

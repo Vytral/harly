@@ -39,6 +39,9 @@ vi.mock("@/lib/logger", () => ({
 }));
 
 import { queueInterviewEmail } from "./email-queue";
+import { makeT } from "@/test-support/translator";
+
+const t = makeT("server.interviews.actions");
 
 const SCHEDULED_PAYLOAD = {
   interviewId: "interview-1",
@@ -63,7 +66,7 @@ describe("queueInterviewEmail dedupe key", () => {
   it("keys an email on the interview, the action, the time and the interview revision", async () => {
     mocks.reads = [[{ status: "sent" }]];
 
-    await queueInterviewEmail("ws-1", "interview.scheduled", { ...SCHEDULED_PAYLOAD });
+    await queueInterviewEmail("ws-1", "interview.scheduled", { ...SCHEDULED_PAYLOAD }, undefined, undefined, t);
 
     expect(mocks.enqueue.mock.calls[0][3]).toBe(
       `interview:interview-1:interview.scheduled:2099-03-10T10:00:00.000Z:${SCHEDULED_PAYLOAD.revision}`,
@@ -73,11 +76,11 @@ describe("queueInterviewEmail dedupe key", () => {
   it("gives an identical re-invite after a cancel its own email", async () => {
     mocks.reads = [[{ status: "sent" }], [{ status: "sent" }]];
 
-    await queueInterviewEmail("ws-1", "interview.scheduled", { ...SCHEDULED_PAYLOAD });
+    await queueInterviewEmail("ws-1", "interview.scheduled", { ...SCHEDULED_PAYLOAD }, undefined, undefined, t);
     await queueInterviewEmail("ws-1", "interview.scheduled", {
       ...SCHEDULED_PAYLOAD,
       revision: SCHEDULED_PAYLOAD.revision + 60_000,
-    });
+    }, undefined, undefined, t);
 
     expect(mocks.enqueue.mock.calls[0][3]).not.toBe(mocks.enqueue.mock.calls[1][3]);
   });
@@ -95,6 +98,8 @@ describe("queueInterviewEmail time zone for later changes", () => {
       "interview.rescheduled",
       { ...SCHEDULED_PAYLOAD, timeZone: "Europe/Madrid" },
       "user-1",
+      undefined,
+      t,
     );
 
     expect(mocks.enqueue.mock.calls[0][2]).toMatchObject({ timeZone: "America/New_York" });
@@ -107,6 +112,9 @@ describe("queueInterviewEmail time zone for later changes", () => {
       "ws-1",
       "interview.canceled",
       { ...SCHEDULED_PAYLOAD, timeZone: "Europe/Madrid" },
+    undefined,
+      undefined,
+      t,
     );
 
     expect(mocks.enqueue.mock.calls[0][2]).toMatchObject({ timeZone: "Europe/Madrid" });
@@ -118,7 +126,7 @@ describe("queueInterviewEmail truthful outcomes", () => {
     mocks.reads = [[]];
     mocks.process.mockRejectedValueOnce(new Error("socket hang up"));
 
-    const result = await queueInterviewEmail("ws-1", "interview.scheduled", { ...SCHEDULED_PAYLOAD });
+    const result = await queueInterviewEmail("ws-1", "interview.scheduled", { ...SCHEDULED_PAYLOAD }, undefined, undefined, t);
 
     expect(result.status).toBe("failed");
     expect(result.warning).not.toContain("could not be queued");
@@ -128,9 +136,9 @@ describe("queueInterviewEmail truthful outcomes", () => {
   it("says the email could not be queued when the row was never saved", async () => {
     mocks.enqueue.mockRejectedValueOnce(new Error("database unavailable"));
 
-    const result = await queueInterviewEmail("ws-1", "interview.scheduled", { ...SCHEDULED_PAYLOAD });
+    const result = await queueInterviewEmail("ws-1", "interview.scheduled", { ...SCHEDULED_PAYLOAD }, undefined, undefined, t);
 
-    expect(result.warning).toContain("could not be queued");
+    expect(result.warning).toContain("couldn't be queued");
   });
 });
 
@@ -146,7 +154,7 @@ describe("queueInterviewEmail latency budget", () => {
     mocks.reads = [[{ status: "pending" }]];
     mocks.process.mockReturnValue(new Promise(() => {}));
 
-    const pending = queueInterviewEmail("ws-1", "interview.scheduled", { ...SCHEDULED_PAYLOAD });
+    const pending = queueInterviewEmail("ws-1", "interview.scheduled", { ...SCHEDULED_PAYLOAD }, undefined, undefined, t);
     await vi.advanceTimersByTimeAsync(8_000);
     const result = await pending;
 

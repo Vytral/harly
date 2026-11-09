@@ -6,6 +6,7 @@ const mocks = vi.hoisted(() => ({
   createApiKey: vi.fn(),
 }));
 
+vi.mock("next-intl/server", async () => (await import("@/test-support/intl-server-mock")).intlServerMock);
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 vi.mock("@harly/db", () => ({ db: {}, webhookDeliveries: {}, webhookDeliveryAttempts: {} }));
 vi.mock("@/server/api/ratelimit", () => ({ enforceRateLimit: vi.fn() }));

@@ -17,22 +17,27 @@ type PortalApplicationInput = {
   questions: readonly PortalQuestion[];
 };
 
+/** Stable codes; the caller turns them into localized messages. */
+export type PortalApplicationValidationError =
+  | { ok: false; code: "resumeRequired" | "resumeInvalid" | "questionRequired" | "consentRequired" | "invalidUrl" | "invalidOption" }
+  | { ok: false; code: "minLength"; min: number };
+
 /**
  * Validates a portal submission against the persisted job configuration.
  * The client is never trusted to decide which fields/questions are valid.
  */
 export function validatePortalApplication(input: PortalApplicationInput):
   | { ok: true; answers: Record<string, string> }
-  | { ok: false; error: string } {
+  | PortalApplicationValidationError {
   if (input.resumeRequired && !input.resumeKey) {
-    return { ok: false, error: "Resume is required." };
+    return { ok: false, code: "resumeRequired" };
   }
 
   if (
     input.resumeKey &&
     !isWorkspaceStorageKey(input.workspaceId, input.resumeKey, "resumes")
   ) {
-    return { ok: false, error: "Resume upload is invalid." };
+    return { ok: false, code: "resumeInvalid" };
   }
 
   const answers: Record<string, string> = {};
@@ -41,25 +46,19 @@ export function validatePortalApplication(input: PortalApplicationInput):
 
     const value = input.answers[question.key]?.trim() ?? "";
     if (question.required && !value) {
-      return { ok: false, error: "This question is required." };
+      return { ok: false, code: "questionRequired" };
     }
     if (question.type === "consent" && question.required && value !== "agree") {
-      return {
-        ok: false,
-        error: "You must agree to continue with your application.",
-      };
+      return { ok: false, code: "consentRequired" };
     }
     if (question.minLength && value && value.length < question.minLength) {
-      return {
-        ok: false,
-        error: `Enter at least ${question.minLength} characters.`,
-      };
+      return { ok: false, code: "minLength", min: question.minLength };
     }
     if (question.type === "url" && value) {
       try {
         if (new URL(value).protocol !== "https:") throw new Error();
       } catch {
-        return { ok: false, error: "Enter a valid URL." };
+        return { ok: false, code: "invalidUrl" };
       }
     }
     if (question.type === "select" && value) {
@@ -67,7 +66,7 @@ export function validatePortalApplication(input: PortalApplicationInput):
         ? question.options.filter((option): option is string => typeof option === "string")
         : [];
       if (!options.includes(value)) {
-        return { ok: false, error: "Select a valid option." };
+        return { ok: false, code: "invalidOption" };
       }
     }
     if (value) answers[question.key] = value;

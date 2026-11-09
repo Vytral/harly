@@ -1,3 +1,5 @@
+import { useTranslations } from "next-intl";
+
 import { cn } from "@/lib/utils";
 import type { BoardStyle, LogoStyle } from "@/features/workspaces/board";
 
@@ -11,12 +13,6 @@ type BoardPreviewProps = {
   boardStyle: BoardStyle;
   logoStyle: LogoStyle;
 };
-
-const SAMPLE_JOBS = [
-  { title: "Senior Product Designer", meta: "Design · Remote" },
-  { title: "Backend Engineer", meta: "Engineering · Berlin" },
-  { title: "Talent Partner", meta: "People · Hybrid" },
-];
 
 /**
  * A faithful, scaled-down preview of the public careers board , updates live as
@@ -33,6 +29,21 @@ export function BoardPreview({
   boardStyle,
   logoStyle,
 }: BoardPreviewProps) {
+  const t = useTranslations("features.workspaces.boardPreview");
+  const sampleJobs = [
+    {
+      title: t("sampleJobs.productDesigner.title"),
+      meta: t("sampleJobs.productDesigner.meta"),
+    },
+    {
+      title: t("sampleJobs.backendEngineer.title"),
+      meta: t("sampleJobs.backendEngineer.meta"),
+    },
+    {
+      title: t("sampleJobs.talentPartner.title"),
+      meta: t("sampleJobs.talentPartner.meta"),
+    },
+  ];
   const initial = (name.charAt(0) || "W").toUpperCase();
   const onHero = boardStyle === "hero";
 
@@ -87,10 +98,10 @@ export function BoardPreview({
             {logo}
             <div className="min-w-0">
               <p className="truncate text-sm font-semibold text-white">
-                {name || "Your company"}
+                {name || t("companyFallback")}
               </p>
               <p className="truncate text-xs text-white/80">
-                {tagline || "Your careers tagline"}
+                {tagline || t("taglineFallback")}
               </p>
             </div>
           </div>
@@ -101,10 +112,10 @@ export function BoardPreview({
             {logo}
             <div className="min-w-0">
               <p className="truncate text-sm font-semibold">
-                {name || "Your company"}
+                {name || t("companyFallback")}
               </p>
               <p className="truncate text-xs text-muted-foreground">
-                {tagline || "Your careers tagline"}
+                {tagline || t("taglineFallback")}
               </p>
             </div>
           </div>
@@ -118,9 +129,9 @@ export function BoardPreview({
       {/* Open roles */}
       <div className="space-y-2 p-3">
         <p className="px-1 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
-          Open roles
+          {t("openRoles")}
         </p>
-        {SAMPLE_JOBS.map((job) => (
+        {sampleJobs.map((job) => (
           <div
             key={job.title}
             className="flex items-center justify-between rounded-lg border px-3 py-2"
@@ -135,7 +146,7 @@ export function BoardPreview({
               className="rounded-full px-2 py-0.5 text-[10px] font-medium text-white"
               style={{ backgroundColor: primaryColor }}
             >
-              Apply
+              {t("apply")}
             </span>
           </div>
         ))}

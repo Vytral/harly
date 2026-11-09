@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
+import { getTranslations } from "next-intl/server";
 import { Eye, PencilLine, ShieldAlert, ShieldCheck } from "lucide-react";
 
 import { getAuthBranding } from "@/features/auth/branding.server";
@@ -10,7 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Callout } from "@/components/ui/callout";
 import { StatusPill } from "@/components/ui/status-pill";
 import { validateAuthorizeRequest, type ValidAuthorizeRequest } from "@/lib/mcp/oauth/authorize";
-import { CONSENT_BLOCK_COPY, evaluateConsentGate, type ConsentBlock } from "@/lib/mcp/oauth/consent";
+import { CONSENT_BLOCK_MESSAGE_KEYS, evaluateConsentGate, type ConsentBlock } from "@/lib/mcp/oauth/consent";
 import { redirectDisplayHost } from "@/lib/mcp/oauth/redirect";
 import { describeScopes } from "@/lib/mcp/oauth/scope-labels";
 import type { McpScope } from "@/lib/mcp/types";
@@ -28,29 +29,22 @@ function toParams(raw: SearchParams): URLSearchParams {
   return params;
 }
 
-// The error code arrives in the URL, which anyone can craft, so only fixed copy
-// is ever rendered here. Never echo a query-supplied description on this page.
-const DEFAULT_REQUEST_ERROR = "The application's request was not valid.";
-const REQUEST_ERROR_COPY: Record<string, string> = {
-  invalid_client: "This application is not registered or its metadata could not be verified.",
-  invalid_request: "The application's request is incomplete, or its redirect address does not match its registration.",
+// Query parameters are untrusted. Only recognized error and reason codes map to fixed localized copy.
+const REQUEST_REASON_KEYS: Record<string, string> = {
+  client_id_missing: "request.client_id_missing", client_unknown: "request.client_unknown",
+  client_expired: "request.client_expired", client_blocked: "request.client_blocked",
+  client_metadata_unverifiable: "request.client_metadata_unverifiable",
+  redirect_uri_missing: "request.redirect_uri_missing", redirect_uri_mismatch: "request.redirect_uri_mismatch",
 };
-
-const REQUEST_ERROR_REASON_COPY: Record<string, string> = {
-  client_id_missing: "The application did not say who it is (client_id is missing).",
-  client_unknown:
-    "This application is not registered with this Harly instance. In the app, remove the Harly connection and add it again so it registers itself. If it keeps failing, check that Settings > AI agents > Allow automatic app registration is on.",
-  client_expired: "This application's registration expired. In the app, remove the Harly connection and add it again.",
-  client_blocked: "An administrator has blocked this application.",
-  client_metadata_unverifiable: "This application's client metadata document could not be fetched or verified.",
-  redirect_uri_missing: "The application did not say where to return after sign-in (redirect_uri is missing).",
-  redirect_uri_mismatch:
-    "The address this application wants to return to does not match the one it registered. Remove the Harly connection in the app and add it again.",
+const REQUEST_ERROR_KEYS: Record<string, string> = {
+  invalid_client: "request.invalid_client", invalid_request: "request.invalid_request",
 };
 
 export default async function ConsentPage({ searchParams }: { searchParams: Promise<SearchParams> }) {
   const params = toParams(await searchParams);
-  const branding = await getAuthBranding();
+  const [branding, t] = await Promise.all([getAuthBranding(), getTranslations("oauthConsent")]);
+  const msg = (key: string, values?: Record<string, string>) =>
+    values ? t(key as never, values as never) : t(key as never);
 
   let body: React.ReactNode;
   const requestError = params.get("request_error");
@@ -58,20 +52,24 @@ export default async function ConsentPage({ searchParams }: { searchParams: Prom
     const reason = params.get("request_error_reason");
     body = (
       <MessageCard
-        title="This request can't be completed"
+        title={msg("request.title")}
         message={
-          reason && Object.hasOwn(REQUEST_ERROR_REASON_COPY, reason)
-            ? REQUEST_ERROR_REASON_COPY[reason]!
-            : Object.hasOwn(REQUEST_ERROR_COPY, requestError)
-              ? REQUEST_ERROR_COPY[requestError]!
-              : DEFAULT_REQUEST_ERROR
+          reason && Object.hasOwn(REQUEST_REASON_KEYS, reason)
+            ? msg(REQUEST_REASON_KEYS[reason]!)
+            : Object.hasOwn(REQUEST_ERROR_KEYS, requestError)
+              ? msg(REQUEST_ERROR_KEYS[requestError]!)
+              : msg("request.default")
         }
       />
     );
   } else {
     const validation = await validateAuthorizeRequest(params);
     if (!validation.ok) {
-      body = <MessageCard title="This request can't be completed" message={validation.description} />;
+      const errorKey = Object.hasOwn(REQUEST_ERROR_KEYS, validation.error) ? REQUEST_ERROR_KEYS[validation.error]! : "request.default";
+      const reasonKey = validation.kind === "page" && Object.hasOwn(REQUEST_REASON_KEYS, validation.reason)
+        ? REQUEST_REASON_KEYS[validation.reason]!
+        : errorKey;
+      body = <MessageCard title={msg("request.title")} message={msg(reasonKey)} />;
     } else {
       const ctx = await getWorkspaceContextOrNull();
       if (!ctx) {
@@ -88,9 +86,10 @@ export default async function ConsentPage({ searchParams }: { searchParams: Prom
           workspaceName={ctx.organization.name}
           workspaceId={ctx.organization.id}
           userEmail={ctx.user.email}
+          msg={msg}
         />
       ) : (
-        <BlockedCard block={gate.block} />
+        <BlockedCard block={gate.block} msg={msg} />
       );
     }
   }
@@ -140,6 +139,7 @@ function ConsentCard({
   workspaceName,
   workspaceId,
   userEmail,
+  msg,
 }: {
   request: ValidAuthorizeRequest;
   query: string;
@@ -147,6 +147,7 @@ function ConsentCard({
   workspaceName: string;
   workspaceId: string;
   userEmail: string;
+  msg: (key: string, values?: Record<string, string>) => string;
 }) {
   const { client } = request;
   const described = describeScopes(scopes);
@@ -163,43 +164,40 @@ function ConsentCard({
             <p className="truncate text-[15px] font-semibold text-near-ink">{client.name}</p>
             {client.known ? (
               <StatusPill size="sm" tone="success">
-                <ShieldCheck className="size-3" /> Known app
+                <ShieldCheck className="size-3" /> {msg("app.known")}
               </StatusPill>
             ) : (
               <StatusPill size="sm" tone="warning">
-                Unverified app
+                {msg("app.unverified")}
               </StatusPill>
             )}
           </div>
-          <p className="truncate text-[12.5px] text-soft-ink">Returns to {host}</p>
+          <p className="truncate text-[12.5px] text-soft-ink">{msg("app.returns", { host } as never)}</p>
         </div>
       </div>
 
       <h1 className="mt-6 font-display text-[24px] leading-tight tracking-tight text-near-ink">
-        Allow {client.name} to use {workspaceName}?
+        {msg("app.allow", { client: client.name, workspace: workspaceName } as never)}
       </h1>
       <p className="mt-1.5 text-sm text-soft-ink">
-        Signed in as <span className="font-medium text-near-ink">{userEmail}</span>. The app acts as you and can only
-        do what your role in Harly allows.
+        {msg("app.signed_in", { email: userEmail } as never)}
       </p>
 
       {!client.known ? (
-        <Callout tone="warning" title="Unverified app" className="mt-5">
-          Harly doesn&apos;t recognise this app. Only continue if you started this connection yourself and trust{" "}
-          <span className="font-medium">{host}</span> with your hiring data.
+        <Callout tone="warning" title={msg("app.unverified")} className="mt-5">
+          {msg("app.unverified_warning", { host } as never)}
         </Callout>
       ) : null}
 
       <div className="mt-6 space-y-5">
-        <ScopeGroup icon={<Eye className="size-3.5" />} heading="Read" items={reads} />
-        <ScopeGroup icon={<PencilLine className="size-3.5" />} heading="Make changes" items={writes} />
+        <ScopeGroup icon={<Eye className="size-3.5" />} heading={msg("scope.read")} items={reads} msg={msg} />
+        <ScopeGroup icon={<PencilLine className="size-3.5" />} heading={msg("scope.write")} items={writes} msg={msg} />
       </div>
 
       <p className="mt-6 flex gap-2 text-[12.5px] leading-snug text-soft-ink">
         <ShieldAlert className="mt-0.5 size-3.5 shrink-0" aria-hidden="true" />
         <span>
-          Anything the app reads is sent to {client.name}, which handles it under its own terms. You can disconnect it
-          at any time in Settings &gt; AI agents.
+          {msg("data_warning", { client: client.name } as never)}
         </span>
       </p>
 
@@ -208,10 +206,10 @@ function ConsentCard({
         {/* The workspace the person was shown; the decision is refused if the session now points elsewhere. */}
         <input type="hidden" name="workspace" value={workspaceId} />
         <Button type="submit" name="decision" value="deny" variant="outline" size="lg">
-          Deny
+          {msg("action.deny")}
         </Button>
         <Button type="submit" name="decision" value="approve" size="lg">
-          Allow access
+          {msg("action.allow")}
         </Button>
       </form>
     </Shell>
@@ -222,10 +220,12 @@ function ScopeGroup({
   icon,
   heading,
   items,
+  msg,
 }: {
   icon: React.ReactNode;
   heading: string;
   items: ReturnType<typeof describeScopes>;
+  msg: (key: string, values?: Record<string, string>) => string;
 }) {
   if (items.length === 0) return null;
   return (
@@ -237,8 +237,8 @@ function ScopeGroup({
       <ul className="divide-y divide-hairline overflow-hidden rounded-xl bg-card-inset">
         {items.map((item) => (
           <li key={item.scope} className="px-4 py-3">
-            <p className="text-[13.5px] font-medium text-near-ink">{item.label}</p>
-            <p className="mt-0.5 text-[12.5px] leading-snug text-soft-ink">{item.description}</p>
+            <p className="text-[13.5px] font-medium text-near-ink">{msg(item.labelKey)}</p>
+            <p className="mt-0.5 text-[12.5px] leading-snug text-soft-ink">{msg(item.descriptionKey)}</p>
           </li>
         ))}
       </ul>
@@ -256,17 +256,17 @@ function MessageCard({ title, message, action }: { title: string; message: strin
   );
 }
 
-function BlockedCard({ block }: { block: ConsentBlock }) {
-  const copy = CONSENT_BLOCK_COPY[block.reason];
+function BlockedCard({ block, msg }: { block: ConsentBlock; msg: (key: string, values?: Record<string, string>) => string }) {
+  const copy = CONSENT_BLOCK_MESSAGE_KEYS[block.reason];
   const action =
     block.reason === "needs_2fa" || block.reason === "needs_passkey" ? (
       <Button asChild>
-        <Link href="/setup-2fa">Continue to security setup</Link>
+        <Link href="/setup-2fa">{msg("action.security")}</Link>
       </Button>
     ) : block.reason === "must_change_password" ? (
       <Button asChild>
-        <Link href="/change-password">Change password</Link>
+        <Link href="/change-password">{msg("action.password")}</Link>
       </Button>
     ) : undefined;
-  return <MessageCard title={copy.title} message={copy.body} action={action} />;
+  return <MessageCard title={msg(copy.title)} message={msg(copy.body)} action={action} />;
 }

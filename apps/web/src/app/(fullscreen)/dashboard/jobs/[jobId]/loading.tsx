@@ -1,5 +1,6 @@
 import { Card } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
+import { getTranslations } from "next-intl/server";
 
 /**
  * Mirrors jobs/[jobId]/page.tsx → JobForm inside FocusModeShell: the 56px top
@@ -7,10 +8,11 @@ import { Skeleton } from "@/components/ui/skeleton";
  * sections (heading + blurb + card), the sticky Back/Continue bar, and the
  * live preview on large screens.
  */
-export default function JobDetailLoading() {
+export default async function JobDetailLoading() {
+  const t = await getTranslations("jobs.list");
   return (
     <div aria-busy="true" className="flex h-dvh w-full flex-col overflow-hidden bg-paper">
-      <span className="sr-only">Loading…</span>
+      <span className="sr-only">{t("loading")}</span>
 
       <header className="relative z-40 flex h-14 shrink-0 items-center gap-3 border-b border-hairline bg-pure-snow/80 px-3">
         <Skeleton className="h-8 w-20 rounded-full" />

@@ -2,6 +2,7 @@
 
 import { useState, useTransition, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { UserPlus } from "lucide-react";
 import { toast } from "@/lib/notification-island/toast";
 
@@ -44,6 +45,7 @@ export function ReferCandidateDrawer({
   /** collab:write can only refer themselves and can't feature; candidates:edit unlocks both. */
   canAttributeToOthers: boolean;
 }) {
+  const t = useTranslations("candidates.referCandidate");
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [isPending, startTransition] = useTransition();
@@ -70,10 +72,10 @@ export function ReferCandidateDrawer({
         featured,
       });
       if (!result.success) {
-        toast.error(result.error ?? "Unable to refer candidate.");
+        toast.error(result.error ?? t("referError"));
         return;
       }
-      toast.success("Referral added");
+      toast.success(t("referralAdded"));
       setOpen(false);
       reset();
       router.refresh();
@@ -91,26 +93,26 @@ export function ReferCandidateDrawer({
         trigger ?? (
           <Button type="button" variant="ghost" size="sm" className="h-6 gap-1 px-2 text-xs text-soft-ink">
             <UserPlus className="size-3.5" />
-            Refer
+            {t("refer")}
           </Button>
         )
       }
-      title="Refer candidate"
-      description="Credit whoever recommended this candidate."
+      title={t("title")}
+      description={t("description")}
       footer={
         <>
           <Button variant="outline" disabled={isPending} onClick={() => setOpen(false)}>
-            Cancel
+            {t("cancel")}
           </Button>
           <Button onClick={submit} disabled={isPending}>
-            {isPending ? "Saving…" : "Add referral"}
+            {isPending ? t("saving") : t("addReferral")}
           </Button>
         </>
       }
     >
       <div className="space-y-4">
         <div className="space-y-1.5">
-          <Label htmlFor="refer-candidate-referrer">Referred by</Label>
+          <Label htmlFor="refer-candidate-referrer">{t("referredBy")}</Label>
           <Select
             value={referredById}
             onValueChange={setReferredById}
@@ -123,23 +125,23 @@ export function ReferCandidateDrawer({
               {canAttributeToOthers ? (
                 members.map((member) => (
                   <SelectItem key={member.userId} value={member.userId}>
-                    {member.userId === currentUserId ? "You" : member.name}
+                    {member.userId === currentUserId ? t("you") : member.name}
                   </SelectItem>
                 ))
               ) : (
-                <SelectItem value={currentUserId}>You</SelectItem>
+                <SelectItem value={currentUserId}>{t("you")}</SelectItem>
               )}
             </SelectContent>
           </Select>
         </div>
         <div className="space-y-1.5">
-          <Label htmlFor="refer-candidate-job">Job (optional)</Label>
+          <Label htmlFor="refer-candidate-job">{t("jobOptional")}</Label>
           <Select value={jobId} onValueChange={setJobId}>
             <SelectTrigger id="refer-candidate-job" className="w-full">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value={NO_JOB}>No specific job</SelectItem>
+              <SelectItem value={NO_JOB}>{t("noSpecificJob")}</SelectItem>
               {jobs.map((job) => (
                 <SelectItem key={job.id} value={job.id}>
                   {job.title}
@@ -149,13 +151,13 @@ export function ReferCandidateDrawer({
           </Select>
         </div>
         <div className="space-y-1.5">
-          <Label htmlFor="refer-candidate-note">Note (optional)</Label>
+          <Label htmlFor="refer-candidate-note">{t("noteOptional")}</Label>
           <Textarea
             id="refer-candidate-note"
             rows={3}
             value={note}
             onChange={(event) => setNote(event.target.value)}
-            placeholder="Why are they a good fit?"
+            placeholder={t("fitNotePlaceholder")}
           />
         </div>
         {canAttributeToOthers ? (
@@ -164,7 +166,7 @@ export function ReferCandidateDrawer({
               checked={featured}
               onCheckedChange={(checked) => setFeatured(checked === true)}
             />
-            Featured referral
+            {t("featuredReferral")}
           </label>
         ) : null}
       </div>

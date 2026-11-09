@@ -13,7 +13,11 @@ export type OutboxDeliveryState = {
  * retried (or re-claimed) automatically; `failed` rows are terminal. `sent`
  * and `cancelled` rows produce no warning.
  */
+/** Translator bound to the `server.emailDelivery` namespace. */
+export type DeliveryTranslator = (key: string, values?: Record<string, string | number | Date>) => string;
+
 export function emailDeliveryWarning(
+  t: DeliveryTranslator,
   label: string,
   states: readonly OutboxDeliveryState[],
 ): string | undefined {
@@ -22,10 +26,10 @@ export function emailDeliveryWarning(
     (state) => state.status === "pending" || state.status === "processing",
   );
   if (finalFailure) {
-    return `The ${label} could not be sent and will not be retried automatically. Review it in Settings → Email → Delivery log.`;
+    return t("notSentFinal", { label });
   }
   if (retrying) {
-    return `The ${label} could not be sent right now and will be retried automatically.`;
+    return t("notSentRetrying", { label });
   }
   return undefined;
 }
@@ -65,16 +69,16 @@ export function sanitizeDeliveryError(message: string): string {
  * Recruiter copy for an offer send, from the outbox row's state after the
  * send attempt. Only a `pending`/`processing` row is promised a retry.
  */
-export function offerSendOutcomeMessage(status: string): string {
+export function offerSendOutcomeMessage(status: string, t: DeliveryTranslator): string {
   switch (status) {
     case "sent":
-      return "This offer was already sent to the candidate.";
+      return t("offerAlreadySent");
     case "pending":
     case "processing":
-      return "Offer delivery failed. It has been queued for retry.";
+      return t("offerRetryQueued");
     case "failed":
-      return "The offer email could not be confirmed as sent. Review the Delivery log before sending again.";
+      return t("offerUnconfirmed");
     default:
-      return "The offer email was not queued. Try sending again.";
+      return t("offerNotQueued");
   }
 }

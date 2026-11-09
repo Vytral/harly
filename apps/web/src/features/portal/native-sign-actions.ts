@@ -3,6 +3,7 @@
 import { cookies } from "next/headers";
 import { revalidatePath } from "next/cache";
 import { and, eq, isNull } from "drizzle-orm";
+import { getTranslations } from "@/i18n/server";
 import { z } from "zod";
 
 import {
@@ -48,10 +49,11 @@ async function getCandidatePortalSession() {
 /** Candidate self-signs their offer letter in-portal — the native counterpart
  *  to the DocuSeal hosted-signing-page redirect. */
 export async function signOfferNatively(input: unknown): Promise<PortalNativeSignResult> {
+  const t = await getTranslations("server.portal.nativeSign");
   const session = await getCandidatePortalSession();
-  if (!session) return { ok: false, error: "Your session has expired. Please sign in again." };
+  if (!session) return { ok: false, error: t("sessionExpired") };
   const parsed = inputSchema.safeParse(input);
-  if (!parsed.success) return { ok: false, error: "Invalid signature details." };
+  if (!parsed.success) return { ok: false, error: t("invalidSignature") };
 
   const [offer] = await db
     .select({
@@ -91,10 +93,10 @@ export async function signOfferNatively(input: unknown): Promise<PortalNativeSig
       ),
     )
     .limit(1);
-  if (!offer) return { ok: false, error: "Offer not found." };
-  if (offer.status !== "sent") return { ok: false, error: "This offer is no longer awaiting a signature." };
+  if (!offer) return { ok: false, error: t("offerNotFound") };
+  if (offer.status !== "sent") return { ok: false, error: t("offerNotAwaiting") };
   if (!isNativeOfferSubmission(offer.esignSubmissionId)) {
-    return { ok: false, error: "This offer is not set up for native signing." };
+    return { ok: false, error: t("notNative") };
   }
   if (
     !isNativeOfferAcceptanceAvailable({
@@ -103,7 +105,7 @@ export async function signOfferNatively(input: unknown): Promise<PortalNativeSig
       expiresAt: offer.expiresAt,
     })
   ) {
-    return { ok: false, error: "This offer is no longer available for signing." };
+    return { ok: false, error: t("offerUnavailable") };
   }
 
   const [association] = await db
@@ -121,9 +123,9 @@ export async function signOfferNatively(input: unknown): Promise<PortalNativeSig
       ),
     )
     .limit(1);
-  if (!association) return { ok: false, error: "The offer letter could not be found." };
+  if (!association) return { ok: false, error: t("letterNotFound") };
   if (!isSignableNativeFieldsSnapshot(association.fieldsSnapshot)) {
-    return { ok: false, error: "This offer is not ready for signing." };
+    return { ok: false, error: t("notReady") };
   }
 
   const [candidate] = await db
@@ -131,7 +133,7 @@ export async function signOfferNatively(input: unknown): Promise<PortalNativeSig
     .from(candidates)
     .where(and(eq(candidates.id, session.candidateId), eq(candidates.workspaceId, session.workspaceId), isNull(candidates.deletedAt)))
     .limit(1);
-  if (!candidate) return { ok: false, error: "Candidate profile not found." };
+  if (!candidate) return { ok: false, error: t("candidateNotFound") };
   const signerName = [candidate.firstName, candidate.lastName].filter(Boolean).join(" ") || candidate.email || "Candidate";
 
   try {
@@ -146,7 +148,10 @@ export async function signOfferNatively(input: unknown): Promise<PortalNativeSig
       documentId: association.documentId,
       fieldsSnapshot: association.fieldsSnapshot,
     });
-    const checked = validateVectorSaveInput({ vectorData: parsed.data.signatureVectorBase64 });
+    const checked = validateVectorSaveInput(
+      { vectorData: parsed.data.signatureVectorBase64 },
+      await getTranslations("server.documents.signatureVector"),
+    );
     if (!checked.ok) return { ok: false, error: checked.error };
     await finalizeNativeSignature({
       workspaceId: session.workspaceId,
@@ -163,7 +168,7 @@ export async function signOfferNatively(input: unknown): Promise<PortalNativeSig
     });
   } catch (error) {
     log.error({ error, offerId: offer.id }, "native offer signature failed");
-    return { ok: false, error: error instanceof Error ? error.message : "Could not sign the offer." };
+    return { ok: false, error: error instanceof Error ? error.message : t("signFailed") };
   }
 
   revalidatePath(`/portal/applications/${offer.applicationId}`);

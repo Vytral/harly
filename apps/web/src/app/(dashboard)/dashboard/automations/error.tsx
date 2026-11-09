@@ -1,5 +1,7 @@
 "use client";
 
+import { useTranslations } from "next-intl";
+
 import { RouteError } from "@/components/ui/route-error";
 
 export default function AutomationsError({
@@ -9,5 +11,6 @@ export default function AutomationsError({
   error: Error & { digest?: string };
   reset: () => void;
 }) {
-  return <RouteError error={error} reset={reset} title="Automations could not load" />;
+  const t = useTranslations("pages.dashboardAutomations.error");
+  return <RouteError error={error} reset={reset} title={t("title")} />;
 }

@@ -1,6 +1,7 @@
 "use server";
 
 import { z } from "zod";
+import { getTranslations } from "@/i18n/server";
 
 import {
   getRolePolicy,
@@ -36,11 +37,12 @@ type ConfigResolution =
   | { ok: false; error: string; reason: NotConfiguredReason };
 
 async function resolveEmbeddingConfig(workspaceId: string): Promise<ConfigResolution> {
+  const t = await getTranslations("server.matching.actions");
   const config = await getWorkspaceAiConfig(workspaceId);
   if (!config) {
     return {
       ok: false,
-      error: "AI is not configured for this workspace.",
+      error: t("aiNotConfigured"),
       reason: "not_configured",
     };
   }
@@ -48,7 +50,7 @@ async function resolveEmbeddingConfig(workspaceId: string): Promise<ConfigResolu
     return {
       ok: false,
       error:
-        "Semantic match needs OpenAI as your workspace's AI provider (it uses OpenAI's embedding model). Switch provider in Settings → AI.",
+        t("needsOpenAiProvider"),
       reason: "unsupported_provider",
     };
   }
@@ -57,6 +59,7 @@ async function resolveEmbeddingConfig(workspaceId: string): Promise<ConfigResolu
 
 /** Index up to 20 stale/never-embedded candidates. Call repeatedly until `remaining` is 0. */
 export async function indexCandidatesForMatchingAction(): Promise<IndexActionResult> {
+  const t = await getTranslations("server.matching.actions");
   const { organization: workspace, roleKey } = await requirePermission("candidates:edit");
   const scope = (await getRolePolicy(workspace.id, roleKey)).scope;
   if (
@@ -66,7 +69,7 @@ export async function indexCandidatesForMatchingAction(): Promise<IndexActionRes
   ) {
     return {
       success: false,
-      error: "Semantic indexing requires workspace-wide candidate access.",
+      error: t("indexingNeedsAccess"),
     };
   }
 
@@ -81,8 +84,9 @@ export async function indexCandidatesForMatchingAction(): Promise<IndexActionRes
 export async function generateJobMatchesAction(
   input: z.infer<typeof jobIdSchema>,
 ): Promise<MatchActionResult> {
+  const t = await getTranslations("server.matching.actions");
   const parsed = jobIdSchema.safeParse(input);
-  if (!parsed.success) return { success: false, error: "Invalid input." };
+  if (!parsed.success) return { success: false, error: t("invalidInput") };
 
   const { organization: workspace, roleKey } = await requireJobPermission(
     "candidates:edit",
@@ -96,7 +100,7 @@ export async function generateJobMatchesAction(
   ) {
     return {
       success: false,
-      error: "Semantic matching requires workspace-wide candidate access.",
+      error: t("matchingNeedsAccess"),
     };
   }
 
@@ -105,7 +109,7 @@ export async function generateJobMatchesAction(
 
   const candidatePoolCount = await countCandidatePool(workspace.id);
   if (candidatePoolCount === 0) {
-    return { success: false, error: "Add candidates to your pool before matching." };
+    return { success: false, error: t("addCandidatesFirst") };
   }
 
   const unindexed = await countCandidatesNeedingIndex(workspace.id);

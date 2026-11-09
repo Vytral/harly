@@ -20,6 +20,7 @@ import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { useCallback, useId, useMemo, useRef, useState } from "react";
 import { clsx, type ClassValue } from "clsx";
 import { twMerge } from "tailwind-merge";
+import { useTranslations } from "next-intl";
 
 export const EASE_OUT = [0.16, 1, 0.3, 1] as const;
 export const EASE_IN_OUT = [0.77, 0, 0.175, 1] as const;
@@ -121,13 +122,6 @@ const FAST_TRANSITION = {
   ease: EASE_OUT,
 } as const;
 
-const STATUS_LABEL: Record<FileUploadStatus, string> = {
-  queued: "Queued",
-  uploading: "Uploading",
-  success: "Uploaded",
-  error: "Failed",
-};
-
 const STATUS_TONE: Record<FileUploadStatus, string> = {
   queued: "text-muted-foreground",
   uploading: "text-foreground",
@@ -185,14 +179,14 @@ function formatBytes(bytes: number) {
   )} ${units[exponent]}`;
 }
 
-function fileKind(item: FileUploadItem) {
+function fileKind(item: FileUploadItem, fallback: string) {
   const extension = item.name.includes(".")
     ? item.name.split(".").pop()
     : undefined;
 
   if (extension) return extension.toUpperCase();
   if (item.type) return item.type.split("/").pop()?.toUpperCase();
-  return "FILE";
+  return fallback;
 }
 
 function getFileIcon(item: FileUploadItem) {
@@ -271,6 +265,7 @@ function StatusIcon({
   reduce: boolean;
 }) {
   const iconClassName = "h-4 w-4";
+  const t = useTranslations("ui.fileUpload");
 
   return (
     <AnimatePresence mode="wait" initial={false}>
@@ -322,7 +317,7 @@ function StatusIcon({
           <FileIcon className={iconClassName} />
         )}
 
-        <span className="sr-only">{STATUS_LABEL[status]}</span>
+        <span className="sr-only">{t(`status.${status}`)}</span>
       </motion.span>
     </AnimatePresence>
   );
@@ -345,6 +340,7 @@ function FileUploadRow({
   const progressRatio = progress / 100;
   const showProgress = status === "uploading" || status === "success";
   const LeadingIcon = useMemo(() => getFileIcon(item), [item]);
+  const t = useTranslations("ui.fileUpload");
 
   return (
     <motion.li
@@ -408,7 +404,7 @@ function FileUploadRow({
                   classNames?.meta,
                 )}
               >
-                {fileKind(item)} · {formatBytes(item.size)}
+                {fileKind(item, t("unknownKind"))} · {formatBytes(item.size)}
                 {status === "error" && item.error ? ` · ${item.error}` : null}
               </p>
             </div>
@@ -420,7 +416,7 @@ function FileUploadRow({
                 <button
                   type="button"
                   onClick={() => onRetry(item)}
-                  aria-label={`Retry ${item.name}`}
+                  aria-label={t("retry", { name: item.name })}
                   className={cn(
                     "grid h-7 w-7 place-items-center rounded-full text-muted-foreground transition-colors duration-150 hover:bg-muted hover:text-foreground active:scale-95",
                     classNames?.action,
@@ -433,7 +429,7 @@ function FileUploadRow({
               <button
                 type="button"
                 onClick={() => onRemove(item)}
-                aria-label={`Remove ${item.name}`}
+                aria-label={t("remove", { name: item.name })}
                 className={cn(
                   "grid h-7 w-7 place-items-center rounded-full text-muted-foreground transition-colors duration-150 hover:bg-muted hover:text-foreground active:scale-95",
                   classNames?.action,
@@ -450,7 +446,7 @@ function FileUploadRow({
               aria-valuemin={0}
               aria-valuemax={100}
               aria-valuenow={Math.round(progress)}
-              aria-label={`${item.name} upload progress`}
+              aria-label={t("uploadProgress", { name: item.name })}
               className={cn(
                 "mt-3 h-1.5 overflow-hidden rounded-full bg-muted",
                 classNames?.progress,
@@ -498,9 +494,9 @@ export function FileUpload({
   maxFiles,
   disabled = false,
   variant = "default",
-  title = "Drop files here",
-  description = "Add files to the upload queue",
-  browseLabel = "Browse",
+  title,
+  description,
+  browseLabel,
   className,
   classNames,
 }: FileUploadProps) {
@@ -508,6 +504,10 @@ export function FileUpload({
   const inputRef = useRef<HTMLInputElement>(null);
   const dragDepthRef = useRef(0);
   const reduce = useReducedMotion() ?? false;
+  const t = useTranslations("ui.fileUpload");
+  const titleText = title ?? t("title");
+  const descriptionText = description ?? t("description");
+  const browseText = browseLabel ?? t("browse");
 
   const [items, setItems] = useControllableUpload({
     value,
@@ -590,7 +590,7 @@ export function FileUpload({
         ref={inputRef}
         id={inputId}
         type="file"
-        aria-label="Upload files"
+        aria-label={t("uploadFiles")}
         accept={accept}
         multiple={multiple}
         disabled={disabled || maxReached}
@@ -673,7 +673,7 @@ export function FileUpload({
               centered ? "text-base" : "text-sm",
             )}
           >
-            {maxReached ? "Upload limit reached" : title}
+            {maxReached ? t("uploadLimitReached") : titleText}
           </span>
 
           <span
@@ -682,7 +682,7 @@ export function FileUpload({
               centered ? "mt-1 leading-5" : "mt-0.5",
             )}
           >
-            {maxReached ? `${items.length} of ${maxFiles} files added` : description}
+            {maxReached ? t("filesAdded", { count: items.length, max: String(maxFiles) }) : descriptionText}
           </span>
         </span>
 
@@ -692,7 +692,7 @@ export function FileUpload({
             centered ? "mt-1 px-4 py-2" : "px-3.5 py-2",
           )}
         >
-          {browseLabel}
+          {browseText}
         </span>
       </button>
 

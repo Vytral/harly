@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useState, useTransition } from "react";
+import { useTranslations } from "next-intl";
 import type { Route } from "next";
 import { useRouter } from "next/navigation";
 import { CheckCheck, Eye, EyeOff, MoreHorizontal, Trash2 } from "lucide-react";
@@ -49,8 +50,8 @@ function groupByDay(items: NotificationItem[]) {
     (new Date(item.createdAt) >= startOfToday ? today : earlier).push(item);
   }
   return [
-    { label: "Today", items: today },
-    { label: "Earlier", items: earlier },
+    { label: "today", items: today },
+    { label: "earlier", items: earlier },
   ].filter((group) => group.items.length > 0);
 }
 
@@ -62,6 +63,7 @@ export function NotificationsBell({
   notifications: NotificationItem[];
   unreadCount: number;
 }) {
+  const t = useTranslations("shell.notifications");
   const router = useRouter();
   const [items, setItems] = useState(notifications);
   const [count, setCount] = useState(unreadCount);
@@ -98,9 +100,9 @@ export function NotificationsBell({
           const result = await markNotificationRead({
             notificationId: item.id,
           });
-          if (!result.success) setError("Could not mark notification as read.");
+          if (!result.success) setError(t("markReadError"));
         } catch {
-          setError("Could not mark notification as read.");
+          setError(t("markReadError"));
         }
       }
       if (item.href) {
@@ -118,11 +120,11 @@ export function NotificationsBell({
           ? await markNotificationUnread({ notificationId: item.id })
           : await markNotificationRead({ notificationId: item.id });
         if (!result.success) {
-          setError("Could not update notification.");
+          setError(t("updateError"));
           return;
         }
       } catch {
-        setError("Could not update notification.");
+        setError(t("updateError"));
         return;
       }
       await reloadNotifications();
@@ -135,11 +137,11 @@ export function NotificationsBell({
       try {
         const result = await deleteNotification({ notificationId: item.id });
         if (!result.success) {
-          setError("Could not delete notification.");
+          setError(t("deleteError"));
           return;
         }
       } catch {
-        setError("Could not delete notification.");
+        setError(t("deleteError"));
         return;
       }
       await reloadNotifications();
@@ -152,11 +154,11 @@ export function NotificationsBell({
       try {
         const result = await markAllNotificationsRead();
         if (!result.success) {
-          setError("Could not mark notifications as read.");
+          setError(t("markAllError"));
           return;
         }
       } catch {
-        setError("Could not mark notifications as read.");
+        setError(t("markAllError"));
         return;
       }
       await reloadNotifications();
@@ -166,9 +168,9 @@ export function NotificationsBell({
   async function removeAll() {
     const ok = await confirm({
       tone: "destructive",
-      title: "Clear all notifications?",
-      description: "Every notification is deleted for you. This can't be undone.",
-      confirmLabel: "Clear all",
+      title: t("confirmTitle"),
+      description: t("confirmDescription"),
+      confirmLabel: t("clearAll"),
     });
     if (!ok) return;
     setError(null);
@@ -176,11 +178,11 @@ export function NotificationsBell({
       try {
         const result = await deleteAllNotifications();
         if (!result.success) {
-          setError("Could not delete all notifications.");
+          setError(t("deleteAllError"));
           return;
         }
       } catch {
-        setError("Could not delete all notifications.");
+        setError(t("deleteAllError"));
         return;
       }
       setOpen(false);
@@ -195,7 +197,7 @@ export function NotificationsBell({
           type="button"
           className={headerRoundButton}
           aria-label={
-            unread > 0 ? `Notifications (${unread} unread)` : "Notifications"
+            unread > 0 ? t("unreadAria", { count: unread }) : t("title")
           }
         >
           <svg
@@ -224,7 +226,7 @@ export function NotificationsBell({
         <div className="flex items-center justify-between gap-3 px-4 pt-4 pb-3">
           <div className="flex items-center gap-2">
             <p className="text-[15px] font-semibold tracking-[-0.01em] text-near-ink">
-              Notifications
+              {t("title")}
             </p>
             {unread > 0 ? (
               <span className="rounded-full bg-chartreuse-signal px-1.5 text-[11px] font-medium leading-[18px] text-chartreuse-ink tabular-nums">
@@ -242,7 +244,7 @@ export function NotificationsBell({
                 disabled={isPending}
               >
                 <CheckCheck className="size-3.5" />
-                Mark all read
+                {t("markAll")}
               </Button>
             ) : null}
             {items.length > 0 ? (
@@ -252,7 +254,7 @@ export function NotificationsBell({
                     size="icon-sm"
                     variant="ghost"
                     className="size-7 text-soft-ink"
-                    aria-label="More notification actions"
+                    aria-label={t("moreActions")}
                   >
                     <MoreHorizontal className="size-4" />
                   </Button>
@@ -264,7 +266,7 @@ export function NotificationsBell({
                     className="text-destructive focus:text-destructive"
                   >
                     <Trash2 className="size-4" />
-                    Clear all
+                    {t("clearAll")}
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
@@ -272,7 +274,7 @@ export function NotificationsBell({
           </div>
         </div>
 
-        <div role="tablist" aria-label="Filter notifications" className="flex gap-1 border-b border-hairline px-4">
+        <div role="tablist" aria-label={t("filter")} className="flex gap-1 border-b border-hairline px-4">
           {(["all", "unread"] as const).map((value) => (
             <button
               key={value}
@@ -287,7 +289,7 @@ export function NotificationsBell({
                   : "border-transparent text-soft-ink hover:text-near-ink",
               )}
             >
-              {value === "all" ? "All" : `Unread${unread > 0 ? ` (${unread})` : ""}`}
+              {value === "all" ? t("all") : unread > 0 ? t("unreadCount", { count: unread }) : t("unread")}
             </button>
           ))}
         </div>
@@ -302,17 +304,17 @@ export function NotificationsBell({
           <div className="flex flex-col items-center gap-2 px-6 py-10 text-center">
             <SpotEmpty size={72} />
             <p className="text-[14px] font-medium text-near-ink">
-              {filter === "unread" ? "No unread notifications" : "You're all caught up"}
+              {filter === "unread" ? t("noUnread") : t("caughtUp")}
             </p>
             <p className="text-[12.5px] text-soft-ink">
-              Mentions, assignments and candidate updates land here.
+              {t("emptyDescription")}
             </p>
           </div>
         ) : (
           <div className="max-h-[420px] overflow-y-auto overscroll-contain p-1.5">
             {groups.map((group) => (
-              <section key={group.label} aria-label={group.label}>
-                <p className="type-col-head px-2.5 pb-1 pt-2">{group.label}</p>
+              <section key={group.label} aria-label={t(group.label)}>
+                <p className="type-col-head px-2.5 pb-1 pt-2">{t(group.label)}</p>
                 <ul className="flex flex-col gap-0.5">
                   {group.items.map((item) => (
                     <li
@@ -371,8 +373,8 @@ export function NotificationsBell({
                           type="button"
                           onClick={() => toggleRead(item)}
                           disabled={isPending}
-                          aria-label={item.read ? "Mark as unread" : "Mark as read"}
-                          title={item.read ? "Mark as unread" : "Mark as read"}
+                          aria-label={item.read ? t("markUnread") : t("markRead")}
+                          title={item.read ? t("markUnread") : t("markRead")}
                           className="grid size-7 place-items-center rounded-md text-soft-ink hover:bg-pure-snow hover:text-near-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-near-ink"
                         >
                           {item.read ? <EyeOff className="size-3.5" /> : <Eye className="size-3.5" />}
@@ -381,8 +383,8 @@ export function NotificationsBell({
                           type="button"
                           onClick={() => dismiss(item)}
                           disabled={isPending}
-                          aria-label="Delete notification"
-                          title="Delete"
+                          aria-label={t("deleteNotification")}
+                          title={t("delete")}
                           className="grid size-7 place-items-center rounded-md text-soft-ink hover:bg-pure-snow hover:text-danger-rust focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-near-ink"
                         >
                           <Trash2 className="size-3.5" />

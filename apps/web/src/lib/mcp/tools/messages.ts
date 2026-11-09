@@ -112,7 +112,7 @@ const idempotencyKeyField = z
     "Optional unique key (for example a UUID you generate). Re-sending the same key with the same content never delivers a second email, so supply it whenever you may retry. Without it every call is a new send.",
   );
 const attachmentsField = z
-  .array(composerAttachmentSchema)
+  .array(composerAttachmentSchema())
   .max(5)
   .optional()
   .describe("Optional files to attach, as base64. At most 5 files, 10 MB each and 20 MB in total.");
@@ -689,7 +689,7 @@ const listTemplatesTool = defineMcpTool({
     const templates = await listEmailTemplates();
     return {
       templates: templates.filter((t) => !input.type || t.type === input.type).map((t) => formatTemplate(t, ctx.appOrigin)),
-      variables: TEMPLATE_VARIABLES.map((variable) => ({ key: variable.key, label: variable.label })),
+      variables: TEMPLATE_VARIABLES.map((variable) => ({ key: variable.key, label: variable.key })),
     };
   },
 });

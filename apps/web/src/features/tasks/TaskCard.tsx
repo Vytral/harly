@@ -17,6 +17,7 @@ import {
 } from "lucide-react";
 
 import Link from "next/link";
+import { useTranslations } from "next-intl";
 
 import { cn } from "@/lib/utils";
 import {
@@ -27,7 +28,6 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import type { TaskItem } from "./shared";
-import { TASK_STATUS_LABELS } from "./shared";
 import {
   OwnerAvatar,
   PRIORITY,
@@ -38,12 +38,13 @@ import {
 } from "./task-ui";
 
 export function TaskMenu({ task, handlers }: { task: TaskItem; handlers: TaskHandlers }) {
+  const t = useTranslations("features.tasks.taskCard");
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <button
           type="button"
-          aria-label="Task actions"
+          aria-label={t("actionsLabel")}
           onPointerDown={(e) => e.stopPropagation()}
           className="rounded-md p-1 text-muted-foreground max-md:opacity-100 opacity-0 transition hover:bg-muted hover:text-foreground focus-visible:opacity-100 group-hover:opacity-100"
         >
@@ -52,21 +53,21 @@ export function TaskMenu({ task, handlers }: { task: TaskItem; handlers: TaskHan
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-44">
         <DropdownMenuItem onClick={() => handlers.edit(task)}>
-          <Pencil className="mr-2 size-4" /> Edit
+          <Pencil className="mr-2 size-4" /> {t("edit")}
         </DropdownMenuItem>
         <DropdownMenuSeparator />
         <DropdownMenuItem onClick={() => handlers.setStatus(task.id, "pending")}>
-          <Circle className="mr-2 size-4 text-muted-foreground" /> To do
+          <Circle className="mr-2 size-4 text-muted-foreground" /> {t("statuses.pending")}
         </DropdownMenuItem>
         <DropdownMenuItem onClick={() => handlers.setStatus(task.id, "in_progress")}>
-          <Clock className="mr-2 size-4 text-clay" /> In progress
+          <Clock className="mr-2 size-4 text-clay" /> {t("statuses.in_progress")}
         </DropdownMenuItem>
         <DropdownMenuItem onClick={() => handlers.setStatus(task.id, "completed")}>
-          <CheckCircle2 className="mr-2 size-4 text-primary" /> Done
+          <CheckCircle2 className="mr-2 size-4 text-primary" /> {t("statuses.completed")}
         </DropdownMenuItem>
         <DropdownMenuSeparator />
         <DropdownMenuItem onClick={() => handlers.remove(task.id)} className="text-destructive">
-          <Trash2 className="mr-2 size-4" /> Delete
+          <Trash2 className="mr-2 size-4" /> {t("delete")}
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
@@ -74,6 +75,7 @@ export function TaskMenu({ task, handlers }: { task: TaskItem; handlers: TaskHan
 }
 
 function Meta({ task }: { task: TaskItem }) {
+  const t = useTranslations("features.tasks.taskCard");
   if (!task.candidateName && !task.jobTitle && !task.applicationId && !task.interviewId) return null;
   return (
     <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
@@ -106,10 +108,10 @@ function Meta({ task }: { task: TaskItem }) {
           <FileText className="size-3" />
           {task.candidateId ? (
             <Link href={`/dashboard/candidates/${task.candidateId}`} className="hover:underline">
-              Application
+              {t("application")}
             </Link>
           ) : (
-            "Application"
+            t("application")
           )}
         </span>
       )}
@@ -118,10 +120,10 @@ function Meta({ task }: { task: TaskItem }) {
           <CalendarClock className="size-3" />
           {task.candidateId ? (
             <Link href={`/dashboard/candidates/${task.candidateId}`} className="hover:underline">
-              Interview
+              {t("interview")}
             </Link>
           ) : (
-            "Interview"
+            t("interview")
           )}
         </span>
       )}
@@ -141,6 +143,7 @@ export function TaskCardView({
   dragging?: boolean;
   withHandle?: boolean;
 }) {
+  const t = useTranslations("features.tasks.taskCard");
   const StatusIcon = STATUS_ICON[task.status];
   const prio = PRIORITY[task.priority];
   const done = task.status === "completed";
@@ -158,8 +161,8 @@ export function TaskCardView({
             type="button"
             onPointerDown={(e) => e.stopPropagation()}
             onClick={() => handlers.cycle(task)}
-            title={TASK_STATUS_LABELS[task.status]}
-            aria-label={`Status: ${TASK_STATUS_LABELS[task.status]}. Advance.`}
+            title={t(`statuses.${task.status}`)}
+            aria-label={t("statusAction", { status: t(`statuses.${task.status}`) })}
             className={cn("mt-0.5 shrink-0 rounded-full transition hover:scale-110 active:scale-95", STATUS_COLOR[task.status])}
           >
             <StatusIcon className="size-[18px]" strokeWidth={2} />

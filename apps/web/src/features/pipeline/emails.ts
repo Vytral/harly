@@ -1,5 +1,6 @@
 import "server-only";
 
+import { getTranslations } from "@/i18n/server";
 import { inArray } from "drizzle-orm";
 
 import { db, emailOutbox } from "@harly/db";
@@ -13,8 +14,6 @@ import {
 } from "@/lib/email/outbox-processor";
 
 const log = createLogger("pipeline-emails");
-
-const CANDIDATE_EMAIL_LABEL = "candidate email";
 
 export type PipelineEmail = (
   | {
@@ -61,10 +60,6 @@ export type PipelineEmailSummary = {
   emailWarning?: string;
 };
 
-const NOT_QUEUED_WARNING = `The ${CANDIDATE_EMAIL_LABEL} could not be queued and will not be sent automatically. Send it manually or review Settings → Email → Delivery log.`;
-const SLOW_WARNING = `The ${CANDIDATE_EMAIL_LABEL} is queued. Delivery is taking longer than usual and will continue in the background.`;
-const UNCONFIRMED_WARNING = `The ${CANDIDATE_EMAIL_LABEL} is queued, but its delivery could not be confirmed. It will be retried automatically; check the Delivery log if it does not arrive.`;
-
 /**
  * Enqueue and attempt delivery of candidate-facing pipeline emails, waiting at
  * most `DELIVERY_BUDGET_MS` inline. The stage change is already committed when
@@ -78,6 +73,7 @@ export async function sendPipelineEmails(
 ): Promise<PipelineEmailSummary> {
   if (emails.length === 0) return { queued: 0, sent: 0, failed: 0 };
 
+  const t = await getTranslations("server.pipeline.emails");
   const ids: string[] = [];
   try {
     for (const email of emails) {
@@ -108,7 +104,7 @@ export async function sendPipelineEmails(
       queued: ids.length,
       sent: ids.length === 0 ? 0 : null,
       failed: emails.length - ids.length,
-      emailWarning: ids.length === 0 ? NOT_QUEUED_WARNING : UNCONFIRMED_WARNING,
+      emailWarning: ids.length === 0 ? t("notQueued") : t("unconfirmed"),
     };
   }
 
@@ -117,13 +113,13 @@ export async function sendPipelineEmails(
   try {
     const outcome = await withDeliveryBudget(processEmailOutbox({ ids, workspaceId }));
     if (outcome.timedOut) {
-      return { queued: ids.length, sent: null, failed: unqueued, emailWarning: SLOW_WARNING };
+      return { queued: ids.length, sent: null, failed: unqueued, emailWarning: t("slow") };
     }
     processed = outcome.value;
   } catch (error) {
     // The rows exist, so the outbox owns them now. Their state is unknown here.
     log.error(error, "pipeline candidate email processing failed after it was queued");
-    return { queued: ids.length, sent: null, failed: unqueued, emailWarning: UNCONFIRMED_WARNING };
+    return { queued: ids.length, sent: null, failed: unqueued, emailWarning: t("unconfirmed") };
   }
 
   try {
@@ -136,11 +132,15 @@ export async function sendPipelineEmails(
       queued: ids.length,
       sent: processed.sent,
       failed: failed + unqueued,
-      emailWarning: emailDeliveryWarning(CANDIDATE_EMAIL_LABEL, states),
+      emailWarning: emailDeliveryWarning(
+        await getTranslations("server.emailDelivery"),
+        (await getTranslations("labels.emailDelivery"))("candidateEmail"),
+        states,
+      ),
     };
   } catch (error) {
     log.error(error, "pipeline candidate email state could not be read");
-    return { queued: ids.length, sent: null, failed: unqueued, emailWarning: UNCONFIRMED_WARNING };
+    return { queued: ids.length, sent: null, failed: unqueued, emailWarning: t("unconfirmed") };
   }
 }
 

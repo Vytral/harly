@@ -3,6 +3,7 @@ import "server-only";
 import { createHash, createHmac, randomBytes, randomInt, randomUUID, timingSafeEqual } from "node:crypto";
 
 import { and, eq, gt, isNotNull, isNull, lt, or, sql } from "drizzle-orm";
+import { getTranslations } from "@/i18n/server";
 import { z } from "zod";
 
 import {
@@ -244,19 +245,20 @@ export async function createNativeSigningLink(input: {
   /** Workflow run identity for durable event loop prevention. */
   automationParentRunId?: string;
 }) {
+  const t = await getTranslations("server.esign.remote");
   const database = input.database ?? db;
   const recipients = (input.recipients?.length ? input.recipients : [{ email: input.recipientEmail ?? "", name: input.recipientName ?? "" }])
     .map((recipient) => ({ email: recipient.email.trim().toLowerCase(), name: recipient.name.trim() || recipient.email.trim().toLowerCase() }))
     .filter((recipient) => recipient.email.length > 0);
-  if (recipients.length === 0 || recipients.length > 10) return { ok: false as const, error: "Add between one and ten signing recipients." };
-  if (new Set(recipients.map((recipient) => recipient.email)).size !== recipients.length) return { ok: false as const, error: "Each signing recipient must have a unique email address." };
+  if (recipients.length === 0 || recipients.length > 10) return { ok: false as const, error: t("recipientCount") };
+  if (new Set(recipients.map((recipient) => recipient.email)).size !== recipients.length) return { ok: false as const, error: t("duplicateEmail") };
   const [settings] = await database.select({
     enabled: workspaceSettings.remoteSignEnabled,
     expirationDays: workspaceSettings.signatureExpirationDays,
     securityMode: workspaceSettings.signatureSecurityMode,
   }).from(workspaceSettings).where(eq(workspaceSettings.organizationId, input.workspaceId)).limit(1);
-  if (!settings?.enabled) return { ok: false as const, error: "Remote signing is not enabled for this workspace." };
-  if (settings.securityMode === "sso") return { ok: false as const, error: "SSO signing is not available yet." };
+  if (!settings?.enabled) return { ok: false as const, error: t("notEnabled") };
+  if (settings.securityMode === "sso") return { ok: false as const, error: t("ssoUnavailable") };
 
   if (input.effectKey) {
     const [existing] = await database
@@ -292,16 +294,16 @@ export async function createNativeSigningLink(input: {
 
   const [document] = await database.select({ id: documents.id, name: documents.name, storageKey: documents.storageKey, mimeType: documents.mimeType, status: documents.status, signatureStatus: documents.signatureStatus, fieldsSnapshot: documents.fieldsSnapshot })
     .from(documents).where(and(eq(documents.id, input.documentId), eq(documents.workspaceId, input.workspaceId))).limit(1);
-  if (!document) return { ok: false as const, error: "Document not found." };
-  if (document.status !== "active" || !["unsigned", "declined", "expired"].includes(document.signatureStatus) || document.mimeType !== "application/pdf") return { ok: false as const, error: "This document is not available for remote signing." };
+  if (!document) return { ok: false as const, error: t("documentNotFound") };
+  if (document.status !== "active" || !["unsigned", "declined", "expired"].includes(document.signatureStatus) || document.mimeType !== "application/pdf") return { ok: false as const, error: t("documentNotAvailable") };
   const fields = Array.isArray(document.fieldsSnapshot) ? document.fieldsSnapshot : [];
-  if (!isSignableNativeFieldsSnapshot(fields)) return { ok: false as const, error: "Place at least one required signature field before sending." };
+  if (!isSignableNativeFieldsSnapshot(fields)) return { ok: false as const, error: t("needsSignatureField") };
   const hasSignatureFieldFor = (recipientIndex: number) => fields.some((field) => field.type === "signature" && field.required !== false && (field.recipientIndex ?? 0) === recipientIndex);
-  if (recipients.some((_, index) => !hasSignatureFieldFor(index))) return { ok: false as const, error: "Place at least one required signature field for every signer before sending." };
+  if (recipients.some((_, index) => !hasSignatureFieldFor(index))) return { ok: false as const, error: t("needsSignatureFieldPerSigner") };
   try {
     await assertNativeSignablePdf(await storage.read(document.storageKey));
   } catch (error) {
-    return { ok: false as const, error: error instanceof Error ? error.message : "This PDF cannot be signed." };
+    return { ok: false as const, error: error instanceof Error ? error.message : t("pdfNotSignable") };
   }
 
   const rawToken = randomBytes(32).toString("base64url");
@@ -383,7 +385,7 @@ export async function createNativeSigningLink(input: {
     });
   } catch (error) {
     if (error instanceof NativeSendConflict) {
-      return { ok: false as const, error: "This document changed or was already sent for signature. Refresh and try again." };
+      return { ok: false as const, error: t("documentChanged") };
     }
     throw error;
   }
@@ -414,6 +416,7 @@ export async function rotateNativePortalSigningLink(input: {
   workspaceId: string;
   recipientId: string;
 }): Promise<{ ok: true; signingUrl: string; expiresAt: Date } | { ok: false; error: string }> {
+  const t = await getTranslations("server.esign.remote");
   const [target] = await db
     .select({
       envelopeId: signatureEnvelopes.id,
@@ -436,11 +439,11 @@ export async function rotateNativePortalSigningLink(input: {
     .limit(1);
 
   if (!target || target.envelopeStatus !== "sent" || target.documentStatus !== "active" || target.signatureStatus !== "pending") {
-    return { ok: false, error: "This document is no longer waiting for your signature." };
+    return { ok: false, error: t("notWaiting") };
   }
   const expiresAt = target.currentExpiry;
   if (!expiresAt || expiresAt <= new Date()) {
-    return { ok: false, error: "This signing request has expired." };
+    return { ok: false, error: t("requestExpired") };
   }
 
   const rawToken = randomBytes(32).toString("base64url");
@@ -456,7 +459,7 @@ export async function rotateNativePortalSigningLink(input: {
       eq(signatureRecipients.status, "sent"),
     ))
     .returning({ id: signatureRecipients.id });
-  if (!rotated) return { ok: false, error: "This signing request changed. Please refresh and try again." };
+  if (!rotated) return { ok: false, error: t("requestChanged") };
 
   return {
     ok: true,
@@ -636,6 +639,7 @@ export async function remindNativeSigner(input: {
   recipientId?: string;
   now?: Date;
 }): Promise<{ ok: true; recipientName: string; recipientEmail: string } | { ok: false; error: string }> {
+  const t = await getTranslations("server.esign.remote");
   const now = input.now ?? new Date();
   const [target] = await db
     .select({
@@ -669,44 +673,46 @@ export async function remindNativeSigner(input: {
       input.recipientId ? eq(signatureRecipients.id, input.recipientId) : undefined,
     ))
     .limit(1);
-  if (!target) return { ok: false, error: "No one is currently waiting to sign this document." };
+  if (!target) return { ok: false, error: t("noOneWaiting") };
   const sentBefore = await db.select({ payload: signatureEvents.payload }).from(signatureEvents).where(and(eq(signatureEvents.envelopeId, target.envelopeId), eq(signatureEvents.eventType, "reminder_sent")));
   if (sentBefore.filter((row) => (row.payload as { recipientId?: string } | null)?.recipientId === target.recipientId).length >= MAX_TOTAL_REMINDERS) {
-    return { ok: false, error: `${target.recipientName} has already been reminded ${MAX_TOTAL_REMINDERS} times. Contact them another way or void and re-send.` };
+    return { ok: false, error: t("reminderLimit", { name: target.recipientName, count: MAX_TOTAL_REMINDERS }) };
   }
-  if (!target.linkExpiresAt || target.linkExpiresAt <= now) return { ok: false, error: "This signer's link has expired. Void the request and send it again." };
+  if (!target.linkExpiresAt || target.linkExpiresAt <= now) return { ok: false, error: t("signerLinkExpired") };
   if (target.lastReminderAt && now.getTime() - target.lastReminderAt.getTime() < MANUAL_REMINDER_MIN_GAP_MS) {
-    return { ok: false, error: `A reminder was sent to ${target.recipientName} less than an hour ago.` };
+    return { ok: false, error: t("reminderTooSoon", { name: target.recipientName }) };
   }
   const signerCount = await countSigners(input.workspaceId, target.envelopeId);
   const eventKey = `native:${target.envelopeId}:reminder:${target.recipientId}:manual:${now.getTime()}`;
   const outboxId = await db.transaction((tx) =>
     queueReminder(tx, { ...target, linkExpiresAt: target.linkExpiresAt!, signerCount }, { now, eventKey, manual: true, actorId: input.actorId }),
   );
-  if (!outboxId) return { ok: false, error: "A reminder is already being sent." };
+  if (!outboxId) return { ok: false, error: t("reminderPending") };
   await processEmailOutbox({ ids: [outboxId], workspaceId: input.workspaceId });
   return { ok: true, recipientName: target.recipientName, recipientEmail: target.recipientEmail };
 }
 
 export async function requestNativeOtp(target: NativeSigningTarget) {
-  if (target.securityMode !== "email_otp") return { ok: false as const, error: "OTP is not required for this signing link." };
+  const t = await getTranslations("server.esign.remote");
+  if (target.securityMode !== "email_otp") return { ok: false as const, error: t("otpNotRequired") };
   await purgeExpiredSignatureData({ workspaceId: target.workspaceId });
   const [recent] = await db.select({ createdAt: nativeSignatureOtpChallenges.createdAt }).from(nativeSignatureOtpChallenges).where(and(eq(nativeSignatureOtpChallenges.recipientId, target.recipientId), gt(nativeSignatureOtpChallenges.createdAt, new Date(Date.now() - OTP_RESEND_COOLDOWN_MS)))).limit(1);
-  if (recent) return { ok: false as const, error: "A code was just sent. Wait a moment before asking for another.", retryAfterSeconds: OTP_RESEND_COOLDOWN_MS / 1000 };
+  if (recent) return { ok: false as const, error: t("codeRecentlySent"), retryAfterSeconds: OTP_RESEND_COOLDOWN_MS / 1000 };
   const code = String(randomInt(100000, 1_000_000));
   // Protect the code before creating a challenge. A missing encryption key
   // must not leave an unverifiable challenge in the database.
   const encryptedCode = encryptSecret(code);
   const [challenge] = await db.insert(nativeSignatureOtpChallenges).values({ workspaceId: target.workspaceId, recipientId: target.recipientId, codeHash: hash(code), expiresAt: new Date(Date.now() + OTP_TTL_MS) }).returning({ id: nativeSignatureOtpChallenges.id });
-  if (!challenge) return { ok: false as const, error: "Could not create a verification challenge." };
+  if (!challenge) return { ok: false as const, error: t("challengeFailed") };
   const outboxId = await enqueueEmailOutbox(target.workspaceId, "native.signature.otp", { code: encryptedCode, recipientEmail: target.email, recipientName: target.name }, `native-signature-otp:${challenge.id}`);
   await processEmailOutbox({ ids: [outboxId], workspaceId: target.workspaceId });
   return { ok: true as const, challengeId: challenge.id };
 }
 
 export async function verifyNativeOtp(target: NativeSigningTarget, challengeId: string, code: string) {
+  const t = await getTranslations("server.esign.remote");
   const parsed = z.object({ challengeId: z.uuid(), code: z.string().regex(/^\d{6}$/) }).safeParse({ challengeId, code });
-  if (!parsed.success) return { ok: false as const, error: "Invalid verification code." };
+  if (!parsed.success) return { ok: false as const, error: t("invalidCode") };
   return db.transaction(async (tx) => {
     const [challenge] = await tx
       .select()
@@ -723,7 +729,7 @@ export async function verifyNativeOtp(target: NativeSigningTarget, challengeId: 
       )
       .for("update")
       .limit(1);
-    if (!challenge) return { ok: false as const, error: "Invalid or expired verification code." };
+    if (!challenge) return { ok: false as const, error: t("invalidOrExpired") };
 
     const actual = Buffer.from(hash(parsed.data.code));
     const expected = Buffer.from(challenge.codeHash);
@@ -744,7 +750,7 @@ export async function verifyNativeOtp(target: NativeSigningTarget, challengeId: 
             ),
           );
       }
-      return { ok: false as const, error: "Invalid or expired verification code." };
+      return { ok: false as const, error: t("invalidOrExpired") };
     }
     const [verified] = await tx
       .update(nativeSignatureOtpChallenges)
@@ -757,7 +763,7 @@ export async function verifyNativeOtp(target: NativeSigningTarget, challengeId: 
         ),
       )
       .returning({ id: nativeSignatureOtpChallenges.id });
-    if (!verified) return { ok: false as const, error: "Invalid or expired verification code." };
+    if (!verified) return { ok: false as const, error: t("invalidOrExpired") };
     await tx.insert(signatureEvents).values({
       workspaceId: target.workspaceId,
       envelopeId: target.envelopeId,

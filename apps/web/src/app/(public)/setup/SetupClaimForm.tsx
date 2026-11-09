@@ -1,8 +1,10 @@
 "use client";
 
 import { useState } from "react";
+import { useTranslations } from "next-intl";
 
 export function SetupClaimForm() {
+  const t = useTranslations("accessSetup");
   const [token, setToken] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
@@ -21,7 +23,7 @@ export function SetupClaimForm() {
       });
       const data = (await response.json()) as { error?: string };
       if (!response.ok) {
-        setError(data.error ?? "Setup could not be authorized.");
+        setError(data.error ?? t("failed"));
         setPending(false);
         return;
       }
@@ -31,7 +33,7 @@ export function SetupClaimForm() {
       setTimeout(() => setLeaving(true), 500);
       setTimeout(() => window.location.replace("/signup"), 800);
     } catch {
-      setError("Setup could not be authorized.");
+      setError(t("failed"));
       setPending(false);
     }
   }
@@ -46,7 +48,7 @@ export function SetupClaimForm() {
           htmlFor="setup-token"
           className="block text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground"
         >
-          Setup token
+          {t("token")}
         </label>
         <input
           id="setup-token"
@@ -59,7 +61,7 @@ export function SetupClaimForm() {
             setToken(event.target.value);
             setError(null);
           }}
-          placeholder="Paste your one-time token"
+          placeholder={t("tokenPlaceholder")}
           className="mt-2 w-full border-0 border-b border-input bg-transparent pb-2.5 font-mono text-base sm:text-sm text-foreground outline-none transition placeholder:font-sans placeholder:text-muted-foreground focus:border-ring disabled:opacity-60"
           required
         />
@@ -79,18 +81,17 @@ export function SetupClaimForm() {
         {done ? (
           <>
             <CheckIcon />
-            Authorized
+            {t("authorized")}
           </>
         ) : pending ? (
-          "Authorizing…"
+          t("authorizing")
         ) : (
-          "Authorize setup"
+          t("authorize")
         )}
       </button>
 
       <p className="text-xs leading-5 text-muted-foreground">
-        Authorization is limited to the owner email configured during{" "}
-        <code className="font-mono text-[0.85em] text-foreground">init</code>.
+        {t.rich("ownerOnly", { code: (chunks) => <code className="font-mono text-[0.85em] text-foreground">{chunks}</code> })}
       </p>
     </form>
   );

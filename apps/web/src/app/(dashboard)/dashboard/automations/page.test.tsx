@@ -1,6 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { ReactElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
+import { NextIntlClientProvider, createTranslator } from "next-intl";
+import en from "../../../../../messages/en.json";
 
 const { isDemoMode, requirePagePermission, listWorkflows, getWorkspaceAutomationPolicy, listPendingWorkflowApprovals, serializeWorkflow } = vi.hoisted(() => ({
   isDemoMode: vi.fn(),
@@ -11,6 +13,10 @@ const { isDemoMode, requirePagePermission, listWorkflows, getWorkspaceAutomation
   serializeWorkflow: vi.fn((value: unknown) => value),
 }));
 
+vi.mock("next-intl/server", () => ({
+  getTranslations: async (namespace: string) => createTranslator({ locale: "en", messages: en, namespace } as never),
+  getLocale: async () => "en",
+}));
 vi.mock("@harly/config", () => ({
   isDemoMode,
   loadHarlyConfig: () => ({ HARLY_URL: "https://ci.example.invalid" }),
@@ -44,7 +50,14 @@ describe("Automations page demo branch", () => {
     expect(getWorkspaceAutomationPolicy).not.toHaveBeenCalled();
     expect(listPendingWorkflowApprovals).not.toHaveBeenCalled();
 
-    const markup = renderToStaticMarkup(page);
+    // AutomationsDemo is an async server component: resolve it before rendering.
+    const element = page as ReactElement<Record<string, unknown>>;
+    const resolved = await (element.type as (props: Record<string, unknown>) => Promise<ReactElement>)(element.props);
+    const markup = renderToStaticMarkup(
+      <NextIntlClientProvider locale="en" messages={en}>
+        {resolved}
+      </NextIntlClientProvider>,
+    );
     expect(markup).toContain("Notify chat on new application");
     expect(markup).toContain("Starter recipes");
     expect(markup).toContain("View only");

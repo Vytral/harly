@@ -3,6 +3,7 @@
 import { useState, useTransition, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { AlertTriangle, Link2, MapPin, Phone, Video } from "lucide-react";
+import { useTranslations } from "next-intl";
 import { toast } from "@/lib/notification-island/toast";
 import { copyText } from "@/lib/utils";
 
@@ -53,17 +54,17 @@ export type ScheduleMemberOption = {
 };
 
 const TYPES = [
-  { key: "screening", label: "Screening" },
-  { key: "technical", label: "Technical" },
-  { key: "culture_fit", label: "Culture fit" },
-  { key: "onsite", label: "Onsite" },
-  { key: "final", label: "Final round" },
+  { key: "screening", labelKey: "screening" },
+  { key: "technical", labelKey: "technical" },
+  { key: "culture_fit", labelKey: "cultureFit" },
+  { key: "onsite", labelKey: "onsite" },
+  { key: "final", labelKey: "final" },
 ] as const;
 
 const MODES = [
-  { key: "video", label: "Video", icon: Video },
-  { key: "phone", label: "Phone", icon: Phone },
-  { key: "onsite", label: "Onsite", icon: MapPin },
+  { key: "video", labelKey: "video", icon: Video },
+  { key: "phone", labelKey: "phone", icon: Phone },
+  { key: "onsite", labelKey: "onsite", icon: MapPin },
 ] as const;
 
 type TypeKey = (typeof TYPES)[number]["key"];
@@ -95,6 +96,7 @@ export function ScheduleDialog({
   currentUserId?: string;
   trigger: ReactNode;
 }) {
+  const t = useTranslations("features.candidates.scheduleDialog");
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [applicationId, setApplicationId] = useState(
@@ -115,7 +117,7 @@ export function ScheduleDialog({
 
   const hasApplication = applications.length > 0;
   const hasCandidateEmail = candidateEmail.trim().length > 0;
-  const locationLabel = mode === "onsite" ? "Address" : "Meeting link";
+  const locationLabel = mode === "onsite" ? t("addressLabel") : t("meetingLinkLabel");
 
   const calLinkAvailable = cal.enabled && Boolean(cal.bookingUrl);
 
@@ -139,25 +141,21 @@ export function ScheduleDialog({
         timeMax: end,
         interviewerId: interviewer ?? (interviewerId || undefined),
       });
-      const warnings: string[] = [];
       const calendarUnchecked = result.gcalAvailability === "unknown";
-      if (result.gcalBusy.length > 0) {
-        warnings.push(
-          `${result.gcalBusy.length} existing calendar event${result.gcalBusy.length > 1 ? "s" : ""}`,
-        );
+      const calendarCount = result.gcalBusy.length;
+      const interviewCount = result.internalConflicts.length;
+      const unchecked = String(calendarUnchecked);
+      let warning: string | null = null;
+      if (calendarCount > 0 && interviewCount > 0) {
+        warning = t("conflictBoth", { calendarCount, interviewCount, unchecked });
+      } else if (calendarCount > 0) {
+        warning = t("conflictCalendar", { calendarCount, unchecked });
+      } else if (interviewCount > 0) {
+        warning = t("conflictInterviews", { interviewCount, unchecked });
+      } else if (calendarUnchecked) {
+        warning = t("calendarUnchecked");
       }
-      if (result.internalConflicts.length > 0) {
-        warnings.push(
-          `${result.internalConflicts.length} overlapping interview${result.internalConflicts.length > 1 ? "s" : ""} in this workspace`,
-        );
-      }
-      setAvailabilityWarning(
-        warnings.length > 0
-          ? `This time conflicts with ${warnings.join(" and ")}.${calendarUnchecked ? " Google Calendar could not be checked." : ""}`
-          : calendarUnchecked
-            ? "Google Calendar availability could not be checked for this time."
-            : null,
-      );
+      setAvailabilityWarning(warning);
     } catch (error) {
       if (error instanceof NonexistentLocalTimeError) {
         setAvailabilityWarning(error.message);
@@ -172,7 +170,7 @@ export function ScheduleDialog({
   function copyBookingLink() {
     if (!cal.bookingUrl) return;
     if (!applicationId) {
-      toast.error("Pick which role this interview is for.");
+      toast.error(t("pickRole"));
       return;
     }
     const link = buildCalBookingLink({
@@ -182,7 +180,7 @@ export function ScheduleDialog({
       metadata: { applicationId, candidateId, workspaceId },
     });
     void copyText(link);
-    toast.success("Booking link copied. Send it to the candidate");
+    toast.success(t("copiedBookingLink"));
   }
 
   function reset() {
@@ -200,15 +198,15 @@ export function ScheduleDialog({
 
   function submit() {
     if (!hasApplication) {
-      toast.error("This candidate has no application to attach the interview to.");
+      toast.error(t("noApplication"));
       return;
     }
     if (!applicationId) {
-      toast.error("Pick which role this interview is for.");
+      toast.error(t("pickRole"));
       return;
     }
     if (!date || !time) {
-      toast.error("Pick a date and time.");
+      toast.error(t("pickDateTime"));
       return;
     }
     startTransition(async () => {
@@ -228,23 +226,20 @@ export function ScheduleDialog({
         sendEmail: sendEmail && hasCandidateEmail,
       });
       if (!result.success) {
-        toast.error(result.error ?? "Could not schedule.");
+        toast.error(result.error ?? t("scheduleError"));
         return;
       }
       if (result.warning && result.emailStatus !== "failed") {
         toast.warning(result.warning);
       }
       if (result.emailStatus === "sent") {
-        toast.success("Interview scheduled and invitation sent");
+        toast.success(t("scheduledAndSent"));
       } else if (result.emailStatus === "skipped") {
-        toast.success("Interview scheduled without sending an invitation");
+        toast.success(t("scheduledWithoutInvite"));
       } else if (result.emailStatus === "failed") {
-        toast.warning(
-          result.warning ??
-            "Interview scheduled, but the invitation email could not be sent.",
-        );
+        toast.warning(result.warning ?? t("inviteFailed"));
       } else {
-        toast.success("Interview scheduled");
+        toast.success(t("scheduled"));
       }
       const emailNote = unshownEmailWarning(result);
       if (emailNote) toast.warning(emailNote);
@@ -259,16 +254,13 @@ export function ScheduleDialog({
       <DialogTrigger asChild>{trigger}</DialogTrigger>
       <DialogContent className="sm:max-w-2xl">
         <DialogHeader>
-          <DialogTitle>Schedule interview</DialogTitle>
-          <DialogDescription>
-            Added to the candidate timeline and the team agenda.
-          </DialogDescription>
+          <DialogTitle>{t("title")}</DialogTitle>
+          <DialogDescription>{t("description")}</DialogDescription>
         </DialogHeader>
 
         {!hasApplication ? (
           <p className="rounded-lg border border-dashed p-6 text-center text-sm text-muted-foreground">
-            This candidate hasn&apos;t applied to any role yet. Interviews attach
-            to an application.
+            {t("noApplicationsDescription")}
           </p>
         ) : (
           <div className="space-y-5">
@@ -277,12 +269,11 @@ export function ScheduleDialog({
                 <div className="flex items-center gap-2">
                   <Link2 className="size-4 text-primary" strokeWidth={1.8} />
                   <p className="text-[13px] font-medium tracking-tight">
-                    Let the candidate self-schedule
+                    {t("selfSchedule")}
                   </p>
                 </div>
                 <p className="text-xs text-muted-foreground">
-                  Send a Cal.com link. When they book, the interview syncs here
-                  automatically.
+                  {t("selfScheduleDescription")}
                 </p>
                 <Button
                   type="button"
@@ -292,10 +283,10 @@ export function ScheduleDialog({
                   onClick={copyBookingLink}
                 >
                   <Link2 className="size-4" />
-                  Copy booking link
+                  {t("copyBookingLink")}
                 </Button>
                 <p className="text-center text-[11px] uppercase tracking-wide text-muted-foreground">
-                  or log it manually
+                  {t("orLogManually")}
                 </p>
               </div>
             ) : null}
@@ -304,7 +295,7 @@ export function ScheduleDialog({
               {/* Left column */}
               <div className="space-y-5">
                 {applications.length > 1 ? (
-                  <Field label="Role">
+                  <Field label={t("role")}>
                     <Select value={applicationId} onValueChange={setApplicationId}>
                       <SelectTrigger className="w-full">
                         <SelectValue />
@@ -326,33 +317,42 @@ export function ScheduleDialog({
                   </Field>
                 ) : (
                   <p className="text-[13px] text-muted-foreground">
-                    For{" "}
-                    <span className="font-medium text-foreground">
-                      {applications[0]?.jobTitle}
-                    </span>
+                    {t.rich("forRole", {
+                      jobTitle: applications[0]?.jobTitle ?? "",
+                      strong: (chunks) => (
+                        <span className="font-medium text-foreground">{chunks}</span>
+                      ),
+                    })}
                   </p>
                 )}
 
-                <Field label="Type">
+                <Field label={t("type")}>
                   <SegmentedControl
-                    aria-label="Interview type"
-                    options={TYPES.map((t) => ({ value: t.key, label: t.label }))}
+                    aria-label={t("typeAriaLabel")}
+                    options={TYPES.map((option) => ({
+                      value: option.key,
+                      label: t(`types.${option.labelKey}`),
+                    }))}
                     value={type}
                     onValueChange={setType}
                   />
                 </Field>
 
-                <Field label="Mode">
+                <Field label={t("mode")}>
                   <SegmentedControl
-                    aria-label="Interview mode"
-                    options={MODES.map((m) => ({ value: m.key, label: m.label, icon: m.icon }))}
+                    aria-label={t("modeAriaLabel")}
+                    options={MODES.map((m) => ({
+                      value: m.key,
+                      label: t(`modes.${m.labelKey}`),
+                      icon: m.icon,
+                    }))}
                     value={mode}
                     onValueChange={setMode}
                   />
                 </Field>
 
                 <div className="grid grid-cols-2 gap-3">
-                  <Field label="Date" htmlFor="schedule-date">
+                  <Field label={t("date")} htmlFor="schedule-date">
                     <Input
                       id="schedule-date"
                       type="date"
@@ -363,7 +363,7 @@ export function ScheduleDialog({
                       }}
                     />
                   </Field>
-                  <Field label="Time" htmlFor="schedule-time">
+                  <Field label={t("time")} htmlFor="schedule-time">
                     <Input
                       id="schedule-time"
                       type="time"
@@ -406,18 +406,18 @@ export function ScheduleDialog({
                     onChange={(e) => setLocation(e.target.value)}
                     placeholder={
                       mode === "onsite"
-                        ? "Office address…"
+                        ? t("officeAddressPlaceholder")
                         : "https://meet.google.com/…"
                     }
                   />
                 </Field>
 
-                <Field label="Notes" htmlFor="schedule-notes">
+                <Field label={t("notes")} htmlFor="schedule-notes">
                   <Textarea
                     id="schedule-notes"
                     value={notes}
                     onChange={(e) => setNotes(e.target.value)}
-                    placeholder="Focus areas, panel, prep…"
+                    placeholder={t("notesPlaceholder")}
                     className="min-h-20"
                   />
                 </Field>
@@ -431,7 +431,7 @@ export function ScheduleDialog({
               </div>
             ) : null}
             {checkingAvailability ? (
-              <p className="text-xs text-muted-foreground">Checking availability…</p>
+              <p className="text-xs text-muted-foreground">{t("checkingAvailability")}</p>
             ) : null}
 
             <label className="flex items-start gap-3 rounded-lg border bg-muted/20 px-3.5 py-3">
@@ -444,12 +444,12 @@ export function ScheduleDialog({
               />
               <span className="space-y-0.5">
                 <span className="block text-sm font-medium">
-                  Send invitation email
+                  {t("sendInvite")}
                 </span>
                 <span className="block text-xs text-muted-foreground">
                   {hasCandidateEmail
-                    ? "The candidate will receive the interview details after scheduling."
-                    : "Add an email address to this candidate before sending an invitation."}
+                    ? t("inviteHint")
+                    : t("inviteNoEmail")}
                 </span>
               </span>
             </label>
@@ -459,17 +459,17 @@ export function ScheduleDialog({
         <DialogFooter>
           <DialogClose asChild>
             <Button variant="outline" disabled={isPending}>
-              Cancel
+              {t("cancel")}
             </Button>
           </DialogClose>
           <Button onClick={submit} disabled={isPending || !hasApplication}>
             {isPending
               ? sendEmail && hasCandidateEmail
-                ? "Scheduling & sending…"
-                : "Scheduling…"
+                ? t("schedulingAndSending")
+                : t("scheduling")
               : sendEmail && hasCandidateEmail
-                ? "Schedule & send invite"
-                : "Schedule without email"}
+                ? t("scheduleAndSend")
+                : t("scheduleWithoutEmail")}
           </Button>
         </DialogFooter>
       </DialogContent>

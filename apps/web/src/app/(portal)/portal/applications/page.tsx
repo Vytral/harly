@@ -2,6 +2,7 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { and, eq, isNull } from "drizzle-orm";
 import type { Route } from "next";
+import { getTranslations } from "next-intl/server";
 
 import { candidates, db, organization, workspaceSettings } from "@harly/db";
 import { PORTAL_SESSION_COOKIE, resolvePortalSession } from "@/lib/portal-auth";
@@ -16,6 +17,7 @@ import { BriefcaseIcon } from "@/components/ui/icons/phosphor";
 export const dynamic = "force-dynamic";
 
 export default async function PortalApplicationsPage() {
+  const t = await getTranslations("pages.portalApplications.page");
   const token = (await cookies()).get(PORTAL_SESSION_COOKIE)?.value;
   if (!token) redirect("/portal/login" as Route);
 
@@ -51,7 +53,7 @@ export default async function PortalApplicationsPage() {
   ]);
 
   const showStages = settings?.showStatus !== false;
-  const orgName = org?.name ?? "the company";
+  const orgName = org?.name ?? t("companyFallback");
   const applications = await listPortalApplications({
     workspaceId: session.workspaceId,
     candidateId: session.candidateId,
@@ -64,8 +66,8 @@ export default async function PortalApplicationsPage() {
     <PortalShell>
       <div className="stagger-in mx-auto max-w-3xl space-y-6">
         <header className="pt-2">
-          <h1 className="text-[28px] font-semibold tracking-tight text-near-ink">Applications</h1>
-          <p className="mt-1 text-[15px] text-soft-ink">Where each application stands and what comes next.</p>
+          <h1 className="text-[28px] font-semibold tracking-tight text-near-ink">{t("title")}</h1>
+          <p className="mt-1 text-[15px] text-soft-ink">{t("description")}</p>
         </header>
 
         {candidate ? <PortalProfileCompletionCard completion={getPortalProfileCompletion(candidate)} /> : null}
@@ -73,16 +75,16 @@ export default async function PortalApplicationsPage() {
         {applications.length === 0 ? (
           <PortalEmptyState
             icon={BriefcaseIcon}
-            title="No applications yet"
-            description={`Browse open roles at ${orgName} and apply in a couple of minutes.`}
-            cta={{ label: "Browse open roles", href: "/portal/jobs" as Route }}
+            title={t("emptyTitle")}
+            description={t("emptyDescription", { orgName })}
+            cta={{ label: t("browseRoles"), href: "/portal/jobs" as Route }}
           />
         ) : (
           <>
             {open.length > 0 ? (
               <section aria-labelledby="open-title" className="space-y-3">
                 <h2 id="open-title" className="text-[13px] font-semibold uppercase tracking-wider text-soft-ink">
-                  Open · {open.length}
+                  {t("openHeading", { count: open.length })}
                 </h2>
                 <ul className="space-y-2.5">
                   {open.map((application) => (
@@ -94,7 +96,7 @@ export default async function PortalApplicationsPage() {
             {closed.length > 0 ? (
               <section aria-labelledby="closed-title" className="space-y-3">
                 <h2 id="closed-title" className="text-[13px] font-semibold uppercase tracking-wider text-soft-ink">
-                  Past · {closed.length}
+                  {t("pastHeading", { count: closed.length })}
                 </h2>
                 <ul className="space-y-2.5">
                   {closed.map((application) => (

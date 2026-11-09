@@ -2,11 +2,9 @@
 
 import { useState, useTransition, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
+import { useLocale, useTranslations } from "next-intl";
 import { toast } from "@/lib/notification-island/toast";
 
-import {
-  LEGAL_PAGE_LABELS,
-} from "@/features/workspaces/legal-constants";
 import {
   saveLegalSettingsAction,
   type LegalPageKey,
@@ -39,14 +37,6 @@ import {
 } from "@/components/ui/select";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
-
-const JURISDICTION_LABELS: Record<string, string> = {
-  eu: "European Union (GDPR)",
-  us: "United States",
-  cl: "Chile (Ley 21.719)",
-  br: "Brazil (LGPD)",
-  other: "Other",
-};
 
 const PAGE_KEYS: LegalPageKey[] = [
   "privacyPolicy",
@@ -103,6 +93,8 @@ export function LegalSettings({
 }: {
   settings: LegalSettingsData;
 }) {
+  const t = useTranslations("features.workspaces.legalSettingsCard");
+  const locale = useLocale();
   const router = useRouter();
   const [saving, startSave] = useTransition();
 
@@ -154,18 +146,18 @@ export function LegalSettings({
 
   function applyTemplate() {
     if (!jurisdiction) {
-      toast.error("Select a jurisdiction first.");
+      toast.error(t("selectJurisdictionFirst"));
       return;
     }
     const template = getTemplate(jurisdiction as Jurisdiction);
     const filled: Record<string, string> = {};
     for (const [key, raw] of Object.entries(template)) {
       let text = raw
-        .replaceAll("{{DATE}}", new Date().toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" }))
-        .replaceAll("{{ENTITY_NAME}}", entityName || "[Company Name]")
-        .replaceAll("{{ENTITY_ADDRESS}}", entityAddress || "[Company Address]")
-        .replaceAll("{{ENTITY_EMAIL}}", entityEmail || "[privacy@company.com]")
-        .replaceAll("{{ENTITY_WEBSITE}}", entityWebsite || "[https://company.com]")
+        .replaceAll("{{DATE}}", new Date().toLocaleDateString(locale, { year: "numeric", month: "long", day: "numeric" }))
+        .replaceAll("{{ENTITY_NAME}}", entityName || t("placeholders.companyName"))
+        .replaceAll("{{ENTITY_ADDRESS}}", entityAddress || t("placeholders.companyAddress"))
+        .replaceAll("{{ENTITY_EMAIL}}", entityEmail || t("placeholders.companyEmail"))
+        .replaceAll("{{ENTITY_WEBSITE}}", entityWebsite || t("placeholders.companyWebsite"))
         .replaceAll("{{RETENTION_APPLICANTS}}", String(retentionApplicants))
         .replaceAll("{{RETENTION_TALENT_POOL}}", String(retentionTalentPool));
       // Handle conditional DPO blocks
@@ -176,7 +168,7 @@ export function LegalSettings({
     setHasDraft(true);
     setPagesVersion((v) => v + 1);
     saveDraft(filled);
-    toast.success(`${JURISDICTION_LABELS[jurisdiction]} template applied. Review and customize.`);
+    toast.success(t("templateApplied", { jurisdiction: t(`jurisdictions.${jurisdiction}`) }));
   }
 
   function save() {
@@ -196,12 +188,12 @@ export function LegalSettings({
         legalPages: pages as LegalPages,
       });
       if (!result.ok) {
-        toast.error(result.error ?? "Could not save.");
+        toast.error(result.error ?? t("saveFailed"));
         return;
       }
       clearDraft();
       setHasDraft(false);
-      toast.success("Legal settings saved");
+      toast.success(t("saved"));
       router.refresh();
     });
   }
@@ -211,7 +203,7 @@ export function LegalSettings({
     setPagesVersion((v) => v + 1);
     clearDraft();
     setHasDraft(false);
-    toast.success("Draft discarded");
+    toast.success(t("draftDiscarded"));
   }
 
   const pageCount = Object.keys(pages).filter((k) => pages[k]?.trim()).length;
@@ -227,85 +219,84 @@ export function LegalSettings({
           <div className="space-y-1">
             <div className="flex flex-wrap items-center gap-2">
               <h1 className="font-display text-lg font-semibold tracking-tight">
-                Legal & Compliance
+                {t("title")}
               </h1>
               {settings.legalConfigured ? (
                 <span className="inline-flex items-center gap-1.5 rounded-full bg-sage px-2.5 py-0.5 text-xs font-medium text-sage-ink">
                   <span className="size-1.5 rounded-full bg-pine" />
-                  Configured
+                  {t("statusConfigured")}
                 </span>
               ) : pageCount > 0 ? (
                 <span className="inline-flex items-center gap-1.5 rounded-full bg-clay/10 px-2.5 py-0.5 text-xs font-medium text-clay">
                   <span className="size-1.5 rounded-full bg-clay" />
-                  Incomplete
+                  {t("statusIncomplete")}
                 </span>
               ) : (
                 <span className="inline-flex items-center gap-1.5 rounded-full border bg-card px-2.5 py-0.5 text-xs font-medium text-muted-foreground">
                   <span className="size-1.5 rounded-full bg-muted-foreground/50" />
-                  Not configured
+                  {t("statusNotConfigured")}
                 </span>
               )}
             </div>
             <p className="max-w-prose text-sm text-muted-foreground">
-              Legal entity information, data retention policies, and customizable legal pages
-              for your careers page and application forms.
+              {t("intro")}
             </p>
           </div>
         </div>
         <div className="flex shrink-0 items-center gap-2">
           {hasDraft ? (
             <Button variant="ghost" size="sm" onClick={discardDraft}>
-              Discard draft
+              {t("discardDraft")}
             </Button>
           ) : null}
           <Button onClick={save} disabled={saving}>
             {saving ? <SpinnerIcon className="size-4" /> : null}
-            Save changes
+            {t("saveChanges")}
           </Button>
         </div>
       </div>
 
       {/* Entity Information */}
       <Card className="gap-3 p-5">
-        <h2 className="m-0 text-sm font-semibold text-foreground">Legal Entity</h2>
+        <h2 className="m-0 text-sm font-semibold text-foreground">{t("legalEntity")}</h2>
         <p className="-mt-2 text-xs text-muted-foreground">
-          Basic information about the organization responsible for candidate data.
+          {t("legalEntityDescription")}
         </p>
 
         <div className="space-y-3">
           <Field>
-            <Label htmlFor="legal-entity-name">Entity name</Label>
+            <Label htmlFor="legal-entity-name">{t("entityName")}</Label>
             <Input
               id="legal-entity-name"
               value={entityName}
               onChange={(e) => setEntityName(e.target.value)}
-              placeholder="Acme Corp S.A."
+              placeholder={t("entityNamePlaceholder")}
             />
           </Field>
 
           <Field>
-            <Label htmlFor="legal-entity-address">Address</Label>
+            <Label htmlFor="legal-entity-address">{t("address")}</Label>
             <Input
               id="legal-entity-address"
               value={entityAddress}
               onChange={(e) => setEntityAddress(e.target.value)}
-              placeholder="Calle Mayor 123, Madrid, Spain"
+              placeholder={t("addressPlaceholder")}
             />
           </Field>
 
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <Field>
-              <Label htmlFor="legal-entity-email">Contact email</Label>
+              <Label htmlFor="legal-entity-email">{t("contactEmail")}</Label>
               <Input
                 id="legal-entity-email"
                 type="email"
                 value={entityEmail}
                 onChange={(e) => setEntityEmail(e.target.value)}
-                placeholder="privacy@acme.com"
+                placeholder={t("contactEmailPlaceholder")}
               />
             </Field>
             <Field>
-              <Label htmlFor="legal-entity-website">Website</Label>
+              <Label htmlFor="legal-entity-website">{t("website")}</Label>
               <Input
                 id="legal-entity-website"
                 type="url"
@@ -318,28 +309,28 @@ export function LegalSettings({
 
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <Field>
-              <Label htmlFor="legal-jurisdiction">Jurisdiction</Label>
+              <Label htmlFor="legal-jurisdiction">{t("jurisdiction")}</Label>
               <Select value={jurisdiction} onValueChange={setJurisdiction}>
                 <SelectTrigger id="legal-jurisdiction">
-                  <SelectValue placeholder="Select jurisdiction" />
+                  <SelectValue placeholder={t("selectJurisdiction")} />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="eu">European Union (GDPR)</SelectItem>
-                  <SelectItem value="us">United States</SelectItem>
-                  <SelectItem value="cl">Chile (Ley 21.719)</SelectItem>
-                  <SelectItem value="br">Brazil (LGPD)</SelectItem>
-                  <SelectItem value="other">Other</SelectItem>
+                  <SelectItem value="eu">{t("jurisdictions.eu")}</SelectItem>
+                  <SelectItem value="us">{t("jurisdictions.us")}</SelectItem>
+                  <SelectItem value="cl">{t("jurisdictions.cl")}</SelectItem>
+                  <SelectItem value="br">{t("jurisdictions.br")}</SelectItem>
+                  <SelectItem value="other">{t("jurisdictions.other")}</SelectItem>
                 </SelectContent>
               </Select>
             </Field>
             <Field>
-              <Label htmlFor="legal-dpo-email">DPO email (optional)</Label>
+              <Label htmlFor="legal-dpo-email">{t("dpoEmail")}</Label>
               <Input
                 id="legal-dpo-email"
                 type="email"
                 value={dpoEmail}
                 onChange={(e) => setDpoEmail(e.target.value)}
-                placeholder="dpo@acme.com"
+                placeholder={t("dpoEmailPlaceholder")}
               />
             </Field>
           </div>
@@ -348,9 +339,9 @@ export function LegalSettings({
 
       {/* Data Retention */}
       <Card className="gap-3 p-5">
-        <h2 className="m-0 text-sm font-semibold text-foreground">Data Retention</h2>
+        <h2 className="m-0 text-sm font-semibold text-foreground">{t("dataRetention")}</h2>
         <p className="-mt-2 text-xs text-muted-foreground">
-          How long candidate data is kept after the hiring process concludes.
+          {t("dataRetentionDescription")}
         </p>
 
         <SettingRow
@@ -358,8 +349,8 @@ export function LegalSettings({
           descriptionId="retention-enforce-desc"
           align="start"
           className="rounded-[var(--radius-inner)] border border-hairline px-4 py-3"
-          title="Enforce automatically"
-          description="When on, a nightly job anonymizes candidates past their retention window (name, contact info, and résumé data redacted; documents deleted). Hired candidates and anything under legal hold are always skipped. Pipeline history is kept for metrics. Off by default — the months below are advisory until you turn this on."
+          title={t("enforceTitle")}
+          description={t("enforceDescription")}
           control={
             <Switch
               id="retention-enforce"
@@ -372,7 +363,7 @@ export function LegalSettings({
 
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <Field>
-            <Label htmlFor="retention-applicants">Applicants (months)</Label>
+            <Label htmlFor="retention-applicants">{t("applicantsMonths")}</Label>
             <Input
               id="retention-applicants"
               type="number"
@@ -382,11 +373,11 @@ export function LegalSettings({
               onChange={(e) => setRetentionApplicants(Number(e.target.value) || 6)}
             />
             <p className="text-[12.5px] text-soft-ink">
-              Unsuccessful candidates are anonymized after this period{retentionEnabled ? "" : " once enforcement is on"}.
+              {retentionEnabled ? t("applicantsHelpEnforced") : t("applicantsHelpPending")}
             </p>
           </Field>
           <Field>
-            <Label htmlFor="retention-talent-pool">Talent pool (months)</Label>
+            <Label htmlFor="retention-talent-pool">{t("talentPoolMonths")}</Label>
             <Input
               id="retention-talent-pool"
               type="number"
@@ -396,13 +387,13 @@ export function LegalSettings({
               onChange={(e) => setRetentionTalentPool(Number(e.target.value) || 24)}
             />
             <p className="text-[12.5px] text-soft-ink">
-              Candidates who opt-in to your talent pool. Requires re-consent.
+              {t("talentPoolHelp")}
             </p>
           </Field>
         </div>
         <div className="max-w-sm">
           <Field>
-            <Label htmlFor="retention-audit">Audit log retention (months)</Label>
+            <Label htmlFor="retention-audit">{t("auditRetentionMonths")}</Label>
             <Input
               id="retention-audit"
               type="number"
@@ -412,7 +403,7 @@ export function LegalSettings({
               onChange={(e) => setAuditRetentionMonths(Number(e.target.value) || 24)}
             />
             <p className="text-[12.5px] text-soft-ink">
-              Audit evidence is pruned by the protected nightly retention job. Minimum 12 months.
+              {t("auditRetentionHelp")}
             </p>
           </Field>
         </div>
@@ -420,22 +411,22 @@ export function LegalSettings({
 
       {/* Consent */}
       <Card className="gap-3 p-5">
-        <h2 className="m-0 text-sm font-semibold text-foreground">Consent</h2>
+        <h2 className="m-0 text-sm font-semibold text-foreground">{t("consent")}</h2>
         <p className="-mt-2 text-xs text-muted-foreground">
-          Text shown next to the consent checkbox on the application form.
+          {t("consentDescription")}
         </p>
 
         <div>
-          <Label htmlFor="consent-text">Consent checkbox text</Label>
+          <Label htmlFor="consent-text">{t("consentCheckboxText")}</Label>
           <Textarea
             id="consent-text"
             value={consentText}
             onChange={(e) => setConsentText(e.target.value)}
-            placeholder="I agree to the processing of my personal data for recruitment purposes. I have read and accept the Privacy Policy."
+            placeholder={t("consentPlaceholder")}
             rows={3}
           />
           <p className="text-xs text-muted-foreground">
-            The link to your Privacy Policy will be appended automatically if provided below.
+            {t("consentHelp")}
           </p>
         </div>
       </Card>
@@ -444,28 +435,28 @@ export function LegalSettings({
       <Card className="p-0 overflow-hidden">
         <div className="flex flex-col gap-3 border-b p-6 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <h2 className="text-sm font-semibold text-foreground">Legal Pages</h2>
+            <h2 className="text-sm font-semibold text-foreground">{t("legalPages")}</h2>
             <p className="text-xs text-muted-foreground">
-              Write your legal content. Pages are published at{" "}
-              <code className="text-xs">/legal/privacy-policy</code>,{" "}
-              <code className="text-xs">/legal/terms-of-service</code>, etc.
+              {t.rich("legalPagesDescription", {
+                code: (chunks) => <code className="text-xs">{chunks}</code>,
+              })}
             </p>
           </div>
           <div className="flex items-center gap-2">
             <Select value={jurisdiction} onValueChange={setJurisdiction}>
               <SelectTrigger className="w-[180px]">
-                <SelectValue placeholder="Template..." />
+                <SelectValue placeholder={t("templatePlaceholder")} />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="eu">EU Template (GDPR)</SelectItem>
-                <SelectItem value="us">US Template</SelectItem>
-                <SelectItem value="cl">Chile Template (Ley 21.719)</SelectItem>
-                <SelectItem value="br">Brazil Template (LGPD)</SelectItem>
-                <SelectItem value="other">Generic Template</SelectItem>
+                <SelectItem value="eu">{t("templates.eu")}</SelectItem>
+                <SelectItem value="us">{t("templates.us")}</SelectItem>
+                <SelectItem value="cl">{t("templates.cl")}</SelectItem>
+                <SelectItem value="br">{t("templates.br")}</SelectItem>
+                <SelectItem value="other">{t("templates.other")}</SelectItem>
               </SelectContent>
             </Select>
             <Button variant="outline" size="sm" onClick={applyTemplate} disabled={!jurisdiction}>
-              Apply template
+              {t("applyTemplate")}
             </Button>
           </div>
         </div>
@@ -482,7 +473,7 @@ export function LegalSettings({
                     "data-[state=active]:border-border data-[state=active]:bg-card data-[state=active]:text-foreground",
                   )}
                 >
-                  {LEGAL_PAGE_LABELS[key]}
+                  {t(`pageLabels.${key}`)}
                   {pages[key]?.trim() ? (
                     <span className="ml-1.5 size-1.5 rounded-full bg-pine" />
                   ) : null}
@@ -503,7 +494,7 @@ export function LegalSettings({
                 <RichTextEditor
                   key={pagesVersion}
                   defaultValue={pages[key] ?? ""}
-                  placeholder={`Write your ${LEGAL_PAGE_LABELS[key].toLowerCase()} here...`}
+                  placeholder={t(`pagePlaceholders.${key}`)}
                   minHeight="24rem"
                   onChange={(html) => updatePage(key, html)}
                 />

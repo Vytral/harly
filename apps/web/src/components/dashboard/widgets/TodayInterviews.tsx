@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { useLocale, useTranslations } from "next-intl";
 import type { Route } from "next";
 import { CalendarClock, CalendarPlus, ExternalLink } from "lucide-react";
 
@@ -7,19 +8,9 @@ import { UserAvatar } from "@/components/ui/UserAvatar";
 import type { InterviewsToSchedule, TodayInterview } from "@/features/dashboard/widgets";
 import { Tile, TileHeader, TileLink, EmptyHint } from "./primitives";
 
-const timeFmt = new Intl.DateTimeFormat("en", {
-  hour: "numeric",
-  minute: "2-digit",
-});
-
 /** Google Calendar's day view for a `YYYY-MM-DD` date (no per-event deep link is stored). */
 function googleDayUrl(date: string) {
   return `https://calendar.google.com/calendar/r/day/${date.replaceAll("-", "/")}`;
-}
-
-function waitingLabel(days: number) {
-  if (days <= 0) return "Today";
-  return `${days} day${days === 1 ? "" : "s"}`;
 }
 
 /**
@@ -36,6 +27,9 @@ export function TodayInterviews({
   scheduling: InterviewsToSchedule | null;
   className?: string;
 }) {
+  const locale = useLocale();
+  const t = useTranslations("shell.todayInterviews");
+  const timeFmt = new Intl.DateTimeFormat(locale, { hour: "numeric", minute: "2-digit" });
   const { date } = interviews;
   const calendarHref = (date ? `/dashboard/calendars?date=${date}` : "/dashboard/calendars") as Route;
 
@@ -43,9 +37,9 @@ export function TodayInterviews({
     <Tile className={className}>
       <TileHeader
         icon={CalendarClock}
-        title="Today's interviews"
+        title={t("title")}
         count={interviews.total}
-        action={<TileLink href={calendarHref}>Calendar</TileLink>}
+        action={<TileLink href={calendarHref}>{t("calendar")}</TileLink>}
       />
       <div className="flex flex-1 flex-col px-2 pb-3 pt-3">
         {interviews.items.length > 0 ? (
@@ -78,7 +72,7 @@ export function TodayInterviews({
                     ) : null}
                   </div>
                   <Badge variant="neutral" dot={false} className="shrink-0">
-                    {iv.label}
+                    {iv.hasCustomTitle ? iv.label : t.has(`interviewTypes.${iv.type}`) ? t(`interviewTypes.${iv.type}`) : t("interviewTypes.screening")}
                   </Badge>
                 </Link>
                 {iv.inGoogleCalendar && date ? (
@@ -87,8 +81,8 @@ export function TodayInterviews({
                     target="_blank"
                     rel="noopener noreferrer"
                     className="shrink-0 pt-3 text-soft-ink hover:text-near-ink"
-                    title="Open the day in Google Calendar"
-                    aria-label={`Open ${iv.candidate}'s day in Google Calendar`}
+                    title={t("googleTitle")}
+                    aria-label={t("googleAria", { candidate: iv.candidate })}
                   >
                     <ExternalLink className="size-3.5" />
                   </a>
@@ -99,7 +93,7 @@ export function TodayInterviews({
         ) : (
           <EmptyHint
             icon={CalendarClock}
-            text="No interviews today. Scheduled interviews show up here."
+            text={t("empty")}
           />
         )}
         {interviews.total > interviews.items.length ? (
@@ -107,15 +101,15 @@ export function TodayInterviews({
             href={calendarHref}
             className="mx-3 mt-1 rounded-[var(--radius-md)] px-3 py-2.5 text-center text-xs font-medium text-soft-ink transition hover:bg-row-wash"
           >
-            {interviews.total - interviews.items.length} more on the calendar
+            {t("more", { count: interviews.total - interviews.items.length })}
           </Link>
         ) : null}
 
         {scheduling && scheduling.total > 0 ? (
-          <section aria-label="Needs scheduling" className="mt-3 border-t border-hairline pt-3">
+          <section aria-label={t("needsScheduling")} className="mt-3 border-t border-hairline pt-3">
             <h3 className="flex items-center gap-2 px-3 pb-1 text-xs font-semibold text-near-ink">
               <CalendarPlus className="size-3.5" strokeWidth={1.8} />
-              Needs scheduling
+              {t("needsScheduling")}
               <span className="font-chrome rounded-full bg-soft-kraft px-1.5 text-[11px] leading-[18px] text-soft-ink tabular">
                 {scheduling.total}
               </span>
@@ -134,7 +128,7 @@ export function TodayInterviews({
                       </p>
                     </div>
                     <Badge variant={c.ageDays > 3 ? "warning" : "neutral"} dot={false} className="shrink-0">
-                      {waitingLabel(c.ageDays)}
+                      {c.ageDays <= 0 ? t("today") : t("days", { count: c.ageDays })}
                     </Badge>
                   </Link>
                 </li>

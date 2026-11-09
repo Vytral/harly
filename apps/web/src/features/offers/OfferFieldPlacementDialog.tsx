@@ -1,5 +1,6 @@
 "use client";
 
+import { useTranslations } from "next-intl";
 import { useRouter } from "next/navigation";
 import { toast } from "@/lib/notification-island/toast";
 
@@ -18,6 +19,7 @@ export function OfferFieldPlacementDialog({
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }) {
+  const t = useTranslations("features.offers.offerFieldPlacementDialog");
   const router = useRouter();
   return (
     <PrepareSigningDialog
@@ -25,9 +27,9 @@ export function OfferFieldPlacementDialog({
       onOpenChange={onOpenChange}
       fileUrl={`/api/offers/${offerId}/letter?purpose=placement`}
       subjectName={offerTitle}
-      mode={{ kind: "single", signerLabel: "Candidate" }}
-      submitLabel="Send offer"
-      pendingLabel="Sending…"
+      mode={{ kind: "single", signerLabel: t("signerLabel") }}
+      submitLabel={t("submit")}
+      pendingLabel={t("pending")}
       onSubmit={async (payload) => {
         const result = await saveOfferSignatureFieldsAndSend({
           offerId,
@@ -40,8 +42,8 @@ export function OfferFieldPlacementDialog({
             recipientIndex: undefined,
           })),
         });
-        if (!result.success) return { ok: false, error: result.error ?? "Could not send the offer." };
-        toast.success("Offer sent");
+        if (!result.success) return { ok: false, error: result.error ?? t("sendFailed") };
+        toast.success(t("sent"));
         router.refresh();
         return { ok: true };
       }}

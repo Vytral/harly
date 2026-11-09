@@ -13,6 +13,7 @@ import {
   type OnNodesChange,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
+import { useTranslations } from "next-intl";
 import { useTheme } from "@/components/ThemeProvider";
 
 import { cn } from "@/lib/utils";
@@ -62,6 +63,7 @@ function CanvasInner({
 }) {
   const { getIntersectingNodes, screenToFlowPosition, setCenter } = useReactFlow();
   const { resolvedTheme } = useTheme();
+  const t = useTranslations("features.automations.workflowCanvas");
   // Keep the server render and the first client render identical. Reading the
   // resolved theme before hydration changes React Flow's className and causes
   // a hydration warning in the editor.
@@ -269,7 +271,7 @@ function CanvasInner({
       ) : null}
     </ReactFlow>
   ) : (
-    <div className="h-full w-full bg-warm-paper" role="application" aria-label="Workflow canvas" />
+    <div className="h-full w-full bg-warm-paper" role="application" aria-label={t("label")} />
   );
 
   return (

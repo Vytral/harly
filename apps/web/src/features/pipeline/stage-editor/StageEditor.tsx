@@ -19,7 +19,8 @@ import {
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
 import { AlertTriangle, ChevronDown, RefreshCw } from "lucide-react";
-import { STAGE_KIND_LABELS, type StageKind } from "@harly/db/stage-kind";
+import type { StageKind } from "@harly/db/stage-kind";
+import { useTranslations } from "next-intl";
 
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -49,9 +50,6 @@ import {
 } from "./model";
 import { useStageEditor } from "./useStageEditor";
 
-const OUTCOME_BOUNDARY_MESSAGE =
-  "Active stages stay before outcome stages. Hired, rejected and withdrawn stay last.";
-
 /**
  * The stage editor, shown as a sheet from the pipeline and the job page. It
  * reads the job's stages on open, applies every change through the server
@@ -68,6 +66,9 @@ export function StageEditor({
   jobId: string;
   jobTitle: string;
 }) {
+  const t = useTranslations("features.pipeline.StageEditor");
+  const labels = useTranslations("labels.pipeline.stageEditor");
+  const kindNames = useTranslations("labels.pipeline.stageKinds");
   const router = useRouter();
   const motionSafe = useMotionSafe();
   const editor = useStageEditor({ jobId, onMutated: () => router.refresh() });
@@ -103,7 +104,7 @@ export function StageEditor({
     const toIndex = active.findIndex((stage) => stage.id === String(over.id));
     const ids = planMove(stages, String(dragged.id), toIndex);
     if (!ids) {
-      announce(OUTCOME_BOUNDARY_MESSAGE);
+      announce(t("outcomeBoundary"));
       return;
     }
     void reorder(String(dragged.id), ids);
@@ -123,10 +124,8 @@ export function StageEditor({
         }}
       >
         <SheetHeader className="border-b border-hairline px-5 py-4 text-left">
-          <SheetTitle>Pipeline stages</SheetTitle>
-          <SheetDescription>
-            {jobTitle}. Candidates move through active stages in this order.
-          </SheetDescription>
+          <SheetTitle>{t("title")}</SheetTitle>
+          <SheetDescription>{t("description", { jobTitle })}</SheetDescription>
         </SheetHeader>
 
         <div className="flex-1 space-y-6 overflow-y-auto px-5 py-5">
@@ -145,7 +144,7 @@ export function StageEditor({
               <AlertTriangle className="mt-0.5 size-4 shrink-0 text-destructive" aria-hidden="true" />
               <p className="min-w-0 flex-1">{state.notice}</p>
               <Button type="button" variant="ghost" size="sm" onClick={editor.dismissNotice}>
-                Dismiss
+                {t("dismiss")}
               </Button>
             </motion.div>
           ) : null}
@@ -153,12 +152,12 @@ export function StageEditor({
           {!state.loaded && state.loadError ? (
             <EmptyState
               icon={AlertTriangle}
-              title="Stages could not load"
+              title={t("loadErrorTitle")}
               description={state.loadError}
               action={
                 <Button type="button" variant="outline" onClick={() => void load()}>
                   <RefreshCw className="size-4" aria-hidden="true" />
-                  Try again
+                  {t("tryAgain")}
                 </Button>
               }
             />
@@ -167,7 +166,7 @@ export function StageEditor({
           {!state.loaded && !state.loadError ? (
             <div className="space-y-2" aria-busy="true">
               <span className="sr-only" role="status">
-                Loading stages
+                {t("loadingStages")}
               </span>
               <Skeleton className="h-16 w-full rounded-xl" />
               <Skeleton className="h-16 w-full rounded-xl" />
@@ -180,8 +179,8 @@ export function StageEditor({
               {active.length === 0 ? (
                 <EmptyState
                   compact
-                  title="No active stages"
-                  description="Add a stage below. New candidates enter the first active stage."
+                  title={t("noActiveStages")}
+                  description={t("noActiveStagesDescription")}
                 />
               ) : (
                 <DndContext
@@ -193,12 +192,12 @@ export function StageEditor({
                     items={active.map((stage) => stage.id)}
                     strategy={verticalListSortingStrategy}
                   >
-                    <ul aria-label="Active stages in pipeline order" className="space-y-2">
+                    <ul aria-label={t("activeStagesLabel")} className="space-y-2">
                       {active.map((stage, index) => (
                         <Fragment key={stage.id}>
                           {firstOutcomeIndex > 0 && index === firstOutcomeIndex ? (
                             <li role="presentation" className="flex items-center gap-3 pt-2">
-                              <span className="text-xs font-medium text-muted-foreground">Outcomes</span>
+                              <span className="text-xs font-medium text-muted-foreground">{t("outcomes")}</span>
                               <span className="h-px flex-1 bg-hairline" aria-hidden="true" />
                             </li>
                           ) : null}
@@ -211,7 +210,7 @@ export function StageEditor({
                             canMoveDown={canStep(stages, stage.id, 1)}
                             checkName={(name) => checkStageName(name, active, stage.id)}
                             decideKind={(kind: StageKind) =>
-                              decideKindChange({ stage, stages, nextKind: kind })
+                              decideKindChange({ stage, stages, nextKind: kind }, labels)
                             }
                             onMoveStep={(direction) => {
                               const ids = planMove(stages, stage.id, index + direction);
@@ -238,7 +237,7 @@ export function StageEditor({
               <AddStageForm stages={stages} busy={busy} onCreate={create} />
 
               {archived.length > 0 ? (
-                <section aria-label="Archived stages">
+                <section aria-label={t("archivedStagesLabel")}>
                   <button
                     type="button"
                     aria-expanded={archivedOpen}
@@ -246,7 +245,7 @@ export function StageEditor({
                     onClick={() => setArchivedOpen((value) => !value)}
                     className="flex w-full items-center justify-between rounded-lg px-1 py-2 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                   >
-                    <span>Archived stages ({archived.length})</span>
+                    <span>{t("archivedStagesToggle", { count: archived.length })}</span>
                     <ChevronDown
                       className={cn("size-4 transition-transform", archivedOpen && "rotate-180")}
                       aria-hidden="true"
@@ -264,8 +263,10 @@ export function StageEditor({
                         <li key={stage.id} className="flex flex-wrap items-center justify-between gap-2 px-3 py-2.5 text-sm">
                           <span className="font-medium text-foreground">{stage.name}</span>
                           <span className="text-xs text-muted-foreground">
-                            {STAGE_KIND_LABELS[stage.kind]} · Archived{" "}
-                            {stage.archivedAt ? formatShort(stage.archivedAt) : ""}
+                            {t("archivedStageMeta", {
+                              kind: kindNames(stage.kind),
+                              date: stage.archivedAt ? formatShort(stage.archivedAt) : "",
+                            })}
                           </span>
                         </li>
                       ))}

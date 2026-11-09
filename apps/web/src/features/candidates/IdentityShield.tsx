@@ -11,6 +11,8 @@ import {
   EyeIcon,
   EyeSlashDuotoneIcon,
 } from "@/components/ui/icons/phosphor";
+import { useTranslations } from "next-intl";
+
 import { cn } from "@/lib/utils";
 
 /**
@@ -38,6 +40,7 @@ export function IdentityShield({
   children: ReactNode;
 }) {
   const [revealed, setRevealed] = useState(false);
+  const t = useTranslations("features.candidates.identityShield");
 
   if (!anonymize) return <>{children}</>;
 
@@ -47,9 +50,7 @@ export function IdentityShield({
         <div className="mb-3 flex items-center justify-between gap-3 rounded-xl border border-pine/20 bg-sage/25 px-3 py-2">
           <span className="inline-flex items-center gap-2 text-xs font-medium text-pine">
             <EyeSlashDuotoneIcon className="size-4 shrink-0" />
-            {revealed
-              ? "Identity revealed for this candidate"
-              : "Anonymized to reduce bias"}
+            {revealed ? t("revealedBanner") : t("anonymizedBanner")}
           </span>
           <button
             type="button"
@@ -62,7 +63,7 @@ export function IdentityShield({
             )}
           >
             <EyeIcon className="size-3.5" />
-            {revealed ? "Hide identity" : "Reveal identity"}
+            {revealed ? t("hideIdentity") : t("revealIdentity")}
           </button>
         </div>
         {children}

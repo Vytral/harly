@@ -1,6 +1,7 @@
 "use client";
 
 import { useSyncExternalStore } from "react";
+import { useTranslations } from "next-intl";
 
 import { Button } from "@/components/ui/button";
 import { FocusModeTopBar } from "@/components/focus-mode/FocusModeTopBar";
@@ -15,11 +16,11 @@ export type PublishState =
   | "publishing"
   | "live";
 
-const STATUS: Record<PublishState, { label: string; dot: string }> = {
-  never: { label: "Not published yet", dot: "bg-warning-clay" },
-  dirty: { label: "Unpublished changes", dot: "bg-warning-clay" },
-  publishing: { label: "Publishing…", dot: "bg-quiet-mist animate-pulse motion-reduce:animate-none" },
-  live: { label: "Live", dot: "bg-success-olive" },
+const STATUS_DOT: Record<PublishState, string> = {
+  never: "bg-warning-clay",
+  dirty: "bg-warning-clay",
+  publishing: "bg-quiet-mist animate-pulse motion-reduce:animate-none",
+  live: "bg-success-olive",
 };
 
 export function BuilderTopBar({
@@ -39,7 +40,7 @@ export function BuilderTopBar({
   onTemplateClick: () => void;
   boardUrl: string;
 }) {
-  const status = STATUS[state];
+  const t = useTranslations("features.careerPage.builderTopBar");
   const canPublish = state === "dirty" || state === "never";
   // Server snapshot is false so the shortcut hint never causes a hydration mismatch.
   const isMac = useSyncExternalStore(
@@ -55,11 +56,11 @@ export function BuilderTopBar({
         <div className="flex min-w-0 items-center gap-3">
           <Button variant="ghost" size="sm" onClick={onExit} className="text-soft-ink hover:text-near-ink">
             <ArrowLeftIcon className="size-4" />
-            <span className="hidden sm:inline">Exit</span>
+            <span className="hidden sm:inline">{t("exit")}</span>
           </Button>
           <span aria-hidden className="hidden h-5 w-px bg-hairline sm:block" />
           <div className="hidden min-w-0 items-center gap-2 sm:flex">
-            <span className="truncate text-[14px] font-semibold text-near-ink">Career page</span>
+            <span className="truncate text-[14px] font-semibold text-near-ink">{t("title")}</span>
             <button
               type="button"
               onClick={onTemplateClick}
@@ -77,13 +78,13 @@ export function BuilderTopBar({
             aria-live="polite"
             className="hidden items-center gap-2 text-[13px] font-medium text-soft-ink md:inline-flex"
           >
-            <span aria-hidden className={cn("size-2 rounded-full", status.dot)} />
-            {justPublished && state === "live" ? "Published just now" : status.label}
+            <span aria-hidden className={cn("size-2 rounded-full", STATUS_DOT[state])} />
+            {justPublished && state === "live" ? t("publishedJustNow") : t(`status.${state}`)}
           </span>
           <Button variant="ghost" size="sm" asChild className="text-soft-ink hover:text-near-ink">
             <a href={boardUrl} target="_blank" rel="noopener noreferrer">
               <ExternalLinkIcon className="size-4" />
-              <span className="hidden sm:inline">View live</span>
+              <span className="hidden sm:inline">{t("viewLive")}</span>
             </a>
           </Button>
           <Button
@@ -91,7 +92,7 @@ export function BuilderTopBar({
             onClick={onPublish}
             disabled={!canPublish}
             aria-keyshortcuts={isMac ? "Meta+S" : "Control+S"}
-            title={`Publish changes (${isMac ? "⌘S" : "Ctrl+S"})`}
+            title={t("publishShortcutTitle", { shortcut: isMac ? "⌘S" : "Ctrl+S" })}
             className={cn(
               "min-w-[132px]",
               canPublish && "bg-chartreuse-signal text-near-ink hover:bg-chartreuse-signal/85",
@@ -102,7 +103,7 @@ export function BuilderTopBar({
             ) : state === "live" ? (
               <CheckIcon className="size-4" />
             ) : null}
-            {state === "publishing" ? "Publishing…" : state === "live" ? "Published" : "Publish changes"}
+            {state === "publishing" ? t("publishing") : state === "live" ? t("published") : t("publish")}
             {canPublish ? (
               <kbd className="ml-1 hidden rounded bg-near-ink/10 px-1 font-sans text-[11px] font-medium lg:inline">
                 {isMac ? "⌘S" : "Ctrl S"}

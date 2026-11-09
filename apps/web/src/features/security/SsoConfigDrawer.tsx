@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { toast } from "@/lib/notification-island/toast";
 import { Eye, EyeOff, Trash2, ExternalLink } from "lucide-react";
 
@@ -22,10 +23,8 @@ import { SpinnerIcon } from "@/components/ui/icons/phosphor";
 type ProviderInfo = {
   id: OAuthProvider;
   name: string;
-  description: string;
   docsUrl: string;
   docsLabel: string;
-  clientIdPlaceholder: string;
   environmentVariables: string;
 };
 
@@ -33,29 +32,23 @@ const PROVIDERS: ProviderInfo[] = [
   {
     id: "google",
     name: "Google Workspace",
-    description: "Allow team members to sign in with their Google account.",
     docsUrl: "https://console.cloud.google.com/apis/credentials",
     docsLabel: "Google Cloud Console",
-    clientIdPlaceholder: "123456789.apps.googleusercontent.com",
     environmentVariables: "GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET",
   },
   {
     id: "microsoft",
     name: "Microsoft / Entra ID",
-    description: "Allow team members to sign in with their Microsoft account.",
     docsUrl:
       "https://portal.azure.com/#blade/Microsoft_AAD_IAM/ActiveDirectoryMenuBlade/RegisteredApps",
     docsLabel: "Azure Portal",
-    clientIdPlaceholder: "Application (client) ID, e.g. a UUID",
     environmentVariables: "MICROSOFT_CLIENT_ID / MICROSOFT_CLIENT_SECRET",
   },
   {
     id: "github",
     name: "GitHub",
-    description: "Allow team members to sign in with their GitHub account.",
     docsUrl: "https://github.com/settings/developers",
     docsLabel: "GitHub Developer Settings",
-    clientIdPlaceholder: "OAuth App Client ID, e.g. Ov23li...",
     environmentVariables: "GITHUB_CLIENT_ID / GITHUB_CLIENT_SECRET",
   },
 ];
@@ -77,6 +70,7 @@ export function SsoConfigDrawer({
   const [showSecret, setShowSecret] = useState(false);
   const [enabled, setEnabled] = useState(existingConfig?.enabled ?? true);
 
+  const t = useTranslations("features.security.ssoConfigDrawer");
   const info = PROVIDERS.find((p) => p.id === provider)!;
   const isEditing = Boolean(existingConfig);
 
@@ -96,11 +90,11 @@ export function SsoConfigDrawer({
     startSave(async () => {
       // For new configs, require both fields. For editing, allow secret to be empty (keep existing).
       if (!clientId.trim()) {
-        toast.error("Client ID is required.");
+        toast.error(t("errors.clientIdRequired"));
         return;
       }
       if (!isEditing && !clientSecret.trim()) {
-        toast.error("Client Secret is required for new configurations.");
+        toast.error(t("errors.clientSecretRequired"));
         return;
       }
       if (isEditing && !clientSecret.trim()) {
@@ -116,11 +110,11 @@ export function SsoConfigDrawer({
       });
 
       if (!result.ok) {
-        toast.error(result.error ?? "Failed to save.");
+        toast.error(result.error ?? t("errors.saveFailed"));
         return;
       }
 
-      toast.success(`${info.name} configured successfully.`);
+      toast.success(t("toasts.saved", { name: info.name }));
       handleOpenChange(false);
       router.refresh();
     });
@@ -131,10 +125,10 @@ export function SsoConfigDrawer({
     startDelete(async () => {
       const result = await deleteOAuthProviderAction(existingConfig.id);
       if (!result.ok) {
-        toast.error(result.error ?? "Failed to delete.");
+        toast.error(result.error ?? t("errors.deleteFailed"));
         return;
       }
-      toast.success(`${info.name} configuration removed.`);
+      toast.success(t("toasts.removed", { name: info.name }));
       handleOpenChange(false);
       router.refresh();
     });
@@ -148,12 +142,12 @@ export function SsoConfigDrawer({
     >
       <SheetTrigger asChild>
         <Button variant="outline" size="sm">
-          {isEditing ? "Configure" : "Set up"}
+          {isEditing ? t("configure") : t("setUp")}
         </Button>
       </SheetTrigger>
       <DrawerLayout
-        title={`${info.name} OAuth`}
-        description={info.description}
+        title={t("title", { name: info.name })}
+        description={t(`providers.${info.id}.description`)}
         footer={
           isEditing ? (
             <>
@@ -168,18 +162,18 @@ export function SsoConfigDrawer({
                 ) : (
                   <Trash2 className="size-4" />
                 )}
-                Remove
+                {t("remove")}
               </Button>
               <Button
                 variant="outline"
                 disabled={saving}
                 onClick={() => handleOpenChange(false)}
               >
-                Cancel
+                {t("cancel")}
               </Button>
               <Button onClick={save} disabled={saving || !clientId.trim()}>
                 {saving ? <SpinnerIcon className="size-4" /> : null}
-                Save
+                {t("save")}
               </Button>
             </>
           ) : (
@@ -189,14 +183,14 @@ export function SsoConfigDrawer({
                 disabled={saving}
                 onClick={() => handleOpenChange(false)}
               >
-                Cancel
+                {t("cancel")}
               </Button>
               <Button
                 onClick={save}
                 disabled={saving || !clientId.trim() || !clientSecret.trim()}
               >
                 {saving ? <SpinnerIcon className="size-4" /> : null}
-                Save
+                {t("save")}
               </Button>
             </>
           )
@@ -211,31 +205,31 @@ export function SsoConfigDrawer({
             className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
           >
             <ExternalLink className="size-3" />
-            Open {info.docsLabel} to create OAuth credentials
+            {t("openDocs", { label: info.docsLabel })}
           </a>
 
           {/* Client ID */}
           <div className="space-y-2">
-            <Label htmlFor={`client-id-${provider}`}>Client ID</Label>
+            <Label htmlFor={`client-id-${provider}`}>{t("clientId")}</Label>
             <Input
               id={`client-id-${provider}`}
               value={clientId}
               onChange={(e) => setClientId(e.target.value)}
-              placeholder={info.clientIdPlaceholder}
+              placeholder={t(`providers.${info.id}.clientIdPlaceholder`)}
               autoComplete="off"
             />
             <p className="text-xs text-muted-foreground">
-              Server fallback: <code>{info.environmentVariables}</code>
+              {t.rich("serverFallback", { environmentVariables: info.environmentVariables, code: (chunks) => <code>{chunks}</code> })}
             </p>
           </div>
 
           {/* Client Secret */}
           <div className="space-y-2">
             <Label htmlFor={`client-secret-${provider}`}>
-              Client Secret
+              {t("clientSecret")}
               {isEditing && !clientSecret && (
                 <span className="ml-2 text-xs text-muted-foreground">
-                  (leave empty to keep current)
+                  {t("keepCurrentSecret")}
                 </span>
               )}
             </Label>
@@ -245,7 +239,7 @@ export function SsoConfigDrawer({
                 type={showSecret ? "text" : "password"}
                 value={clientSecret}
                 onChange={(e) => setClientSecret(e.target.value)}
-                placeholder={isEditing ? "••••••••" : "Enter client secret"}
+                placeholder={isEditing ? "••••••••" : t("secretPlaceholder")}
                 autoComplete="off"
               />
               <button
@@ -270,9 +264,9 @@ export function SsoConfigDrawer({
                 onCheckedChange={(v) => setEnabled(v === true)}
               />
               <span className="min-w-0">
-                <span className="block text-sm font-medium">Enabled</span>
+                <span className="block text-sm font-medium">{t("enabled")}</span>
                 <span className="mt-0.5 block text-xs text-muted-foreground">
-                  Allow users to sign in with this provider
+                  {t("enabledDescription")}
                 </span>
               </span>
             </label>
@@ -281,7 +275,7 @@ export function SsoConfigDrawer({
           {/* Callback URL hint */}
           <div className="rounded-lg bg-muted/50 px-3 py-2.5">
             <p className="text-xs font-medium text-muted-foreground">
-              Callback URL (set this in {info.docsLabel}):
+              {t("callbackHint", { label: info.docsLabel })}
             </p>
             <code className="mt-1 block break-all text-xs font-mono text-foreground">
               {typeof window !== "undefined" ? window.location.origin : ""}

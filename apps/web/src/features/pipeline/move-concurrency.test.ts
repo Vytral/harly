@@ -72,6 +72,7 @@ vi.mock("@/lib/email", () => ({
 vi.mock("@/server/webhooks/emit", () => ({
   emitWebhookEvent: mocks.emitWebhookEvent,
 }));
+vi.mock("next-intl/server", async () => (await import("@/test-support/intl-server-mock")).intlServerMock);
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 
 import { moveApplicationInPipeline } from "./actions";

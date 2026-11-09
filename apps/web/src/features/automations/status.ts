@@ -17,9 +17,6 @@ export function legacyWorkflowDispatchDisabled(): boolean {
   return process.env.AUTOMATIONS_DISABLE_V1_DISPATCH === "1";
 }
 
-export const AUTOMATIONS_DISABLED_MESSAGE =
-  "Automations are temporarily disabled.";
-
 /**
  * Public REST `/api/v1/automations` is withdrawn independently of the
  * dashboard kill switch. A 410 here is not an outage of the builder.

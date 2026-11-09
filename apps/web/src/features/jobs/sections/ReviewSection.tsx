@@ -1,16 +1,11 @@
 import { CheckCircle2, Rocket } from "lucide-react";
+import { useTranslations } from "next-intl";
 import type { Job } from "@harly/db";
 
 import type { HiringTeamMember, WorkspaceMemberOption } from "../hiring-team-data";
 import { JobHiringTeam } from "../JobHiringTeam";
 import { PublicJobPreview } from "../PublicJobPreview";
 import { SemanticMatchPanel } from "@/features/matching/SemanticMatchPanel";
-
-const WORKPLACE_LABEL: Record<string, string> = {
-  remote: "Remote",
-  hybrid: "Hybrid",
-  onsite: "Onsite",
-};
 
 export function ReviewSection({
   job,
@@ -33,6 +28,12 @@ export function ReviewSection({
   aiConfigured?: boolean;
   candidatePoolCount?: number;
 }) {
+  const t = useTranslations("jobs.review");
+  const workplaceLabels: Record<string, string> = {
+    remote: t("remote"),
+    hybrid: t("hybrid"),
+    onsite: t("onsite"),
+  };
   return (
     <div data-section="review" className="space-y-5">
       <div className="rounded-[var(--radius-card)] bg-card p-5 shadow-[var(--shadow-card)]">
@@ -42,11 +43,11 @@ export function ReviewSection({
           </span>
           <div className="min-w-0">
             <p className="font-display text-[15px] font-semibold tracking-tight">
-              {title || "New job"}
+              {title || t("newJob")}
             </p>
             <p className="mt-0.5 text-sm text-soft-ink">
-              {WORKPLACE_LABEL[workplace] ?? workplace}
-              {job ? " · Ready to save" : ` · Ready to ${submitLabel.toLowerCase()}`}
+              {workplaceLabels[workplace] ?? workplace}
+              {job ? ` · ${t("readyToSave")}` : ` · ${t("readyTo", { action: submitLabel.toLowerCase() })}`}
             </p>
           </div>
         </div>
@@ -71,10 +72,9 @@ export function ReviewSection({
           <span className="flex size-10 items-center justify-center rounded-full bg-card-inset text-soft-ink">
             <Rocket className="size-5" />
           </span>
-          <p className="text-sm font-medium">Hiring team, AI matching, and live preview unlock after you publish</p>
+          <p className="text-sm font-medium">{t("unlocksAfterPublish")}</p>
           <p className="max-w-sm text-sm text-soft-ink">
-            Save this job first. You&apos;ll be able to assign a hiring team, rank your candidate pool, and preview
-            the public listing right after.
+            {t("publishFirst")}
           </p>
         </div>
       )}

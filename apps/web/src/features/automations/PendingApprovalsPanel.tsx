@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useState, useTransition } from "react";
+import { useTranslations } from "next-intl";
 
 import { CheckCircleIcon, ClockIcon, XCircleIcon } from "@/components/ui/icons/phosphor";
 import { RelativeTime } from "@/lib/date-hydration";
@@ -16,6 +17,7 @@ export function PendingApprovalsPanel({
 }: {
   initialApprovals: PendingWorkflowApproval[];
 }) {
+  const t = useTranslations("features.automations.PendingApprovalsPanel");
   const [approvals, setApprovals] = useState(initialApprovals);
   const activeApprovals = approvals.filter((approval) => approval.status === "pending");
   const expiredApprovals = approvals.filter((approval) => approval.status === "expired");
@@ -29,7 +31,7 @@ export function PendingApprovalsPanel({
           <div className="flex items-center gap-2">
             <ClockIcon className="size-4 text-warning-clay" />
             <h2 id="pending-approvals-heading" className="text-[15px] font-semibold tracking-[-0.01em] text-near-ink">
-              {activeApprovals.length > 0 ? "Needs your approval" : "Approval updates"}
+              {activeApprovals.length > 0 ? t("needsApproval") : t("approvalUpdates")}
             </h2>
             <span className="rounded-full bg-warning-clay/15 px-2 py-0.5 text-[11px] font-semibold text-warning-clay">
               {activeApprovals.length}
@@ -37,12 +39,12 @@ export function PendingApprovalsPanel({
           </div>
           <p className="mt-1 text-xs text-soft-ink">
             {activeApprovals.length > 0
-              ? "These workflows are paused until an eligible teammate makes a decision."
-              : "These approval requests are no longer actionable."}
+              ? t("pausedUntilDecision")
+              : t("noLongerActionable")}
           </p>
         </div>
         <span className="text-[11px] font-medium uppercase tracking-[0.08em] text-warning-clay">
-          {activeApprovals.length > 0 ? "Action required" : "Expired"}
+          {activeApprovals.length > 0 ? t("actionRequired") : t("expired")}
         </span>
       </div>
 
@@ -62,7 +64,7 @@ export function PendingApprovalsPanel({
         <div className={cn("divide-y divide-hairline overflow-hidden rounded-[var(--radius-inner)] bg-pure-snow", activeApprovals.length > 0 && "mt-3")}>
           {activeApprovals.length > 0 && (
             <div className="bg-card-inset px-4 py-2 text-[11px] font-medium uppercase tracking-[0.08em] text-soft-ink">
-              Expired requests
+              {t("expiredRequests")}
             </div>
           )}
           {expiredApprovals.map((approval) => (
@@ -88,6 +90,7 @@ function ApprovalRow({
   expired?: boolean;
   onResolved: () => void;
 }) {
+  const t = useTranslations("features.automations.PendingApprovalsPanel");
   const [pending, startTransition] = useTransition();
 
   function decide(decision: "approved" | "rejected") {
@@ -100,9 +103,9 @@ function ApprovalRow({
       });
       if (result.ok) {
         onResolved();
-        toast.success(decision === "approved" ? "Approval recorded." : "Workflow rejected.");
+        toast.success(decision === "approved" ? t("approvalRecorded") : t("workflowRejected"));
       } else {
-        toast.error(result.error ?? "Could not resolve this approval.");
+        toast.error(result.error ?? t("resolveError"));
       }
     });
   }
@@ -114,14 +117,36 @@ function ApprovalRow({
           {approval.workflowName}
         </Link>
         <p className="mt-0.5 text-xs text-soft-ink">
-          {approval.candidateName ? `${approval.candidateName} · ` : ""}
-          {approval.triggerEvent} · requested <RelativeTime value={approval.createdAt} />
+          {approval.candidateName
+            ? t.rich("rowMetaWithCandidate", {
+                candidate: approval.candidateName,
+                trigger: approval.triggerEvent,
+                when: (chunks) => (
+                  <>
+                    {chunks} <RelativeTime value={approval.createdAt} />
+                  </>
+                ),
+              })
+            : t.rich("rowMeta", {
+                trigger: approval.triggerEvent,
+                when: (chunks) => (
+                  <>
+                    {chunks} <RelativeTime value={approval.createdAt} />
+                  </>
+                ),
+              })}
         </p>
       </div>
       <div className="flex items-center gap-2">
         {approval.deadlineAt && (
           <span className={cn("hidden text-[11px] md:inline", expired ? "font-medium text-danger-rust" : "text-soft-ink")}>
-            {expired ? "Expired" : "Due"} <RelativeTime value={approval.deadlineAt} />
+            {t.rich(expired ? "expiredDeadline" : "dueDeadline", {
+              when: (chunks) => (
+                <>
+                  {chunks} <RelativeTime value={approval.deadlineAt ?? ""} />
+                </>
+              ),
+            })}
           </span>
         )}
         {!expired && <button
@@ -130,7 +155,7 @@ function ApprovalRow({
           onClick={() => decide("rejected")}
           className={cn("inline-flex items-center gap-1 rounded-[var(--radius-btn)] bg-danger-rust/10 px-2.5 py-1.5 text-xs font-medium text-danger-rust hover:bg-danger-rust/15 disabled:opacity-50")}
         >
-          <XCircleIcon className="size-3.5" /> Reject
+          <XCircleIcon className="size-3.5" /> {t("reject")}
         </button>}
         {!expired && <button
           type="button"
@@ -138,7 +163,7 @@ function ApprovalRow({
           onClick={() => decide("approved")}
           className="inline-flex items-center gap-1 rounded-[var(--radius-btn)] bg-near-ink px-2.5 py-1.5 text-xs font-medium text-primary-foreground hover:bg-near-ink/90 disabled:opacity-50"
         >
-          <CheckCircleIcon className="size-3.5" /> Approve
+          <CheckCircleIcon className="size-3.5" /> {t("approve")}
         </button>}
       </div>
     </div>

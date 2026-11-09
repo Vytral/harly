@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { useTranslations } from "next-intl";
 import { MapPin, X } from "lucide-react";
 
 import type { Job } from "@harly/db";
@@ -36,6 +37,7 @@ export function AdvancedSection({
   setPhotos: React.Dispatch<React.SetStateAction<string[]>>;
   aiConfigured: boolean;
 }) {
+  const t = useTranslations("jobs.advanced");
   const [keywordDraft, setKeywordDraft] = useState("");
   const [photoDraft, setPhotoDraft] = useState("");
   const [office, setOffice] = useState(job?.officeAddress ?? "");
@@ -66,9 +68,9 @@ export function AdvancedSection({
       <div className="grid gap-5 sm:grid-cols-2">
         <FieldBox
           className="sm:col-span-2"
-          label="Public slug"
+          label={t("publicSlug")}
           htmlFor="slug"
-          hint="Leave blank to generate from the title."
+          hint={t("slugHint")}
         >
           <Input
             id="slug"
@@ -79,22 +81,22 @@ export function AdvancedSection({
           />
         </FieldBox>
 
-        <FieldBox label="Experience" htmlFor="experienceLevel">
+        <FieldBox label={t("experience")} htmlFor="experienceLevel">
           <Input
             id="experienceLevel"
             name="experienceLevel"
             defaultValue={job?.experienceLevel ?? ""}
-            placeholder="Mid / Senior · 3-5 years"
+            placeholder={t("experiencePlaceholder")}
             className={fieldBoxControlClassName}
           />
         </FieldBox>
 
-        <FieldBox label="Education" htmlFor="education">
+        <FieldBox label={t("education")} htmlFor="education">
           <Input
             id="education"
             name="education"
             defaultValue={job?.education ?? ""}
-            placeholder="Not required / Bachelor's"
+            placeholder={t("educationPlaceholder")}
             className={fieldBoxControlClassName}
           />
         </FieldBox>
@@ -104,9 +106,9 @@ export function AdvancedSection({
         {aiConfigured ? (
         <FieldBox
           className="sm:col-span-2"
-          label="AI evaluation style"
+          label={t("evaluationStyle")}
           htmlFor="evaluationMode"
-          hint="Controls how strictly missing or teachable requirements affect recommendations."
+          hint={t("evaluationHint")}
         >
           <Select
             name="evaluationMode"
@@ -116,9 +118,9 @@ export function AdvancedSection({
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="relaxed">Relaxed · transferable skills</SelectItem>
-              <SelectItem value="balanced">Balanced · recommended</SelectItem>
-              <SelectItem value="strict">Strict · hard requirements</SelectItem>
+              <SelectItem value="relaxed">{t("relaxed")}</SelectItem>
+              <SelectItem value="balanced">{t("balanced")}</SelectItem>
+              <SelectItem value="strict">{t("strict")}</SelectItem>
             </SelectContent>
           </Select>
         </FieldBox>
@@ -133,12 +135,12 @@ export function AdvancedSection({
 
       {/* Keywords */}
       <div className="space-y-3" data-preview-target="keywords">
-        <Label>Keywords</Label>
+        <Label>{t("keywords")}</Label>
         <p className="text-xs text-muted-foreground">
-          Tags that help candidates and search find this role.
+          {t("keywordHint")}
         </p>
         <div className="flex gap-2">
-          <FieldBox className="flex-1" label="Add a keyword">
+          <FieldBox className="flex-1" label={t("addKeyword")}>
             <Input
               value={keywordDraft}
               onChange={(e) => setKeywordDraft(e.target.value)}
@@ -148,12 +150,12 @@ export function AdvancedSection({
                   addKeyword();
                 }
               }}
-              placeholder="react, remote, fintech..."
+            placeholder={t("keywordPlaceholder")}
               className={fieldBoxControlClassName}
             />
           </FieldBox>
           <Button type="button" variant="outline" onClick={addKeyword} className="self-end">
-            Add
+            {t("add")}
           </Button>
         </div>
         {keywords.length > 0 ? (
@@ -168,7 +170,7 @@ export function AdvancedSection({
                   type="button"
                   onClick={() => setKeywords((prev) => prev.filter((k) => k !== kw))}
                   className="text-muted-foreground hover:text-foreground"
-                  aria-label={`Remove ${kw}`}
+                  aria-label={t("removeKeyword", { keyword: kw })}
                 >
                   <X className="size-3.5" />
                 </button>
@@ -185,12 +187,12 @@ export function AdvancedSection({
           className="space-y-4 rounded-[var(--radius-inner)] bg-card-inset p-4"
         >
           <FieldBox
-            label="Office address"
+            label={t("officeAddress")}
             htmlFor="officeAddress"
             hint={
               <>
                 <MapPin className="mr-1 inline size-3" />
-                We&apos;ll show an interactive map. No API key needed.
+                {t("mapHint")}
               </>
             }
           >
@@ -207,16 +209,16 @@ export function AdvancedSection({
             <iframe
               key={mapSrc}
               src={mapSrc}
-              title="Office location"
+              title={t("officeLocation")}
               className="h-48 w-full rounded-lg border"
               loading="lazy"
             />
           ) : null}
 
           <div className="space-y-2">
-            <Label>Office photos</Label>
+            <Label>{t("officePhotos")}</Label>
             <div className="flex gap-2">
-              <FieldBox className="flex-1" label="Add a photo URL">
+              <FieldBox className="flex-1" label={t("addPhotoUrl")}>
                 <Input
                   value={photoDraft}
                   onChange={(e) => setPhotoDraft(e.target.value)}
@@ -231,7 +233,7 @@ export function AdvancedSection({
                 />
               </FieldBox>
               <Button type="button" variant="outline" onClick={addPhoto} className="self-end">
-                Add
+                {t("add")}
               </Button>
             </div>
             {photos.length > 0 ? (
@@ -244,14 +246,14 @@ export function AdvancedSection({
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img
                       src={url}
-                      alt="Office"
+                      alt={t("officePhotoAlt")}
                       className="aspect-video w-full object-cover"
                     />
                     <button
                       type="button"
                       onClick={() => setPhotos((prev) => prev.filter((p) => p !== url))}
                       className="absolute right-1.5 top-1.5 rounded-md bg-black/60 p-1 text-white opacity-0 transition group-hover:opacity-100"
-                      aria-label="Remove photo"
+                      aria-label={t("removePhoto")}
                     >
                       <X className="size-3.5" />
                     </button>

@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
+import { useTranslations } from "next-intl";
 
 import { authClient } from "@/lib/auth-client";
 import {
@@ -26,11 +27,13 @@ import {
   type AuthMethodId,
 } from "../../_components/auth-methods";
 
-async function activateFirstOrganization() {
+async function activateFirstOrganization(
+  t: ReturnType<typeof useTranslations>,
+) {
   const organizationsResult = await authClient.organization.list();
 
   if (organizationsResult.error) {
-    return organizationsResult.error.message ?? "Unable to load organizations.";
+    return organizationsResult.error.message ?? t("organizationListFailed");
   }
 
   const organizationId = organizationsResult.data?.[0]?.id;
@@ -41,7 +44,7 @@ async function activateFirstOrganization() {
   });
 
   if (activeResult.error) {
-    return activeResult.error.message ?? "Unable to activate organization.";
+    return activeResult.error.message ?? t("organizationActivateFailed");
   }
 
   return null;
@@ -76,6 +79,7 @@ export function LoginForm({
   redirect?: string;
   methods?: AvailableLoginMethods;
 }) {
+  const t = useTranslations("accessLogin");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -113,7 +117,7 @@ export function LoginForm({
 
     const trimmedEmail = email.trim();
     if (!trimmedEmail || !password) {
-      setError("Invalid email or password.");
+      setError(t("invalidCredentials"));
       return;
     }
 
@@ -128,11 +132,11 @@ export function LoginForm({
       // Any failure — bad password, invite-only, demo guard — reads as a plain
       // credential failure. Never surface backend-specific messages here.
       if (result.error) {
-        setError("Invalid email or password.");
+        setError(t("invalidCredentials"));
         return;
       }
 
-      const organizationError = await activateFirstOrganization();
+      const organizationError = await activateFirstOrganization(t);
       if (organizationError) {
         setError(organizationError);
         return;
@@ -149,7 +153,7 @@ export function LoginForm({
     setSent(false);
     const trimmedEmail = email.trim();
     if (!trimmedEmail) {
-      setError("Enter your email before requesting a magic link.");
+      setError(t("magicEmailRequired"));
       return;
     }
 
@@ -160,7 +164,7 @@ export function LoginForm({
         callbackURL,
       });
       if (result.error) {
-        setError("Unable to send magic link. Check the email and try again.");
+        setError(t("magicSendFailed"));
         return;
       }
       setSent(true);
@@ -176,12 +180,12 @@ export function LoginForm({
     try {
       const result = await authClient.signIn.social({ provider, callbackURL });
       if (result.error) {
-        setError(`Unable to continue with ${SOCIAL_META[provider].label}.`);
+        setError(t("socialFailed", {provider: SOCIAL_META[provider].label}));
         setPending(null);
       }
       // On success the browser redirects; keep the spinner until it does.
     } catch {
-      setError(`Unable to continue with ${SOCIAL_META[provider].label}.`);
+      setError(t("socialFailed", {provider: SOCIAL_META[provider].label}));
       setPending(null);
     }
   }
@@ -191,7 +195,7 @@ export function LoginForm({
     setSent(false);
     const trimmedEmail = email.trim();
     if (!trimmedEmail) {
-      setError("Enter your work email to continue with SSO.");
+      setError(t("ssoEmailRequired"));
       return;
     }
 
@@ -203,11 +207,11 @@ export function LoginForm({
         errorCallbackURL: "/login",
       });
       if (result.error) {
-        setError("We couldn't find single sign-on for that email domain.");
+        setError(t("ssoNotFound"));
         setPending(null);
       }
     } catch {
-      setError("Unable to start enterprise SSO.");
+      setError(t("ssoStartFailed"));
       setPending(null);
     }
   }
@@ -225,7 +229,7 @@ export function LoginForm({
           })
         : await fetch("/api/passkey/login", { method: "GET" });
       if (!optionsRes.ok) {
-        setError("Unable to start passkey authentication.");
+        setError(t("passkeyStartFailed"));
         return;
       }
       const options = await optionsRes.json();
@@ -260,7 +264,7 @@ export function LoginForm({
         | null;
 
       if (!credential) {
-        setError("Passkey authentication was cancelled.");
+        setError(t("passkeyCancelled"));
         return;
       }
 
@@ -293,15 +297,15 @@ export function LoginForm({
 
       if (!verifyRes.ok) {
         const data = await verifyRes.json();
-        setError(data.error ?? "Passkey verification failed.");
+        setError(data.error ?? t("passkeyVerifyFailed"));
         return;
       }
       window.location.href = callbackURL;
     } catch (err) {
       if (err instanceof Error && err.name === "NotAllowedError") {
-        setError("No passkey was selected or the request was cancelled. For an older passkey, choose ‘Use an older passkey’ and enter your email.");
+        setError(t("passkeyNotSelected"));
       } else {
-        setError("Passkey authentication failed.");
+        setError(t("passkeyFailed"));
       }
     } finally {
       setPending(null);
@@ -312,7 +316,7 @@ export function LoginForm({
     event.preventDefault();
     const normalizedEmail = legacyPasskeyEmail.trim().toLowerCase();
     if (!normalizedEmail) {
-      setError("Enter your email to use an older passkey.");
+      setError(t("legacyEmailRequired"));
       return;
     }
     void signInWithPasskey(normalizedEmail);
@@ -332,7 +336,7 @@ export function LoginForm({
   if (methods.sso) {
     altMethods.push({
       id: "sso",
-      label: "Company SSO",
+      label: t("companySso"),
       icon: <SsoIcon />,
       onSelect: continueWithSSO,
       loading: pending === "sso",
@@ -341,7 +345,7 @@ export function LoginForm({
   if (methods.magicLink) {
     altMethods.push({
       id: "magic_link",
-      label: "Magic link",
+      label: t("magicLink"),
       icon: <MagicLinkIcon />,
       onSelect: sendMagicLink,
       loading: pending === "magic_link",
@@ -354,8 +358,7 @@ export function LoginForm({
   if (hasNoMethods(methods)) {
     return (
       <p className="rounded-xl border border-hairline bg-soft-kraft/50 px-4 py-3 text-sm text-muted-foreground">
-        No sign-in methods are currently enabled for this workspace. Contact
-        your workspace administrator.
+        {t("noMethods")}
       </p>
     );
   }
@@ -369,7 +372,7 @@ export function LoginForm({
               htmlFor="email"
               className="block text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground"
             >
-              Email address
+              {t("email") }
             </label>
             <input
               id="email"
@@ -378,7 +381,7 @@ export function LoginForm({
               autoComplete="email"
               value={email}
               onChange={(e) => { setEmail(e.target.value); setError(null); }}
-              placeholder="you@company.com"
+              placeholder={t("emailPlaceholder")}
               className="auth-field mt-2 w-full border-0 border-b border-input bg-transparent pb-2.5 text-base md:text-sm text-foreground outline-none transition-colors placeholder:text-muted-foreground focus:border-ring"
             />
           </div>
@@ -389,13 +392,13 @@ export function LoginForm({
                 htmlFor="password"
                 className="block text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground"
               >
-                Password
+                {t("password") }
               </label>
               <Link
                 href="/forgot-password"
                 className="text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
               >
-                Forgot password?
+                {t("forgotPassword") }
               </Link>
             </div>
             <div className="relative mt-2">
@@ -406,14 +409,14 @@ export function LoginForm({
                 autoComplete="current-password"
                 value={password}
                 onChange={(e) => { setPassword(e.target.value); setError(null); }}
-                placeholder="Your password"
+                placeholder={t("passwordPlaceholder")}
                 className="auth-field w-full border-0 border-b border-input bg-transparent pb-2.5 pr-10 text-base md:text-sm text-foreground outline-none transition-colors placeholder:text-muted-foreground focus:border-ring"
               />
               <button
                 type="button"
                 onClick={() => setShowPassword((v) => !v)}
                 className="absolute right-0 top-0 text-muted-foreground transition-colors hover:text-foreground"
-                aria-label={showPassword ? "Hide password" : "Show password"}
+                aria-label={showPassword ? t("hidePassword") : t("showPassword")}
               >
                 {showPassword ? <EyeOffIcon /> : <EyeIcon />}
               </button>
@@ -423,7 +426,7 @@ export function LoginForm({
           {error ? <p role="alert" className="text-center text-sm text-danger-rust">{error}</p> : null}
           {sent ? (
             <p role="status" className="text-center text-sm text-success-olive">
-              Check your email for a sign-in link.
+              {t("checkEmail") }
             </p>
           ) : null}
 
@@ -438,7 +441,7 @@ export function LoginForm({
               htmlFor="email"
               className="block text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground"
             >
-              Work email
+              {t("workEmail") }
             </label>
             <input
               id="email"
@@ -447,16 +450,16 @@ export function LoginForm({
               autoComplete="email"
               value={email}
               onChange={(e) => { setEmail(e.target.value); setError(null); }}
-              placeholder="you@company.com"
+              placeholder={t("emailPlaceholder")}
               className="auth-field mt-2 w-full border-0 border-b border-input bg-transparent pb-2.5 text-base md:text-sm text-foreground outline-none transition-colors placeholder:text-muted-foreground focus:border-ring"
             />
             <p className="mt-2 text-xs text-muted-foreground">
-              Sign in with your organization&apos;s single sign-on.
+              {t("ssoHelp")}
             </p>
           </div>
           {error ? <p role="alert" className="text-center text-sm text-danger-rust">{error}</p> : null}
           <ContinueButton
-            label="Continue with SSO"
+            label={t("continueSso")}
             pending={pending === "sso"}
             disabled={isBusy || !email.trim()}
             onClick={continueWithSSO}
@@ -474,7 +477,7 @@ export function LoginForm({
           ) : null}
           {!showPasswordForm && sent ? (
             <p role="status" className="text-center text-sm text-success-olive">
-              Check your email for a sign-in link.
+              {t("checkEmail") }
             </p>
           ) : null}
 
@@ -487,7 +490,7 @@ export function LoginForm({
                 className="flex w-full items-center justify-center gap-2.5 rounded-xl border border-mist-border bg-card py-3 text-sm font-medium text-foreground transition-colors hover:bg-soft-kraft disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {pending === "passkey" ? <AuthSpinner /> : <PasskeyIcon />}
-                Continue with passkey
+                {t("continuePasskey") }
               </button>
               <button
                 type="button"
@@ -495,12 +498,12 @@ export function LoginForm({
                 disabled={isBusy}
                 className="w-full text-center text-xs text-muted-foreground underline-offset-4 hover:text-foreground hover:underline disabled:opacity-50"
               >
-                Use an older passkey
+                {t("useOlderPasskey") }
               </button>
               {showLegacyPasskey ? (
                 <form className="space-y-3 rounded-xl border border-mist-border bg-card p-4" onSubmit={signInWithLegacyPasskey}>
                   <label htmlFor="legacy-passkey-email" className="block text-xs font-medium text-foreground">
-                    Email used with your account
+                    {t("accountEmail") }
                   </label>
                   <input
                     id="legacy-passkey-email"
@@ -512,7 +515,7 @@ export function LoginForm({
                     className="auth-field w-full border-0 border-b border-input bg-transparent pb-2 text-base md:text-sm text-foreground outline-none focus:border-ring"
                   />
                   <p className="text-xs text-muted-foreground">
-                    This is for passkeys registered before discoverable sign-in was required.
+                    {t("legacyHelp") }
                   </p>
                   <button
                     type="submit"
@@ -520,7 +523,7 @@ export function LoginForm({
                     className="flex w-full items-center justify-center gap-2 rounded-full bg-primary py-2.5 text-sm font-semibold text-primary-foreground disabled:opacity-50"
                   >
                     {pending === "passkey" ? <AuthSpinner /> : null}
-                    Continue with older passkey
+                    {t("continueOlderPasskey") }
                   </button>
                 </form>
               ) : null}
@@ -536,7 +539,7 @@ export function LoginForm({
 
 /** Near-ink pill CTA with an inline loading spinner (transitions-dev). */
 function ContinueButton({
-  label = "Continue",
+  label,
   pending,
   disabled,
   onClick,
@@ -548,6 +551,7 @@ function ContinueButton({
   onClick?: () => void;
   type?: "submit" | "button";
 }) {
+  const t = useTranslations("accessLogin");
   return (
     <button
       type={type}
@@ -561,20 +565,21 @@ function ContinueButton({
       {pending ? (
         <>
           <AuthSpinner />
-          <span>Signing in…</span>
+          <span>{t("signingIn")}</span>
         </>
       ) : (
-        <span>{label}</span>
+        <span>{label ?? t("continue")}</span>
       )}
     </button>
   );
 }
 
 function OrDivider() {
+  const t = useTranslations("accessLogin");
   return (
     <div className="flex items-center gap-4 text-[10px] uppercase tracking-[0.15em] text-muted-foreground">
       <div className="h-px flex-1 bg-border" />
-      or
+      {t("or")}
       <div className="h-px flex-1 bg-border" />
     </div>
   );

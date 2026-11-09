@@ -2,6 +2,7 @@
 
 import { useRef, useState, useTransition } from "react";
 import { Bold, Italic, Link2, Heading2, AtSign, MessageSquare } from "lucide-react";
+import { useTranslations } from "next-intl";
 import { toast } from "@/lib/notification-island/toast";
 
 import { createCandidateNote } from "@/features/candidates/actions";
@@ -75,6 +76,7 @@ export function NoteForm({
   initialNotes,
   members,
 }: NoteFormProps) {
+  const t = useTranslations("features.candidates.noteForm");
   const [body, setBody] = useState("");
   const [notes, setNotes] = useState<NoteListItem[]>(initialNotes);
   const [mentions, setMentions] = useState<NoteMention[]>([]);
@@ -168,7 +170,7 @@ export function NoteForm({
         id: optimisticId,
         body: submittedBody,
         createdAt: new Date().toISOString(),
-        authorName: "You",
+        authorName: t("you"),
         authorEmail: "Saving…",
         mentions: usedMentions,
         pending: true,
@@ -185,7 +187,7 @@ export function NoteForm({
       });
       if (!result.success) {
         setNotes((current) => current.filter((n) => n.id !== optimisticId));
-        toast.error(result.error ?? "Unable to save note.");
+        toast.error(result.error ?? t("saveError"));
         return;
       }
       if (result.note) {
@@ -213,7 +215,7 @@ export function NoteForm({
                 e.currentTarget.selectionStart ?? 0,
               )
             }
-            placeholder="Write a note about this candidate…"
+            placeholder={t("placeholder")}
             className="resize-none border-0 px-0 shadow-none focus-visible:ring-0"
           />
 
@@ -245,16 +247,16 @@ export function NoteForm({
         <div className="flex items-center justify-between border-t px-4 py-2">
           <div className="flex items-center gap-0.5">
             {[
-              { icon: Bold, label: "Bold", wrap: "**" },
-              { icon: Italic, label: "Italic", wrap: "_" },
-              { icon: Heading2, label: "Heading", wrap: "## " },
-              { icon: Link2, label: "Link", wrap: "[](url)" },
-              { icon: AtSign, label: "Mention", wrap: "@" },
-            ].map(({ icon: Icon, label, wrap }) => (
+              { icon: Bold, id: "bold", wrap: "**" },
+              { icon: Italic, id: "italic", wrap: "_" },
+              { icon: Heading2, id: "heading", wrap: "## " },
+              { icon: Link2, id: "link", wrap: "[](url)" },
+              { icon: AtSign, id: "mention", wrap: "@" },
+            ].map(({ icon: Icon, id, wrap }) => (
               <button
-                key={label}
+                key={id}
                 type="button"
-                title={label}
+                title={t(`format.${id}`)}
                 className="flex size-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
                 onClick={() => {
                   const ta = textareaRef.current;
@@ -266,9 +268,11 @@ export function NoteForm({
                   if (wrap === "## " || wrap === "@") {
                     insert = `${wrap}${selected}`;
                   } else if (wrap === "[](url)") {
-                    insert = selected ? `[${selected}](url)` : "[link text](url)";
+                    insert = selected ? `[${selected}](url)` : `[${t("format.linkText")}](url)`;
                   } else {
-                    insert = selected ? `${wrap}${selected}${wrap}` : `${wrap}text${wrap}`;
+                    insert = selected
+                      ? `${wrap}${selected}${wrap}`
+                      : `${wrap}${t("format.placeholderText")}${wrap}`;
                   }
                   const next = body.slice(0, start) + insert + body.slice(end);
                   setBody(next);
@@ -285,14 +289,14 @@ export function NoteForm({
           </div>
           <div className="flex items-center gap-3">
             <p className="text-xs text-muted-foreground">
-              {remaining.toLocaleString()} characters remaining
+              {t("charactersRemaining", { count: remaining })}
             </p>
             <Button
               size="sm"
               disabled={isPending || body.trim().length === 0}
               onClick={submitNote}
             >
-              {isPending ? "Saving…" : "Add note"}
+              {isPending ? t("saving") : t("addNote")}
             </Button>
           </div>
         </div>
@@ -301,8 +305,8 @@ export function NoteForm({
       {notes.length === 0 ? (
         <EmptyState
           icon={MessageSquare}
-          title="No notes on this candidate"
-          description="Write what you noticed above. Mention a teammate with @ and they get notified."
+          title={t("emptyTitle")}
+          description={t("emptyDescription")}
         />
       ) : (
         <div className="space-y-3">
@@ -313,7 +317,7 @@ export function NoteForm({
                 <div className="min-w-0 flex-1">
                   <p className="text-sm font-semibold">{note.authorName}</p>
                   <p className="truncate text-xs text-muted-foreground">
-                    {note.pending ? "Saving…" : <RelativeTime value={note.createdAt} />}
+                    {note.pending ? t("saving") : <RelativeTime value={note.createdAt} />}
                   </p>
                 </div>
               </div>

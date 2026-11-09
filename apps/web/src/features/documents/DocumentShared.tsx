@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { FileArchive, FileImage, FileText, Plus } from "lucide-react";
 import { toast } from "@/lib/notification-island/toast";
 
@@ -55,20 +56,22 @@ export function iconForDocument(mimeType: string) {
   return FileArchive;
 }
 
+export type DocumentFileError = "type" | "size" | "extension";
+
 /** Client-side file gate mirroring the presign + server validation. */
-export function validateDocumentFile(file: File): string | null {
+export function validateDocumentFile(file: File): DocumentFileError | null {
   if (
     !allowedDocumentContentTypes.includes(
       file.type as (typeof allowedDocumentContentTypes)[number],
     )
   ) {
-    return "Choose a PDF, DOC, DOCX, PNG, JPG, GIF, or WEBP file.";
+    return "type";
   }
   if (file.size <= 0 || file.size > DOCUMENT_MAX_SIZE) {
-    return "Documents must be between 1 byte and 25 MB.";
+    return "size";
   }
   if (!documentExtensionMatches(file.name, file.type)) {
-    return "The file extension does not match its content type.";
+    return "extension";
   }
   return null;
 }
@@ -78,6 +81,21 @@ async function sha256Hex(buffer: ArrayBuffer): Promise<string> {
   return Array.from(new Uint8Array(digest))
     .map((byte) => byte.toString(16).padStart(2, "0"))
     .join("");
+}
+
+/** Upload failure tagged with the step that failed, so callers can translate it. */
+export class DocumentUploadError extends Error {
+  readonly step: "prepare" | "upload";
+
+  constructor(step: "prepare" | "upload") {
+    super(
+      step === "prepare"
+        ? "Could not prepare the document upload."
+        : "Could not upload the document.",
+    );
+    this.name = "DocumentUploadError";
+    this.step = step;
+  }
 }
 
 /** Presign, PUT to storage, and return the storage key. Throws on failure. */
@@ -99,54 +117,59 @@ export async function uploadToStorage(
     key?: string;
   };
   if (!presignResponse.ok || !presign.uploadUrl || !presign.key)
-    throw new Error("Could not prepare the document upload.");
+    throw new DocumentUploadError("prepare");
   const upload = await fetch(presign.uploadUrl, {
     method: "PUT",
     headers: { "Content-Type": file.type },
     body: file,
   });
-  if (!upload.ok) throw new Error("Could not upload the document.");
+  if (!upload.ok) throw new DocumentUploadError("upload");
   return { key: presign.key, checksum };
 }
 
-export function formatDate(value: string) {
-  return new Intl.DateTimeFormat("en", {
+export function formatDate(value: string, locale = "en") {
+  return new Intl.DateTimeFormat(locale, {
     month: "short",
     day: "numeric",
     year: "numeric",
   }).format(new Date(value));
 }
 
-const ACTIVITY_LABELS: Record<string, string> = {
-  "document.uploaded": "Uploaded",
-  "document.generated": "Generated from a template",
-  "document.version_created": "New version uploaded",
-  "document.viewed": "Viewed",
-  "document.downloaded": "Downloaded",
-  "document.renamed": "Renamed",
-  "document.archived": "Archived",
-  "document.restored": "Restored",
-  "document.deleted": "Deleted",
-  "document.category_changed": "Category changed",
-  "document.assigned": "Assigned",
-  "document.unassigned": "Unassigned",
-  "document.date_set": "Date changed",
-  "document.permissions_changed": "Access rules changed",
-  "document.requested": "Requested from candidate",
-  "document.signature_sent": "Sent for signature",
-  "document.signature_reminded": "Signer reminded",
-  "document.signature_link_copied": "Signing link issued",
-  "document.signature_changed": "Signature status changed",
-  "document.signature_voided": "Signature request voided",
-  "document.legal_hold_placed": "Legal hold placed",
-  "document.legal_hold_released": "Legal hold released",
-  "document.evidence_exported": "Evidence exported",
-  "document.expired": "Expired",
-};
+const ACTIVITY_LABEL_KEYS = {
+  "document.uploaded": "uploaded",
+  "document.generated": "generated",
+  "document.version_created": "versionCreated",
+  "document.viewed": "viewed",
+  "document.downloaded": "downloaded",
+  "document.renamed": "renamed",
+  "document.archived": "archived",
+  "document.restored": "restored",
+  "document.deleted": "deleted",
+  "document.category_changed": "categoryChanged",
+  "document.assigned": "assigned",
+  "document.unassigned": "unassigned",
+  "document.date_set": "dateChanged",
+  "document.permissions_changed": "permissionsChanged",
+  "document.requested": "requested",
+  "document.signature_sent": "signatureSent",
+  "document.signature_reminded": "signatureReminded",
+  "document.signature_link_copied": "signatureLinkCopied",
+  "document.signature_changed": "signatureChanged",
+  "document.signature_voided": "signatureVoided",
+  "document.legal_hold_placed": "legalHoldPlaced",
+  "document.legal_hold_released": "legalHoldReleased",
+  "document.evidence_exported": "evidenceExported",
+  "document.expired": "expired",
+} as const;
 
-export function formatActivityType(type: string) {
-  const known = ACTIVITY_LABELS[type];
-  if (known) return known;
+/** `t` must come from the caller's namespace that holds an `activity` group. */
+export function formatActivityType(
+  type: string,
+  t: ReturnType<typeof useTranslations>,
+) {
+  const known =
+    ACTIVITY_LABEL_KEYS[type as keyof typeof ACTIVITY_LABEL_KEYS];
+  if (known) return t(`activity.${known}`);
   const plain = type.replace(/^document\./, "").replaceAll("_", " ");
   return plain.charAt(0).toUpperCase() + plain.slice(1);
 }
@@ -186,6 +209,7 @@ export function UploadDialog({
   /** Pre-select an association (the candidate a filtered hub is scoped to). */
   defaultAssociation?: { type: "candidate" | "job"; id: string } | null;
 }) {
+  const t = useTranslations("features.documents.uploadDialog");
   const router = useRouter();
   const [file, setFile] = useState<File | null>(null);
   const [name, setName] = useState("");
@@ -211,7 +235,7 @@ export function UploadDialog({
     if (!next) return;
     const validationError = validateDocumentFile(next);
     if (validationError) {
-      setError(validationError);
+      setError(t(`fileErrors.${validationError}`));
       return;
     }
     setFile(next);
@@ -220,7 +244,7 @@ export function UploadDialog({
 
   function submit() {
     if (!file) {
-      setError("Choose a file to upload.");
+      setError(t("chooseFile"));
       return;
     }
     startTransition(async () => {
@@ -252,18 +276,24 @@ export function UploadDialog({
               },
             });
         if (!result.ok)
-          throw new Error(result.error ?? "Could not save the document.");
+          throw new Error(result.error ?? t("saveError"));
         toast.success(
-          replaceDocument ? "New version uploaded" : "Document uploaded",
+          replaceDocument ? t("versionUploaded") : t("uploaded"),
         );
         reset();
         onOpenChange(false);
         router.refresh();
       } catch (caught) {
         setError(
-          caught instanceof Error
-            ? caught.message
-            : "Could not upload the document.",
+          caught instanceof DocumentUploadError
+            ? t(
+                caught.step === "prepare"
+                  ? "prepareUploadError"
+                  : "uploadError",
+              )
+            : caught instanceof Error
+              ? caught.message
+              : t("uploadError"),
         );
       }
     });
@@ -280,38 +310,38 @@ export function UploadDialog({
       <DialogContent>
         <DialogHeader>
           <DialogTitle>
-            {replaceDocument ? "Upload new version" : "Upload document"}
+            {replaceDocument ? t("replaceTitle") : t("title")}
           </DialogTitle>
           <DialogDescription>
             {replaceDocument
-              ? `Replaces the current file for “${replaceDocument.name}”. Previous versions remain in the audit trail.`
-              : "Keep contracts, credentials, and hiring files in one workspace-scoped vault."}
+              ? t("replaceDescription", { name: replaceDocument.name })
+              : t("description")}
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-4 py-2">
           <div className="space-y-2">
-            <Label htmlFor="document-file">File</Label>
+            <Label htmlFor="document-file">{t("fileLabel")}</Label>
             <DropZone
               id="document-file"
               accept=".pdf,.doc,.docx,.png,.jpg,.jpeg,.gif,.webp"
-              title={file?.name ?? "Drag a file here or click to browse"}
-              hint="PDF, DOCX, or image · up to 25 MB"
+              title={file?.name ?? t("dropTitle")}
+              hint={t("dropHint")}
               onFiles={([next]) => chooseFile(next ?? null)}
             />
           </div>
           {!replaceDocument ? (
             <>
               <div className="space-y-2">
-                <Label htmlFor="document-name">Display name</Label>
+                <Label htmlFor="document-name">{t("nameLabel")}</Label>
                 <Input
                   id="document-name"
                   value={name}
                   onChange={(event) => setName(event.target.value)}
-                  placeholder="Offer letter — Taylor Okafor"
+                  placeholder={t("namePlaceholder")}
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="document-category">Category</Label>
+                <Label htmlFor="document-category">{t("categoryLabel")}</Label>
                 <Select
                   value={categoryId || "none"}
                   onValueChange={(value) => setCategoryId(value === "none" ? "" : value)}
@@ -320,7 +350,7 @@ export function UploadDialog({
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent position="popper">
-                    <SelectItem value="none">No category</SelectItem>
+                    <SelectItem value="none">{t("noCategory")}</SelectItem>
                     {data.categories
                       .filter((category) => category.active)
                       .map((category) => (
@@ -332,7 +362,7 @@ export function UploadDialog({
                 </Select>
               </div>
               <div className="space-y-2">
-                <Label htmlFor="document-association">Associate with</Label>
+                <Label htmlFor="document-association">{t("associationLabel")}</Label>
                 <Select
                   value={associationType}
                   onValueChange={(next) => {
@@ -344,20 +374,28 @@ export function UploadDialog({
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent position="popper">
-                    <SelectItem value="workspace">Workspace library</SelectItem>
-                    <SelectItem value="candidate">Candidate</SelectItem>
-                    <SelectItem value="job">Job</SelectItem>
+                    <SelectItem value="workspace">{t("workspaceLibrary")}</SelectItem>
+                    <SelectItem value="candidate">{t("candidate")}</SelectItem>
+                    <SelectItem value="job">{t("job")}</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
               {associationType !== "workspace" ? (
                 <div className="space-y-2">
                   <Label htmlFor="document-association-target">
-                    Choose {associationType}
+                    {associationType === "candidate"
+                      ? t("chooseCandidate")
+                      : t("chooseJob")}
                   </Label>
                   <Select value={associationId} onValueChange={setAssociationId}>
                     <SelectTrigger id="document-association-target" className="w-full">
-                      <SelectValue placeholder={`Select a ${associationType}`} />
+                      <SelectValue
+                        placeholder={
+                          associationType === "candidate"
+                            ? t("selectCandidate")
+                            : t("selectJob")
+                        }
+                      />
                     </SelectTrigger>
                     <SelectContent position="popper" className="max-h-64">
                       {data.associationOptions
@@ -381,10 +419,14 @@ export function UploadDialog({
             disabled={isPending}
             onClick={() => onOpenChange(false)}
           >
-            Cancel
+            {t("cancel")}
           </Button>
           <Button onClick={submit} disabled={isPending}>
-            {isPending ? "Uploading…" : replaceDocument ? "Upload new version" : "Upload document"}
+            {isPending
+              ? t("uploading")
+              : replaceDocument
+                ? t("submitReplace")
+                : t("submit")}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -403,6 +445,7 @@ export function AccessDialog({
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }) {
+  const t = useTranslations("features.documents.accessDialog");
   const router = useRouter();
   const [roles, setRoles] = useState<
     Array<{ roleKey: string; accessLevel: "read" | "manage" }>
@@ -433,10 +476,10 @@ export function AccessDialog({
         members,
       });
       if (!result.ok) {
-        toast.error(result.error ?? "Could not update access.");
+        toast.error(result.error ?? t("fallbackError"));
         return;
       }
-      toast.success("Access updated");
+      toast.success(t("saved"));
       onOpenChange(false);
       router.refresh();
     });
@@ -445,16 +488,15 @@ export function AccessDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Manage access</DialogTitle>
+          <DialogTitle>{t("title")}</DialogTitle>
           <DialogDescription>
-            {document.name}. Members need both the global Documents permission
-            and an ACL match.
+            {t("description", { name: document.name })}
           </DialogDescription>
         </DialogHeader>
         <div className="max-h-[55vh] space-y-5 overflow-y-auto py-2">
           <div>
             <p className="mb-2 text-[11px] font-medium uppercase tracking-wide text-soft-ink">
-              Roles
+              {t("rolesLabel")}
             </p>
             <div className="divide-y divide-hairline overflow-hidden rounded-[var(--radius-inner)] bg-card-inset">
               {[...new Set(data.members.map((member) => member.role))].map(
@@ -478,7 +520,7 @@ export function AccessDialog({
           </div>
           <div>
             <p className="mb-2 text-[11px] font-medium uppercase tracking-wide text-soft-ink">
-              Specific members
+              {t("membersLabel")}
             </p>
             <div className="divide-y divide-hairline overflow-hidden rounded-[var(--radius-inner)] bg-card-inset">
               {data.members.map((member) => {
@@ -506,17 +548,15 @@ export function AccessDialog({
             </div>
           </div>
           <p className="text-xs leading-5 text-soft-ink">
-            If no roles or members are selected, the document follows the
-            workspace-level Documents permission. Once a rule is added, only
-            matching users can open it.
+            {t("footnote")}
           </p>
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>
-            Cancel
+            {t("cancel")}
           </Button>
           <Button onClick={save} disabled={isPending}>
-            {isPending ? "Saving…" : "Save access"}
+            {isPending ? t("saving") : t("save")}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -533,6 +573,7 @@ export function CategoryDialog({
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }) {
+  const t = useTranslations("features.documents.categoryDialog");
   const router = useRouter();
   const [name, setName] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -542,11 +583,11 @@ export function CategoryDialog({
     startTransition(async () => {
       const result = await createDocumentCategory({ name });
       if (!result.ok) {
-        setError(result.error ?? "Could not create category.");
+        setError(result.error ?? t("fallbackError"));
         return;
       }
       setName("");
-      toast.success("Category created");
+      toast.success(t("created"));
       router.refresh();
     });
   }
@@ -554,10 +595,9 @@ export function CategoryDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Document categories</DialogTitle>
+          <DialogTitle>{t("title")}</DialogTitle>
           <DialogDescription>
-            Use a small, consistent vocabulary so filters stay useful as the
-            workspace grows.
+            {t("description")}
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-4 py-2">
@@ -565,18 +605,18 @@ export function CategoryDialog({
             <Input
               value={name}
               onChange={(event) => setName(event.target.value)}
-              placeholder="Employment agreement"
+              placeholder={t("namePlaceholder")}
             />
             <Button onClick={addCategory} disabled={isPending || !name.trim()}>
               <Plus className="size-4" />
-              Add
+              {t("add")}
             </Button>
           </div>
           {error ? <Callout tone="danger">{error}</Callout> : null}
           <div className="divide-y divide-hairline overflow-hidden rounded-[var(--radius-inner)] bg-card-inset">
             {data.categories.length === 0 ? (
               <p className="px-3 py-5 text-center text-sm text-soft-ink">
-                No custom categories yet.
+                {t("empty")}
               </p>
             ) : (
               data.categories.map((category) => (
@@ -591,6 +631,7 @@ export function CategoryDialog({
 }
 
 function CategoryRow({ category }: { category: DocumentCategoryItem }) {
+  const t = useTranslations("features.documents.categoryRow");
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [editing, setEditing] = useState(false);
@@ -603,7 +644,7 @@ function CategoryRow({ category }: { category: DocumentCategoryItem }) {
         accent: category.accent,
         active: category.active,
       });
-      if (!result.ok) toast.error(result.error ?? "Could not update category.");
+      if (!result.ok) toast.error(result.error ?? t("fallbackError"));
       else {
         setEditing(false);
         router.refresh();
@@ -623,15 +664,15 @@ function CategoryRow({ category }: { category: DocumentCategoryItem }) {
         <span className="min-w-0 flex-1 truncate text-sm">{category.name}</span>
       )}
       <StatusPill tone={category.active ? "accent" : "neutral"}>
-        {category.active ? "Active" : "Hidden"}
+        {category.active ? t("active") : t("hidden")}
       </StatusPill>
       {editing ? (
         <Button size="sm" onClick={save} disabled={isPending}>
-          Save
+          {t("save")}
         </Button>
       ) : (
         <Button size="sm" variant="ghost" onClick={() => setEditing(true)}>
-          Edit
+          {t("edit")}
         </Button>
       )}
     </div>

@@ -1,6 +1,7 @@
 "use client";
 
 import type { Route } from "next";
+import { useTranslations } from "next-intl";
 import { useRouter } from "next/navigation";
 
 import {
@@ -19,6 +20,7 @@ export function PipelineJobSelect({
   jobs: { id: string; title: string }[];
   selectedId: string;
 }) {
+  const t = useTranslations("shell.pipelineOverview");
   const router = useRouter();
 
   return (
@@ -28,7 +30,7 @@ export function PipelineJobSelect({
         router.push(`/dashboard?job=${id}` as Route, { scroll: false })
       }
     >
-      <SelectTrigger size="sm" className="w-full">
+      <SelectTrigger size="sm" className="w-full" aria-label={t("selectJob")}>
         <SelectValue />
       </SelectTrigger>
       <SelectContent>

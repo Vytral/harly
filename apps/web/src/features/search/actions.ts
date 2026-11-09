@@ -1,6 +1,7 @@
 "use server";
 
 import { z } from "zod";
+import { getTranslations } from "@/i18n/server";
 
 import { createLogger } from "@/lib/logger";
 
@@ -51,9 +52,10 @@ const log = createLogger("workspace-search");
 export async function searchWorkspaceAction(
   rawQuery: string,
 ): Promise<WorkspaceSearchActionResult> {
+  const t = await getTranslations("server.search.actions");
   const parsed = querySchema.safeParse(rawQuery);
   if (!parsed.success) {
-    return { ok: false, error: "That search is too long. Shorten it and try again." };
+    return { ok: false, error: t("searchTooLong") };
   }
   const query = normalizeSearchQuery(parsed.data);
   if (!query) {
@@ -68,7 +70,7 @@ export async function searchWorkspaceAction(
     if (isRedirectSignal(error)) throw error;
     // Drizzle errors carry the bound parameters, which are the typed text.
     log.error({ failure: safeFailure(error) }, "workspace search failed");
-    return { ok: false, error: "Search didn't load. Try again." };
+    return { ok: false, error: t("searchFailed") };
   }
 }
 
@@ -88,13 +90,14 @@ function isRedirectSignal(error: unknown): boolean {
  * page does not pass the id down, so the palette asks once when it mounts.
  */
 export async function recentsViewerAction(): Promise<RecentsViewerActionResult> {
+  const t = await getTranslations("server.search.actions");
   try {
     const actor = await resolveSearchActor();
     return { ok: true, userId: actor.userId };
   } catch (error) {
     if (isRedirectSignal(error)) throw error;
     log.error({ failure: safeFailure(error) }, "recents viewer failed");
-    return { ok: false, error: "Search didn't load. Try again." };
+    return { ok: false, error: t("searchFailed") };
   }
 }
 
@@ -105,9 +108,10 @@ export async function recentsViewerAction(): Promise<RecentsViewerActionResult> 
 export async function visibleRecentsAction(
   refs: unknown,
 ): Promise<VisibleRecentsActionResult> {
+  const t = await getTranslations("server.search.actions");
   const parsed = recentRefsSchema.safeParse(refs);
   if (!parsed.success) {
-    return { ok: false, error: "Recent searches could not be checked." };
+    return { ok: false, error: t("recentSearchesUnavailable") };
   }
   if (parsed.data.length === 0) return { ok: true, visible: [] };
 
@@ -118,7 +122,7 @@ export async function visibleRecentsAction(
   } catch (error) {
     if (isRedirectSignal(error)) throw error;
     log.error({ failure: safeFailure(error) }, "recents check failed");
-    return { ok: false, error: "Recent searches could not be checked." };
+    return { ok: false, error: t("recentSearchesUnavailable") };
   }
 }
 

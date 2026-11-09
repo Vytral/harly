@@ -1,4 +1,7 @@
 import type { CandidateExperienceEntry, ResumeExperienceItem } from "@harly/db";
+import { useLocale, useTranslations } from "next-intl";
+
+type Translator = ReturnType<typeof useTranslations>;
 
 function isStructuredEntry(
   item: ResumeExperienceItem | CandidateExperienceEntry,
@@ -6,25 +9,25 @@ function isStructuredEntry(
   return "id" in item;
 }
 
-function formatMonth(value: string | null | undefined) {
+function formatMonth(value: string | null | undefined, locale: string) {
   if (!value) return null;
   const [year, month] = value.split("-");
   if (!year || !month) return value;
   const date = new Date(Number(year), Number(month) - 1, 1);
   if (Number.isNaN(date.getTime())) return value;
-  return new Intl.DateTimeFormat("en", {
+  return new Intl.DateTimeFormat(locale, {
     month: "short",
     year: "numeric",
   }).format(date);
 }
 
-function formatDateRange(item: CandidateExperienceEntry) {
-  const start = formatMonth(item.startDate);
-  const end = item.current ? "Present" : formatMonth(item.endDate);
-  if (start && end) return `${start} - ${end}`;
-  if (start) return `${start} - ${item.current ? "Present" : "Not set"}`;
+function formatDateRange(item: CandidateExperienceEntry, t: Translator, locale: string) {
+  const start = formatMonth(item.startDate, locale);
+  const end = item.current ? t("present") : formatMonth(item.endDate, locale);
+  if (start && end) return t("dateRange", { start, end });
+  if (start) return t("dateRange", { start, end: item.current ? t("present") : t("notSet") });
   if (end) return end;
-  return "Not set";
+  return t("notSet");
 }
 
 function descriptionBullets(value: string | null | undefined) {
@@ -45,6 +48,8 @@ export function ExperienceTimeline({
 }: {
   experience: Array<ResumeExperienceItem | CandidateExperienceEntry>;
 }) {
+  const t = useTranslations("features.candidates.ExperienceTimeline");
+  const locale = useLocale();
   if (experience.length === 0) return null;
 
   return (
@@ -55,11 +60,15 @@ export function ExperienceTimeline({
           className="grid gap-3 sm:grid-cols-[8rem_minmax(0,1fr)]"
         >
           <div className="text-sm text-muted-foreground">
-            {isStructuredEntry(item) ? formatDateRange(item) : item.dateRange ?? "Not set"}
+            {isStructuredEntry(item) ? formatDateRange(item, t, locale) : item.dateRange ?? t("notSet")}
           </div>
           <div className="min-w-0">
             <p className="font-medium leading-snug">
-              {item.title} <span className="text-muted-foreground">at</span> {item.company}
+              {t.rich("roleAtCompany", {
+                title: item.title,
+                company: item.company,
+                muted: (chunks) => <span className="text-muted-foreground">{chunks}</span>,
+              })}
             </p>
             {isStructuredEntry(item) && item.location ? (
               <p className="mt-1 text-sm text-muted-foreground">{item.location}</p>

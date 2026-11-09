@@ -1,11 +1,13 @@
 "use client";
 
 import { useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { useState, useTransition } from "react";
 import { RotateCcw, Trash2 } from "lucide-react";
 import { toast } from "@/lib/notification-island/toast";
 
 import { permanentlyDeleteJobAction, restoreJobAction } from "./actions";
+import { getJobActionErrorKey } from "./action-errors";
 import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 
@@ -16,6 +18,8 @@ export function TrashJobActions({
   jobId: string;
   jobTitle: string;
 }) {
+  const t = useTranslations("jobs.trashActions");
+  const tErrors = useTranslations("jobs.errors");
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [confirmOpen, setConfirmOpen] = useState(false);
@@ -24,10 +28,11 @@ export function TrashJobActions({
     startTransition(async () => {
       const result = await restoreJobAction(jobId);
       if (result.success) {
-        toast.success("Job restored.");
+        toast.success(t("restored"));
         router.refresh();
       } else {
-        toast.error(result.error ?? "Could not restore the job.");
+        const errorKey = getJobActionErrorKey(result.code);
+        toast.error(errorKey ? tErrors(errorKey) : t("restoreError"));
       }
     });
   }
@@ -35,12 +40,14 @@ export function TrashJobActions({
   async function deleteForever() {
     const result = await permanentlyDeleteJobAction(jobId);
     if (result.success) {
-      toast.success("Job deleted permanently.");
+      toast.success(t("deleted"));
       router.refresh();
     } else {
-      toast.error(result.error ?? "Could not delete the job.");
+      const errorKey = getJobActionErrorKey(result.code);
+      const message = errorKey ? tErrors(errorKey) : t("deleteError");
+      toast.error(message);
       // Keep the dialog open so the user can read the error and retry.
-      throw new Error(result.error);
+      throw new Error(message);
     }
   }
 
@@ -53,7 +60,7 @@ export function TrashJobActions({
         disabled={isPending}
       >
         <RotateCcw className="size-4" />
-        Restore
+        {t("restore")}
       </Button>
       <Button
         variant="ghost"
@@ -61,7 +68,7 @@ export function TrashJobActions({
         className="size-8 text-muted-foreground hover:text-destructive"
         onClick={() => setConfirmOpen(true)}
         disabled={isPending}
-        aria-label="Delete permanently"
+        aria-label={t("deletePermanently")}
       >
         <Trash2 className="size-4" />
       </Button>
@@ -70,9 +77,9 @@ export function TrashJobActions({
         open={confirmOpen}
         onOpenChange={setConfirmOpen}
         tone="destructive"
-        title="Delete job permanently?"
-        description={`“${jobTitle}” will be removed for good. Jobs with applications can't be deleted. Close them instead. This can't be undone.`}
-        confirmLabel="Delete permanently"
+        title={t("confirmTitle")}
+        description={t("confirmDescription", { jobTitle })}
+        confirmLabel={t("deletePermanently")}
         onConfirm={deleteForever}
       />
     </div>

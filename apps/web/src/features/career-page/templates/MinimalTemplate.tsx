@@ -1,5 +1,6 @@
 "use client";
 
+import { useTranslations } from "next-intl";
 import Link from "next/link";
 import type { Route } from "next";
 import { ArrowUpRight } from "lucide-react";
@@ -46,7 +47,9 @@ export function MinimalTemplate({
   const base = boardBase(boardRoot);
   const headline = config.hero.headline || `Careers at ${workspace.name}`;
   const subhead = config.hero.subhead;
-  const ctaText = config.hero.ctaButtonText || "View jobs";
+  const tFallbacks = useTranslations("labels.careerPage.fallbacks");
+  const tFacets = useTranslations("labels.careerPage.facets");
+  const ctaText = config.hero.ctaButtonText || tFallbacks("viewJobs");
   const btn = "rounded-[var(--career-r-btn,10px)]";
 
   // Which logo to show: square mark vs full wordmark.
@@ -73,7 +76,7 @@ export function MinimalTemplate({
         ? "justify-end"
         : "justify-start";
 
-  const groups = groupByDepartment(jobs);
+  const groups = groupByDepartment(jobs, tFacets("other"));
   const hasIntro = Boolean(config.intro.body);
   const bannerImage = config.hero.imageUrl ?? workspace.heroImageUrl;
   // A floor on the scrim keeps white text readable over bright photos.
@@ -286,7 +289,7 @@ export function MinimalTemplate({
                 )}
                 style={{ backgroundColor: ctaColor, color: readableInk(ctaColor) }}
               >
-                {config.cta.buttonText || "Get in touch"}
+                {config.cta.buttonText || tFallbacks("getInTouch")}
               </a>
             )}
           </div>

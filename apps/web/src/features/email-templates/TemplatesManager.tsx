@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import type { Route } from "next";
 import { toast } from "@/lib/notification-island/toast";
 import DOMPurify from "dompurify";
+import { useTranslations } from "next-intl";
 
 import {
   createEmailTemplate,
@@ -57,14 +58,7 @@ import { cn } from "@/lib/utils";
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 
-const TEMPLATE_TYPE_LABELS: Record<TemplateType, string> = {
-  general: "General",
-  interview_invite: "Interview",
-  rejection: "Rejection",
-  offer: "Offer",
-  screening: "Screening",
-  stage_change: "Stage change",
-};
+const TEMPLATE_TYPES: TemplateType[] = ["general", "interview_invite", "rejection", "offer", "screening", "stage_change"];
 
 const TEMPLATE_TYPE_COLORS: Record<TemplateType, string> = {
   general: "bg-soft-kraft text-soft-ink",
@@ -85,10 +79,8 @@ function isAutomaticTemplateType(type: TemplateType) {
   return ACTIVATABLE_TYPES.has(type);
 }
 
-function templateTypeDescription(type: TemplateType) {
-  return isAutomaticTemplateType(type)
-    ? "Automatic: review the preview, then activate it to replace Harly's default event email."
-    : "Manual only: use it when composing an email to a candidate.";
+function typeDescriptionKey(type: TemplateType): "typeDescriptionAutomatic" | "typeDescriptionManual" {
+  return isAutomaticTemplateType(type) ? "typeDescriptionAutomatic" : "typeDescriptionManual";
 }
 
 // Groups for the variable pill picker
@@ -102,39 +94,33 @@ const VARIABLE_GROUPS = Array.from(
 
 // Starter templates shown when the workspace has no templates yet
 const STARTER_TEMPLATES: Array<{
-  name: string;
+  key: "interviewInvitation" | "applicationRejection" | "offerExtended" | "screeningCall" | "stageUpdate";
   type: TemplateType;
-  subject: string;
   body: string;
 }> = [
   {
-    name: "Interview invitation",
+    key: "interviewInvitation",
     type: "interview_invite",
-    subject: "Interview invitation, {{job_title}} at {{company_name}}",
     body: "<p>Hi {{candidate_first_name}},</p><p>We'd love to invite you to an interview for the <strong>{{job_title}}</strong> role at {{company_name}}.</p><p><strong>Date:</strong> {{interview_date}}<br><strong>Time:</strong> {{interview_time}}<br><strong>Location:</strong> {{interview_location}}</p><p>Please let us know if this works for you.</p><p>Best,<br>{{sender_name}}</p>",
   },
   {
-    name: "Application rejection",
+    key: "applicationRejection",
     type: "rejection",
-    subject: "Your application for {{job_title}}",
     body: "<p>Hi {{candidate_first_name}},</p><p>Thank you for your interest in the <strong>{{job_title}}</strong> position at {{company_name}} and for taking the time to apply.</p><p>After careful consideration, we've decided to move forward with other candidates whose experience more closely matches our current needs.</p><p>We'll keep your profile on file and encourage you to apply for future openings that may be a better fit.</p><p>Best of luck,<br>{{sender_name}}</p>",
   },
   {
-    name: "Offer extended",
+    key: "offerExtended",
     type: "offer",
-    subject: "Offer letter, {{job_title}} at {{company_name}}",
     body: "<p>Hi {{candidate_first_name}},</p><p>We're thrilled to offer you the <strong>{{job_title}}</strong> position at {{company_name}}.</p><p><strong>Compensation:</strong> {{offer_salary}}<br><strong>Offer expires:</strong> {{offer_expiry}}</p><p>Please review the attached offer letter and let us know if you have any questions.</p><p>We're excited to have you on board,<br>{{sender_name}}</p>",
   },
   {
-    name: "Screening call",
+    key: "screeningCall",
     type: "screening",
-    subject: "Quick intro call, {{job_title}}",
     body: "<p>Hi {{candidate_first_name}},</p><p>We reviewed your application for <strong>{{job_title}}</strong> at {{company_name}} and we're impressed with your background.</p><p>We'd love to schedule a quick 30-minute call to learn more about you and share details about the role.</p><p>Looking forward to connecting,<br>{{sender_name}}</p>",
   },
   {
-    name: "Stage update",
+    key: "stageUpdate",
     type: "stage_change",
-    subject: "You're moving to {{stage_name}}, {{job_title}}",
     body: "<p>Hi {{candidate_first_name}},</p><p>Good news. Your application for <strong>{{job_title}}</strong> at {{company_name}} has moved to the <strong>{{stage_name}}</strong> stage.</p><p>Someone from the team will reach out shortly with next steps.</p><p>Best,<br>{{sender_name}}</p>",
   },
 ];
@@ -174,6 +160,9 @@ export function TemplatesManager({
   templates: EmailTemplateItem[];
   workspaceName: string;
 }) {
+  const t = useTranslations("features.emailTemplates.templatesManager");
+  const tLabels = useTranslations("labels.emailTemplates");
+  const typeLabel = (type: TemplateType) => t(`typeLabels.${type}`);
   const previewValues = { ...PREVIEW_VALUES, company_name: workspaceName };
   const router = useRouter();
   const confirm = useConfirm();
@@ -232,10 +221,10 @@ export function TemplatesManager({
         : await createEmailTemplate(fields);
 
       if (!result.success) {
-        toast.error(result.error ?? "Could not save the template.");
+        toast.error(result.error ?? t("saveFailed"));
         return;
       }
-      toast.success(editing ? "Template updated" : "Template created");
+      toast.success(editing ? t("templateUpdated") : t("templateCreated"));
       closeEditor();
       router.refresh();
     });
@@ -245,19 +234,19 @@ export function TemplatesManager({
     if (
       !(await confirm({
         tone: "destructive",
-        title: `Delete the "${template.name}" template?`,
-        description: "Emails that use it will fall back to the default wording. This cannot be undone.",
-        confirmLabel: "Delete template",
+        title: t("deleteTitle", { name: template.name }),
+        description: t("deleteDescription"),
+        confirmLabel: t("deleteConfirm"),
       }))
     )
       return;
     startTransition(async () => {
       const result = await deleteEmailTemplate({ templateId: template.id });
       if (!result.success) {
-        toast.error(result.error ?? "Could not delete the template.");
+        toast.error(result.error ?? t("deleteFailed"));
         return;
       }
-      toast.success("Template deleted");
+      toast.success(t("templateDeleted"));
       router.refresh();
     });
   }
@@ -269,13 +258,13 @@ export function TemplatesManager({
         active: !template.isActive,
       });
       if (!result.success) {
-        toast.error(result.error ?? "Could not update the template.");
+        toast.error(result.error ?? t("updateFailed"));
         return;
       }
       toast.success(
         template.isActive
-          ? "Reverted to the default email"
-          : `Now used for every ${TEMPLATE_TYPE_LABELS[template.type].toLowerCase()} email`,
+          ? t("revertedNotice")
+          : t("activatedNotice", { type: typeLabel(template.type).toLowerCase() }),
       );
       router.refresh();
     });
@@ -286,12 +275,12 @@ export function TemplatesManager({
     return html.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
   }
 
-  const typeOptions = Object.keys(TEMPLATE_TYPE_LABELS) as TemplateType[];
+  const typeOptions = TEMPLATE_TYPES;
 
   function renderStarter(starter: (typeof STARTER_TEMPLATES)[number]) {
     return (
       <button
-        key={starter.name}
+        key={starter.key}
         type="button"
         onClick={() => openNew(starter)}
         className="group flex w-full items-center gap-3 rounded-[var(--radius-inner)] px-3 py-3 text-left transition-colors hover:bg-row-wash focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-near-ink"
@@ -301,12 +290,12 @@ export function TemplatesManager({
         </span>
         <span className="min-w-0 flex-1">
           <span className="flex flex-wrap items-center gap-2">
-            <span className="text-sm font-semibold text-near-ink">{starter.name}</span>
+            <span className="text-sm font-semibold text-near-ink">{t(`starters.${starter.key}.name`)}</span>
             <span className={cn(TYPE_CHIP, TEMPLATE_TYPE_COLORS[starter.type])}>
-              {TEMPLATE_TYPE_LABELS[starter.type]}
+              {typeLabel(starter.type)}
             </span>
           </span>
-          <span className="mt-0.5 block truncate text-[13px] text-soft-ink">{starter.subject}</span>
+          <span className="mt-0.5 block truncate text-[13px] text-soft-ink">{t(`starters.${starter.key}.subject`)}</span>
         </span>
         <CaretRightIcon className="size-4 shrink-0 text-quiet-mist transition-transform group-hover:translate-x-0.5" />
       </button>
@@ -323,19 +312,19 @@ export function TemplatesManager({
               <div className="relative w-full sm:w-64">
                 <SearchIcon className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-quiet-mist" />
                 <Input
-                  aria-label="Search templates"
-                  placeholder="Search templates…"
+                  aria-label={t("searchLabel")}
+                  placeholder={t("searchPlaceholder")}
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
                   className="rounded-full pl-9"
                 />
               </div>
               <FilterPill
-                label="Type"
+                label={t("typeFilter")}
                 value={filterType}
                 onChange={(v) => setFilterType(v as TemplateType | "all")}
                 options={["all", ...typeOptions]}
-                labelMap={{ all: "All", ...TEMPLATE_TYPE_LABELS }}
+                labelMap={{ all: t("allTypes"), ...Object.fromEntries(typeOptions.map((type) => [type, typeLabel(type)])) }}
                 allValue="all"
               />
             </>
@@ -344,25 +333,25 @@ export function TemplatesManager({
         <div className="flex items-center gap-2">
           {templates.length > 0 ? (
             <Button variant="outline" onClick={() => setShowStarters((visible) => !visible)}>
-              {showStarters ? "Hide starters" : "Use a starter"}
+              {showStarters ? t("hideStarters") : t("useStarter")}
             </Button>
           ) : null}
           <Button onClick={() => openNew()}>
             <PlusIcon className="size-4" />
-            New template
+            {t("newTemplate")}
           </Button>
         </div>
       </div>
 
       <Callout tone="info">
-        Automatic templates can replace Harly&apos;s event emails when activated. Review the preview before activating; general and screening templates are for manual outreach.
+        {t("automaticNotice")}
       </Callout>
 
       {templates.length > 0 && showStarters ? (
         <Card className="gap-2 p-4">
           <div className="px-2">
-            <p className="text-[15px] font-semibold tracking-[-0.01em] text-near-ink">Start from a template</p>
-            <p className="text-[13px] text-soft-ink">Choose a starting point, then customize it for your workspace.</p>
+            <p className="text-[15px] font-semibold tracking-[-0.01em] text-near-ink">{t("startFromTemplate")}</p>
+            <p className="text-[13px] text-soft-ink">{t("startFromTemplateHelp")}</p>
           </div>
           <div className="space-y-0.5">
             {STARTER_TEMPLATES.map(renderStarter)}
@@ -378,10 +367,12 @@ export function TemplatesManager({
               <FileTextIcon className="size-5" />
             </span>
             <div className="min-w-0">
-              <p className="text-[15px] font-semibold tracking-[-0.01em] text-near-ink">Write once, send often</p>
+              <p className="text-[15px] font-semibold tracking-[-0.01em] text-near-ink">{t("emptyTitle")}</p>
               <p className="mt-0.5 text-sm text-soft-ink">
-                Start from a starter template or create your own with variables like{" "}
-                <code className="rounded bg-pure-snow px-1 py-0.5 text-xs">{"{{candidate_first_name}}"}</code>.
+                {t.rich("emptyDescription", {
+                  variable: "{{candidate_first_name}}",
+                  code: (chunks) => <code className="rounded bg-pure-snow px-1 py-0.5 text-xs">{chunks}</code>,
+                })}
               </p>
             </div>
           </div>
@@ -393,8 +384,8 @@ export function TemplatesManager({
         <EmptyState
           variant="filtered"
           icon={FileTextIcon}
-          title="No templates match these filters"
-          description="Try another stage or category, or search by the template's name."
+          title={t("noMatchTitle")}
+          description={t("noMatchDescription")}
         />
       ) : (
         <Card className="gap-0 divide-y divide-hairline overflow-hidden py-0">
@@ -415,22 +406,22 @@ export function TemplatesManager({
                 <span className="flex flex-wrap items-center gap-2">
                   <span className="truncate text-sm font-semibold text-near-ink">{template.name}</span>
                   <span className={cn(TYPE_CHIP, TEMPLATE_TYPE_COLORS[template.type])}>
-                    {TEMPLATE_TYPE_LABELS[template.type]}
+                    {typeLabel(template.type)}
                   </span>
                   <span className="text-[11px] text-soft-ink">
-                    {isAutomaticTemplateType(template.type) ? "Automatic" : "Manual only"}
+                    {isAutomaticTemplateType(template.type) ? t("automatic") : t("manualOnly")}
                   </span>
                   {template.isActive ? (
                     <span className="inline-flex w-fit items-center gap-1.5 rounded-full bg-lime-wash px-2 py-0.5 text-[11px] font-semibold text-sage-ink">
                       <span aria-hidden className="size-1.5 rounded-full bg-success-olive" />
-                      Active
+                      {t("active")}
                     </span>
                   ) : null}
                 </span>
                 <span className="mt-1 block truncate text-[13px] font-medium text-near-ink/80">{template.subject}</span>
                 <span className="mt-0.5 line-clamp-1 text-[13px] text-soft-ink">{stripHtml(template.body)}</span>
                 <span className="mt-1 block text-xs text-quiet-mist">
-                  Updated <RelativeTime value={template.updatedAt} />
+                  {t.rich("updatedAgo", { time: () => <RelativeTime value={template.updatedAt} /> })}
                 </span>
               </button>
               <div className="flex shrink-0 items-center gap-1">
@@ -441,13 +432,13 @@ export function TemplatesManager({
                     className={cn("size-8", template.isActive ? "text-success-olive" : "text-soft-ink")}
                     aria-label={
                       template.isActive
-                        ? `Stop using "${template.name}" for auto-emails`
-                        : `Use "${template.name}" for every ${TEMPLATE_TYPE_LABELS[template.type].toLowerCase()} email`
+                        ? t("stopUsingAria", { name: template.name })
+                        : t("useForAria", { name: template.name, type: typeLabel(template.type).toLowerCase() })
                     }
                     title={
                       template.isActive
-                        ? "Active. Used for this workspace's auto-emails"
-                        : "Use for this workspace's auto-emails"
+                        ? t("activeTitle")
+                        : t("useTitle")
                     }
                     disabled={isPending}
                     onClick={() => toggleActive(template)}
@@ -463,7 +454,7 @@ export function TemplatesManager({
                   size="icon"
                   variant="ghost"
                   className="size-8 text-soft-ink hover:text-danger-rust"
-                  aria-label={`Delete ${template.name}`}
+                  aria-label={t("deleteAria", { name: template.name })}
                   disabled={isPending}
                   onClick={() => remove(template)}
                 >
@@ -486,10 +477,10 @@ export function TemplatesManager({
             isDirty &&
             !(await confirm({
               tone: "warning",
-              title: "Discard unsaved changes?",
-              description: "Your edits to this template will be lost.",
-              confirmLabel: "Discard changes",
-              cancelLabel: "Keep editing",
+              title: t("discardChangesTitle"),
+              description: t("discardChangesDescription"),
+              confirmLabel: t("discardChangesConfirm"),
+              cancelLabel: t("keepEditing"),
             }))
           )
             return;
@@ -498,19 +489,19 @@ export function TemplatesManager({
         }}
       >
         <DrawerLayout
-          title={editing ? "Edit template" : "New template"}
-          description="Variables are replaced per candidate when the email is sent."
+          title={editing ? t("editTitle") : t("newTitle")}
+          description={t("sheetDescription")}
           className="inset-0 h-dvh max-h-none w-screen max-w-none rounded-none border-0 sm:max-w-none"
           footer={
             <>
               <SheetClose asChild>
-                <Button variant="outline" disabled={isPending}>Cancel</Button>
+                <Button variant="outline" disabled={isPending}>{t("cancel")}</Button>
               </SheetClose>
               <Button
                 onClick={save}
                 disabled={isPending || !name.trim() || !subject.trim() || !body.trim()}
               >
-                {isPending ? "Saving…" : "Save template"}
+                {isPending ? t("saving") : t("save")}
               </Button>
             </>
           }
@@ -519,55 +510,55 @@ export function TemplatesManager({
             {/* Name + type row */}
             <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_14rem]">
               <div className="flex-1 space-y-2">
-                <Label htmlFor="template-name">Name</Label>
+                <Label htmlFor="template-name">{t("nameLabel")}</Label>
                 <Input
                   id="template-name"
                   value={name}
                   onChange={(e) => setName(e.target.value)}
-                  placeholder="Interview invitation"
+                  placeholder={t("namePlaceholder")}
                 />
               </div>
               <div className="space-y-2">
-                <Label>Type</Label>
+                <Label>{t("typeLabel")}</Label>
                 <Select value={type} onValueChange={(v) => setType(v as TemplateType)}>
                   <SelectTrigger>
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
                     <SelectGroup>
-                      <SelectLabel>Automatic emails</SelectLabel>
+                      <SelectLabel>{t("automaticGroup")}</SelectLabel>
                       {SYSTEM_TEMPLATE_TYPES.map((t) => (
-                        <SelectItem key={t} value={t}>{TEMPLATE_TYPE_LABELS[t]}</SelectItem>
+                        <SelectItem key={t} value={t}>{typeLabel(t)}</SelectItem>
                       ))}
                     </SelectGroup>
                     <SelectSeparator />
                     <SelectGroup>
-                      <SelectLabel>Manual outreach</SelectLabel>
+                      <SelectLabel>{t("manualGroup")}</SelectLabel>
                       {MANUAL_TEMPLATE_TYPES.map((t) => (
-                        <SelectItem key={t} value={t}>{TEMPLATE_TYPE_LABELS[t]}</SelectItem>
+                        <SelectItem key={t} value={t}>{typeLabel(t)}</SelectItem>
                       ))}
                     </SelectGroup>
                   </SelectContent>
                 </Select>
-                <p className="text-xs leading-4 text-muted-foreground">{templateTypeDescription(type)}</p>
+                <p className="text-xs leading-4 text-muted-foreground">{t(typeDescriptionKey(type))}</p>
               </div>
             </div>
 
             {/* Subject */}
             <div className="space-y-2">
-              <Label htmlFor="template-subject">Subject</Label>
+              <Label htmlFor="template-subject">{t("subjectLabel")}</Label>
               <Input
                 id="template-subject"
                 value={subject}
                 onChange={(e) => setSubject(e.target.value)}
-                placeholder="Next steps for {{job_title}}"
+                placeholder={t("subjectPlaceholder")}
               />
             </div>
 
             {/* Body , edit / preview tabs */}
             <div className="space-y-2">
               <div className="flex items-center justify-between">
-                <Label>Body</Label>
+                <Label>{t("bodyLabel")}</Label>
                 <div className="flex rounded-full bg-soft-kraft p-0.5">
                   <button
                     type="button"
@@ -577,7 +568,7 @@ export function TemplatesManager({
                       tab === "edit" ? "bg-pure-snow text-near-ink" : "text-soft-ink hover:text-near-ink",
                     )}
                   >
-                    Edit
+                    {t("edit")}
                   </button>
                   <button
                     type="button"
@@ -587,7 +578,7 @@ export function TemplatesManager({
                       tab === "preview" ? "bg-pure-snow text-near-ink" : "text-soft-ink hover:text-near-ink",
                     )}
                   >
-                    Preview
+                    {t("preview")}
                   </button>
                 </div>
               </div>
@@ -599,7 +590,7 @@ export function TemplatesManager({
                     defaultValue={body}
                     onChange={setBody}
                     editorRef={editorRef}
-                    placeholder={"Hi {{candidate_first_name}},\n\nWrite your message here…"}
+                    placeholder={t("bodyPlaceholder")}
                     minHeight="min(56vh,42rem)"
                   />
 
@@ -607,7 +598,7 @@ export function TemplatesManager({
                   <div className="space-y-2 pt-1">
                     {VARIABLE_GROUPS.map(([group, vars]) => (
                       <div key={group}>
-                        <p className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">{group}</p>
+                        <p className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">{tLabels(`groups.${group}`)}</p>
                         <div className="flex flex-wrap gap-1.5">
                           {vars.map((variable) => (
                             <button
@@ -615,7 +606,7 @@ export function TemplatesManager({
                               type="button"
                               onClick={() => editorRef.current?.insertText(`{{${variable.key}}}`)}
                               className="cursor-pointer rounded-full bg-card-inset px-2.5 py-0.5 text-xs font-medium text-soft-ink transition hover:bg-row-wash hover:text-near-ink"
-                              title={variable.label}
+                              title={tLabels(`variables.${variable.labelKey}`)}
                             >
                               {`{{${variable.key}}}`}
                             </button>
@@ -627,8 +618,7 @@ export function TemplatesManager({
 
                   {unknownVariables.length > 0 && (
                     <p className="text-xs text-warning-clay">
-                      Unknown variable{unknownVariables.length > 1 ? "s" : ""}:{" "}
-                      {unknownVariables.map((v) => `{{${v}}}`).join(", ")}, will be sent as-is.
+                      {t("unknownVariables", { count: unknownVariables.length, variables: unknownVariables.map((v) => `{{${v}}}`).join(", ") })}
                     </p>
                   )}
                 </>
@@ -651,7 +641,7 @@ export function TemplatesManager({
                       }}
                     />
                   ) : (
-                    <p className="text-sm text-muted-foreground">Nothing to preview yet.</p>
+                    <p className="text-sm text-muted-foreground">{t("nothingToPreview")}</p>
                   )}
                 </div>
               )}

@@ -23,6 +23,7 @@ import {
 } from "@dnd-kit/core";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
+import { useTranslations } from "next-intl";
 
 import { updateStageEmailSettings } from "@/features/pipeline/actions";
 import {
@@ -35,7 +36,6 @@ import {
   deriveColumns,
   displayName,
   failureMessage,
-  FALLBACK_FAILURE_MESSAGE,
   findApplicationStage,
   getOverTarget,
   limitToReveal,
@@ -129,14 +129,15 @@ function ShowMoreButton({
   stageName: string;
   onClick: () => void;
 }) {
+  const t = useTranslations("features.pipeline.PipelineBoard");
   return (
     <button
       type="button"
       onClick={onClick}
-      aria-label={`Show ${count} more candidates in ${stageName}`}
+      aria-label={t("showMoreAria", { count, stage: stageName })}
       className="font-chrome rounded-[var(--radius-md)] px-2 py-2 text-center text-[12px] text-soft-ink transition-colors hover:bg-row-wash hover:text-near-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-near-ink"
     >
-      Show {count} more
+      {t("showMore", { count })}
     </button>
   );
 }
@@ -148,6 +149,9 @@ export function PipelineBoard({
 }: PipelineBoardProps) {
   const router = useRouter();
   const confirm = useConfirm();
+  const t = useTranslations("features.pipeline.PipelineBoard");
+  const boardMessages = useTranslations("labels.pipeline.board");
+  const confirmMessages = useTranslations("labels.pipeline.confirmation");
   const [stages, setStages] = useState(initialStages);
   const baseColumns = useMemo(
     () => buildColumns(stages, applications),
@@ -236,31 +240,31 @@ export function PipelineBoard({
 
   function candidateLabel(applicationId: string) {
     const found = findApplicationStage(columns, applicationId);
-    return found ? displayName(found.application) : "Candidate";
+    return found ? displayName(found.application) : t("candidateFallback");
   }
 
   function stageLabel(stageId: string) {
-    return stages.find((stage) => stage.id === stageId)?.name ?? "stage";
+    return stages.find((stage) => stage.id === stageId)?.name ?? t("stageFallback");
   }
 
   const dragAnnouncements: Announcements = {
     onDragStart({ active }) {
-      return `Picked up ${candidateLabel(String(active.id))}.`;
+      return t("pickedUp", { name: candidateLabel(String(active.id)) });
     },
     onDragOver({ active, over }) {
       if (!over) return undefined;
       const target = getOverTarget(columns, stages, String(over.id));
       if (!target) return undefined;
-      return `${candidateLabel(String(active.id))} is over ${stageLabel(target.stageId)}.`;
+      return t("dragOver", { name: candidateLabel(String(active.id)), stage: stageLabel(target.stageId) });
     },
     onDragEnd({ active, over }) {
-      if (!over) return `${candidateLabel(String(active.id))} was not moved.`;
+      if (!over) return t("dragNotMoved", { name: candidateLabel(String(active.id)) });
       const target = getOverTarget(columns, stages, String(over.id));
-      if (!target) return `${candidateLabel(String(active.id))} was not moved.`;
-      return `${candidateLabel(String(active.id))} moved to ${stageLabel(target.stageId)}.`;
+      if (!target) return t("dragNotMoved", { name: candidateLabel(String(active.id)) });
+      return t("dragMoved", { name: candidateLabel(String(active.id)), stage: stageLabel(target.stageId) });
     },
     onDragCancel({ active }) {
-      return `Moving ${candidateLabel(String(active.id))} was cancelled.`;
+      return t("dragCancelled", { name: candidateLabel(String(active.id)) });
     },
   };
 
@@ -281,7 +285,7 @@ export function PipelineBoard({
 
   function enqueueOperation(operation: BoardOperation) {
     setError(null);
-    queue.enqueue(operation);
+    queue.enqueue(operation, boardMessages);
   }
 
   /** Shows the outcome of a write this board started (or inherited). */
@@ -417,7 +421,7 @@ export function PipelineBoard({
     if (
       targets.length > 1 &&
       status === "hired" &&
-      !(await confirm(bulkDecisionConfirmCopy(status, targets.length)))
+      !(await confirm(bulkDecisionConfirmCopy(confirmMessages, status, targets.length)))
     ) {
       return;
     }
@@ -435,7 +439,9 @@ export function PipelineBoard({
       id: newOperationId(),
       workspaceId: targets[0].workspaceId,
       subject:
-        targets.length === 1 ? displayName(targets[0]) : `${targets.length} candidates`,
+        targets.length === 1
+          ? displayName(targets[0])
+          : boardMessages("candidateCount", { count: targets.length }),
       issuedAt: new Date().toISOString(),
       applicationIds: targets.map((application) => application.id),
       status,
@@ -455,7 +461,7 @@ export function PipelineBoard({
       kind: "bulkMove",
       id: newOperationId(),
       workspaceId: selectedApplications[0].workspaceId,
-      subject: `${applicationIds.length} candidates`,
+      subject: boardMessages("candidateCount", { count: applicationIds.length }),
       issuedAt: new Date().toISOString(),
       applicationIds,
       toStageId,
@@ -504,14 +510,14 @@ export function PipelineBoard({
 
       if (!result.success) {
         restore();
-        toast.error(failureMessage(result.error));
+        toast.error(failureMessage(result.error, boardMessages));
       }
     } catch (caught) {
       if (process.env.NODE_ENV !== "production") {
         console.error("[pipeline-board] stage email update failed", caught);
       }
       restore();
-      toast.error(FALLBACK_FAILURE_MESSAGE);
+      toast.error(boardMessages("fallbackFailure"));
     }
   }
 
@@ -521,13 +527,13 @@ export function PipelineBoard({
         <SearchIcon className="pointer-events-none absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-soft-ink" />
         <Input
           type="search"
-          aria-label="Search candidates"
+          aria-label={t("searchLabel")}
           value={searchQuery}
           onChange={(event) => {
             setSearchQuery(event.target.value);
             setSelectedIds(new Set());
           }}
-          placeholder="Search candidates…"
+          placeholder={t("searchPlaceholder")}
           className="h-9 w-full rounded-full border-transparent bg-card-inset pl-9 shadow-none sm:w-56"
         />
       </div>
@@ -538,15 +544,15 @@ export function PipelineBoard({
           setSelectedIds(new Set());
         }}
       >
-        <SelectTrigger className="h-9 w-full rounded-full border-transparent bg-soft-kraft shadow-none hover:bg-row-wash sm:w-36" aria-label="Filter by status">
+        <SelectTrigger className="h-9 w-full rounded-full border-transparent bg-soft-kraft shadow-none hover:bg-row-wash sm:w-36" aria-label={t("filterByStatus")}>
           <SelectValue />
         </SelectTrigger>
         <SelectContent>
-          <SelectItem value="all">All statuses</SelectItem>
-          <SelectItem value="active">Active</SelectItem>
-          <SelectItem value="hired">Hired</SelectItem>
-          <SelectItem value="rejected">Rejected</SelectItem>
-          <SelectItem value="withdrawn">Withdrawn</SelectItem>
+          <SelectItem value="all">{t("allStatuses")}</SelectItem>
+          <SelectItem value="active">{t("statusActive")}</SelectItem>
+          <SelectItem value="hired">{t("statusHired")}</SelectItem>
+          <SelectItem value="rejected">{t("statusRejected")}</SelectItem>
+          <SelectItem value="withdrawn">{t("statusWithdrawn")}</SelectItem>
         </SelectContent>
       </Select>
       <label className="hidden items-center gap-2 h-9 rounded-full bg-soft-kraft px-3.5 text-[13px] font-medium text-soft-ink sm:flex">
@@ -554,7 +560,7 @@ export function PipelineBoard({
           checked={hideEmptyColumns}
           onCheckedChange={(checked) => setHideEmptyColumns(checked === true)}
         />
-        Hide empty
+        {t("hideEmpty")}
       </label>
     </div>
   );
@@ -562,13 +568,13 @@ export function PipelineBoard({
   const bulkBar = selectedApplications.length > 0 ? (
     <div className="flex flex-col gap-3 rounded-[var(--radius-inner)] bg-lime-wash p-3 sm:flex-row sm:items-center sm:justify-between">
       <Badge variant="secondary" className="w-fit">
-        {selectedApplications.length} selected
+        {t("selectedCount", { count: selectedApplications.length })}
       </Badge>
       <div className="flex flex-wrap gap-2">
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button variant="outline" size="sm">
-              Move to stage
+              {t("moveToStage")}
               <CaretDownIcon className="size-4" />
             </Button>
           </DropdownMenuTrigger>
@@ -593,7 +599,7 @@ export function PipelineBoard({
           }
         >
           <CheckIcon className="size-4" />
-          Hire
+          {t("hire")}
         </Button>
         <Button
           size="sm"
@@ -606,14 +612,14 @@ export function PipelineBoard({
           }
         >
           <XIcon className="size-4" />
-          Reject
+          {t("reject")}
         </Button>
         <Button
           size="sm"
           variant="ghost"
           onClick={() => setSelectedIds(new Set())}
         >
-          Clear
+          {t("clear")}
         </Button>
       </div>
     </div>
@@ -642,8 +648,8 @@ export function PipelineBoard({
       {/* Mobile: stage selector + vertical card list */}
       <div className="sm:hidden">
         <Select value={mobileStage} onValueChange={setMobileStage}>
-          <SelectTrigger className="w-full" aria-label="Select stage">
-            <SelectValue placeholder="Select stage" />
+          <SelectTrigger className="w-full" aria-label={t("selectStage")}>
+            <SelectValue placeholder={t("selectStage")} />
           </SelectTrigger>
           <SelectContent>
             {stages.map((stage) => (
@@ -681,7 +687,7 @@ export function PipelineBoard({
           ) : null}
           {mobileAll.length === 0 ? (
             <div className="flex items-center justify-center rounded-[var(--radius-inner)] bg-card-inset p-8 text-center text-[13px] text-soft-ink">
-              No candidates in this stage
+              {t("noCandidatesInStage")}
             </div>
           ) : null}
         </div>

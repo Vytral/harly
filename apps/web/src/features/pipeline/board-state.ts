@@ -1,3 +1,5 @@
+import type { useTranslations } from "next-intl";
+
 import {
   applicationStatusForStage,
   type ApplicationOutcome,
@@ -19,6 +21,9 @@ import type { RejectionDecision } from "@/features/rejection-reasons/shared";
  */
 
 export type BoardColumns = Map<string, PipelineApplication[]>;
+
+/** Translator for the `labels.pipeline.board` namespace (toasts and announcements). */
+export type BoardTranslator = ReturnType<typeof useTranslations>;
 
 export type ApplicationStatus = PipelineApplication["status"];
 
@@ -403,40 +408,33 @@ export function pendingApplicationIds(entries: readonly QueueEntry[]) {
 
 // ── Failures and messages ───────────────────────────────────────────────────
 
-export const THROWN_FAILURE_MESSAGE =
-  "Something went wrong and the change was not saved. Please try again.";
-
-export const FALLBACK_FAILURE_MESSAGE = "The change was not saved. Please try again.";
-
 /** Prefer the server's message, which is written for people; never raw error text. */
-export function failureMessage(serverError: string | null | undefined) {
+export function failureMessage(serverError: string | null | undefined, t: BoardTranslator) {
   const trimmed = serverError?.trim();
-  return trimmed ? trimmed : FALLBACK_FAILURE_MESSAGE;
+  return trimmed ? trimmed : t("fallbackFailure");
 }
 
-export function cancelledMessage(count: number) {
-  return count === 1
-    ? "1 queued change was not applied because the one before it failed. The board has been refreshed."
-    : `${count} queued changes were not applied because the one before them failed. The board has been refreshed.`;
+export function cancelledMessage(count: number, t: BoardTranslator) {
+  return t("cancelled", { count });
 }
 
-export function successAnnouncement(operation: BoardOperation) {
+export function successAnnouncement(operation: BoardOperation, t: BoardTranslator) {
   if (operation.kind === "move") {
-    return `${operation.subject} moved to ${operation.toStageName}.`;
+    return t("successMoved", { subject: operation.subject, stage: operation.toStageName });
   }
   if (operation.kind === "bulkMove") {
-    const count = operation.applicationIds.length;
-    return `${count} candidate${count === 1 ? "" : "s"} moved to ${operation.toStageName}.`;
+    return t("successBulkMoved", {
+      count: operation.applicationIds.length,
+      stage: operation.toStageName,
+    });
   }
-  return `Status updated for ${operation.applicationIds.length} candidate${
-    operation.applicationIds.length === 1 ? "" : "s"
-  }.`;
+  return t("successStatus", { count: operation.applicationIds.length });
 }
 
-export function warningMessage(operation: BoardOperation, emailWarning: string) {
-  const headline =
-    operation.kind === "status" ? "Status updated." : "Stage updated.";
-  return `${headline} ${emailWarning}`;
+export function warningMessage(operation: BoardOperation, emailWarning: string, t: BoardTranslator) {
+  return operation.kind === "status"
+    ? t("warningStatus", { warning: emailWarning })
+    : t("warningStage", { warning: emailWarning });
 }
 
 // ── Settling a write ────────────────────────────────────────────────────────
@@ -478,6 +476,7 @@ export function settleWrite(
   entries: readonly QueueEntry[],
   operation: BoardOperation,
   outcome: WriteOutcome,
+  t: BoardTranslator,
 ): Settlement {
   const keyboardMove = operation.kind === "move" && operation.keyboard;
   const deselect = operation.kind === "move" ? [] : operationApplicationIds(operation);
@@ -486,12 +485,12 @@ export function settleWrite(
     const result = settle(entries, operation.id, "saved");
     const toasts: SettledToast[] = [];
     if (outcome.warning) {
-      toasts.push({ tone: "warning", message: warningMessage(operation, outcome.warning) });
+      toasts.push({ tone: "warning", message: warningMessage(operation, outcome.warning, t) });
     }
     const refresh = !hasUnfinished(result.entries);
     return {
       entries: result.entries,
-      announcement: successAnnouncement(operation),
+      announcement: successAnnouncement(operation, t),
       error: null,
       toasts,
       refresh,
@@ -504,12 +503,12 @@ export function settleWrite(
   }
 
   const result = settle(entries, operation.id, "failed");
-  const message = outcome.thrown ? THROWN_FAILURE_MESSAGE : failureMessage(outcome.error);
+  const message = outcome.thrown ? t("thrownFailure") : failureMessage(outcome.error, t);
   const toasts: SettledToast[] = [{ tone: "error", message }];
   let announcement = message;
 
   if (result.cancelled.length > 0) {
-    const cancelled = cancelledMessage(result.cancelled.length);
+    const cancelled = cancelledMessage(result.cancelled.length, t);
     toasts.push({ tone: "warning", message: cancelled });
     announcement = `${message} ${cancelled}`;
   }
@@ -537,7 +536,7 @@ export function visibleApplications(
   return applications.slice(0, limit);
 }
 
-/** How many more cards "Show more" will reveal. */
+/** How many more cards the "Show more" control will reveal. */
 export function nextPageSize(total: number, limit: number) {
   return Math.min(CARD_PAGE_SIZE, Math.max(0, total - limit));
 }

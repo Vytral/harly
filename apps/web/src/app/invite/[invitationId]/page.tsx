@@ -1,4 +1,5 @@
 import Image from "next/image";
+import { getTranslations } from "next-intl/server";
 import Link from "next/link";
 import { headers } from "next/headers";
 import { notFound } from "next/navigation";
@@ -15,6 +16,12 @@ type InvitePageProps = {
 };
 
 export default async function InvitePage({ params }: InvitePageProps) {
+  const t = await getTranslations("accessInvitation");
+  const roles: Record<string, string> = {
+    owner: t("roleOwner"), admin: t("roleAdmin"), recruiter: t("roleRecruiter"),
+    hiring_manager: t("roleHiringManager"), coordinator: t("roleCoordinator"),
+    sourcer: t("roleSourcer"), interviewer: t("roleInterviewer"), viewer: t("roleViewer"),
+  };
   const { invitationId } = await params;
   const invitation = await getInvitationById(invitationId);
 
@@ -41,7 +48,7 @@ export default async function InvitePage({ params }: InvitePageProps) {
           href={`/login?redirect=${encodeURIComponent(`/invite/${invitationId}`)}`}
           className="text-sm font-medium text-muted-foreground transition hover:text-foreground"
         >
-          Sign in
+          {t("signIn")}
         </Link>
       </header>
 
@@ -61,17 +68,13 @@ export default async function InvitePage({ params }: InvitePageProps) {
 
         <div className="w-full max-w-sm">
           <p className="text-center text-[11px] font-semibold uppercase tracking-[0.12em] text-pine">
-            Invitation
+            {t("invitation")}
           </p>
           <h1 className="mt-3 text-center font-display text-3xl tracking-tight text-foreground">
-            Join {invitation.organizationName}
+            {t("joinName", {name: invitation.organizationName})}
           </h1>
           <p className="mt-2 text-center text-sm leading-6 text-muted-foreground">
-            You were invited as{" "}
-            <span className="font-semibold capitalize text-foreground">
-              {invitation.role.replace("_", " ")}
-            </span>{" "}
-            using {invitation.email}.
+            {t.rich("invitedRole", {role: roles[invitation.role] ?? invitation.role.replace("_", " "), email: invitation.email, strong: (chunks) => <span className="font-semibold capitalize text-foreground">{chunks}</span>})}
           </p>
 
           {invitation.inviter && (
@@ -96,10 +99,7 @@ export default async function InvitePage({ params }: InvitePageProps) {
                 </div>
               )}
               <p className="text-sm text-muted-foreground">
-                Invited by{" "}
-                <span className="font-medium text-foreground">
-                  {invitation.inviter.name}
-                </span>
+                {t.rich("invitedBy", {name: invitation.inviter.name, strong: (chunks) => <span className="font-medium text-foreground">{chunks}</span>})}
               </p>
             </div>
           )}
@@ -107,11 +107,11 @@ export default async function InvitePage({ params }: InvitePageProps) {
           <div className="mt-10">
             {invitation.status !== "pending" ? (
               <div className="rounded-lg bg-muted px-4 py-3 text-center text-sm font-medium text-muted-foreground">
-                This invitation is {invitation.status}.
+                {t("status", {status: ({ accepted: t("statusAccepted"), rejected: t("statusRejected"), canceled: t("statusCanceled") } as Record<string, string>)[invitation.status] ?? invitation.status})}
               </div>
             ) : isExpired ? (
               <div className="rounded-lg bg-destructive/10 px-4 py-3 text-center text-sm font-medium text-destructive">
-                This invitation has expired.
+                {t("expired")}
               </div>
             ) : !session ? (
               hasAccount ? (
@@ -120,14 +120,10 @@ export default async function InvitePage({ params }: InvitePageProps) {
                     href={`/login?redirect=${encodeURIComponent(`/invite/${invitationId}`)}`}
                     className="block w-full rounded-lg bg-primary py-3.5 text-center text-sm font-semibold text-primary-foreground transition hover:bg-pine-strong"
                   >
-                    Sign in to accept
+                    {t("signInAccept")}
                   </Link>
                   <p className="text-center text-xs text-muted-foreground">
-                    Sign in with{" "}
-                    <span className="font-medium text-foreground">
-                      {invitation.email}
-                    </span>{" "}
-                    to accept this invitation.
+                    {t.rich("signInAs", {email: invitation.email, strong: (chunks) => <span className="font-medium text-foreground">{chunks}</span>})}
                   </p>
                 </div>
               ) : (
@@ -138,8 +134,7 @@ export default async function InvitePage({ params }: InvitePageProps) {
               )
             ) : !isRecipient ? (
               <div className="rounded-lg bg-destructive/10 px-4 py-3 text-center text-sm font-medium text-destructive">
-                You are signed in as {session.user.email}. This invitation
-                belongs to {invitation.email}.
+                {t("wrongAccount", {current: session.user.email, invited: invitation.email})}
               </div>
             ) : (
               <AcceptInvitationButton invitationId={invitation.id} />

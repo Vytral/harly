@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { Calendar, Flag, Loader2 } from "lucide-react";
+import { useTranslations } from "next-intl";
 import { toast } from "@/lib/notification-island/toast";
 
 import { cn } from "@/lib/utils";
@@ -20,7 +21,7 @@ import { InterviewerSelect, type InterviewerOption } from "@/features/candidates
 import { updateTask } from "./actions";
 import { TaskLinkFields, type TaskContextOptions, type TaskLinkValues } from "./TaskLinkFields";
 import type { TaskItem, TaskPriority } from "./shared";
-import { TASK_PRIORITIES, TASK_PRIORITY_LABELS } from "./shared";
+import { TASK_PRIORITIES } from "./shared";
 
 type Member = { id: string; name: string; image: string | null };
 
@@ -51,6 +52,7 @@ export function EditTaskDialog({
   onSave: () => void;
 }) {
   const [pending, startTransition] = useTransition();
+  const t = useTranslations("features.tasks.editTaskDialog");
   const [title, setTitle] = useState(task?.title ?? "");
   const [description, setDescription] = useState(task?.description ?? "");
   const [priority, setPriority] = useState<TaskPriority>(task?.priority ?? "medium");
@@ -104,10 +106,10 @@ export function EditTaskDialog({
       });
 
       if (result.success) {
-        toast.success("Task updated");
+        toast.success(t("toastUpdated"));
         onSave();
       } else {
-        setError(result.error ?? "Something went wrong.");
+        setError(result.error ?? t("somethingWentWrong"));
       }
     });
   }
@@ -126,17 +128,17 @@ export function EditTaskDialog({
         }}
       >
         <SheetHeader>
-          <SheetTitle>Edit task</SheetTitle>
-          <SheetDescription>Update the task details below.</SheetDescription>
+          <SheetTitle>{t("title")}</SheetTitle>
+          <SheetDescription>{t("subtitle")}</SheetDescription>
         </SheetHeader>
 
         <form onSubmit={handleSubmit} className="flex min-h-0 flex-1 flex-col">
           <div className="flex-1 space-y-4 overflow-y-auto px-5 pb-5">
           <div>
-            <label htmlFor="edit-task-title" className="sr-only">Task title</label>
+            <label htmlFor="edit-task-title" className="sr-only">{t("taskTitle")}</label>
             <Input
               id="edit-task-title"
-              placeholder="Task title"
+              placeholder={t("taskTitle")}
               value={title}
               onChange={(e) => setTitle(e.target.value)}
               autoFocus
@@ -145,10 +147,10 @@ export function EditTaskDialog({
           </div>
 
           <div>
-            <label htmlFor="edit-task-description" className="sr-only">Description</label>
+            <label htmlFor="edit-task-description" className="sr-only">{t("descriptionLabel")}</label>
             <Textarea
               id="edit-task-description"
-              placeholder="Description (optional)"
+              placeholder={t("descriptionPlaceholder")}
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               rows={3}
@@ -162,14 +164,14 @@ export function EditTaskDialog({
                 value={ownerId}
                 onChange={setOwnerId}
                 members={interviewerMembers}
-                label="Assignee"
+                label={t("assignee")}
               />
             </div>
 
             <div className="flex-1">
               <label htmlFor="edit-task-due-date" className="mb-1.5 block text-[12.5px] font-medium text-soft-ink">
                 <Calendar className="mr-1 inline size-3" />
-                Due date
+                {t("dueDate")}
               </label>
               <Input
                 id="edit-task-due-date"
@@ -186,7 +188,7 @@ export function EditTaskDialog({
           <div>
             <label className="mb-1.5 block text-[12.5px] font-medium text-soft-ink">
               <Flag className="mr-1 inline size-3" />
-              Priority
+              {t("priority")}
             </label>
             <div className="flex gap-1.5">
               {TASK_PRIORITIES.map((p) => (
@@ -202,7 +204,7 @@ export function EditTaskDialog({
                       : "border-transparent bg-card-inset text-soft-ink hover:text-near-ink",
                   )}
                 >
-                  {TASK_PRIORITY_LABELS[p]}
+                  {t(`priorities.${p}`)}
                 </button>
               ))}
             </div>
@@ -221,13 +223,13 @@ export function EditTaskDialog({
               onClick={() => onOpenChange(false)}
               disabled={pending}
             >
-              Discard
+              {t("discard")}
             </Button>
             <Button type="submit" disabled={pending || !title.trim()}>
               {pending ? (
                 <Loader2 className="mr-1.5 size-4 animate-spin" />
               ) : null}
-              Save changes
+              {t("saveChanges")}
             </Button>
           </SheetFooter>
         </form>

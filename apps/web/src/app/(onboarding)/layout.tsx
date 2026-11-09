@@ -1,6 +1,8 @@
 import Image from "next/image";
+import { getTranslations } from "next-intl/server";
 
 import { getWorkspaceContextOrNull } from "@/features/workspaces/context";
+import { LanguageSelector } from "@/i18n/LanguageSelector";
 import { OnboardingSignOut } from "./onboarding/_components/OnboardingSignOut";
 
 export default async function OnboardingLayout({
@@ -13,6 +15,7 @@ export default async function OnboardingLayout({
   });
   const logo = context?.organization.logo;
   const orgName = context?.organization.name;
+  const t = await getTranslations("pages.onboarding.layout");
 
   return (
     <div className="relative flex min-h-screen flex-col bg-paper text-foreground antialiased">
@@ -28,7 +31,7 @@ export default async function OnboardingLayout({
         {logo ? (
           <Image
             src={logo}
-            alt={orgName ?? "Workspace"}
+            alt={orgName ?? t("workspace")}
             width={140}
             height={40}
             className="h-10 w-auto object-contain"
@@ -56,7 +59,8 @@ export default async function OnboardingLayout({
         {children}
       </main>
 
-      <footer className="relative z-10 flex items-center justify-center pb-8">
+      <footer className="relative z-10 flex items-center justify-center gap-4 pb-8">
+        <LanguageSelector variant="compact" />
         <OnboardingSignOut />
       </footer>
     </div>

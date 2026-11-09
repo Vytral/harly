@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { Mail, Paperclip } from "lucide-react";
+import { useTranslations } from "next-intl";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -27,6 +28,7 @@ export function ConversationThread({
   workspaceId: string;
   aiConfigured: boolean;
 }) {
+  const t = useTranslations("features.candidates.conversationThread");
   const first = conversation[0]!;
   const last = conversation[conversation.length - 1]!;
   const threadId = first.threadId;
@@ -39,8 +41,7 @@ export function ConversationThread({
           <div className="min-w-0">
             <p className="truncate text-sm font-semibold">{first.subject}</p>
             <p className="mt-0.5 truncate text-xs text-muted-foreground">
-              {candidateName} · {conversation.length}{" "}
-              {conversation.length === 1 ? "message" : "messages"} ·{" "}
+              {candidateName} · {t("messageCount", { count: conversation.length })} ·{" "}
               <RelativeTime value={last.createdAt} />
             </p>
           </div>
@@ -54,7 +55,11 @@ export function ConversationThread({
                 : "secondary"
           }
         >
-          {last.status === "failed" ? "Failed" : last.read ? "Read" : "Unread"}
+          {last.status === "failed"
+            ? t("status.failed")
+            : last.read
+              ? t("status.read")
+              : t("status.unread")}
         </Badge>
       </div>
 
@@ -79,7 +84,7 @@ export function ConversationThread({
                   )}
                 >
                   <span className="font-medium text-foreground/80">
-                    {inbound ? message.fromEmail ?? "Candidate" : "You"}
+                    {inbound ? message.fromEmail ?? t("candidateFallback") : t("you")}
                   </span>
                   <RelativeTime value={message.createdAt} />
                 </div>
@@ -119,7 +124,7 @@ export function ConversationThread({
             href={`/dashboard/inbox?thread=${encodeURIComponent(threadId)}`}
             className="text-xs font-semibold text-foreground underline underline-offset-4"
           >
-            Open in Inbox
+            {t("openInInbox")}
           </Link>
         ) : (
           <span />
@@ -135,7 +140,7 @@ export function ConversationThread({
             trigger={
               <Button size="sm" variant="outline">
                 <Mail className="size-4" />
-                Reply
+                {t("reply")}
               </Button>
             }
           />

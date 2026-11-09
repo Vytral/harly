@@ -1,3 +1,4 @@
+import { useTranslations } from "next-intl";
 import { SearchX, Briefcase } from "lucide-react";
 
 import { cn } from "@/lib/utils";
@@ -18,6 +19,7 @@ export function CareerEmpty({
   portalEnabled?: boolean;
   className?: string;
 }) {
+  const t = useTranslations("features.careerPage.careerEmpty");
   const filtered = kind === "filtered";
   const Icon = filtered ? SearchX : Briefcase;
   return (
@@ -32,12 +34,10 @@ export function CareerEmpty({
         <Icon className="size-5" strokeWidth={1.6} aria-hidden />
       </span>
       <p className="mt-4 text-base font-semibold tracking-tight text-near-ink">
-        {filtered ? "No roles match these filters" : "No open roles right now"}
+        {filtered ? t("filteredTitle") : t("noneTitle")}
       </p>
       <p className="mt-1 max-w-sm text-sm text-soft-ink">
-        {filtered
-          ? "Try removing a filter or searching for something broader."
-          : "New roles show up here as soon as they open. Check back soon."}
+        {filtered ? t("filteredDescription") : t("noneDescription")}
       </p>
       {filtered && onReset ? (
         <button
@@ -45,7 +45,7 @@ export function CareerEmpty({
           onClick={onReset}
           className="mt-5 inline-flex h-9 items-center rounded-[var(--career-r-btn,10px)] border border-hairline bg-pure-snow px-4 text-sm font-medium text-near-ink transition-colors hover:bg-row-wash"
         >
-          Clear filters
+          {t("clearFilters")}
         </button>
       ) : null}
       {!filtered && portalEnabled ? (
@@ -53,7 +53,7 @@ export function CareerEmpty({
           href="/portal"
           className="mt-5 inline-flex h-9 items-center rounded-[var(--career-r-btn,10px)] border border-hairline bg-pure-snow px-4 text-sm font-medium text-near-ink transition-colors hover:bg-row-wash"
         >
-          Open the candidate portal
+          {t("openPortal")}
         </a>
       ) : null}
     </div>

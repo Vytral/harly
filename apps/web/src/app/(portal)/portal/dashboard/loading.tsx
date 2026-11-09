@@ -1,8 +1,11 @@
+import { getTranslations } from "next-intl/server";
+
 import { Skeleton } from "@/components/ui/skeleton";
 
-export default function PortalDashboardLoading() {
+export default async function PortalDashboardLoading() {
+  const t = await getTranslations("pages.portalDashboard.loading");
   return (
-    <div className="space-y-6" aria-busy="true" aria-label="Loading">
+    <div className="space-y-6" aria-busy="true" aria-label={t("ariaLabel")}>
       <div className="space-y-2 pt-2">
         <Skeleton className="h-9 w-48" />
         <Skeleton className="h-4 w-72" />

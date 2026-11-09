@@ -18,6 +18,7 @@ const dbState: {
   steps: Record<string, unknown>[];
 } = { inserted: [], updated: [], deleted: [], workflows: [], runs: [], steps: [] };
 
+vi.mock("next-intl/server", async () => (await import("@/test-support/intl-server-mock")).intlServerMock);
 vi.mock("@harly/db", () => ({
   db: {
     // The data layer uses several chain shapes:

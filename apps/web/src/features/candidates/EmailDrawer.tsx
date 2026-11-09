@@ -2,6 +2,7 @@
 
 import { useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { toast } from "@/lib/notification-island/toast";
 import Link from "next/link";
 
@@ -24,13 +25,7 @@ export type EmailTemplateOption = {
 
 type DraftType = "screening" | "interview_invite" | "rejection" | "offer" | "followup";
 
-const DRAFT_TYPES: { id: DraftType; label: string }[] = [
-  { id: "screening", label: "Screening" },
-  { id: "interview_invite", label: "Interview" },
-  { id: "rejection", label: "Rejection" },
-  { id: "offer", label: "Offer" },
-  { id: "followup", label: "Follow-up" },
-];
+const DRAFT_TYPES: DraftType[] = ["screening", "interview_invite", "rejection", "offer", "followup"];
 
 export function EmailDrawer({
   candidateId,
@@ -53,8 +48,9 @@ export function EmailDrawer({
   templateValues?: TemplateValues;
   aiConfigured?: boolean;
 }) {
+  const t = useTranslations("features.candidates.EmailDrawer");
   const router = useRouter();
-  const firstName = name.trim().split(/\s+/)[0] || "there";
+  const firstName = name.trim().split(/\s+/)[0] || t("fallbackName");
   const [open, setOpen] = useState(false);
   const [selectedDraftType, setSelectedDraftType] = useState<DraftType>("screening");
 
@@ -69,16 +65,16 @@ export function EmailDrawer({
     <Sheet open={open} onOpenChange={setOpen} mobilePresentation="bottom-on-mobile">
       <SheetTrigger asChild>{trigger}</SheetTrigger>
       <DrawerLayout
-        title={`Email ${name}`}
-        description="Compose and send an email directly to this candidate."
+        title={t("title", { name })}
+        description={t("description")}
       >
         <div className="space-y-4">
           {aiConfigured ? (
             <div className="space-y-2 rounded-xl border bg-muted/30 p-3.5">
-              <p className="text-[12px] font-semibold uppercase tracking-wide text-muted-foreground">Draft with AI</p>
-              <p className="text-xs text-muted-foreground">Pick a type, then use “Draft with AI” below to fill the subject and message.</p>
+              <p className="text-[12px] font-semibold uppercase tracking-wide text-muted-foreground">{t("draftWithAi")}</p>
+              <p className="text-xs text-muted-foreground">{t("draftHint")}</p>
               <div className="flex flex-wrap gap-1.5">
-                {DRAFT_TYPES.map(({ id, label }) => (
+                {DRAFT_TYPES.map((id) => (
                   <button
                     key={id}
                     type="button"
@@ -90,31 +86,31 @@ export function EmailDrawer({
                         : "bg-background text-muted-foreground hover:border-foreground/20 hover:text-foreground",
                     )}
                   >
-                    {label}
+                    {t(`draftTypes.${id}`)}
                   </button>
                 ))}
               </div>
             </div>
           ) : (
             <div className="flex items-center justify-between rounded-xl border border-dashed px-3.5 py-2.5">
-              <p className="text-[13px] text-muted-foreground">AI drafts available when AI is configured.</p>
-              <Link href="/settings/ai" className="text-[13px] font-medium text-primary underline-offset-2 hover:underline">Set up</Link>
+              <p className="text-[13px] text-muted-foreground">{t("aiUnavailable")}</p>
+              <Link href="/settings/ai" className="text-[13px] font-medium text-primary underline-offset-2 hover:underline">{t("setUp")}</Link>
             </div>
           )}
 
           <MailComposer
             to={email}
-            defaultBody={`<p>Hi ${firstName},</p><p></p>`}
-            placeholder="Write your message…"
+            defaultBody={`<p>${t("greeting", { name: firstName })}</p><p></p>`}
+            placeholder={t("writeMessage")}
             templates={composerTemplates}
             aiConfigured={aiConfigured}
-            sendLabel="Send email"
+            sendLabel={t("sendEmail")}
             onCancel={() => setOpen(false)}
             onDraftAI={async () => {
               const result = await generateEmailDraftAction({ candidateId, threadId, type: selectedDraftType });
               if (!result.ok) {
                 if (result.reason === "not_configured") {
-                  toast.error(result.error, { action: { label: "Set up AI", onClick: () => router.push("/settings/ai") } });
+                  toast.error(result.error, { action: { label: t("setUpAi"), onClick: () => router.push("/settings/ai") } });
                 } else {
                   toast.error(result.error);
                 }
@@ -133,8 +129,8 @@ export function EmailDrawer({
                 html,
                 attachments: attachments.map((file) => ({ filename: file.filename, contentType: file.contentType, base64: file.base64 })),
               });
-              if (!result.success) return { ok: false, error: result.error ?? "Could not send the email." };
-              toast.success(result.delivered ? "Email sent" : "Saved to thread. Connect a sender to deliver.");
+              if (!result.success) return { ok: false, error: result.error ?? t("sendError") };
+              toast.success(result.delivered ? t("emailSent") : t("savedToThread"));
               setOpen(false);
               router.refresh();
               return { ok: true };

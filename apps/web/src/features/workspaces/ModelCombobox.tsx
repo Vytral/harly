@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { ChevronsUpDown, Check, TriangleAlert } from "lucide-react";
+import { useTranslations } from "next-intl";
 
 import {
   Command,
@@ -37,17 +38,18 @@ function Chip({ children, tone }: { children: React.ReactNode; tone?: "warn" }) 
 }
 
 function ModelChips({ model }: { model: ModelOption }) {
+  const t = useTranslations("features.workspaces.modelCombobox");
   const price = formatPricePerM(model.inputCostPerM, model.outputCostPerM);
   const ctx = formatContextWindow(model.contextWindow);
   return (
     <span className="mt-1 flex flex-wrap gap-1">
       {ctx ? <Chip>{ctx}</Chip> : null}
-      {model.toolCall ? <Chip>tools</Chip> : null}
-      {model.reasoning ? <Chip>reasoning</Chip> : null}
-      {model.attachments ? <Chip>images</Chip> : null}
+      {model.toolCall ? <Chip>{t("chipTools")}</Chip> : null}
+      {model.reasoning ? <Chip>{t("chipReasoning")}</Chip> : null}
+      {model.attachments ? <Chip>{t("chipImages")}</Chip> : null}
       {price ? <Chip>{price}</Chip> : null}
-      {lacksToolCalling(model) ? <Chip tone="warn">no tool calling</Chip> : null}
-      {model.deprecated ? <Chip tone="warn">deprecated</Chip> : null}
+      {lacksToolCalling(model) ? <Chip tone="warn">{t("chipNoToolCalling")}</Chip> : null}
+      {model.deprecated ? <Chip tone="warn">{t("chipDeprecated")}</Chip> : null}
     </span>
   );
 }
@@ -74,6 +76,7 @@ export function ModelCombobox({
   placeholder: string;
   disabled?: boolean;
 }) {
+  const t = useTranslations("features.workspaces.modelCombobox");
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
 
@@ -135,7 +138,7 @@ export function ModelCombobox({
           <CommandInput
             value={search}
             onValueChange={setSearch}
-            placeholder="Search models or type an ID…"
+            placeholder={t("searchPlaceholder")}
             name="ai_model_search"
             autoComplete="off"
             autoCorrect="off"
@@ -155,13 +158,16 @@ export function ModelCombobox({
                 className="mx-1 mt-1"
               >
                 <span className="min-w-0 truncate">
-                  Use <span className="font-mono">{typed}</span>
+                  {t.rich("useModel", {
+                    modelId: typed,
+                    mono: (chunks) => <span className="font-mono">{chunks}</span>,
+                  })}
                 </span>
               </CommandItem>
             ) : null}
             {models.length === 0 && !canUseTyped ? (
               <CommandEmpty>
-                {loading ? "Loading models…" : "Type a model ID to use it."}
+                {loading ? t("loadingModels") : t("typeModelId")}
               </CommandEmpty>
             ) : (
               <CommandGroup>
@@ -201,12 +207,12 @@ export function ModelCombobox({
 
 /** Quiet warning shown under the field when the chosen model can't call tools. */
 export function ToolCallingWarning({ model }: { model: ModelOption | undefined }) {
+  const t = useTranslations("features.workspaces.modelCombobox");
   if (!lacksToolCalling(model)) return null;
   return (
     <p className="flex items-start gap-1.5 text-xs text-clay">
       <TriangleAlert className="mt-0.5 size-3.5 shrink-0" aria-hidden />
-      This model does not support tool calling. Harly AI uses tools to read and update
-      your pipeline, so it may not work well with it.
+      {t("toolCallingWarning")}
     </p>
   );
 }

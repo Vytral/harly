@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
+import { getTranslations } from "@/i18n/server";
 
 import { db, workspaceSettings } from "@harly/db";
 
@@ -22,9 +23,10 @@ export async function saveGravatarEnabledAction(
 ): Promise<GravatarSettingsActionResult> {
   assertNotDemo();
   const context = await requirePermission("settings:edit");
+  const t = await getTranslations("server.workspaces.gravatarSettingsActions");
 
   const parsed = saveSchema.safeParse({ enabled });
-  if (!parsed.success) return { ok: false, error: "Invalid setting." };
+  if (!parsed.success) return { ok: false, error: t("invalidSetting") };
 
   await db
     .insert(workspaceSettings)

@@ -1,7 +1,15 @@
 import { describe, expect, it } from "vitest";
 
+import { makeT } from "@/test-support/translator";
+
 import { portalApplicationProgress } from "./application-progress";
 import { buildInterviewIcs, googleCalendarUrl, icsFileName } from "./interview-calendar";
+
+const t = makeT("labels.portal.applicationProgress");
+
+function progress(input: Parameters<typeof portalApplicationProgress>[0]) {
+  return portalApplicationProgress(input, t);
+}
 
 const stages = [
   { id: "s1", name: "Applied", order: 0 },
@@ -11,31 +19,31 @@ const stages = [
 
 describe("portalApplicationProgress", () => {
   it("reports the current step for an active application", () => {
-    const p = portalApplicationProgress({ stages, currentStageId: "s2", status: "active", showStages: true, orgName: "Acme" });
+    const p = progress({ stages, currentStageId: "s2", status: "active", showStages: true, orgName: "Acme" });
     expect(p).toMatchObject({ step: 2, total: 3, currentStageName: "Phone screen", tone: "info", headline: "Phone screen" });
     expect(p.body).toContain("step 2 of 3");
   });
 
   it("uses review copy on the first step", () => {
-    const p = portalApplicationProgress({ stages, currentStageId: "s1", status: "active", showStages: true, orgName: "Acme" });
+    const p = progress({ stages, currentStageId: "s1", status: "active", showStages: true, orgName: "Acme" });
     expect(p.body).toContain("Acme has your application");
   });
 
   it("hides stage names when the workspace turns status off", () => {
-    const p = portalApplicationProgress({ stages, currentStageId: "s2", status: "active", showStages: false });
+    const p = progress({ stages, currentStageId: "s2", status: "active", showStages: false });
     expect(p).toMatchObject({ step: null, total: 0, currentStageName: null, headline: "In review" });
   });
 
   it("falls back to in review when the stage is unknown", () => {
-    const p = portalApplicationProgress({ stages, currentStageId: "missing", status: "active", showStages: true });
+    const p = progress({ stages, currentStageId: "missing", status: "active", showStages: true });
     expect(p.headline).toBe("In review");
     expect(p.step).toBeNull();
   });
 
   it("maps terminal statuses to their tone and copy", () => {
-    expect(portalApplicationProgress({ stages, currentStageId: "s2", status: "hired", showStages: true })).toMatchObject({ tone: "success", step: 3, label: "Hired" });
-    expect(portalApplicationProgress({ stages, currentStageId: "s2", status: "rejected", showStages: true })).toMatchObject({ tone: "danger", step: 2, label: "Not selected" });
-    expect(portalApplicationProgress({ stages, currentStageId: null, status: "withdrawn", showStages: true })).toMatchObject({ tone: "neutral", label: "Withdrawn" });
+    expect(progress({ stages, currentStageId: "s2", status: "hired", showStages: true })).toMatchObject({ tone: "success", step: 3, label: "Hired" });
+    expect(progress({ stages, currentStageId: "s2", status: "rejected", showStages: true })).toMatchObject({ tone: "danger", step: 2, label: "Not selected" });
+    expect(progress({ stages, currentStageId: null, status: "withdrawn", showStages: true })).toMatchObject({ tone: "neutral", label: "Withdrawn" });
   });
 });
 

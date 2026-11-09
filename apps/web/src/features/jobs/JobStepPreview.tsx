@@ -3,10 +3,9 @@
 import { memo, useEffect, useRef, type ReactNode } from "react";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { Check, Pencil } from "lucide-react";
+import { useFormatter, useTranslations } from "next-intl";
 
 import { RichBody } from "@/features/career-page/RichBody";
-import { formatCompensation } from "@/features/career-page/job/jobMeta";
-import { formatEmploymentType, formatWorkplaceType } from "@/lib/format";
 import { cn, slugify } from "@/lib/utils";
 
 import type { ApplicationFieldVisibility, JobContentSection } from "./config";
@@ -36,16 +35,9 @@ export type StepDraft = {
   fields: FormPreviewFields;
 };
 
-const STEP_TITLE: Record<StepKey, string> = {
-  essentials: "Job header",
-  description: "Job description",
-  compensation: "Compensation",
-  application: "Application form",
-  advanced: "Search & visibility",
-  review: "Ready to publish?",
-};
-
 const EASE = [0.16, 1, 0.3, 1] as const;
+
+const EVALUATION_MODES = new Set(["relaxed", "balanced", "strict"]);
 
 /** A previewed block. `fields` are the editor control names/targets that edit it. */
 function Block({
@@ -61,6 +53,7 @@ function Block({
   className?: string;
   children: ReactNode;
 }) {
+  const t = useTranslations("jobs.stepPreview");
   const active = focus != null && fields.includes(focus);
   return (
     <div
@@ -81,7 +74,7 @@ function Block({
         )}
       >
         <Pencil className="size-2.5" />
-        {label ?? "Editing"}
+        {label ?? t("editing")}
       </span>
       {children}
     </div>
@@ -127,57 +120,58 @@ function Reveal({ show, children }: { show: boolean; children: ReactNode }) {
 }
 
 function DetailsStep({ d, focus }: { d: StepDraft; focus: string | null }) {
+  const t = useTranslations("jobs.stepPreview");
   const f = d.fields;
   const place = [f.location, f.jobLocationRegion, f.jobLocationCountry.toUpperCase()]
     .filter(Boolean)
     .join(", ");
   return (
     <div className="space-y-4">
-      <Block fields={["title"]} focus={focus} label="Job title">
+      <Block fields={["title"]} focus={focus} label={t("jobTitle")}>
         <h3 className="font-display text-[22px] leading-tight tracking-tight text-near-ink">
-          {d.title.trim() || <span className="text-quiet-mist">Your job title</span>}
+          {d.title.trim() || <span className="text-quiet-mist">{t("yourJobTitle")}</span>}
         </h3>
       </Block>
       <div className="grid grid-cols-2 gap-x-4 gap-y-3">
         <Block fields={["department"]} focus={focus}>
-          <Row label="Department">
-            <Value empty="Not set">{f.department}</Value>
+          <Row label={t("department")}>
+            <Value empty={t("notSet")}>{f.department}</Value>
           </Row>
         </Block>
         <Block
           fields={["location", "jobLocationRegion", "jobLocationCountry"]}
           focus={focus}
         >
-          <Row label="Location">
-            <Value empty="Not set">{place}</Value>
+          <Row label={t("location")}>
+            <Value empty={t("notSet")}>{place}</Value>
           </Row>
         </Block>
         <Block fields={["employmentType"]} focus={focus}>
-          <Row label="Employment">
-            <Value empty="Not set">{formatEmploymentType(f.employmentType)}</Value>
+          <Row label={t("employmentLabel")}>
+            <Value empty={t("notSet")}>{t(`employment.${f.employmentType}`)}</Value>
           </Row>
         </Block>
         <Block fields={["workplaceType"]} focus={focus}>
-          <Row label="Workplace">
-            <Value empty="Not set">{formatWorkplaceType(d.workplace)}</Value>
+          <Row label={t("workplaceLabel")}>
+            <Value empty={t("notSet")}>{t(`workplace.${d.workplace}`)}</Value>
           </Row>
         </Block>
         <Block fields={["experienceLevel"]} focus={focus} className="col-span-2">
-          <Row label="Experience">
-            <Value empty="Not set">{f.experienceLevel}</Value>
+          <Row label={t("experience")}>
+            <Value empty={t("notSet")}>{f.experienceLevel}</Value>
           </Row>
         </Block>
       </div>
       <Reveal show={d.workplace === "remote"}>
         <Block fields={["remoteEligibleCountries"]} focus={focus}>
-          <Row label="Remote eligibility">
-            <Value empty="Worldwide">{f.remoteEligibleCountries.toUpperCase()}</Value>
+          <Row label={t("remoteEligibility")}>
+            <Value empty={t("worldwide")}>{f.remoteEligibleCountries.toUpperCase()}</Value>
           </Row>
         </Block>
       </Reveal>
       <Block fields={["validThrough"]} focus={focus}>
-        <Row label="Posting expires">
-          <Value empty="Never">{f.validThrough}</Value>
+        <Row label={t("postingExpires")}>
+          <Value empty={t("never")}>{f.validThrough}</Value>
         </Row>
       </Block>
     </div>
@@ -185,16 +179,17 @@ function DetailsStep({ d, focus }: { d: StepDraft; focus: string | null }) {
 }
 
 function DescriptionStep({ d, focus }: { d: StepDraft; focus: string | null }) {
+  const t = useTranslations("jobs.stepPreview");
   const hasHtml = (html: string) => html.replace(/<[^>]*>/g, "").trim().length > 0;
   return (
     <div className="space-y-3">
-      <Block fields={["description"]} focus={focus} label="Writing">
-        <p className="text-[15px] font-semibold text-near-ink">About this role</p>
+      <Block fields={["description"]} focus={focus} label={t("writing")}>
+        <p className="text-[15px] font-semibold text-near-ink">{t("aboutRole")}</p>
         {hasHtml(d.description) ? (
           <RichBody html={d.description} className="prose-job mt-2 max-w-none text-[14px]" />
         ) : (
           <p className="mt-2 text-[14px] text-quiet-mist">
-            What you write in the editor shows up here as you type.
+            {t("descriptionPlaceholder")}
           </p>
         )}
       </Block>
@@ -208,14 +203,14 @@ function DescriptionStep({ d, focus }: { d: StepDraft; focus: string | null }) {
             exit={{ opacity: 0 }}
             transition={{ duration: 0.22, ease: EASE }}
           >
-            <Block fields={[`section:${s.id}`]} focus={focus} label="Writing">
+            <Block fields={[`section:${s.id}`]} focus={focus} label={t("writing")}>
               <p className="text-[15px] font-semibold text-near-ink">
-                {s.title.trim() || <span className="text-quiet-mist">Untitled section</span>}
+                {s.title.trim() || <span className="text-quiet-mist">{t("untitledSection")}</span>}
               </p>
               {hasHtml(s.body) ? (
                 <RichBody html={s.body} className="prose-job mt-2 max-w-none text-[14px]" />
               ) : (
-                <p className="mt-2 text-[14px] text-quiet-mist">Empty section</p>
+                <p className="mt-2 text-[14px] text-quiet-mist">{t("emptySection")}</p>
               )}
             </Block>
           </motion.div>
@@ -226,13 +221,32 @@ function DescriptionStep({ d, focus }: { d: StepDraft; focus: string | null }) {
 }
 
 function CompensationStep({ d, focus }: { d: StepDraft; focus: string | null }) {
+  const t = useTranslations("jobs.stepPreview");
+  const format = useFormatter();
   const f = d.fields;
-  const text = formatCompensation({
-    salaryMin: f.salaryMin,
-    salaryMax: f.salaryMax,
-    currency: f.currency,
-    salaryPeriod: f.salaryPeriod,
-  } as Parameters<typeof formatCompensation>[0]);
+  const currency = f.currency || "USD";
+  const formatAmount = (amount: number) => {
+    try {
+      return format.number(amount, {
+        style: "currency",
+        currency,
+        maximumFractionDigits: 0,
+      });
+    } catch {
+      return `${currency} ${format.number(amount)}`;
+    }
+  };
+  const range =
+    f.salaryMin != null && f.salaryMax != null
+      ? `${formatAmount(f.salaryMin)} – ${formatAmount(f.salaryMax)}`
+      : f.salaryMin != null || f.salaryMax != null
+        ? formatAmount((f.salaryMin ?? f.salaryMax)!)
+        : null;
+  const text = range
+    ? f.salaryPeriod === "monthly"
+      ? t("salaryMonthly", { range })
+      : t("salaryYearly", { range })
+    : null;
   const top = Math.max(f.salaryMax ?? 0, f.salaryMin ?? 0, 1);
   const lo = f.salaryMin != null ? (f.salaryMin / top) * 100 : 0;
   const hi = f.salaryMax != null ? (f.salaryMax / top) * 100 : f.salaryMin != null ? 100 : 0;
@@ -242,11 +256,11 @@ function CompensationStep({ d, focus }: { d: StepDraft; focus: string | null }) 
       <Block
         fields={["salaryMin", "salaryMax", "currency", "salaryPeriod"]}
         focus={focus}
-        label="Salary"
+        label={t("salary")}
       >
-        <p className="text-[11px] font-semibold uppercase tracking-wide text-soft-ink">Salary</p>
+        <p className="text-[11px] font-semibold uppercase tracking-wide text-soft-ink">{t("salary")}</p>
         <p className="mt-1 font-display text-[24px] leading-tight tracking-tight tabular-nums text-near-ink">
-          {text ?? <span className="text-quiet-mist">Not shown</span>}
+          {text ?? <span className="text-quiet-mist">{t("notShown")}</span>}
         </p>
         <div className="mt-3 h-2 overflow-clip rounded-full bg-soft-kraft">
           <div
@@ -259,7 +273,7 @@ function CompensationStep({ d, focus }: { d: StepDraft; focus: string | null }) 
         </div>
         {!text ? (
           <p className="mt-2 text-[12.5px] text-soft-ink">
-            Listing a range measurably increases applications.
+            {t("salaryHint")}
           </p>
         ) : null}
       </Block>
@@ -274,22 +288,22 @@ function CompensationStep({ d, focus }: { d: StepDraft; focus: string | null }) 
 }
 
 const FIELD_ROWS: Array<{
-  group: string;
+  group: "personal" | "profile" | "details";
   key: ApplicationFieldKey;
-  label: string;
+  labelKey: string;
   kind: "line" | "upload" | "area";
 }> = [
-  { group: "Personal information", key: "phone", label: "Phone", kind: "line" },
-  { group: "Personal information", key: "address", label: "Address", kind: "line" },
-  { group: "Personal information", key: "photo", label: "Photo", kind: "upload" },
-  { group: "Personal information", key: "headline", label: "Headline", kind: "line" },
-  { group: "Profile", key: "resume", label: "Resume / CV", kind: "upload" },
-  { group: "Profile", key: "linkedin", label: "LinkedIn", kind: "line" },
-  { group: "Profile", key: "github", label: "GitHub", kind: "line" },
-  { group: "Profile", key: "website", label: "Website / Portfolio", kind: "line" },
-  { group: "Profile", key: "education", label: "Education", kind: "area" },
-  { group: "Profile", key: "experience", label: "Experience", kind: "area" },
-  { group: "Details", key: "coverLetter", label: "Cover letter", kind: "area" },
+  { group: "personal", key: "phone", labelKey: "phone", kind: "line" },
+  { group: "personal", key: "address", labelKey: "address", kind: "line" },
+  { group: "personal", key: "photo", labelKey: "photo", kind: "upload" },
+  { group: "personal", key: "headline", labelKey: "headline", kind: "line" },
+  { group: "profile", key: "resume", labelKey: "resume", kind: "upload" },
+  { group: "profile", key: "linkedin", labelKey: "linkedin", kind: "line" },
+  { group: "profile", key: "github", labelKey: "github", kind: "line" },
+  { group: "profile", key: "website", labelKey: "website", kind: "line" },
+  { group: "profile", key: "education", labelKey: "education", kind: "area" },
+  { group: "profile", key: "experience", labelKey: "experience", kind: "area" },
+  { group: "details", key: "coverLetter", labelKey: "coverLetter", kind: "area" },
 ];
 
 function FormField({
@@ -305,6 +319,7 @@ function FormField({
   active: boolean;
   fixed?: boolean;
 }) {
+  const t = useTranslations("jobs.stepPreview");
   const disabled = visibility === "disabled";
   return (
     <div
@@ -335,12 +350,12 @@ function FormField({
             visibility === "optional" ? "translate-x-0 opacity-100" : "-translate-x-1 opacity-0",
           )}
         >
-          Optional
+          {t("optional")}
         </span>
         {disabled ? (
-          <span className="ml-auto text-[11px] font-normal text-soft-ink">Hidden from candidates</span>
+          <span className="ml-auto text-[11px] font-normal text-soft-ink">{t("hiddenFromCandidates")}</span>
         ) : fixed ? (
-          <span className="ml-auto text-[11px] font-normal text-quiet-mist">Always asked</span>
+          <span className="ml-auto text-[11px] font-normal text-quiet-mist">{t("alwaysAsked")}</span>
         ) : null}
       </div>
       <div
@@ -356,34 +371,35 @@ function FormField({
 }
 
 function ApplicationStep({ d, focus }: { d: StepDraft; focus: string | null }) {
-  const groups = ["Personal information", "Profile", "Details"];
+  const t = useTranslations("jobs.stepPreview");
+  const groups = ["personal", "profile", "details"] as const;
   return (
     <div className="space-y-4">
       <div>
         <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-soft-ink">
-          Your details
+          {t("yourDetails")}
         </p>
         <div className="space-y-1.5">
-          <FormField label="Full name" visibility="required" kind="line" active={false} fixed />
-          <FormField label="Email" visibility="required" kind="line" active={false} fixed />
+          <FormField label={t("fullName")} visibility="required" kind="line" active={false} fixed />
+          <FormField label={t("email")} visibility="required" kind="line" active={false} fixed />
         </div>
       </div>
       {groups.map((group) => (
         <div key={group}>
           <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-soft-ink">
-            {group}
+            {t(group)}
           </p>
           <div className="space-y-1.5">
             {FIELD_ROWS.filter((r) => r.group === group).map((r) => (
               <FormField
                 key={r.key}
-                label={r.label}
+                label={t(`field.${r.labelKey}`)}
                 kind={r.kind}
                 visibility={d.fields.visibility[r.key]}
                 active={focus === applicationFieldName(r.key)}
               />
             ))}
-            {group === "Details"
+            {group === "details"
               ? d.fields.questions.map((q) => (
                   <FormField
                     key={q.id}
@@ -410,18 +426,19 @@ function AdvancedStep({
   focus: string | null;
   aiConfigured: boolean;
 }) {
+  const t = useTranslations("jobs.stepPreview");
   const f = d.fields;
   const slug = f.slug.trim() ? slugify(f.slug) : slugify(d.title) || "your-job-title";
   const onsite = d.workplace === "onsite" || d.workplace === "hybrid";
   return (
     <div className="space-y-3">
-      <Block fields={["slug"]} focus={focus} label="Link">
-        <Row label="Public link">
+      <Block fields={["slug"]} focus={focus} label={t("link")}>
+        <Row label={t("publicLink")}>
           <span className="break-all text-[13px] font-medium text-near-ink">/jobs/{slug}</span>
         </Row>
       </Block>
-      <Block fields={["keywords"]} focus={focus} label="Keywords">
-        <Row label="Keywords">
+      <Block fields={["keywords"]} focus={focus} label={t("keywords")}>
+        <Row label={t("keywords")}>
           <div className="flex flex-wrap gap-1.5">
             <AnimatePresence initial={false}>
               {d.keywords.map((k) => (
@@ -437,46 +454,46 @@ function AdvancedStep({
                 </motion.span>
               ))}
             </AnimatePresence>
-            {d.keywords.length === 0 ? <Value empty="No keywords yet" /> : null}
+            {d.keywords.length === 0 ? <Value empty={t("noKeywordsYet")} /> : null}
           </div>
         </Row>
       </Block>
       <div className="grid grid-cols-2 gap-3">
         <Block fields={["experienceLevel"]} focus={focus}>
-          <Row label="Experience">
-            <Value empty="Not set">{f.experienceLevel}</Value>
+          <Row label={t("experience")}>
+            <Value empty={t("notSet")}>{f.experienceLevel}</Value>
           </Row>
         </Block>
         <Block fields={["education"]} focus={focus}>
-          <Row label="Education">
-            <Value empty="Not set">{f.education}</Value>
+          <Row label={t("education")}>
+            <Value empty={t("notSet")}>{f.education}</Value>
           </Row>
         </Block>
       </div>
       <Reveal show={onsite}>
-        <Block fields={["officeAddress", "office"]} focus={focus} label="Office">
-          <Row label="Office">
-            <Value empty="Add an address to show a map">{f.officeAddress}</Value>
+        <Block fields={["officeAddress", "office"]} focus={focus} label={t("office")}>
+          <Row label={t("office")}>
+            <Value empty={t("officeAddressEmpty")}>{f.officeAddress}</Value>
           </Row>
           {d.photos.length > 0 ? (
             <p className="mt-1 text-[12px] text-soft-ink">
-              {d.photos.length} office photo{d.photos.length === 1 ? "" : "s"}
+              {t("officePhotosCount", { count: d.photos.length })}
             </p>
           ) : null}
         </Block>
       </Reveal>
       <Reveal show={d.workplace === "remote"}>
         <div className="rounded-[var(--radius-inner)] bg-card-inset px-3 py-2.5 text-[13px] text-soft-ink">
-          Remote role: no office map is shown on the posting.
+          {t("remoteNoMap")}
         </div>
       </Reveal>
       {aiConfigured ? (
-        <Block fields={["evaluationMode"]} focus={focus} label="AI scoring">
-          <Row label="AI evaluation style">
-            <Value empty="Balanced">
-              {f.evaluationMode
-                ? f.evaluationMode[0].toUpperCase() + f.evaluationMode.slice(1)
-                : ""}
+        <Block fields={["evaluationMode"]} focus={focus} label={t("aiScoring")}>
+          <Row label={t("evaluationStyle")}>
+            <Value empty={t("balanced")}>
+              {f.evaluationMode && EVALUATION_MODES.has(f.evaluationMode)
+                ? t(`evaluation.${f.evaluationMode}`)
+                : f.evaluationMode}
             </Value>
           </Row>
         </Block>
@@ -486,20 +503,21 @@ function AdvancedStep({
 }
 
 function ReviewStep({ d, status }: { d: StepDraft; status: "draft" | "open" | "closed" }) {
+  const t = useTranslations("jobs.stepPreview");
   const hasContent = getPublishBlockers({
     description: d.description,
     contentSections: d.sections,
   }).length === 0;
   const required = Object.values(d.fields.visibility).filter((v) => v === "required").length;
-  const items: Array<{ ok: boolean; text: string; optional?: boolean }> = [
-    { ok: d.title.trim().length > 0, text: "Job title" },
-    { ok: hasContent, text: "Description or at least one section" },
+  const items: Array<{ ok: boolean; key: string; optional?: boolean }> = [
+    { ok: d.title.trim().length > 0, key: "jobTitle" },
+    { ok: hasContent, key: "descriptionChecklist" },
     {
       ok: d.fields.salaryMin != null || d.fields.salaryMax != null,
-      text: "Salary range",
+      key: "salaryRange",
       optional: true,
     },
-    { ok: d.keywords.length > 0, text: "Keywords", optional: true },
+    { ok: d.keywords.length > 0, key: "keywords", optional: true },
   ];
   return (
     <div className="space-y-3">
@@ -512,16 +530,16 @@ function ReviewStep({ d, status }: { d: StepDraft; status: "draft" | "open" | "c
             )}
           />
           <p className="text-[13px] font-semibold text-near-ink">
-            {status === "open" ? "Live" : status === "closed" ? "Closed" : "Draft"}
+            {t(`status.${status}`)}
           </p>
         </div>
         <p className="mt-1 font-display text-[18px] leading-tight text-near-ink">
-          {d.title.trim() || "Your job title"}
+          {d.title.trim() || t("yourJobTitle")}
         </p>
       </div>
       <ul className="space-y-1.5">
         {items.map((i) => (
-          <li key={i.text} className="flex items-center gap-2 text-[13px]">
+          <li key={i.key} className="flex items-center gap-2 text-[13px]">
             <span
               className={cn(
                 "flex size-4.5 items-center justify-center rounded-full transition-colors duration-200",
@@ -531,14 +549,15 @@ function ReviewStep({ d, status }: { d: StepDraft; status: "draft" | "open" | "c
               <Check className="size-3" strokeWidth={3} />
             </span>
             <span className={i.ok ? "text-near-ink" : "text-soft-ink"}>
-              {i.text}
-              {i.optional && !i.ok ? " (optional)" : ""}
+              {i.optional && !i.ok
+                ? t("reviewOptional", { item: t(`review.${i.key}`) })
+                : t(`review.${i.key}`)}
             </span>
           </li>
         ))}
       </ul>
       <p className="text-[12.5px] text-soft-ink">
-        Candidates will be asked for {required + 2} required field{required + 2 === 1 ? "" : "s"}.
+        {t("requiredFields", { count: required + 2 })}
       </p>
     </div>
   );
@@ -564,6 +583,7 @@ export const JobStepPreview = memo(function JobStepPreview({
   status: "draft" | "open" | "closed";
   aiConfigured: boolean;
 }) {
+  const t = useTranslations("jobs.stepPreview");
   const reduce = useReducedMotion();
   const scroller = useRef<HTMLDivElement>(null);
 
@@ -590,7 +610,7 @@ export const JobStepPreview = memo(function JobStepPreview({
             transition={{ duration: reduce ? 0 : 0.2, ease: EASE }}
             className="rounded-[var(--radius-card)] bg-card p-5 shadow-[var(--shadow-card)]"
           >
-            <p className="mb-4 text-[12.5px] font-semibold text-soft-ink">{STEP_TITLE[step]}</p>
+            <p className="mb-4 text-[12.5px] font-semibold text-soft-ink">{t(`title.${step}`)}</p>
             {step === "essentials" ? <DetailsStep d={draft} focus={focus} /> : null}
             {step === "description" ? <DescriptionStep d={draft} focus={focus} /> : null}
             {step === "compensation" ? <CompensationStep d={draft} focus={focus} /> : null}

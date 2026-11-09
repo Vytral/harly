@@ -1,3 +1,5 @@
+import { getTranslations } from "next-intl/server";
+
 import {
   parseJobContentSections,
   parseKeywords,
@@ -44,7 +46,7 @@ function Heading({ children }: { children: React.ReactNode }) {
  * inside any career template and in dark mode. The surrounding chrome (header,
  * meta column, tabs) is supplied by the per-template shell.
  */
-export function JobOverviewBody({
+export async function JobOverviewBody({
   job,
   process,
   accent,
@@ -58,6 +60,7 @@ export function JobOverviewBody({
   accent?: string;
   rounded?: "soft" | "sharp";
 }) {
+  const t = await getTranslations("features.careerPage.jobOverviewBody");
   const sections = parseJobContentSections(job.contentSections);
   const officePhotos = parseOfficePhotos(job.officePhotos);
   const keywords = parseKeywords(job.keywords);
@@ -73,7 +76,7 @@ export function JobOverviewBody({
     <article className="space-y-10 text-base leading-7 text-zinc-600 dark:text-zinc-300">
       {hasDescription ? (
         <section data-preview-section="description">
-          <Heading>About this role</Heading>
+          <Heading>{t("aboutRole")}</Heading>
           <JobContent content={job.description} />
         </section>
       ) : null}
@@ -89,13 +92,13 @@ export function JobOverviewBody({
         <>
           {job.requirements ? (
             <section>
-              <Heading>Requirements</Heading>
+              <Heading>{t("requirements")}</Heading>
               <JobContent content={job.requirements} />
             </section>
           ) : null}
           {job.benefits ? (
             <section>
-              <Heading>Benefits</Heading>
+              <Heading>{t("benefits")}</Heading>
               <JobContent content={job.benefits} />
             </section>
           ) : null}
@@ -104,14 +107,14 @@ export function JobOverviewBody({
 
       {mapSrc || officePhotos.length > 0 ? (
         <section data-preview-section="office">
-          <Heading>Office</Heading>
+          <Heading>{t("office")}</Heading>
           {job.officeAddress ? (
             <p className="mt-2 text-zinc-600 dark:text-zinc-400">{job.officeAddress}</p>
           ) : null}
           {mapSrc ? (
             <ThirdPartyEmbed
               src={mapSrc}
-              title="Office location"
+              title={t("officeLocation")}
               className="mt-3 h-64 w-full rounded-lg border border-zinc-200 dark:border-zinc-800"
             />
           ) : null}
@@ -122,7 +125,7 @@ export function JobOverviewBody({
                 <img
                   key={url}
                   src={url}
-                  alt="Office"
+                  alt={t("officeAlt")}
                   className="aspect-video w-full rounded-lg border border-zinc-200 object-cover dark:border-zinc-800"
                 />
               ))}
@@ -137,7 +140,7 @@ export function JobOverviewBody({
             process={process}
             accent={accent}
             rounded={rounded}
-            title={process.title || "How we hire"}
+            title={process.title || t("howWeHire")}
             headingLevel={2}
             compact
           />

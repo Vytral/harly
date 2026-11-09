@@ -1,11 +1,14 @@
 "use client";
 
+import { useTranslations } from "next-intl";
+
 import { writeCookiePreferences } from "@/lib/cookie-consent";
 import { cn } from "@/lib/utils";
 
 import { useEmbedConsent } from "./use-embed-consent";
 
 export function EmbedConsentPlaceholder({ className }: { className?: string }) {
+  const t = useTranslations("ui.thirdPartyEmbed");
   return (
     <div
       className={cn(
@@ -14,14 +17,14 @@ export function EmbedConsentPlaceholder({ className }: { className?: string }) {
       )}
     >
       <p className="text-sm text-zinc-600 dark:text-zinc-300">
-        This content is embedded from another site. It stays off until you allow embeds.
+        {t("placeholder")}
       </p>
       <button
         type="button"
         onClick={() => writeCookiePreferences(true)}
         className="mt-3 inline-flex items-center justify-center rounded-xl bg-zinc-900 px-3.5 py-2 text-[13px] font-semibold text-white transition-opacity hover:opacity-90 dark:bg-zinc-100 dark:text-zinc-900"
       >
-        Allow embeds
+        {t("allowEmbeds")}
       </button>
     </div>
   );

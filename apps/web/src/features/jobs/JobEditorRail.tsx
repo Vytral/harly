@@ -2,6 +2,7 @@
 
 import { useEffect, type ReactNode } from "react";
 import { Check } from "lucide-react";
+import { useTranslations } from "next-intl";
 
 import { cn } from "@/lib/utils";
 
@@ -29,6 +30,7 @@ export function JobEditorRail({
    *  live here instead of the top bar, which has no room for them. */
   secondaryActions?: ReactNode;
 }) {
+  const t = useTranslations("jobs.form");
   useEffect(() => {
     const root = scrollRootRef.current;
     if (!root) return;
@@ -59,11 +61,11 @@ export function JobEditorRail({
     <>
       <aside className="hidden w-64 shrink-0 flex-col gap-3 overflow-y-auto p-4 md:flex">
         <nav
-          aria-label="Job sections"
+          aria-label={t("jobSections")}
           className="rounded-[var(--radius-card)] bg-card p-4 shadow-[var(--shadow-card)]"
         >
           <p className="mb-3 px-2 text-[15px] font-semibold tracking-[-0.01em] text-near-ink">
-            Steps
+            {t("steps")}
           </p>
           <ol className="flex flex-col gap-0.5">
             {sections.map((s, index) => {
@@ -94,7 +96,7 @@ export function JobEditorRail({
                       {isDone ? <Check className="size-3.5" strokeWidth={3} /> : index + 1}
                     </span>
                     <span className="min-w-0 truncate">{s.label}</span>
-                    {isDone ? <span className="sr-only">(visited)</span> : null}
+                    {isDone ? <span className="sr-only">{t("visited")}</span> : null}
                   </button>
                 </li>
               );
@@ -124,9 +126,10 @@ export function JobEditorMobileNav({
   active: string;
   onSelect: (key: string) => void;
 }) {
+  const t = useTranslations("jobs.form");
   return (
     <nav
-      aria-label="Job sections"
+      aria-label={t("jobSections")}
       className="scrollbar-hide sticky top-0 z-10 flex shrink-0 gap-1.5 overflow-x-auto bg-background px-3 py-2 md:hidden"
     >
       {sections.map((s, index) => {

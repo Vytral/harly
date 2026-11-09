@@ -5,6 +5,7 @@ import { useEffect, useId, useMemo, useState, useTransition } from "react";
 import type { Route } from "next";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
+import { useTranslations } from "next-intl";
 import {
   ArrowRightLeft,
   CheckCircle2,
@@ -69,6 +70,8 @@ export function PipelineList({
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [rejectOpen, setRejectOpen] = useState(false);
   const [rejectTargets, setRejectTargets] = useState<RejectTarget[]>([]);
+  const t = useTranslations("features.pipeline.PipelineList");
+  const confirmMessages = useTranslations("labels.pipeline.confirmation");
   const selectAllId = useId();
   const [isPending, startTransition] = useTransition();
 
@@ -160,13 +163,17 @@ export function PipelineList({
     [filtered, selected],
   );
 
-  function afterBulk(result: { success: boolean; error?: string }, label: string) {
+  function afterBulk(result: { success: boolean; error?: string }, kind: "moved" | "updated") {
     if (result.success) {
-      toast.success(`${label} ${selectedIds.length} candidate${selectedIds.length === 1 ? "" : "s"}.`);
+      toast.success(
+        kind === "moved"
+          ? t("movedCount", { count: selectedIds.length })
+          : t("updatedCount", { count: selectedIds.length }),
+      );
       setSelected(new Set());
       router.refresh();
     } else {
-      toast.error(result.error ?? "Could not update candidates.");
+      toast.error(result.error ?? t("updateFailed"));
     }
   }
 
@@ -178,7 +185,7 @@ export function PipelineList({
         toStageId,
         workspaceId,
       });
-      afterBulk(result, "Moved");
+      afterBulk(result, "moved");
     });
   }
 
@@ -207,7 +214,7 @@ export function PipelineList({
     if (
       status === "hired" &&
       selectedIds.length > 1 &&
-      !(await confirm(bulkDecisionConfirmCopy(status, selectedIds.length)))
+      !(await confirm(bulkDecisionConfirmCopy(confirmMessages, status, selectedIds.length)))
     ) {
       return;
     }
@@ -217,7 +224,7 @@ export function PipelineList({
         workspaceId,
         status,
       });
-      afterBulk(result, "Updated");
+      afterBulk(result, "updated");
     });
   }
 
@@ -227,11 +234,11 @@ export function PipelineList({
       <div className="flex flex-wrap items-center gap-3 px-4 py-4 sm:px-5">
         <div
           role="tablist"
-          aria-label="Filter by stage"
+          aria-label={t("filterByStage")}
           className="flex min-w-0 flex-1 items-center gap-1.5 overflow-x-auto"
         >
           <StageTab
-            label="All"
+            label={t("all")}
             count={applications.length}
             active={activeStage === ALL}
             onClick={() => setActiveStage(ALL)}
@@ -254,8 +261,8 @@ export function PipelineList({
           <Input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search candidates…"
-            aria-label="Search candidates"
+            placeholder={t("searchPlaceholder")}
+            aria-label={t("searchLabel")}
             className="h-9 rounded-full border-transparent bg-card-inset pl-9 shadow-none"
           />
         </div>
@@ -264,17 +271,17 @@ export function PipelineList({
       {/* Bulk bar */}
       {selectedIds.length > 0 ? (
         <div className="mx-4 mb-3 flex flex-wrap items-center gap-2 rounded-[var(--radius-inner)] bg-lime-wash px-3 py-2 duration-200 animate-in fade-in slide-in-from-top-1 sm:mx-5">
-          <span className="text-sm font-medium text-near-ink">{selectedIds.length} selected</span>
+          <span className="text-sm font-medium text-near-ink">{t("selectedCount", { count: selectedIds.length })}</span>
           <div className="ml-auto flex flex-wrap gap-2">
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button size="sm" variant="outline" disabled={isPending}>
                   <ArrowRightLeft className="size-4" />
-                  Move to stage
+                  {t("moveToStage")}
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
-                <DropdownMenuLabel>Move to</DropdownMenuLabel>
+                <DropdownMenuLabel>{t("moveTo")}</DropdownMenuLabel>
                 {stages
                   .slice()
                   .sort((a, b) => a.order - b.order)
@@ -287,18 +294,18 @@ export function PipelineList({
             </DropdownMenu>
             <Button size="sm" variant="outline" disabled={isPending} onClick={() => setStatus("hired")}>
               <CheckCircle2 className="size-4 text-success-olive" />
-              Hire
+              {t("hire")}
             </Button>
             <Button size="sm" variant="outline" disabled={isPending} onClick={() => setStatus("rejected")}>
               <XCircle className="size-4 text-destructive" />
-              Reject
+              {t("reject")}
             </Button>
             <Button size="sm" variant="outline" disabled={isPending} onClick={() => setStatus("active")}>
               <RotateCcw className="size-4" />
-              Reactivate
+              {t("reactivate")}
             </Button>
             <Button size="sm" variant="ghost" onClick={() => setSelected(new Set())}>
-              Clear
+              {t("clear")}
             </Button>
           </div>
         </div>
@@ -311,14 +318,10 @@ export function PipelineList({
             id={selectAllId}
             checked={allVisibleSelected}
             onCheckedChange={toggleAll}
-            aria-label={`Select all visible candidates (${filtered.length})`}
+            aria-label={t("selectAllVisible", { count: filtered.length })}
           />
-          <label htmlFor={selectAllId} className="text-[12.5px] font-medium text-soft-ink">
-            Select all visible candidates ({filtered.length})
-          </label>
-          <span className="type-col-head ml-auto hidden uppercase sm:block">
-            Stage
-          </span>
+          <label htmlFor={selectAllId} className="text-[12.5px] font-medium text-soft-ink">{t("selectAllVisible", { count: filtered.length })}</label>
+          <span className="type-col-head ml-auto hidden uppercase sm:block">{t("stageHeader")}</span>
         </div>
         <div className="divide-y divide-hairline">
           {filtered.map((a) => {
@@ -326,13 +329,13 @@ export function PipelineList({
             const isSelected = selected.has(a.id);
             const currentStage = stageById.get(a.currentStageId);
             const href = candidateHref(a.candidateId, origin, a.id);
-            const stageName = currentStage?.name ?? "Unknown stage";
+            const stageName = currentStage?.name ?? t("unknownStage");
             return (
               <div
                 key={a.id}
                 role="button"
                 tabIndex={0}
-                aria-label={`Open ${fullName} profile`}
+                aria-label={t("openProfile", { name: fullName })}
                 data-state={isSelected ? "selected" : undefined}
                 onClick={() => router.push(href as Route)}
                 onKeyDown={(e) => {
@@ -348,7 +351,7 @@ export function PipelineList({
                   <Checkbox
                     checked={isSelected}
                     onCheckedChange={() => toggleOne(a.id)}
-                    aria-label={`Select ${fullName}`}
+                    aria-label={t("selectCandidate", { name: fullName })}
                   />
                 </div>
                 <Link
@@ -367,8 +370,7 @@ export function PipelineList({
                       {fullName}
                     </p>
                     <p className="truncate text-xs text-soft-ink">
-                      {a.candidateEmail}
-                      {a.source ? ` · via ${a.source}` : ""}
+                      {a.source ? t("emailVia", { email: a.candidateEmail, source: a.source }) : a.candidateEmail}
                     </p>
                   </div>
                 </Link>
@@ -382,7 +384,7 @@ export function PipelineList({
                     className="mt-1.5 max-w-40"
                   />
                   <p className="mt-1 text-xs text-soft-ink">
-                    Applied <ShortDate value={a.appliedAt} />
+                    {t.rich("applied", { date: () => <ShortDate value={a.appliedAt} /> })}
                   </p>
                 </div>
                 <div className="col-start-2 sm:col-auto sm:self-center">
@@ -395,7 +397,7 @@ export function PipelineList({
             <div className="flex flex-col items-center gap-2 px-6 py-14 text-center">
               <Search className="size-5 text-quiet-mist" />
               <p className="text-sm text-soft-ink">
-                No candidates in this view.
+                {t("noCandidates")}
               </p>
             </div>
           ) : null}

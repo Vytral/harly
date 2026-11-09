@@ -80,6 +80,7 @@ vi.mock("@/features/candidates/duplicate-detection", () => ({
 }));
 
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
+vi.mock("next-intl/server", async () => (await import("@/test-support/intl-server-mock")).intlServerMock);
 
 import { ANONYMIZATION_BLOCKED_MESSAGES } from "@/lib/ai/candidate-context";
 

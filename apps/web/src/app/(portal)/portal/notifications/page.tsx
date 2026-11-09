@@ -1,6 +1,7 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import type { Route } from "next";
+import { getTranslations } from "next-intl/server";
 
 import { PORTAL_SESSION_COOKIE, resolvePortalSession } from "@/lib/portal-auth";
 import { PortalShell } from "@/features/portal/PortalShellServer";
@@ -10,6 +11,7 @@ import { PortalNotificationsList } from "@/features/portal/PortalNotificationsLi
 export const dynamic = "force-dynamic";
 
 export default async function PortalNotificationsPage() {
+  const t = await getTranslations("pages.portalNotifications.page");
   const token = (await cookies()).get(PORTAL_SESSION_COOKIE)?.value;
   if (!token) redirect("/portal/login" as Route);
 
@@ -25,8 +27,8 @@ export default async function PortalNotificationsPage() {
     <PortalShell>
       <div className="mx-auto max-w-3xl space-y-6">
         <header className="pt-2">
-          <h1 className="text-[28px] font-semibold tracking-tight text-near-ink">Updates</h1>
-          <p className="mt-1 text-[15px] text-soft-ink">News about your applications and interviews.</p>
+          <h1 className="text-[28px] font-semibold tracking-tight text-near-ink">{t("title")}</h1>
+          <p className="mt-1 text-[15px] text-soft-ink">{t("description")}</p>
         </header>
         <PortalNotificationsList notifications={notifications} />
       </div>

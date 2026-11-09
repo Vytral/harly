@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition, type ReactNode } from "react";
+import { useTranslations } from "next-intl";
 import { useRouter } from "next/navigation";
 import { AlertTriangle } from "lucide-react";
 import { toast } from "@/lib/notification-island/toast";
@@ -33,17 +34,17 @@ import {
 } from "@/features/interviews/shared";
 
 const TYPES = [
-  { key: "screening", label: "Screening" },
-  { key: "technical", label: "Technical" },
-  { key: "culture_fit", label: "Culture fit" },
-  { key: "onsite", label: "Onsite" },
-  { key: "final", label: "Final round" },
+  { key: "screening", labelKey: "typeScreening" },
+  { key: "technical", labelKey: "typeTechnical" },
+  { key: "culture_fit", labelKey: "typeCultureFit" },
+  { key: "onsite", labelKey: "typeOnsite" },
+  { key: "final", labelKey: "typeFinal" },
 ] as const;
 
 const MODES = [
-  { key: "video", label: "Video" },
-  { key: "phone", label: "Phone" },
-  { key: "onsite", label: "Onsite" },
+  { key: "video", labelKey: "modeVideo" },
+  { key: "phone", labelKey: "modePhone" },
+  { key: "onsite", labelKey: "modeOnsite" },
 ] as const;
 
 type TypeKey = (typeof TYPES)[number]["key"];
@@ -61,6 +62,7 @@ export function EditInterviewDialog({
   currentUserId?: string;
   trigger: ReactNode;
 }) {
+  const t = useTranslations("candidates.editInterview");
   const router = useRouter();
   const [open, setOpen] = useState(false);
 
@@ -81,7 +83,7 @@ export function EditInterviewDialog({
   const [availabilityWarning, setAvailabilityWarning] = useState<string | null>(null);
   const [checkingAvailability, setCheckingAvailability] = useState(false);
 
-  const locationLabel = mode === "onsite" ? "Address" : "Meeting link";
+  const locationLabel = mode === "onsite" ? t("address") : t("meetingLink");
 
   async function checkTimeAvailability(
     newDate: string,
@@ -107,20 +109,16 @@ export function EditInterviewDialog({
       const warnings: string[] = [];
       const calendarUnchecked = result.gcalAvailability === "unknown";
       if (result.gcalBusy.length > 0) {
-        warnings.push(
-          `${result.gcalBusy.length} existing calendar event${result.gcalBusy.length > 1 ? "s" : ""}`,
-        );
+        warnings.push(t("calendarConflicts", { count: result.gcalBusy.length }));
       }
       if (result.internalConflicts.length > 0) {
-        warnings.push(
-          `${result.internalConflicts.length} overlapping interview${result.internalConflicts.length > 1 ? "s" : ""} in this workspace`,
-        );
+        warnings.push(t("interviewConflicts", { count: result.internalConflicts.length }));
       }
       setAvailabilityWarning(
         warnings.length > 0
-          ? `This time conflicts with ${warnings.join(" and ")}.${calendarUnchecked ? " Google Calendar could not be checked." : ""}`
+          ? t("availabilityConflicts", { conflicts: warnings.join(", "), calendarNote: calendarUnchecked ? ` ${t("calendarUnavailable")}` : "" })
           : calendarUnchecked
-            ? "Google Calendar availability could not be checked for this time."
+            ? t("calendarCouldNotCheck")
             : null,
       );
     } catch (error) {
@@ -136,7 +134,7 @@ export function EditInterviewDialog({
 
   function submit() {
     if (!date || !time) {
-      toast.error("Pick a date and time.");
+      toast.error(t("pickDateTime"));
       return;
     }
     startTransition(async () => {
@@ -154,13 +152,13 @@ export function EditInterviewDialog({
         title: title.trim() || null,
       });
       if (!result.success) {
-        toast.error(result.error ?? "Could not update.");
+        toast.error(result.error ?? t("updateError"));
         return;
       }
       if (result.warning) toast.warning(result.warning);
       const emailNote = unshownEmailWarning(result);
       if (emailNote) toast.warning(emailNote);
-      toast.success("Interview updated");
+      toast.success(t("updated"));
       setOpen(false);
       router.refresh();
     });
@@ -171,45 +169,45 @@ export function EditInterviewDialog({
       <DialogTrigger asChild>{trigger}</DialogTrigger>
       <DialogContent className="sm:max-w-2xl">
         <DialogHeader>
-          <DialogTitle>Edit interview</DialogTitle>
+          <DialogTitle>{t("title")}</DialogTitle>
           <DialogDescription>
-            Update details, change the interviewer, or reschedule.
+            {t("description")}
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-5">
-          <Field label="Title (optional)" htmlFor="edit-title">
+          <Field label={t("titleOptional")} htmlFor="edit-title">
             <Input
               id="edit-title"
               value={title}
               onChange={(e) => setTitle(e.target.value)}
-              placeholder="e.g. Panel with engineering team"
+              placeholder={t("titlePlaceholder")}
             />
           </Field>
 
           <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
             {/* Left column */}
             <div className="space-y-5">
-              <Field label="Type">
+              <Field label={t("type")}>
                 <SegmentedControl
-                  aria-label="Interview type"
-                  options={TYPES.map((t) => ({ value: t.key, label: t.label }))}
+                  aria-label={t("type")}
+                  options={TYPES.map((item) => ({ value: item.key, label: t(item.labelKey) }))}
                   value={type}
                   onValueChange={setType}
                 />
               </Field>
 
-              <Field label="Mode">
+              <Field label={t("mode")}>
                 <SegmentedControl
-                  aria-label="Interview mode"
-                  options={MODES.map((m) => ({ value: m.key, label: m.label }))}
+                  aria-label={t("mode")}
+                  options={MODES.map((item) => ({ value: item.key, label: t(item.labelKey) }))}
                   value={mode}
                   onValueChange={setMode}
                 />
               </Field>
 
               <div className="grid grid-cols-2 gap-3">
-                <Field label="Date" htmlFor="edit-date">
+                <Field label={t("date")} htmlFor="edit-date">
                   <Input
                     id="edit-date"
                     type="date"
@@ -220,7 +218,7 @@ export function EditInterviewDialog({
                     }}
                   />
                 </Field>
-                <Field label="Time" htmlFor="edit-time">
+                <Field label={t("time")} htmlFor="edit-time">
                   <Input
                     id="edit-time"
                     type="time"
@@ -263,18 +261,18 @@ export function EditInterviewDialog({
                   onChange={(e) => setLocation(e.target.value)}
                   placeholder={
                     mode === "onsite"
-                      ? "Office address…"
+                      ? t("officeAddress")
                       : "https://meet.google.com/…"
                   }
                 />
               </Field>
 
-              <Field label="Notes" htmlFor="edit-notes">
+              <Field label={t("notes")} htmlFor="edit-notes">
                 <Textarea
                   id="edit-notes"
                   value={notes}
                   onChange={(e) => setNotes(e.target.value)}
-                  placeholder="Focus areas, panel, prep…"
+                  placeholder={t("notesPlaceholder")}
                   className="min-h-20"
                 />
               </Field>
@@ -288,18 +286,18 @@ export function EditInterviewDialog({
             </div>
           ) : null}
           {checkingAvailability ? (
-            <p className="text-xs text-muted-foreground">Checking availability…</p>
+            <p className="text-xs text-muted-foreground">{t("checkingAvailability")}</p>
           ) : null}
         </div>
 
         <DialogFooter>
           <DialogClose asChild>
             <Button variant="outline" disabled={isPending}>
-              Cancel
+              {t("cancel")}
             </Button>
           </DialogClose>
           <Button onClick={submit} disabled={isPending}>
-            {isPending ? "Saving…" : "Save changes"}
+            {isPending ? t("saving") : t("saveChanges")}
           </Button>
         </DialogFooter>
       </DialogContent>

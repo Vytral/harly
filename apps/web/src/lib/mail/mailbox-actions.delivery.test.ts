@@ -12,11 +12,12 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock("server-only", () => ({}));
+vi.mock("next-intl/server", async () => (await import("@/test-support/intl-server-mock")).intlServerMock);
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 vi.mock("@/features/mailbox/compose-shared", async () => {
   const { z } = await import("zod");
   return {
-    composerAttachmentsSchema: z.array(z.any()).optional(),
+    composerAttachmentsSchema: () => z.array(z.any()).optional(),
     decodeComposerAttachments: () => [],
     richBodyReact: () => null,
   };

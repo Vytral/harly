@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { useTranslations } from "next-intl";
 import { useRouter } from "next/navigation";
 import { toast } from "@/lib/notification-island/toast";
 
@@ -21,12 +22,12 @@ import { cn } from "@/lib/utils";
 /** Mirrors AiScoreCard so a suggested decision reads the same everywhere. */
 const DECISION_META: Record<
   "strong_yes" | "yes" | "maybe" | "no",
-  { label: string; className: string }
+  { labelKey: "strongYes" | "yes" | "maybe" | "no"; className: string }
 > = {
-  strong_yes: { label: "Strong yes", className: "bg-primary/10 text-primary" },
-  yes: { label: "Yes", className: "bg-primary/10 text-primary" },
-  maybe: { label: "Maybe", className: "bg-clay/15 text-clay" },
-  no: { label: "No", className: "bg-destructive/10 text-destructive" },
+  strong_yes: { labelKey: "strongYes", className: "bg-primary/10 text-primary" },
+  yes: { labelKey: "yes", className: "bg-primary/10 text-primary" },
+  maybe: { labelKey: "maybe", className: "bg-clay/15 text-clay" },
+  no: { labelKey: "no", className: "bg-destructive/10 text-destructive" },
 };
 
 export function SummarizeNotesSheet({
@@ -40,6 +41,8 @@ export function SummarizeNotesSheet({
   workspaceId: string;
   trigger: React.ReactNode;
 }) {
+  const t = useTranslations("features.candidates.summarizeNotesSheet");
+  const ilt = useTranslations("labels.interviews");
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [isPending, startTransition] = useTransition();
@@ -47,9 +50,14 @@ export function SummarizeNotesSheet({
   const [summary, setSummary] = useState<InterviewNotesSummary | null>(null);
   const [isSaving, startSaveTransition] = useTransition();
 
+  function decisionLabel(decision: string) {
+    const meta = DECISION_META[decision as keyof typeof DECISION_META];
+    return meta ? t(`decisions.${meta.labelKey}`) : decision;
+  }
+
   function summarize() {
     if (!rawNotes.trim()) {
-      toast.error("Enter some notes first.");
+      toast.error(t("enterNotesFirst"));
       return;
     }
     startTransition(async () => {
@@ -67,19 +75,22 @@ export function SummarizeNotesSheet({
 
   function saveAsNote() {
     if (!summary) return;
-    const decision = DECISION_META[summary.suggestedDecision];
     const body = [
-      `Interview summary, ${interview.title ?? interviewTypeLabel(interview.type)}`,
+      t("noteTitle", {
+        title: interview.title ?? interviewTypeLabel(interview.type, ilt),
+      }),
       "",
       summary.executiveSummary,
       "",
-      "Positive signals",
+      t("positiveSignals"),
       ...summary.positiveSignals.map((s) => `• ${s}`),
       ...(summary.concerns.length > 0
-        ? ["", "Concerns", ...summary.concerns.map((c) => `• ${c}`)]
+        ? ["", t("concerns"), ...summary.concerns.map((c) => `• ${c}`)]
         : []),
       "",
-      `Suggested decision: ${decision?.label ?? summary.suggestedDecision}`,
+      t("noteSuggestedDecision", {
+        decision: decisionLabel(summary.suggestedDecision),
+      }),
     ].join("\n");
 
     startSaveTransition(async () => {
@@ -89,10 +100,10 @@ export function SummarizeNotesSheet({
         body,
       });
       if (!result.success) {
-        toast.error(result.error ?? "Could not save note.");
+        toast.error(result.error ?? t("saveError"));
         return;
       }
-      toast.success("Summary saved as note");
+      toast.success(t("summarySaved"));
       setOpen(false);
       (router as { refresh?: () => void }).refresh?.();
     });
@@ -102,8 +113,8 @@ export function SummarizeNotesSheet({
     <Sheet open={open} onOpenChange={setOpen} mobilePresentation="bottom-on-mobile">
       <SheetTrigger asChild>{trigger}</SheetTrigger>
       <DrawerLayout
-        title="Summarize interview notes"
-        description={`${interview.title ?? interviewTypeLabel(interview.type)} · ${interview.jobTitle}`}
+        title={t("title")}
+        description={`${interview.title ?? interviewTypeLabel(interview.type, ilt)} · ${interview.jobTitle}`}
         footer={
           summary ? (
             <Button
@@ -112,7 +123,7 @@ export function SummarizeNotesSheet({
               disabled={isSaving}
               onClick={saveAsNote}
             >
-              {isSaving ? "Saving…" : "Save as note"}
+              {isSaving ? t("saving") : t("saveAsNote")}
             </Button>
           ) : undefined
         }
@@ -121,7 +132,7 @@ export function SummarizeNotesSheet({
           {!summary ? (
             <>
               <Textarea
-                placeholder="Paste your raw interview notes here — messy is fine."
+                placeholder={t("notesPlaceholder")}
                 className="min-h-[180px] resize-y text-base sm:text-sm"
                 value={rawNotes}
                 onChange={(e) => setRawNotes(e.target.value)}
@@ -131,16 +142,18 @@ export function SummarizeNotesSheet({
                 size="sm"
                 onClick={summarize}
                 loading={isPending}
-                loadingText="Summarizing"
+                loadingText={t("summarizing")}
                 disabled={!rawNotes.trim()}
               >
-                Summarize with AI
+                {t("summarizeWithAi")}
               </AiButton>
             </>
           ) : (
             <div className="space-y-5 text-sm">
               <div>
-                <p className="mb-1.5 font-medium text-foreground">Summary</p>
+                <p className="mb-1.5 font-medium text-foreground">
+                  {t("summary")}
+                </p>
                 <p className="leading-relaxed text-muted-foreground">
                   {summary.executiveSummary}
                 </p>
@@ -149,7 +162,7 @@ export function SummarizeNotesSheet({
               {summary.positiveSignals.length > 0 ? (
                 <div>
                   <p className="mb-1.5 font-medium text-foreground">
-                    Positive signals
+                    {t("positiveSignals")}
                   </p>
                   <ul className="space-y-1 text-muted-foreground">
                     {summary.positiveSignals.map((s, i) => (
@@ -164,7 +177,9 @@ export function SummarizeNotesSheet({
 
               {summary.concerns.length > 0 ? (
                 <div>
-                  <p className="mb-1.5 font-medium text-foreground">Concerns</p>
+                  <p className="mb-1.5 font-medium text-foreground">
+                    {t("concerns")}
+                  </p>
                   <ul className="space-y-1 text-muted-foreground">
                     {summary.concerns.map((c, i) => (
                       <li key={i} className="flex items-start gap-2">
@@ -177,15 +192,16 @@ export function SummarizeNotesSheet({
               ) : null}
 
               <div className="flex items-center gap-2">
-                <p className="font-medium text-foreground">Suggested decision</p>
+                <p className="font-medium text-foreground">
+                  {t("suggestedDecision")}
+                </p>
                 <span
                   className={cn(
                     "rounded-full px-2.5 py-0.5 text-xs font-medium",
                     DECISION_META[summary.suggestedDecision]?.className,
                   )}
                 >
-                  {DECISION_META[summary.suggestedDecision]?.label ??
-                    summary.suggestedDecision}
+                  {decisionLabel(summary.suggestedDecision)}
                 </span>
               </div>
 
@@ -194,7 +210,7 @@ export function SummarizeNotesSheet({
                 className="text-xs text-muted-foreground underline-offset-2 hover:underline"
                 onClick={() => setSummary(null)}
               >
-                Edit notes and re-summarize
+                {t("editAndResummarize")}
               </button>
             </div>
           )}

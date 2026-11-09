@@ -1,16 +1,15 @@
 import { describe, expect, it } from "vitest";
 
+import { makeT } from "@/test-support/translator";
 import {
   applyOperation,
   buildColumns,
-  settleWrite,
-  THROWN_FAILURE_MESSAGE,
+  settleWrite as settleWriteWith,
   CARD_PAGE_SIZE,
   cancelledMessage,
   deriveColumns,
   enqueue,
   failureMessage,
-  FALLBACK_FAILURE_MESSAGE,
   hasUnfinished,
   limitToReveal,
   markRunning,
@@ -27,7 +26,17 @@ import {
   type BoardOperation,
   type MoveOperation,
   type QueueEntry,
+  type WriteOutcome,
 } from "@/features/pipeline/board-state";
+
+const t = makeT("labels.pipeline.board");
+
+const THROWN_FAILURE_MESSAGE = t("thrownFailure");
+const FALLBACK_FAILURE_MESSAGE = t("fallbackFailure");
+
+function settleWrite(entries: readonly QueueEntry[], operation: BoardOperation, outcome: WriteOutcome) {
+  return settleWriteWith(entries, operation, outcome, t);
+}
 import type {
   PipelineApplication,
   PipelineStage,
@@ -424,24 +433,25 @@ describe("write queue", () => {
 
 describe("messages", () => {
   it("prefers the server message and never shows raw text when none is given", () => {
-    expect(failureMessage("Workspace access denied.")).toBe("Workspace access denied.");
-    expect(failureMessage("   ")).toBe(FALLBACK_FAILURE_MESSAGE);
-    expect(failureMessage(undefined)).toBe(FALLBACK_FAILURE_MESSAGE);
+    expect(failureMessage("Workspace access denied.", t)).toBe("Workspace access denied.");
+    expect(failureMessage("   ", t)).toBe(FALLBACK_FAILURE_MESSAGE);
+    expect(failureMessage(undefined, t)).toBe(FALLBACK_FAILURE_MESSAGE);
   });
 
   it("explains cancelled writes in the singular and the plural", () => {
-    expect(cancelledMessage(1)).toMatch(/^1 queued change was not applied/);
-    expect(cancelledMessage(3)).toMatch(/^3 queued changes were not applied/);
+    expect(cancelledMessage(1, t)).toMatch(/^1 queued change was not applied/);
+    expect(cancelledMessage(3, t)).toMatch(/^3 queued changes were not applied/);
   });
 
   it("announces success and email warnings in plain language", () => {
     const move = moveOp({ id: "m", subject: "Ada Lovelace", toStageName: "Interview" });
-    expect(successAnnouncement(move)).toBe("Ada Lovelace moved to Interview.");
-    expect(warningMessage(move, "Email is queued.")).toBe("Stage updated. Email is queued.");
+    expect(successAnnouncement(move, t)).toBe("Ada Lovelace moved to Interview.");
+    expect(warningMessage(move, "Email is queued.", t)).toBe("Stage updated. Email is queued.");
     expect(
       warningMessage(
         { kind: "status", id: "s", workspaceId: WORKSPACE, subject: "x", issuedAt: ISSUED, applicationIds: ["a"], status: "hired" },
         "Email is queued.",
+        t,
       ),
     ).toBe("Status updated. Email is queued.");
   });

@@ -1,11 +1,14 @@
+import { getTranslations } from "next-intl/server";
+
 import { Skeleton } from "@/components/ui/skeleton";
 
 const ROWS = [0, 1, 2, 3];
 
-export default function AutomationsLoading() {
+export default async function AutomationsLoading() {
+  const t = await getTranslations("pages.dashboardAutomations.loading");
   return (
     <div className="w-full" aria-busy="true">
-      <span className="sr-only">Loading…</span>
+      <span className="sr-only">{t("srLabel")}</span>
 
       {/* Workspace automation controls sit above the header, as in the page. */}
       <section className="mb-6 w-full rounded-[var(--radius-card)] bg-pure-snow p-5 shadow-[var(--shadow-card)]">

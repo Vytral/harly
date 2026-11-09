@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { CheckCircle2, ChevronRight, SearchX } from "lucide-react";
+import { useTranslations } from "next-intl";
 
 import { Card } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -10,7 +11,6 @@ import type { TaskItem } from "./shared";
 import { TaskRow } from "./TaskRow";
 import {
   URGENCY_DOT,
-  URGENCY_LABEL,
   URGENCY_ORDER,
   startOfToday,
   urgencyOf,
@@ -20,10 +20,15 @@ import {
 
 type Group = {
   key: UrgencyKey | "completed" | "canceled";
-  label: string;
   dot: string;
   tasks: TaskItem[];
 };
+
+type ListTranslator = ReturnType<typeof useTranslations>;
+
+function groupLabel(t: ListTranslator, key: Group["key"]): string {
+  return key === "completed" || key === "canceled" ? t(key) : t(`urgency.${key}`);
+}
 
 export function TaskList({
   tasks,
@@ -35,6 +40,7 @@ export function TaskList({
   /** Lets the empty state tell "nothing exists" apart from "nothing matches". */
   filtersActive?: boolean;
 }) {
+  const t = useTranslations("features.tasks.taskList");
   const [collapsed, setCollapsed] = useState<Set<string>>(() => new Set(["completed", "canceled"]));
 
   const groups = useMemo<Group[]>(() => {
@@ -45,16 +51,15 @@ export function TaskList({
 
     const byUrgency: Group[] = URGENCY_ORDER.map((key) => ({
       key,
-      label: URGENCY_LABEL[key],
       dot: URGENCY_DOT[key],
       tasks: open.filter((t) => urgencyOf(t.dueDate, todayStart) === key),
     })).filter((g) => g.tasks.length > 0);
 
     if (done.length > 0) {
-      byUrgency.push({ key: "completed", label: "Completed", dot: "bg-success-olive", tasks: done });
+      byUrgency.push({ key: "completed", dot: "bg-success-olive", tasks: done });
     }
     if (canceled.length > 0) {
-      byUrgency.push({ key: "canceled", label: "Canceled", dot: "bg-quiet-mist", tasks: canceled });
+      byUrgency.push({ key: "canceled", dot: "bg-quiet-mist", tasks: canceled });
     }
     return byUrgency;
   }, [tasks]);
@@ -64,14 +69,14 @@ export function TaskList({
       <EmptyState
         variant="filtered"
         icon={SearchX}
-        title="No tasks match these filters"
-        description="Try a different assignee or due window, or reset the filters."
+        title={t("emptyFilteredTitle")}
+        description={t("emptyFilteredDescription")}
       />
     ) : (
       <EmptyState
         icon={CheckCircle2}
-        title="Nothing on your plate"
-        description="Tasks you create , or that a stage move assigns you , collect here with the most urgent first."
+        title={t("emptyTitle")}
+        description={t("emptyDescription")}
       />
     );
   }
@@ -99,7 +104,7 @@ export function TaskList({
                 className={cn("size-3.5 text-quiet-mist transition-transform", !isCollapsed && "rotate-90")}
               />
               <span aria-hidden className={cn("size-2 rounded-full", group.dot)} />
-              <span className="text-[13px] font-semibold text-near-ink">{group.label}</span>
+              <span className="text-[13px] font-semibold text-near-ink">{groupLabel(t, group.key)}</span>
               <span className="rounded-full bg-soft-kraft px-2 py-0.5 text-[11px] font-medium tabular-nums text-soft-ink">
                 {group.tasks.length}
               </span>

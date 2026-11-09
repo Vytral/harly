@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   isOwnedAvatarUrl,
+  portalEmailPreferenceSchema,
   portalProfileSchema,
 } from "./profile-validation";
 
@@ -42,6 +43,24 @@ describe("portalProfileSchema", () => {
     });
 
     expect(result.success).toBe(false);
+  });
+});
+
+describe("portalEmailPreferenceSchema", () => {
+  it("canonicalizes a supported locale", () => {
+    expect(
+      portalEmailPreferenceSchema.parse({ preferredEmailLocale: " PT-br " }),
+    ).toEqual({ preferredEmailLocale: "pt-BR" });
+  });
+
+  it("allows clearing the preference and rejects unsupported locales", () => {
+    expect(
+      portalEmailPreferenceSchema.parse({ preferredEmailLocale: null }),
+    ).toEqual({ preferredEmailLocale: null });
+    expect(
+      portalEmailPreferenceSchema.safeParse({ preferredEmailLocale: "pt-PT" })
+        .success,
+    ).toBe(false);
   });
 });
 

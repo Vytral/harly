@@ -1,6 +1,7 @@
 "use client";
 
 import { useContext, useId, useState } from "react";
+import { useTranslations } from "next-intl";
 
 import { Switch } from "@/components/ui/switch";
 import { SegmentedControl, type SegmentedOption } from "@/components/ui/segmented-control";
@@ -59,6 +60,7 @@ export function Group({
   errorPrefix?: string;
   children?: React.ReactNode;
 }) {
+  const t = useTranslations("features.careerPage.PanelKit");
   const [open, setOpen] = useState(defaultOpen);
   const errors = useContext(FieldErrorsContext);
   const errorCount = errorPrefix
@@ -74,7 +76,7 @@ export function Group({
       <div className="flex items-center justify-between gap-3 rounded-[var(--radius-card)] border border-dashed border-hairline px-4 py-3">
         <div className="min-w-0">
           <p className="text-[13px] font-medium text-soft-ink">{title}</p>
-          <p className="text-[12px] text-quiet-mist">Not used by {unsupported}</p>
+          <p className="text-[12px] text-quiet-mist">{t("notUsedBy", { template: unsupported })}</p>
         </div>
       </div>
     );
@@ -110,14 +112,14 @@ export function Group({
         </button>
         {errorCount > 0 ? (
           <span className="shrink-0 rounded-full bg-danger-rust/10 px-2 py-0.5 text-[11px] font-medium text-danger-rust">
-            {errorCount} to fix
+            {t("errorsToFix", { count: errorCount })}
           </span>
         ) : null}
         {badge ? <span className="shrink-0 text-[12px] tabular-nums text-quiet-mist">{badge}</span> : null}
         {hasToggle ? (
           <>
             <label htmlFor={switchId} className="sr-only">
-              Show {title} on the page
+              {t("showOnPage", { title })}
             </label>
             <Switch id={switchId} checked={Boolean(enabled)} onCheckedChange={onEnabledChange} />
           </>
@@ -127,7 +129,7 @@ export function Group({
         <div id={bodyId} className={cn("space-y-4 border-t border-hairline px-4 py-4", off && "opacity-70")}>
           {off ? (
             <p className="rounded-[var(--radius-btn)] bg-card-inset px-3 py-2 text-[12px] text-soft-ink">
-              Hidden on the page. Turn it on to publish this section.
+              {t("hiddenOnPage")}
             </p>
           ) : null}
           {children}
@@ -139,10 +141,11 @@ export function Group({
 
 /** Lists settings the active template ignores, so nothing vanishes silently. */
 export function HiddenNote({ template, items }: { template: string; items: string[] }) {
+  const t = useTranslations("features.careerPage.PanelKit");
   if (items.length === 0) return null;
   return (
     <p className="text-[12px] leading-snug text-quiet-mist">
-      Not used by {template}: {items.join(", ")}.
+      {t("notUsedByItems", { template, items: items.join(", ") })}
     </p>
   );
 }

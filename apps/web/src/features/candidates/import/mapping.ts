@@ -12,23 +12,22 @@ export type ImportFieldKey =
 
 export type ImportField = {
   key: ImportFieldKey;
-  label: string;
   required: boolean;
 };
 
 export type ImportMapping = Partial<Record<ImportFieldKey, number>>;
 
 export const IMPORT_FIELDS: ImportField[] = [
-  { key: "fullName", label: "Full name", required: false },
-  { key: "firstName", label: "First name", required: true },
-  { key: "lastName", label: "Last name", required: true },
-  { key: "email", label: "Email", required: true },
-  { key: "phone", label: "Phone", required: false },
-  { key: "location", label: "Location", required: false },
-  { key: "linkedinUrl", label: "LinkedIn URL", required: false },
-  { key: "githubUrl", label: "GitHub URL", required: false },
-  { key: "websiteUrl", label: "Website URL", required: false },
-  { key: "headline", label: "Headline", required: false },
+  { key: "fullName", required: false },
+  { key: "firstName", required: true },
+  { key: "lastName", required: true },
+  { key: "email", required: true },
+  { key: "phone", required: false },
+  { key: "location", required: false },
+  { key: "linkedinUrl", required: false },
+  { key: "githubUrl", required: false },
+  { key: "websiteUrl", required: false },
+  { key: "headline", required: false },
 ];
 
 const HEADER_ALIASES: Record<ImportFieldKey, string[]> = {

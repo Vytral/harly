@@ -1,9 +1,12 @@
 import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { ACTION_CATALOG } from "./builder/catalog";
+import { makeT } from "@/test-support/translator";
+import { actionMeta, pickableActions } from "./builder/catalog";
 import { ACTION_TYPES } from "./schema";
 import { createRegistryActionAdapter } from "./runtime/worker";
 import { defaultSimulationFixture } from "./runtime/simulation-fixtures";
+
+const t = makeT("labels.automations");
 
 const { createNotification } = vi.hoisted(() => ({
   createNotification: vi.fn().mockResolvedValue(undefined),
@@ -86,11 +89,11 @@ describe("automation action registry", () => {
 
   it("keeps every selectable catalog action backed by a runtime handler", () => {
     const registered = new Set(Object.keys(ACTION_REGISTRY));
-    for (const action of ACTION_CATALOG.filter((item) => item.available)) {
+    for (const action of pickableActions(undefined, t)) {
       expect(registered.has(action.type), `${action.type} is selectable but has no handler`).toBe(true);
     }
     for (const type of ACTION_TYPES) {
-      expect(ACTION_CATALOG.some((item) => item.type === type), `${type} is missing from the catalog`).toBe(true);
+      expect(actionMeta(type, t), `${type} is missing from the catalog`).toBeDefined();
     }
   });
 
@@ -167,7 +170,7 @@ describe("automation action registry", () => {
   });
 
   it("keeps every visible config field aligned with its runtime action schema", () => {
-    for (const action of ACTION_CATALOG.filter((item) => item.available)) {
+    for (const action of pickableActions(undefined, t)) {
       const handler = ACTION_REGISTRY[action.type];
       expect(handler, `${action.type} must have a runtime schema`).toBeDefined();
       const shape = (handler!.schema as unknown as { shape: Record<string, unknown> }).shape;

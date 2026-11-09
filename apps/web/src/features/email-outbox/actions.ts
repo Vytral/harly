@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { getTranslations } from "@/i18n/server";
 import { z } from "zod";
 
 import { getWorkspaceContext } from "@/features/workspaces/context";
@@ -30,8 +31,9 @@ const idSchema = z.object({ id: z.string().uuid() });
 export async function listEmailDeliveryLogAction(
   input: z.input<typeof listSchema>,
 ): Promise<{ ok: true; data: DeliveryLogPage } | { ok: false; error: string }> {
+  const t = await getTranslations("server.emailOutbox");
   const parsed = listSchema.safeParse(input);
-  if (!parsed.success) return { ok: false, error: "Invalid filter." };
+  if (!parsed.success) return { ok: false, error: t("actions.invalidFilter") };
   await requirePermission("settings:edit");
   const { organization } = await getWorkspaceContext();
   const data = await listDeliveryLog({
@@ -43,8 +45,9 @@ export async function listEmailDeliveryLogAction(
 }
 
 export async function retryEmailDeliveryAction(input: { id: string }) {
+  const t = await getTranslations("server.emailOutbox");
   const parsed = idSchema.safeParse(input);
-  if (!parsed.success) return { ok: false as const, error: "Unknown email." };
+  if (!parsed.success) return { ok: false as const, error: t("actions.unknownEmail") };
   await requirePermission("settings:edit");
   const { organization, user } = await getWorkspaceContext();
   const result = await retryDelivery({
@@ -66,8 +69,9 @@ export async function retryEmailDeliveryAction(input: { id: string }) {
 }
 
 export async function cancelEmailDeliveryAction(input: { id: string }) {
+  const t = await getTranslations("server.emailOutbox");
   const parsed = idSchema.safeParse(input);
-  if (!parsed.success) return { ok: false as const, error: "Unknown email." };
+  if (!parsed.success) return { ok: false as const, error: t("actions.unknownEmail") };
   await requirePermission("settings:edit");
   const { organization, user } = await getWorkspaceContext();
   const result = await cancelDelivery({

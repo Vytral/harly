@@ -1,5 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+vi.mock("next-intl/server", async () => (await import("@/test-support/intl-server-mock")).intlServerMock);
+
 const mocks = vi.hoisted(() => ({
   audit: vi.fn(),
   requirePermission: vi.fn(),

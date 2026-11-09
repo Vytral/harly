@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useTranslations } from "next-intl";
 import { usePathname } from "next/navigation";
 import type { Route } from "next";
 import { useEffect, useState, type ReactNode } from "react";
@@ -39,9 +40,9 @@ type PortalTopNavProps = {
 };
 
 const NAV_ITEMS = [
-  { href: "/portal/dashboard" as Route, label: "Home", icon: HouseIcon },
-  { href: "/portal/applications" as Route, label: "Applications", icon: FileTextIcon },
-  { href: "/portal/jobs" as Route, label: "Open roles", icon: BriefcaseIcon },
+  { href: "/portal/dashboard" as Route, label: "home", icon: HouseIcon },
+  { href: "/portal/applications" as Route, label: "applications", icon: FileTextIcon },
+  { href: "/portal/jobs" as Route, label: "openRoles", icon: BriefcaseIcon },
 ] as const;
 
 function isActive(pathname: string, href: string) {
@@ -74,6 +75,7 @@ function OrgMark({
   orgFullLogoDarkUrl: string | null;
   accent: string;
 }) {
+  const t = useTranslations("portal.nav");
   if (orgFullLogoUrl) {
     return (
       <>
@@ -106,7 +108,7 @@ function OrgMark({
       )}
       <span className="min-w-0 truncate text-[15px] font-semibold tracking-tight text-near-ink">
         {orgName}
-        <span className="ml-1.5 font-normal text-soft-ink max-sm:hidden">Careers</span>
+        <span className="ml-1.5 font-normal text-soft-ink max-sm:hidden">{t("careers")}</span>
       </span>
     </>
   );
@@ -124,6 +126,7 @@ export function PortalTopNav({
   unreadNotificationCount,
   signOutForm,
 }: PortalTopNavProps) {
+  const t = useTranslations("portal.nav");
   const pathname = usePathname();
   const accent = orgColor ?? "#3f6212";
   const unread = unreadNotificationCount;
@@ -156,7 +159,7 @@ export function PortalTopNav({
             />
           </Link>
 
-          <nav aria-label="Portal" className="hidden md:block">
+          <nav aria-label={t("portal")} className="hidden md:block">
             <LayoutGroup id="portal-pills">
               <ul className="flex items-center gap-1 rounded-full bg-pure-snow/40 p-1 dark:bg-soft-kraft/30">
                 {NAV_ITEMS.map((item) => {
@@ -173,7 +176,7 @@ export function PortalTopNav({
                       >
                         {active ? <ActivePill /> : null}
                         <item.icon className="relative size-[18px]" />
-                        <span className="relative">{item.label}</span>
+                        <span className="relative">{t(item.label)}</span>
                       </Link>
                     </li>
                   );
@@ -185,7 +188,7 @@ export function PortalTopNav({
           <div className="flex items-center justify-end gap-2">
             <Link
               href={"/portal/notifications" as Route}
-              aria-label={unread > 0 ? `Notifications, ${unread} unread` : "Notifications"}
+              aria-label={unread > 0 ? t("unreadNotifications", { count: unread }) : t("notifications")}
               className={cn(headerRoundButton, "max-md:hidden", isActive(pathname, "/portal/notifications") && "bg-pure-snow text-near-ink")}
             >
               <BellIcon className="size-[18px]" />
@@ -194,7 +197,7 @@ export function PortalTopNav({
 
             <DropdownMenu>
               <DropdownMenuTrigger
-                aria-label="Account"
+                aria-label={t("account")}
                 className="flex items-center rounded-full outline-none transition-shadow focus-visible:ring-2 focus-visible:ring-near-ink focus-visible:ring-offset-2"
               >
                 {candidateAvatarUrl ? (
@@ -209,19 +212,19 @@ export function PortalTopNav({
               <DropdownMenuContent align="end" className="w-56">
                 <DropdownMenuLabel className="font-normal">
                   <p className="truncate text-sm font-medium text-foreground">{candidateName}</p>
-                  <p className="text-xs text-muted-foreground">Candidate at {orgName}</p>
+                  <p className="text-xs text-muted-foreground">{t("candidateAt", { orgName })}</p>
                 </DropdownMenuLabel>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem asChild>
                   <Link href={"/portal/profile" as Route}>
                     <UserCircleIcon className="size-4" />
-                    Profile & privacy
+                    {t("profilePrivacy")}
                   </Link>
                 </DropdownMenuItem>
                 <DropdownMenuItem asChild>
                   <Link href={"/portal/notifications" as Route}>
                     <BellIcon className="size-4" />
-                    Notifications
+                    {t("notifications")}
                     {unread > 0 ? <span className="ml-auto text-xs tabular-nums text-soft-ink">{unread}</span> : null}
                   </Link>
                 </DropdownMenuItem>
@@ -242,13 +245,14 @@ export function PortalTopNav({
 
 /** Phone and small tablet: a bottom tab bar, thumb-reachable, above the home indicator. */
 function PortalTabBar({ pathname, unread }: { pathname: string; unread: number }) {
+  const t = useTranslations("portal.nav");
   const items = [
-    ...NAV_ITEMS.map((item) => ({ ...item, label: item.label === "Open roles" ? "Roles" : item.label, badge: 0 })),
-    { href: "/portal/notifications" as Route, label: "Updates", icon: BellIcon, badge: unread },
+    ...NAV_ITEMS.map((item) => ({ ...item, label: item.label === "openRoles" ? "roles" as const : item.label, badge: 0 })),
+    { href: "/portal/notifications" as Route, label: "updates" as const, icon: BellIcon, badge: unread },
   ];
   return (
     <nav
-      aria-label="Portal"
+      aria-label={t("portal")}
       className="fixed inset-x-0 bottom-0 z-40 border-t border-hairline bg-warm-paper/90 pb-[env(safe-area-inset-bottom)] backdrop-blur-md md:hidden"
     >
       <ul className="mx-auto grid max-w-md grid-cols-4">
@@ -270,8 +274,8 @@ function PortalTabBar({ pathname, unread }: { pathname: string; unread: number }
                     <span className="absolute right-1.5 top-0.5 size-2 rounded-full bg-chartreuse-signal ring-2 ring-warm-paper" aria-hidden="true" />
                   ) : null}
                 </span>
-                {item.label}
-                {item.badge > 0 ? <span className="sr-only">, {item.badge} unread</span> : null}
+                {t(item.label)}
+                {item.badge > 0 ? <span className="sr-only">{t("unreadSuffix", { count: item.badge })}</span> : null}
               </Link>
             </li>
           );

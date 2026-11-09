@@ -1,3 +1,4 @@
+vi.mock("next-intl/server", async () => (await import("@/test-support/intl-server-mock")).intlServerMock);
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 // F1-13: an offer is only marked `sent` after the email provider accepts it.
@@ -204,7 +205,7 @@ describe("F1-13 offer delivery via durable outbox", () => {
     });
 
     expect(result.success).toBe(false);
-    expect(result.error ?? "").toMatch(/queued for retry/i);
+    expect(result.error ?? "").toMatch(/queued for another try/i);
     expect(mocks.processEmailOutbox).toHaveBeenCalledTimes(1);
   });
 
@@ -266,7 +267,7 @@ describe("F1-13 offer delivery via durable outbox", () => {
     const result = await sendOffer({ offerId: OFFER.id });
 
     expect(result.success).toBe(true);
-    expect(result.warning ?? "").toMatch(/not configured/i);
+    expect(result.warning ?? "").toMatch(/isn't set up/i);
     expect(mocks.updateCalls.some((c) => c.set.status === "sent")).toBe(true);
     expect(mocks.enqueueEmailOutbox).not.toHaveBeenCalled();
     expect(mocks.processEmailOutbox).not.toHaveBeenCalled();

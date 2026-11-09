@@ -1,6 +1,7 @@
 "use client";
 
 import { useTransition } from "react";
+import { useTranslations } from "next-intl";
 import { toast } from "@/lib/notification-island/toast";
 
 import { moveApplicationStage } from "@/features/pipeline/actions";
@@ -34,6 +35,7 @@ export function MoveStageButton({
   className?: string;
 }) {
   const advance = useAdvanceAfterDecision();
+  const t = useTranslations("features.candidates.moveStageButton");
   const [isPending, startTransition] = useTransition();
 
   if (!target) return null;
@@ -56,19 +58,19 @@ export function MoveStageButton({
       );
       if (result.success) {
         if (result.emailWarning) {
-          toast.warning(`Stage updated. ${result.emailWarning}`);
+          toast.warning(t("stageUpdated", { warning: result.emailWarning }));
         }
         // In the review queue a move is a decision: go on to the next item.
         // No undo here: moving back would re-send stage emails.
         const advanced = advance(
           moveTarget.applicationId,
-          (name) => `Moved ${name} to ${nextStage.name}`,
+          (name) => t("movedName", { name, stage: nextStage.name }),
         );
         if (!advanced && !result.emailWarning) {
-          toast.success(`Moved to ${nextStage.name}.`);
+          toast.success(t("movedTo", { stage: nextStage.name }));
         }
       } else {
-        toast.error(result.error ?? "Could not move candidate.");
+        toast.error(result.error ?? t("couldNotMove"));
       }
     });
   }
@@ -81,20 +83,20 @@ export function MoveStageButton({
       className={cn("gap-1.5", className)}
       title={
         nextStage
-          ? withHint(`Move to ${nextStage.name}`, "candidate.move")
-          : "Already in the final stage"
+          ? withHint(t("moveTo", { stage: nextStage.name }), "candidate.move")
+          : t("finalStageHint")
       }
       aria-keyshortcuts={nextStage ? ariaKeys("candidate.move") : undefined}
     >
       {nextStage ? (
         <>
           <span className="truncate">
-            {isPending ? "Moving…" : `Move to ${nextStage.name}`}
+            {isPending ? t("moving") : t("moveTo", { stage: nextStage.name })}
           </span>
           <ArrowLineRightIcon className="size-4 shrink-0" />
         </>
       ) : (
-        "Final stage"
+        t("finalStage")
       )}
     </Button>
   );

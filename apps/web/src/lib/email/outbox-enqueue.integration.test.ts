@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { eq } from "drizzle-orm";
 
-import { db, emailOutbox } from "@harly/db";
+import { candidates, db, emailOutbox, offers } from "@harly/db";
 
 import {
   createPipelineFixture,
@@ -40,6 +40,82 @@ describe.skipIf(!runPipelineIntegration)("email outbox enqueue keys", () => {
     const second = await enqueueEmailOutbox(fx.workspaceId, "pipeline.stage", PAYLOAD, "history-move-2");
 
     expect(second).not.toBe(first);
+  });
+
+  it("snapshots candidate language in pipeline, interview, and offer rows", async () => {
+    const stageId = Object.values(fx.stages)[0]?.id;
+    if (!stageId) throw new Error("Pipeline fixture has no stage.");
+    const { applicationId, candidateId } = await fx.addApplication({ stageId });
+    await db
+      .update(candidates)
+      .set({ preferredEmailLocale: "es" })
+      .where(eq(candidates.id, candidateId));
+    const [candidate] = await db
+      .select({ email: candidates.email })
+      .from(candidates)
+      .where(eq(candidates.id, candidateId))
+      .limit(1);
+    if (!candidate?.email) throw new Error("Pipeline fixture candidate has no email.");
+
+    const pipelineId = await enqueueEmailOutbox(
+      fx.workspaceId,
+      "pipeline.stage",
+      { ...PAYLOAD, candidateEmail: candidate.email },
+      "locale-snapshot-pipeline-1",
+    );
+    const applicationReceiptId = await enqueueEmailOutbox(
+      fx.workspaceId,
+      "application.received.candidate",
+      { candidateEmail: candidate.email },
+      "locale-snapshot-application-receipt-1",
+    );
+    const interviewId = await enqueueEmailOutbox(
+      fx.workspaceId,
+      "interview.scheduled",
+      { candidateEmail: candidate.email },
+      "locale-snapshot-interview-1",
+    );
+    const withdrawnOfferId = await enqueueEmailOutbox(
+      fx.workspaceId,
+      "offer.withdrawn",
+      { candidateEmail: candidate.email },
+      "locale-snapshot-withdrawn-offer-1",
+    );
+    const [offer] = await db
+      .insert(offers)
+      .values({
+        workspaceId: fx.workspaceId,
+        applicationId,
+        candidateId,
+        jobId: fx.jobId,
+        title: "Engineer",
+        createdById: fx.userId,
+      })
+      .returning({ id: offers.id });
+    const offerEmailId = await enqueueEmailOutbox(
+      fx.workspaceId,
+      "offer.extended",
+      { offerId: offer.id },
+      "locale-snapshot-offer-1",
+    );
+
+    await db
+      .update(candidates)
+      .set({ preferredEmailLocale: "fr" })
+      .where(eq(candidates.id, candidateId));
+    const retryId = await enqueueEmailOutbox(
+      fx.workspaceId,
+      "pipeline.stage",
+      { ...PAYLOAD, candidateEmail: candidate.email },
+      "locale-snapshot-pipeline-1",
+    );
+
+    expect(retryId).toBe(pipelineId);
+    expect((await readRow(pipelineId))?.payload).toMatchObject({ recipientLocale: "es" });
+    expect((await readRow(applicationReceiptId))?.payload).toMatchObject({ recipientLocale: "es" });
+    expect((await readRow(interviewId))?.payload).toMatchObject({ recipientLocale: "es" });
+    expect((await readRow(withdrawnOfferId))?.payload).toMatchObject({ recipientLocale: "es" });
+    expect((await readRow(offerEmailId))?.payload).toMatchObject({ recipientLocale: "es" });
   });
 
   it("resets a terminally failed row when an explicit user send conflicts with it", async () => {

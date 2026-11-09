@@ -116,7 +116,18 @@ export function offerMatchesTerms(
   );
 }
 
-export type TermsViolation = { ok: false; message: string };
+export type TermsViolationCode =
+  | "expiryBeforeStart"
+  | "expiryInPast"
+  | "currencyNeedsSalary";
+
+export type TermsViolation = {
+  ok: false;
+  /** Stable code for callers that show their own translated copy. */
+  code: TermsViolationCode;
+  /** English copy for API consumers. */
+  message: string;
+};
 export type TermsOk = { ok: true };
 export type TermsResult = TermsOk | TermsViolation;
 
@@ -139,6 +150,7 @@ export function assertOfferTerms(values: OfferTerms): TermsResult {
   ) {
     return {
       ok: false,
+      code: "expiryBeforeStart",
       message: "Offer expiry cannot be before its start date.",
     };
   }
@@ -146,12 +158,17 @@ export function assertOfferTerms(values: OfferTerms): TermsResult {
     values.expiresAt &&
     values.expiresAt.getTime() < Date.now()
   ) {
-    return { ok: false, message: "Offer expiry cannot be in the past." };
+    return {
+      ok: false,
+      code: "expiryInPast",
+      message: "Offer expiry cannot be in the past.",
+    };
   }
   if (values.salaryAmount === null) {
     if (values.currency !== null || values.salaryPeriod !== null) {
       return {
         ok: false,
+        code: "currencyNeedsSalary",
         message: "Currency and salary period require a salary amount.",
       };
     }

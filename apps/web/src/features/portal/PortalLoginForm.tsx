@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import type { Route } from "next";
+import { useTranslations } from "next-intl";
 import { startAuthentication } from "@simplewebauthn/browser";
 
 import { sendPortalMagicLinkAction } from "@/features/portal/actions";
@@ -22,14 +23,23 @@ import {
 } from "@/features/portal/portal-form-ui";
 import { cn } from "@/lib/utils";
 
-const ERROR_MESSAGES: Record<string, string> = {
-  oauth_denied: "Sign-in was cancelled.",
-  oauth_failed: "Sign-in failed. Try again.",
-  oauth_state: "Sign-in expired. Try again.",
-  invalid_token: "The link has expired or already been used.",
-  missing_token: "Invalid sign-in link.",
-  no_workspace: "Workspace not found.",
-  method_disabled: "That sign-in method isn't available.",
+type ErrorKey =
+  | "errorOauthDenied"
+  | "errorOauthFailed"
+  | "errorOauthState"
+  | "errorInvalidToken"
+  | "errorMissingToken"
+  | "errorNoWorkspace"
+  | "errorMethodDisabled";
+
+const ERROR_MESSAGE_KEYS: Record<string, ErrorKey> = {
+  oauth_denied: "errorOauthDenied",
+  oauth_failed: "errorOauthFailed",
+  oauth_state: "errorOauthState",
+  invalid_token: "errorInvalidToken",
+  missing_token: "errorMissingToken",
+  no_workspace: "errorNoWorkspace",
+  method_disabled: "errorMethodDisabled",
 };
 
 export type PortalLoginMethods = {
@@ -49,6 +59,7 @@ type View = "signin" | "register" | "recover" | "forgot" | "access" | "magic-sen
 export function PortalLoginForm({ methods }: { methods: PortalLoginMethods }) {
   const params = useSearchParams();
   const router = useRouter();
+  const t = useTranslations("features.portal.PortalLoginForm");
   const urlError = params.get("error");
   const next = params.get("next") ?? "/portal/dashboard";
 
@@ -111,7 +122,7 @@ export function PortalLoginForm({ methods }: { methods: PortalLoginMethods }) {
     start(async () => {
       const r = await requestPortalPasswordResetEmailAction({ email: get("email") });
       if (!r.ok) return setError(r.error);
-      setNotice(r.message ?? "Check your inbox.");
+      setNotice(r.message ?? t("checkInboxNotice"));
     });
   }
 
@@ -155,8 +166,8 @@ export function PortalLoginForm({ methods }: { methods: PortalLoginMethods }) {
         const cancelled = err instanceof Error && err.name === "NotAllowedError";
         setError(
           cancelled
-            ? "Passkey sign-in was cancelled."
-            : "We couldn't sign you in with a passkey. Try another method.",
+            ? t("passkeyCancelled")
+            : t("passkeyFailed"),
         );
       }
     });
@@ -168,19 +179,21 @@ export function PortalLoginForm({ methods }: { methods: PortalLoginMethods }) {
   if (view === "magic-sent") {
     return (
       <div className="space-y-4 py-4 text-center" role="status">
-        <p className="text-base font-semibold text-foreground">Check your inbox</p>
+        <p className="text-base font-semibold text-foreground">{t("checkInbox")}</p>
         <p className="text-sm text-muted-foreground">
-          If <span className="font-medium text-foreground">{sentTo}</span> can
-          sign in, a link is on its way. It expires in 15 minutes.
+          {t.rich("magicSent", {
+            email: sentTo,
+            b: (chunks) => <span className="font-medium text-foreground">{chunks}</span>,
+          })}
         </p>
         <button type="button" className={portalLinkButtonClass} onClick={() => show("signin")}>
-          Use a different method
+          {t("useDifferentMethod")}
         </button>
       </div>
     );
   }
 
-  const urlMessage = urlError ? (ERROR_MESSAGES[urlError] ?? "Something went wrong.") : null;
+  const urlMessage = urlError ? t(ERROR_MESSAGE_KEYS[urlError] ?? "errorGeneric") : null;
   const submitLabel = (idle: string, busy: string) => (pending ? busy : idle);
 
   return (
@@ -198,17 +211,17 @@ export function PortalLoginForm({ methods }: { methods: PortalLoginMethods }) {
             <div className="space-y-2.5">
               {methods.google ? (
                 <a href={oauthHref("google")} className={portalSecondaryButtonClass}>
-                  Continue with Google
+                  {t("continueWith", { provider: "Google" })}
                 </a>
               ) : null}
               {methods.github ? (
                 <a href={oauthHref("github")} className={portalSecondaryButtonClass}>
-                  Continue with GitHub
+                  {t("continueWith", { provider: "GitHub" })}
                 </a>
               ) : null}
               {methods.linkedin ? (
                 <a href={oauthHref("linkedin")} className={portalSecondaryButtonClass}>
-                  Continue with LinkedIn
+                  {t("continueWith", { provider: "LinkedIn" })}
                 </a>
               ) : null}
             </div>
@@ -216,32 +229,32 @@ export function PortalLoginForm({ methods }: { methods: PortalLoginMethods }) {
 
           {methods.passkey ? (
             <button type="button" onClick={onPasskey} disabled={pending} className={portalSecondaryButtonClass}>
-              Sign in with a passkey
+              {t("signInWithPasskey")}
             </button>
           ) : null}
 
           {methods.password ? (
             <form onSubmit={onSignIn} className="space-y-3" aria-busy={pending}>
-              <Divider show={anyOAuth || methods.passkey} />
-              <PortalField label="Email">
+              <Divider show={anyOAuth || methods.passkey} label={t("or")} />
+              <PortalField label={t("email")}>
                 {(p) => (
                   <input {...p} name="email" type="email" required autoComplete="username" placeholder="you@example.com" className={portalInputClass} />
                 )}
               </PortalField>
-              <PortalField label="Password">
+              <PortalField label={t("password")}>
                 {(p) => (
                   <input {...p} name="password" type="password" required autoComplete="current-password" className={portalInputClass} />
                 )}
               </PortalField>
               <button type="submit" disabled={pending} className={portalPrimaryButtonClass}>
-                {submitLabel("Sign in", "Signing in…")}
+                {submitLabel(t("signIn"), t("signingIn"))}
               </button>
               <div className="flex justify-between">
                 <button type="button" className={portalLinkButtonClass} onClick={() => show("register")}>
-                  Set up a password
+                  {t("setUpPassword")}
                 </button>
                 <button type="button" className={portalLinkButtonClass} onClick={() => show(methods.emailReset ? "forgot" : "recover")}>
-                  Forgot password?
+                  {t("forgotPassword")}
                 </button>
               </div>
             </form>
@@ -249,14 +262,14 @@ export function PortalLoginForm({ methods }: { methods: PortalLoginMethods }) {
 
           {methods.magicLink ? (
             <form onSubmit={onMagic} className="space-y-3" aria-busy={pending}>
-              <Divider show={methods.password || anyOAuth || methods.passkey} label="or get a sign-in link" />
-              <PortalField label="Email">
+              <Divider show={methods.password || anyOAuth || methods.passkey} label={t("orGetSignInLink")} />
+              <PortalField label={t("email")}>
                 {(p) => (
                   <input {...p} name="email" type="email" required autoComplete="email" placeholder="you@example.com" className={portalInputClass} />
                 )}
               </PortalField>
               <button type="submit" disabled={pending} className={methods.password ? portalSecondaryButtonClass : portalPrimaryButtonClass}>
-                {submitLabel("Email me a sign-in link", "Sending…")}
+                {submitLabel(t("emailSignInLink"), t("sending"))}
               </button>
             </form>
           ) : null}
@@ -264,7 +277,7 @@ export function PortalLoginForm({ methods }: { methods: PortalLoginMethods }) {
           {methods.accessCode ? (
             <p className="text-center">
               <button type="button" className={portalLinkButtonClass} onClick={() => show("access")}>
-                I have an access code
+                {t("haveAccessCode")}
               </button>
             </p>
           ) : null}
@@ -273,15 +286,11 @@ export function PortalLoginForm({ methods }: { methods: PortalLoginMethods }) {
 
       {view === "register" ? (
         <div className="space-y-4">
-          <h3 className="text-base font-semibold text-foreground">Set up your account</h3>
-          <p className="text-sm text-muted-foreground">
-            First verify your access with a sign-in link or connected account.
-            You can then set a password from your profile. If those options are
-            unavailable, ask the company for an access or password setup link.
-          </p>
+          <h3 className="text-base font-semibold text-foreground">{t("setUpAccountTitle")}</h3>
+          <p className="text-sm text-muted-foreground">{t("setUpAccountBody")}</p>
           {methods.accessCode ? (
             <button type="button" className={portalPrimaryButtonClass} onClick={() => show("access")}>
-              I have an access code
+              {t("haveAccessCode")}
             </button>
           ) : null}
           <BackLink onClick={() => show("signin")} />
@@ -290,22 +299,19 @@ export function PortalLoginForm({ methods }: { methods: PortalLoginMethods }) {
 
       {view === "recover" ? (
         <form onSubmit={onRecover} className="space-y-3" aria-busy={pending}>
-          <h3 className="text-base font-semibold text-foreground">Reset with a recovery code</h3>
-          <p className="text-sm text-muted-foreground">
-            Use one of the codes you saved when you created your account. No
-            code? Ask the company for a password reset link.
-          </p>
-          <PortalField label="Email">
+          <h3 className="text-base font-semibold text-foreground">{t("recoverTitle")}</h3>
+          <p className="text-sm text-muted-foreground">{t("recoverBody")}</p>
+          <PortalField label={t("email")}>
             {(p) => <input {...p} name="email" type="email" required autoComplete="username" className={portalInputClass} />}
           </PortalField>
-          <PortalField label="Recovery code">
+          <PortalField label={t("recoveryCode")}>
             {(p) => <input {...p} name="recoveryCode" required autoComplete="off" placeholder="XXXX-XXXX-XXXX-XXXX" className={cn(portalInputClass, "font-mono")} />}
           </PortalField>
-          <PortalField label="New password" hint="At least 10 characters.">
+          <PortalField label={t("newPassword")} hint={t("passwordHint")}>
             {(p) => <input {...p} name="newPassword" type="password" required minLength={10} autoComplete="new-password" className={portalInputClass} />}
           </PortalField>
           <button type="submit" disabled={pending} className={portalPrimaryButtonClass}>
-            {submitLabel("Set new password", "Saving…")}
+            {submitLabel(t("setNewPassword"), t("saving"))}
           </button>
           <BackLink onClick={() => show("signin")} />
         </form>
@@ -313,16 +319,16 @@ export function PortalLoginForm({ methods }: { methods: PortalLoginMethods }) {
 
       {view === "forgot" ? (
         <form onSubmit={onForgot} className="space-y-3" aria-busy={pending}>
-          <h3 className="text-base font-semibold text-foreground">Reset your password</h3>
-          <PortalField label="Email">
+          <h3 className="text-base font-semibold text-foreground">{t("forgotTitle")}</h3>
+          <PortalField label={t("email")}>
             {(p) => <input {...p} name="email" type="email" required autoComplete="username" className={portalInputClass} />}
           </PortalField>
           <button type="submit" disabled={pending} className={portalPrimaryButtonClass}>
-            {submitLabel("Email me a reset link", "Sending…")}
+            {submitLabel(t("emailResetLink"), t("sending"))}
           </button>
           <p className="text-center">
             <button type="button" className={portalLinkButtonClass} onClick={() => show("recover")}>
-              Use a recovery code instead
+              {t("useRecoveryCodeInstead")}
             </button>
           </p>
           <BackLink onClick={() => show("signin")} />
@@ -331,15 +337,13 @@ export function PortalLoginForm({ methods }: { methods: PortalLoginMethods }) {
 
       {view === "access" ? (
         <form onSubmit={onAccess} className="space-y-3" aria-busy={pending}>
-          <h3 className="text-base font-semibold text-foreground">Enter your access code</h3>
-          <p className="text-sm text-muted-foreground">
-            Paste the code or link the company gave you.
-          </p>
-          <PortalField label="Access code">
+          <h3 className="text-base font-semibold text-foreground">{t("accessTitle")}</h3>
+          <p className="text-sm text-muted-foreground">{t("accessBody")}</p>
+          <PortalField label={t("accessCode")}>
             {(p) => <input {...p} name="code" required autoComplete="off" spellCheck={false} className={cn(portalInputClass, "font-mono")} />}
           </PortalField>
           <button type="submit" disabled={pending} className={portalPrimaryButtonClass}>
-            {submitLabel("Continue", "Checking…")}
+            {submitLabel(t("continue"), t("checking"))}
           </button>
           <BackLink onClick={() => show("signin")} />
         </form>
@@ -359,7 +363,7 @@ export function extractCode(input: string): string {
   }
 }
 
-function Divider({ show, label = "or" }: { show: boolean; label?: string }) {
+function Divider({ show, label }: { show: boolean; label: string }) {
   if (!show) return null;
   return (
     <div className="flex items-center gap-3" aria-hidden="true">
@@ -371,10 +375,11 @@ function Divider({ show, label = "or" }: { show: boolean; label?: string }) {
 }
 
 function BackLink({ onClick }: { onClick: () => void }) {
+  const t = useTranslations("features.portal.PortalLoginForm");
   return (
     <p className="text-center">
       <button type="button" className={portalLinkButtonClass} onClick={onClick}>
-        Back to sign in
+        {t("backToSignIn")}
       </button>
     </p>
   );

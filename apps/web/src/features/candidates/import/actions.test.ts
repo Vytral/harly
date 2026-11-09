@@ -72,6 +72,7 @@ vi.mock("@/features/workspaces/permissions-server", () => ({
   requireJobPermission: mocks.requireJobPermission,
 }));
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
+vi.mock("next-intl/server", async () => (await import("@/test-support/intl-server-mock")).intlServerMock);
 vi.mock("@/server/webhooks/emit", () => ({
   emitWebhookEvent: mocks.emitWebhookEvent,
 }));

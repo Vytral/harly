@@ -3,6 +3,7 @@
 /* eslint-disable @next/next/no-img-element */
 
 import { useRef } from "react";
+import { useTranslations } from "next-intl";
 import { usePdfPageRenderer } from "@/features/documents/usePdfPageRenderer";
 
 export type FillableField = {
@@ -54,6 +55,7 @@ export function PdfFieldFiller({
   onSignatureFieldClick,
   onFieldFocus,
 }: Props) {
+  const t = useTranslations("features.documents.pdfFieldFiller");
   const rootRef = useRef<HTMLDivElement>(null);
   const { pages, error } = usePdfPageRenderer(fileUrl, maxPageWidth, rootRef);
 
@@ -90,11 +92,11 @@ export function PdfFieldFiller({
                     key={field.id}
                     type={field.type === "date" ? "date" : "text"}
                     data-field-id={field.id}
-                    aria-label={field.label?.trim() || "Text field"}
+                    aria-label={field.label?.trim() || t("textFieldLabel")}
                     value={textValues[field.id] ?? ""}
                     onChange={(event) => onTextValueChange(field.id, event.target.value)}
                     onFocus={() => onFieldFocus?.(field.id)}
-                    placeholder={field.label?.trim() || (field.type === "date" ? "Date" : "Type here")}
+                    placeholder={field.label?.trim() || (field.type === "date" ? t("dateLabel") : t("typeHere"))}
                     required={field.required}
                     maxLength={200}
                     autoCapitalize="sentences"
@@ -112,7 +114,7 @@ export function PdfFieldFiller({
                   type="button"
                   data-field-id={field.id}
                   disabled={!interactive}
-                  aria-label={hasSignature ? "Change your signature" : "Add your signature"}
+                  aria-label={hasSignature ? t("changeSignature") : t("addSignature")}
                   onClick={() => onSignatureFieldClick?.(field.id)}
                   // The ::before widens the tap target past the visual box.
                   className={`absolute z-10 rounded-sm border-2 border-dashed before:absolute before:-inset-2 before:content-[''] ${hasSignature ? "border-success/60 bg-pure-snow/40" : "border-near-ink bg-chartreuse-signal/30"} ${interactive ? "cursor-pointer active:scale-[0.99]" : "cursor-default"}`}
@@ -121,13 +123,13 @@ export function PdfFieldFiller({
                   {hasSignature ? (
                     <img
                       src={signatureDataUrl}
-                      alt="Your signature"
+                      alt={t("yourSignatureAlt")}
                       className="h-full w-full object-contain"
                       draggable={false}
                     />
                   ) : (
                     <span className="flex h-full w-full items-center justify-center text-center text-[11px] font-medium leading-tight text-near-ink">
-                      Tap to sign
+                      {t("tapToSign")}
                     </span>
                   )}
                 </button>
@@ -142,7 +144,7 @@ export function PdfFieldFiller({
             style={{ maxWidth: maxPageWidth }}
           />
           <p className="text-center text-sm text-muted-foreground">
-            Loading PDF…
+            {t("loadingPdf")}
           </p>
         </div>
       ) : null}

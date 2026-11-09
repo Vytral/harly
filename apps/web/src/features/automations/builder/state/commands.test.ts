@@ -131,7 +131,7 @@ describe("T07 — click/keyboard-equivalent commands", () => {
     state = editorReducer(state, { type: "add-node", node: action, position: { x: 0, y: 120 } });
     state = editorReducer(state, { type: "connect", source: "trigger", port: "next", target: action.id });
     state = editorReducer(state, { type: "connect", source: action.id, port: "success", target: "trigger" });
-    expect(state.lastError).toMatch(/trigger|cycle/i);
+    expect(state.lastError?.key).toMatch(/trigger|cycle/i);
   });
 });
 

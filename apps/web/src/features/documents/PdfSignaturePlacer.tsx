@@ -3,6 +3,7 @@
 /* eslint-disable @next/next/no-img-element */
 
 import { useEffect, useRef, useState } from "react";
+import { useTranslations } from "next-intl";
 import { Calendar, Copy, Trash2 } from "lucide-react";
 import type { SignaturePlacement } from "@/lib/esign/native/bake";
 import { usePdfPageRenderer } from "@/features/documents/usePdfPageRenderer";
@@ -42,8 +43,10 @@ function clamp(value: number, min: number, max: number) {
   return Math.min(max, Math.max(min, value));
 }
 
-function typeName(type: AuthorFieldPlacement["type"]) {
-  return type === "text" ? "Text" : type === "date" ? "Date" : "Signature";
+type Translator = ReturnType<typeof useTranslations>;
+
+function typeName(t: Translator, type: AuthorFieldPlacement["type"]) {
+  return type === "text" ? t("kinds.text") : type === "date" ? t("kinds.date") : t("kinds.signature");
 }
 
 type Props = {
@@ -99,6 +102,7 @@ export function PdfSignaturePlacer({
   fieldColor,
   fieldOwner,
 }: Props) {
+  const t = useTranslations("features.documents.pdfSignaturePlacer");
   const rootRef = useRef<HTMLDivElement>(null);
   const [pageWidthPx, setPageWidthPx] = useState(maxPageWidth);
   useEffect(() => {
@@ -319,8 +323,11 @@ export function PdfSignaturePlacer({
             const color = fieldColor?.(placement, index) ?? "var(--near-ink)";
             const owner = fieldOwner?.(placement, index);
             const optional = placement.required === false;
-            const kind = typeName(placement.type);
-            const accessibleName = `${kind} field ${index + 1}${owner ? `, for ${owner}` : ""}, page ${placement.page}, ${optional ? "optional" : "required"}`;
+            const kind = typeName(t, placement.type);
+            const requirement = optional ? t("requirements.optional") : t("requirements.required");
+            const accessibleName = owner
+              ? t("fieldNameWithOwner", { kind, index: index + 1, owner, page: placement.page, requirement })
+              : t("fieldName", { kind, index: index + 1, page: placement.page, requirement });
             // Pixel geometry of this field inside its page, used to keep the
             // contextual controls on whichever side still has room.
             const pageH = pageWidthPx * (page.height / page.width);
@@ -373,7 +380,7 @@ export function PdfSignaturePlacer({
                   >
                     {placement.type === "date" ? <Calendar className="size-3 shrink-0" aria-hidden /> : null}
                     <span className="truncate">
-                      {placement.label?.trim() || (placement.type === "date" ? "Date" : "Text field")}
+                      {placement.label?.trim() || (placement.type === "date" ? t("dateDefault") : t("textFieldDefault"))}
                     </span>
                   </div>
                 ) : hasSignature ? (
@@ -388,7 +395,7 @@ export function PdfSignaturePlacer({
                     className="flex h-full w-full items-center justify-center text-xs font-medium"
                     style={{ color }}
                   >
-                    Signature
+                    {t("signatureDefault")}
                   </div>
                 )}
                 <div
@@ -428,8 +435,7 @@ export function PdfSignaturePlacer({
                     className="pointer-events-none absolute -top-2.5 left-1.5 max-w-[calc(100%-12px)] truncate rounded-full px-1.5 py-px text-[11px] font-medium leading-4 text-pure-snow"
                     style={{ backgroundColor: color }}
                   >
-                    {owner}
-                    {optional ? " · optional" : ""}
+                    {optional ? t("ownerOptional", { owner }) : owner}
                   </span>
                 ) : null}
 
@@ -458,8 +464,8 @@ export function PdfSignaturePlacer({
                         type="text"
                         value={placement.label ?? ""}
                         onChange={(event) => onLabelChange(index, event.target.value)}
-                        placeholder={placement.type === "date" ? "Label (default: Date)" : "Label (e.g. Full name)"}
-                        aria-label={`Label for field ${index + 1}`}
+                        placeholder={placement.type === "date" ? t("labelDefaultDate") : t("labelExample")}
+                        aria-label={t("labelFor", { index: index + 1 })}
                         maxLength={60}
                         className="h-9 w-full rounded-[var(--radius-btn)] border border-hairline bg-pure-snow px-2 text-base text-near-ink md:h-8 md:text-xs shadow-[var(--shadow-card)] outline-none placeholder:text-soft-ink focus-visible:border-near-ink focus-visible:ring-2 focus-visible:ring-near-ink/20"
                       />
@@ -467,7 +473,7 @@ export function PdfSignaturePlacer({
                     {onDuplicate || onRemoveField || (onPageChange && pageCount > 1) ? (
                       <div
                         role="toolbar"
-                        aria-label={`Actions for field ${index + 1}`}
+                        aria-label={t("actionsFor", { index: index + 1 })}
                         className="flex items-center gap-0.5 rounded-[var(--radius-inner)] border border-hairline bg-pure-snow p-1 shadow-lg"
                       >
                         {onPageChange && pageCount > 1 ? (
@@ -478,11 +484,11 @@ export function PdfSignaturePlacer({
                                 onPageChange(index, Number(event.target.value))
                               }
                               className="h-8 rounded-md border border-hairline bg-pure-snow px-1.5 text-base font-medium md:h-7 md:text-xs text-near-ink outline-none focus-visible:ring-2 focus-visible:ring-near-ink/30"
-                              aria-label={`Page for field ${index + 1}`}
+                              aria-label={t("pageFor", { index: index + 1 })}
                             >
                               {Array.from({ length: pageCount }, (_, p) => (
                                 <option key={p + 1} value={p + 1}>
-                                  Page {p + 1}
+                                  {t("pageOption", { page: p + 1 })}
                                 </option>
                               ))}
                             </select>
@@ -492,8 +498,8 @@ export function PdfSignaturePlacer({
                         {onDuplicate ? (
                           <button
                             type="button"
-                            aria-label={`Duplicate field ${index + 1}`}
-                            title="Duplicate"
+                            aria-label={t("duplicateField", { index: index + 1 })}
+                            title={t("duplicate")}
                             onClick={() => onDuplicate(index)}
                             className="flex size-7 items-center justify-center rounded-md text-soft-ink outline-none transition-colors hover:bg-warm-paper hover:text-near-ink focus-visible:ring-2 focus-visible:ring-near-ink/30"
                           >
@@ -503,8 +509,8 @@ export function PdfSignaturePlacer({
                         {onRemoveField ? (
                           <button
                             type="button"
-                            aria-label={`Remove field ${index + 1}`}
-                            title="Delete (Del)"
+                            aria-label={t("removeField", { index: index + 1 })}
+                            title={t("deleteShortcut")}
                             onClick={() => onRemoveField(index)}
                             className="flex size-7 items-center justify-center rounded-md text-soft-ink outline-none transition-colors hover:bg-danger-rust/10 hover:text-danger-rust focus-visible:ring-2 focus-visible:ring-danger-rust/40"
                           >
@@ -521,17 +527,15 @@ export function PdfSignaturePlacer({
         </div>
       ))}
       <span id="placer-keyboard-help" className="sr-only">
-        Arrow keys move the field, Shift with arrows moves further, Alt with arrows resizes it, Delete removes it.
+        {t("keyboardHelp")}
       </span>
       {pages.length === 0 ? (
-        <div className="space-y-3 p-2" role="status" aria-label="Loading PDF">
+        <div className="space-y-3 p-2" role="status" aria-label={t("loadingLabel")}>
           <Skeleton className="mx-auto h-[600px] w-full" style={{ maxWidth: maxPageWidth }} />
         </div>
       ) : (
         <p className="text-center text-xs text-soft-ink">
-          Drag a field to move it, or focus it and use the arrow keys (Shift for
-          larger steps, Alt to resize). Hold a dragged field near the top or
-          bottom edge to scroll.
+          {t("dragHelp")}
         </p>
       )}
     </div>

@@ -1,4 +1,5 @@
 import Image from "next/image";
+import { getTranslations } from "next-intl/server";
 import Link from "next/link";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
@@ -11,6 +12,7 @@ import { Setup2FAForm } from "./_components/setup-2fa-form";
 export const dynamic = "force-dynamic";
 
 export default async function Setup2FAPage() {
+  const t = await getTranslations("accessTwoFactor");
   const session = await auth.api.getSession({ headers: await headers() });
 
   if (!session?.user) {
@@ -68,7 +70,7 @@ export default async function Setup2FAPage() {
               <div className="mb-6 flex justify-center">
                 <Image
                   src={membership.logo}
-                  alt={membership.name ?? "Workspace"}
+                  alt={membership.name ?? t("workspace")}
                   width={56}
                   height={56}
                   className="h-14 w-14 rounded-xl object-cover"
@@ -77,14 +79,13 @@ export default async function Setup2FAPage() {
               </div>
             )}
             <p className="text-center text-[11px] font-semibold uppercase tracking-[0.12em] text-pine">
-              Security required
+              {t("securityRequired")}
             </p>
             <h1 className="mt-3 text-center font-display text-3xl tracking-tight text-foreground">
-              Set up two-factor authentication
+              {t("heading")}
             </h1>
             <p className="mt-2 text-center text-sm leading-6 text-muted-foreground">
-              Your workspace requires 2FA. Set it up below to continue to the
-              dashboard.
+              {t("intro")}
             </p>
 
             <div className="mt-10">

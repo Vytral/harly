@@ -5,6 +5,7 @@ import type { IntegrationHealthView } from "@/features/integrations/health/model
 import { providerStatusLabel, providerStatusTone } from "@/features/integrations/health/connection-label";
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { toast } from "@/lib/notification-island/toast";
 
 import {
@@ -56,6 +57,7 @@ export function JitsiConnectPanel({
   tileClassName: string;
   description: string;
 }) {
+  const t = useTranslations("features.workspaces.jitsiConnectPanel");
   const router = useRouter();
   const isConfigured = Boolean(status.baseUrl);
   const [open, setOpen] = useState(isConfigured);
@@ -68,13 +70,13 @@ export function JitsiConnectPanel({
     : "neutral");
   const statusLabel = providerStatusLabel(health, isConfigured
     ? status.enabled
-      ? "Connected"
-      : "Disabled"
-    : "Not connected");
+      ? t("statusConnected")
+      : t("statusDisabled")
+    : t("statusNotConnected"));
 
   function toggleEnabled(next: boolean) {
     if (!status.baseUrl) {
-      toast.error("Add an instance URL first.");
+      toast.error(t("addInstanceUrlFirst"));
       return;
     }
     startToggle(async () => {
@@ -83,10 +85,10 @@ export function JitsiConnectPanel({
         baseUrl: status.baseUrl!,
       });
       if (!result.ok) {
-        toast.error(result.error ?? "Could not update.");
+        toast.error(result.error ?? t("updateFailed"));
         return;
       }
-      toast.success(next ? "Jitsi enabled" : "Jitsi disabled");
+      toast.success(next ? t("jitsiEnabled") : t("jitsiDisabled"));
       router.refresh();
     });
   }
@@ -114,7 +116,7 @@ export function JitsiConnectPanel({
                 ) : (
                   <KeyDuotoneIcon className="size-4" />
                 )}
-                {isConfigured ? (open ? "Hide settings" : "Manage") : "Connect"}
+                {isConfigured ? (open ? t("hideSettings") : t("manage")) : t("connect")}
               </Button>
               {isConfigured ? (
                 <label className="flex h-9 items-center gap-2 rounded-[var(--radius-btn)] border border-mist-border bg-pure-snow px-3 text-sm">
@@ -122,10 +124,10 @@ export function JitsiConnectPanel({
                     checked={status.enabled}
                     disabled={togglePending}
                     onCheckedChange={toggleEnabled}
-                    aria-label="Enable Jitsi"
+                    aria-label={t("enableSwitchLabel")}
                   />
                   <span className="text-muted-foreground">
-                    {status.enabled ? "On" : "Off"}
+                    {status.enabled ? t("on") : t("off")}
                   </span>
                 </label>
               ) : null}
@@ -138,13 +140,13 @@ export function JitsiConnectPanel({
       {isConfigured ? (
         <Card className="overflow-hidden p-0">
           <div className="grid grid-cols-1 divide-y sm:grid-cols-2 sm:divide-x sm:divide-y-0">
-            <StatCell label="Instance">
+            <StatCell label={t("instance")}>
               <JitsiLogo className="size-4" />
               <span className="truncate">{status.baseUrl}</span>
             </StatCell>
-            <StatCell label="Rooms">
+            <StatCell label={t("rooms")}>
               <span className="text-muted-foreground">
-                Generated per interview (random code)
+                {t("roomsValue")}
               </span>
             </StatCell>
           </div>
@@ -170,6 +172,7 @@ function JitsiConnectForm({
   status: WorkspaceJitsiStatus;
   onSaved: () => void;
 }) {
+  const t = useTranslations("features.workspaces.jitsiConnectPanel");
   const router = useRouter();
   const [baseUrl, setBaseUrl] = useState(status.baseUrl ?? "");
   const [enabled, setEnabled] = useState(status.enabled || !status.baseUrl);
@@ -188,11 +191,11 @@ function JitsiConnectForm({
       });
       if (result.ok) {
         setTest({ kind: "ok" });
-        toast.success("Instance is reachable");
+        toast.success(t("reachable"));
       } else {
         setTest({
           kind: "error",
-          message: result.error ?? "Could not reach that instance.",
+          message: result.error ?? t("unreachable"),
         });
       }
     });
@@ -202,10 +205,10 @@ function JitsiConnectForm({
     startSave(async () => {
       const result = await saveJitsiSettingsAction({ enabled, baseUrl });
       if (!result.ok) {
-        toast.error(result.error ?? "Could not save.");
+        toast.error(result.error ?? t("saveFailed"));
         return;
       }
-      toast.success("Jitsi settings saved");
+      toast.success(t("settingsSaved"));
       onSaved();
     });
   }
@@ -214,10 +217,10 @@ function JitsiConnectForm({
     startDisconnect(async () => {
       const result = await disconnectJitsiAction();
       if (!result.ok) {
-        toast.error(result.error ?? "Could not disconnect.");
+        toast.error(result.error ?? t("disconnectFailed"));
         return;
       }
-      toast.success("Jitsi disconnected");
+      toast.success(t("disconnected"));
       router.refresh();
     });
   }
@@ -227,11 +230,10 @@ function JitsiConnectForm({
       <div className="mb-5 flex items-start justify-between gap-4">
         <div className="space-y-0.5">
           <h2 className="font-display text-base font-semibold tracking-tight">
-            {status.baseUrl ? "Manage connection" : "Connect Jitsi Meet"}
+            {status.baseUrl ? t("manageConnection") : t("connectTitle")}
           </h2>
           <p className="text-sm text-muted-foreground">
-            Video interviews get a unique room link on your instance. No account
-            or API key needed.
+            {t("intro")}
           </p>
         </div>
         <a
@@ -240,14 +242,14 @@ function JitsiConnectForm({
           rel="noopener noreferrer"
           className="inline-flex shrink-0 items-center gap-1 text-xs font-medium text-pine transition-colors hover:text-pine-strong"
         >
-          Self-host guide
+          {t("selfHostGuide")}
           <ArrowUpRightIcon className="size-3.5" />
         </a>
       </div>
 
       <div className="space-y-5">
         <div className="space-y-2">
-          <Label htmlFor="jitsi-base">Instance base URL</Label>
+          <Label htmlFor="jitsi-base">{t("instanceBaseUrl")}</Label>
           <Input
             id="jitsi-base"
             value={baseUrl}
@@ -260,7 +262,7 @@ function JitsiConnectForm({
             className="font-mono text-xs"
           />
           <p className="text-xs text-muted-foreground">
-            Your self-hosted instance, or the public https://meet.jit.si.
+            {t("instanceHelp")}
           </p>
         </div>
 
@@ -268,9 +270,7 @@ function JitsiConnectForm({
           <div className="flex items-start gap-2 rounded-xl border border-clay/30 bg-clay/5 px-3 py-2 text-sm text-clay">
             <WarningCircleIcon className="mt-0.5 size-4 shrink-0" />
             <p>
-              Rooms on the public meet.jit.si are open to anyone with the link.
-              Room codes are random and unguessable, but for sensitive
-              interviews prefer a self-hosted instance with a lobby.
+              {t("publicInstanceWarning")}
             </p>
           </div>
         ) : null}
@@ -278,9 +278,8 @@ function JitsiConnectForm({
         <SettingRow
           htmlFor="jitsiconnectpanel-switch-1"
           className="rounded-[var(--radius-inner)] border border-hairline px-4 py-3"
-          title={<>Enable Jitsi</>}
-          description={<>Used for video interviews when Zoom, Teams and Google Meet are not
-              connected.</>}
+          title={t("enableTitle")}
+          description={t("enableDescription")}
           control={<Switch id="jitsiconnectpanel-switch-1" checked={enabled} onCheckedChange={setEnabled} />}
         />
 
@@ -303,7 +302,7 @@ function JitsiConnectForm({
             disabled={disconnecting}
           >
             {disconnecting ? <SpinnerIcon className="size-3.5" /> : null}
-            Disconnect
+            {t("disconnect")}
           </Button>
         ) : (
           <span />
@@ -320,11 +319,11 @@ function JitsiConnectForm({
             ) : test.kind === "ok" ? (
               <CheckCircleIcon className="size-4 text-pine" />
             ) : null}
-            {test.kind === "ok" ? "Instance OK" : "Test connection"}
+            {test.kind === "ok" ? t("instanceOk") : t("testConnection")}
           </Button>
           <Button onClick={save} disabled={saving || !baseUrl.trim()}>
             {saving ? <SpinnerIcon className="size-4" /> : null}
-            Save
+            {t("save")}
           </Button>
         </div>
       </div>

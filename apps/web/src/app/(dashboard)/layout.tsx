@@ -1,6 +1,7 @@
 import type { Route } from "next";
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
+import { getTranslations } from "next-intl/server";
 
 import { HarlyAIProvider } from "@/components/dashboard/HarlyAIWidget";
 import { AppHeader } from "@/components/dashboard/AppHeader";
@@ -85,6 +86,7 @@ export default async function DashboardLayout({
     name: organization.name,
     logoUrl: organization.logo ?? null,
   };
+  const t = await getTranslations("pages.dashboardRoot.layout");
 
   return (
     <RealtimeProvider>
@@ -108,7 +110,7 @@ export default async function DashboardLayout({
               href="#main-content"
               className="sr-only focus-visible:not-sr-only focus-visible:fixed focus-visible:left-4 focus-visible:top-4 focus-visible:z-50 focus-visible:rounded-[var(--radius-btn)] focus-visible:bg-near-ink focus-visible:px-3 focus-visible:py-2 focus-visible:text-sm focus-visible:text-pure-snow"
             >
-              Skip to content
+              {t("skipToContent")}
             </a>
             <AppHeader
               user={{

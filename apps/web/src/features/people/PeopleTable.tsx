@@ -4,6 +4,7 @@ import Link from "next/link";
 import type { Route } from "next";
 import { useMemo, useState } from "react";
 import { Search } from "lucide-react";
+import { useTranslations } from "next-intl";
 
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -36,6 +37,7 @@ export type PersonListRow = {
 };
 
 export function PeopleTable({ rows }: { rows: PersonListRow[] }) {
+  const t = useTranslations("features.people.peopleTable");
   const [query, setQuery] = useState("");
   const [role, setRole] = useState(FILTER_ALL);
   const [specialty, setSpecialty] = useState(FILTER_ALL);
@@ -78,16 +80,16 @@ export function PeopleTable({ rows }: { rows: PersonListRow[] }) {
         <SearchPill
           value={query}
           onChange={setQuery}
-          placeholder="Search people"
-          label="Search people by name, title, or username"
+          placeholder={t("searchPlaceholder")}
+          label={t("searchLabel")}
         />
         <FilterCountButton count={activeCount} onClear={clear} />
         {roleOptions.length > 1 && (
-          <FilterChip label="Role" value={role} onChange={setRole} options={roleOptions} />
+          <FilterChip label={t("role")} value={role} onChange={setRole} options={roleOptions} />
         )}
         {specialtyOptions.length > 0 && (
           <FilterChip
-            label="Specialty"
+            label={t("specialty")}
             value={specialty}
             onChange={setSpecialty}
             options={specialtyOptions}
@@ -95,18 +97,18 @@ export function PeopleTable({ rows }: { rows: PersonListRow[] }) {
         )}
       </FilterBar>
 
-      <TotalLine total={filtered.length} noun="person" pluralNoun="people" />
+      <TotalLine total={filtered.length} noun={t("nounSingular")} pluralNoun={t("nounPlural")} />
 
       {filtered.length === 0 ? (
         <EmptyState
           variant="filtered"
           icon={Search}
-          title="No teammates match your search"
-          description="Try a different name, title, or username."
+          title={t("noMatchTitle")}
+          description={t("noMatchHelp")}
           action={
             filtersActive ? (
               <Button variant="outline" size="sm" onClick={clear}>
-                Clear filters
+                {t("clearFilters")}
               </Button>
             ) : undefined
           }
@@ -116,10 +118,10 @@ export function PeopleTable({ rows }: { rows: PersonListRow[] }) {
           <table className={dirTable}>
             <thead>
               <tr>
-                <th scope="col" className={dirTh}>Person</th>
-                <th scope="col" className={cn(dirTh, "hidden sm:table-cell")}>Role</th>
-                <th scope="col" className={cn(dirTh, "hidden md:table-cell")}>Specialties</th>
-                <th scope="col" className={cn(dirTh, "hidden sm:table-cell")}>Timezone</th>
+                <th scope="col" className={dirTh}>{t("columnPerson")}</th>
+                <th scope="col" className={cn(dirTh, "hidden sm:table-cell")}>{t("role")}</th>
+                <th scope="col" className={cn(dirTh, "hidden md:table-cell")}>{t("columnSpecialties")}</th>
+                <th scope="col" className={cn(dirTh, "hidden sm:table-cell")}>{t("columnTimezone")}</th>
               </tr>
             </thead>
             <tbody>
@@ -135,6 +137,7 @@ export function PeopleTable({ rows }: { rows: PersonListRow[] }) {
 }
 
 function PersonRow({ person }: { person: PersonListRow }) {
+  const t = useTranslations("features.people.peopleTable");
   const href = person.username
     ? (`/people/${person.username}` as Route)
     : undefined;
@@ -192,11 +195,11 @@ function PersonRow({ person }: { person: PersonListRow }) {
             ) : null}
           </span>
         ) : (
-          <span className="text-quiet-mist">None</span>
+          <span className="text-quiet-mist">{t("none")}</span>
         )}
       </td>
       <td className={cn(dirTd, "hidden whitespace-nowrap text-[13px] text-soft-ink sm:table-cell")}>
-        {person.timezone ?? <span className="text-quiet-mist">None</span>}
+        {person.timezone ?? <span className="text-quiet-mist">{t("none")}</span>}
       </td>
     </tr>
   );

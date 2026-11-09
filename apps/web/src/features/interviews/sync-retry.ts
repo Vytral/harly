@@ -1,6 +1,7 @@
 import "server-only";
 
 import { randomUUID } from "node:crypto";
+import { getTranslations } from "@/i18n/server";
 import { and, eq, isNull } from "drizzle-orm";
 
 import {
@@ -26,16 +27,9 @@ import { replaceInterviewToZoom, syncInterviewToZoom } from "@/lib/zoom/sync";
 import { syncInterviewToJitsi } from "@/lib/jitsi/sync";
 import { claimInterviewSync, trackInterviewSync } from "@/lib/interviews/sync-ledger";
 import { createLogger } from "@/lib/logger";
+import { interviewTypeTitle } from "@/features/interviews/shared";
 
 const log = createLogger("interview-sync-actions");
-
-const TYPE_LABEL: Record<string, string> = {
-  screening: "Screening interview",
-  culture_fit: "Culture fit interview",
-  technical: "Technical interview",
-  onsite: "On-site interview",
-  final: "Final interview",
-};
 
 const PROVIDER_LABEL: Record<string, string> = {
   google_calendar: "Google Calendar",
@@ -57,6 +51,8 @@ export async function retryInterviewSyncForWorkspace(input: {
   workerId?: string;
   database?: typeof db;
 }): Promise<{ success: boolean; error?: string; warning?: string }> {
+  const t = await getTranslations("server.interviews.syncRetry");
+  const tl = await getTranslations("labels.interviews");
   try {
     const database = input.database ?? db;
     const workspace = { id: input.workspaceId };
@@ -104,7 +100,7 @@ export async function retryInterviewSyncForWorkspace(input: {
       )
       .limit(1);
 
-    if (!row) return { success: false, error: "Sync attempt not found." };
+    if (!row) return { success: false, error: t("syncNotFound") };
 
     const workerId = input.workerId ?? `interview-sync-manual:${randomUUID()}`;
     const claimed = await claimInterviewSync({
@@ -116,7 +112,7 @@ export async function retryInterviewSyncForWorkspace(input: {
     if (!claimed) {
       return {
         success: false,
-        error: "This synchronization is already being retried or is no longer retryable.",
+        error: t("alreadyRetrying"),
       };
     }
 
@@ -124,7 +120,7 @@ export async function retryInterviewSyncForWorkspace(input: {
     const attendees = [row.candidateEmail, row.interviewerEmail].filter(
       (email): email is string => Boolean(email),
     );
-    const summary = interview.title ?? TYPE_LABEL[interview.type] ?? "Interview";
+    const summary = interview.title ?? interviewTypeTitle(tl, interview.type);
     const providerLabel = PROVIDER_LABEL[sync.provider] ?? sync.provider;
 
     if (sync.operation === "cancel") {
@@ -178,7 +174,7 @@ export async function retryInterviewSyncForWorkspace(input: {
         ? { success: true }
         : {
             success: false,
-            error: `${providerLabel} could not complete the cancellation.`,
+            error: t("cancelFailed", { provider: providerLabel }),
           };
     }
 
@@ -308,13 +304,13 @@ export async function retryInterviewSyncForWorkspace(input: {
     if (!result.ok) {
       return {
         success: false,
-        error: `${providerLabel} could not complete the synchronization.`,
+        error: t("providerFailed", { provider: providerLabel }),
       };
     }
     return { success: true };
   } catch (error) {
     log.error(error, "retryInterviewSyncForWorkspace failed");
-    return { success: false, error: "Could not retry this synchronization." };
+    return { success: false, error: t("retryFailed") };
   }
 }
 

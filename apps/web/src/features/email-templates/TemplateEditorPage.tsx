@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 import DOMPurify from "dompurify";
 import { marked } from "marked";
 import { toast } from "@/lib/notification-island/toast";
@@ -16,7 +17,6 @@ import { createEmailTemplate, updateEmailTemplate } from "@/features/email-templ
 import { findUnknownVariables, interpolateTemplate, TEMPLATE_VARIABLES } from "@/features/email-templates/interpolate";
 import { SYSTEM_TEMPLATE_TYPES, type EmailTemplateItem, type TemplateType } from "@/features/email-templates/shared";
 
-const LABELS: Record<TemplateType, string> = { general: "General", interview_invite: "Interview", rejection: "Rejection", offer: "Offer", screening: "Screening", stage_change: "Stage change" };
 const MANUAL: TemplateType[] = ["general", "screening"];
 type TemplateVariable = (typeof TEMPLATE_VARIABLES)[number];
 const GROUPS = Array.from(TEMPLATE_VARIABLES.reduce((map, variable) => {
@@ -31,6 +31,8 @@ function normalizeTemplateBody(value: string) {
 }
 
 export function TemplateEditorPage({ template, workspaceName }: { template: EmailTemplateItem | null; workspaceName: string }) {
+  const t = useTranslations("features.emailTemplates.templateEditorPage");
+  const tLabels = useTranslations("labels.emailTemplates");
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [name, setName] = useState(template?.name ?? "");
@@ -46,10 +48,10 @@ export function TemplateEditorPage({ template, workspaceName }: { template: Emai
     startTransition(async () => {
       const result = template ? await updateEmailTemplate({ templateId: template.id, name, type, subject, body }) : await createEmailTemplate({ name, type, subject, body });
       if (!result.success) {
-        toast.error(result.error ?? "Could not save the template.");
+        toast.error(result.error ?? t("saveFailed"));
         return;
       }
-      toast.success(template ? "Template updated" : "Template created");
+      toast.success(template ? t("templateUpdated") : t("templateCreated"));
       router.push("/dashboard/templates");
       router.refresh();
     });
@@ -59,11 +61,11 @@ export function TemplateEditorPage({ template, workspaceName }: { template: Emai
     <div className="flex h-dvh w-full flex-col overflow-hidden bg-warm-paper">
       <header className="shrink-0 bg-pure-snow shadow-[var(--shadow-card)]">
         <div className="grid h-16 grid-cols-[1fr_auto_1fr] items-center gap-4 px-4 sm:px-6">
-          <Link href="/dashboard/templates" className="w-fit text-sm font-medium text-soft-ink transition-colors hover:text-near-ink">← Templates</Link>
-          <h1 className="font-display text-base">{template ? "Edit template" : "New template"}</h1>
+          <Link href="/dashboard/templates" className="w-fit text-sm font-medium text-soft-ink transition-colors hover:text-near-ink">{t("backToTemplates")}</Link>
+          <h1 className="font-display text-base">{template ? t("editTitle") : t("newTitle")}</h1>
           <div className="flex justify-self-end gap-2">
-            <Link href="/dashboard/templates" className="inline-flex h-9 items-center rounded-[var(--radius-btn)] px-3 text-sm font-medium text-soft-ink transition hover:bg-soft-kraft hover:text-near-ink">Discard</Link>
-            <Button onClick={save} disabled={pending || !name.trim() || !subject.trim() || !body.trim()}>{pending ? "Saving…" : "Save template"}</Button>
+            <Link href="/dashboard/templates" className="inline-flex h-9 items-center rounded-[var(--radius-btn)] px-3 text-sm font-medium text-soft-ink transition hover:bg-soft-kraft hover:text-near-ink">{t("discard")}</Link>
+            <Button onClick={save} disabled={pending || !name.trim() || !subject.trim() || !body.trim()}>{pending ? t("saving") : t("save")}</Button>
           </div>
         </div>
       </header>
@@ -71,16 +73,16 @@ export function TemplateEditorPage({ template, workspaceName }: { template: Emai
       <main className="grid min-h-0 flex-1 overflow-y-auto lg:grid-cols-[minmax(0,1fr)_minmax(30rem,0.8fr)] lg:overflow-hidden">
         <section className="min-w-0 space-y-7 px-4 py-8 sm:px-6 lg:overflow-y-auto lg:px-10 xl:px-14">
           <div className="grid gap-5 md:grid-cols-[minmax(0,1fr)_13rem]">
-            <div className="space-y-2"><Label htmlFor="template-name">Template name</Label><Input id="template-name" value={name} onChange={(event) => setName(event.target.value)} placeholder="Interview invitation" /></div>
-            <div className="space-y-2"><Label>Type</Label><Select value={type} onValueChange={(value) => setType(value as TemplateType)}><SelectTrigger className="w-full"><SelectValue /></SelectTrigger><SelectContent><SelectGroup><SelectLabel>Automatic emails</SelectLabel>{SYSTEM_TEMPLATE_TYPES.map((value) => <SelectItem key={value} value={value}>{LABELS[value]}</SelectItem>)}</SelectGroup><SelectSeparator /><SelectGroup><SelectLabel>Manual outreach</SelectLabel>{MANUAL.map((value) => <SelectItem key={value} value={value}>{LABELS[value]}</SelectItem>)}</SelectGroup></SelectContent></Select></div>
+            <div className="space-y-2"><Label htmlFor="template-name">{t("nameLabel")}</Label><Input id="template-name" value={name} onChange={(event) => setName(event.target.value)} placeholder={t("namePlaceholder")} /></div>
+            <div className="space-y-2"><Label>{t("typeLabel")}</Label><Select value={type} onValueChange={(value) => setType(value as TemplateType)}><SelectTrigger className="w-full"><SelectValue /></SelectTrigger><SelectContent><SelectGroup><SelectLabel>{t("automaticGroup")}</SelectLabel>{SYSTEM_TEMPLATE_TYPES.map((value) => <SelectItem key={value} value={value}>{t(`typeLabels.${value}`)}</SelectItem>)}</SelectGroup><SelectSeparator /><SelectGroup><SelectLabel>{t("manualGroup")}</SelectLabel>{MANUAL.map((value) => <SelectItem key={value} value={value}>{t(`typeLabels.${value}`)}</SelectItem>)}</SelectGroup></SelectContent></Select></div>
           </div>
-          <div className="space-y-2"><Label htmlFor="template-subject">Subject</Label><Input id="template-subject" value={subject} onChange={(event) => setSubject(event.target.value)} placeholder="Next steps for {{job_title}}" /></div>
-          <div className="space-y-2"><div className="flex items-start justify-between gap-4"><div><Label>Message</Label><p className="mt-1 text-xs text-soft-ink">Write the email candidates receive. Use variables from the reference panel when needed.</p></div><div className="flex shrink-0 rounded-full bg-soft-kraft p-0.5"><button type="button" onClick={() => setMode("edit")} className={mode === "edit" ? "rounded-full bg-pure-snow px-3 py-1.5 text-xs font-medium text-near-ink" : "rounded-full px-3 py-1.5 text-xs font-medium text-soft-ink hover:text-near-ink"}>Edit</button><button type="button" onClick={() => setMode("preview")} className={mode === "preview" ? "rounded-full bg-pure-snow px-3 py-1.5 text-xs font-medium text-near-ink" : "rounded-full px-3 py-1.5 text-xs font-medium text-soft-ink hover:text-near-ink"}>Preview</button></div></div>{mode === "edit" ? <RichTextEditor key={template?.id ?? "new"} defaultValue={body} onChange={setBody} editorRef={editorRef} placeholder="Hi {{candidate_first_name}}," minHeight="34rem" /> : <div className="min-h-[34rem] rounded-[var(--radius-card)] bg-pure-snow p-8 shadow-[var(--shadow-card)] sm:p-10"><p className="border-b border-hairline pb-5 text-lg font-semibold">{interpolateTemplate(subject || "Subject", previewValues)}</p><div className="prose prose-sm mt-6 max-w-none text-sm leading-relaxed dark:prose-invert" dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(interpolateTemplate(body || "<p>Start writing your message.</p>", previewValues), { ALLOWED_TAGS: ["p", "br", "strong", "em", "s", "ul", "ol", "li", "h1", "h2", "h3", "blockquote", "a"], ALLOWED_ATTR: ["href"] }) }} /></div>}</div>
-          {unknown.length > 0 ? <p className="text-xs text-warning-clay">Unknown variable{unknown.length > 1 ? "s" : ""}: {unknown.map((value) => `{{${value}}}`).join(", ")}. They will be sent as-is.</p> : null}
+          <div className="space-y-2"><Label htmlFor="template-subject">{t("subjectLabel")}</Label><Input id="template-subject" value={subject} onChange={(event) => setSubject(event.target.value)} placeholder={t("subjectPlaceholder")} /></div>
+          <div className="space-y-2"><div className="flex items-start justify-between gap-4"><div><Label>{t("messageLabel")}</Label><p className="mt-1 text-xs text-soft-ink">{t("messageHelp")}</p></div><div className="flex shrink-0 rounded-full bg-soft-kraft p-0.5"><button type="button" onClick={() => setMode("edit")} className={mode === "edit" ? "rounded-full bg-pure-snow px-3 py-1.5 text-xs font-medium text-near-ink" : "rounded-full px-3 py-1.5 text-xs font-medium text-soft-ink hover:text-near-ink"}>{t("edit")}</button><button type="button" onClick={() => setMode("preview")} className={mode === "preview" ? "rounded-full bg-pure-snow px-3 py-1.5 text-xs font-medium text-near-ink" : "rounded-full px-3 py-1.5 text-xs font-medium text-soft-ink hover:text-near-ink"}>{t("preview")}</button></div></div>{mode === "edit" ? <RichTextEditor key={template?.id ?? "new"} defaultValue={body} onChange={setBody} editorRef={editorRef} placeholder={t("bodyPlaceholder")} minHeight="34rem" /> : <div className="min-h-[34rem] rounded-[var(--radius-card)] bg-pure-snow p-8 shadow-[var(--shadow-card)] sm:p-10"><p className="border-b border-hairline pb-5 text-lg font-semibold">{interpolateTemplate(subject || t("previewSubjectFallback"), previewValues)}</p><div className="prose prose-sm mt-6 max-w-none text-sm leading-relaxed dark:prose-invert" dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(interpolateTemplate(body || `<p>${t("startWriting")}</p>`, previewValues), { ALLOWED_TAGS: ["p", "br", "strong", "em", "s", "ul", "ol", "li", "h1", "h2", "h3", "blockquote", "a"], ALLOWED_ATTR: ["href"] }) }} /></div>}</div>
+          {unknown.length > 0 ? <p className="text-xs text-warning-clay">{t("unknownVariables", { count: unknown.length, variables: unknown.map((value) => `{{${value}}}`).join(", ") })}</p> : null}
         </section>
 
         <aside className="border-t border-hairline bg-card-inset px-4 py-8 sm:px-6 lg:overflow-y-auto lg:border-l lg:border-t-0 lg:px-8 xl:px-10">
-          <section><h2 className="text-sm font-semibold">Variables</h2><p className="mt-1 text-xs leading-5 text-soft-ink">Place the cursor in the message, then choose a variable to insert it.</p><div className="mt-6 space-y-5">{GROUPS.map(([group, variables]) => <div key={group}><p className="mb-2 text-xs font-medium text-soft-ink">{group}</p><div className="flex flex-wrap gap-1.5">{variables.map((variable) => <button key={variable.key} type="button" onClick={() => { setMode("edit"); editorRef.current?.insertText(`{{${variable.key}}}`); }} className="rounded-full bg-pure-snow px-2.5 py-1.5 text-xs font-medium text-near-ink shadow-[var(--shadow-card)] transition hover:bg-row-wash">{`{{${variable.key}}}`}</button>)}</div></div>)}</div></section>
+          <section><h2 className="text-sm font-semibold">{t("variablesTitle")}</h2><p className="mt-1 text-xs leading-5 text-soft-ink">{t("variablesHelp")}</p><div className="mt-6 space-y-5">{GROUPS.map(([group, variables]) => <div key={group}><p className="mb-2 text-xs font-medium text-soft-ink">{tLabels(`groups.${group}`)}</p><div className="flex flex-wrap gap-1.5">{variables.map((variable) => <button key={variable.key} type="button" onClick={() => { setMode("edit"); editorRef.current?.insertText(`{{${variable.key}}}`); }} className="rounded-full bg-pure-snow px-2.5 py-1.5 text-xs font-medium text-near-ink shadow-[var(--shadow-card)] transition hover:bg-row-wash">{`{{${variable.key}}}`}</button>)}</div></div>)}</div></section>
         </aside>
       </main>
     </div>

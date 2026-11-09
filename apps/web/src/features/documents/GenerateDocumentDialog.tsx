@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, useTransition } from "react";
+import { useTranslations } from "next-intl";
 import Link from "next/link";
 import type { Route } from "next";
 import { useRouter } from "next/navigation";
@@ -60,6 +61,7 @@ export function GenerateDocumentDialog({
   candidate?: { id: string; name: string } | null;
 }) {
   const router = useRouter();
+  const t = useTranslations("features.documents.generateDocumentDialog");
   const [templates, setTemplates] = useState<GenerateTemplateOption[] | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [templateId, setTemplateId] = useState(defaultTemplateId ?? "");
@@ -85,7 +87,7 @@ export function GenerateDocumentDialog({
     getGenerateDocumentOptions().then((result) => {
       if (cancelled) return;
       if (!result.ok) {
-        setLoadError(result.error ?? "Could not load templates.");
+        setLoadError(result.error ?? t("loadTemplatesError"));
         return;
       }
       setLoadError(null);
@@ -98,12 +100,12 @@ export function GenerateDocumentDialog({
             : "",
       );
     }, () => {
-      if (!cancelled) setLoadError("Could not load templates.");
+      if (!cancelled) setLoadError(t("loadTemplatesError"));
     });
     return () => {
       cancelled = true;
     };
-  }, [open, attempt]);
+  }, [open, attempt, t]);
 
   // Candidate applications: all of one candidate's, or a debounced name search.
   useEffect(() => {
@@ -137,13 +139,13 @@ export function GenerateDocumentDialog({
           setSearching(false);
           setTargets([]);
           setApplicationId("");
-          setSearchError("Could not search candidates.");
+          setSearchError(t("searchError"));
         });
       },
       candidateId ? 0 : 250,
     );
     return () => clearTimeout(timer);
-  }, [open, query, candidateId, attempt]);
+  }, [open, query, candidateId, attempt, t]);
 
   // Fill the template as soon as both choices are made.
   useEffect(() => {
@@ -163,7 +165,7 @@ export function GenerateDocumentDialog({
       setPreviewing(false);
       if (!result.ok) {
         setPreview(null);
-        setPreviewError(result.error ?? "Could not preview the document.");
+        setPreviewError(result.error ?? t("previewError"));
         return;
       }
       setPreviewError(null);
@@ -176,9 +178,9 @@ export function GenerateDocumentDialog({
       if (seq !== previewSeq.current) return;
       setPreviewing(false);
       setPreview(null);
-      setPreviewError("Could not preview the document.");
+      setPreviewError(t("previewError"));
     });
-  }, [open, templateId, applicationId, attempt]);
+  }, [open, templateId, applicationId, attempt, t]);
 
   function reset() {
     setSearchError(null);
@@ -193,10 +195,10 @@ export function GenerateDocumentDialog({
     startTransition(async () => {
       const result = await generateDocumentFromTemplate({ templateId, applicationId });
       if (!result.ok || !result.documentId) {
-        toast.error(result.error ?? "Could not generate the document.");
+        toast.error(result.error ?? t("generateFailed"));
         return;
       }
-      toast.success("Document generated");
+      toast.success(t("generated"));
       reset();
       onOpenChange(false);
       router.push(`/dashboard/documents/${result.documentId}` as Route);
@@ -216,10 +218,9 @@ export function GenerateDocumentDialog({
     >
       <DialogContent className="sm:max-w-xl">
         <DialogHeader>
-          <DialogTitle>Generate document</DialogTitle>
+          <DialogTitle>{t("title")}</DialogTitle>
           <DialogDescription>
-            Fill a template with a candidate&apos;s details and save the PDF to
-            your library. You can send it for signature from the document page.
+            {t("description")}
           </DialogDescription>
         </DialogHeader>
 
@@ -231,30 +232,30 @@ export function GenerateDocumentDialog({
               onClick={() => setAttempt((n) => n + 1)}
               className="font-medium text-near-ink underline underline-offset-2"
             >
-              Try again
+              {t("tryAgain")}
             </button>
           </Callout>
         ) : null}
         {noTemplates ? (
-          <Callout tone="info" title="No templates yet" icon={<FileText />}>
-            Create a reusable template first.{" "}
+          <Callout tone="info" title={t("noTemplatesTitle")} icon={<FileText />}>
+            {t("noTemplatesBody")}{" "}
             <Link
               href={"/dashboard/documents/templates/new" as Route}
               className="font-medium text-near-ink underline underline-offset-2"
             >
-              New template
+              {t("newTemplate")}
             </Link>
           </Callout>
         ) : (
           <div className="max-h-[60vh] space-y-4 overflow-y-auto py-1 pr-1">
             <div className="space-y-2">
-              <Label htmlFor="generate-template">Template</Label>
+              <Label htmlFor="generate-template">{t("template")}</Label>
               {templates === null ? (
                 <Skeleton className="h-9 w-full rounded-[var(--radius-btn)]" />
               ) : (
                 <Select value={templateId} onValueChange={setTemplateId}>
                   <SelectTrigger id="generate-template" className="w-full">
-                    <SelectValue placeholder="Choose a template" />
+                    <SelectValue placeholder={t("chooseTemplate")} />
                   </SelectTrigger>
                   <SelectContent position="popper" className="max-h-64">
                     {templates.map((template) => (
@@ -269,12 +270,12 @@ export function GenerateDocumentDialog({
 
             <div className="space-y-2">
               <Label htmlFor={candidate ? "generate-application" : "generate-search"}>
-                {candidate ? `Application for ${candidate.name}` : "Candidate"}
+                {candidate ? t("applicationFor", { name: candidate.name }) : t("candidate")}
               </Label>
               {candidate ? (
                 <Select value={applicationId} onValueChange={setApplicationId}>
                   <SelectTrigger id="generate-application" className="w-full">
-                    <SelectValue placeholder={searching ? "Loading…" : "Choose a job"} />
+                    <SelectValue placeholder={searching ? t("loading") : t("chooseJob")} />
                   </SelectTrigger>
                   <SelectContent position="popper">
                     {targets.map((target) => (
@@ -292,14 +293,14 @@ export function GenerateDocumentDialog({
                       id="generate-search"
                       value={query}
                       onChange={(event) => setQuery(event.target.value)}
-                      placeholder="Search by candidate or job"
+                      placeholder={t("searchPlaceholder")}
                       className="pl-9"
                       autoComplete="off"
                     />
                   </div>
                   <div
                     role="radiogroup"
-                    aria-label="Candidate applications"
+                    aria-label={t("candidateApplications")}
                     className="max-h-44 divide-y divide-hairline overflow-y-auto rounded-[var(--radius-inner)] bg-card-inset"
                   >
                     {searching && targets.length === 0 ? (
@@ -309,7 +310,7 @@ export function GenerateDocumentDialog({
                       </div>
                     ) : targets.length === 0 ? (
                       <p className="px-3 py-4 text-center text-sm text-soft-ink">
-                        No candidates match.
+                        {t("noCandidates")}
                       </p>
                     ) : (
                       targets.map((target) => {
@@ -348,14 +349,14 @@ export function GenerateDocumentDialog({
                   onClick={() => setAttempt((n) => n + 1)}
                   className="font-medium text-near-ink underline underline-offset-2"
                 >
-                  Try again
+                  {t("tryAgain")}
                 </button>
               </Callout>
             ) : preview ? (
               <div className="space-y-3">
                 {preview.blank.length > 0 ? (
-                  <Callout tone="warning" title="Some details are empty for this candidate">
-                    {preview.blank.join(", ")} will be left blank in the PDF.
+                  <Callout tone="warning" title={t("blankTitle")}>
+                    {t("blankBody", { fields: preview.blank.join(", ") })}
                   </Callout>
                 ) : null}
                 <div className="rounded-[var(--radius-inner)] bg-pure-snow p-4 shadow-[inset_0_0_0_1px_var(--hairline)]">
@@ -367,7 +368,7 @@ export function GenerateDocumentDialog({
                 </div>
                 {selectedTarget ? (
                   <p className="text-xs text-soft-ink">
-                    Will be saved to the library and linked to {selectedTarget.candidateName}.
+                    {t("savedTo", { name: selectedTarget.candidateName })}
                   </p>
                 ) : null}
               </div>
@@ -377,13 +378,13 @@ export function GenerateDocumentDialog({
 
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={isPending}>
-            Cancel
+            {t("cancel")}
           </Button>
           <Button
             onClick={generate}
             disabled={isPending || previewing || !preview || !selectedTarget || Boolean(previewError)}
           >
-            {isPending ? "Generating…" : "Generate PDF"}
+            {isPending ? t("generating") : t("generatePdf")}
           </Button>
         </DialogFooter>
       </DialogContent>

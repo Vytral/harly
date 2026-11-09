@@ -4,6 +4,7 @@ import { useEffect, useState, useTransition } from "react";
 import type { Route } from "next";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { toast } from "@/lib/notification-island/toast";
 
 import {
@@ -73,12 +74,13 @@ export function AiSettingsCard({
   status: WorkspaceAiStatus;
   canEdit: boolean;
 }) {
+  const t = useTranslations("features.workspaces.aiSettingsCard");
   const router = useRouter();
   const [togglePending, startToggle] = useTransition();
 
   function toggleEnabled(next: boolean) {
     if (!status.hasApiKey && next) {
-      toast.error("Configure a provider and API key first.");
+      toast.error(t("configureFirst"));
       return;
     }
     startToggle(async () => {
@@ -90,10 +92,10 @@ export function AiSettingsCard({
           })
         : await disableAiAction();
       if (!result.ok) {
-        toast.error(result.error ?? "Could not update AI settings.");
+        toast.error(result.error ?? t("updateFailed"));
         return;
       }
-      toast.success(next ? "AI enabled" : "AI disabled");
+      toast.success(next ? t("enabledToast") : t("disabledToast"));
       router.refresh();
     });
   }
@@ -107,17 +109,17 @@ export function AiSettingsCard({
         <div className="p-6">
           <SectionHeader
             icon={RobotDuotoneIcon}
-            title="AI"
+            title={t("title")}
             badge={
               status.hasApiKey ? (
                 <StatusPill tone={status.enabled ? "on" : "off"}>
-                  {status.enabled ? "Active" : "Paused"}
+                  {status.enabled ? t("active") : t("paused")}
                 </StatusPill>
               ) : (
-                <StatusPill tone="neutral">Using heuristics</StatusPill>
+                <StatusPill tone="neutral">{t("usingHeuristics")}</StatusPill>
               )
             }
-            description="Bring your own provider key to power resume parsing and job-description drafting. Without one, Harly falls back to fast built-in heuristics."
+            description={t("description")}
             action={
               canEdit ? (
                 <>
@@ -128,13 +130,13 @@ export function AiSettingsCard({
                     >
                       <Link href={"/settings/ai/configure" as Route}>
                         <KeyDuotoneIcon className="size-4" />
-                        {status.hasApiKey ? "Manage" : "Configure AI"}
+                        {status.hasApiKey ? t("manage") : t("configureAi")}
                       </Link>
                     </Button>
                   ) : (
                     <Button variant="default" disabled>
                       <KeyDuotoneIcon className="size-4" />
-                      Configure AI
+                      {t("configureAi")}
                     </Button>
                   )}
                   {status.hasApiKey ? (
@@ -143,10 +145,10 @@ export function AiSettingsCard({
                         checked={status.enabled}
                         disabled={togglePending}
                         onCheckedChange={toggleEnabled}
-                        aria-label="Enable AI"
+                        aria-label={t("enableAi")}
                       />
                       <span className="text-muted-foreground">
-                        {status.enabled ? "On" : "Off"}
+                        {status.enabled ? t("on") : t("off")}
                       </span>
                     </label>
                   ) : null}
@@ -157,20 +159,20 @@ export function AiSettingsCard({
 
           {status.hasApiKey ? (
             <div className="mt-4 grid grid-cols-1 divide-y border-t bg-muted/20 sm:grid-cols-3 sm:divide-x sm:divide-y-0">
-              <StatCell label="Provider">
+              <StatCell label={t("provider")}>
                 {status.provider ? <ProviderLogo id={status.provider} className="size-4" /> : null}
                 {providerLabel(status.provider)}
               </StatCell>
-              <StatCell label="Model">
+              <StatCell label={t("model")}>
                 <span className="truncate font-mono text-[13px]">
                   {status.modelId
                     ? formatModelLabel(status.modelId)
-                    : "Not configured"}
+                    : t("notConfigured")}
                 </span>
               </StatCell>
-              <StatCell label="Endpoint">
+              <StatCell label={t("endpoint")}>
                 <span className="truncate text-muted-foreground">
-                  {status.baseUrl ?? "Provider default"}
+                  {status.baseUrl ?? t("providerDefault")}
                 </span>
               </StatCell>
             </div>
@@ -182,19 +184,19 @@ export function AiSettingsCard({
       <Card className="gap-0 py-0">
         <div className="px-5 pt-5 pb-1">
           <h2 className="text-[15px] font-semibold tracking-[-0.01em] text-near-ink">
-            AI features
+            {t("aiFeatures")}
           </h2>
         </div>
         <SettingRows>
           <FeatureRow
             icon={<ScanText strokeWidth={1.8} />}
-            title="Resume parsing"
-            description="Turns uploaded CVs into structured candidate profiles."
+            title={t("resumeParsing")}
+            description={t("resumeParsingDescription")}
           />
           <FeatureRow
             icon={<Wand2 strokeWidth={1.8} />}
-            title="Job-description drafting"
-            description="Drafts a job posting from a short brief."
+            title={t("jobDescriptionDrafting")}
+            description={t("jobDescriptionDraftingDescription")}
           />
           <AutoScoreFeatureCard status={status} canEdit={canEdit} />
           <DuplicateCheckFeatureCard status={status} canEdit={canEdit} />
@@ -206,12 +208,10 @@ export function AiSettingsCard({
       <Card className="gap-4">
         <div className="px-6">
           <h3 className="text-sm font-semibold tracking-tight">
-            Works with your provider
+            {t("worksWithProvider")}
           </h3>
           <p className="mt-1 max-w-prose text-sm text-muted-foreground">
-            Bring a key from any major provider, run a local model with Ollama,
-            or point Harly at any OpenAI-compatible endpoint. Keys are encrypted
-            at rest.
+            {t("worksWithProviderDescription")}
           </p>
         </div>
         <div className="grid grid-cols-1 gap-2.5 px-6 min-[480px]:grid-cols-2 sm:grid-cols-3 lg:grid-cols-4">
@@ -237,17 +237,17 @@ export function AiSettingsCard({
                   </span>
                   {isActive ? (
                     <span className="block text-[11px] font-medium text-pine">
-                      Connected
+                      {t("connected")}
                     </span>
                   ) : (
                     <span className="block truncate text-[11px] text-muted-foreground">
                       {provider.supportsModelSearch
-                        ? "100s of models"
+                        ? t("hundredsOfModels")
                         : provider.requiresBaseUrl
-                          ? "Your endpoint"
+                          ? t("yourEndpoint")
                           : provider.allowPrivateHosts
-                            ? "Runs locally"
-                            : "Bring your key"}
+                            ? t("runsLocally")
+                            : t("bringYourKey")}
                     </span>
                   )}
                 </span>
@@ -261,12 +261,14 @@ export function AiSettingsCard({
 }
 
 function EncryptionWarning() {
+  const t = useTranslations("features.workspaces.aiSettingsCard");
   return (
     <div className="flex items-start gap-2 rounded-2xl border border-clay/30 bg-clay/5 px-4 py-3 text-sm text-clay">
       <GlobeIcon className="mt-0.5 size-4 shrink-0" />
       <p>
-        Set <code className="font-mono text-xs">AI_ENCRYPTION_KEY</code> on the
-        server to enable AI features.
+        {t.rich("encryptionWarning", {
+          code: (chunks) => <code className="font-mono text-xs">{chunks}</code>,
+        })}
       </p>
     </div>
   );
@@ -281,6 +283,7 @@ function FeatureRow({
   title: string;
   description: string;
 }) {
+  const t = useTranslations("features.workspaces.aiSettingsCard");
   return (
     <SettingRow
       icon={icon}
@@ -288,7 +291,7 @@ function FeatureRow({
       description={description}
       control={
         <span className="rounded-full bg-sage-wash px-2 py-0.5 text-[11.5px] font-medium text-sage-ink">
-          Always on
+          {t("alwaysOn")}
         </span>
       }
     />
@@ -297,11 +300,12 @@ function FeatureRow({
 
 /** Why a model-backed toggle is locked, in one quiet line. */
 function LockedHint({ status }: { status: WorkspaceAiStatus }) {
+  const t = useTranslations("features.workspaces.aiSettingsCard");
   if (!status.hasApiKey) {
-    return <p className="text-[12.5px] text-soft-ink">Connect a provider to turn this on.</p>;
+    return <p className="text-[12.5px] text-soft-ink">{t("connectProviderToEnable")}</p>;
   }
   if (!status.enabled) {
-    return <p className="text-[12.5px] text-warning-clay">Enable AI above to turn this on.</p>;
+    return <p className="text-[12.5px] text-warning-clay">{t("enableAiToEnable")}</p>;
   }
   return null;
 }
@@ -313,6 +317,7 @@ function AutoScoreFeatureCard({
   status: WorkspaceAiStatus;
   canEdit: boolean;
 }) {
+  const t = useTranslations("features.workspaces.aiSettingsCard");
   const router = useRouter();
   const [pending, startToggle] = useTransition();
   const [optimistic, setOptimistic] = useState(status.autoScore);
@@ -325,10 +330,10 @@ function AutoScoreFeatureCard({
       const result = await saveAiAutoScoreAction(next);
       if (!result.ok) {
         setOptimistic(!next);
-        toast.error(result.error ?? "Could not update setting.");
+        toast.error(result.error ?? t("updateSettingFailed"));
         return;
       }
-      toast.success(next ? "Auto-scoring enabled" : "Auto-scoring disabled");
+      toast.success(next ? t("autoScoreEnabled") : t("autoScoreDisabled"));
       router.refresh();
     });
   }
@@ -336,14 +341,14 @@ function AutoScoreFeatureCard({
   return (
       <SettingRow
         icon={<Gauge strokeWidth={1.8} />}
-        title="Auto-score applications"
-        description="Scores every new application as it arrives."
+        title={t("autoScore")}
+        description={t("autoScoreDescription")}
         control={
           <Switch
           checked={optimistic}
               onCheckedChange={toggle}
               disabled={disabled || pending}
-              aria-label="Auto-score applications"
+              aria-label={t("autoScore")}
           />
         }
       >
@@ -359,6 +364,7 @@ function DuplicateCheckFeatureCard({
   status: WorkspaceAiStatus;
   canEdit: boolean;
 }) {
+  const t = useTranslations("features.workspaces.aiSettingsCard");
   const router = useRouter();
   const [pending, startToggle] = useTransition();
   const [optimistic, setOptimistic] = useState(status.duplicateCheck);
@@ -371,11 +377,11 @@ function DuplicateCheckFeatureCard({
       const result = await saveAiDuplicateCheckAction(next);
       if (!result.ok) {
         setOptimistic(!next);
-        toast.error(result.error ?? "Could not update setting.");
+        toast.error(result.error ?? t("updateSettingFailed"));
         return;
       }
       toast.success(
-        next ? "Duplicate detection enabled" : "Duplicate detection disabled",
+        next ? t("duplicateDetectionEnabled") : t("duplicateDetectionDisabled"),
       );
       router.refresh();
     });
@@ -384,14 +390,14 @@ function DuplicateCheckFeatureCard({
   return (
       <SettingRow
         icon={<CopyCheck strokeWidth={1.8} />}
-        title="Duplicate detection"
-        description="Flags likely duplicate candidates when someone applies."
+        title={t("duplicateDetection")}
+        description={t("duplicateDetectionDescription")}
         control={
           <Switch
           checked={optimistic}
               onCheckedChange={toggle}
               disabled={disabled || pending}
-              aria-label="Duplicate detection"
+              aria-label={t("duplicateDetection")}
           />
         }
       >
@@ -407,6 +413,7 @@ function ResumeAnonymizationFeatureCard({
   status: WorkspaceAiStatus;
   canEdit: boolean;
 }) {
+  const t = useTranslations("features.workspaces.aiSettingsCard");
   const router = useRouter();
   const [pending, startToggle] = useTransition();
   const [optimistic, setOptimistic] = useState(status.resumeAnonymization);
@@ -421,11 +428,11 @@ function ResumeAnonymizationFeatureCard({
       const result = await saveAiResumeAnonymizationAction(next);
       if (!result.ok) {
         setOptimistic(!next);
-        toast.error(result.error ?? "Could not update setting.");
+        toast.error(result.error ?? t("updateSettingFailed"));
         return;
       }
       toast.success(
-        next ? "Resume anonymization enabled" : "Resume anonymization disabled",
+        next ? t("resumeAnonymizationEnabled") : t("resumeAnonymizationDisabled"),
       );
       router.refresh();
     });
@@ -434,14 +441,14 @@ function ResumeAnonymizationFeatureCard({
   return (
       <SettingRow
         icon={<EyeOff strokeWidth={1.8} />}
-        title="Resume anonymization"
-        description="Hides candidate identity on screen and from your AI provider. Features that need a name pause while it's on."
+        title={t("resumeAnonymization")}
+        description={t("resumeAnonymizationDescription")}
         control={
           <Switch
           checked={optimistic}
               onCheckedChange={toggle}
               disabled={disabled || pending}
-              aria-label="Resume anonymization"
+              aria-label={t("resumeAnonymization")}
           />
         }
       />
@@ -456,6 +463,9 @@ export function AiSettingsForm({
   /** Server has HARLY_ALLOW_LOCAL_LLM=1 (local / LAN model servers allowed). */
   allowLocalLlm?: boolean;
 }) {
+  const t = useTranslations("features.workspaces.aiSettingsCard");
+  const tProviders = useTranslations("labels.ai.providers");
+  const tModelSource = useTranslations("labels.ai.modelSource");
   const router = useRouter();
   const initialProvider: AiProviderId = isAiProviderId(status.provider ?? "")
     ? (status.provider as AiProviderId)
@@ -542,9 +552,9 @@ export function AiSettingsForm({
       });
       if (result.ok) {
         setTestResult({ state: "ok", model: modelId });
-        toast.success("Connection OK");
+        toast.success(t("connectionOk"));
       } else {
-        setTestResult({ state: "error", message: result.error ?? "Connection failed." });
+        setTestResult({ state: "error", message: result.error ?? t("connectionFailed") });
       }
     });
   }
@@ -560,10 +570,10 @@ export function AiSettingsForm({
         enabled,
       });
       if (!result.ok) {
-        setSaveError(result.error ?? "Could not save.");
+        setSaveError(result.error ?? t("saveFailed"));
         return;
       }
-      toast.success("AI settings saved");
+      toast.success(t("aiSettingsSaved"));
       router.push("/settings/ai" as Route);
       router.refresh();
     });
@@ -573,8 +583,8 @@ export function AiSettingsForm({
 
   return (
     <DrawerLayout
-      title="Configure AI"
-      description="Your API key is encrypted at rest and never shown again."
+      title={t("configureTitle")}
+      description={t("configureDescription")}
       surface="page"
     >
       {/* autoComplete="off" + masked text inputs (no password field) keep
@@ -586,7 +596,7 @@ export function AiSettingsForm({
         data-form-type="other"
       >
         <div className="space-y-2">
-          <Label htmlFor="ai-provider">Provider</Label>
+          <Label htmlFor="ai-provider">{t("provider")}</Label>
           <Select value={provider} onValueChange={changeProvider}>
             <SelectTrigger id="ai-provider" className="w-full">
               <SelectValue>
@@ -609,11 +619,11 @@ export function AiSettingsForm({
               })}
             </SelectContent>
           </Select>
-          {info ? <p className="text-xs text-muted-foreground">{info.tagline}</p> : null}
+          {info ? <p className="text-xs text-muted-foreground">{tProviders(`${info.id}.tagline`)}</p> : null}
         </div>
 
         <div className="space-y-2">
-          <Label htmlFor="ai-model">{provider === "azure" ? "Deployment name" : "Model"}</Label>
+          <Label htmlFor="ai-model">{provider === "azure" ? t("deploymentName") : t("model")}</Label>
           <ModelCombobox
             id="ai-model"
             value={modelId}
@@ -624,15 +634,15 @@ export function AiSettingsForm({
             models={models}
             loading={loadingModels}
             placeholder={
-              info?.modelExample ? `e.g. ${info.modelExample}` : "Choose or enter any model ID"
+              info?.modelExample ? t("modelPlaceholder", { example: info.modelExample }) : t("chooseModel")
             }
           />
           <ToolCallingWarning model={selectedModel} />
           <div className="flex items-center justify-between gap-3 text-xs text-muted-foreground">
             <span>
-              {catalog ? describeModelSource(catalog.source, catalog.fetchedAt) : "Loading models…"}
+              {catalog ? describeModelSource(catalog.source, catalog.fetchedAt, tModelSource) : t("loadingModels")}
               {" · "}
-              Any model ID works, even if it isn&apos;t listed.
+              {t("anyModelId")}
             </span>
             {info?.catalogId ? (
               <button
@@ -642,7 +652,7 @@ export function AiSettingsForm({
                 className="inline-flex shrink-0 items-center gap-1 font-medium text-foreground underline underline-offset-2 hover:text-pine disabled:opacity-50"
               >
                 <RefreshCw className={cn("size-3", loadingModels && "animate-spin")} aria-hidden />
-                Refresh
+                {t("refresh")}
               </button>
             ) : null}
           </div>
@@ -650,9 +660,9 @@ export function AiSettingsForm({
 
         <div className="space-y-2">
           <Label htmlFor="ai-key">
-            API key
+            {t("apiKey")}
             {!info?.requiresKey ? (
-              <span className="ml-1 font-normal text-muted-foreground">(optional)</span>
+              <span className="ml-1 font-normal text-muted-foreground">{t("optional")}</span>
             ) : null}
           </Label>
           <SecretInput
@@ -665,15 +675,15 @@ export function AiSettingsForm({
             }}
             placeholder={
               keyIsStoredForProvider
-                ? "•••••••• (stored, leave blank to keep)"
+                ? t("keyStored")
                 : info?.requiresKey
-                  ? "Paste your API key"
-                  : "Leave blank if no key is needed"
+                  ? t("pasteKey")
+                  : t("keyNotNeeded")
             }
           />
           {info ? (
             <p className="text-xs text-muted-foreground">
-              {info.apiKeyHint}{" "}
+              {tProviders(`${info.id}.apiKeyHint`)}{" "}
               {info.requiresKey ? (
                 <a
                   href={info.apiKeyUrl}
@@ -681,7 +691,7 @@ export function AiSettingsForm({
                   rel="noreferrer"
                   className="font-medium text-foreground underline underline-offset-2 hover:text-pine"
                 >
-                  Get a key
+                  {t("getKey")}
                 </a>
               ) : null}
             </p>
@@ -699,13 +709,13 @@ export function AiSettingsForm({
               className="inline-flex items-center gap-1.5 text-xs font-medium text-muted-foreground transition hover:text-foreground"
             >
               <GlobeIcon className="size-3.5" />
-              {showCustomEndpoint ? "Use default endpoint" : "Custom API endpoint"}
+              {showCustomEndpoint ? t("useDefaultEndpoint") : t("customApiEndpoint")}
             </button>
           ) : null}
           {showEndpointField ? (
             <div className="space-y-2">
               <Label htmlFor="ai-base-url">
-                {info?.requiresBaseUrl ? "API endpoint" : "Custom API endpoint"}
+                {info?.requiresBaseUrl ? t("apiEndpoint") : t("customApiEndpoint")}
               </Label>
               <Input
                 id="ai-base-url"
@@ -728,7 +738,7 @@ export function AiSettingsForm({
                 placeholder={info?.baseUrl || "https://llm.example.com/v1"}
                 className="font-mono text-sm"
               />
-              <p className="text-xs text-muted-foreground">{info?.baseUrlHelp}</p>
+              <p className="text-xs text-muted-foreground">{info ? tProviders(`${info.id}.baseUrlHelp`) : null}</p>
               <EndpointGuidance
                 info={info}
                 allowLocalLlm={allowLocalLlm}
@@ -753,9 +763,9 @@ export function AiSettingsForm({
 
         <SettingRows className="rounded-[var(--radius-inner)] border border-hairline">
           <SettingRow
-            title="Enable AI"
+            title={t("enableAi")}
             htmlFor="ai-enabled"
-            description="When off, Harly uses heuristics only."
+            description={t("enableAiHint")}
             control={<Switch id="ai-enabled" checked={enabled} onCheckedChange={setEnabled} />}
           />
         </SettingRows>
@@ -769,7 +779,7 @@ export function AiSettingsForm({
             disabled={testing || !modelId.trim()}
           >
             {testing ? <SpinnerIcon className="size-4" /> : <LightningIcon className="size-4" />}
-            Test connection
+            {t("testConnection")}
           </Button>
           {testResult?.state === "ok" ? (
             <div
@@ -778,31 +788,34 @@ export function AiSettingsForm({
             >
               <CheckIcon className="mt-0.5 size-4 shrink-0" />
               <p>
-                <span className="font-medium">Connection healthy.</span>{" "}
+                <span className="font-medium">{t("connectionHealthy")}</span>{" "}
                 <span className="text-pine/80">
-                  {providerLabel(provider)} responded with{" "}
-                  <span className="font-mono text-[13px]">{testResult.model}</span>
-                  {endpointValue ? " through your endpoint" : ""}.
+                  {t.rich("respondedWith", {
+                    provider: providerLabel(provider) ?? provider,
+                    model: testResult.model,
+                    throughEndpoint: endpointValue ? "yes" : "no",
+                    mono: (chunks) => <span className="font-mono text-[13px]">{chunks}</span>,
+                  })}
                 </span>
               </p>
             </div>
           ) : testResult?.state === "error" ? (
-            <ErrorBanner title="Couldn't connect.">{testResult.message}</ErrorBanner>
+            <ErrorBanner title={t("couldntConnect")}>{testResult.message}</ErrorBanner>
           ) : (
             <p className="text-center text-xs text-muted-foreground">
-              Verify your key and model before saving.
+              {t("verifyBeforeSaving")}
             </p>
           )}
-          {saveError ? <ErrorBanner title="Couldn't save.">{saveError}</ErrorBanner> : null}
+          {saveError ? <ErrorBanner title={t("couldntSave")}>{saveError}</ErrorBanner> : null}
         </div>
 
         <div className="flex items-center justify-end gap-2 border-t border-hairline pt-5">
           <Button asChild variant="outline">
-            <Link href={"/settings/ai" as Route}>Cancel</Link>
+            <Link href={"/settings/ai" as Route}>{t("cancel")}</Link>
           </Button>
           <Button type="button" onClick={save} disabled={saving || !modelId.trim()}>
             {saving ? <SpinnerIcon className="size-4" /> : null}
-            Save changes
+            {t("saveChanges")}
           </Button>
         </div>
       </form>
@@ -852,26 +865,28 @@ function EndpointGuidance({
   allowLocalLlm: boolean;
   looksLocal: boolean;
 }) {
+  const t = useTranslations("features.workspaces.aiSettingsCard");
   if (!info) return null;
   if (looksLocal) {
     return allowLocalLlm ? (
       <p className="text-xs text-pine">
-        Local and LAN endpoints are enabled on this server (
-        <code className="font-mono">HARLY_ALLOW_LOCAL_LLM=1</code>).
+        {t.rich("endpointLocalEnabled", {
+          code: (chunks) => <code className="font-mono">{chunks}</code>,
+        })}
       </p>
     ) : (
       <div className="rounded-lg border border-clay/30 bg-clay/5 px-3 py-2 text-xs text-clay">
-        Local and LAN endpoints are disabled on this server. Set{" "}
-        <code className="font-mono">HARLY_ALLOW_LOCAL_LLM=1</code> in the server environment and
-        restart Harly to use Ollama, LM Studio or vLLM.
+        {t.rich("endpointLocalDisabled", {
+          code: (chunks) => <code className="font-mono">{chunks}</code>,
+        })}
       </div>
     );
   }
   return (
     <p className="text-xs text-muted-foreground">
       {info.allowPrivateHosts
-        ? "Use this for a gateway or proxy (LiteLLM, Azure API Management) or a model server such as Ollama, LM Studio or vLLM."
-        : `Use this for your own proxy or gateway in front of ${info.label}. Hosts outside ${info.label}'s own domain are rejected; pick OpenAI-compatible for those.`}
+        ? t("endpointProxyOnly")
+        : t("endpointProviderProxy", { provider: info.label })}
     </p>
   );
 }

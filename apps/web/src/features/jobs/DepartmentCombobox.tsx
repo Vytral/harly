@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useTranslations } from "next-intl";
 import { Check, ChevronsUpDown, Plus } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -36,6 +37,7 @@ export function DepartmentCombobox({
   defaultValue,
   className,
 }: DepartmentComboboxProps) {
+  const t = useTranslations("jobs.departmentCombobox");
   const [open, setOpen] = useState(false);
   const [value, setValue] = useState(defaultValue ?? "");
   const [query, setQuery] = useState("");
@@ -64,7 +66,7 @@ export function DepartmentCombobox({
             className={cn("h-10 w-full justify-between rounded-lg bg-card px-3.5 font-normal", className)}
           >
             <span className={cn("truncate", !value && "text-muted-foreground")}>
-              {value || "Select or create a department"}
+              {value || t("selectOrCreate")}
             </span>
             <ChevronsUpDown className="size-4 shrink-0 opacity-50" />
           </Button>
@@ -75,16 +77,16 @@ export function DepartmentCombobox({
         >
           <Command>
             <CommandInput
-              placeholder="Search or create…"
+              placeholder={t("searchOrCreate")}
               value={query}
               onValueChange={setQuery}
             />
             <CommandList>
               <CommandEmpty className="py-3 text-center text-sm text-muted-foreground">
-                Type a name to create a department.
+                {t("createHint")}
               </CommandEmpty>
               {departments.length > 0 ? (
-                <CommandGroup heading="Existing">
+                <CommandGroup heading={t("existing")}>
                   {departments.map((d) => (
                     <CommandItem key={d} value={d} onSelect={() => choose(d)}>
                       <Check
@@ -99,10 +101,10 @@ export function DepartmentCombobox({
                 </CommandGroup>
               ) : null}
               {trimmed && !exactExists ? (
-                <CommandGroup heading="Create new">
+                <CommandGroup heading={t("createNew")}>
                   <CommandItem value={trimmed} onSelect={() => choose(trimmed)}>
                     <Plus className="size-4" />
-                    Create &ldquo;{trimmed}&rdquo;
+                    {t("createNamed", { name: trimmed })}
                   </CommandItem>
                 </CommandGroup>
               ) : null}

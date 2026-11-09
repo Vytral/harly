@@ -1,4 +1,5 @@
 import { Briefcase } from "lucide-react";
+import { useTranslations } from "next-intl";
 
 import type { WorkspaceBoardBranding } from "@/features/workspaces/board";
 import { PlayfulPositions } from "@/features/career-page/templates/playful/PlayfulPositions";
@@ -37,11 +38,12 @@ export function PlayfulTemplate({
   boardRoot: string;
   portalEnabled?: boolean;
 }) {
+  const t = useTranslations("features.careerPage.playfulTemplate");
   const accent = config.theme.accent ?? workspace.primaryColor;
   const ctaColor = config.cta.color ?? accent;
   const overlayFrom = config.hero.overlayFrom ?? `${accent}E6`;
   const overlayTo = config.hero.overlayTo ?? `${accent}00`;
-  const headline = config.hero.headline || "Join us";
+  const headline = config.hero.headline || t("defaultHeadline");
   const heroImage = config.hero.imageUrl ?? workspace.heroImageUrl;
   const logo = workspace.logoUrl;
 
@@ -100,9 +102,9 @@ export function PlayfulTemplate({
         <div className="grid gap-10 lg:grid-cols-[1.5fr_1fr]">
           <div className={reveal}>
             <span className="inline-flex items-center gap-1.5 rounded-full bg-zinc-100 px-3 py-1 text-xs font-medium text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400">
-              Careers
+              {t("eyebrow")}
               <span className="rounded-full bg-white px-2 py-0.5 text-zinc-900 dark:bg-zinc-700 dark:text-zinc-100">
-                Join us
+                {t("eyebrowAccent")}
               </span>
             </span>
             <h1 className="mt-5 text-5xl font-semibold tracking-tight sm:text-6xl">
@@ -181,7 +183,7 @@ export function PlayfulTemplate({
                 href="#positions"
                 className="mt-6 block rounded-xl bg-zinc-900 px-4 py-2.5 text-center text-sm font-medium text-white transition-transform duration-150 active:scale-[0.98] motion-reduce:transition-none dark:bg-zinc-100 dark:text-zinc-900"
               >
-                See open positions
+                {t("seeOpenPositions")}
               </a>
             </aside>
           )}
@@ -320,7 +322,7 @@ export function PlayfulTemplate({
                   className="rounded-xl px-5 py-2.5 text-sm font-semibold text-white transition-transform duration-150 active:scale-[0.98] motion-reduce:transition-none"
                   style={{ backgroundColor: ctaColor }}
                 >
-                  Get in touch
+                  {t("getInTouch")}
                 </a>
               )}
             </div>

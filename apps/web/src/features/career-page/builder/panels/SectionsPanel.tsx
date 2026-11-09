@@ -1,9 +1,11 @@
 "use client";
 
+import { useTranslations } from "next-intl";
+
 import { MAX_PROCESS_STEPS } from "@/features/career-page/config";
 
 import type { SectionProps } from "../types";
-import { capabilitiesFor, type TemplateCapabilities } from "../template-capabilities";
+import { capabilitiesFor, templateLabel, type TemplateCapabilities } from "../template-capabilities";
 import { ContrastNotice } from "../ContrastNotice";
 import {
   AvatarField,
@@ -19,37 +21,26 @@ import { Group, PanelHeader, Segmented } from "./PanelKit";
 
 type SectionId = "overview" | "values" | "gallery" | "testimonials" | "process" | "faq" | "cta";
 
-const SECTION_LABEL: Record<SectionId, string> = {
-  overview: "Key facts",
-  values: "Values & benefits",
-  gallery: "Photo gallery",
-  testimonials: "Testimonials",
-  process: "How we hire",
-  faq: "FAQ",
-  cta: "Call to action",
-};
-
 const ORDER: SectionId[] = ["overview", "values", "gallery", "testimonials", "process", "faq", "cta"];
 
 /** Content blocks below the hero. Blocks the template ignores sink to the end. */
 export function SectionsPanel(props: SectionProps) {
+  const t = useTranslations("features.careerPage.SectionsPanel");
+  const tTemplates = useTranslations("labels.careerPage.templates");
   const caps = capabilitiesFor(props.config.template);
   const supported = ORDER.filter((id) => caps[id]);
   const unsupported = ORDER.filter((id) => !caps[id]);
 
   return (
     <div className="space-y-4">
-      <PanelHeader
-        title="Sections"
-        subtitle="Blocks below the hero. Each one stays hidden until it's on and has content."
-      />
+      <PanelHeader title={t("title")} subtitle={t("subtitle")} />
       {supported.map((id) => (
         <SectionEditor key={id} id={id} caps={caps} {...props} />
       ))}
       {unsupported.length > 0 ? (
         <div className="space-y-2 pt-2">
           {unsupported.map((id) => (
-            <Group key={id} title={SECTION_LABEL[id]} unsupported={caps.label} />
+            <Group key={id} title={t(`sectionLabels.${id}`)} unsupported={templateLabel(props.config.template, tTemplates)} />
           ))}
         </div>
       ) : null}
@@ -64,30 +55,31 @@ function SectionEditor({
   update,
   workspace,
 }: SectionProps & { id: SectionId; caps: TemplateCapabilities }) {
+  const t = useTranslations("features.careerPage.SectionsPanel");
   switch (id) {
     case "overview":
       return (
         <Group
-          title={SECTION_LABEL.overview}
-          description="Founded, team size, locations…"
+          title={t("sectionLabels.overview")}
+          description={t("overviewDescription")}
           enabled={config.overview.enabled}
           onEnabledChange={(v) => update((d) => void (d.overview.enabled = v))}
-          badge={count(config.overview.stats.length)}
+          badge={count(t, config.overview.stats.length)}
           errorPrefix="overview."
         >
           <TextField
-            label="Title"
+            label={t("title")}
             path="overview.title"
             value={config.overview.title}
             max={60}
             onChange={(v) => update((d) => void (d.overview.title = v))}
           />
           <ListEditor
-            label="Facts"
-            itemName="Fact"
+            label={t("facts")}
+            itemName={t("fact")}
             items={config.overview.stats}
             max={8}
-            emptyText="Add a fact like Founded · 2019."
+            emptyText={t("factsEmpty")}
             onAdd={() => update((d) => void d.overview.stats.push({ label: "", value: "", icon: "" }))}
             onRemove={(i) => update((d) => void d.overview.stats.splice(i, 1))}
             onRestore={(i, item) => update((d) => void d.overview.stats.splice(i, 0, item))}
@@ -100,19 +92,19 @@ function SectionEditor({
                 />
                 <div className="grid min-w-0 flex-1 grid-cols-2 gap-2">
                   <TextField
-                    label="Label"
+                    label={t("label")}
                     path={`overview.stats.${i}.label`}
                     value={stat.label}
                     max={40}
-                    placeholder="Founded"
+                    placeholder={t("founded")}
                     onChange={(v) => update((d) => void (d.overview.stats[i].label = v))}
                   />
                   <TextField
-                    label="Value"
+                    label={t("value")}
                     path={`overview.stats.${i}.value`}
                     value={stat.value}
                     max={60}
-                    placeholder="2019"
+                    placeholder={t("year")}
                     onChange={(v) => update((d) => void (d.overview.stats[i].value = v))}
                   />
                 </div>
@@ -125,26 +117,26 @@ function SectionEditor({
     case "values":
       return (
         <Group
-          title={SECTION_LABEL.values}
-          description="What you stand for, or what you offer"
+          title={t("sectionLabels.values")}
+          description={t("valuesDescription")}
           enabled={config.values.enabled}
           onEnabledChange={(v) => update((d) => void (d.values.enabled = v))}
-          badge={count(config.values.items.length)}
+          badge={count(t, config.values.items.length)}
           errorPrefix="values."
         >
           <TextField
-            label="Title"
+            label={t("title")}
             path="values.title"
             value={config.values.title}
             max={60}
             onChange={(v) => update((d) => void (d.values.title = v))}
           />
           <ListEditor
-            label="Items"
-            itemName="Value"
+            label={t("items")}
+            itemName={t("valueItem")}
             items={config.values.items}
             max={8}
-            emptyText="Add a value or a benefit, e.g. Remote-first."
+            emptyText={t("valuesEmpty")}
             onAdd={() => update((d) => void d.values.items.push({ title: "", body: "" }))}
             onRemove={(i) => update((d) => void d.values.items.splice(i, 1))}
             onRestore={(i, item) => update((d) => void d.values.items.splice(i, 0, item))}
@@ -160,7 +152,7 @@ function SectionEditor({
                   ) : null}
                   <div className="min-w-0 flex-1">
                     <TextField
-                      label="Title"
+                      label={t("title")}
                       path={`values.items.${i}.title`}
                       value={value.title}
                       max={60}
@@ -169,7 +161,7 @@ function SectionEditor({
                   </div>
                 </div>
                 <TextField
-                  label="Description"
+                  label={t("description")}
                   path={`values.items.${i}.body`}
                   value={value.body}
                   max={400}
@@ -185,11 +177,11 @@ function SectionEditor({
     case "gallery":
       return (
         <Group
-          title={SECTION_LABEL.gallery}
-          description="Team and office photos"
+          title={t("sectionLabels.gallery")}
+          description={t("galleryDescription")}
           enabled={config.gallery.enabled}
           onEnabledChange={(v) => update((d) => void (d.gallery.enabled = v))}
-          badge={count(config.gallery.images.length, "photo")}
+          badge={count(t, config.gallery.images.length, "photo")}
           errorPrefix="gallery."
         >
           <ImageListEditor
@@ -200,18 +192,18 @@ function SectionEditor({
           {caps.galleryAutoplay ? (
             <>
               <ToggleRow
-                label="Scroll photos automatically"
+                label={t("scrollPhotos")}
                 checked={config.gallery.autoplay}
                 onCheckedChange={(v) => update((d) => void (d.gallery.autoplay = v))}
               />
               {config.gallery.autoplay ? (
                 <Segmented
-                  label="Speed"
+                  label={t("speed")}
                   value={config.gallery.speed}
                   onChange={(s) => update((d) => void (d.gallery.speed = s))}
                   options={[
-                    { value: "slow", label: "Slow" },
-                    { value: "normal", label: "Normal" },
+                    { value: "slow", label: t("speedSlow") },
+                    { value: "normal", label: t("speedNormal") },
                   ]}
                 />
               ) : null}
@@ -223,26 +215,26 @@ function SectionEditor({
     case "testimonials":
       return (
         <Group
-          title={SECTION_LABEL.testimonials}
-          description="Quotes from people on the team"
+          title={t("sectionLabels.testimonials")}
+          description={t("testimonialsDescription")}
           enabled={config.testimonials.enabled}
           onEnabledChange={(v) => update((d) => void (d.testimonials.enabled = v))}
-          badge={count(config.testimonials.items.length)}
+          badge={count(t, config.testimonials.items.length)}
           errorPrefix="testimonials."
         >
           <TextField
-            label="Title"
+            label={t("title")}
             path="testimonials.title"
             value={config.testimonials.title}
             max={60}
             onChange={(v) => update((d) => void (d.testimonials.title = v))}
           />
           <ListEditor
-            label="Quotes"
-            itemName="Quote"
+            label={t("quotes")}
+            itemName={t("quote")}
             items={config.testimonials.items}
             max={12}
-            emptyText="Add a quote from someone on the team."
+            emptyText={t("quotesEmpty")}
             onAdd={() =>
               update((d) => void d.testimonials.items.push({ quote: "", name: "", role: "", avatar: "" }))
             }
@@ -252,7 +244,7 @@ function SectionEditor({
             render={(item, i) => (
               <div className="space-y-2">
                 <TextField
-                  label="Quote"
+                  label={t("quote")}
                   path={`testimonials.items.${i}.quote`}
                   value={item.quote}
                   max={600}
@@ -261,14 +253,14 @@ function SectionEditor({
                 />
                 <div className="grid grid-cols-2 gap-2">
                   <TextField
-                    label="Name"
+                    label={t("name")}
                     path={`testimonials.items.${i}.name`}
                     value={item.name}
                     max={60}
                     onChange={(v) => update((d) => void (d.testimonials.items[i].name = v))}
                   />
                   <TextField
-                    label="Role"
+                    label={t("role")}
                     path={`testimonials.items.${i}.role`}
                     value={item.role}
                     max={60}
@@ -293,26 +285,26 @@ function SectionEditor({
       };
       return (
         <Group
-          title={SECTION_LABEL.process}
-          description="Your interview steps, in order"
+          title={t("sectionLabels.process")}
+          description={t("processDescription")}
           enabled={process.enabled}
           onEnabledChange={(v) => update((d) => void (ensure(d).enabled = v))}
-          badge={count(process.steps.length, "step")}
+          badge={count(t, process.steps.length, "step")}
           errorPrefix="process."
         >
           <TextField
-            label="Title"
+            label={t("title")}
             path="process.title"
             value={process.title}
             max={60}
             onChange={(v) => update((d) => void (ensure(d).title = v))}
           />
           <ListEditor
-            label="Steps"
-            itemName="Step"
+            label={t("steps")}
+            itemName={t("step")}
             items={process.steps}
             max={MAX_PROCESS_STEPS}
-            emptyText="Add a step, e.g. Intro call · 30 minutes with the hiring manager."
+            emptyText={t("stepsEmpty")}
             onAdd={() => update((d) => void ensure(d).steps.push({ title: "", body: "" }))}
             onRemove={(i) => update((d) => void ensure(d).steps.splice(i, 1))}
             onRestore={(i, item) => update((d) => void ensure(d).steps.splice(i, 0, item))}
@@ -320,15 +312,15 @@ function SectionEditor({
             render={(step, i) => (
               <div className="space-y-2">
                 <TextField
-                  label={`Step ${i + 1}`}
+                  label={t("stepNumber", { number: i + 1 })}
                   path={`process.steps.${i}.title`}
                   value={step.title}
                   max={80}
-                  placeholder="Intro call"
+                  placeholder={t("stepPlaceholder")}
                   onChange={(v) => update((d) => void (ensure(d).steps[i].title = v))}
                 />
                 <TextField
-                  label="Details"
+                  label={t("details")}
                   path={`process.steps.${i}.body`}
                   value={step.body ?? ""}
                   max={400}
@@ -345,26 +337,26 @@ function SectionEditor({
     case "faq":
       return (
         <Group
-          title={SECTION_LABEL.faq}
-          description="Answers to what candidates ask most"
+          title={t("sectionLabels.faq")}
+          description={t("faqDescription")}
           enabled={config.faq.enabled}
           onEnabledChange={(v) => update((d) => void (d.faq.enabled = v))}
-          badge={count(config.faq.items.length)}
+          badge={count(t, config.faq.items.length)}
           errorPrefix="faq."
         >
           <TextField
-            label="Title"
+            label={t("title")}
             path="faq.title"
             value={config.faq.title}
             max={60}
             onChange={(v) => update((d) => void (d.faq.title = v))}
           />
           <ListEditor
-            label="Questions"
-            itemName="Question"
+            label={t("questions")}
+            itemName={t("question")}
             items={config.faq.items}
             max={20}
-            emptyText="Add a question, e.g. Do you sponsor visas?"
+            emptyText={t("questionsEmpty")}
             onAdd={() => update((d) => void d.faq.items.push({ q: "", a: "" }))}
             onRemove={(i) => update((d) => void d.faq.items.splice(i, 1))}
             onRestore={(i, item) => update((d) => void d.faq.items.splice(i, 0, item))}
@@ -372,14 +364,14 @@ function SectionEditor({
             render={(item, i) => (
               <div className="space-y-2">
                 <TextField
-                  label="Question"
+                  label={t("question")}
                   path={`faq.items.${i}.q`}
                   value={item.q}
                   max={200}
                   onChange={(v) => update((d) => void (d.faq.items[i].q = v))}
                 />
                 <TextField
-                  label="Answer"
+                  label={t("answer")}
                   path={`faq.items.${i}.a`}
                   value={item.a}
                   max={2000}
@@ -397,64 +389,66 @@ function SectionEditor({
       const needsWebsite = !caps.ctaUrl && !workspace.websiteUrl;
       return (
         <Group
-          title={SECTION_LABEL.cta}
-          description="A closing band, e.g. “Don't see your role?”"
+          title={t("sectionLabels.cta")}
+          description={t("ctaDescription")}
           enabled={config.cta.enabled}
           onEnabledChange={(v) => update((d) => void (d.cta.enabled = v))}
           errorPrefix="cta."
         >
           <TextField
-            label="Heading"
+            label={t("heading")}
             path="cta.title"
             value={config.cta.title}
             max={120}
-            placeholder="Don't see a role that fits?"
-            hint={config.cta.enabled && !config.cta.title.trim() ? "Add a heading, or the band stays hidden." : undefined}
+            placeholder={t("headingPlaceholder")}
+            hint={config.cta.enabled && !config.cta.title.trim() ? t("headingHint") : undefined}
             onChange={(v) => update((d) => void (d.cta.title = v))}
           />
           <TextField
-            label="Body"
+            label={t("body")}
             path="cta.body"
             value={config.cta.body}
             max={400}
             rows={2}
-            placeholder="We're always glad to meet great people."
+            placeholder={t("bodyPlaceholder")}
             onChange={(v) => update((d) => void (d.cta.body = v))}
           />
           {caps.ctaButton ? (
             <TextField
-              label="Button label"
+              label={t("buttonLabel")}
               path="cta.buttonText"
               value={config.cta.buttonText}
               max={60}
-              placeholder="Get in touch"
+              placeholder={t("buttonPlaceholder")}
               onChange={(v) => update((d) => void (d.cta.buttonText = v))}
             />
           ) : null}
           {caps.ctaUrl ? (
             <TextField
-              label="Button link"
+              label={t("buttonLink")}
               path="cta.url"
               type="url"
               value={config.cta.url ?? ""}
               max={600}
               placeholder={workspace.websiteUrl || "https://…"}
-              hint="Empty links to your website, or the candidate portal if no website is set."
+              hint={t("buttonLinkHint")}
               onChange={(v) => update((d) => void (d.cta.url = v))}
             />
           ) : (
             <p className="text-[12px] leading-snug text-soft-ink">
               {needsWebsite
-                ? "The button links to your company website, which isn't set yet. Add it in Settings → Branding, or the button is hidden."
-                : `The button links to your company website${workspace.websiteUrl ? ` (${workspace.websiteUrl})` : ""}.`}
+                ? t("ctaWebsiteMissing")
+                : workspace.websiteUrl
+                  ? t("ctaWebsiteWithUrl", { url: workspace.websiteUrl })
+                  : t("ctaWebsite")}
             </p>
           )}
           <ColorField
-            label="Colour"
+            label={t("colour")}
             path="cta.color"
             value={config.cta.color}
             fallback={fallbackColor}
-            hint={config.cta.color ? undefined : "Empty uses your accent colour."}
+            hint={config.cta.color ? undefined : t("colourHint")}
             onChange={(c) => update((d) => void (d.cta.color = c))}
           >
             {config.cta.color ? (
@@ -472,7 +466,13 @@ function SectionEditor({
   }
 }
 
-function count(n: number, noun = "item") {
-  if (n === 0) return "Empty";
-  return `${n} ${noun}${n === 1 ? "" : "s"}`;
+function count(
+  t: ReturnType<typeof useTranslations>,
+  n: number,
+  noun: "item" | "photo" | "step" = "item",
+) {
+  if (n === 0) return t("empty");
+  if (noun === "photo") return t("countPhotos", { count: n });
+  if (noun === "step") return t("countSteps", { count: n });
+  return t("countItems", { count: n });
 }

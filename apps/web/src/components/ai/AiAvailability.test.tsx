@@ -1,4 +1,6 @@
 import { renderToStaticMarkup } from "react-dom/server";
+import { NextIntlClientProvider } from "next-intl";
+import en from "../../../messages/en.json";
 import { describe, expect, it, vi } from "vitest";
 
 vi.mock("next/link", () => ({
@@ -14,18 +16,20 @@ import { AiOnly, ConnectAiPrompt } from "./AiAvailability";
 
 function withCtx(enabled: boolean, canConfigure: boolean, node: React.ReactNode) {
   return renderToStaticMarkup(
-    <HarlyAIContext
-      value={{
-        open: false,
-        toggle: () => {},
-        enabled,
-        canConfigure,
-        ask: () => {},
-        assistant: DEFAULT_CLIENT_ASSISTANT,
-      }}
-    >
-      {node}
-    </HarlyAIContext>,
+    <NextIntlClientProvider locale="en" messages={en}>
+      <HarlyAIContext
+        value={{
+          open: false,
+          toggle: () => {},
+          enabled,
+          canConfigure,
+          ask: () => {},
+          assistant: DEFAULT_CLIENT_ASSISTANT,
+        }}
+      >
+        {node}
+      </HarlyAIContext>
+    </NextIntlClientProvider>,
   );
 }
 

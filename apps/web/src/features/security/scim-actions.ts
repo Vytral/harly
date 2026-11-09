@@ -7,6 +7,7 @@ import { requirePermission } from "@/features/workspaces/permissions-server";
 import { assertNotDemo } from "@/features/demo/assert-not-demo";
 import { createScimTokenValue } from "@/server/scim/service";
 import { logAuditEvent } from "@/lib/audit-log";
+import { getTranslations } from "@/i18n/server";
 
 export type ScimTokenSummary = {
   id: string;
@@ -39,15 +40,16 @@ export async function createScimTokenAction(input: {
   name: string;
   expiresAt?: string;
 }): Promise<{ ok: boolean; token?: string; error?: string }> {
+  const t = await getTranslations("server.security.scim");
   try {
     assertNotDemo();
     const context = await requirePermission("security:manage");
-    if (context.roleKey !== "owner") return { ok: false, error: "Only owners can manage SCIM tokens." };
+    if (context.roleKey !== "owner") return { ok: false, error: t("ownersOnly") };
     const name = input.name.trim().slice(0, 100);
-    if (!name) return { ok: false, error: "Token name is required." };
+    if (!name) return { ok: false, error: t("nameRequired") };
     const expiresAt = input.expiresAt ? new Date(input.expiresAt) : null;
     if (expiresAt && (!Number.isFinite(expiresAt.getTime()) || expiresAt <= new Date())) {
-      return { ok: false, error: "Expiration must be a future date." };
+      return { ok: false, error: t("expirationInFuture") };
     }
     const value = createScimTokenValue();
     const id = crypto.randomUUID();
@@ -72,15 +74,16 @@ export async function createScimTokenAction(input: {
     });
     return { ok: true, token: value.raw };
   } catch (error) {
-    return { ok: false, error: error instanceof Error ? error.message : "Unable to create token." };
+    return { ok: false, error: error instanceof Error ? error.message : t("createFailed") };
   }
 }
 
 export async function revokeScimTokenAction(id: string) {
+  const t = await getTranslations("server.security.scim");
   try {
     assertNotDemo();
     const context = await requirePermission("security:manage");
-    if (context.roleKey !== "owner") return { ok: false, error: "Only owners can manage SCIM tokens." };
+    if (context.roleKey !== "owner") return { ok: false, error: t("ownersOnly") };
     await db.update(scimTokens).set({ revokedAt: new Date() }).where(
       and(eq(scimTokens.id, id), eq(scimTokens.workspaceId, context.organization.id)),
     );
@@ -95,6 +98,6 @@ export async function revokeScimTokenAction(id: string) {
     });
     return { ok: true };
   } catch (error) {
-    return { ok: false, error: error instanceof Error ? error.message : "Unable to revoke token." };
+    return { ok: false, error: error instanceof Error ? error.message : t("revokeFailed") };
   }
 }

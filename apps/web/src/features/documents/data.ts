@@ -2,6 +2,7 @@ import "server-only";
 
 import { and, asc, desc, eq, inArray, isNull } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
+import { getTranslations } from "@/i18n/server";
 
 import {
   db,
@@ -212,6 +213,7 @@ export async function getDocumentHubData(
   options: { documentId?: string } = {},
 ): Promise<DocumentHubData> {
   const only = options.documentId;
+  const tData = await getTranslations("server.documents.data");
   const { organization, user, roleKey } = await getWorkspaceContext();
   const actor = await callerActor(organization.id, user.id, roleKey);
   const manualSigners = alias(authUsers, "manual_signers");
@@ -580,7 +582,7 @@ export async function getDocumentHubData(
       associationLabels: [
         ...new Set(
           labels.get(row.id) ??
-            (associations.length > 0 ? [] : ["Workspace"]),
+            (associations.length > 0 ? [] : [tData("workspaceAssociation")]),
         ),
       ],
       candidateIds: candidateIdsByDocument.get(row.id) ?? [],

@@ -1,5 +1,8 @@
 import { renderToStaticMarkup } from "react-dom/server";
+import { NextIntlClientProvider } from "next-intl";
 import { describe, expect, it, vi } from "vitest";
+
+import en from "../../../messages/en.json";
 
 vi.mock("@/features/matching/actions", () => ({
   indexCandidatesForMatchingAction: vi.fn(),
@@ -16,13 +19,17 @@ import { SemanticMatchPanel } from "./SemanticMatchPanel";
 describe("SemanticMatchPanel without AI", () => {
   it("renders nothing, with no 'Set up AI' nag", () => {
     const html = renderToStaticMarkup(
-      <SemanticMatchPanel jobId="j" aiConfigured={false} candidatePoolCount={3} />,
+      <NextIntlClientProvider locale="en" messages={en}>
+        <SemanticMatchPanel jobId="j" aiConfigured={false} candidatePoolCount={3} />
+      </NextIntlClientProvider>,
     );
     expect(html).toBe("");
   });
   it("renders the panel when AI is configured", () => {
     const html = renderToStaticMarkup(
-      <SemanticMatchPanel jobId="j" aiConfigured candidatePoolCount={3} />,
+      <NextIntlClientProvider locale="en" messages={en}>
+        <SemanticMatchPanel jobId="j" aiConfigured candidatePoolCount={3} />
+      </NextIntlClientProvider>,
     );
     expect(html).toContain("Semantic match");
   });

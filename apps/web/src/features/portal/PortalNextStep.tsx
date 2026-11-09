@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { useTranslations } from "next-intl";
 import type { Route } from "next";
 import { FileSignature, Upload, Coffee } from "lucide-react";
 
@@ -18,12 +19,13 @@ export type PortalNextStepData =
  * "nothing to do" with where things stand.
  */
 export function PortalNextStep({ step, orgName }: { step: PortalNextStepData; orgName: string }) {
+  const t = useTranslations("portal.nextStep");
   if (step.kind === "interview") {
     return (
       <section aria-labelledby="next-step-title" className="space-y-3">
         <div className="flex items-baseline justify-between gap-3">
           <h2 id="next-step-title" className="text-[13px] font-semibold uppercase tracking-wider text-soft-ink">
-            Up next
+            {t("upNext")}
           </h2>
           <Link
             href={`/portal/applications/${step.applicationId}` as Route}
@@ -41,19 +43,19 @@ export function PortalNextStep({ step, orgName }: { step: PortalNextStepData; or
     step.kind === "offer"
       ? {
           icon: FileSignature,
-          eyebrow: "Action needed",
-          title: step.offerTitle ? `Review and sign: ${step.offerTitle}` : "You have an offer to review",
-          body: `${orgName} sent you an offer for ${step.jobTitle}. Read it carefully and sign when you're ready.`,
-          cta: "Review offer",
+          eyebrow: t("actionNeeded"),
+          title: step.offerTitle ? t("reviewAndSign", { title: step.offerTitle }) : t("offerTitle"),
+          body: t("offerBody", { orgName, jobTitle: step.jobTitle }),
+          cta: t("reviewOffer"),
           href: `/portal/applications/${step.applicationId}`,
         }
       : step.kind === "documents"
         ? {
             icon: Upload,
-            eyebrow: "Action needed",
-            title: step.count === 1 ? "1 document requested" : `${step.count} documents requested`,
-            body: `${orgName} needs a few files for ${step.jobTitle}. Upload them to keep things moving.`,
-            cta: "Upload documents",
+            eyebrow: t("actionNeeded"),
+            title: t("documentsTitle", { count: step.count }),
+            body: t("documentsBody", { orgName, jobTitle: step.jobTitle }),
+            cta: t("uploadDocuments"),
             href: `/portal/applications/${step.applicationId}#documents`,
           }
         : null;

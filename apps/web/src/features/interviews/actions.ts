@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { and, desc, eq, isNull, ne, sql } from "drizzle-orm";
 import { z } from "zod";
+import { getTranslations } from "@/i18n/server";
 
 import { db } from "@harly/db";
 import {
@@ -67,6 +68,8 @@ import type { InterviewBrief, InterviewNotesSummary } from "@/lib/ai/schemas";
 import { createLogger } from "@/lib/logger";
 import {
   deriveMeetLink,
+  interviewModeTitle,
+  interviewTypeTitle,
   NonexistentLocalTimeError,
   parseScheduledAt,
 } from "@/features/interviews/shared";
@@ -80,19 +83,8 @@ import { serializeInterview } from "./service";
 
 const log = createLogger("interviews");
 
-const INTERVIEW_TYPE_LABEL: Record<string, string> = {
-  screening: "Screening interview",
-  culture_fit: "Culture fit interview",
-  technical: "Technical interview",
-  onsite: "On-site interview",
-  final: "Final interview",
-};
+type Translate = Awaited<ReturnType<typeof getTranslations>>;
 
-const INTERVIEW_MODE_LABEL: Record<string, string> = {
-  video: "Video call",
-  phone: "Phone call",
-  onsite: "On-site",
-};
 
 async function isWorkspaceMember(workspaceId: string, userId: string) {
   const membership = await findWorkspaceMember(workspaceId, userId);
@@ -150,6 +142,7 @@ function formatInterviewWhen(when: Date, timeZone?: string | null): string {
  * validation error for the recruiter, not a silent shift.
  */
 function parseInterviewTime(
+  t: Translate,
   value: string,
   timeZone: string | null | undefined,
 ): { ok: true; when: Date } | { ok: false; error: string } {
@@ -157,7 +150,10 @@ function parseInterviewTime(
     return { ok: true, when: parseScheduledAt(value, timeZone) };
   } catch (error) {
     if (error instanceof NonexistentLocalTimeError) {
-      return { ok: false, error: error.message };
+      return {
+        ok: false,
+        error: t("nonexistentTime", { timeZone: timeZone ?? "" }),
+      };
     }
     throw error;
   }
@@ -181,19 +177,20 @@ const meetingProviders = [
 ] as const;
 type MeetingProvider = (typeof meetingProviders)[number];
 
-const scheduleSchema = z.object({
+function buildScheduleSchema(t: Translate) {
+  return z.object({
   workspaceId: z.string().min(1),
   candidateId: z.string().min(1),
   applicationId: z
     .string()
-    .min(1, "Pick which application this interview is for."),
+    .min(1, t("pickApplication")),
   type: z.enum(interviewTypes),
   mode: z.enum(interviewModes),
   // Local datetime-string from the form (YYYY-MM-DDTHH:mm). Parsed to a Date below.
   scheduledAt: z
     .string()
-    .min(1, "Pick a date and time.")
-    .refine((value) => !Number.isNaN(Date.parse(value)), "Invalid date/time."),
+    .min(1, t("pickDateTime"))
+    .refine((value) => !Number.isNaN(Date.parse(value)), t("invalidDateTime")),
   timeZone: z
     .string()
     .trim()
@@ -205,7 +202,7 @@ const scheduleSchema = z.object({
       } catch {
         return false;
       }
-    }, "Invalid timezone.")
+    }, t("invalidTimezone"))
     .nullable()
     .optional(),
   durationMins: z.coerce.number().int().min(5).max(480).default(45),
@@ -238,7 +235,8 @@ const scheduleSchema = z.object({
     .optional(),
   meetingProvider: z.enum(meetingProviders).default("auto"),
   sendEmail: z.boolean().default(true),
-});
+  });
+}
 
 export type InterviewEmailStatus = "sent" | "failed" | "skipped";
 
@@ -275,18 +273,20 @@ export async function scheduleInterview(
   emailWarning?: string;
   interviewId?: string;
 }> {
+  const t = await getTranslations("server.interviews.actions");
+  const tl = await getTranslations("labels.interviews");
   try {
-    const parsed = scheduleSchema.safeParse(input);
+    const parsed = buildScheduleSchema(t).safeParse(input);
     if (!parsed.success) {
       return {
         success: false,
-        error: parsed.error.issues[0]?.message ?? "Invalid interview.",
+        error: parsed.error.issues[0]?.message ?? t("invalidInterview"),
       };
     }
 
     const { organization: workspace, user } = await getWorkspaceContext();
     if (workspace.id !== parsed.data.workspaceId) {
-      return { success: false, error: "Workspace access denied." };
+      return { success: false, error: t("workspaceAccessDenied") };
     }
 
     await requireApplicationPermission(
@@ -295,14 +295,14 @@ export async function scheduleInterview(
     );
 
     const data = parsed.data;
-    const parsedWhen = parseInterviewTime(data.scheduledAt, data.timeZone);
+    const parsedWhen = parseInterviewTime(t, data.scheduledAt, data.timeZone);
     if (!parsedWhen.ok) return { success: false, error: parsedWhen.error };
     const when = parsedWhen.when;
 
     if (isPastWhen(when)) {
       return {
         success: false,
-        error: "Interview time must be in the future.",
+        error: t("timeInPast"),
       };
     }
 
@@ -312,7 +312,7 @@ export async function scheduleInterview(
     ) {
       return {
         success: false,
-        error: "Interviewer must belong to this workspace.",
+        error: t("interviewerNotInWorkspace"),
       };
     }
 
@@ -357,7 +357,7 @@ export async function scheduleInterview(
         .limit(1);
 
       if (!application) {
-        return { success: false as const, error: "Application not found." };
+        return { success: false as const, error: t("applicationNotFound") };
       }
 
       if (data.interviewerId) {
@@ -371,7 +371,7 @@ export async function scheduleInterview(
         if (conflict) {
           return {
             success: false as const,
-            error: "This interviewer already has an overlapping interview.",
+            error: t("interviewerConflict"),
           };
         }
       }
@@ -418,8 +418,8 @@ export async function scheduleInterview(
         workspaceId: workspace.id,
         candidateId: data.candidateId,
         type: "interview_scheduled",
-        title: "Interview scheduled",
-        body: `Your interview is scheduled for ${formatInterviewWhen(when, displayZone)}.`,
+        title: t("scheduledTitle"),
+        body: t("scheduledBody", { when: formatInterviewWhen(when, displayZone) }),
         href: `/portal/applications/${application.id}`,
         metadata: { interviewId: interview.id, applicationId: application.id },
       });
@@ -512,7 +512,7 @@ export async function scheduleInterview(
       );
 
       const summary =
-        data.title ?? INTERVIEW_TYPE_LABEL[data.type] ?? "Interview";
+        data.title ?? interviewTypeTitle(tl, data.type);
       const warnings: string[] = [];
       let deliveryLocation = data.location ?? undefined;
       const provider = data.meetingProvider ?? "auto";
@@ -523,10 +523,10 @@ export async function scheduleInterview(
       ) => {
         warnings.push(
           reason === "invalid_grant"
-            ? "Google Calendar needs to be reconnected; the interview was saved without a calendar event."
+            ? t("gcalNeedsReconnect")
             : reason === "not_connected"
-              ? "Google Calendar is not connected; the interview was saved without a calendar event."
-              : "Google Calendar could not be updated; the interview was saved and can be synced later.",
+              ? t("gcalNotConnected")
+              : t("gcalUpdateFailed"),
         );
       };
       const syncCalendar = async (conferenceData: boolean) => {
@@ -574,7 +574,7 @@ export async function scheduleInterview(
         if (hasExplicitMeetingLink || provider === "external") {
           if (!data.location) {
             warnings.push(
-              "The interview was saved, but an external video provider needs a meeting link.",
+              t("externalLinkNeeded"),
             );
           } else {
             await syncCalendar(false);
@@ -584,7 +584,7 @@ export async function scheduleInterview(
         } else if (provider === "zoom") {
           if (!zoomToken) {
             warnings.push(
-              "Zoom is not connected; the interview was saved without a video link.",
+              t("zoomNotConnected"),
             );
           } else if (
             !(await trackInterviewSync({
@@ -606,13 +606,13 @@ export async function scheduleInterview(
             }))
           ) {
             warnings.push(
-              "Zoom could not create a meeting; the interview was saved without a video link.",
+              t("zoomCreateFailed"),
             );
           }
         } else if (provider === "teams") {
           if (!outlookConfig) {
             warnings.push(
-              "Microsoft Teams is not connected; the interview was saved without a video link.",
+              t("teamsNotConnected"),
             );
           } else {
             const teamsResult = await trackInterviewSync({
@@ -634,14 +634,14 @@ export async function scheduleInterview(
             });
             if (!teamsResult) {
               warnings.push(
-                "Teams could not create a meeting; the interview was saved without a video link.",
+                t("teamsCreateFailed"),
               );
             }
           }
         } else if (provider === "jitsi") {
           if (!jitsiConfig) {
             warnings.push(
-              "Jitsi Meet is not connected; the interview was saved without a video link.",
+              t("jitsiNotConnected"),
             );
           } else {
             const jitsiResult = await trackInterviewSync({
@@ -660,7 +660,7 @@ export async function scheduleInterview(
             });
             if (!jitsiResult) {
               warnings.push(
-                "Jitsi could not create a meeting link; the interview was saved without a video link.",
+                t("jitsiCreateFailed"),
               );
             }
           }
@@ -684,7 +684,7 @@ export async function scheduleInterview(
           });
           if (!zoomResult) {
             warnings.push(
-              "Zoom could not create a meeting; the interview was saved without a video link.",
+              t("zoomCreateFailed"),
             );
           }
         } else if (outlookConfig) {
@@ -707,7 +707,7 @@ export async function scheduleInterview(
           });
           if (!teamsResult) {
             warnings.push(
-              "Teams could not create a meeting; the interview was saved without a video link.",
+              t("teamsCreateFailed"),
             );
           }
         } else if (gcalConfig) {
@@ -729,7 +729,7 @@ export async function scheduleInterview(
           });
           if (!jitsiResult) {
             warnings.push(
-              "Jitsi could not create a meeting link; the interview was saved without a video link.",
+              t("jitsiCreateFailed"),
             );
           }
         }
@@ -746,7 +746,7 @@ export async function scheduleInterview(
         deliveryLocation = synced?.meetLink ?? deliveryLocation;
         if (!deliveryLocation && warnings.length === 0) {
           warnings.push(
-            "The interview was saved, but no video link could be created.",
+            t("noVideoLink"),
           );
         }
       } else {
@@ -768,10 +768,10 @@ export async function scheduleInterview(
             candidateName: `${recipient.firstName} ${recipient.lastName}`,
             companyName: recipient.companyName,
             jobTitle: recipient.jobTitle,
-            interviewType: INTERVIEW_TYPE_LABEL[data.type] ?? "Interview",
+            interviewType: interviewTypeTitle(tl, data.type),
             scheduledAt: when.toISOString(),
             timeZone: data.timeZone ?? null,
-            mode: INTERVIEW_MODE_LABEL[data.mode] ?? data.mode,
+            mode: interviewModeTitle(tl, data.mode),
             location: deliveryLocation,
             durationMins: data.durationMins,
             notes: data.notes ?? undefined,
@@ -780,16 +780,17 @@ export async function scheduleInterview(
           },
           user.id,
           displayZone,
+          t,
         );
         emailStatus = queuedEmail.status;
         emailWarning = queuedEmail.warning;
         if (queuedEmail.warning) {
-          warnings.push(`The interview was scheduled. ${queuedEmail.warning}`);
+          warnings.push(t("scheduledWithWarning", { warning: queuedEmail.warning }));
         }
       } else if (data.sendEmail) {
         emailStatus = "failed";
         warnings.push(
-          "The interview was scheduled, but no candidate email address was available.",
+          t("noCandidateEmail"),
         );
       }
 
@@ -826,7 +827,7 @@ export async function scheduleInterview(
     log.error(error, "scheduleInterview failed");
     return {
       success: false,
-      error: "Unable to schedule interview.",
+      error: t("unableToSchedule"),
     };
   }
 }
@@ -845,11 +846,13 @@ export async function setInterviewStatus(input: {
   candidateId?: string;
   status: "completed" | "canceled";
 }): Promise<{ success: boolean; error?: string; warning?: string; emailWarning?: string }> {
+  const t = await getTranslations("server.interviews.actions");
+  const tl = await getTranslations("labels.interviews");
   try {
     let emailWarning: string | undefined;
     const parsed = statusSchema.safeParse(input);
     if (!parsed.success) {
-      return { success: false, error: "Invalid request." };
+      return { success: false, error: t("invalidRequest") };
     }
     const { organization: workspace, user } = await getWorkspaceContext();
 
@@ -880,12 +883,12 @@ export async function setInterviewStatus(input: {
       )
       .limit(1);
     if (!existing) {
-      return { success: false, error: "Interview not found." };
+      return { success: false, error: t("interviewNotFound") };
     }
     if (existing.status !== "scheduled") {
       return {
         success: false,
-        error: "This interview is no longer scheduled and can't be changed.",
+        error: t("noLongerScheduled"),
       };
     }
 
@@ -922,7 +925,7 @@ export async function setInterviewStatus(input: {
       // Race: the interview changed status between our check and the update.
       return {
         success: false,
-        error: "This interview is no longer scheduled and can't be changed.",
+        error: t("noLongerScheduled"),
       };
     }
 
@@ -1055,11 +1058,13 @@ export async function setInterviewStatus(input: {
             candidateName: info.firstName,
             companyName: info.companyName,
             jobTitle: info.jobTitle,
-            interviewType: INTERVIEW_TYPE_LABEL[info.type] ?? "Interview",
+            interviewType: interviewTypeTitle(tl, info.type),
             scheduledAt: info.scheduledAt.toISOString(),
             replyTo,
           },
           user.id,
+          undefined,
+          t,
         )).warning;
       }
     }
@@ -1082,7 +1087,7 @@ export async function setInterviewStatus(input: {
       ...(emailWarning ? { emailWarning } : {}),
       ...(providerWarnings.length > 0
         ? {
-            warning: `Interview canceled, but ${providerWarnings.join(", ")} could not be synchronized. The provider meeting may still exist and needs manual cleanup.`,
+            warning: t("cancelSyncWarning", { providers: providerWarnings.join(", ") }),
           }
         : {}),
     };
@@ -1090,19 +1095,20 @@ export async function setInterviewStatus(input: {
     log.error(error, "setInterviewStatus failed");
     return {
       success: false,
-      error: "Unable to update interview.",
+      error: t("unableToUpdate"),
     };
   }
 }
 
-const rescheduleSchema = z.object({
+function buildRescheduleSchema(t: Translate) {
+  return z.object({
   interviewId: z.string().min(1),
   // Legacy callers may still send this field, but it is deliberately ignored.
   candidateId: z.string().min(1).optional(),
   scheduledAt: z
     .string()
-    .min(1, "Pick a date and time.")
-    .refine((value) => !Number.isNaN(Date.parse(value)), "Invalid date/time."),
+    .min(1, t("pickDateTime"))
+    .refine((value) => !Number.isNaN(Date.parse(value)), t("invalidDateTime")),
   timeZone: z
     .string()
     .trim()
@@ -1115,7 +1121,7 @@ const rescheduleSchema = z.object({
       } catch {
         return false;
       }
-    }, "Invalid timezone.")
+    }, t("invalidTimezone"))
     .nullable()
     .optional(),
   durationMins: z.coerce.number().int().min(5).max(480).default(45),
@@ -1126,7 +1132,8 @@ const rescheduleSchema = z.object({
     .transform((value) => (value.length > 0 ? value : null))
     .nullable()
     .optional(),
-});
+  });
+}
 
 /** Reschedule an interview to a new date/time and update the GCal event. */
 export async function rescheduleInterview(input: {
@@ -1137,19 +1144,21 @@ export async function rescheduleInterview(input: {
   durationMins: number;
   location?: string | null;
 }): Promise<{ success: boolean; error?: string; warning?: string; emailWarning?: string }> {
+  const t = await getTranslations("server.interviews.actions");
+  const tl = await getTranslations("labels.interviews");
   try {
     let emailWarning: string | undefined;
-    const parsed = rescheduleSchema.safeParse(input);
+    const parsed = buildRescheduleSchema(t).safeParse(input);
     if (!parsed.success) {
       return {
         success: false,
-        error: parsed.error.issues[0]?.message ?? "Invalid input.",
+        error: parsed.error.issues[0]?.message ?? t("invalidInput"),
       };
     }
 
     const { organization: workspace, user } = await getWorkspaceContext();
     const data = parsed.data;
-    const parsedWhen = parseInterviewTime(data.scheduledAt, data.timeZone);
+    const parsedWhen = parseInterviewTime(t, data.scheduledAt, data.timeZone);
     if (!parsedWhen.ok) return { success: false, error: parsedWhen.error };
     const when = parsedWhen.when;
 
@@ -1161,7 +1170,7 @@ export async function rescheduleInterview(input: {
     if (isPastWhen(when)) {
       return {
         success: false,
-        error: "Interview time must be in the future.",
+        error: t("timeInPast"),
       };
     }
 
@@ -1201,12 +1210,12 @@ export async function rescheduleInterview(input: {
       .limit(1);
 
     if (!row) {
-      return { success: false, error: "Interview not found." };
+      return { success: false, error: t("interviewNotFound") };
     }
     if (row.status !== "scheduled") {
       return {
         success: false,
-        error: "This interview is no longer scheduled and can't be changed.",
+        error: t("noLongerScheduled"),
       };
     }
 
@@ -1251,7 +1260,7 @@ export async function rescheduleInterview(input: {
     if (!info) {
       return {
         success: false,
-        error: "Interview candidate or job is no longer active.",
+        error: t("candidateOrJobInactive"),
       };
     }
 
@@ -1283,7 +1292,7 @@ export async function rescheduleInterview(input: {
       if (conflict) {
         return {
           success: false,
-          error: "This interviewer already has an overlapping interview.",
+          error: t("interviewerConflict"),
         };
       }
     }
@@ -1314,12 +1323,12 @@ export async function rescheduleInterview(input: {
           });
           if (!updated) {
             calendarWarning =
-              "Google Calendar could not be updated; the interview was saved and can be synced later.";
+              t("gcalUpdateFailed");
             log.warn("rescheduleInterview: GCal event update failed");
           }
         } catch (error) {
           calendarWarning =
-            "Google Calendar could not be updated; the interview was saved and can be synced later.";
+            t("gcalUpdateFailed");
           log.warn(error, "rescheduleInterview: GCal event update failed");
         }
       } else if (
@@ -1338,8 +1347,7 @@ export async function rescheduleInterview(input: {
               interviewId: row.id,
               summary:
                 row.title ??
-                INTERVIEW_TYPE_LABEL[row.type ?? "screening"] ??
-                "Interview",
+                interviewTypeTitle(tl, row.type ?? "screening"),
               start: when,
               durationMins: data.durationMins,
               attendees: attendees.length > 0 ? attendees : undefined,
@@ -1353,7 +1361,7 @@ export async function rescheduleInterview(input: {
         });
         if (!gcalResult || !gcalResult.ok) {
           calendarWarning =
-            "Google Calendar could not be updated; the interview was saved and can be synced later.";
+            t("gcalUpdateFailed");
           log.warn(
             { reason: gcalResult?.reason },
             "rescheduleInterview: GCal sync failed, event may be stale",
@@ -1367,8 +1375,7 @@ export async function rescheduleInterview(input: {
     // deletion fails, so the candidate never receives a dead link.
     const summary =
       row?.title ??
-      INTERVIEW_TYPE_LABEL[row?.type ?? "screening"] ??
-      "Interview";
+      interviewTypeTitle(tl, row?.type ?? "screening");
     if (info?.mode === "video" && row?.teamsMeetingId) {
       const replacement = await trackInterviewSync({
         workspaceId: workspace.id,
@@ -1394,7 +1401,7 @@ export async function rescheduleInterview(input: {
       if (!replacement || !("ok" in replacement) || !replacement.ok) {
         return {
           success: false,
-          error: "Could not replace the Microsoft Teams meeting; the original meeting is still active.",
+          error: t("teamsReplaceFailed"),
         };
       }
     } else if (info?.mode === "video" && row?.zoomMeetingId) {
@@ -1422,7 +1429,7 @@ export async function rescheduleInterview(input: {
       if (!replacement || !("ok" in replacement) || !replacement.ok) {
         return {
           success: false,
-          error: "Could not replace the Zoom meeting; the original meeting is still active.",
+          error: t("zoomReplaceFailed"),
         };
       }
     }
@@ -1461,7 +1468,7 @@ export async function rescheduleInterview(input: {
         if (conflict) {
           return {
             ok: false as const,
-            error: "This interviewer already has an overlapping interview.",
+            error: t("interviewerConflict"),
           };
         }
       }
@@ -1480,7 +1487,7 @@ export async function rescheduleInterview(input: {
       if (!updated) {
         return {
           ok: false as const,
-          error: "This interview is no longer scheduled and can't be changed.",
+          error: t("noLongerScheduled"),
         };
       }
 
@@ -1488,8 +1495,8 @@ export async function rescheduleInterview(input: {
         workspaceId: workspace.id,
         candidateId: row.candidateId,
         type: "interview_rescheduled",
-        title: "Interview rescheduled",
-        body: `Your interview is now scheduled for ${formatInterviewWhen(when, displayZone)}.`,
+        title: t("rescheduledTitle"),
+        body: t("rescheduledBody", { when: formatInterviewWhen(when, displayZone) }),
         href: info?.applicationId
           ? `/portal/applications/${info.applicationId}`
           : null,
@@ -1549,9 +1556,9 @@ export async function rescheduleInterview(input: {
           candidateName: info.firstName,
           companyName: info.companyName,
           jobTitle: info.jobTitle,
-          interviewType: INTERVIEW_TYPE_LABEL[info.type] ?? "Interview",
+          interviewType: interviewTypeTitle(tl, info.type),
           scheduledAt: when.toISOString(),
-          mode: INTERVIEW_MODE_LABEL[info.mode] ?? info.mode,
+          mode: interviewModeTitle(tl, info.mode),
           location: deliveryLocation,
           durationMins: data.durationMins,
           timeZone: data.timeZone ?? null,
@@ -1559,6 +1566,7 @@ export async function rescheduleInterview(input: {
         },
         user.id,
         displayZone,
+        t,
       )).warning;
     }
 
@@ -1583,12 +1591,13 @@ export async function rescheduleInterview(input: {
     log.error(error, "rescheduleInterview failed");
     return {
       success: false,
-      error: "Unable to reschedule interview.",
+      error: t("unableToReschedule"),
     };
   }
 }
 
-const updateSchema = z.object({
+function buildUpdateSchema(t: Translate) {
+  return z.object({
   interviewId: z.string().min(1),
   // Legacy callers may still send this field, but it is deliberately ignored.
   candidateId: z.string().min(1).optional(),
@@ -1598,7 +1607,7 @@ const updateSchema = z.object({
     .string()
     .refine(
       (value) => value === "" || !Number.isNaN(Date.parse(value)),
-      "Invalid date/time.",
+      t("invalidDateTime"),
     )
     .optional(),
   timeZone: z
@@ -1613,7 +1622,7 @@ const updateSchema = z.object({
       } catch {
         return false;
       }
-    }, "Invalid timezone.")
+    }, t("invalidTimezone"))
     .nullable()
     .optional(),
   durationMins: z.coerce.number().int().min(5).max(480).optional(),
@@ -1644,7 +1653,8 @@ const updateSchema = z.object({
     .transform((value) => (value.length > 0 ? value : null))
     .nullable()
     .optional(),
-});
+  });
+}
 
 /**
  * Full edit: update any combination of interview fields. Syncs to GCal and
@@ -1663,13 +1673,15 @@ export async function updateInterview(input: {
   location?: string | null;
   notes?: string | null;
 }): Promise<{ success: boolean; error?: string; warning?: string; emailWarning?: string }> {
+  const t = await getTranslations("server.interviews.actions");
+  const tl = await getTranslations("labels.interviews");
   try {
     let emailWarning: string | undefined;
-    const parsed = updateSchema.safeParse(input);
+    const parsed = buildUpdateSchema(t).safeParse(input);
     if (!parsed.success) {
       return {
         success: false,
-        error: parsed.error.issues[0]?.message ?? "Invalid input.",
+        error: parsed.error.issues[0]?.message ?? t("invalidInput"),
       };
     }
 
@@ -1687,7 +1699,7 @@ export async function updateInterview(input: {
     ) {
       return {
         success: false,
-        error: "Interviewer must belong to this workspace.",
+        error: t("interviewerNotInWorkspace"),
       };
     }
 
@@ -1696,14 +1708,14 @@ export async function updateInterview(input: {
     // directly, which interpreted naive strings as UTC and shifted the time.
     let when: Date | undefined;
     if (data.scheduledAt && data.scheduledAt !== "") {
-      const parsedWhen = parseInterviewTime(data.scheduledAt, data.timeZone);
+      const parsedWhen = parseInterviewTime(t, data.scheduledAt, data.timeZone);
       if (!parsedWhen.ok) return { success: false, error: parsedWhen.error };
       when = parsedWhen.when;
     }
     if (when && isPastWhen(when)) {
       return {
         success: false,
-        error: "Interview time must be in the future.",
+        error: t("timeInPast"),
       };
     }
 
@@ -1751,12 +1763,12 @@ export async function updateInterview(input: {
       .limit(1);
 
     if (!row) {
-      return { success: false, error: "Interview not found." };
+      return { success: false, error: t("interviewNotFound") };
     }
     if (row.status !== "scheduled") {
       return {
         success: false,
-        error: "This interview is no longer scheduled and can't be changed.",
+        error: t("noLongerScheduled"),
       };
     }
 
@@ -1801,7 +1813,7 @@ export async function updateInterview(input: {
     if (!info) {
       return {
         success: false,
-        error: "Interview candidate or job is no longer active.",
+        error: t("candidateOrJobInactive"),
       };
     }
 
@@ -1848,7 +1860,7 @@ export async function updateInterview(input: {
       if (conflict) {
         return {
           success: false,
-          error: "This interviewer already has an overlapping interview.",
+          error: t("interviewerConflict"),
         };
       }
     }
@@ -1878,12 +1890,12 @@ export async function updateInterview(input: {
           });
           if (!updated) {
             calendarWarning =
-              "Google Calendar could not be updated; the interview was saved and can be synced later.";
+              t("gcalUpdateFailed");
             log.warn("updateInterview: GCal event update failed");
           }
         } catch (error) {
           calendarWarning =
-            "Google Calendar could not be updated; the interview was saved and can be synced later.";
+            t("gcalUpdateFailed");
           log.warn(error, "updateInterview: GCal event update failed");
       }
     }
@@ -1902,8 +1914,7 @@ export async function updateInterview(input: {
       const durationMins = effectiveDurationMins;
       const summary =
         effectiveTitle ??
-        INTERVIEW_TYPE_LABEL[data.type ?? row.type] ??
-        "Interview";
+        interviewTypeTitle(tl, data.type ?? row.type);
       if (row.teamsMeetingId) {
         if (effectiveMode === "video") {
           const replacement = await trackInterviewSync({
@@ -1930,7 +1941,7 @@ export async function updateInterview(input: {
           if (!replacement || !("ok" in replacement) || !replacement.ok) {
             return {
               success: false,
-              error: "Could not replace the Microsoft Teams meeting; the original meeting is still active.",
+              error: t("teamsReplaceFailed"),
             };
           }
         } else {
@@ -1948,7 +1959,7 @@ export async function updateInterview(input: {
             isSuccess: Boolean,
           });
           if (!canceled) {
-            return { success: false, error: "Could not cancel the Teams meeting." };
+            return { success: false, error: t("teamsCancelFailed") };
           }
         }
       } else if (row.zoomMeetingId) {
@@ -1977,7 +1988,7 @@ export async function updateInterview(input: {
           if (!replacement || !("ok" in replacement) || !replacement.ok) {
             return {
               success: false,
-              error: "Could not replace the Zoom meeting; the original meeting is still active.",
+              error: t("zoomReplaceFailed"),
             };
           }
         } else {
@@ -1995,7 +2006,7 @@ export async function updateInterview(input: {
             isSuccess: Boolean,
           });
           if (!canceled) {
-            return { success: false, error: "Could not cancel the Zoom meeting." };
+            return { success: false, error: t("zoomCancelFailed") };
           }
         }
       } else if (
@@ -2077,7 +2088,7 @@ export async function updateInterview(input: {
           });
           if (!gcalResult || !gcalResult.ok) {
             calendarWarning =
-              "Google Calendar could not be updated; the interview was saved and can be synced later.";
+              t("gcalUpdateFailed");
           }
         } else if (jitsiConfig) {
           await trackInterviewSync({
@@ -2139,7 +2150,7 @@ export async function updateInterview(input: {
         ) {
           return {
             ok: false as const,
-            error: "This interviewer already has an overlapping interview.",
+            error: t("interviewerConflict"),
           };
         }
       }
@@ -2158,7 +2169,7 @@ export async function updateInterview(input: {
       if (!updated) {
         return {
           ok: false as const,
-          error: "This interview is no longer scheduled and can't be changed.",
+          error: t("noLongerScheduled"),
         };
       }
 
@@ -2202,15 +2213,17 @@ export async function updateInterview(input: {
           companyName: info.companyName,
           jobTitle: info.jobTitle,
           interviewType:
-            INTERVIEW_TYPE_LABEL[data.type ?? row.type] ?? "Interview",
+            interviewTypeTitle(tl, data.type ?? row.type),
           scheduledAt: effectiveScheduledAt.toISOString(),
-          mode: INTERVIEW_MODE_LABEL[effectiveMode] ?? effectiveMode,
+          mode: interviewModeTitle(tl, effectiveMode),
           location: data.location ?? undefined,
           durationMins: effectiveDurationMins,
           timeZone: data.timeZone ?? null,
           replyTo,
         },
         user.id,
+        undefined,
+        t,
       )).warning;
     }
 
@@ -2234,7 +2247,7 @@ export async function updateInterview(input: {
     log.error(error, "updateInterview failed");
     return {
       success: false,
-      error: "Unable to update interview.",
+      error: t("unableToUpdate"),
     };
   }
 }
@@ -2251,9 +2264,11 @@ export type GenerateInterviewBriefResult =
 export async function generateInterviewBriefAction(input: {
   interviewId: string;
 }): Promise<GenerateInterviewBriefResult> {
+  const t = await getTranslations("server.interviews.actions");
+  const tl = await getTranslations("labels.interviews");
   const parsed = briefSchema.safeParse(input);
   if (!parsed.success) {
-    return { success: false, error: "Invalid interview." };
+    return { success: false, error: t("invalidInterview") };
   }
 
   let context;
@@ -2265,7 +2280,7 @@ export async function generateInterviewBriefAction(input: {
   } catch {
     return {
       success: false,
-      error: "You do not have permission to generate briefs.",
+      error: t("briefPermission"),
     };
   }
   const workspaceId = context.organization.id;
@@ -2274,7 +2289,7 @@ export async function generateInterviewBriefAction(input: {
   if (!aiConfig) {
     return {
       success: false,
-      error: "AI is not configured for this workspace.",
+      error: t("aiNotConfigured"),
       reason: "not_configured",
     };
   }
@@ -2324,7 +2339,7 @@ export async function generateInterviewBriefAction(input: {
     .limit(1);
 
   if (!briefRow) {
-    return { success: false, error: "Interview not found." };
+    return { success: false, error: t("interviewNotFound") };
   }
 
   // Load resume text for richer brief context.
@@ -2393,7 +2408,7 @@ export async function generateInterviewBriefAction(input: {
         keywords: [],
       },
       interview: {
-        type: INTERVIEW_TYPE_LABEL[briefRow.type] ?? briefRow.type,
+        type: interviewTypeTitle(tl, briefRow.type),
         scheduledAt: briefRow.scheduledAt,
         interviewerName: null,
         durationMins: briefRow.durationMins,
@@ -2419,17 +2434,19 @@ export async function generateInterviewBriefAction(input: {
     return {
       success: false,
       error:
-        "Failed to generate brief. Check AI provider settings and try again.",
+        t("briefFailed"),
     };
   }
 }
 
 // ── Interview Notes Summarizer ───────────────────────────────────────────────
 
-const summarizeSchema = z.object({
+function buildSummarizeSchema(t: Translate) {
+  return z.object({
   interviewId: z.uuid(),
-  rawNotes: z.string().trim().min(1, "Notes are required.").max(8000),
-});
+  rawNotes: z.string().trim().min(1, t("notesRequired")).max(8000),
+  });
+}
 
 export type SummarizeInterviewNotesResult =
   | { success: true; summary: InterviewNotesSummary }
@@ -2440,11 +2457,13 @@ export async function summarizeInterviewNotesAction(input: {
   interviewId: string;
   rawNotes: string;
 }): Promise<SummarizeInterviewNotesResult> {
-  const parsed = summarizeSchema.safeParse(input);
+  const t = await getTranslations("server.interviews.actions");
+  const tl = await getTranslations("labels.interviews");
+  const parsed = buildSummarizeSchema(t).safeParse(input);
   if (!parsed.success) {
     return {
       success: false,
-      error: parsed.error.issues[0]?.message ?? "Invalid input.",
+      error: parsed.error.issues[0]?.message ?? t("invalidInput"),
     };
   }
 
@@ -2457,7 +2476,7 @@ export async function summarizeInterviewNotesAction(input: {
   } catch {
     return {
       success: false,
-      error: "You do not have permission to summarize notes.",
+      error: t("summaryPermission"),
     };
   }
   const workspaceId = context.organization.id;
@@ -2466,7 +2485,7 @@ export async function summarizeInterviewNotesAction(input: {
   if (!aiConfig) {
     return {
       success: false,
-      error: "AI is not configured for this workspace.",
+      error: t("aiNotConfigured"),
       reason: "not_configured",
     };
   }
@@ -2505,7 +2524,7 @@ export async function summarizeInterviewNotesAction(input: {
     .limit(1);
 
   if (!sumRow) {
-    return { success: false, error: "Interview not found." };
+    return { success: false, error: t("interviewNotFound") };
   }
 
   try {
@@ -2514,7 +2533,7 @@ export async function summarizeInterviewNotesAction(input: {
       candidateName: `${sumRow.candidateFirst} ${sumRow.candidateLast}`,
       jobTitle: sumRow.jobTitle,
       interviewType:
-        sumRow.title ?? INTERVIEW_TYPE_LABEL[sumRow.type] ?? sumRow.type,
+        sumRow.title ?? interviewTypeTitle(tl, sumRow.type),
     });
 
     return { success: true, summary };
@@ -2523,7 +2542,7 @@ export async function summarizeInterviewNotesAction(input: {
     return {
       success: false,
       error:
-        "Failed to summarize notes. Check AI provider settings and try again.",
+        t("summaryFailed"),
     };
   }
 }

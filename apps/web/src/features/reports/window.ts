@@ -227,27 +227,30 @@ export function trailingMonths(
   return { keys, window: { from, to, timeZone: zone, days: null } };
 }
 
-const MONTH_LABELS = [
-  "Jan", "Feb", "Mar", "Apr", "May", "Jun",
-  "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
-];
-
-/** Short month name for a `YYYY-MM` key. */
-export function monthLabel(monthKey: string): string {
-  const month = Number(monthKey.split("-")[1]);
-  return MONTH_LABELS[month - 1] ?? monthKey;
+/**
+ * Short month name for a `YYYY-MM` key, in the given locale. Defaults to English
+ * for server callers that have no request locale (scheduled email, AI tools).
+ */
+export function monthLabel(monthKey: string, locale = "en"): string {
+  const [year, month] = monthKey.split("-").map(Number);
+  if (!Number.isFinite(year) || !Number.isFinite(month)) return monthKey;
+  return new Intl.DateTimeFormat(locale, {
+    month: "short",
+    timeZone: UTC_TIME_ZONE,
+  }).format(new Date(Date.UTC(year, month - 1, 1)));
 }
 
-const SHORT_DAY = new Intl.DateTimeFormat("en", {
-  month: "short",
-  day: "numeric",
-  timeZone: UTC_TIME_ZONE,
-});
-
-/** `Oct 28` for a `YYYY-MM-DD` key. Pure calendar formatting, no zone shift. */
-export function dayLabel(dateKey: string): string {
+/**
+ * `Oct 28` for a `YYYY-MM-DD` key, in the given locale. Pure calendar
+ * formatting, no zone shift.
+ */
+export function dayLabel(dateKey: string, locale = "en"): string {
   const [year, month, day] = dateKey.split("-").map(Number);
-  return SHORT_DAY.format(new Date(Date.UTC(year, month - 1, day)));
+  return new Intl.DateTimeFormat(locale, {
+    month: "short",
+    day: "numeric",
+    timeZone: UTC_TIME_ZONE,
+  }).format(new Date(Date.UTC(year, month - 1, day)));
 }
 
 /**

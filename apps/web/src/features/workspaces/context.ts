@@ -21,6 +21,7 @@ import {
   type WorkspaceRole,
   type WorkspaceRoleKey,
 } from "@/features/workspaces/roles";
+import { getTranslations } from "@/i18n/server";
 
 type Session = NonNullable<Awaited<ReturnType<typeof auth.api.getSession>>>;
 
@@ -253,7 +254,8 @@ export async function requireWorkspaceRole(allowedRoles: WorkspaceRole[]) {
   const context = await getWorkspaceContext();
 
   if (!allowedRoles.includes(context.role)) {
-    throw new Error("You do not have permission to perform this action.");
+    const t = await getTranslations("server.workspaces.permissions");
+    throw new Error(t("noPermission"));
   }
 
   return context;

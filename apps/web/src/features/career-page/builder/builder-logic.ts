@@ -10,6 +10,7 @@ import {
   type CareerTemplate,
 } from "@/features/career-page/config";
 import { contrastRatio, readableInk, shade, tint } from "@/features/career-page/color";
+import type { Translate } from "@/features/career-page/translate";
 
 import type { BuilderSection } from "./types";
 import { capabilitiesFor } from "./template-capabilities";
@@ -85,26 +86,32 @@ export function sectionOfPath(path: string): BuilderSection {
   return SECTION_OF[path.split(".")[0]] ?? "content";
 }
 
-/** Runs the same zod schema the server uses and keys each issue by path. */
-export function validateConfig(config: CareerPageConfig): FieldErrors {
+/**
+ * Runs the same zod schema the server uses and keys each issue by path. `t` is
+ * the `labels.careerPage.builderLogic` translator.
+ */
+export function validateConfig(config: CareerPageConfig, t: Translate): FieldErrors {
   const parsed = careerPageConfigSchema.safeParse(config);
   if (parsed.success) return {};
   const errors: FieldErrors = {};
   for (const issue of parsed.error.issues) {
     const path = issue.path.map(String).join(".");
-    if (!errors[path]) errors[path] = friendlyMessage(issue);
+    if (!errors[path]) errors[path] = friendlyMessage(issue, t);
   }
   return errors;
 }
 
-function friendlyMessage(issue: { code: string; message: string; maximum?: unknown; origin?: unknown }): string {
+function friendlyMessage(
+  issue: { code: string; message: string; maximum?: unknown; origin?: unknown },
+  t: Translate,
+): string {
   if (issue.code === "too_big" && typeof issue.maximum !== "undefined") {
     return issue.origin === "array"
-      ? `Keep this to ${String(issue.maximum)} items or fewer.`
-      : `Keep this under ${String(issue.maximum)} characters.`;
+      ? t("tooManyItems", { max: String(issue.maximum) })
+      : t("tooLong", { max: String(issue.maximum) });
   }
   if (issue.code === "custom" || issue.code === "invalid_format") return issue.message;
-  return "This value isn't valid.";
+  return t("invalid");
 }
 
 /** Error count per builder section, for the nav rail. */
@@ -158,6 +165,7 @@ export function accentContrastWarnings(
   config: CareerPageConfig,
   color: string,
   { checkBackground = true }: { checkBackground?: boolean } = {},
+  t: Translate,
 ): ContrastWarning[] {
   if (!isCompleteHex(color)) return [];
   const caps = capabilitiesFor(config.template);
@@ -169,7 +177,10 @@ export function accentContrastWarnings(
     warnings.push({
       id: "on-accent",
       ratio: onAccent,
-      message: `${ink === "#ffffff" ? "White" : "Dark"} text on this colour is ${onAccent.toFixed(1)}:1. Buttons need 4.5:1 to be readable.`,
+      message: t("onAccentContrast", {
+        tone: ink === "#ffffff" ? t("tone.white") : t("tone.dark"),
+        ratio: onAccent.toFixed(1),
+      }),
       suggestion: readableShade(color, ink, 4.5),
     });
   }
@@ -183,7 +194,7 @@ export function accentContrastWarnings(
       warnings.push({
         id: "accent-on-background",
         ratio: onBg,
-        message: `This colour is ${onBg.toFixed(1)}:1 against your background, so accent links and icons are hard to see.`,
+        message: t("backgroundContrast", { ratio: onBg.toFixed(1) }),
         suggestion: readableShade(color, background, 3),
       });
     }

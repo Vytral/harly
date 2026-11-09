@@ -1,6 +1,7 @@
 "use client";
 
 import { useTransition } from "react";
+import { useLocale, useTranslations } from "next-intl";
 import { useRouter } from "next/navigation";
 import {
   AlertTriangle,
@@ -56,41 +57,27 @@ const INTERVIEW_MODE_ICON = {
 
 const INTERVIEW_STATUS_META = {
   scheduled: {
-    label: "Scheduled",
+    labelKey: "scheduled",
     variant: "neutral" as const,
     accent: "bg-slate-info",
   },
   completed: {
-    label: "Completed",
+    labelKey: "completed",
     variant: "secondary" as const,
     accent: "bg-lime",
   },
   canceled: {
-    label: "Canceled",
+    labelKey: "canceled",
     variant: "danger" as const,
     accent: "bg-destructive",
   },
 };
-
-const interviewDateFmt = new Intl.DateTimeFormat("en", {
-  weekday: "short",
-  month: "short",
-  day: "numeric",
-  hour: "numeric",
-  minute: "2-digit",
-});
 
 function providerLabelFor(provider: string) {
   if (provider === "google_calendar") return "Google Calendar";
   if (provider === "microsoft_teams") return "Microsoft Teams";
   if (provider === "jitsi") return "Jitsi";
   return "Zoom";
-}
-
-function meetLabelFor(interview: CandidateInterviewItem) {
-  if (interview.teamsMeetingId) return "Join Teams Meeting";
-  if (interview.zoomMeetingId) return "Join Zoom Meeting";
-  return "Join Google Meet";
 }
 
 export function InterviewCard({
@@ -108,8 +95,18 @@ export function InterviewCard({
   currentUserId?: string;
   aiConfigured: boolean;
 }) {
+  const t = useTranslations("features.candidates.interviewCard");
+  const ilt = useTranslations("labels.interviews");
+  const locale = useLocale();
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
+  const interviewDateFmt = new Intl.DateTimeFormat(locale, {
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
   const ModeIcon = INTERVIEW_MODE_ICON[interview.mode];
   const statusMeta = INTERVIEW_STATUS_META[interview.status];
   const isPast = interview.status !== "scheduled";
@@ -122,11 +119,11 @@ export function InterviewCard({
         status,
       });
       if (!result.success) {
-        toast.error(result.error ?? "Could not update.");
+        toast.error(result.error ?? t("updateError"));
         return;
       }
       toast.success(
-        status === "completed" ? "Marked complete" : "Interview canceled",
+        status === "completed" ? t("markedComplete") : t("interviewCanceled"),
       );
       if (result.warning) toast.warning(result.warning);
       const emailNote = unshownEmailWarning(result);
@@ -139,10 +136,10 @@ export function InterviewCard({
     startTransition(async () => {
       const result = await retryInterviewSyncAction({ syncId });
       if (!result.success) {
-        toast.error(result.error ?? "Could not retry synchronization.");
+        toast.error(result.error ?? t("retrySyncError"));
         return;
       }
-      toast.success("Synchronization retried");
+      toast.success(t("syncRetried"));
       router.refresh();
     });
   }
@@ -163,7 +160,7 @@ export function InterviewCard({
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
             <p className="font-medium">
-              {interview.title ?? interviewTypeLabel(interview.type)}
+              {interview.title ?? interviewTypeLabel(interview.type, ilt)}
             </p>
             <p className="mt-0.5 text-sm text-muted-foreground">
               {interviewDateFmt.format(new Date(interview.scheduledAt))} ·{" "}
@@ -181,7 +178,7 @@ export function InterviewCard({
                   <Button
                     size="sm"
                     variant="ghost"
-                    aria-label="Edit interview"
+                    aria-label={t("editInterview")}
                     className="size-8 p-0 text-muted-foreground hover:text-foreground"
                   >
                     <Pencil className="size-4" />
@@ -189,14 +186,14 @@ export function InterviewCard({
                 }
               />
             ) : null}
-            <Badge variant={statusMeta.variant}>{statusMeta.label}</Badge>
+            <Badge variant={statusMeta.variant}>{t(statusMeta.labelKey)}</Badge>
           </div>
         </div>
 
         {/* Mode pill */}
         <span className="inline-flex w-fit items-center gap-1.5 rounded-full bg-muted px-2.5 py-1 text-xs text-muted-foreground">
           <ModeIcon className="size-3.5" strokeWidth={1.8} />
-          {interviewModeLabel(interview.mode)}
+          {interviewModeLabel(interview.mode, ilt)}
         </span>
 
         {/* Location */}
@@ -210,12 +207,12 @@ export function InterviewCard({
           </div>
         ) : null}
 
-        {/* Meet link , one button, provider decides the wording */}
+        {/* Meet link, one button, provider decides the wording */}
         {interview.meetLink ? (
           <Button asChild size="sm" variant="outline" className="w-fit">
             <a href={interview.meetLink} target="_blank" rel="noopener noreferrer">
               <Video className="size-4" />
-              {meetLabelFor(interview)}
+              {t(interview.teamsMeetingId ? "joinTeams" : interview.zoomMeetingId ? "joinZoom" : "joinGoogleMeet")}
             </a>
           </Button>
         ) : null}
@@ -233,8 +230,8 @@ export function InterviewCard({
               <AlertTriangle className="size-4 shrink-0 text-amber-600" />
               <span className="min-w-0 flex-1 text-amber-900 dark:text-amber-200">
                 {pending
-                  ? `${providerLabel} sync is pending.`
-                  : `${providerLabel} sync failed${sync.lastError ? `: ${sync.lastError}` : "."}`}
+                  ? t("syncPending", { provider: providerLabel })
+                  : t("syncFailed", { provider: providerLabel, error: sync.lastError ? `: ${sync.lastError}` : "." })}
               </span>
               {!pending ? (
                 <Button
@@ -244,7 +241,7 @@ export function InterviewCard({
                   onClick={() => retrySync(sync.id)}
                 >
                   <RotateCcw className="size-3.5" />
-                  Retry
+                  {t("retry")}
                 </Button>
               ) : null}
             </div>
@@ -283,22 +280,20 @@ export function InterviewCard({
                   <DialogTrigger asChild>
                     <Button size="sm" variant="outline" disabled={isPending}>
                       <Check className="size-4" />
-                      Mark complete
+                      {t("markComplete")}
                     </Button>
                   </DialogTrigger>
                   <DialogContent>
                     <DialogHeader>
-                      <DialogTitle>Mark interview as complete?</DialogTitle>
+                      <DialogTitle>{t("confirmCompleteTitle")}</DialogTitle>
                       <DialogDescription>
-                        This will mark the interview with{" "}
-                        {interview.interviewerName ?? "the interviewer"} as
-                        completed.
+                        {t("confirmCompleteDescription", { interviewer: interview.interviewerName ?? t("theInterviewer") })}
                       </DialogDescription>
                     </DialogHeader>
                     <DialogFooter>
                       <DialogClose asChild>
                         <Button variant="outline" disabled={isPending}>
-                          Cancel
+                          {t("cancel")}
                         </Button>
                       </DialogClose>
                       <DialogClose asChild>
@@ -306,7 +301,7 @@ export function InterviewCard({
                           disabled={isPending}
                           onClick={() => update("completed")}
                         >
-                          {isPending ? "Saving…" : "Confirm"}
+                          {isPending ? t("saving") : t("confirm")}
                         </Button>
                       </DialogClose>
                     </DialogFooter>
@@ -322,21 +317,20 @@ export function InterviewCard({
                       disabled={isPending}
                     >
                       <X className="size-4" />
-                      Cancel
+                      {t("cancel")}
                     </Button>
                   </DialogTrigger>
                   <DialogContent>
                     <DialogHeader>
-                      <DialogTitle>Cancel this interview?</DialogTitle>
+                      <DialogTitle>{t("confirmCancelTitle")}</DialogTitle>
                       <DialogDescription>
-                        The candidate will be notified. This action cannot be
-                        undone.
+                        {t("confirmCancelDescription")}
                       </DialogDescription>
                     </DialogHeader>
                     <DialogFooter>
                       <DialogClose asChild>
                         <Button variant="outline" disabled={isPending}>
-                          Go back
+                          {t("goBack")}
                         </Button>
                       </DialogClose>
                       <DialogClose asChild>
@@ -345,7 +339,7 @@ export function InterviewCard({
                           disabled={isPending}
                           onClick={() => update("canceled")}
                         >
-                          {isPending ? "Canceling…" : "Yes, cancel interview"}
+                          {isPending ? t("canceling") : t("confirmCancel")}
                         </Button>
                       </DialogClose>
                     </DialogFooter>
@@ -373,7 +367,7 @@ export function InterviewCard({
             ) : interview.status === "scheduled" ? (
               <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
                 <span className="size-1.5 rounded-full bg-amber-400" />
-                Not synced to GCal
+                {t("notSynced")}
               </span>
             ) : null}
 
@@ -384,7 +378,7 @@ export function InterviewCard({
                     interview={interview}
                     trigger={
                       <AiButton size="sm" variant="outline">
-                        Interview Brief
+                        {t("interviewBrief")}
                       </AiButton>
                     }
                   />
@@ -395,7 +389,7 @@ export function InterviewCard({
                       workspaceId={workspaceId}
                       trigger={
                         <AiButton size="sm" variant="outline">
-                          Summarize notes
+                          {t("summarizeNotes")}
                         </AiButton>
                       }
                     />
@@ -406,11 +400,11 @@ export function InterviewCard({
                 candidateId={candidateId}
                 workspaceId={workspaceId}
                 applicationId={interview.applicationId}
-                stageName={interview.title ?? interviewTypeLabel(interview.type)}
+                stageName={interview.title ?? interviewTypeLabel(interview.type, ilt)}
                 trigger={
                   <Button size="sm" variant="outline">
                     <ClipboardCheck className="size-4" />
-                    Evaluate
+                    {t("evaluate")}
                   </Button>
                 }
               />

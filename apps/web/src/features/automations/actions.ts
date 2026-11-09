@@ -1,5 +1,6 @@
 "use server";
 
+import { getTranslations } from "@/i18n/server";
 import { revalidatePath } from "next/cache";
 
 import { ApiError } from "@harly/api";
@@ -75,7 +76,7 @@ import {
 import { requirePermission } from "@/features/workspaces/permissions-server";
 import { createLogger } from "@/lib/logger";
 import { logAuditEvent } from "@/lib/audit-log";
-import { AUTOMATIONS_DISABLED_MESSAGE, AUTOMATIONS_ENABLED } from "./status";
+import { AUTOMATIONS_ENABLED } from "./status";
 import { assertNotDemo } from "@/features/demo/assert-not-demo";
 
 const log = createLogger("automations");
@@ -95,6 +96,7 @@ export async function setWorkspaceAutomationEnabledAction(input: {
 }): Promise<AutomationsActionResult & {
   policy?: Awaited<ReturnType<typeof getWorkspaceAutomationPolicy>>;
 }> {
+  const t = await getTranslations("server.automations.actions");
   try {
     const { organization, user } = await requireAutomationsMutationPermission();
     const policy = await setWorkspaceAutomationEnabled({
@@ -118,7 +120,7 @@ export async function setWorkspaceAutomationEnabledAction(input: {
   } catch (error) {
     return {
       ok: false,
-      error: errorMessage(error, "Could not update workspace automations."),
+      error: errorMessage(error, t("updateWorkspaceFailed")),
     };
   }
 }
@@ -181,12 +183,15 @@ function publishBlockersFor(workflow: {
   );
 }
 
-function assertAutomationsEnabled() {
-  if (!AUTOMATIONS_ENABLED) throw new Error(AUTOMATIONS_DISABLED_MESSAGE);
+async function assertAutomationsEnabled() {
+  if (!AUTOMATIONS_ENABLED) {
+    const t = await getTranslations("server.automations.actions");
+    throw new Error(t("automationsDisabled"));
+  }
 }
 
 async function requireAutomationsPermission() {
-  assertAutomationsEnabled();
+  await assertAutomationsEnabled();
   return requirePermission("automations:manage");
 }
 
@@ -198,6 +203,7 @@ async function requireAutomationsMutationPermission() {
 // ----- Reads (the list page + builder + run history) -----------------------
 
 export async function listWorkflowsAction() {
+  const t = await getTranslations("server.automations.actions");
   try {
     const { organization } = await requireAutomationsPermission();
     const workflows = await listWorkflows(organization.id);
@@ -205,12 +211,13 @@ export async function listWorkflowsAction() {
   } catch (error) {
     return {
       ok: false,
-      error: errorMessage(error, "Could not load automations."),
+      error: errorMessage(error, t("loadFailed")),
     };
   }
 }
 
 export async function listPendingWorkflowApprovalsAction() {
+  const t = await getTranslations("server.automations.actions");
   try {
     const { organization, user } = await requireAutomationsPermission();
     return {
@@ -223,12 +230,13 @@ export async function listPendingWorkflowApprovalsAction() {
   } catch (error) {
     return {
       ok: false,
-      error: errorMessage(error, "Could not load pending approvals."),
+      error: errorMessage(error, t("loadApprovalsFailed")),
     };
   }
 }
 
 export async function getWorkflowAction(id: string) {
+  const t = await getTranslations("server.automations.actions");
   try {
     const { organization } = await requireAutomationsPermission();
     const workflow = await getWorkflow({ workspaceId: organization.id, id });
@@ -236,7 +244,7 @@ export async function getWorkflowAction(id: string) {
   } catch (error) {
     return {
       ok: false,
-      error: errorMessage(error, "Could not load automation."),
+      error: errorMessage(error, t("loadAutomationFailed")),
     };
   }
 }
@@ -253,16 +261,18 @@ export async function searchBuilderOptionsAction(input: {
   items?: BuilderSearchItem[];
   nextCursor?: string | null;
 }> {
+  const t = await getTranslations("server.automations.actions");
   try {
     await requireAutomationsPermission();
     const result = await searchBuilderOptions(input);
     return { ok: true, items: result.items, nextCursor: result.nextCursor };
   } catch (error) {
-    return { ok: false, error: errorMessage(error, "Could not search.") };
+    return { ok: false, error: errorMessage(error, t("searchFailed")) };
   }
 }
 
 export async function listWorkflowVersionsAction(id: string) {
+  const t = await getTranslations("server.automations.actions");
   try {
     const { organization } = await requireAutomationsPermission();
     const versions = await listWorkflowVersions({
@@ -273,12 +283,13 @@ export async function listWorkflowVersionsAction(id: string) {
   } catch (error) {
     return {
       ok: false,
-      error: errorMessage(error, "Could not load workflow history."),
+      error: errorMessage(error, t("loadHistoryFailed")),
     };
   }
 }
 
 export async function getWorkflowMetricsAction(id: string) {
+  const t = await getTranslations("server.automations.actions");
   try {
     const { organization } = await requireAutomationsPermission();
     return {
@@ -291,7 +302,7 @@ export async function getWorkflowMetricsAction(id: string) {
   } catch (error) {
     return {
       ok: false,
-      error: errorMessage(error, "Could not load workflow metrics."),
+      error: errorMessage(error, t("loadMetricsFailed")),
     };
   }
 }
@@ -300,6 +311,7 @@ export async function listRunsAction(input: {
   workflowId?: string;
   limit?: number;
 }) {
+  const t = await getTranslations("server.automations.actions");
   try {
     const { organization } = await requireAutomationsPermission();
     const runs = await listRuns({
@@ -309,11 +321,12 @@ export async function listRunsAction(input: {
     });
     return { ok: true, runs: runs.map(serializeRun) };
   } catch (error) {
-    return { ok: false, error: errorMessage(error, "Could not load runs.") };
+    return { ok: false, error: errorMessage(error, t("loadRunsFailed")) };
   }
 }
 
 export async function getRunAction(id: string) {
+  const t = await getTranslations("server.automations.actions");
   try {
     const { organization } = await requireAutomationsPermission();
     const run = await getRun({ workspaceId: organization.id, id });
@@ -327,13 +340,14 @@ export async function getRunAction(id: string) {
       steps: steps.map(serializeRunStep),
     };
   } catch (error) {
-    return { ok: false, error: errorMessage(error, "Could not load run.") };
+    return { ok: false, error: errorMessage(error, t("loadRunFailed")) };
   }
 }
 
 export async function cancelRunAction(
   id: string,
 ): Promise<AutomationsActionResult> {
+  const t = await getTranslations("server.automations.actions");
   try {
     const { organization, user } = await requireAutomationsMutationPermission();
     await requestCancelRun({ workspaceId: organization.id, id });
@@ -346,13 +360,14 @@ export async function cancelRunAction(
     });
     return { ok: true };
   } catch (error) {
-    return { ok: false, error: errorMessage(error, "Could not cancel run.") };
+    return { ok: false, error: errorMessage(error, t("cancelRunFailed")) };
   }
 }
 
 export async function retryRunAction(
   id: string,
 ): Promise<AutomationsActionResult> {
+  const t = await getTranslations("server.automations.actions");
   try {
     const { organization, user } = await requireAutomationsMutationPermission();
     await retryRun({ workspaceId: organization.id, id });
@@ -365,7 +380,7 @@ export async function retryRunAction(
     });
     return { ok: true };
   } catch (error) {
-    return { ok: false, error: errorMessage(error, "Could not retry run.") };
+    return { ok: false, error: errorMessage(error, t("retryRunFailed")) };
   }
 }
 
@@ -377,6 +392,7 @@ export async function resolveRunApprovalAction(input: {
   nodeId?: string;
   decision: "approved" | "rejected";
 }): Promise<AutomationsActionResult> {
+  const t = await getTranslations("server.automations.actions");
   try {
     const { organization, user } = await requireAutomationsMutationPermission();
     const count = await resolveWorkflowApproval({
@@ -389,7 +405,7 @@ export async function resolveRunApprovalAction(input: {
     if (count === 0)
       return {
         ok: false,
-        error: "This approval is not assigned to you or is already resolved.",
+        error: t("approvalNotAssigned"),
       };
     await logAuditEvent({
       workspaceId: organization.id,
@@ -404,7 +420,7 @@ export async function resolveRunApprovalAction(input: {
   } catch (error) {
     return {
       ok: false,
-      error: errorMessage(error, "Could not resolve approval."),
+      error: errorMessage(error, t("resolveApprovalFailed")),
     };
   }
 }
@@ -414,6 +430,7 @@ export async function reassignRunApprovalAction(input: {
   nodeId: string;
   actorIds: string[];
 }): Promise<AutomationsActionResult> {
+  const t = await getTranslations("server.automations.actions");
   try {
     const { organization, user } = await requireAutomationsMutationPermission();
     const result = await reassignWorkflowApproval({
@@ -441,7 +458,7 @@ export async function reassignRunApprovalAction(input: {
   } catch (error) {
     return {
       ok: false,
-      error: errorMessage(error, "Could not reassign approval."),
+      error: errorMessage(error, t("reassignApprovalFailed")),
     };
   }
 }
@@ -454,6 +471,7 @@ export async function resolveRunUncertainAction(input: {
   providerRef?: string;
   outputJson?: string;
 }): Promise<AutomationsActionResult> {
+  const t = await getTranslations("server.automations.actions");
   try {
     const { organization, user } = await requireAutomationsMutationPermission();
     let output: JsonValue | undefined;
@@ -464,14 +482,14 @@ export async function resolveRunUncertainAction(input: {
       } catch {
         return {
           ok: false,
-          error: "The reconciliation output is not valid JSON.",
+          error: t("reconcileNotJson"),
         };
       }
       const checked = jsonValueSchema.safeParse(parsed);
       if (!checked.success)
         return {
           ok: false,
-          error: "The reconciliation output must be valid JSON.",
+          error: t("reconcileMustBeJson"),
         };
       output = checked.data;
     }
@@ -503,7 +521,7 @@ export async function resolveRunUncertainAction(input: {
   } catch (error) {
     return {
       ok: false,
-      error: errorMessage(error, "Could not reconcile uncertain action."),
+      error: errorMessage(error, t("reconcileFailed")),
     };
   }
 }
@@ -512,6 +530,7 @@ export async function replayRunFromStepAction(
   id: string,
   stepIndex: number,
 ): Promise<AutomationsActionResult & { runId?: string }> {
+  const t = await getTranslations("server.automations.actions");
   try {
     const { organization, user } = await requireAutomationsMutationPermission();
     const run = await replayRunFromStep({
@@ -529,7 +548,7 @@ export async function replayRunFromStepAction(
     });
     return { ok: true, runId: run.id };
   } catch (error) {
-    return { ok: false, error: errorMessage(error, "Could not replay run.") };
+    return { ok: false, error: errorMessage(error, t("replayFailed")) };
   }
 }
 
@@ -537,6 +556,7 @@ export async function requestWorkflowApprovalAction(
   id: string,
   expectedRevision: number,
 ): Promise<AutomationsActionResult> {
+  const t = await getTranslations("server.automations.actions");
   try {
     const { organization, user } = await requireAutomationsMutationPermission();
     const current = await getWorkflow({ workspaceId: organization.id, id });
@@ -544,14 +564,14 @@ export async function requestWorkflowApprovalAction(
       return {
         ok: false,
         conflict: true,
-        error: "This draft changed. Save the latest revision and try again.",
+        error: t("draftChanged"),
       };
     }
     const issues = publishBlockersFor(current);
     if (issues.length > 0) {
       return {
         ok: false,
-        error: issues[0]?.message ?? "This recipe isn't ready to publish.",
+        error: issues[0]?.message ?? t("notReadyToPublish"),
         issues,
       };
     }
@@ -572,7 +592,7 @@ export async function requestWorkflowApprovalAction(
   } catch (error) {
     return {
       ok: false,
-      error: errorMessage(error, "Could not request approval."),
+      error: errorMessage(error, t("requestApprovalFailed")),
       issues: issuesFromError(error),
       conflict: error instanceof ApiError && error.code === "conflict",
     };
@@ -583,6 +603,7 @@ export async function approveWorkflowAction(
   id: string,
   expectedRevision: number,
 ): Promise<AutomationsActionResult> {
+  const t = await getTranslations("server.automations.actions");
   try {
     const { organization, user } = await requireAutomationsMutationPermission();
     await approveWorkflow({
@@ -602,7 +623,7 @@ export async function approveWorkflowAction(
   } catch (error) {
     return {
       ok: false,
-      error: errorMessage(error, "Could not approve workflow."),
+      error: errorMessage(error, t("approveFailed")),
       conflict: error instanceof ApiError && error.code === "conflict",
     };
   }
@@ -612,6 +633,7 @@ export async function publishWorkflowAction(
   id: string,
   expectedRevision: number,
 ): Promise<AutomationsActionResult> {
+  const t = await getTranslations("server.automations.actions");
   try {
     const { organization, user } = await requireAutomationsMutationPermission();
     const current = await getWorkflow({ workspaceId: organization.id, id });
@@ -619,14 +641,14 @@ export async function publishWorkflowAction(
       return {
         ok: false,
         conflict: true,
-        error: "This draft changed. Save the latest revision and try again.",
+        error: t("draftChanged"),
       };
     }
     const issues = publishBlockersFor(current);
     if (issues.length > 0) {
       return {
         ok: false,
-        error: issues[0]?.message ?? "This recipe isn't ready to publish.",
+        error: issues[0]?.message ?? t("notReadyToPublish"),
         issues,
       };
     }
@@ -648,7 +670,7 @@ export async function publishWorkflowAction(
   } catch (error) {
     return {
       ok: false,
-      error: errorMessage(error, "Could not publish workflow."),
+      error: errorMessage(error, t("publishFailed")),
       issues: issuesFromError(error),
       conflict: error instanceof ApiError && error.code === "conflict",
     };
@@ -658,6 +680,7 @@ export async function publishWorkflowAction(
 export async function pauseWorkflowAction(
   id: string,
 ): Promise<AutomationsActionResult> {
+  const t = await getTranslations("server.automations.actions");
   try {
     const { organization, user } = await requireAutomationsMutationPermission();
     await pauseWorkflow({ workspaceId: organization.id, id });
@@ -673,7 +696,7 @@ export async function pauseWorkflowAction(
   } catch (error) {
     return {
       ok: false,
-      error: errorMessage(error, "Could not pause workflow."),
+      error: errorMessage(error, t("pauseFailed")),
     };
   }
 }
@@ -681,6 +704,7 @@ export async function pauseWorkflowAction(
 export async function resumeWorkflowAction(
   id: string,
 ): Promise<AutomationsActionResult> {
+  const t = await getTranslations("server.automations.actions");
   try {
     const { organization, user } = await requireAutomationsMutationPermission();
     await resumeWorkflow({ workspaceId: organization.id, id });
@@ -696,7 +720,7 @@ export async function resumeWorkflowAction(
   } catch (error) {
     return {
       ok: false,
-      error: errorMessage(error, "Could not resume workflow."),
+      error: errorMessage(error, t("resumeFailed")),
     };
   }
 }
@@ -705,6 +729,7 @@ export async function rollbackWorkflowAction(
   id: string,
   version: number,
 ): Promise<AutomationsActionResult> {
+  const t = await getTranslations("server.automations.actions");
   try {
     const { organization, user } = await requireAutomationsMutationPermission();
     await rollbackWorkflow({
@@ -725,7 +750,7 @@ export async function rollbackWorkflowAction(
   } catch (error) {
     return {
       ok: false,
-      error: errorMessage(error, "Could not roll back workflow."),
+      error: errorMessage(error, t("rollbackFailed")),
     };
   }
 }
@@ -741,6 +766,7 @@ export async function createWorkflowAction(
 ): Promise<
   AutomationsActionResult & { workflow?: ReturnType<typeof serializeWorkflow> }
 > {
+  const t = await getTranslations("server.automations.actions");
   try {
     const { organization, user } = await requireAutomationsMutationPermission();
     const parsed = workflowInputSchema.parse(values);
@@ -768,7 +794,7 @@ export async function createWorkflowAction(
     log.error(error, "[automations] createWorkflowAction failed");
     return {
       ok: false,
-      error: errorMessage(error, "Could not create automation."),
+      error: errorMessage(error, t("createFailed")),
     };
   }
 }
@@ -786,6 +812,7 @@ export async function updateWorkflowAction(
 > {
   let organization: { id: string };
   let user: { id: string };
+  const t = await getTranslations("server.automations.actions");
   try {
     const session = await requireAutomationsMutationPermission();
     organization = session.organization;
@@ -793,7 +820,7 @@ export async function updateWorkflowAction(
   } catch (error) {
     return {
       ok: false,
-      error: errorMessage(error, "Could not update automation."),
+      error: errorMessage(error, t("updateFailed")),
     };
   }
   try {
@@ -842,20 +869,20 @@ export async function updateWorkflowAction(
         return {
           ok: false,
           conflict: true,
-          error: errorMessage(error, "This draft was saved elsewhere."),
+          error: errorMessage(error, t("draftSavedElsewhere")),
           workflow: serializeWorkflow(current),
         };
       } catch {
         return {
           ok: false,
           conflict: true,
-          error: errorMessage(error, "This draft was saved elsewhere."),
+          error: errorMessage(error, t("draftSavedElsewhere")),
         };
       }
     }
     return {
       ok: false,
-      error: errorMessage(error, "Could not update automation."),
+      error: errorMessage(error, t("updateFailed")),
     };
   }
 }
@@ -865,6 +892,7 @@ export async function toggleWorkflowAction(
   id: string,
   enabled: boolean,
 ): Promise<AutomationsActionResult> {
+  const t = await getTranslations("server.automations.actions");
   try {
     const { organization, user } = await requireAutomationsMutationPermission();
     if (enabled) {
@@ -894,12 +922,13 @@ export async function toggleWorkflowAction(
   } catch (error) {
     return {
       ok: false,
-      error: errorMessage(error, "Could not toggle automation."),
+      error: errorMessage(error, t("toggleFailed")),
     };
   }
 }
 
 export async function listWorkflowWebhookEndpointsAction(workflowId: string) {
+  const t = await getTranslations("server.automations.actions");
   try {
     const { organization } = await requireAutomationsPermission();
     return {
@@ -914,7 +943,7 @@ export async function listWorkflowWebhookEndpointsAction(workflowId: string) {
   } catch (error) {
     return {
       ok: false as const,
-      error: errorMessage(error, "Could not load webhook endpoints."),
+      error: errorMessage(error, t("loadWebhooksFailed")),
     };
   }
 }
@@ -925,6 +954,7 @@ export async function createWorkflowWebhookEndpointAction(input: {
   name: string;
   payloadSchema?: Record<string, unknown>;
 }) {
+  const t = await getTranslations("server.automations.actions");
   try {
     const { organization, user } = await requireAutomationsMutationPermission();
     const result = await createWorkflowWebhookEndpoint({
@@ -951,7 +981,7 @@ export async function createWorkflowWebhookEndpointAction(input: {
   } catch (error) {
     return {
       ok: false as const,
-      error: errorMessage(error, "Could not create webhook endpoint."),
+      error: errorMessage(error, t("createWebhookFailed")),
     };
   }
 }
@@ -960,6 +990,7 @@ export async function toggleWorkflowWebhookEndpointAction(input: {
   endpointId: string;
   enabled: boolean;
 }) {
+  const t = await getTranslations("server.automations.actions");
   try {
     const { organization, user } = await requireAutomationsMutationPermission();
     const updated = await setWorkflowWebhookEndpointEnabled({
@@ -968,7 +999,7 @@ export async function toggleWorkflowWebhookEndpointAction(input: {
       enabled: input.enabled,
     });
     if (!updated)
-      return { ok: false as const, error: "Webhook endpoint not found." };
+      return { ok: false as const, error: t("webhookNotFound") };
     await logAuditEvent({
       workspaceId: organization.id,
       actorId: user.id,
@@ -980,7 +1011,7 @@ export async function toggleWorkflowWebhookEndpointAction(input: {
   } catch (error) {
     return {
       ok: false as const,
-      error: errorMessage(error, "Could not update webhook endpoint."),
+      error: errorMessage(error, t("updateWebhookFailed")),
     };
   }
 }
@@ -989,6 +1020,7 @@ export async function updateWorkflowWebhookEndpointPayloadSchemaAction(input: {
   endpointId: string;
   payloadSchema: unknown;
 }) {
+  const t = await getTranslations("server.automations.actions");
   try {
     const { organization, user } = await requireAutomationsMutationPermission();
     const updated = await setWorkflowWebhookEndpointPayloadSchema({
@@ -997,7 +1029,7 @@ export async function updateWorkflowWebhookEndpointPayloadSchemaAction(input: {
       payloadSchema: input.payloadSchema,
     });
     if (!updated)
-      return { ok: false as const, error: "Webhook endpoint not found." };
+      return { ok: false as const, error: t("webhookNotFound") };
     await logAuditEvent({
       workspaceId: organization.id,
       actorId: user.id,
@@ -1012,7 +1044,7 @@ export async function updateWorkflowWebhookEndpointPayloadSchemaAction(input: {
       ok: false as const,
       error: errorMessage(
         error,
-        "Could not update the webhook payload schema.",
+        t("webhookSchemaFailed"),
       ),
     };
   }
@@ -1021,6 +1053,7 @@ export async function updateWorkflowWebhookEndpointPayloadSchemaAction(input: {
 export async function deleteWorkflowAction(
   id: string,
 ): Promise<AutomationsActionResult> {
+  const t = await getTranslations("server.automations.actions");
   try {
     const { organization, user } = await requireAutomationsMutationPermission();
     await deleteWorkflow({ workspaceId: organization.id, id });
@@ -1037,7 +1070,7 @@ export async function deleteWorkflowAction(
   } catch (error) {
     return {
       ok: false,
-      error: errorMessage(error, "Could not delete automation."),
+      error: errorMessage(error, t("deleteFailed")),
     };
   }
 }
@@ -1059,12 +1092,13 @@ export async function dryRunWorkflowAction(input: {
   fixtures?: Record<string, NodeOutcome>;
   startedAt?: string;
 }): Promise<AutomationsActionResult & Partial<DryRunResult>> {
+  const t = await getTranslations("server.automations.actions");
   try {
     await requireAutomationsMutationPermission();
     const result = await dryRunWorkflow(input);
     return { ok: true, ...result };
   } catch (error) {
-    return { ok: false, error: errorMessage(error, "Could not run dry-run.") };
+    return { ok: false, error: errorMessage(error, t("dryRunFailed")) };
   }
 }
 
@@ -1072,13 +1106,14 @@ export async function previewWorkflowPayloadAction(input: {
   trigger: WorkflowDefinitionInput["trigger"];
   candidateId?: string;
 }): Promise<AutomationsActionResult & { payload?: Record<string, unknown> }> {
+  const t = await getTranslations("server.automations.actions");
   try {
     await requireAutomationsMutationPermission();
     return { ok: true, payload: await previewWorkflowPayload(input) };
   } catch (error) {
     return {
       ok: false,
-      error: errorMessage(error, "Could not preview payload."),
+      error: errorMessage(error, t("previewFailed")),
     };
   }
 }
@@ -1094,6 +1129,7 @@ export async function createWorkflowFromTemplateAction(
 ): Promise<
   AutomationsActionResult & { workflow?: ReturnType<typeof serializeWorkflow> }
 > {
+  const t = await getTranslations("server.automations.actions");
   try {
     const { organization, user } = await requireAutomationsMutationPermission();
     const parsed = workflowInputSchema.parse(values);
@@ -1108,7 +1144,7 @@ export async function createWorkflowFromTemplateAction(
     log.error(error, "[automations] createWorkflowFromTemplateAction failed");
     return {
       ok: false,
-      error: errorMessage(error, "Could not create from template."),
+      error: errorMessage(error, t("createFromTemplateFailed")),
     };
   }
 }

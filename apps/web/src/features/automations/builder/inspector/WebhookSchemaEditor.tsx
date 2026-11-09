@@ -1,6 +1,7 @@
 "use client";
 
 import { useId, useMemo, useState } from "react";
+import { useTranslations } from "next-intl";
 
 const schemaInputClass =
   "min-h-40 w-full resize-y rounded-lg border border-border bg-warm-paper px-2.5 py-2 font-mono text-[11px] leading-5 text-foreground outline-none focus:border-foreground/40";
@@ -16,7 +17,8 @@ const sampleSchema = {
   additionalProperties: true,
 };
 
-type ParsedSchema = { value: Record<string, unknown> } | { error: string };
+type SchemaError = "errorNotObject" | "errorTooLarge" | "errorInvalidJson";
+type ParsedSchema = { value: Record<string, unknown> } | { error: SchemaError };
 
 function stableJson(value: unknown): string {
   if (Array.isArray(value)) return `[${value.map(stableJson).join(",")}]`;
@@ -40,20 +42,21 @@ export function WebhookSchemaEditor({
   saveLabel: string;
   showSavedStatus?: boolean;
 }) {
+  const t = useTranslations("features.automations.WebhookSchemaEditor");
   const id = useId();
   const [text, setText] = useState(() => JSON.stringify(schema, null, 2));
   const parsed = useMemo<ParsedSchema>(() => {
     try {
       const value: unknown = JSON.parse(text);
       if (!value || typeof value !== "object" || Array.isArray(value)) {
-        return { error: "Schema must be a JSON object." };
+        return { error: "errorNotObject" };
       }
       if (new TextEncoder().encode(text).byteLength > 32 * 1024) {
-        return { error: "Schema must be 32 KB or smaller." };
+        return { error: "errorTooLarge" };
       }
       return { value: value as Record<string, unknown> };
     } catch {
-      return { error: "Enter valid JSON before saving." };
+      return { error: "errorInvalidJson" };
     }
   }, [text]);
   const saved = "value" in parsed && stableJson(parsed.value) === stableJson(schema);
@@ -61,7 +64,7 @@ export function WebhookSchemaEditor({
   return (
     <div className="space-y-2">
       <label className="block">
-        <span className="mb-1 block text-[11px] font-medium text-foreground">Payload schema (JSON Schema Draft 7)</span>
+        <span className="mb-1 block text-[11px] font-medium text-foreground">{t("payloadSchema")}</span>
         <textarea
           aria-describedby={`${id}-help ${id}-error`}
           aria-invalid={"error" in parsed}
@@ -75,14 +78,14 @@ export function WebhookSchemaEditor({
         />
       </label>
       <p id={`${id}-help`} className="text-[10px] leading-4 text-soft-ink">
-        {"{}"} accepts any JSON object. Rules are enforced before an event is recorded; validation does not rewrite the payload.
+        {t("help", { emptyObject: "{}" })}
       </p>
       <p id={`${id}-error`} aria-live="polite" className="min-h-4 text-[10px] text-danger-rust">
-        {"error" in parsed ? parsed.error : ""}
+        {"error" in parsed ? t(parsed.error) : ""}
       </p>
       {showSavedStatus ? (
-        <p role="status" aria-label="Webhook schema save status" className="text-[10px] text-soft-ink">
-          {saved ? "Saved" : "Unsaved changes"}
+        <p role="status" aria-label={t("statusLabel")} className="text-[10px] text-soft-ink">
+          {saved ? t("saved") : t("unsaved")}
         </p>
       ) : null}
       <div className="flex flex-wrap items-center gap-2">
@@ -102,7 +105,7 @@ export function WebhookSchemaEditor({
           disabled={disabled}
           onClick={() => setText(JSON.stringify(sampleSchema, null, 2))}
         >
-          Use sample
+          {t("useSample")}
         </button>
         <button
           type="button"
@@ -110,7 +113,7 @@ export function WebhookSchemaEditor({
           disabled={disabled}
           onClick={() => setText("{}")}
         >
-          Accept any object
+          {t("acceptAnyObject")}
         </button>
       </div>
     </div>

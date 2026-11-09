@@ -1,3 +1,5 @@
+import { getTranslations } from "next-intl/server";
+
 import { Card } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 
@@ -31,10 +33,11 @@ function SectionHeaderSkeleton({
  * (key rows), webhooks card (endpoint rows), embed widget card (variant chips
  * and a code block).
  */
-export default function DevelopersSettingsLoading() {
+export default async function DevelopersSettingsLoading() {
+  const t = await getTranslations("pages.settingsDevelopers.loading");
   return (
     <div aria-busy="true" className="space-y-6">
-      <span className="sr-only">Loading…</span>
+      <span className="sr-only">{t("label")}</span>
 
       <Card className="gap-5 p-6">
         <SectionHeaderSkeleton titleWidth="w-24" descWidth="w-96" />

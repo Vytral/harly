@@ -1,3 +1,5 @@
+import { useTranslations } from "next-intl";
+
 import { cn } from "@/lib/utils";
 import {
   Select,
@@ -29,9 +31,10 @@ export function FilterPill({
   labelMap?: Record<string, string>;
   allValue?: string;
 }) {
+  const t = useTranslations("ui.filterPill");
   const neutral = allValue ?? FILTER_ALL;
   const active = value !== neutral;
-  const display = value === FILTER_ALL ? "All" : (labelMap?.[value] ?? value);
+  const display = value === FILTER_ALL ? t("all") : (labelMap?.[value] ?? value);
 
   return (
     <Select value={value} onValueChange={onChange}>
@@ -51,7 +54,7 @@ export function FilterPill({
         </span>
       </SelectTrigger>
       <SelectContent position="popper" align="start" className="max-h-60">
-        {allValue === undefined ? <SelectItem value={FILTER_ALL}>All</SelectItem> : null}
+        {allValue === undefined ? <SelectItem value={FILTER_ALL}>{t("all")}</SelectItem> : null}
         {options.map((opt) => (
           <SelectItem key={opt} value={opt}>
             {labelMap?.[opt] ?? opt}

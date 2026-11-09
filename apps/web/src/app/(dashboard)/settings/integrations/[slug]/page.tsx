@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import type { Metadata, Route } from "next";
 import type { ComponentType, ReactNode } from "react";
+import { getTranslations } from "next-intl/server";
 
 import { TheSvgLogo } from "@/components/ui/icons/brands";
 import {
@@ -54,7 +55,7 @@ import { buildEsignWebhookUrl } from "@/lib/esign/webhook-url";
 import { isDemoMode } from "@harly/config";
 import {
   WEBHOOK_EVENTS,
-  WEBHOOK_EVENT_LABELS,
+  webhookEventLabelKey,
 } from "@/server/webhooks/events";
 
 export const dynamic = "force-dynamic";
@@ -102,7 +103,8 @@ export async function generateMetadata({
   const { slug } = await params;
   const integration = getIntegration(slug);
   if (!integration) return {};
-  return { title: `${integration.name} · Integrations` };
+  const t = await getTranslations("pages.settingsIntegrationsSlug.page");
+  return { title: t("metaTitle", { name: integration.name }) };
 }
 
 export default async function IntegrationDetailPage({
@@ -121,9 +123,10 @@ export default async function IntegrationDetailPage({
   const demoLocked = isDemoMode();
   const canEdit = (role === "owner" || role === "admin") && !demoLocked;
 
+  const tWebhookEvents = await getTranslations("labels.webhooks.events");
   const eventOptions = WEBHOOK_EVENTS.map((event) => ({
     value: event,
-    label: WEBHOOK_EVENT_LABELS[event],
+    label: tWebhookEvents(webhookEventLabelKey(event)),
   }));
 
   const appUrl = getHarlyPublicOrigin();
@@ -133,6 +136,7 @@ export default async function IntegrationDetailPage({
 
   const statuses = await getIntegrationStatuses(organization.id);
   const healthKey = integrationHealthKeyForSlug(integration.slug);
+  const t = await getTranslations("pages.settingsIntegrationsSlug.page");
 
   const panel = await renderPanel(integration, {
     organizationId: organization.id,
@@ -149,21 +153,33 @@ export default async function IntegrationDetailPage({
         className="inline-flex items-center gap-1.5 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
       >
         <CaretLeftIcon className="size-4" />
-        Integrations
+        {t("integrations")}
       </Link>
 
       {demoLocked ? (
-        <DemoLockedNotice>
-          Integration credentials and outbound chat webhooks are locked in the demo.
-        </DemoLockedNotice>
+        <DemoLockedNotice>{t("demoLocked")}</DemoLockedNotice>
       ) : null}
 
-      {panel ?? <ComingSoon integration={integration} />}
+      {panel ?? (
+        <ComingSoon
+          integration={integration}
+          title={t("comingSoon")}
+          description={t("comingSoonDescription")}
+        />
+      )}
     </div>
   );
 }
 
-function ComingSoon({ integration }: { integration: IntegrationDefinition }) {
+function ComingSoon({
+  integration,
+  title,
+  description,
+}: {
+  integration: IntegrationDefinition;
+  title: string;
+  description: string;
+}) {
   const Logo = DETAIL_LOGOS[integration.slug];
   return (
     <>
@@ -186,9 +202,9 @@ function ComingSoon({ integration }: { integration: IntegrationDefinition }) {
         </div>
       </div>
       <div className="rounded-2xl border border-dashed border-border/70 bg-muted/20 px-6 py-10 text-center">
-        <p className="text-sm font-medium text-foreground">Coming soon</p>
+        <p className="text-sm font-medium text-foreground">{title}</p>
         <p className="mx-auto mt-1 max-w-sm text-sm text-muted-foreground">
-          This integration is on the way. Check back shortly.
+          {description}
         </p>
       </div>
     </>

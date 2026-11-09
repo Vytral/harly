@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { toast } from "@/lib/notification-island/toast";
 import Link from "next/link";
 import type { Route } from "next";
@@ -88,6 +89,7 @@ function OAuthProviderSection({
   const [clientSecret, setClientSecret] = useState("");
   const [saving, startSave] = useTransition();
   const [disconnecting, startDisconnect] = useTransition();
+  const t = useTranslations("features.workspaces.candidatePortalCard");
 
   function handleOpenChange(next: boolean) {
     if (!next) {
@@ -105,10 +107,10 @@ function OAuthProviderSection({
         clientSecret: clientSecret || undefined,
       });
       if (!result.ok) {
-        toast.error(result.error ?? "Could not save.");
+        toast.error(result.error ?? t("couldNotSave"));
         return;
       }
-      toast.success(`${label} connected`);
+      toast.success(t("providerConnected", { provider: label }));
       setClientSecret("");
       setOpen(false);
       router.refresh();
@@ -119,10 +121,10 @@ function OAuthProviderSection({
     startDisconnect(async () => {
       const result = await disconnectPortalOAuthAction(provider);
       if (!result.ok) {
-        toast.error(result.error ?? "Could not disconnect.");
+        toast.error(result.error ?? t("couldNotDisconnect"));
         return;
       }
-      toast.success(`${label} disconnected`);
+      toast.success(t("providerDisconnected", { provider: label }));
       setClientId("");
       setClientSecret("");
       setOpen(false);
@@ -144,10 +146,12 @@ function OAuthProviderSection({
       <div className="flex items-center gap-2">
         {configured ? (
           <span className="flex items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 text-[11px] font-semibold text-primary">
-            <CheckIcon className="size-3" /> Connected
+            <CheckIcon className="size-3" /> {t("connected")}
           </span>
         ) : (
-          <span className="text-xs text-muted-foreground">Not configured</span>
+          <span className="text-xs text-muted-foreground">
+            {t("notConfigured")}
+          </span>
         )}
         {canEdit ? (
           <Sheet open={open} onOpenChange={handleOpenChange} mobilePresentation="bottom-on-mobile">
@@ -157,12 +161,12 @@ function OAuthProviderSection({
                 size="sm"
                 className={configured ? "text-muted-foreground" : undefined}
               >
-                {configured ? "Edit" : "Configure"}
+                {configured ? t("edit") : t("configure")}
               </Button>
             </SheetTrigger>
             <DrawerLayout
-              title={`Configure ${label} sign-in`}
-              description={`Use ${label} OAuth so candidates can sign in to the portal with their existing account.`}
+              title={t("configureTitle", { provider: label })}
+              description={t("configureDescription", { provider: label })}
               footer={
                 <>
                   {configured ? (
@@ -175,7 +179,7 @@ function OAuthProviderSection({
                       {disconnecting ? (
                         <SpinnerIcon className="size-4" />
                       ) : null}
-                      Disconnect
+                      {t("disconnect")}
                     </Button>
                   ) : null}
                   <SheetClose asChild>
@@ -183,7 +187,7 @@ function OAuthProviderSection({
                       variant="outline"
                       disabled={saving || disconnecting}
                     >
-                      Cancel
+                      {t("cancel")}
                     </Button>
                   </SheetClose>
                   <Button
@@ -191,35 +195,34 @@ function OAuthProviderSection({
                     disabled={saving || disconnecting || !clientId.trim()}
                   >
                     {saving ? <SpinnerIcon className="size-4" /> : null}
-                    Save
+                    {t("save")}
                   </Button>
                 </>
               }
             >
               <div className="space-y-5">
                 <div className="rounded-lg border bg-muted/30 px-3 py-2.5 text-xs text-muted-foreground">
-                  <p>
-                    Credentials are encrypted at rest and the secret is never
-                    shown again.
-                  </p>
+                  <p>{t("credentialsNote")}</p>
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor={`${provider}-client-id`}>Client ID</Label>
+                  <Label htmlFor={`${provider}-client-id`}>
+                    {t("clientIdLabel")}
+                  </Label>
                   <Input
                     id={`${provider}-client-id`}
                     value={clientId}
                     onChange={(e) => setClientId(e.target.value)}
-                    placeholder="Paste your Client ID"
+                    placeholder={t("clientIdPlaceholder")}
                     autoComplete="off"
                     className="font-mono text-sm"
                   />
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor={`${provider}-client-secret`}>
-                    Client Secret{" "}
+                    {t("clientSecretLabel")}{" "}
                     {configured ? (
                       <span className="font-normal text-muted-foreground">
-                        (leave blank to keep existing)
+                        {t("clientSecretKeepExisting")}
                       </span>
                     ) : null}
                   </Label>
@@ -228,14 +231,14 @@ function OAuthProviderSection({
                     value={clientSecret}
                     onChange={(e) => setClientSecret(e.target.value)}
                     placeholder={
-                      configured ? "••••••••" : "Paste your Client Secret"
+                      configured ? "••••••••" : t("clientSecretPlaceholder")
                     }
                     autoComplete="new-password"
                     className="font-mono text-sm"
                   />
                 </div>
                 <div className="space-y-1.5 rounded-lg bg-muted/40 px-3 py-2.5 text-xs text-muted-foreground">
-                  <p>Authorized redirect URI</p>
+                  <p>{t("redirectUriLabel")}</p>
                   <p className="break-all font-mono text-foreground">
                     {redirectUri}
                   </p>
@@ -279,6 +282,7 @@ export function CandidatePortalCard({
   showApplicationStatus: boolean;
   showHiringTeam: boolean;
 }) {
+  const t = useTranslations("features.workspaces.candidatePortalCard");
   const router = useRouter();
   const [optimisticEnabled, setOptimisticEnabled] = useState(enabled);
   const [optimisticStatus, setOptimisticStatus] = useState(
@@ -300,12 +304,10 @@ export function CandidatePortalCard({
       const result = await savePortalSettingsAction(next);
       if (!result.ok) {
         setOptimisticEnabled(!next);
-        toast.error(result.error ?? "Could not update.");
+        toast.error(result.error ?? t("updateFailed"));
         return;
       }
-      toast.success(
-        next ? "Candidate portal enabled" : "Candidate portal disabled",
-      );
+      toast.success(next ? t("portalEnabled") : t("portalDisabled"));
       router.refresh();
     });
   }
@@ -319,7 +321,7 @@ export function CandidatePortalCard({
       if (!result.ok) {
         setOptimisticStatus(showApplicationStatus);
         setOptimisticHiringTeam(showHiringTeam);
-        toast.error(result.error ?? "Could not update.");
+        toast.error(result.error ?? t("updateFailed"));
         return;
       }
       router.refresh();
@@ -349,13 +351,13 @@ export function CandidatePortalCard({
         <div className="p-6">
           <SectionHeader
             icon={IdentificationCardDuotoneIcon}
-            title="Candidate Portal"
+            title={t("portalTitle")}
             badge={
               <StatusPill tone={optimisticEnabled ? "on" : "off"}>
-                {optimisticEnabled ? "Active" : "Disabled"}
+                {optimisticEnabled ? t("active") : t("disabled")}
               </StatusPill>
             }
-            description="A self-service portal where candidates can sign in, track their applications, and update their profile."
+            description={t("portalDescription")}
             action={
               canEdit ? (
                 <label className="flex h-9 items-center gap-2 rounded-[var(--radius-btn)] border border-mist-border bg-pure-snow px-3 text-sm">
@@ -363,10 +365,10 @@ export function CandidatePortalCard({
                     checked={optimisticEnabled}
                     disabled={toggling}
                     onCheckedChange={toggleEnabled}
-                    aria-label="Enable portal"
+                    aria-label={t("enablePortalAria")}
                   />
                   <span className="text-muted-foreground">
-                    {optimisticEnabled ? "On" : "Off"}
+                    {optimisticEnabled ? t("on") : t("off")}
                   </span>
                 </label>
               ) : null
@@ -376,7 +378,7 @@ export function CandidatePortalCard({
           {optimisticEnabled ? (
             <div className="mt-4 rounded-xl border bg-muted/30 px-4 py-3">
               <p className="text-xs text-muted-foreground">
-                Portal URL:{" "}
+                {t("portalUrlLabel")}{" "}
                 <Link
                   href={"/portal/login" as Route}
                   target="_blank"
@@ -391,14 +393,17 @@ export function CandidatePortalCard({
         </div>
 
         <div className="grid grid-cols-1 divide-y border-t bg-muted/20 sm:grid-cols-3 sm:divide-x sm:divide-y-0">
-          <FeatureCell label="Authentication" value="Password · Access code · Magic link · OAuth · Passkeys" />
           <FeatureCell
-            label="Candidate views"
-            value="Applications · Jobs · Profile"
+            label={t("authenticationLabel")}
+            value={t("authenticationMethods")}
           />
           <FeatureCell
-            label="Sign-in methods"
-            value="Chosen below"
+            label={t("candidateViewsLabel")}
+            value={t("candidateViews")}
+          />
+          <FeatureCell
+            label={t("signInMethodsLabel")}
+            value={t("signInMethodsValue")}
           />
         </div>
       </Card>
@@ -412,7 +417,7 @@ export function CandidatePortalCard({
       {/* OAuth providers */}
       <div>
         <h2 className="mb-3 text-sm font-semibold tracking-tight text-near-ink">
-          OAuth provider credentials
+          {t("oauthHeading")}
         </h2>
         <div className="space-y-3">
           <OAuthProviderSection
@@ -423,7 +428,7 @@ export function CandidatePortalCard({
             configured={googleConfigured}
             savedClientId={googleClientId}
             canEdit={canEdit}
-            description="Candidates sign in with their Google account."
+            description={t("providerDescription", { provider: "Google" })}
             redirectUri={googleRedirect}
           />
 
@@ -435,7 +440,7 @@ export function CandidatePortalCard({
             configured={githubConfigured}
             savedClientId={githubClientId}
             canEdit={canEdit}
-            description="Candidates sign in with their GitHub account."
+            description={t("providerDescription", { provider: "GitHub" })}
             redirectUri={githubRedirect}
           />
 
@@ -447,7 +452,7 @@ export function CandidatePortalCard({
             configured={linkedinConfigured}
             savedClientId={linkedinClientId}
             canEdit={canEdit}
-            description="Candidates sign in with their LinkedIn account."
+            description={t("providerDescription", { provider: "LinkedIn" })}
             redirectUri={linkedinRedirect}
           />
         </div>
@@ -456,20 +461,15 @@ export function CandidatePortalCard({
       {/* UI options */}
       <div>
         <h2 className="mb-3 text-sm font-semibold tracking-tight text-near-ink">
-          Portal options
+          {t("portalOptionsHeading")}
         </h2>
         <Card className="gap-0 p-0">
           <SettingRows>
             <SettingRow
               htmlFor="portal-show-status"
               descriptionId="portal-show-status-desc"
-              title="Show application status"
-              description={
-                <>
-                  Candidates can see which pipeline stage they are in (e.g.
-                  &quot;Screening&quot;, &quot;Interview&quot;).
-                </>
-              }
+              title={t("showStatusTitle")}
+              description={t("showStatusDescription")}
               control={
                 <Switch
                   id="portal-show-status"
@@ -483,8 +483,8 @@ export function CandidatePortalCard({
             <SettingRow
               htmlFor="portal-show-team"
               descriptionId="portal-show-team-desc"
-              title="Show hiring team"
-              description="Show candidate-facing names, roles, and profile photos of your workspace members. Off by default for privacy."
+              title={t("showTeamTitle")}
+              description={t("showTeamDescription")}
               control={
                 <Switch
                   id="portal-show-team"

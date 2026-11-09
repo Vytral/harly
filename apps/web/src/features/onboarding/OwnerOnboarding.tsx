@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState, useTransition } from "react";
+import { useTranslations } from "next-intl";
 import { useRouter } from "next/navigation";
 import type { Route } from "next";
 import Link from "next/link";
@@ -41,25 +42,6 @@ import {
 
 const PINE = "#3f6212";
 
-const COMPANY_STEP: OnboardingStepMeta = {
-  key: "workspace",
-  label: "Company",
-  desc: "Name your hiring workspace",
-  icon: BuildingsIcon,
-};
-const BRANDING_STEP: OnboardingStepMeta = {
-  key: "branding",
-  label: "Branding",
-  desc: "Logo, color & tagline",
-  icon: MagicWandDuotoneIcon,
-};
-const PROFILE_STEP: OnboardingStepMeta = {
-  key: "profile",
-  label: "You",
-  desc: "Photo & job title",
-  icon: UserCircleIcon,
-};
-
 // Balanced accent palette with evergreen, cool, warm and neutral options.
 const SWATCHES = [
   "#3f6212",
@@ -99,13 +81,13 @@ export function OwnerOnboarding({
    *  step is skipped and the workspace is created with it. */
   suggestedCompanyName?: string | null;
 }) {
+  const t = useTranslations("accessOwnerOnboarding");
   const router = useRouter();
-  // The company step exists only when no workspace does yet. Every step after
-  // it is optional, so nothing here can block reaching the app.
-  const steps = useMemo(
-    () => (initialOrg || suggestedCompanyName ? [BRANDING_STEP, PROFILE_STEP] : [COMPANY_STEP, BRANDING_STEP, PROFILE_STEP]),
-    [initialOrg, suggestedCompanyName],
-  );
+  const steps: OnboardingStepMeta[] = [
+    ...(!initialOrg && !suggestedCompanyName ? [{key: "workspace", label: t("company"), desc: t("companyDesc"), icon: BuildingsIcon}] : []),
+    {key: "branding", label: t("branding"), desc: t("brandingDesc"), icon: MagicWandDuotoneIcon},
+    {key: "profile", label: t("you"), desc: t("youDesc"), icon: UserCircleIcon},
+  ];
   const [step, setStep] = useState(0);
   const [done, setDone] = useState(false);
   const [pending, startTransition] = useTransition();
@@ -139,7 +121,7 @@ export function OwnerOnboarding({
     });
     const created = (await response.json()) as { id?: string; error?: string };
     if (!response.ok || !created.id) {
-      setError(created.error ?? "Couldn't create your workspace.");
+      setError(created.error ?? t("createFailed"));
       return false;
     }
     setOrgId(created.id);
@@ -159,18 +141,18 @@ export function OwnerOnboarding({
         color !== (initialOrg?.primaryColor ?? PINE);
       if (!touched) return true;
       const res = await saveOnboardingBrandingAction({ logoUrl, tagline, primaryColor: color });
-      if (!res.ok) { setError(res.error ?? "Couldn't save branding."); return false; }
+      if (!res.ok) { setError(res.error ?? t("brandingFailed")); return false; }
       setSaved((s) => ({ ...s, branding: true }));
     }
     if (key === "profile") {
       const title = jobTitle.trim();
       if (title) {
         const res = await saveUserRoleAction(title);
-        if (!res.ok) { setError(res.error ?? "Couldn't save your job title."); return false; }
+        if (!res.ok) { setError(res.error ?? t("titleFailed")); return false; }
       }
       if (avatar && avatar !== (initialAvatar ?? "")) {
         const res = await saveOnboardingAvatarAction(avatar);
-        if (!res.ok) { setError(res.error ?? "Couldn't save your photo."); return false; }
+        if (!res.ok) { setError(res.error ?? t("photoFailed")); return false; }
       }
       if (title || avatar !== (initialAvatar ?? "")) setSaved((s) => ({ ...s, profile: true }));
     }
@@ -179,7 +161,7 @@ export function OwnerOnboarding({
 
   async function finish() {
     const res = await completeOnboardingAction();
-    if (!res.ok) { setError(res.error ?? "Couldn't finish setup."); return; }
+    if (!res.ok) { setError(res.error ?? t("finishFailed")); return; }
     setDone(true);
   }
 
@@ -214,8 +196,8 @@ export function OwnerOnboarding({
 
   return (
     <OnboardingShell
-      railTitle="Get set up"
-      railFootnote="Every step is optional and takes seconds. You can change everything later in Settings."
+      railTitle={t("railTitle")}
+      railFootnote={t("railFootnote")}
       steps={steps}
       current={step}
       onJump={(i) => { if (i < step) { setStep(i); setError(null); } }}
@@ -225,7 +207,7 @@ export function OwnerOnboarding({
       onBack={() => { setStep((s) => s - 1); setError(null); }}
       onNext={() => advance(true)}
       onSkip={() => advance(false)}
-      nextLabel={isLast ? "Finish setup" : "Continue"}
+      nextLabel={isLast ? t("finish") : t("continue")}
       minHeight="min-h-[28rem]"
     >
       {key === "workspace" && (
@@ -254,13 +236,14 @@ export function OwnerOnboarding({
 }
 
 function StepCompany({ userName, name, onName, locked }: { userName: string; name: string; onName: (v: string) => void; locked: boolean }) {
+  const t = useTranslations("accessOwnerOnboarding");
   return (
     <StepStagger>
       <StepField>
         <StepHeading
-          eyebrow={`Welcome, ${userName}`}
-          title="What's your company called?"
-          subtitle="Candidates see this on your careers page and in emails. Skip it and we'll use a placeholder you can rename later."
+          eyebrow={t("greeting", {name: userName})}
+          title={t("companyQuestion")}
+          subtitle={t("companyHelp")}
         />
       </StepField>
       <StepField className="mt-7 space-y-3">
@@ -268,10 +251,10 @@ function StepCompany({ userName, name, onName, locked }: { userName: string; nam
           autoFocus
           value={name}
           onChange={(e) => onName(e.target.value)}
-          placeholder="Acme Recruiting"
+          placeholder={t("companyPlaceholder")}
           className="h-11"
           disabled={locked}
-          aria-label="Company name"
+          aria-label={t("companyName")}
         />
       </StepField>
     </StepStagger>
@@ -279,14 +262,15 @@ function StepCompany({ userName, name, onName, locked }: { userName: string; nam
 }
 
 function StepBranding({ logoUrl, onLogo, tagline, onTagline, color, onColor }: { logoUrl: string; onLogo: (v: string) => void; tagline: string; onTagline: (v: string) => void; color: string; onColor: (v: string) => void }) {
+  const t = useTranslations("accessOwnerOnboarding");
   const isCustomColor = !SWATCHES.some((swatch) => swatch.toLowerCase() === color.toLowerCase());
 
   return (
     <StepStagger>
       <StepField>
         <StepHeading
-          title="Make it yours"
-          subtitle="Add your logo, a tagline and an accent color. Everything is optional and editable later."
+          title={t("brandHeading")}
+          subtitle={t("brandHelp")}
         />
       </StepField>
       <StepField className="mt-7 flex items-center gap-5">
@@ -294,34 +278,34 @@ function StepBranding({ logoUrl, onLogo, tagline, onTagline, color, onColor }: {
           value={logoUrl || null}
           onChange={(url) => onLogo(url ?? "")}
           variant="avatar"
-          hint="Square logo · PNG, JPG, SVG or WEBP"
+          hint={t("logoHint")}
         />
         <div className="flex-1 space-y-1">
-          <Label>Company logo</Label>
+          <Label>{t("companyLogo")}</Label>
           <p className="text-xs text-muted-foreground">
-            Shown as your app icon and on the careers page. Square works best.
+            {t("logoHelp")}
           </p>
         </div>
       </StepField>
       <StepField className="mt-6 space-y-2">
-        <Label htmlFor="ob-tagline">Careers page tagline</Label>
+        <Label htmlFor="ob-tagline">{t("tagline")}</Label>
         <Input
           id="ob-tagline"
           value={tagline}
           onChange={(e) => onTagline(e.target.value)}
-          placeholder="A short line about your company"
+          placeholder={t("taglinePlaceholder")}
           maxLength={120}
         />
       </StepField>
       <StepField className="mt-6 space-y-2">
-        <Label>Accent color</Label>
+        <Label>{t("accent")}</Label>
         <div className="flex flex-wrap items-center gap-2">
           {SWATCHES.map((s) => (
             <button
               key={s}
               type="button"
               onClick={() => onColor(s)}
-              aria-label={`Use ${s}`}
+              aria-label={t("useColor", {color: s})}
               className={cn(
                 "size-8 rounded-full ring-2 ring-offset-2 ring-offset-card transition active:scale-95 motion-reduce:active:scale-100",
                 color.toLowerCase() === s.toLowerCase() ? "ring-pine" : "ring-transparent",
@@ -335,7 +319,7 @@ function StepBranding({ logoUrl, onLogo, tagline, onTagline, color, onColor }: {
               "relative flex h-8 shrink-0 cursor-pointer items-center gap-2 overflow-hidden rounded-full border bg-card px-2.5 text-xs font-medium text-foreground transition hover:border-ring/40 focus-within:border-ring focus-within:ring-[3px] focus-within:ring-ring/30",
               isCustomColor && "border-ring ring-2 ring-ring/20",
             )}
-            aria-label="Custom color"
+            aria-label={t("customColor")}
           >
             <input
               type="color"
@@ -348,7 +332,7 @@ function StepBranding({ logoUrl, onLogo, tagline, onTagline, color, onColor }: {
               style={{ backgroundColor: color }}
             />
             <PaletteDuotoneIcon className="pointer-events-none size-3.5 text-muted-foreground" />
-            <span className="pointer-events-none">Custom</span>
+            <span className="pointer-events-none">{t("custom")}</span>
           </label>
         </div>
       </StepField>
@@ -357,12 +341,13 @@ function StepBranding({ logoUrl, onLogo, tagline, onTagline, color, onColor }: {
 }
 
 function StepProfile({ jobTitle, onJobTitle, avatar, onAvatar }: { jobTitle: string; onJobTitle: (v: string) => void; avatar: string; onAvatar: (v: string) => void }) {
+  const t = useTranslations("accessOwnerOnboarding");
   return (
     <StepStagger>
       <StepField>
         <StepHeading
-          title="Put a face to the name"
-          subtitle="Your photo and title show next to your activity and to the hiring team. Optional."
+          title={t("profileHeading")}
+          subtitle={t("profileHelp")}
         />
       </StepField>
       <StepField className="mt-7 flex items-center gap-5">
@@ -370,22 +355,22 @@ function StepProfile({ jobTitle, onJobTitle, avatar, onAvatar }: { jobTitle: str
           value={avatar || null}
           onChange={(url) => onAvatar(url ?? "")}
           variant="avatar"
-          hint="Profile photo · PNG, JPG or WEBP"
+          hint={t("photoHint")}
         />
         <div className="flex-1 space-y-1">
-          <Label>Profile photo</Label>
+          <Label>{t("photo")}</Label>
           <p className="text-xs text-muted-foreground">
-            Shown on your profile and next to your activity.
+            {t("photoHelp")}
           </p>
         </div>
       </StepField>
       <StepField className="mt-6 space-y-2">
-        <Label htmlFor="ob-title">Your job title</Label>
+        <Label htmlFor="ob-title">{t("jobTitle")}</Label>
         <Input
           id="ob-title"
           value={jobTitle}
           onChange={(e) => onJobTitle(e.target.value)}
-          placeholder="Head of Talent"
+          placeholder={t("titlePlaceholder")}
           maxLength={80}
         />
       </StepField>
@@ -408,24 +393,25 @@ function Launchpad({
   aiConfigured: boolean;
   onEnter: () => void;
 }) {
+  const t = useTranslations("accessOwnerOnboarding");
   const reduceMotion = useReducedMotion();
   // The first hour starts with a job. AI is offered last, only when it is not
   // configured, and is plainly optional.
   const nextSteps = useMemo(() => {
     const list: { icon: typeof MegaphoneDuotoneIcon; label: string; hint: string; href: Route; primary: boolean }[] = [
-      { icon: MegaphoneDuotoneIcon, label: "Create your first job", hint: "Describe the role, then publish it", href: "/dashboard/jobs/new" as Route, primary: true },
-      { icon: UsersThreeDuotoneIcon, label: "Invite your team", hint: "Optional. Add teammates any time", href: "/settings/members" as Route, primary: false },
-      { icon: DownloadDuotoneIcon, label: "Import candidates", hint: "From a CSV file", href: "/dashboard/candidates" as Route, primary: false },
+      { icon: MegaphoneDuotoneIcon, label: t("createJob"), hint: t("createJobHelp"), href: "/dashboard/jobs/new" as Route, primary: true },
+      { icon: UsersThreeDuotoneIcon, label: t("invite"), hint: t("inviteHelp"), href: "/settings/members" as Route, primary: false },
+      { icon: DownloadDuotoneIcon, label: t("import"), hint: t("importHelp"), href: "/dashboard/candidates" as Route, primary: false },
     ];
     if (!aiConfigured) {
-      list.push({ icon: RobotDuotoneIcon, label: "Connect AI (optional)", hint: "Bring your own provider to screen and draft", href: "/settings/ai" as Route, primary: false });
+      list.push({ icon: RobotDuotoneIcon, label: t("connectAi"), hint: t("connectAiHelp"), href: "/settings/ai" as Route, primary: false });
     }
     return list;
-  }, [aiConfigured]);
+  }, [aiConfigured, t]);
   const doneItems = [
-    "Workspace created",
-    brandingSaved ? "Careers page branded" : null,
-    profileSaved ? "Profile updated" : null,
+    t("workspaceCreated"),
+    brandingSaved ? t("brandingSaved") : null,
+    profileSaved ? t("profileSaved") : null,
   ].filter(Boolean) as string[];
 
   return (
@@ -439,10 +425,10 @@ function Launchpad({
         <SealCheckDuotoneIcon className="size-8" />
       </motion.span>
       <h2 className="mt-5 font-display text-2xl tracking-tight text-foreground">
-        {workspaceName || "Your workspace"} is ready
+        {t("ready", {workspace: workspaceName || t("workspace")})}
       </h2>
       <p className="mx-auto mt-2 max-w-sm text-sm text-muted-foreground">
-        You can start hiring right away. Here is what is done and what is worth doing next.
+        {t("readyHelp")}
       </p>
 
       <div className="mt-7 space-y-2 text-left">
@@ -468,7 +454,7 @@ function Launchpad({
       </div>
 
       <Button className="mt-7 w-full" size="lg" onClick={onEnter}>
-        Go to dashboard
+        {t("dashboard")}
       </Button>
     </div>
   );

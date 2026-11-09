@@ -1,6 +1,7 @@
 "use client";
 
 import { usePathname } from "next/navigation";
+import { useTranslations } from "next-intl";
 
 import { allNavItems } from "@/components/dashboard/nav-items";
 import { usePageTitle } from "@/components/dashboard/PageTitleContext";
@@ -14,13 +15,14 @@ import { usePageTitle } from "@/components/dashboard/PageTitleContext";
  * are untouched.
  */
 export function ShellPageHeading() {
+  const t = useTranslations("shell.nav");
   const pathname = usePathname();
   const { title: contextTitle } = usePageTitle();
 
   const navTitle = allNavItems().find(
     (item) => item.shellTitle && item.href === pathname,
-  )?.label;
-  const title = contextTitle || navTitle;
+  )?.messageKey;
+  const title = contextTitle || (navTitle ? t(navTitle) : undefined);
   if (!title) return null;
 
   return (

@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   buildModelOptions,
   describeModelSource,
+  type ModelSourceTranslator,
   formatContextWindow,
   formatPricePerM,
   lacksToolCalling,
@@ -39,12 +40,21 @@ describe("model options", () => {
 
   it("describes where the list came from", () => {
     const now = Date.parse("2026-11-07T12:00:00Z");
-    expect(describeModelSource("snapshot", null)).toBe("Built-in list (offline)");
-    expect(describeModelSource("builtin", null)).toBe("Built-in list (offline)");
-    expect(describeModelSource("live", "2026-11-07T11:55:00Z", now)).toBe(
+    const messages = {
+      builtin: "Built-in list (offline)",
+      updated: "Updated from models.dev",
+      updatedJustNow: "Updated from models.dev · just now",
+      updatedMinutesAgo: "Updated from models.dev · {count} min ago",
+      updatedHoursAgo: "Updated from models.dev · {count} h ago",
+      updatedDaysAgo: "Updated from models.dev · {count} d ago",
+    } as const;
+    const t: ModelSourceTranslator = (key, values) => messages[key].replace("{count}", String(values?.count ?? ""));
+    expect(describeModelSource("snapshot", null, t)).toBe("Built-in list (offline)");
+    expect(describeModelSource("builtin", null, t)).toBe("Built-in list (offline)");
+    expect(describeModelSource("live", "2026-11-07T11:55:00Z", t, now)).toBe(
       "Updated from models.dev · 5 min ago",
     );
-    expect(describeModelSource("cache", "2026-11-07T06:00:00Z", now)).toBe(
+    expect(describeModelSource("cache", "2026-11-07T06:00:00Z", t, now)).toBe(
       "Updated from models.dev · 6 h ago",
     );
   });

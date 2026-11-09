@@ -37,11 +37,12 @@ vi.mock("@/features/candidates/actions", () => ({
 vi.mock("@/features/mailbox/compose-shared", async () => {
   const { z } = await import("zod");
   return {
-    composerAttachmentSchema: z.object({
-      filename: z.string(),
-      contentType: z.string(),
-      base64: z.string(),
-    }),
+    composerAttachmentSchema: () =>
+      z.object({
+        filename: z.string(),
+        contentType: z.string(),
+        base64: z.string(),
+      }),
   };
 });
 vi.mock("@/features/mailbox/actions", () => ({

@@ -1,9 +1,12 @@
 import { describe, expect, it } from "vitest";
 
+import { makeT } from "@/test-support/translator";
 import { emptyCanvasGraph } from "../../definition/schema-v2";
 import { addNode, connectNodes, type EditorSnapshot } from "../state/commands";
 import { createBlock } from "../state/blocks";
 import { asLiteral, bindingOptionsFor } from "./bindings";
+
+const t = makeT("labels.automations");
 
 describe("BindingPicker options", () => {
   it("preserves nested JSON config values instead of stringifying them", () => {
@@ -39,7 +42,7 @@ describe("BindingPicker options", () => {
     expect(c.ok).toBe(true);
     if (!c.ok) return;
 
-    const options = bindingOptionsFor(c.snapshot.graph, no.id);
+    const options = bindingOptionsFor(c.snapshot.graph, no.id, t);
     const fromYes = options.filter((item) => item.id.includes(yes.id));
     expect(fromYes.length).toBeGreaterThan(0);
     expect(fromYes.every((item) => item.disabled)).toBe(true);
@@ -59,7 +62,7 @@ describe("BindingPicker options", () => {
     expect(second.ok).toBe(true);
     if (!second.ok) return;
 
-    const options = bindingOptionsFor(second.snapshot.graph, signature.id);
+    const options = bindingOptionsFor(second.snapshot.graph, signature.id, t);
     expect(options.some((item) => item.id === `output:${request.id}:primaryRequestId` && !item.disabled)).toBe(true);
   });
 
@@ -77,7 +80,7 @@ describe("BindingPicker options", () => {
     expect(second.ok).toBe(true);
     if (!second.ok) return;
 
-    const chained = bindingOptionsFor(second.snapshot.graph, sendOffer.id);
+    const chained = bindingOptionsFor(second.snapshot.graph, sendOffer.id, t);
     expect(chained.some((item) => item.id === `output:${offer.id}:offerId` && !item.disabled)).toBe(true);
 
     let interviewSnapshot: EditorSnapshot = { graph: emptyCanvasGraph(), layout: { positions: {}, collapsedNodeIds: [] } };
@@ -91,7 +94,7 @@ describe("BindingPicker options", () => {
     const interviewNext = connectNodes(interviewStart.snapshot, { source: interview.id, port: "success", target: reschedule.id });
     expect(interviewNext.ok).toBe(true);
     if (!interviewNext.ok) return;
-    const interviewOptions = bindingOptionsFor(interviewNext.snapshot.graph, reschedule.id);
+    const interviewOptions = bindingOptionsFor(interviewNext.snapshot.graph, reschedule.id, t);
     expect(interviewOptions.some((item) => item.id === `output:${interview.id}:interviewId` && !item.disabled)).toBe(true);
   });
 
@@ -109,7 +112,7 @@ describe("BindingPicker options", () => {
     expect(second.ok).toBe(true);
     if (!second.ok) return;
 
-    const options = bindingOptionsFor(second.snapshot.graph, next.id);
+    const options = bindingOptionsFor(second.snapshot.graph, next.id, t);
     expect(options.some((item) => item.id === `output:${request.id}:status` && !item.disabled)).toBe(true);
     expect(options.some((item) => item.id === `output:${request.id}:body` && !item.disabled)).toBe(true);
     expect(options.some((item) => item.id === `output:${request.id}:result`)).toBe(false);

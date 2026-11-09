@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { useLocale, useTranslations } from "next-intl";
 import { useRouter } from "next/navigation";
 import { AlertTriangle } from "lucide-react";
 import { toast } from "@/lib/notification-island/toast";
@@ -33,16 +34,16 @@ import { cn } from "@/lib/utils";
 
 import type { CandidatePrivacyRow, PrivacyInventory } from "./types";
 
-const INVENTORY_ROWS: Array<{ key: keyof PrivacyInventory; label: string }> = [
-  { key: "applications", label: "Applications" },
-  { key: "interviews", label: "Interviews" },
-  { key: "messages", label: "Email messages" },
-  { key: "files", label: "Files & résumés" },
-  { key: "notes", label: "Internal notes" },
-  { key: "scorecards", label: "Scorecards" },
-  { key: "aiEvaluations", label: "Automatic evaluations" },
-  { key: "offers", label: "Offers" },
-  { key: "activity", label: "Activity timeline events" },
+const INVENTORY_ROWS: Array<{ key: keyof PrivacyInventory }> = [
+  { key: "applications" },
+  { key: "interviews" },
+  { key: "messages" },
+  { key: "files" },
+  { key: "notes" },
+  { key: "scorecards" },
+  { key: "aiEvaluations" },
+  { key: "offers" },
+  { key: "activity" },
 ];
 
 // GDPR Art. 12(3): respond to a data-subject request within one month.
@@ -61,6 +62,9 @@ export function PrivacyRequestCard({
   canFulfilErasure: boolean;
   inventory: PrivacyInventory;
 }) {
+  const t = useTranslations("features.candidates.privacyRequestCard");
+  const tDsar = useTranslations("labels.workspaces.dsar");
+  const locale = useLocale();
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [note, setNote] = useState("");
@@ -74,14 +78,10 @@ export function PrivacyRequestCard({
         notes: note || undefined,
       });
       if (!result.ok) {
-        toast.error(result.error ?? "Could not review the request.");
+        toast.error(result.error ?? t("reviewError"));
         return;
       }
-      toast.success(
-        decision === "approve"
-          ? "Request approved for fulfilment."
-          : "Request denied.",
-      );
+      toast.success(decision === "approve" ? t("approved") : t("denied"));
       router.refresh();
     });
   }
@@ -93,10 +93,10 @@ export function PrivacyRequestCard({
         candidateId,
       });
       if (!result.ok) {
-        toast.error(result.error ?? "Could not fulfil the erasure request.");
+        toast.error(result.error ?? t("erasureError"));
         return;
       }
-      toast.success("Candidate data erased and request fulfilled.");
+      toast.success(t("erased"));
       router.replace("/dashboard/candidates");
     });
   }
@@ -110,7 +110,6 @@ export function PrivacyRequestCard({
   const emailConfirmed =
     confirmEmail.trim().toLowerCase() === candidateEmail.trim().toLowerCase();
 
-  const source = request.requestedBy ? "candidate portal" : null;
   const typeMeta = DSAR_TYPE_META[request.type];
 
   return (
@@ -123,7 +122,7 @@ export function PrivacyRequestCard({
         )}
       />
       <div className="space-y-5 p-5 pl-6">
-        {/* Heading , type icon + title + status, timing floated right */}
+        {/* Heading: type icon + title + status, timing floated right */}
         <div className="flex items-start justify-between gap-4">
           <div className="flex items-center gap-2.5">
             <span
@@ -134,33 +133,46 @@ export function PrivacyRequestCard({
             >
               <typeMeta.icon className="size-4" strokeWidth={1.8} />
             </span>
-            <h3 className="font-medium">{typeMeta.label}</h3>
-            <DsarStatusBadge status={request.status} />
+            <h3 className="font-medium">{tDsar(`type.${request.type}`)}</h3>
+            <DsarStatusBadge
+              status={request.status}
+              label={tDsar(`status.${request.status}`)}
+            />
           </div>
           <span className="shrink-0 text-[13px] text-muted-foreground">
             <RelativeTime value={request.createdAt} />
           </span>
         </div>
 
-        {/* One-line context , who, how, deadline */}
+        {/* One-line context: who, how, deadline */}
         <p className="text-sm text-muted-foreground">
-          Requested by{" "}
-          <span className="text-foreground">
-            {request.requestedBy ?? "the candidate"}
-          </span>
-          {source ? ` via ${source}` : ""}
+          {request.requestedBy
+            ? t.rich("requestedByPortal", {
+                name: request.requestedBy,
+                strong: (chunks) => (
+                  <span className="text-foreground">{chunks}</span>
+                ),
+              })
+            : t.rich("requestedByCandidate", {
+                strong: (chunks) => (
+                  <span className="text-foreground">{chunks}</span>
+                ),
+              })}
           {isOpen ? (
             <>
               {" "}
-              · respond by <ShortDate value={dueDate} />
+              ·{" "}
+              {t.rich("respondBy", {
+                date: () => <ShortDate value={dueDate} />,
+              })}
             </>
           ) : null}
           {request.processedBy ? (
-            <> · reviewed by {request.processedBy}</>
+            <> · {t("reviewedBy", { name: request.processedBy })}</>
           ) : null}
         </p>
 
-        {/* Data in scope , scannable number grid, weighted like the warning it is */}
+        {/* Data in scope: scannable number grid, weighted like the warning it is */}
         {isErasure ? (
           <div
             className={cn(
@@ -182,8 +194,8 @@ export function PrivacyRequestCard({
                 <AlertTriangle className="size-3.5 shrink-0" />
               ) : null}
               {scoped.length > 0
-                ? "Approving permanently destroys the following"
-                : "No linked records — only the candidate profile remains"}
+                ? t("dataInScope")
+                : t("noLinkedRecords")}
             </p>
             {scoped.length > 0 ? (
               <dl className="mt-4 grid grid-cols-1 justify-start gap-x-12 gap-y-5 sm:grid-cols-[repeat(3,auto)]">
@@ -193,7 +205,7 @@ export function PrivacyRequestCard({
                       {inventory[row.key]}
                     </dd>
                     <dt className="mt-1.5 text-[13px] text-muted-foreground">
-                      {row.label}
+                      {t(`inventory.${row.key}`)}
                     </dt>
                   </div>
                 ))}
@@ -202,7 +214,7 @@ export function PrivacyRequestCard({
           </div>
         ) : null}
 
-        {/* Prior review note , only for already-decided requests */}
+        {/* Prior review note, only for already-decided requests */}
         {request.notes && request.status !== "pending" ? (
           <p className="whitespace-pre-line text-sm text-muted-foreground">
             {request.notes}
@@ -210,18 +222,19 @@ export function PrivacyRequestCard({
         ) : null}
         {request.status === "blocked" && request.reviewDueAt ? (
           <p className="mt-2 text-xs text-muted-foreground">
-            Legal hold review due{" "}
-            {new Date(request.reviewDueAt).toLocaleDateString()}.
+            {t("legalHoldReviewDue", {
+              date: new Date(request.reviewDueAt).toLocaleDateString(locale),
+            })}
           </p>
         ) : null}
 
-        {/* Decision , pending: optional note + Deny / Approve */}
+        {/* Decision: pending gets an optional note plus Deny / Approve */}
         {request.status === "pending" ? (
           <div className="space-y-4">
             <Textarea
               value={note}
               onChange={(event) => setNote(event.target.value)}
-              placeholder="Internal review note (optional)"
+              placeholder={t("reviewNotePlaceholder")}
               maxLength={1000}
               className="min-h-[70px] resize-y text-base sm:text-sm"
             />
@@ -234,21 +247,20 @@ export function PrivacyRequestCard({
                     disabled={isPending}
                     className="border-destructive/30 text-destructive hover:border-destructive/50 hover:bg-destructive/10 hover:text-destructive"
                   >
-                    Deny
+                    {t("deny")}
                   </Button>
                 </DialogTrigger>
                 <DialogContent>
                   <DialogHeader>
-                    <DialogTitle>Deny this request?</DialogTitle>
+                    <DialogTitle>{t("denyTitle")}</DialogTitle>
                     <DialogDescription>
-                      This records the decision and its review note in the audit
-                      log.
+                      {t("denyDescription")}
                     </DialogDescription>
                   </DialogHeader>
                   <DialogFooter>
                     <DialogClose asChild>
                       <Button variant="outline" disabled={isPending}>
-                        Cancel
+                        {t("cancel")}
                       </Button>
                     </DialogClose>
                     <DialogClose asChild>
@@ -257,7 +269,7 @@ export function PrivacyRequestCard({
                         disabled={isPending}
                         onClick={() => review("deny")}
                       >
-                        Deny request
+                        {t("denyRequest")}
                       </Button>
                     </DialogClose>
                   </DialogFooter>
@@ -266,22 +278,22 @@ export function PrivacyRequestCard({
               <Dialog>
                 <DialogTrigger asChild>
                   <Button size="sm" disabled={isPending}>
-                    Approve
+                    {t("approve")}
                   </Button>
                 </DialogTrigger>
                 <DialogContent>
                   <DialogHeader>
-                    <DialogTitle>Approve for fulfilment?</DialogTitle>
+                    <DialogTitle>{t("approveTitle")}</DialogTitle>
                     <DialogDescription>
                       {isErasure
-                        ? "Approval moves the request to fulfilment; it does not delete data yet. A role with candidate deletion access confirms the erasure in a second step."
-                        : "This records your approval in the audit log."}
+                        ? t("approveErasureDescription")
+                        : t("approveDescription")}
                     </DialogDescription>
                   </DialogHeader>
                   <DialogFooter>
                     <DialogClose asChild>
                       <Button variant="outline" disabled={isPending}>
-                        Cancel
+                        {t("cancel")}
                       </Button>
                     </DialogClose>
                     <DialogClose asChild>
@@ -289,7 +301,7 @@ export function PrivacyRequestCard({
                         disabled={isPending}
                         onClick={() => review("approve")}
                       >
-                        Approve request
+                        {t("approveRequest")}
                       </Button>
                     </DialogClose>
                   </DialogFooter>
@@ -299,7 +311,7 @@ export function PrivacyRequestCard({
           </div>
         ) : null}
 
-        {/* Fulfilment , processing erasure: irreversible confirm */}
+        {/* Fulfilment: processing erasure needs an irreversible confirm */}
         {(request.status === "processing" || request.status === "blocked") &&
         isErasure ? (
           canFulfilErasure ? (
@@ -310,16 +322,14 @@ export function PrivacyRequestCard({
             >
               <DialogTrigger asChild>
                 <Button size="sm" variant="destructive" disabled={isPending}>
-                  Erase candidate data
+                  {t("erase")}
                 </Button>
               </DialogTrigger>
               <DialogContent>
                 <DialogHeader>
-                  <DialogTitle>Permanently erase candidate data?</DialogTitle>
+                  <DialogTitle>{t("eraseTitle")}</DialogTitle>
                   <DialogDescription>
-                    This fulfils the approved request. The candidate profile and
-                    every linked record above are permanently removed, then you
-                    return to Candidates.
+                    {t("eraseDescription")}
                   </DialogDescription>
                 </DialogHeader>
                 <div className="space-y-2">
@@ -327,11 +337,14 @@ export function PrivacyRequestCard({
                     htmlFor={`erase-confirm-${request.id}`}
                     className="text-sm text-muted-foreground"
                   >
-                    Type{" "}
-                    <span className="font-medium text-foreground">
-                      {candidateEmail}
-                    </span>{" "}
-                    to confirm.
+                    {t.rich("typeToConfirm", {
+                      email: candidateEmail,
+                      strong: (chunks) => (
+                        <span className="font-medium text-foreground">
+                          {chunks}
+                        </span>
+                      ),
+                    })}
                   </label>
                   <Input
                     id={`erase-confirm-${request.id}`}
@@ -344,7 +357,7 @@ export function PrivacyRequestCard({
                 <DialogFooter>
                   <DialogClose asChild>
                     <Button variant="outline" disabled={isPending}>
-                      Cancel
+                      {t("cancel")}
                     </Button>
                   </DialogClose>
                   <DialogClose asChild>
@@ -353,7 +366,7 @@ export function PrivacyRequestCard({
                       disabled={isPending || !emailConfirmed}
                       onClick={fulfilErasure}
                     >
-                      Erase permanently
+                      {t("eraseConfirm")}
                     </Button>
                   </DialogClose>
                 </DialogFooter>
@@ -361,8 +374,7 @@ export function PrivacyRequestCard({
             </Dialog>
           ) : (
             <p className="text-sm text-muted-foreground">
-              Approved and awaiting fulfilment — a role with candidate deletion
-              access must complete the erasure.
+              {t("awaitingFulfilment")}
             </p>
           )
         ) : null}

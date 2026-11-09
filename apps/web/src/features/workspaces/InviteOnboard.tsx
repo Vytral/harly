@@ -2,6 +2,8 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
+import { authErrorKey } from "@/features/auth/i18n/error-keys";
 import { toast } from "@/lib/notification-island/toast";
 
 import { authClient } from "@/lib/auth-client";
@@ -23,6 +25,8 @@ export function InviteOnboard({
   invitationId: string;
   email: string;
 }) {
+  const errorText = useTranslations("accessAuthErrors");
+  const t = useTranslations("accessInvitation");
   const router = useRouter();
   const [name, setName] = useState("");
   const [password, setPassword] = useState("");
@@ -40,13 +44,13 @@ export function InviteOnboard({
         password,
       });
       if (signUp.error) {
-        setError(signUp.error.message ?? "Could not create your account.");
+        setError(errorText(authErrorKey(signUp.error.code, "signupFailed")));
         return;
       }
 
       const accepted = await acceptWorkspaceInvitationAction(invitationId);
       if (!accepted.success || !accepted.organizationId) {
-        setError(accepted.error ?? "Could not join the workspace.");
+        setError(accepted.error ?? t("joinFailed"));
         return;
       }
 
@@ -54,7 +58,7 @@ export function InviteOnboard({
         organizationId: accepted.organizationId,
       });
 
-      toast.success("Welcome aboard");
+      toast.success(t("welcome"));
       router.replace("/onboarding");
       router.refresh();
     });
@@ -63,17 +67,17 @@ export function InviteOnboard({
   return (
     <div className="space-y-4">
       <div className="space-y-1.5">
-        <Label htmlFor="invite-email">Email</Label>
+        <Label htmlFor="invite-email">{t("email")}</Label>
         <Input id="invite-email" value={email} disabled readOnly />
       </div>
       <div className="space-y-1.5">
-        <Label htmlFor="invite-name">Full name</Label>
+        <Label htmlFor="invite-name">{t("name")}</Label>
         <Input
           id="invite-name"
           value={name}
           autoFocus
           autoComplete="name"
-          placeholder="Ada Lovelace"
+          placeholder={t("namePlaceholder")}
           onChange={(e) => {
             setName(e.target.value);
             setError(null);
@@ -81,13 +85,13 @@ export function InviteOnboard({
         />
       </div>
       <div className="space-y-1.5">
-        <Label htmlFor="invite-password">Password</Label>
+        <Label htmlFor="invite-password">{t("password")}</Label>
         <Input
           id="invite-password"
           type="password"
           value={password}
           autoComplete="new-password"
-          placeholder="At least 8 characters"
+          placeholder={t("minLength")}
           onChange={(e) => {
             setPassword(e.target.value);
             setError(null);
@@ -110,7 +114,7 @@ export function InviteOnboard({
         disabled={!canSubmit || isPending}
         onClick={submit}
       >
-        {isPending ? "Setting up…" : "Join & start working"}
+        {isPending ? t("settingUp") : t("joinStart")}
       </Button>
     </div>
   );

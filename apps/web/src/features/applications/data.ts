@@ -55,9 +55,43 @@ export type PublicApplicationResult =
         portalEnabled: boolean;
         applicationId: string;
         ownerEmails: string[];
+        ownerRecipients: Array<{
+          email: string;
+          preferredEmailLocale: string | null;
+        }>;
       };
     }
-  | { ok: false; message: string };
+  | { ok: false; code: PublicApplicationFailureCode; message: string };
+
+/**
+ * English fallbacks for public application failures. `message` stays English
+ * for the public REST API; the hosted apply form translates by `code`.
+ */
+export const PUBLIC_APPLICATION_FAILURE_MESSAGES = {
+  jobUnavailable: "Job not available.",
+  resumeRequired: "Resume is required.",
+  resumeInvalid: "Resume upload is invalid.",
+  consentRequired:
+    "You must agree to the privacy policy to submit your application.",
+  duplicateApplication: "You've already applied to this job",
+  alreadyApplied: "You've already applied to this job.",
+  candidateBeingCreated:
+    "A candidate with this email is being created. Please try again.",
+  notAccepting: "This job is not accepting applications yet.",
+} as const;
+
+export type PublicApplicationFailureCode =
+  keyof typeof PUBLIC_APPLICATION_FAILURE_MESSAGES;
+
+function publicApplicationFailure(
+  code: PublicApplicationFailureCode,
+): PublicApplicationResult {
+  return {
+    ok: false,
+    code,
+    message: PUBLIC_APPLICATION_FAILURE_MESSAGES[code],
+  };
+}
 
 export const DEFAULT_APPLICATION_CONSENT_TEXT =
   "I agree to the privacy policy and consent to the processing of my personal data.";
@@ -67,8 +101,10 @@ export type PublicApplicationConfig = JobApplicationConfig & {
   consentText: string;
 };
 
-/** Map known uniqueness races to the public application contract. */
-export function getApplicationConflictMessage(error: unknown): string | null {
+/** Map known uniqueness races to a stable failure code, or null. */
+export function getApplicationConflictCode(
+  error: unknown,
+): Extract<PublicApplicationFailureCode, "alreadyApplied" | "candidateBeingCreated"> | null {
   const seen = new Set<unknown>();
   const parts: string[] = [];
   let current: unknown = error;
@@ -98,15 +134,21 @@ export function getApplicationConflictMessage(error: unknown): string | null {
         description.includes("candidate") &&
         description.includes("job")))
   ) {
-    return "You've already applied to this job.";
+    return "alreadyApplied";
   }
   if (
     parts.includes("23505") &&
     description.includes("candidates_workspace_email_idx")
   ) {
-    return "A candidate with this email is being created. Please try again.";
+    return "candidateBeingCreated";
   }
   return null;
+}
+
+/** English message for a uniqueness race, kept for callers outside the apply flow. */
+export function getApplicationConflictMessage(error: unknown): string | null {
+  const code = getApplicationConflictCode(error);
+  return code ? PUBLIC_APPLICATION_FAILURE_MESSAGES[code] : null;
 }
 
 function normalizeEducationEntries(
@@ -245,7 +287,7 @@ export async function createPublicApplication(
         .limit(1);
 
       if (!job) {
-        return { ok: false, message: "Job not available." };
+        return publicApplicationFailure("jobUnavailable");
       }
 
       const workspaceId = job.workspaceId;
@@ -256,10 +298,10 @@ export async function createPublicApplication(
         applicationConfig.sections.profile.resume.visibility === "required" &&
         !values.resumeKey
       ) {
-        return { ok: false, message: "Resume is required." };
+        return publicApplicationFailure("resumeRequired");
       }
       if (values.resumeUrl && !values.resumeKey) {
-        return { ok: false, message: "Resume upload is invalid." };
+        return publicApplicationFailure("resumeInvalid");
       }
       const verifiedResume = values.resumeKey
         ? await verifyResumeUpload({
@@ -271,7 +313,7 @@ export async function createPublicApplication(
           })
         : null;
       if (values.resumeKey && !verifiedResume) {
-        return { ok: false, message: "Resume upload is invalid." };
+        return publicApplicationFailure("resumeInvalid");
       }
       const [workspace] = await tx
         .select({
@@ -296,11 +338,7 @@ export async function createPublicApplication(
       const consentText =
         workspace.consentText?.trim() || DEFAULT_APPLICATION_CONSENT_TEXT;
       if (workspace.legalConfigured && !options?.consent) {
-        return {
-          ok: false,
-          message:
-            "You must agree to the privacy policy to submit your application.",
-        };
+        return publicApplicationFailure("consentRequired");
       }
 
       const submittedAddress = values.address ?? values.location ?? null;
@@ -341,10 +379,7 @@ export async function createPublicApplication(
           .limit(1);
 
         if (duplicateApplication) {
-          return {
-            ok: false,
-            message: "You've already applied to this job",
-          };
+          return publicApplicationFailure("duplicateApplication");
         }
       }
 
@@ -422,10 +457,7 @@ export async function createPublicApplication(
       });
 
       if (!firstStage) {
-        return {
-          ok: false,
-          message: "This job is not accepting applications yet.",
-        };
+        return publicApplicationFailure("notAccepting");
       }
 
       const now = new Date();
@@ -569,7 +601,10 @@ export async function createPublicApplication(
       }
 
       const owners = await tx
-        .select({ email: authUsers.email })
+        .select({
+          email: authUsers.email,
+          preferredEmailLocale: authUsers.preferredEmailLocale,
+        })
         .from(authMembers)
         .innerJoin(authUsers, eq(authUsers.id, authMembers.userId))
         .where(
@@ -615,13 +650,17 @@ export async function createPublicApplication(
           portalEnabled: workspace.portalEnabled === true,
           applicationId: application.id,
           ownerEmails: owners.map((owner) => owner.email),
+          ownerRecipients: owners.map((owner) => ({
+            email: owner.email,
+            preferredEmailLocale: owner.preferredEmailLocale,
+          })),
         },
       };
       },
     );
   } catch (error) {
-    const conflict = getApplicationConflictMessage(error);
-    if (conflict) return { ok: false, message: conflict };
+    const conflict = getApplicationConflictCode(error);
+    if (conflict) return publicApplicationFailure(conflict);
     throw error;
   }
 

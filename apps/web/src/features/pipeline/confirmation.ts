@@ -1,25 +1,20 @@
-export function bulkDecisionConfirmationMessage(
-  status: "hired" | "rejected",
-  count: number,
-) {
-  const verb = status === "hired" ? "hire" : "reject";
-  const noun = count === 1 ? "application" : "applications";
-  return `Confirm ${verb} ${count} ${noun}? This changes every selected application.`;
-}
+import type { useTranslations } from "next-intl";
 
-/** Copy for the ConfirmDialog version of the same bulk-decision prompt. */
+type Translator = ReturnType<typeof useTranslations>;
+
+/** Copy for the ConfirmDialog version of the bulk hire or reject prompt. */
 export function bulkDecisionConfirmCopy(
+  t: Translator,
   status: "hired" | "rejected",
   count: number,
 ) {
-  const noun = count === 1 ? "application" : "applications";
   const hire = status === "hired";
   return {
     tone: hire ? ("default" as const) : ("destructive" as const),
-    title: `${hire ? "Hire" : "Reject"} ${count} ${noun}?`,
+    title: hire ? t("hireTitle", { count }) : t("rejectTitle", { count }),
     description: hire
-      ? `All ${count} selected ${noun} will be marked as hired.`
-      : `All ${count} selected ${noun} will be marked as rejected. Candidates may be notified depending on your stage emails.`,
-    confirmLabel: `${hire ? "Hire" : "Reject"} ${count} ${noun}`,
+      ? t("hireDescription", { count })
+      : t("rejectDescription", { count }),
+    confirmLabel: hire ? t("hireConfirm", { count }) : t("rejectConfirm", { count }),
   };
 }

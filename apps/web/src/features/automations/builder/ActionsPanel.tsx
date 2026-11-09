@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, type ComponentType, type SVGProps } from "react";
+import { useTranslations } from "next-intl";
 import { cn } from "@/lib/utils";
 import { MAX_ACTIONS_PER_WORKFLOW, type Action, type ActionType } from "../schema";
 import { actionMeta, pickableActions, type ConfigField } from "./catalog";
@@ -16,10 +17,10 @@ type IconComponent = ComponentType<SVGProps<SVGSVGElement>>;
 const MAX_ACTIONS = MAX_ACTIONS_PER_WORKFLOW;
 
 const VARIABLE_CHIPS = [
-  { label: "Candidate Name", value: "{{candidate_first_name}}" },
-  { label: "Job Title", value: "{{job_title}}" },
-  { label: "Company", value: "{{company_name}}" },
-];
+  { id: "candidateName", value: "{{candidate_first_name}}" },
+  { id: "jobTitle", value: "{{job_title}}" },
+  { id: "company", value: "{{company_name}}" },
+] as const;
 
 /**
  * The DO panel: an ordered list of human-friendly action cards.
@@ -43,6 +44,8 @@ export function ActionsPanel({
   tags?: string[];
   startWithPicker?: boolean;
 }) {
+  const t = useTranslations("features.automations.ActionsPanel");
+  const tl = useTranslations("labels.automations");
   const [pickerOpen, setPickerOpen] = useState(startWithPicker && value.length === 0);
 
   function update(i: number, patch: Partial<Action>) {
@@ -95,7 +98,7 @@ export function ActionsPanel({
   return (
     <div className="space-y-0">
       {value.map((action, i) => {
-        const meta = actionMeta(action.type);
+        const meta = actionMeta(action.type, tl);
         return (
           <div key={i}>
             <span className="flex items-center gap-2 pb-1.5 pl-1">
@@ -103,14 +106,14 @@ export function ActionsPanel({
                 {i + 1}
               </span>
               <span className="font-chrome text-[11px] uppercase tracking-wider text-soft-ink">
-                Step {i + 1}
+                {t("step", { number: i + 1 })}
               </span>
             </span>
             <ActionCard
               index={i}
               total={value.length}
               action={action}
-              summary={describeAction(action)}
+              summary={describeAction(action, tl)}
               icon={meta?.icon}
               label={meta?.label ?? action.type}
               stageNames={stageNames}
@@ -143,12 +146,12 @@ export function ActionsPanel({
                 : "bg-near-ink text-primary-foreground border-near-ink hover:bg-near-ink/90 hover:text-primary-foreground",
             )}
           >
-            {value.length > 0 ? "+ Add another action" : "Choose an action"}
+            {value.length > 0 ? t("addAnother") : t("chooseAction")}
           </button>
         )
       ) : (
         <p className="mt-3 text-center text-xs text-soft-ink">
-          Maximum of {MAX_ACTIONS} actions reached.
+          {t("maxReached", { max: MAX_ACTIONS })}
         </p>
       )}
     </div>
@@ -190,7 +193,9 @@ function ActionCard({
   onRemove: () => void;
   onMove: (dir: -1 | 1) => void;
 }) {
-  const meta = actionMeta(action.type);
+  const t = useTranslations("features.automations.ActionsPanel");
+  const tl = useTranslations("labels.automations");
+  const meta = actionMeta(action.type, tl);
 
   return (
     <div className="rounded-xl border border-border bg-warm-paper p-4 shadow-xs transition-colors duration-150 ease-out">
@@ -210,7 +215,7 @@ function ActionCard({
                 onClick={() => onMove(-1)}
                 disabled={index === 0}
                 className="rounded p-1 hover:bg-soft-kraft hover:text-foreground disabled:opacity-25"
-                aria-label="Move up"
+                aria-label={t("moveUp")}
               >
                 <ChevronUpIcon className="size-3.5" />
               </button>
@@ -219,7 +224,7 @@ function ActionCard({
                 onClick={() => onMove(1)}
                 disabled={index === total - 1}
                 className="rounded p-1 hover:bg-soft-kraft hover:text-foreground disabled:opacity-25"
-                aria-label="Move down"
+                aria-label={t("moveDown")}
               >
                 <ChevronDownIcon className="size-3.5" />
               </button>
@@ -228,7 +233,7 @@ function ActionCard({
                 type="button"
                 onClick={onRemove}
                 className="rounded p-1 hover:bg-danger-rust/10 hover:text-danger-rust"
-                aria-label="Remove action"
+                aria-label={t("removeAction")}
               >
                 <CloseIcon className="size-3.5" />
               </button>
@@ -258,7 +263,7 @@ function ActionCard({
             action.type === "send_booking_link" ||
             action.type === "add_note") && (
             <div className="mt-2.5 flex flex-wrap items-center gap-1 text-[11px] text-soft-ink">
-              <span>Insert variable:</span>
+              <span>{t("insertVariable")}</span>
               {VARIABLE_CHIPS.map((chip) => (
                 <button
                   key={chip.value}
@@ -278,7 +283,7 @@ function ActionCard({
                   }}
                   className="rounded-md border border-border/80 bg-pure-snow px-1.5 py-0.5 text-[10px] font-mono text-foreground hover:bg-soft-kraft transition-colors duration-150 ease-out"
                 >
-                  {chip.label}
+                  {t(`variables.${chip.id}`)}
                 </button>
               ))}
             </div>
@@ -292,7 +297,7 @@ function ActionCard({
               onChange={(e) => onUpdate({ continueOnError: e.target.checked })}
               className="size-3.5 rounded border-border accent-foreground"
             />
-            Continue workflow if this action fails
+            {t("continueOnError")}
           </label>
         </div>
       </div>
@@ -318,6 +323,7 @@ function ConfigEditor({
   onChange: (v: unknown) => void;
 }) {
   const base = builderFieldClass();
+  const t = useTranslations("features.automations.ActionsPanel");
 
   if (field.kind === "datetime") {
     const parsedValue = typeof value === "string" && value ? new Date(value) : null;
@@ -348,10 +354,10 @@ function ConfigEditor({
           onChange={(e) => onChange(e.target.value || undefined)}
           className={base}
         >
-          <option value="">Choose an email template…</option>
+          <option value="">{t("chooseEmailTemplate")}</option>
           {emailTemplates.length === 0 ? (
             <option value="" disabled>
-              No email templates configured
+              {t("noEmailTemplates")}
             </option>
           ) : (
             emailTemplates.map((t) => (
@@ -376,13 +382,13 @@ function ConfigEditor({
           onChange={(e) => onChange(Number(e.target.value))}
           className={base}
         >
-          <option value="0">Same day (0 days)</option>
-          <option value="1">In 1 day</option>
-          <option value="2">In 2 days</option>
-          <option value="3">In 3 days</option>
-          <option value="5">In 5 days</option>
-          <option value="7">In 1 week (7 days)</option>
-          <option value="14">In 2 weeks (14 days)</option>
+          <option value="0">{t("dueOffset.sameDay")}</option>
+          <option value="1">{t("dueOffset.inDays", { count: 1 })}</option>
+          <option value="2">{t("dueOffset.inDays", { count: 2 })}</option>
+          <option value="3">{t("dueOffset.inDays", { count: 3 })}</option>
+          <option value="5">{t("dueOffset.inDays", { count: 5 })}</option>
+          <option value="7">{t("dueOffset.oneWeek")}</option>
+          <option value="14">{t("dueOffset.twoWeeks")}</option>
         </BuilderSelect>
       </div>
     );
@@ -398,7 +404,7 @@ function ConfigEditor({
             list="action-tag-list"
             value={String(value ?? "")}
             onChange={(e) => onChange(e.target.value)}
-            placeholder="Tag label (e.g. vip, referral)"
+            placeholder={t("tagPlaceholder")}
             className={base}
           />
           <datalist id="action-tag-list">
@@ -454,7 +460,7 @@ function ConfigEditor({
           onChange={(e) => onChange(e.target.value)}
           className={base}
         >
-          <option value="">{field.placeholder ?? "Select…"}</option>
+          <option value="">{field.placeholder ?? t("selectFallback")}</option>
           {field.options.map((o) => (
             <option key={o.value} value={o.value}>
               {o.label}
@@ -474,10 +480,10 @@ function ConfigEditor({
           onChange={(e) => onChange(e.target.value)}
           className={base}
         >
-          <option value="">Select a stage…</option>
+          <option value="">{t("selectStage")}</option>
           {stageNames.length === 0 ? (
             <option value="" disabled>
-              No stages defined yet
+              {t("noStages")}
             </option>
           ) : (
             stageNames.map((name) => (
@@ -500,7 +506,7 @@ function ConfigEditor({
           onChange={(e) => onChange(e.target.value)}
           className={base}
         >
-          <option value="">Assign to workflow owner</option>
+          <option value="">{t("assignOwner")}</option>
           {members.map((m) => (
             <option key={m.id} value={m.id}>
               {m.name}
@@ -579,31 +585,34 @@ function ActionPicker({
   onPick: (t: ActionType) => void;
   onCancel: () => void;
 }) {
-  const groups = Array.from(new Set(pickableActions().map((a) => a.group)));
+  const t = useTranslations("features.automations.ActionsPanel");
+  const tl = useTranslations("labels.automations");
+  const pickable = pickableActions(undefined, tl);
+  const groups = Array.from(new Map(pickable.map((a) => [a.group, a.groupLabel] as const)));
 
   return (
     <div className="rounded-xl border border-border bg-warm-paper p-4 shadow-sm">
       <div className="mb-3 flex items-center justify-between">
         <span className="font-display text-sm font-semibold text-foreground">
-          Choose an action
+          {t("chooseAction")}
         </span>
         <button
           type="button"
           onClick={onCancel}
           className="rounded p-1 text-soft-ink hover:bg-soft-kraft hover:text-foreground"
-          aria-label="Cancel"
+          aria-label={t("cancel")}
         >
           <CloseIcon className="size-3.5" />
         </button>
       </div>
       <div className="space-y-4">
-        {groups.map((group) => (
+        {groups.map(([group, groupLabel]) => (
           <div key={group}>
             <p className="font-chrome mb-1.5 text-[11px] uppercase tracking-wider text-soft-ink">
-              {group}
+              {groupLabel}
             </p>
             <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-              {pickableActions()
+              {pickable
                 .filter((a) => a.group === group)
                 .map((a) => {
                   const Icon = a.icon;

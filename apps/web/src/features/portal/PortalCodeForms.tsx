@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import type { Route } from "next";
+import { useTranslations } from "next-intl";
 
 import {
   redeemPortalAccessCodeAction,
@@ -23,6 +24,7 @@ import { cn } from "@/lib/utils";
  */
 export function AccessCodeForm({ initialCode }: { initialCode: string }) {
   const router = useRouter();
+  const t = useTranslations("features.portal.PortalCodeForms");
   const [error, setError] = useState<string | null>(null);
   const [pending, start] = useTransition();
 
@@ -40,17 +42,17 @@ export function AccessCodeForm({ initialCode }: { initialCode: string }) {
   return (
     <form onSubmit={submit} className="space-y-4" aria-busy={pending}>
       <PortalFormError message={error} />
-      <PortalField label="Access code">
+      <PortalField label={t("accessCode")}>
         {(p) => (
           <input {...p} name="code" required defaultValue={initialCode} autoComplete="off" spellCheck={false} className={cn(portalInputClass, "font-mono")} />
         )}
       </PortalField>
       <button type="submit" disabled={pending} className={portalPrimaryButtonClass}>
-        {pending ? "Checking…" : "Open my portal"}
+        {pending ? t("checking") : t("openPortal")}
       </button>
       <p className="text-center">
         <a href="/portal/login" className={portalLinkButtonClass}>
-          Back to sign in
+          {t("backToSignIn")}
         </a>
       </p>
     </form>
@@ -59,6 +61,7 @@ export function AccessCodeForm({ initialCode }: { initialCode: string }) {
 
 export function ResetPasswordForm({ code }: { code: string }) {
   const router = useRouter();
+  const t = useTranslations("features.portal.PortalCodeForms");
   const [error, setError] = useState<string | null>(null);
   const [pending, start] = useTransition();
 
@@ -67,7 +70,7 @@ export function ResetPasswordForm({ code }: { code: string }) {
     const data = new FormData(e.currentTarget);
     const password = String(data.get("password") ?? "");
     if (password !== String(data.get("confirm") ?? "")) {
-      return setError("The passwords don't match.");
+      return setError(t("passwordsDoNotMatch"));
     }
     setError(null);
     start(async () => {
@@ -80,14 +83,14 @@ export function ResetPasswordForm({ code }: { code: string }) {
   return (
     <form onSubmit={submit} className="space-y-4" aria-busy={pending}>
       <PortalFormError message={error} />
-      <PortalField label="New password" hint="At least 10 characters.">
+      <PortalField label={t("newPassword")} hint={t("passwordHint")}>
         {(p) => <input {...p} name="password" type="password" required minLength={10} autoComplete="new-password" className={portalInputClass} />}
       </PortalField>
-      <PortalField label="Confirm new password">
+      <PortalField label={t("confirmPassword")}>
         {(p) => <input {...p} name="confirm" type="password" required minLength={10} autoComplete="new-password" className={portalInputClass} />}
       </PortalField>
       <button type="submit" disabled={pending} className={portalPrimaryButtonClass}>
-        {pending ? "Saving…" : "Set password and sign in"}
+        {pending ? t("saving") : t("setPasswordAndSignIn")}
       </button>
     </form>
   );

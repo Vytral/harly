@@ -16,6 +16,7 @@ import {
 } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 
+import { getTranslations } from "@/i18n/server";
 import { db } from "@harly/db";
 import {
   activityEvents,
@@ -1406,18 +1407,20 @@ export async function getCandidateProfile(candidateId: string) {
       : [];
   const stageNames = new Map(stageRows.map((stage) => [stage.id, stage.name]));
 
+  const tl = await getTranslations("labels.candidates.activity");
+  const ilt = await getTranslations("labels.interviews");
   const activity: CandidateActivityItem[] = visibleEvents.map((event) => {
     const mapped = (() => {
     if (event.type === "application.created") {
-      const jobTitle = applicationJobTitles.get(event.entityId) ?? "a job";
+      const jobTitle = applicationJobTitles.get(event.entityId) ?? tl("aJob");
       const source = textFromMetadata(event.metadata, "source");
       return {
         id: event.id,
         type: event.type,
         label:
           source === "csv_import"
-            ? `Added to ${jobTitle} via CSV import`
-            : `Applied to ${jobTitle}`,
+            ? tl("addedViaCsvImport", { job: jobTitle })
+            : tl("appliedToJob", { job: jobTitle }),
         actorName: event.actorName,
         createdAt: event.createdAt,
       };
@@ -1428,7 +1431,9 @@ export async function getCandidateProfile(candidateId: string) {
       return {
         id: event.id,
         type: event.type,
-        label: `Moved to ${toStageId ? (stageNames.get(toStageId) ?? "another stage") : "another stage"}`,
+        label: tl("movedToStage", {
+          stage: toStageId ? (stageNames.get(toStageId) ?? tl("anotherStage")) : tl("anotherStage"),
+        }),
         actorName: event.actorName,
         createdAt: event.createdAt,
       };
@@ -1438,7 +1443,7 @@ export async function getCandidateProfile(candidateId: string) {
       return {
         id: event.id,
         type: event.type,
-        label: "Note added",
+        label: tl("noteAdded"),
         actorName: event.actorName,
         createdAt: event.createdAt,
       };
@@ -1448,7 +1453,7 @@ export async function getCandidateProfile(candidateId: string) {
       return {
         id: event.id,
         type: event.type,
-        label: "Referred",
+        label: tl("referred"),
         actorName: event.actorName,
         createdAt: event.createdAt,
       };
@@ -1458,7 +1463,7 @@ export async function getCandidateProfile(candidateId: string) {
       return {
         id: event.id,
         type: event.type,
-        label: "Referral removed",
+        label: tl("referralRemoved"),
         actorName: event.actorName,
         createdAt: event.createdAt,
       };
@@ -1469,7 +1474,7 @@ export async function getCandidateProfile(candidateId: string) {
       return {
         id: event.id,
         type: event.type,
-        label: who ? `Mentioned ${who}` : "Mentioned a teammate",
+        label: who ? tl("mentionedPerson", { name: who }) : tl("mentionedTeammate"),
         actorName: event.actorName,
         createdAt: event.createdAt,
       };
@@ -1479,7 +1484,7 @@ export async function getCandidateProfile(candidateId: string) {
       return {
         id: event.id,
         type: event.type,
-        label: "Profile updated",
+        label: tl("profileUpdated"),
         actorName: event.actorName,
         createdAt: event.createdAt,
       };
@@ -1489,7 +1494,9 @@ export async function getCandidateProfile(candidateId: string) {
       return {
         id: event.id,
         type: event.type,
-        label: `File uploaded${textFromMetadata(event.metadata, "fileName") ? `: ${textFromMetadata(event.metadata, "fileName")}` : ""}`,
+        label: textFromMetadata(event.metadata, "fileName")
+          ? tl("fileUploadedNamed", { name: textFromMetadata(event.metadata, "fileName") ?? "" })
+          : tl("fileUploaded"),
         actorName: event.actorName,
         createdAt: event.createdAt,
       };
@@ -1499,7 +1506,7 @@ export async function getCandidateProfile(candidateId: string) {
       return {
         id: event.id,
         type: event.type,
-        label: "Marked as hired",
+        label: tl("markedAsHired"),
         actorName: event.actorName,
         createdAt: event.createdAt,
       };
@@ -1520,7 +1527,9 @@ export async function getCandidateProfile(candidateId: string) {
       return {
         id: event.id,
         type: event.type,
-        label: `${source === "rules" || event.type === "evaluation.rules_generated" ? "Automatic evaluation generated" : "AI evaluation generated"}${typeof score === "number" ? ` · ${score}/100` : ""}`,
+        label: tl(source === "rules" || event.type === "evaluation.rules_generated" ? "automaticEvaluation" : "aiEvaluation", {
+          suffix: typeof score === "number" ? ` · ${score}/100` : "",
+        }),
         actorName: event.actorName,
         createdAt: event.createdAt,
       };
@@ -1533,9 +1542,9 @@ export async function getCandidateProfile(candidateId: string) {
       return {
         id: event.id,
         type: event.type,
-        label: reasonLabel ? `Rejected · ${reasonLabel}` : "Marked as rejected",
+        label: reasonLabel ? tl("rejectedWithReason", { reason: reasonLabel }) : tl("markedAsRejected"),
         detail:
-          [note, emailSent === false ? "No email sent" : null]
+          [note, emailSent === false ? tl("noEmailSent") : null]
             .filter(Boolean)
             .join(" · ") || null,
         actorName: event.actorName,
@@ -1545,10 +1554,10 @@ export async function getCandidateProfile(candidateId: string) {
 
     if (event.type.startsWith("interview.")) {
       const interviewLabels: Record<string, string> = {
-        "interview.scheduled": "Interview scheduled",
-        "interview.canceled": "Interview canceled",
-        "interview.completed": "Interview completed",
-        "interview.rescheduled": "Interview rescheduled",
+        "interview.scheduled": tl("interviewScheduled"),
+        "interview.canceled": tl("interviewCanceled"),
+        "interview.completed": tl("interviewCompleted"),
+        "interview.rescheduled": tl("interviewRescheduled"),
       };
       const meta = isRecord(event.metadata) ? event.metadata : null;
       const interviewType =
@@ -1560,16 +1569,18 @@ export async function getCandidateProfile(candidateId: string) {
           ? (meta.mode as InterviewMode)
           : null;
       const typeLabel = interviewType
-        ? interviewTypeLabel(interviewType)
+        ? interviewTypeLabel(interviewType, ilt)
         : null;
       const modeLabel = interviewMode
-        ? interviewModeLabel(interviewMode)
+        ? interviewModeLabel(interviewMode, ilt)
         : null;
       const suffix = [typeLabel, modeLabel].filter(Boolean).join(" · ");
       return {
         id: event.id,
         type: event.type,
-        label: `${interviewLabels[event.type] ?? event.type}${suffix ? `, ${suffix}` : ""}`,
+        label: suffix
+          ? tl("labelWithDetail", { label: interviewLabels[event.type] ?? event.type, detail: suffix })
+          : (interviewLabels[event.type] ?? event.type),
         actorName: event.actorName,
         createdAt: event.createdAt,
       };
@@ -1577,17 +1588,19 @@ export async function getCandidateProfile(candidateId: string) {
 
     if (event.type.startsWith("offer.")) {
       const offerLabels: Record<string, string> = {
-        "offer.created": "Offer drafted",
-        "offer.sent": "Offer sent",
-        "offer.accepted": "Offer accepted",
-        "offer.declined": "Offer declined",
-        "offer.withdrawn": "Offer withdrawn",
+        "offer.created": tl("offerDrafted"),
+        "offer.sent": tl("offerSent"),
+        "offer.accepted": tl("offerAccepted"),
+        "offer.declined": tl("offerDeclined"),
+        "offer.withdrawn": tl("offerWithdrawn"),
       };
       const title = textFromMetadata(event.metadata, "title");
       return {
         id: event.id,
         type: event.type,
-        label: `${offerLabels[event.type] ?? event.type}${title ? `, ${title}` : ""}`,
+        label: title
+          ? tl("labelWithDetail", { label: offerLabels[event.type] ?? event.type, detail: title })
+          : (offerLabels[event.type] ?? event.type),
         actorName: event.actorName,
         createdAt: event.createdAt,
       };
@@ -1595,19 +1608,21 @@ export async function getCandidateProfile(candidateId: string) {
 
     if (event.type.startsWith("document.")) {
       const documentLabels: Record<string, string> = {
-        "document.requested": "Documents requested",
-        "document.submitted": "Document submitted",
-        "document.uploaded": "Document added",
-        "document.signature_sent": "Sent for signature",
-        "document.signature_changed": "Signature status changed",
-        "document.signature_voided": "Signature request voided",
-        "document.expired": "Document expired",
+        "document.requested": tl("documentsRequested"),
+        "document.submitted": tl("documentSubmitted"),
+        "document.uploaded": tl("documentAdded"),
+        "document.signature_sent": tl("sentForSignature"),
+        "document.signature_changed": tl("signatureStatusChanged"),
+        "document.signature_voided": tl("signatureRequestVoided"),
+        "document.expired": tl("documentExpired"),
       };
       const title = textFromMetadata(event.metadata, "title");
       return {
         id: event.id,
         type: event.type,
-        label: `${documentLabels[event.type] ?? "Document activity"}${title ? `, ${title}` : ""}`,
+        label: title
+          ? tl("labelWithDetail", { label: documentLabels[event.type] ?? tl("documentActivity"), detail: title })
+          : (documentLabels[event.type] ?? tl("documentActivity")),
         actorName: event.actorName,
         createdAt: event.createdAt,
       };
@@ -1617,7 +1632,7 @@ export async function getCandidateProfile(candidateId: string) {
       return {
         id: event.id,
         type: event.type,
-        label: "Candidate data anonymized (retention policy)",
+        label: tl("anonymized"),
         actorName: event.actorName,
         createdAt: event.createdAt,
       };
@@ -1890,6 +1905,7 @@ export async function listTrashedCandidates(): Promise<TrashedCandidateItem[]> {
 
 /** Move a candidate to the trash (soft delete) , reversible. */
 export async function trashCandidate(candidateId: string) {
+  const t = await getTranslations("server.candidates.data");
   const { organization: workspace } = await getWorkspaceContext();
 
   const [candidate] = await db
@@ -1906,7 +1922,7 @@ export async function trashCandidate(candidateId: string) {
 
   return candidate
     ? ({ ok: true } as const)
-    : ({ ok: false, error: "Candidate not found." } as const);
+    : ({ ok: false, error: t("candidateNotFound") } as const);
 }
 
 /** Move multiple candidates to the trash (soft delete) , reversible. */
@@ -1934,6 +1950,7 @@ export async function trashCandidates(candidateIds: string[]) {
 
 /** Restore a candidate out of the trash. */
 export async function restoreCandidate(candidateId: string) {
+  const t = await getTranslations("server.candidates.data");
   const { organization: workspace } = await getWorkspaceContext();
 
   const [candidate] = await db
@@ -1949,7 +1966,7 @@ export async function restoreCandidate(candidateId: string) {
 
   return candidate
     ? ({ ok: true } as const)
-    : ({ ok: false, error: "Candidate not found." } as const);
+    : ({ ok: false, error: t("candidateNotFound") } as const);
 }
 
 /** Permanently delete a trashed candidate and all related records (cascade). */
@@ -1958,6 +1975,7 @@ export async function permanentlyDeleteCandidate(
   processedBy: string,
   workspaceId?: string,
 ) {
+  const t = await getTranslations("server.candidates.data");
   const workspace = workspaceId
     ? { id: workspaceId }
     : (await getWorkspaceContext()).organization;
@@ -1974,7 +1992,7 @@ export async function permanentlyDeleteCandidate(
     )
     .limit(1);
   if (!candidate)
-    return { ok: false, error: "Candidate not found in trash." } as const;
+    return { ok: false, error: t("candidateNotFoundInTrash") } as const;
   const purgeStartedAt = Date.now();
 
   const applicationRows = await db
@@ -2248,7 +2266,7 @@ export async function permanentlyDeleteCandidate(
     return {
       ok: false,
       error:
-        "This candidate has documents under legal hold and cannot be erased yet.",
+        t("legalHoldBlocksErase"),
     } as const;
   }
 
@@ -2283,7 +2301,7 @@ export async function permanentlyDeleteCandidate(
   if (storageResults.some((result) => result.status === "rejected")) {
     return {
       ok: false,
-      error: "Could not erase every stored candidate file. Please retry.",
+      error: t("eraseStorageFailed"),
     } as const;
   }
 
@@ -2295,7 +2313,7 @@ export async function permanentlyDeleteCandidate(
     if (!esignConfig) {
       return {
         ok: false,
-        error: "Could not reach the external signature provider. Please retry.",
+        error: t("signatureProviderUnreachable"),
       } as const;
     }
     const signatureResults = await Promise.all(
@@ -2309,7 +2327,7 @@ export async function permanentlyDeleteCandidate(
       return {
         ok: false,
         error:
-          "Could not cancel every external signature request. Please retry.",
+          t("cancelSignatureFailed"),
       } as const;
     }
   }
@@ -2380,7 +2398,7 @@ export async function permanentlyDeleteCandidate(
       return {
         ok: false,
         error:
-          "Could not cancel every external interview resource. Please retry.",
+          t("cancelInterviewFailed"),
       } as const;
     }
   }
@@ -2644,7 +2662,7 @@ export async function permanentlyDeleteCandidate(
       },
     } as const;
   }
-  return { ok: false, error: "Candidate not found in trash." } as const;
+  return { ok: false, error: t("candidateNotFoundInTrash") } as const;
 }
 
 /** @deprecated Use `trashCandidate`. Kept as an alias for older callers. */

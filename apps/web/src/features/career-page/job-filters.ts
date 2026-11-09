@@ -16,11 +16,11 @@ export function jobType(j: Job): string {
 
 export const FILTER_META: Record<
   FilterKind,
-  { label: string; pick: (j: Job) => string | null }
+  { pick: (j: Job) => string | null }
 > = {
-  department: { label: "Department", pick: (j) => j.department },
-  location: { label: "Location", pick: jobLocation },
-  type: { label: "Type", pick: jobType },
+  department: { pick: (j) => j.department },
+  location: { pick: jobLocation },
+  type: { pick: jobType },
 };
 
 /** Distinct, sorted facet values for a key. */
@@ -33,11 +33,14 @@ export function facet(jobs: Job[], pick: (j: Job) => string | null): string[] {
   return Array.from(set).sort((a, b) => a.localeCompare(b));
 }
 
-/** Group by department (null departments land in "Other"), sorted by name. */
-export function groupByDepartment(jobs: Job[]): Array<[string, Job[]]> {
+/** Group by department (null departments land in `other`), sorted by name. */
+export function groupByDepartment(
+  jobs: Job[],
+  other = "Other",
+): Array<[string, Job[]]> {
   const map = new Map<string, Job[]>();
   jobs.forEach((j) => {
-    const key = j.department ?? "Other";
+    const key = j.department ?? other;
     const list = map.get(key);
     if (list) list.push(j);
     else map.set(key, [j]);

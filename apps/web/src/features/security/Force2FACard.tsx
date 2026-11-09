@@ -2,6 +2,7 @@
 
 import { useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { toast } from "@/lib/notification-island/toast";
 
 import { SectionHeader, StatusPill } from "@/features/workspaces/settings-ui";
@@ -20,26 +21,24 @@ export function Force2FACard({
 }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
+  const t = useTranslations("features.security.force2FACard");
+  const tReauth = useTranslations("labels.security.reauth");
 
   function handleToggle(value: boolean) {
     startTransition(async () => {
       let result;
       try {
-        await ensureSensitiveActionReauth();
+        await ensureSensitiveActionReauth(tReauth);
         result = await toggleForce2FAAction(value);
       } catch (error) {
-        toast.error(error instanceof Error ? error.message : "Reauthentication failed.");
+        toast.error(error instanceof Error ? error.message : t("reauthFailed"));
         return;
       }
       if (!result.ok) {
-        toast.error(result.error ?? "Could not update setting.");
+        toast.error(result.error ?? t("updateFailed"));
         return;
       }
-      toast.success(
-        value
-          ? "2FA is now required for all members."
-          : "2FA requirement removed.",
-      );
+      toast.success(value ? t("enabledToast") : t("disabledToast"));
       router.refresh();
     });
   }
@@ -48,11 +47,11 @@ export function Force2FACard({
     <Card className="gap-5 p-6">
       <SectionHeader
         icon={UsersThreeDuotoneIcon}
-        title="Enforce 2FA for all members"
-        description="When enabled, all workspace members must set up two-factor authentication before accessing the dashboard."
+        title={t("title")}
+        description={t("description")}
         badge={
           <StatusPill tone={enabled ? "on" : "off"}>
-            {enabled ? "Required" : "Optional"}
+            {enabled ? t("required") : t("optional")}
           </StatusPill>
         }
         action={
@@ -62,21 +61,19 @@ export function Force2FACard({
               checked={enabled}
               onCheckedChange={handleToggle}
               disabled={isPending}
-              aria-label="Require 2FA for all members"
+              aria-label={t("toggleLabel")}
             />
           ) : null
         }
       />
 
       {!isOwner && (
-        <p className="text-[12.5px] text-soft-ink">
-          Only workspace owners can change this setting.
-        </p>
+        <p className="text-[12.5px] text-soft-ink">{t("ownersOnly")}</p>
       )}
 
       {enabled && (
         <div className="rounded-xl border border-warning-clay/20 bg-warning-clay/5 px-4 py-3 text-sm text-clay">
-          Members without 2FA will be prompted to enable it on their next login.
+          {t("enabledNotice")}
         </div>
       )}
     </Card>

@@ -1,6 +1,7 @@
 import "server-only";
 
 import type { Metadata } from "next";
+import { getTranslations } from "@/i18n/server";
 
 import type { CareerPageConfig } from "./config";
 import type { WorkspaceBoardBranding } from "@/features/workspaces/board";
@@ -36,14 +37,19 @@ function robots(indexable: boolean) {
 
 const HARLY_FAVICON = "/favicon.svg";
 
-export function publicBoardMetadata(
+export async function publicBoardMetadata(
   workspace: WorkspaceBoardBranding,
   config: CareerPageConfig,
   options?: { path?: string },
-): Metadata {
+): Promise<Metadata> {
+  const t = await getTranslations("server.careerPage.seo");
   const url = options?.path !== undefined ? pathUrl(options.path) : boardUrl(workspace.slug);
-  const title = config.seo.title || workspace.name || "Careers";
-  const description = config.seo.description || workspace.description || workspace.tagline || `Explore open roles at ${workspace.name}.`;
+  const title = config.seo.title || workspace.name || t("boardTitleFallback");
+  const description =
+    config.seo.description ||
+    workspace.description ||
+    workspace.tagline ||
+    t("boardDescription", { name: workspace.name });
   const image = config.seo.socialImageUrl ?? config.hero.imageUrl ?? workspace.heroImageUrl ?? workspace.logoUrl ?? undefined;
   const favicon = config.seo.faviconUrl ?? workspace.logoUrl ?? HARLY_FAVICON;
 
@@ -58,16 +64,19 @@ export function publicBoardMetadata(
   };
 }
 
-export function publicJobMetadata(
+export async function publicJobMetadata(
   workspace: WorkspaceBoardBranding,
   config: CareerPageConfig,
   job: Job,
   options?: { path?: string },
-): Metadata {
+): Promise<Metadata> {
+  const t = await getTranslations("server.careerPage.seo");
   const base = options?.path !== undefined ? pathUrl(options.path) : boardUrl(workspace.slug);
   const url = `${base.replace(/\/$/, "")}/jobs/${job.slug}`;
-  const title = `${job.title} at ${workspace.name}`;
-  const description = plainText(job.description).slice(0, 180) || `Apply for ${job.title} at ${workspace.name}.`;
+  const title = t("jobTitle", { title: job.title, name: workspace.name });
+  const description =
+    plainText(job.description).slice(0, 180) ||
+    t("jobDescription", { title: job.title, name: workspace.name });
   const image = config.seo.socialImageUrl ?? config.hero.imageUrl ?? workspace.heroImageUrl ?? workspace.logoUrl ?? undefined;
   const favicon = config.seo.faviconUrl ?? workspace.logoUrl ?? HARLY_FAVICON;
   return {

@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 
+import { makeT } from "@/test-support/translator";
 import {
   beginSave,
   formatSaveStatus,
@@ -10,6 +11,8 @@ import {
   saveFailed,
   saveSucceeded,
 } from "./save-controller";
+
+const t = makeT("labels.automations");
 
 describe("T03 — edits during an in-flight save stay dirty", () => {
   it("does not mark saved when a newer generation exists", () => {
@@ -26,7 +29,7 @@ describe("T03 — edits during an in-flight save stay dirty", () => {
     expect(state.kind).toBe("unsaved");
     expect(isDirty(state)).toBe(true);
     expect(state.queued).toBe(true);
-    expect(formatSaveStatus(state)).toBe("Unsaved");
+    expect(formatSaveStatus(state, t, "en")).toBe("Unsaved");
   });
 
   it("marks saved only when the finished generation is still the latest", () => {
@@ -35,7 +38,7 @@ describe("T03 — edits during an in-flight save stay dirty", () => {
     state = saveSucceeded(started.state, started.generation!, Date.UTC(2026, 8, 6, 9, 30));
     expect(state.kind).toBe("saved");
     expect(isDirty(state)).toBe(false);
-    expect(formatSaveStatus(state, Date.UTC(2026, 8, 6, 9, 30))).toMatch(/^Saved at \d{2}:\d{2}$/);
+    expect(formatSaveStatus(state, t, "en")).toMatch(/^Saved at \d{2}:\d{2}$/);
   });
 
   it("queues a second save instead of overlapping the in-flight one", () => {
@@ -75,7 +78,7 @@ describe("409 conflict never overwrites local dirty state", () => {
     state = saveConflict(state, started.generation!, "This draft was saved elsewhere.", 4);
     expect(state.kind).toBe("conflict");
     expect(isDirty(state)).toBe(true);
-    expect(formatSaveStatus(state)).toBe("Conflict");
+    expect(formatSaveStatus(state, t, "en")).toBe("Conflict");
     const replay = saveSucceeded(state, started.generation!, Date.now());
     expect(isDirty(replay)).toBe(true);
   });

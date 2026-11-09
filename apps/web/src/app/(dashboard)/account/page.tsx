@@ -1,10 +1,13 @@
 import { isDemoMode } from "@harly/config";
+import { getTranslations } from "next-intl/server";
 
 import { getWorkspaceContext } from "@/features/workspaces/context";
 import { getOwnProfileAction } from "@/features/people/actions";
 import { getSecurityPasskeys } from "@/features/security/data";
+import { LanguageSelector } from "@/i18n/LanguageSelector";
 import { PageTitle } from "@/components/dashboard/PageTitleContext";
 import { AccountSettingsPanel } from "@/features/account/AccountSettingsPanel";
+import { EmailLanguagePreference } from "@/features/account/EmailLanguagePreference";
 import { TwoFactorCard } from "@/features/security/TwoFactorCard";
 import { PasskeysCard } from "@/features/security/PasskeysCard";
 import { listMySessionsAction } from "@/features/security/session-actions";
@@ -12,6 +15,7 @@ import { listMySessionsAction } from "@/features/security/session-actions";
 export const dynamic = "force-dynamic";
 
 export default async function AccountPage() {
+  const t = await getTranslations("pages.account.page");
   const { user } = await getWorkspaceContext();
   const demoLocked = isDemoMode();
   const profile = await getOwnProfileAction();
@@ -31,7 +35,12 @@ export default async function AccountPage() {
 
   return (
     <div className="space-y-6">
-      <PageTitle title="Account" />
+      <PageTitle title={t("title")} />
+      <LanguageSelector />
+      <EmailLanguagePreference
+        initialValue={profile?.preferredEmailLocale ?? null}
+        demoLocked={demoLocked}
+      />
       <AccountSettingsPanel
         demoLocked={demoLocked}
         user={{

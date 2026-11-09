@@ -4,6 +4,8 @@ import os from "node:os";
 import path from "node:path";
 
 import { PDFDocument } from "pdf-lib";
+
+vi.mock("next-intl/server", async () => (await import("@/test-support/intl-server-mock")).intlServerMock);
 import { and, eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 

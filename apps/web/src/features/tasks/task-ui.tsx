@@ -9,6 +9,8 @@ import {
   type LucideIcon,
 } from "lucide-react";
 
+import { useLocale, useTranslations } from "next-intl";
+
 import { cn } from "@/lib/utils";
 import { UserAvatar } from "@/components/ui/UserAvatar";
 import { PersonLink } from "@/components/people/PersonLink";
@@ -100,14 +102,6 @@ export function urgencyOf(iso: string | null, todayStart: string): UrgencyKey {
 
 export const URGENCY_ORDER: UrgencyKey[] = ["overdue", "today", "week", "later", "none"];
 
-export const URGENCY_LABEL: Record<UrgencyKey, string> = {
-  overdue: "Overdue",
-  today: "Due today",
-  week: "This week",
-  later: "Later",
-  none: "No due date",
-};
-
 export const URGENCY_DOT: Record<UrgencyKey, string> = {
   overdue: "bg-danger-rust",
   today: "bg-warning-clay",
@@ -119,20 +113,22 @@ export const URGENCY_DOT: Record<UrgencyKey, string> = {
 // ── small shared pieces ──────────────────────────────────────────────────────
 
 export function RelativeDate({ iso }: { iso: string | null }) {
+  const t = useTranslations("features.tasks.taskUi");
+  const locale = useLocale();
   // Reading the clock is impure, so it lives in useMemo (not the render body).
   const view = useMemo(() => {
-    if (!iso) return { label: "No date", cls: "text-quiet-mist", dot: "bg-quiet-mist/60" };
+    if (!iso) return { label: t("noDate"), cls: "text-quiet-mist", dot: "bg-quiet-mist/60" };
     const dateKey = taskDateKey(iso);
-    if (!dateKey) return { label: "No date", cls: "text-quiet-mist", dot: "bg-quiet-mist/60" };
+    if (!dateKey) return { label: t("noDate"), cls: "text-quiet-mist", dot: "bg-quiet-mist/60" };
     const d = new Date(`${dateKey}T12:00:00`);
-    const label = new Intl.DateTimeFormat("en", { month: "short", day: "numeric" }).format(d);
+    const label = new Intl.DateTimeFormat(locale, { month: "short", day: "numeric" }).format(d);
     const today = currentTaskDateKey();
     if (dateKey < today) return { label, cls: "text-danger-rust", dot: "bg-danger-rust" };
     if (dateKey === today) return { label, cls: "text-warning-clay", dot: "bg-warning-clay" };
     const daysAway = Math.round((Date.parse(`${dateKey}T00:00:00`) - Date.parse(`${today}T00:00:00`)) / DAY);
     if (daysAway <= 2) return { label, cls: "text-warning-clay", dot: "bg-warning-clay" };
     return { label, cls: "text-soft-ink", dot: "bg-quiet-mist" };
-  }, [iso]);
+  }, [iso, locale, t]);
 
   return (
     <span

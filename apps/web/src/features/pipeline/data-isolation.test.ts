@@ -54,6 +54,7 @@ vi.mock("@/lib/email", () => ({
 vi.mock("@/server/webhooks/emit", () => ({
   emitWebhookEvent: vi.fn(),
 }));
+vi.mock("next-intl/server", async () => (await import("@/test-support/intl-server-mock")).intlServerMock);
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 
 import { moveApplicationInPipeline } from "./actions";
@@ -86,7 +87,7 @@ describe("F1-01 pipeline stage isolation", () => {
     });
 
     expect(result.success).toBe(false);
-    expect(result.error ?? "").toMatch(/not found|unable to move/i);
+    expect(result.error ?? "").toMatch(/couldn't move the application/i);
   });
 
   it("allows moving to a stage of the same job", async () => {

@@ -11,6 +11,7 @@ const mocks = vi.hoisted(() => ({
   dbInsert: vi.fn(),
 }));
 
+vi.mock("next-intl/server", async () => (await import("@/test-support/intl-server-mock")).intlServerMock);
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 vi.mock("drizzle-orm", () => ({ eq: vi.fn(() => "where") }));
 vi.mock("@harly/db", () => ({

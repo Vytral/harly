@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Archive, Pencil, RotateCcw } from "lucide-react";
+import { useTranslations } from "next-intl";
 
 import { toast } from "@/lib/notification-island/toast";
 import { Badge } from "@/components/ui/badge";
@@ -28,6 +29,7 @@ export function RejectionReasonsCard({
   reasons: RejectionReasonOption[];
   canEdit?: boolean;
 }) {
+  const t = useTranslations("features.rejectionReasons.rejectionReasonsCard");
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [editing, setEditing] = useState<string | null>(null);
@@ -43,14 +45,14 @@ export function RejectionReasonsCard({
       try {
         const result = await action();
         if (!result.ok) {
-          toast.error(result.error ?? "Could not save.");
+          toast.error(result.error ?? t("couldNotSave"));
           return;
         }
         toast.success(success);
         after?.();
         router.refresh();
       } catch {
-        toast.error("Could not save.");
+        toast.error(t("couldNotSave"));
       }
     });
   }
@@ -60,8 +62,8 @@ export function RejectionReasonsCard({
   return (
     <Card className="gap-0 p-0">
       <SettingSection
-        title="Rejection reasons"
-        description="Recruiters pick one when rejecting a candidate. Reasons are internal and never shown to candidates."
+        title={t("title")}
+        description={t("description")}
       >
         <SettingRows>
           {reasons.map((reason) => {
@@ -73,13 +75,13 @@ export function RejectionReasonsCard({
                 htmlFor={isEditing ? inputId : undefined}
                 title={
                   isEditing ? (
-                    <span className="sr-only">Rename {reason.label}</span>
+                    <span className="sr-only">{t("renameSr", { label: reason.label })}</span>
                   ) : (
                     <span className="inline-flex items-center gap-2">
                       <span className={reason.archived ? "text-soft-ink" : undefined}>
                         {reason.label}
                       </span>
-                      {reason.archived ? <Badge variant="neutral">Archived</Badge> : null}
+                      {reason.archived ? <Badge variant="neutral">{t("archived")}</Badge> : null}
                     </span>
                   )
                 }
@@ -92,7 +94,7 @@ export function RejectionReasonsCard({
                         disabled={pending}
                         onClick={() => setEditing(null)}
                       >
-                        Cancel
+                        {t("cancel")}
                       </Button>
                       <Button
                         size="sm"
@@ -100,12 +102,12 @@ export function RejectionReasonsCard({
                         onClick={() =>
                           run(
                             () => renameRejectionReasonAction(reason.code, draft),
-                            "Reason renamed",
+                            t("reasonRenamed"),
                             () => setEditing(null),
                           )
                         }
                       >
-                        Save
+                        {t("save")}
                       </Button>
                     </>
                   ) : (
@@ -121,7 +123,7 @@ export function RejectionReasonsCard({
                           }}
                         >
                           <Pencil className="size-3.5" />
-                          Rename
+                          {t("rename")}
                         </Button>
                       ) : null}
                       <Button
@@ -130,26 +132,26 @@ export function RejectionReasonsCard({
                         disabled={pending || (!reason.archived && activeCount <= 1)}
                         title={
                           !reason.archived && activeCount <= 1
-                            ? "Keep at least one active reason"
+                            ? t("keepOneActive")
                             : undefined
                         }
                         onClick={() =>
                           run(
                             () =>
                               setRejectionReasonArchivedAction(reason.code, !reason.archived),
-                            reason.archived ? "Reason restored" : "Reason archived",
+                            reason.archived ? t("reasonRestored") : t("reasonArchived"),
                           )
                         }
                       >
                         {reason.archived ? (
                           <>
                             <RotateCcw className="size-3.5" />
-                            Restore
+                            {t("restore")}
                           </>
                         ) : (
                           <>
                             <Archive className="size-3.5" />
-                            Archive
+                            {t("archive")}
                           </>
                         )}
                       </Button>
@@ -171,7 +173,7 @@ export function RejectionReasonsCard({
                         event.preventDefault();
                         run(
                           () => renameRejectionReasonAction(reason.code, draft),
-                          "Reason renamed",
+                          t("reasonRenamed"),
                           () => setEditing(null),
                         );
                       }
@@ -184,8 +186,8 @@ export function RejectionReasonsCard({
           {canEdit ? (
             <SettingRow
               htmlFor="rejection-reason-new"
-              title="Add a reason"
-              description="Shown to recruiters in the reject dialog."
+              title={t("addReasonTitle")}
+              description={t("addReasonDescription")}
             >
               <form
                 className="flex flex-col gap-2 sm:flex-row"
@@ -194,7 +196,7 @@ export function RejectionReasonsCard({
                   if (!newLabel.trim()) return;
                   run(
                     () => addRejectionReasonAction(newLabel),
-                    "Reason added",
+                    t("reasonAdded"),
                     () => setNewLabel(""),
                   );
                 }}
@@ -203,13 +205,13 @@ export function RejectionReasonsCard({
                   id="rejection-reason-new"
                   value={newLabel}
                   maxLength={80}
-                  placeholder="e.g. Culture add"
+                  placeholder={t("addReasonPlaceholder")}
                   disabled={pending}
                   onChange={(event) => setNewLabel(event.target.value)}
                   className="sm:flex-1"
                 />
                 <Button type="submit" size="sm" disabled={pending || !newLabel.trim()} className="sm:h-9">
-                  Add reason
+                  {t("addReason")}
                 </Button>
               </form>
             </SettingRow>

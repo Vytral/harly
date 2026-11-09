@@ -157,21 +157,18 @@ export function resolvePortalAuthMethods(
 /**
  * Server-side guard for saving a configuration. Rejects a change that would
  * leave no primary method usable (passkeys alone cannot be a way in because
- * they are registered after signing in with another method).
+ * they are registered after signing in with another method). Callers translate
+ * the stable `code`.
  */
 export function validatePortalAuthConfig(
   nextConfig: PortalAuthConfig,
   req: PortalAuthRequirements,
-): { ok: true } | { ok: false; error: string } {
+): { ok: true } | { ok: false; code: "noUsableMethod" } {
   const usable = PRIMARY_KEYS.filter(
     (k) => nextConfig[k] && unmetRequirement(k, req) === null,
   );
   if (usable.length === 0) {
-    return {
-      ok: false,
-      error:
-        "At least one sign-in method must stay enabled and usable. Enable password or access codes, or finish configuring email or OAuth first.",
-    };
+    return { ok: false, code: "noUsableMethod" };
   }
   return { ok: true };
 }

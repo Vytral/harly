@@ -4,6 +4,7 @@ import { useEffect, useId, useMemo, useState } from "react";
 import Link from "next/link";
 import type { Route } from "next";
 import { ArrowUpRight, Check, ChevronRight, MapPin } from "lucide-react";
+import { useTranslations } from "next-intl";
 
 import { cn } from "@/lib/utils";
 import type { WorkspaceBoardBranding } from "@/features/workspaces/board";
@@ -70,11 +71,12 @@ export function JoinTemplate({
   boardRoot: string;
   portalEnabled?: boolean;
 }) {
+  const t = useTranslations("features.careerPage.joinTemplate");
   const theme = careerTheme(config, workspace.primaryColor);
   const { accent, tintBg, tintInk } = theme;
   const base = boardBase(boardRoot);
   const enabled = config.positions.filters;
-  const headline = config.hero.headline || `Careers at ${workspace.name}`;
+  const headline = config.hero.headline || t("defaultHeadline", { name: workspace.name });
   const deptId = useId();
   const locId = useId();
 
@@ -117,11 +119,11 @@ export function JoinTemplate({
   const ctaBg = config.cta.color ?? tintInk;
 
   const tabs = [
-    { id: "positions", label: config.positions.title || "Open positions", show: true },
-    { id: "about", label: "About us", show: Boolean(config.intro.body) },
-    { id: "values", label: config.values.title || "Values", show: showValues },
-    { id: "images", label: "Images", show: photos.length > 0 },
-    { id: "locations", label: "Locations", show: officeLocations.length > 0 },
+    { id: "positions", label: config.positions.title || t("openPositions"), show: true },
+    { id: "about", label: t("aboutUs"), show: Boolean(config.intro.body) },
+    { id: "values", label: config.values.title || t("values"), show: showValues },
+    { id: "images", label: t("images"), show: photos.length > 0 },
+    { id: "locations", label: t("locations"), show: officeLocations.length > 0 },
   ].filter((t) => t.show);
   const tabKey = tabs.map((t) => t.id).join(",");
 
@@ -213,17 +215,17 @@ export function JoinTemplate({
         {/* Tab bar */}
         {tabs.length > 1 && (
           <nav
-            aria-label="Page sections"
+            aria-label={t("pageSections")}
             className="scrollbar-none mt-9 flex gap-6 overflow-x-auto border-b border-hairline"
           >
-            {tabs.map((t) => {
-              const on = activeTab === t.id;
+            {tabs.map((tab) => {
+              const on = activeTab === tab.id;
               return (
                 <a
-                  key={t.id}
-                  href={`#${t.id}`}
+                  key={tab.id}
+                  href={`#${tab.id}`}
                   aria-current={on ? "true" : undefined}
-                  onClick={() => setActiveTab(t.id)}
+                  onClick={() => setActiveTab(tab.id)}
                   className={cn(
                     "-mb-px shrink-0 whitespace-nowrap border-b-2 py-3 text-sm font-medium transition-colors motion-reduce:transition-none",
                     on
@@ -231,8 +233,8 @@ export function JoinTemplate({
                       : "border-transparent text-soft-ink hover:border-[var(--career-accent)] hover:text-near-ink",
                   )}
                 >
-                  {t.label}
-                  {t.id === "positions" && jobs.length > 0 && (
+                  {tab.label}
+                  {tab.id === "positions" && jobs.length > 0 && (
                     <span className="ml-1.5 text-soft-ink">{jobs.length}</span>
                   )}
                 </a>
@@ -250,7 +252,7 @@ export function JoinTemplate({
                 {enabled.includes("department") && departments.length > 0 && (
                   <div>
                     <label htmlFor={deptId} className="sr-only">
-                      Filter by category
+                      {t("filterByCategory")}
                     </label>
                     <select
                       id={deptId}
@@ -258,7 +260,7 @@ export function JoinTemplate({
                       onChange={(e) => setDepartment(e.target.value)}
                       className={selectClass}
                     >
-                      <option value={ALL}>All categories</option>
+                      <option value={ALL}>{t("allCategories")}</option>
                       {departments.map((d) => (
                         <option key={d} value={d}>
                           {d}
@@ -270,7 +272,7 @@ export function JoinTemplate({
                 {enabled.includes("location") && locations.length > 0 && (
                   <div>
                     <label htmlFor={locId} className="sr-only">
-                      Filter by location
+                      {t("filterByLocation")}
                     </label>
                     <select
                       id={locId}
@@ -278,7 +280,7 @@ export function JoinTemplate({
                       onChange={(e) => setLocation(e.target.value)}
                       className={selectClass}
                     >
-                      <option value={ALL}>All locations</option>
+                      <option value={ALL}>{t("allLocations")}</option>
                       {locations.map((l) => (
                         <option key={l} value={l}>
                           {l}
@@ -340,7 +342,7 @@ export function JoinTemplate({
                 ))}
               </div>
               <p className="mt-3 text-right text-xs text-soft-ink" aria-live="polite">
-                {shown.length} of {jobs.length} {jobs.length === 1 ? "result" : "results"}
+                {t("resultsCount", { shown: shown.length, total: jobs.length })}
               </p>
             </>
           )}
@@ -349,7 +351,7 @@ export function JoinTemplate({
         {/* About us: the full intro (the header only carries an excerpt) */}
         {config.intro.body && (
           <section id="about" className={`${reveal} ${sectionRule}`}>
-            <h2 className={h2}>About us</h2>
+            <h2 className={h2}>{t("aboutUs")}</h2>
             <div className="mt-4 max-w-2xl text-soft-ink">
               <RichBody html={config.intro.body} />
             </div>
@@ -382,13 +384,13 @@ export function JoinTemplate({
         {/* Images */}
         {photos.length > 0 && (
           <section id="images" className={`${reveal} ${sectionRule}`}>
-            <h2 className={h2}>Images</h2>
+            <h2 className={h2}>{t("images")}</h2>
             <div className="mt-5">
               <CareerGallery
                 gallery={{ ...config.gallery, enabled: true }}
                 rounded="rounded-[var(--career-r-card,16px)]"
                 aspectClass="h-56 w-72"
-                label={`Photos from ${workspace.name}`}
+                label={t("photosFrom", { name: workspace.name })}
               />
             </div>
           </section>
@@ -397,7 +399,7 @@ export function JoinTemplate({
         {/* Locations */}
         {officeLocations.length > 0 && (
           <section id="locations" className={`${reveal} ${sectionRule}`}>
-            <h2 className={h2}>Locations</h2>
+            <h2 className={h2}>{t("locations")}</h2>
             <div className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-2">
               {officeLocations.map(([loc, count]) => (
                 <div
@@ -414,7 +416,7 @@ export function JoinTemplate({
                     {loc}
                   </span>
                   <span className="shrink-0 text-sm text-soft-ink">
-                    {count} open {count === 1 ? "role" : "roles"}
+                    {t("openRoles", { count })}
                   </span>
                 </div>
               ))}
@@ -444,7 +446,7 @@ export function JoinTemplate({
                 className="mt-6 inline-flex h-11 items-center gap-2 rounded-full px-6 text-sm font-semibold transition-transform duration-150 hover:scale-[1.02] active:scale-[0.98] motion-reduce:transition-none"
                 style={{ backgroundColor: ctaBg, color: readableInk(ctaBg) }}
               >
-                {config.cta.buttonText || "Get in touch"}
+                {config.cta.buttonText || t("getInTouch")}
                 <ArrowUpRight className="size-4" strokeWidth={2} aria-hidden />
               </a>
             )}

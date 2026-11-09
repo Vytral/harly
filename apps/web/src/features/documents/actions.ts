@@ -4,6 +4,7 @@ import { randomUUID } from "node:crypto";
 
 import { revalidatePath } from "next/cache";
 import { and, desc, eq, exists, ilike, inArray, isNull, or } from "drizzle-orm";
+import { getTranslations } from "@/i18n/server";
 import { z } from "zod";
 
 import { ApiError } from "@harly/api";
@@ -59,10 +60,11 @@ const accessLevelSchema = z.enum(["read", "manage"]);
 
 export type DocumentActionResult = { ok: boolean; error?: string; documentId?: string };
 
-function archivedDocumentError(document: { status: string }) {
-  return document.status === "archived"
-    ? "Archived documents are read-only. Restore the document before editing it."
-    : null;
+type ActionT = Awaited<ReturnType<typeof getTranslations>>;
+
+async function archivedDocumentError(t: ActionT, document: { status: string }) {
+  if (document.status !== "archived") return null;
+  return t("archivedReadOnly");
 }
 
 type DocumentPermissionContext = {
@@ -70,11 +72,11 @@ type DocumentPermissionContext = {
   error?: string;
 };
 
-async function documentContext(permission: "documents:manage" | "documents:share"): Promise<DocumentPermissionContext> {
+async function documentContext(t: ActionT, permission: "documents:manage" | "documents:share"): Promise<DocumentPermissionContext> {
   try {
     return { context: await requirePermission(permission) };
   } catch {
-    return { context: undefined as never, error: "You do not have permission to manage documents." };
+    return { context: undefined as never, error: t("permissionDenied") };
   }
 }
 
@@ -202,14 +204,15 @@ export async function createDocument(input: {
   association: z.input<typeof associationSchema>;
   ownerId?: string | null;
 }): Promise<DocumentActionResult> {
-  const permission = await documentContext("documents:manage");
+  const t = await getTranslations("server.documents.actions");
+  const permission = await documentContext(t, "documents:manage");
   if (permission.error) return { ok: false, error: permission.error };
   const { context } = permission;
   const parsedAssociation = associationSchema.safeParse(input.association);
-  if (!parsedAssociation.success) return { ok: false, error: "Invalid document association." };
+  if (!parsedAssociation.success) return { ok: false, error: t("invalidAssociation") };
   const name = input.name.trim().replace(/[\r\n]/g, "").slice(0, 255);
   const originalName = input.originalName.trim().replace(/[\r\n]/g, "").slice(0, 255);
-  if (!name || !originalName || !input.mimeType || !Number.isInteger(input.sizeBytes)) return { ok: false, error: "Invalid document metadata." };
+  if (!name || !originalName || !input.mimeType || !Number.isInteger(input.sizeBytes)) return { ok: false, error: t("invalidMetadata") };
   const checked = await verifyUploadedDocument({
     workspaceId: context.organization.id,
     storageKey: input.storageKey,
@@ -219,21 +222,21 @@ export async function createDocument(input: {
     checksum: input.checksum,
   });
   if ("error" in checked) return { ok: false, error: checked.error };
-  if (!await targetBelongsToWorkspace(context.organization.id, parsedAssociation.data)) return { ok: false, error: "The selected association was not found." };
+  if (!await targetBelongsToWorkspace(context.organization.id, parsedAssociation.data)) return { ok: false, error: t("associationNotFound") };
   // Judged by the same scope rule the document lists use. An out-of-scope target
   // gets the same message as a missing one, so the caller learns nothing new.
   const inScope = await associationTargetsInScope(
     { workspaceId: context.organization.id, userId: context.user.id, roleKey: context.roleKey },
     [parsedAssociation.data],
   );
-  if (!inScope) return { ok: false, error: "The selected association was not found." };
+  if (!inScope) return { ok: false, error: t("associationNotFound") };
   if (input.categoryId) {
     const [category] = await db.select({ id: documentCategories.id }).from(documentCategories).where(and(eq(documentCategories.id, input.categoryId), eq(documentCategories.workspaceId, context.organization.id), eq(documentCategories.active, true))).limit(1);
-    if (!category) return { ok: false, error: "Category not found." };
+    if (!category) return { ok: false, error: t("categoryNotFound") };
   }
   if (input.ownerId) {
     const [owner] = await db.select({ userId: authMembers.userId }).from(authMembers).where(and(eq(authMembers.organizationId, context.organization.id), eq(authMembers.userId, input.ownerId))).limit(1);
-    if (!owner) return { ok: false, error: "Document owner is not a workspace member." };
+    if (!owner) return { ok: false, error: t("ownerNotMember") };
   }
 
   const created = await db.transaction(async (tx) => {
@@ -275,14 +278,15 @@ export async function createDocument(input: {
 }
 
 export async function renameDocument(input: { documentId: string; name: string }): Promise<DocumentActionResult> {
-  const permission = await documentContext("documents:manage");
+  const t = await getTranslations("server.documents.actions");
+  const permission = await documentContext(t, "documents:manage");
   if (permission.error) return { ok: false, error: permission.error };
   const { context } = permission;
   const parsed = documentIdSchema.extend({ name: z.string().trim().min(1).max(255) }).safeParse(input);
-  if (!parsed.success) return { ok: false, error: "Document name is invalid." };
+  if (!parsed.success) return { ok: false, error: t("invalidName") };
   const access = await resolveDocumentAccessInScope({ documentId: input.documentId, workspaceId: context.organization.id, userId: context.user.id, roleKey: context.roleKey });
-  if (!access || access.level !== "manage") return { ok: false, error: "You cannot edit this document." };
-  const archivedError = archivedDocumentError(access.document);
+  if (!access || access.level !== "manage") return { ok: false, error: t("cannotEditDocument") };
+  const archivedError = await archivedDocumentError(t, access.document);
   if (archivedError) return { ok: false, error: archivedError };
   await db.transaction(async (tx) => {
     await tx.update(documents).set({ name: parsed.data.name.replace(/[\r\n]/g, "") }).where(and(eq(documents.id, input.documentId), eq(documents.workspaceId, context.organization.id)));
@@ -293,13 +297,14 @@ export async function renameDocument(input: { documentId: string; name: string }
 }
 
 export async function setDocumentStatus(input: { documentId: string; status: "active" | "archived" }): Promise<DocumentActionResult> {
-  const permission = await documentContext("documents:manage");
+  const t = await getTranslations("server.documents.actions");
+  const permission = await documentContext(t, "documents:manage");
   if (permission.error) return { ok: false, error: permission.error };
   const { context } = permission;
   const parsed = documentIdSchema.extend({ status: z.enum(["active", "archived"]) }).safeParse(input);
-  if (!parsed.success) return { ok: false, error: "Invalid document status." };
+  if (!parsed.success) return { ok: false, error: t("invalidStatus") };
   const access = await resolveDocumentAccessInScope({ documentId: input.documentId, workspaceId: context.organization.id, userId: context.user.id, roleKey: context.roleKey });
-  if (!access || access.level !== "manage") return { ok: false, error: "You cannot edit this document." };
+  if (!access || access.level !== "manage") return { ok: false, error: t("cannotEditDocument") };
   if (parsed.data.status === "archived") {
     const [activeHold] = await db
       .select({ id: documentLegalHolds.id })
@@ -315,7 +320,7 @@ export async function setDocumentStatus(input: { documentId: string; status: "ac
     if (activeHold) {
       return {
         ok: false,
-        error: "This document is under legal hold and cannot be archived until every hold is released.",
+        error: t("archiveBlockedByHold"),
       };
     }
   }
@@ -340,22 +345,23 @@ async function requireOwnerOrAdminResult(message: string): Promise<DocumentActio
 
 /** Permanently remove a document and every stored derivative. Owner/admin only. */
 export async function deleteDocument(input: { documentId: string }): Promise<DocumentActionResult> {
-  const permission = await documentContext("documents:manage");
+  const t = await getTranslations("server.documents.actions");
+  const permission = await documentContext(t, "documents:manage");
   if (permission.error) return { ok: false, error: permission.error };
-  const denied = await requireOwnerOrAdminResult("Only workspace owners and admins can delete documents.");
+  const denied = await requireOwnerOrAdminResult(t("ownerOrAdminOnlyDelete"));
   if (denied) return denied;
   const { context } = permission;
   const parsed = documentIdSchema.safeParse(input);
-  if (!parsed.success) return { ok: false, error: "Invalid document." };
+  if (!parsed.success) return { ok: false, error: t("invalidDocument") };
   const access = await resolveDocumentAccessInScope({
     documentId: input.documentId,
     workspaceId: context.organization.id,
     userId: context.user.id,
     roleKey: context.roleKey,
   });
-  if (!access) return { ok: false, error: "Document not found." };
+  if (!access) return { ok: false, error: t("documentNotFound") };
   if (["pending"].includes(access.document.signatureStatus)) {
-    return { ok: false, error: "Void the active signature request before deleting this document." };
+    return { ok: false, error: t("voidBeforeDelete") };
   }
   const [activeHold] = await db
     .select({ id: documentLegalHolds.id })
@@ -368,7 +374,7 @@ export async function deleteDocument(input: { documentId: string }): Promise<Doc
       ),
     )
     .limit(1);
-  if (activeHold) return { ok: false, error: "Documents under legal hold cannot be deleted." };
+  if (activeHold) return { ok: false, error: t("deleteBlockedByHold") };
 
   const versions = await db
     .select({ storageKey: documentVersions.storageKey })
@@ -416,7 +422,8 @@ export async function placeDocumentLegalHold(input: {
   reason: string;
   reference?: string | null;
 }): Promise<DocumentActionResult> {
-  const permission = await documentContext("documents:manage");
+  const t = await getTranslations("server.documents.actions");
+  const permission = await documentContext(t, "documents:manage");
   if (permission.error) return { ok: false, error: permission.error };
   const { context } = permission;
   const parsed = documentIdSchema
@@ -425,7 +432,7 @@ export async function placeDocumentLegalHold(input: {
       reference: z.string().trim().max(160).nullable().optional(),
     })
     .safeParse(input);
-  if (!parsed.success) return { ok: false, error: "Enter a reason for the legal hold." };
+  if (!parsed.success) return { ok: false, error: t("legalHoldReasonRequired") };
   const access = await resolveDocumentAccessInScope({
     documentId: input.documentId,
     workspaceId: context.organization.id,
@@ -433,7 +440,7 @@ export async function placeDocumentLegalHold(input: {
     roleKey: context.roleKey,
   });
   if (!access || access.level !== "manage") {
-    return { ok: false, error: "You cannot place a legal hold on this document." };
+    return { ok: false, error: t("cannotPlaceLegalHold") };
   }
   await db.transaction(async (tx) => {
     const [hold] = await tx
@@ -463,7 +470,8 @@ export async function releaseDocumentLegalHold(input: {
   holdId: string;
   releaseReason: string;
 }): Promise<DocumentActionResult> {
-  const permission = await documentContext("documents:manage");
+  const t = await getTranslations("server.documents.actions");
+  const permission = await documentContext(t, "documents:manage");
   if (permission.error) return { ok: false, error: permission.error };
   const { context } = permission;
   const parsed = z
@@ -472,7 +480,7 @@ export async function releaseDocumentLegalHold(input: {
       releaseReason: z.string().trim().min(3).max(2000),
     })
     .safeParse(input);
-  if (!parsed.success) return { ok: false, error: "Enter a reason for releasing the legal hold." };
+  if (!parsed.success) return { ok: false, error: t("releaseHoldReasonRequired") };
   const [hold] = await db
     .select({ id: documentLegalHolds.id, documentId: documentLegalHolds.documentId })
     .from(documentLegalHolds)
@@ -484,7 +492,7 @@ export async function releaseDocumentLegalHold(input: {
       ),
     )
     .limit(1);
-  if (!hold) return { ok: false, error: "Active legal hold not found." };
+  if (!hold) return { ok: false, error: t("activeHoldNotFound") };
   const access = await resolveDocumentAccessInScope({
     documentId: hold.documentId,
     workspaceId: context.organization.id,
@@ -492,7 +500,7 @@ export async function releaseDocumentLegalHold(input: {
     roleKey: context.roleKey,
   });
   if (!access || access.level !== "manage") {
-    return { ok: false, error: "You cannot release this legal hold." };
+    return { ok: false, error: t("cannotReleaseLegalHold") };
   }
   await db.transaction(async (tx) => {
     await tx
@@ -523,18 +531,19 @@ export async function releaseDocumentLegalHold(input: {
 }
 
 export async function setDocumentCategory(input: { documentId: string; categoryId: string | null }): Promise<DocumentActionResult> {
-  const permission = await documentContext("documents:manage");
+  const t = await getTranslations("server.documents.actions");
+  const permission = await documentContext(t, "documents:manage");
   if (permission.error) return { ok: false, error: permission.error };
   const { context } = permission;
   const parsed = documentIdSchema.extend({ categoryId: z.uuid().nullable() }).safeParse(input);
-  if (!parsed.success) return { ok: false, error: "Invalid category." };
+  if (!parsed.success) return { ok: false, error: t("invalidCategory") };
   const access = await resolveDocumentAccessInScope({ documentId: input.documentId, workspaceId: context.organization.id, userId: context.user.id, roleKey: context.roleKey });
-  if (!access || access.level !== "manage") return { ok: false, error: "You cannot edit this document." };
-  const archivedError = archivedDocumentError(access.document);
+  if (!access || access.level !== "manage") return { ok: false, error: t("cannotEditDocument") };
+  const archivedError = await archivedDocumentError(t, access.document);
   if (archivedError) return { ok: false, error: archivedError };
   if (parsed.data.categoryId) {
     const [category] = await db.select({ id: documentCategories.id }).from(documentCategories).where(and(eq(documentCategories.id, parsed.data.categoryId), eq(documentCategories.workspaceId, context.organization.id), eq(documentCategories.active, true))).limit(1);
-    if (!category) return { ok: false, error: "Category not found." };
+    if (!category) return { ok: false, error: t("categoryNotFound") };
   }
   await db.transaction(async (tx) => {
     await tx.update(documents).set({ categoryId: parsed.data.categoryId }).where(and(eq(documents.id, input.documentId), eq(documents.workspaceId, context.organization.id)));
@@ -545,14 +554,15 @@ export async function setDocumentCategory(input: { documentId: string; categoryI
 }
 
 export async function createDocumentVersion(input: { documentId: string; originalName: string; mimeType: string; sizeBytes: number; checksum: string; storageKey: string }): Promise<DocumentActionResult> {
-  const permission = await documentContext("documents:manage");
+  const t = await getTranslations("server.documents.actions");
+  const permission = await documentContext(t, "documents:manage");
   if (permission.error) return { ok: false, error: permission.error };
   const { context } = permission;
   const access = await resolveDocumentAccessInScope({ documentId: input.documentId, workspaceId: context.organization.id, userId: context.user.id, roleKey: context.roleKey });
-  if (!access || access.level !== "manage") return { ok: false, error: "You cannot edit this document." };
-  const archivedError = archivedDocumentError(access.document);
+  if (!access || access.level !== "manage") return { ok: false, error: t("cannotEditDocument") };
+  const archivedError = await archivedDocumentError(t, access.document);
   if (archivedError) return { ok: false, error: archivedError };
-  if (["signed", "pending"].includes(access.document.signatureStatus)) return { ok: false, error: "Signed documents cannot be replaced. Create a new document instead." };
+  if (["signed", "pending"].includes(access.document.signatureStatus)) return { ok: false, error: t("signedCannotReplace") };
   const checked = await verifyUploadedDocument({ workspaceId: context.organization.id, storageKey: input.storageKey, name: input.originalName, mimeType: input.mimeType, sizeBytes: input.sizeBytes, checksum: input.checksum });
   if ("error" in checked) return { ok: false, error: checked.error };
   const replaced = await db.transaction(async (tx) => {
@@ -568,25 +578,26 @@ export async function createDocumentVersion(input: { documentId: string; origina
     await logDocumentActivity(tx, { workspaceId: context.organization.id, actorId: context.user.id, documentId: input.documentId, type: "document.version_created", metadata: { versionNumber } });
     return true;
   });
-  if (!replaced) return { ok: false, error: "Signed documents cannot be replaced. Create a new document instead." };
+  if (!replaced) return { ok: false, error: t("signedCannotReplace") };
   revalidatePath("/dashboard/documents");
   return { ok: true };
 }
 
 export async function saveDocumentAcl(input: { documentId: string; roles: Array<{ roleKey: string; accessLevel: "read" | "manage" }>; members: Array<{ userId: string; accessLevel: "read" | "manage" }> }): Promise<DocumentActionResult> {
-  const permission = await documentContext("documents:share");
+  const t = await getTranslations("server.documents.actions");
+  const permission = await documentContext(t, "documents:share");
   if (permission.error) return { ok: false, error: permission.error };
   const { context } = permission;
   const parsed = documentIdSchema.extend({ roles: z.array(z.object({ roleKey: z.string().trim().min(1).max(80), accessLevel: accessLevelSchema })), members: z.array(z.object({ userId: z.string().min(1), accessLevel: accessLevelSchema })) }).safeParse(input);
-  if (!parsed.success) return { ok: false, error: "Invalid access rules." };
+  if (!parsed.success) return { ok: false, error: t("invalidAccessRules") };
   const access = await resolveDocumentAccessInScope({ documentId: input.documentId, workspaceId: context.organization.id, userId: context.user.id, roleKey: context.roleKey });
-  if (!access || access.level !== "manage") return { ok: false, error: "You cannot share this document." };
-  const archivedError = archivedDocumentError(access.document);
+  if (!access || access.level !== "manage") return { ok: false, error: t("cannotShareDocument") };
+  const archivedError = await archivedDocumentError(t, access.document);
   if (archivedError) return { ok: false, error: archivedError };
   const memberIds = parsed.data.members.map((member) => member.userId);
   if (memberIds.length) {
     const workspaceMembers = await db.select({ userId: authMembers.userId }).from(authMembers).where(and(eq(authMembers.organizationId, context.organization.id), inArray(authMembers.userId, memberIds)));
-    if (workspaceMembers.length !== new Set(memberIds).size) return { ok: false, error: "Every selected member must belong to this workspace." };
+    if (workspaceMembers.length !== new Set(memberIds).size) return { ok: false, error: t("membersNotInWorkspace") };
   }
   await db.transaction(async (tx) => {
     await tx.delete(documentAccessRoles).where(eq(documentAccessRoles.documentId, input.documentId));
@@ -600,18 +611,19 @@ export async function saveDocumentAcl(input: { documentId: string; roles: Array<
 }
 
 export async function assignDocument(input: { documentId: string; userId: string | null; assignmentType: "owner" | "reviewer" }): Promise<DocumentActionResult> {
-  const permission = await documentContext("documents:manage");
+  const t = await getTranslations("server.documents.actions");
+  const permission = await documentContext(t, "documents:manage");
   if (permission.error) return { ok: false, error: permission.error };
   const { context } = permission;
   const parsed = documentIdSchema.extend({ userId: z.string().min(1).nullable(), assignmentType: z.enum(["owner", "reviewer"]) }).safeParse(input);
-  if (!parsed.success) return { ok: false, error: "Invalid assignment." };
+  if (!parsed.success) return { ok: false, error: t("invalidAssignment") };
   const access = await resolveDocumentAccessInScope({ documentId: input.documentId, workspaceId: context.organization.id, userId: context.user.id, roleKey: context.roleKey });
-  if (!access || access.level !== "manage") return { ok: false, error: "You cannot assign this document." };
-  const archivedError = archivedDocumentError(access.document);
+  if (!access || access.level !== "manage") return { ok: false, error: t("cannotAssignDocument") };
+  const archivedError = await archivedDocumentError(t, access.document);
   if (archivedError) return { ok: false, error: archivedError };
   if (parsed.data.userId) {
     const [member] = await db.select({ userId: authMembers.userId }).from(authMembers).where(and(eq(authMembers.organizationId, context.organization.id), eq(authMembers.userId, parsed.data.userId))).limit(1);
-    if (!member) return { ok: false, error: "Assignee is not a workspace member." };
+    if (!member) return { ok: false, error: t("assigneeNotMember") };
   }
   await db.transaction(async (tx) => {
     await tx.delete(documentAssignments).where(and(eq(documentAssignments.documentId, input.documentId), eq(documentAssignments.assignmentType, input.assignmentType)));
@@ -623,14 +635,15 @@ export async function assignDocument(input: { documentId: string; userId: string
 }
 
 export async function saveDocumentSignature(input: { documentId: string; status: "unsigned" | "pending" | "signed" | "declined" | "expired"; provider?: string | null; envelopeId?: string | null; url?: string | null; expiresAt?: string | null; attestationNote?: string | null }): Promise<DocumentActionResult> {
-  const permission = await documentContext("documents:manage");
+  const t = await getTranslations("server.documents.actions");
+  const permission = await documentContext(t, "documents:manage");
   if (permission.error) return { ok: false, error: permission.error };
   const { context } = permission;
   const parsed = documentIdSchema.extend({ status: z.enum(["unsigned", "pending", "signed", "declined", "expired"]), provider: z.string().max(80).nullable().optional(), envelopeId: z.string().max(255).nullable().optional(), url: z.url().nullable().optional(), expiresAt: z.iso.datetime().nullable().optional(), attestationNote: z.string().trim().max(2000).nullable().optional() }).safeParse(input);
-  if (!parsed.success) return { ok: false, error: "Invalid signature details." };
+  if (!parsed.success) return { ok: false, error: t("invalidSignatureDetails") };
   const access = await resolveDocumentAccessInScope({ documentId: input.documentId, workspaceId: context.organization.id, userId: context.user.id, roleKey: context.roleKey });
-  if (!access || access.level !== "manage") return { ok: false, error: "You cannot update this document." };
-  const archivedError = archivedDocumentError(access.document);
+  if (!access || access.level !== "manage") return { ok: false, error: t("cannotUpdateDocument") };
+  const archivedError = await archivedDocumentError(t, access.document);
   if (archivedError) return { ok: false, error: archivedError };
   if (
     isExternallyManagedSignatureProvider(access.document.signatureProvider) ||
@@ -638,18 +651,18 @@ export async function saveDocumentSignature(input: { documentId: string; status:
   ) {
     return {
       ok: false,
-      error: "DocuSeal signature status is controlled by verified signing events.",
+      error: t("docusealControlled"),
     };
   }
   if (access.document.signatureStatus === "signed" && parsed.data.status !== "signed") {
-    return { ok: false, error: "Signed documents are immutable. Create a new document for another signature cycle." };
+    return { ok: false, error: t("signedImmutable") };
   }
   // Marking a document "signed" outside DocuSeal is an attestation, not verified
   // evidence — require the manager to record how/when it was actually signed
   // so the status isn't just a trust-me flag.
   const attestationNote = parsed.data.attestationNote?.trim() || "";
   if (parsed.data.status === "signed" && attestationNote.length < 3) {
-    return { ok: false, error: "Describe how this document was signed (e.g. \"signed in person, scan on file\")." };
+    return { ok: false, error: t("describeSignature") };
   }
   const manualAttestation =
     parsed.data.status === "signed"
@@ -684,14 +697,15 @@ export async function saveDocumentSignature(input: { documentId: string; status:
 
 /** Set or clear a document's business date (e.g. an NDA's expiration/effective date). */
 export async function setDocumentExpiresAt(input: { documentId: string; expiresAt: string | null }): Promise<DocumentActionResult> {
-  const permission = await documentContext("documents:manage");
+  const t = await getTranslations("server.documents.actions");
+  const permission = await documentContext(t, "documents:manage");
   if (permission.error) return { ok: false, error: permission.error };
   const { context } = permission;
   const parsed = documentIdSchema.extend({ expiresAt: z.iso.date().nullable() }).safeParse(input);
-  if (!parsed.success) return { ok: false, error: "Enter a valid date." };
+  if (!parsed.success) return { ok: false, error: t("invalidDate") };
   const access = await resolveDocumentAccessInScope({ documentId: input.documentId, workspaceId: context.organization.id, userId: context.user.id, roleKey: context.roleKey });
-  if (!access || access.level !== "manage") return { ok: false, error: "You cannot edit this document." };
-  const archivedError = archivedDocumentError(access.document);
+  if (!access || access.level !== "manage") return { ok: false, error: t("cannotEditDocument") };
+  const archivedError = await archivedDocumentError(t, access.document);
   if (archivedError) return { ok: false, error: archivedError };
   await db.transaction(async (tx) => {
     await tx.update(documents).set({ expiresAt: parsed.data.expiresAt ? new Date(parsed.data.expiresAt) : null }).where(and(eq(documents.id, input.documentId), eq(documents.workspaceId, context.organization.id)));
@@ -702,27 +716,29 @@ export async function setDocumentExpiresAt(input: { documentId: string; expiresA
 }
 
 export async function createDocumentCategory(input: { name: string; accent?: string }): Promise<DocumentActionResult> {
-  const permission = await documentContext("documents:manage");
+  const t = await getTranslations("server.documents.actions");
+  const permission = await documentContext(t, "documents:manage");
   if (permission.error) return { ok: false, error: permission.error };
   const { context } = permission;
   const name = input.name.trim().slice(0, 80);
-  if (!name) return { ok: false, error: "Category name is required." };
+  if (!name) return { ok: false, error: t("categoryNameRequired") };
   const slug = slugifyDocumentCategory(name);
   try {
     await db.insert(documentCategories).values({ workspaceId: context.organization.id, name, slug, accent: input.accent?.trim().slice(0, 30) || "pine" });
   } catch {
-    return { ok: false, error: "A category with that name already exists." };
+    return { ok: false, error: t("categoryNameTaken") };
   }
   revalidatePath("/dashboard/documents");
   return { ok: true };
 }
 
 export async function updateDocumentCategory(input: { categoryId: string; name: string; accent?: string; active: boolean }): Promise<DocumentActionResult> {
-  const permission = await documentContext("documents:manage");
+  const t = await getTranslations("server.documents.actions");
+  const permission = await documentContext(t, "documents:manage");
   if (permission.error) return { ok: false, error: permission.error };
   const { context } = permission;
   const parsed = z.object({ categoryId: z.uuid(), name: z.string().trim().min(1).max(80), accent: z.string().trim().max(30).optional(), active: z.boolean() }).safeParse(input);
-  if (!parsed.success) return { ok: false, error: "Invalid category." };
+  if (!parsed.success) return { ok: false, error: t("invalidCategory") };
   await db.update(documentCategories).set({ name: parsed.data.name, slug: slugifyDocumentCategory(parsed.data.name), accent: parsed.data.accent || "pine", active: parsed.data.active }).where(and(eq(documentCategories.id, input.categoryId), eq(documentCategories.workspaceId, context.organization.id)));
   revalidatePath("/dashboard/documents");
   return { ok: true };
@@ -749,19 +765,20 @@ export async function sendDocumentForSignature(input: {
   subject: string;
   message?: string | null;
 }): Promise<DocumentActionResult> {
-  const permission = await documentContext("documents:manage");
+  const t = await getTranslations("server.documents.actions");
+  const permission = await documentContext(t, "documents:manage");
   if (permission.error) return { ok: false, error: permission.error };
   const { context } = permission;
   const parsed = sendSignatureSchema.safeParse(input);
-  if (!parsed.success) return { ok: false, error: "Enter a valid recipient email, name, and subject." };
+  if (!parsed.success) return { ok: false, error: t("invalidRecipient") };
   const access = await resolveDocumentAccessInScope({
     documentId: input.documentId,
     workspaceId: context.organization.id,
     userId: context.user.id,
     roleKey: context.roleKey,
   });
-  if (!access || access.level !== "manage") return { ok: false, error: "You cannot send this document for signature." };
-  const archivedError = archivedDocumentError(access.document);
+  if (!access || access.level !== "manage") return { ok: false, error: t("cannotSendForSignature") };
+  const archivedError = await archivedDocumentError(t, access.document);
   if (archivedError) return { ok: false, error: archivedError };
 
   const result = await sendDocumentForEnvelope({
@@ -787,29 +804,30 @@ export async function voidDocumentSignature(input: {
   documentId: string;
   reason: string;
 }): Promise<DocumentActionResult> {
-  const permission = await documentContext("documents:manage");
+  const t = await getTranslations("server.documents.actions");
+  const permission = await documentContext(t, "documents:manage");
   if (permission.error) return { ok: false, error: permission.error };
   const { context } = permission;
   const parsed = z
     .object({ documentId: z.uuid(), reason: z.string().trim().min(3).max(400) })
     .safeParse(input);
-  if (!parsed.success) return { ok: false, error: "Enter a short reason for voiding the request." };
+  if (!parsed.success) return { ok: false, error: t("voidReasonRequired") };
   const access = await resolveDocumentAccessInScope({
     documentId: input.documentId,
     workspaceId: context.organization.id,
     userId: context.user.id,
     roleKey: context.roleKey,
   });
-  if (!access || access.level !== "manage") return { ok: false, error: "You cannot void this request." };
-  const archivedError = archivedDocumentError(access.document);
+  if (!access || access.level !== "manage") return { ok: false, error: t("cannotVoidRequest") };
+  const archivedError = await archivedDocumentError(t, access.document);
   if (archivedError) return { ok: false, error: archivedError };
   const document = access.document;
   if (document.signatureProvider === "native") {
     if (document.signatureStatus !== "pending") {
-      return { ok: false, error: "Only an in-progress native signature request can be voided." };
+      return { ok: false, error: t("nativeVoidNotPending") };
     }
     if (!document.signatureEnvelopeRefId) {
-      return { ok: false, error: "Could not resolve the native signing envelope." };
+      return { ok: false, error: t("nativeEnvelopeMissing") };
     }
     const voided = await voidNativeSignature({
       workspaceId: context.organization.id,
@@ -824,17 +842,17 @@ export async function voidDocumentSignature(input: {
     return { ok: true };
   }
   if (!isExternallyManagedSignatureProvider(document.signatureProvider)) {
-    return { ok: false, error: "This document is not part of a signature request that can be voided." };
+    return { ok: false, error: t("notVoidable") };
   }
   if (document.signatureStatus === "signed") {
-    return { ok: false, error: "Signed documents are immutable and cannot be voided." };
+    return { ok: false, error: t("signedCannotVoid") };
   }
   if (!document.signatureEnvelopeRefId && !document.signatureEnvelopeId) {
-    return { ok: false, error: "Could not resolve the DocuSeal submission for this document." };
+    return { ok: false, error: t("docusealSubmissionMissing") };
   }
 
   const ctx = await freshEsignContext(context.organization.id);
-  if (!ctx) return { ok: false, error: "DocuSeal is not connected. Reconnect it in Settings → Integrations." };
+  if (!ctx) return { ok: false, error: t("docusealNotConnected") };
 
   // Resolve the provider submission id: prefer the stored envelope row, fall back
   // to the denormalised id on the document for envelopes created before the
@@ -846,13 +864,13 @@ export async function voidDocumentSignature(input: {
       .from(signatureEnvelopes)
       .where(and(eq(signatureEnvelopes.workspaceId, context.organization.id), eq(signatureEnvelopes.id, document.signatureEnvelopeRefId)))
       .limit(1);
-    if (!envelope) return { ok: false, error: "Signature envelope record not found." };
+    if (!envelope) return { ok: false, error: t("envelopeNotFound") };
     if (envelope.status === "completed" || envelope.status === "declined" || envelope.status === "voided") {
-      return { ok: false, error: "This signature request is already complete." };
+      return { ok: false, error: t("signatureAlreadyComplete") };
     }
     submissionId = envelope.providerEnvelopeId;
   }
-  if (!submissionId) return { ok: false, error: "Could not resolve the DocuSeal submission id." };
+  if (!submissionId) return { ok: false, error: t("docusealSubmissionIdMissing") };
 
   try {
     await archiveSubmission(ctx, submissionId);
@@ -861,8 +879,8 @@ export async function voidDocumentSignature(input: {
     return {
       ok: false,
       error: error instanceof Error
-        ? `DocuSeal could not void the submission: ${error.message}`
-        : "DocuSeal could not void the submission. Try again in a moment.",
+        ? t("docusealVoidFailedWithReason", { reason: error.message })
+        : t("docusealVoidFailed"),
     };
   }
 
@@ -926,13 +944,14 @@ export async function bulkSetDocumentStatus(input: {
   documentIds: string[];
   status: "active" | "archived";
 }): Promise<DocumentActionResult> {
-  const permission = await documentContext("documents:manage");
+  const t = await getTranslations("server.documents.actions");
+  const permission = await documentContext(t, "documents:manage");
   if (permission.error) return { ok: false, error: permission.error };
   const { context } = permission;
   const parsed = bulkIdsSchema.extend({ status: z.enum(["active", "archived"]) }).safeParse(input);
-  if (!parsed.success) return { ok: false, error: "Invalid bulk status request." };
+  if (!parsed.success) return { ok: false, error: t("invalidBulkStatus") };
   const ids = await resolveManageableIds(context.organization.id, context.user.id, context.roleKey, parsed.data.documentIds);
-  if (ids.length === 0) return { ok: false, error: "You cannot manage any of the selected documents." };
+  if (ids.length === 0) return { ok: false, error: t("cannotManageSelected") };
 
   if (parsed.data.status === "archived") {
     const held = await db
@@ -948,7 +967,7 @@ export async function bulkSetDocumentStatus(input: {
     const heldIds = new Set(held.map((row) => row.documentId));
     const archivable = ids.filter((id) => !heldIds.has(id));
     if (archivable.length === 0) {
-      return { ok: false, error: "Every selected document is under legal hold and cannot be archived." };
+      return { ok: false, error: t("allHeldCannotArchive") };
     }
     await db.transaction(async (tx) => {
       await tx.update(documents).set({ status: "archived" }).where(and(eq(documents.workspaceId, context.organization.id), inArray(documents.id, archivable)));
@@ -956,7 +975,7 @@ export async function bulkSetDocumentStatus(input: {
     });
     revalidatePath("/dashboard/documents");
     if (heldIds.size > 0) {
-      return { ok: true, error: `${archivable.length} archived. ${heldIds.size} under legal hold were skipped.` };
+      return { ok: true, error: t("bulkArchivedSkipped", { archived: archivable.length, held: heldIds.size }) };
     }
     return { ok: true };
   }
@@ -974,17 +993,18 @@ export async function bulkSetDocumentCategory(input: {
   documentIds: string[];
   categoryId: string | null;
 }): Promise<DocumentActionResult> {
-  const permission = await documentContext("documents:manage");
+  const t = await getTranslations("server.documents.actions");
+  const permission = await documentContext(t, "documents:manage");
   if (permission.error) return { ok: false, error: permission.error };
   const { context } = permission;
   const parsed = bulkIdsSchema.extend({ categoryId: z.uuid().nullable() }).safeParse(input);
-  if (!parsed.success) return { ok: false, error: "Invalid bulk category request." };
+  if (!parsed.success) return { ok: false, error: t("invalidBulkCategory") };
   if (parsed.data.categoryId) {
     const [category] = await db.select({ id: documentCategories.id }).from(documentCategories).where(and(eq(documentCategories.id, parsed.data.categoryId), eq(documentCategories.workspaceId, context.organization.id), eq(documentCategories.active, true))).limit(1);
-    if (!category) return { ok: false, error: "Category not found." };
+    if (!category) return { ok: false, error: t("categoryNotFound") };
   }
   const ids = await resolveManageableIds(context.organization.id, context.user.id, context.roleKey, parsed.data.documentIds, true);
-  if (ids.length === 0) return { ok: false, error: "You cannot manage any of the selected documents." };
+  if (ids.length === 0) return { ok: false, error: t("cannotManageSelected") };
   await db.transaction(async (tx) => {
     await tx.update(documents).set({ categoryId: parsed.data.categoryId }).where(and(eq(documents.workspaceId, context.organization.id), inArray(documents.id, ids)));
     await tx.insert(activityEvents).values(ids.map((documentId) => ({ workspaceId: context.organization.id, actorId: context.user.id, entityType: "document" as const, entityId: documentId, type: "document.category_changed", metadata: { categoryId: parsed.data.categoryId, bulk: true } })));
@@ -995,13 +1015,14 @@ export async function bulkSetDocumentCategory(input: {
 
 /** Permanently delete many documents at once. Owner/admin only; skips pending-signature and legal-hold ids. */
 export async function bulkDeleteDocuments(input: { documentIds: string[] }): Promise<DocumentActionResult> {
-  const permission = await documentContext("documents:manage");
+  const t = await getTranslations("server.documents.actions");
+  const permission = await documentContext(t, "documents:manage");
   if (permission.error) return { ok: false, error: permission.error };
-  const denied = await requireOwnerOrAdminResult("Only workspace owners and admins can delete documents.");
+  const denied = await requireOwnerOrAdminResult(t("ownerOrAdminOnlyDelete"));
   if (denied) return denied;
   const { context } = permission;
   const parsed = bulkIdsSchema.safeParse(input);
-  if (!parsed.success) return { ok: false, error: "Invalid bulk delete request." };
+  if (!parsed.success) return { ok: false, error: t("invalidBulkDelete") };
 
   const held = await db
     .select({ documentId: documentLegalHolds.documentId })
@@ -1026,7 +1047,7 @@ export async function bulkDeleteDocuments(input: { documentIds: string[] }): Pro
     if (access?.level === "manage") deletable.push(doc);
   }
   if (deletable.length === 0) {
-    return { ok: false, error: "None of the selected documents could be deleted (legal hold or pending signature)." };
+    return { ok: false, error: t("noneDeletable") };
   }
 
   const ids = deletable.map((doc) => doc.id);
@@ -1049,7 +1070,9 @@ export async function bulkDeleteDocuments(input: { documentIds: string[] }): Pro
   revalidatePath("/dashboard/documents");
   const skipped = candidates.length - deletable.length;
   if (skipped > 0) {
-    return { ok: true, error: `${deletable.length} deleted. ${skipped} skipped (legal hold${skippedPending > 0 ? " or pending signature" : ""}).` };
+    return { ok: true, error: skippedPending > 0
+        ? t("bulkDeletedSkippedHoldOrPending", { deleted: deletable.length, skipped })
+        : t("bulkDeletedSkippedHold", { deleted: deletable.length, skipped }) };
   }
   return { ok: true };
 }
@@ -1068,16 +1091,17 @@ type SignerTarget = {
 async function resolveLiveNativeSigner(
   context: DocumentPermissionContext["context"],
   input: { documentId: string; recipientId: string },
+  t: ActionT,
 ): Promise<SignerTarget | { error: string }> {
   const parsed = z.object({ documentId: z.uuid(), recipientId: z.uuid() }).safeParse(input);
-  if (!parsed.success) return { error: "Invalid signer." };
+  if (!parsed.success) return { error: t("invalidSigner") };
   const access = await resolveDocumentAccessInScope({ documentId: input.documentId, workspaceId: context.organization.id, userId: context.user.id, roleKey: context.roleKey });
-  if (!access || access.level !== "manage") return { error: "You cannot manage this document." };
-  const archivedError = archivedDocumentError(access.document);
+  if (!access || access.level !== "manage") return { error: t("cannotManageDocument") };
+  const archivedError = await archivedDocumentError(t, access.document);
   if (archivedError) return { error: archivedError };
   const document = access.document;
   if (document.signatureProvider !== "native" || document.signatureStatus !== "pending" || !document.signatureEnvelopeRefId) {
-    return { error: "This document has no native signing request in progress." };
+    return { error: t("noNativeSigningRequest") };
   }
   const [recipient] = await db
     .select({ id: signatureRecipients.id, email: signatureRecipients.email, name: signatureRecipients.name, status: signatureRecipients.status, linkExpiresAt: signatureRecipients.linkExpiresAt })
@@ -1089,10 +1113,10 @@ async function resolveLiveNativeSigner(
       eq(signatureRecipients.role, "signer"),
     ))
     .limit(1);
-  if (!recipient) return { error: "Signer not found." };
-  if (recipient.status !== "sent") return { error: "This signer is not the one being asked to sign right now." };
+  if (!recipient) return { error: t("signerNotFound") };
+  if (recipient.status !== "sent") return { error: t("signerNotCurrent") };
   if (!recipient.linkExpiresAt || recipient.linkExpiresAt <= new Date()) {
-    return { error: "This signing link has expired. Void the request and send it again." };
+    return { error: t("signingLinkExpired") };
   }
   return {
     workspaceId: context.organization.id,
@@ -1108,10 +1132,11 @@ async function resolveLiveNativeSigner(
  * Limited to one reminder per signer per minute by the event key.
  */
 export async function remindSignatureRecipient(input: { documentId: string; recipientId: string }): Promise<DocumentActionResult> {
-  const permission = await documentContext("documents:manage");
+  const t = await getTranslations("server.documents.actions");
+  const permission = await documentContext(t, "documents:manage");
   if (permission.error) return { ok: false, error: permission.error };
   const { context } = permission;
-  const target = await resolveLiveNativeSigner(context, input);
+  const target = await resolveLiveNativeSigner(context, input, t);
   if ("error" in target) return { ok: false, error: target.error };
 
   // Shared with the scheduled reminders: same throttle and cap, and earlier
@@ -1135,10 +1160,11 @@ export async function remindSignatureRecipient(input: { documentId: string; reci
  * link the signer was emailed (only hashes are stored), so callers confirm first.
  */
 export async function createSignatureShareLink(input: { documentId: string; recipientId: string }): Promise<{ ok: boolean; error?: string; url?: string }> {
-  const permission = await documentContext("documents:manage");
+  const t = await getTranslations("server.documents.actions");
+  const permission = await documentContext(t, "documents:manage");
   if (permission.error) return { ok: false, error: permission.error };
   const { context } = permission;
-  const target = await resolveLiveNativeSigner(context, input);
+  const target = await resolveLiveNativeSigner(context, input, t);
   if ("error" in target) return { ok: false, error: target.error };
   const rotated = await rotateNativePortalSigningLink({ workspaceId: target.workspaceId, recipientId: target.recipient.id });
   if (!rotated.ok) return { ok: false, error: rotated.error };
@@ -1157,7 +1183,8 @@ export async function createSignatureShareLink(input: { documentId: string; reci
 /* ── Generate a document from a template ────────────────────────────────── */
 
 export async function getGenerateDocumentOptions(): Promise<{ ok: boolean; error?: string; templates: GenerateTemplateOption[] }> {
-  const permission = await documentContext("documents:manage");
+  const t = await getTranslations("server.documents.actions");
+  const permission = await documentContext(t, "documents:manage");
   if (permission.error) return { ok: false, error: permission.error, templates: [] };
   const templates = await listActiveWorkflowDocumentTemplates();
   return { ok: true, templates: templates.map((template) => ({ id: template.id, name: template.name, title: template.title })) };
@@ -1165,11 +1192,12 @@ export async function getGenerateDocumentOptions(): Promise<{ ok: boolean; error
 
 /** Applications the caller can see, by candidate or job name, or all of one candidate's. */
 export async function searchGenerateDocumentTargets(input: { query?: string; candidateId?: string }): Promise<{ ok: boolean; error?: string; targets: GenerateTargetOption[] }> {
-  const permission = await documentContext("documents:manage");
+  const t = await getTranslations("server.documents.actions");
+  const permission = await documentContext(t, "documents:manage");
   if (permission.error) return { ok: false, error: permission.error, targets: [] };
   const { context } = permission;
   const parsed = z.object({ query: z.string().trim().max(80).optional(), candidateId: z.uuid().optional() }).safeParse(input);
-  if (!parsed.success) return { ok: false, error: "Invalid search.", targets: [] };
+  if (!parsed.success) return { ok: false, error: t("invalidSearch"), targets: [] };
   const policy = await getRolePolicy(context.organization.id, context.roleKey);
   const actor = { workspaceId: context.organization.id, userId: context.user.id, permissions: policy.permissions, scope: policy.scope };
   const needle = parsed.data.query ? `%${parsed.data.query.replace(/[%_\\]/g, "\\$&")}%` : null;
@@ -1206,23 +1234,24 @@ export async function searchGenerateDocumentTargets(input: { query?: string; can
   };
 }
 
-async function authorizeGenerateTarget(context: DocumentPermissionContext["context"], applicationId: string) {
+async function authorizeGenerateTarget(context: DocumentPermissionContext["context"], applicationId: string, t: ActionT) {
   const target = { targetType: "application" as const, targetId: applicationId };
   if (!z.uuid().safeParse(applicationId).success || !(await targetBelongsToWorkspace(context.organization.id, target))) {
-    return "Candidate application not found.";
+    return t("applicationNotFound");
   }
   const inScope = await associationTargetsInScope({ workspaceId: context.organization.id, userId: context.user.id, roleKey: context.roleKey }, [target]);
-  return inScope ? null : "Candidate application not found.";
+  return inScope ? null : t("applicationNotFound");
 }
 
 /** Fill the template for one application without saving anything. */
 export async function previewTemplateDocument(input: { templateId: string; applicationId: string }): Promise<{ ok: boolean; error?: string; title?: string; html?: string; blank?: string[] }> {
-  const permission = await documentContext("documents:manage");
+  const t = await getTranslations("server.documents.actions");
+  const permission = await documentContext(t, "documents:manage");
   if (permission.error) return { ok: false, error: permission.error };
   const { context } = permission;
-  const denied = await authorizeGenerateTarget(context, input.applicationId);
+  const denied = await authorizeGenerateTarget(context, input.applicationId, t);
   if (denied) return { ok: false, error: denied };
-  if (!z.uuid().safeParse(input.templateId).success) return { ok: false, error: "Choose a template." };
+  if (!z.uuid().safeParse(input.templateId).success) return { ok: false, error: t("chooseTemplate") };
   const rendered = await renderTemplateForApplication({ workspaceId: context.organization.id, actorId: context.user.id, templateId: input.templateId, applicationId: input.applicationId });
   if (!rendered.ok) return { ok: false, error: rendered.error };
   return { ok: true, title: rendered.title, html: rendered.body, blank: rendered.blank };
@@ -1233,12 +1262,13 @@ export async function previewTemplateDocument(input: { templateId: string; appli
  * linked to the application and its candidate. Each click makes a new document.
  */
 export async function generateDocumentFromTemplate(input: { templateId: string; applicationId: string }): Promise<DocumentActionResult> {
-  const permission = await documentContext("documents:manage");
+  const t = await getTranslations("server.documents.actions");
+  const permission = await documentContext(t, "documents:manage");
   if (permission.error) return { ok: false, error: permission.error };
   const { context } = permission;
-  const denied = await authorizeGenerateTarget(context, input.applicationId);
+  const denied = await authorizeGenerateTarget(context, input.applicationId, t);
   if (denied) return { ok: false, error: denied };
-  if (!z.uuid().safeParse(input.templateId).success) return { ok: false, error: "Choose a template." };
+  if (!z.uuid().safeParse(input.templateId).success) return { ok: false, error: t("chooseTemplate") };
   const rendered = await renderTemplateForApplication({ workspaceId: context.organization.id, actorId: context.user.id, templateId: input.templateId, applicationId: input.applicationId });
   if (!rendered.ok) return { ok: false, error: rendered.error };
   const result = await generateDocumentForWorkflow({
@@ -1252,7 +1282,7 @@ export async function generateDocumentFromTemplate(input: { templateId: string; 
     log.error({ error }, "generateDocumentFromTemplate failed");
     return null;
   });
-  if (!result) return { ok: false, error: "Could not generate the document. Try again." };
+  if (!result) return { ok: false, error: t("generateFailed") };
   if (!result.ok) return { ok: false, error: result.error };
   // The workflow generator links the application; also link the candidate so the
   // candidate filter and profile find it.

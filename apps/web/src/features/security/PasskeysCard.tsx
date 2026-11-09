@@ -1,9 +1,11 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { useLocale, useTranslations } from "next-intl";
 import { startRegistration } from "@simplewebauthn/browser";
 import { toast } from "@/lib/notification-island/toast";
 import { formatDistanceToNow } from "date-fns";
+import { dateFnsLocale } from "@/lib/date-fns-locale";
 import { randomId } from "@/lib/utils";
 
 import { SectionHeader, StatusPill } from "@/features/workspaces/settings-ui";
@@ -39,6 +41,8 @@ export function PasskeysCard({
   const [passkeyList, setPasskeyList] = useState(initialPasskeys);
   const [adding, setAdding] = useState(false);
   const [passkeyName, setPasskeyName] = useState("");
+  const t = useTranslations("features.security.passkeysCard");
+  const locale = useLocale();
   const [isPending, startTransition] = useTransition();
 
   async function handleRegister() {
@@ -47,7 +51,7 @@ export function PasskeysCard({
       try {
         // 1. Get registration options from server
         const optRes = await fetch("/api/passkey/register");
-        if (!optRes.ok) throw new Error("Failed to get registration options");
+        if (!optRes.ok) throw new Error(t("errors.optionsFailed"));
         const { challengeId, ...options } = await optRes.json();
 
         // 2. Browser creates credential
@@ -62,10 +66,10 @@ export function PasskeysCard({
 
         if (!verRes.ok) {
           const err = await verRes.json();
-          throw new Error(err.error ?? "Registration failed");
+          throw new Error(err.error ?? t("errors.registrationFailed"));
         }
 
-        toast.success("Passkey registered successfully");
+        toast.success(t("toasts.registered"));
         setAdding(false);
         setPasskeyName("");
 
@@ -85,7 +89,7 @@ export function PasskeysCard({
           return;
         }
         toast.error(
-          err instanceof Error ? err.message : "Failed to register passkey",
+          err instanceof Error ? err.message : t("errors.registerFailed"),
         );
       }
     });
@@ -96,7 +100,7 @@ export function PasskeysCard({
     startTransition(async () => {
       await deletePasskeyAction(id);
       setPasskeyList((prev) => prev.filter((p) => p.id !== id));
-      toast.success("Passkey removed");
+      toast.success(t("toasts.removed"));
     });
   }
 
@@ -104,25 +108,25 @@ export function PasskeysCard({
     <Card className="gap-5 p-6">
       {demoLocked ? (
         <DemoLockedNotice>
-          Passkeys stay off in the demo so the shared account cannot be gated.
+          {t("demoLocked")}
         </DemoLockedNotice>
       ) : null}
       <SectionHeader
         icon={FingerPrintDuotoneIcon}
-        title="Passkeys"
-        description="Sign in with biometrics or a hardware security key. No password required."
+        title={t("title")}
+        description={t("description")}
         badge={
           <StatusPill tone={passkeyList.length > 0 ? "on" : "neutral"}>
             {passkeyList.length === 0
-              ? "None registered"
-              : `${passkeyList.length} passkey${passkeyList.length > 1 ? "s" : ""}`}
+              ? t("noneRegistered")
+              : t("passkeyCount", { count: passkeyList.length })}
           </StatusPill>
         }
         action={
           !demoLocked && !adding ? (
             <Button size="sm" onClick={() => setAdding(true)}>
               <PlusIcon className="mr-1.5 size-3.5" />
-              Add passkey
+              {t("addPasskey")}
             </Button>
           ) : null
         }
@@ -132,16 +136,15 @@ export function PasskeysCard({
       {adding && (
         <div className="space-y-4 rounded-xl border bg-muted/30 p-4">
           <p className="text-sm text-muted-foreground">
-            Name this passkey so you can identify it later (e.g. &ldquo;MacBook&rdquo; or
-            &ldquo;iPhone 15&rdquo;).
+            {t("nameHint")}
           </p>
           <div className="space-y-2">
-            <Label htmlFor="passkey-name">Passkey name</Label>
+            <Label htmlFor="passkey-name">{t("nameLabel")}</Label>
             <Input
               id="passkey-name"
               value={passkeyName}
               onChange={(e) => setPasskeyName(e.target.value)}
-              placeholder="My MacBook"
+              placeholder={t("namePlaceholder")}
               maxLength={50}
               onKeyDown={(e) => e.key === "Enter" && handleRegister()}
             />
@@ -157,14 +160,14 @@ export function PasskeysCard({
               ) : (
                 <FingerPrintDuotoneIcon className="mr-1.5 size-3.5" />
               )}
-              Register passkey
+              {t("register")}
             </Button>
             <Button
               variant="ghost"
               size="sm"
               onClick={() => { setAdding(false); setPasskeyName(""); }}
             >
-              Cancel
+              {t("cancel")}
             </Button>
           </div>
         </div>
@@ -183,15 +186,21 @@ export function PasskeysCard({
                 <div className="min-w-0">
                   <p className="truncate text-sm font-medium">{pk.name}</p>
                   <p className="text-xs text-muted-foreground">
-                    {pk.deviceType === "multiDevice" ? "Synced" : "Device-bound"}
-                    {pk.backedUp ? " · backed up" : ""}
-                    {" · added "}
-                    {formatDistanceToNow(new Date(pk.createdAt), {
-                      addSuffix: true,
+                    {t("meta", {
+                      deviceType:
+                        pk.deviceType === "multiDevice"
+                          ? t("deviceTypes.synced")
+                          : t("deviceTypes.deviceBound"),
+                      backedUp: pk.backedUp ? "yes" : "no",
+                      addedAgo: formatDistanceToNow(new Date(pk.createdAt), {
+                        addSuffix: true,
+                        locale: dateFnsLocale(locale),
+                      }),
+                      hasLastUsed: pk.lastUsedAt ? "yes" : "no",
+                      lastUsedAgo: pk.lastUsedAt
+                        ? formatDistanceToNow(new Date(pk.lastUsedAt), { addSuffix: true, locale: dateFnsLocale(locale) })
+                        : "",
                     })}
-                    {pk.lastUsedAt
-                      ? ` · last used ${formatDistanceToNow(new Date(pk.lastUsedAt), { addSuffix: true })}`
-                      : ""}
                   </p>
                 </div>
               </div>
@@ -203,7 +212,7 @@ export function PasskeysCard({
                 disabled={demoLocked || isPending}
               >
                 <TrashIcon className="size-4" />
-                <span className="sr-only">Remove</span>
+                <span className="sr-only">{t("remove")}</span>
               </Button>
             </div>
           ))}
@@ -212,8 +221,7 @@ export function PasskeysCard({
 
       {passkeyList.length === 0 && !adding && (
         <p className="text-sm text-muted-foreground">
-          No passkeys yet. Add one to enable passwordless sign-in on this
-          device.
+          {t("noPasskeys")}
         </p>
       )}
     </Card>

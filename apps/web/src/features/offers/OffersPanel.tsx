@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 import {
   BadgeCheck,
   BadgeDollarSign,
@@ -47,6 +48,7 @@ export function OffersPanel({
   offerSignatureChannel: "email" | "esign" | "native";
 }) {
   const router = useRouter();
+  const t = useTranslations("features.offers.offersPanel");
   const canManage = access?.canManage !== false;
   const canDecide = access?.canDecide !== false;
   const [isPending, startTransition] = useTransition();
@@ -58,7 +60,7 @@ export function OffersPanel({
     startTransition(async () => {
       const result = await action();
       if (!result.success) {
-        toast.error(result.error ?? "Could not update the offer.");
+        toast.error(result.error ?? t("updateFailed"));
         return;
       }
       toast.success(ok);
@@ -71,14 +73,12 @@ export function OffersPanel({
     <div className="space-y-4">
       <div className="flex items-center justify-between gap-3">
         <p className="text-sm text-muted-foreground">
-          {offers.length === 0
-            ? "No offers yet."
-            : `${offers.length} offer${offers.length === 1 ? "" : "s"}.`}
+          {t("countSummary", { count: offers.length })}
         </p>
         {canManage && applications.length > 0 ? (
           <Button size="sm" onClick={() => setCreateOpen(true)}>
             <BadgeDollarSign className="size-4" />
-            New offer
+            {t("newOffer")}
           </Button>
         ) : null}
       </div>
@@ -88,10 +88,9 @@ export function OffersPanel({
           <span className="flex size-10 items-center justify-center rounded-xl bg-muted text-muted-foreground">
             <BadgeDollarSign className="size-5" strokeWidth={1.6} />
           </span>
-          <p className="text-sm font-medium">No offers extended</p>
+          <p className="text-sm font-medium">{t("emptyTitle")}</p>
           <p className="max-w-sm text-sm text-muted-foreground">
-            Draft an offer with compensation and start date, then send it and
-            track the candidate&apos;s decision here.
+            {t("emptyHelp")}
           </p>
         </div>
       ) : (
@@ -99,6 +98,9 @@ export function OffersPanel({
           {offers.map((offer) => {
             const meta = OFFER_STATUS_META[offer.status];
             const comp = formatOfferComp(offer);
+            const startDate = offer.startDate;
+            const expiresAt = offer.expiresAt;
+            const decidedAt = offer.decidedAt;
             return (
               <div
                 key={offer.id}
@@ -126,7 +128,7 @@ export function OffersPanel({
                             disabled={isPending}
                             onClick={() => setEditing(offer)}
                           >
-                            Edit
+                            {t("edit")}
                           </Button>
                           <Button
                             size="sm"
@@ -134,11 +136,11 @@ export function OffersPanel({
                             onClick={() =>
                               offerSignatureChannel === "native"
                                 ? setPlacingFieldsFor(offer)
-                                : run(() => sendOffer({ offerId: offer.id }), "Offer sent")
+                                : run(() => sendOffer({ offerId: offer.id }), t("sent"))
                             }
                           >
                             <Send className="size-4" />
-                            Send offer
+                            {t("sendOffer")}
                           </Button>
                         </>
                       ) : null}
@@ -151,12 +153,12 @@ export function OffersPanel({
                               run(
                                 () =>
                                   decideOffer({ offerId: offer.id, decision: "accepted" }),
-                                "Offer accepted. Candidate marked as hired",
+                                t("accepted"),
                               )
                             }
                           >
                             <BadgeCheck className="size-4" />
-                            Mark accepted
+                            {t("markAccepted")}
                           </Button>
                           <Button
                             size="sm"
@@ -166,12 +168,12 @@ export function OffersPanel({
                               run(
                                 () =>
                                   decideOffer({ offerId: offer.id, decision: "declined" }),
-                                "Offer marked as declined",
+                                t("markedDeclined"),
                               )
                             }
                           >
                             <ThumbsDown className="size-4" />
-                            Declined
+                            {t("declined")}
                           </Button>
                         </>
                       ) : null}
@@ -184,12 +186,12 @@ export function OffersPanel({
                           onClick={() =>
                             run(
                               () => withdrawOffer({ offerId: offer.id }),
-                              "Offer withdrawn",
+                              t("withdrawn"),
                             )
                           }
                         >
                           <Undo2 className="size-4" />
-                          Withdraw
+                          {t("withdraw")}
                         </Button>
                       ) : null}
                     </div>
@@ -205,18 +207,18 @@ export function OffersPanel({
                     {offer.equity ? (
                       <span className="inline-flex items-center gap-1.5">
                         <BadgeDollarSign className="size-4" />
-                        Equity: {offer.equity}
+                        {t("equity", { value: offer.equity })}
                       </span>
                     ) : null}
-                    {offer.startDate ? (
+                    {startDate ? (
                       <span className="inline-flex items-center gap-1.5">
                         <CalendarDays className="size-4" />
-                        Starts <ShortDate value={offer.startDate} />
+                        {t.rich("starts", { date: () => <ShortDate value={startDate} /> })}
                       </span>
                     ) : null}
-                    {offer.expiresAt ? (
+                    {expiresAt ? (
                       <span>
-                        Expires <ShortDate value={offer.expiresAt} />
+                        {t.rich("expires", { date: () => <ShortDate value={expiresAt} /> })}
                       </span>
                     ) : null}
                   </div>
@@ -228,14 +230,16 @@ export function OffersPanel({
                   ) : null}
 
                   <p className="text-xs text-muted-foreground">
-                    {offer.createdByName ?? "Someone"} ·{" "}
-                    <RelativeTime value={offer.createdAt} />
-                    {offer.decidedAt ? (
-                      <>
-                        {" "}
-                        · decided <RelativeTime value={offer.decidedAt} />
-                      </>
-                    ) : null}
+                    {decidedAt
+                      ? t.rich("decidedBy", {
+                          name: offer.createdByName ?? t("someone"),
+                          time: () => <RelativeTime value={offer.createdAt} />,
+                          decidedTime: () => <RelativeTime value={decidedAt} />,
+                        })
+                      : t.rich("createdBy", {
+                          name: offer.createdByName ?? t("someone"),
+                          time: () => <RelativeTime value={offer.createdAt} />,
+                        })}
                   </p>
                 </div>
               </div>

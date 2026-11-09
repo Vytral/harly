@@ -5,6 +5,7 @@ import Link from "next/link";
 import type { Route } from "next";
 import { useChat } from "@ai-sdk/react";
 import { DefaultChatTransport } from "ai";
+import { useLocale, useTranslations } from "next-intl";
 import {
   X,
   ArrowUp,
@@ -101,54 +102,27 @@ type Starter = {
 };
 
 /**
+ * Starter slots for the recruiter's surface, in the same order as the
+ * `starterLabels` / `starterPrompts` messages. Only `prefill` lives here: the
+ * copy is resolved with `t` in the empty state, so no English is duplicated.
  * Starters follow where the recruiter is. Each one is a real request the
  * agent can answer with its tools, sent on click (one step, not two).
  */
-export function startersFor(surface?: { kind: "candidate" | "section"; label: string }): Starter[] {
-  if (surface?.kind === "candidate") {
-    const name = surface.label && surface.label !== "Current candidate" ? surface.label : "this candidate";
-    return [
-      { label: `Summarize ${name}`, prompt: `Summarize ${name}'s profile: experience, strengths and gaps for the role.` },
-      { label: "Score the CV for this job", prompt: `Evaluate ${name}'s resume against the job they applied to.` },
-      { label: "Prepare the interview", prompt: `Prepare an interview brief for ${name} with focus areas and questions.` },
-      { label: "What's the next step?", prompt: `What's the next step for ${name}?` },
-    ];
-  }
+export function startersFor(surface?: { kind: "candidate" | "section"; label: string }): Array<Pick<Starter, "prefill">> {
+  if (surface?.kind === "candidate") return [{}, {}, {}, {}];
   switch (surface?.label) {
     case "Jobs":
-      return [
-        { label: "Which jobs are at risk?", prompt: "Which of my jobs are at risk, and why?" },
-        { label: "Draft a job description", prompt: "Draft a job description for ", prefill: true },
-        { label: "Roles with few applicants", prompt: "Which open roles got the fewest applicants this month?" },
-      ];
+      return [{}, { prefill: true }, {}];
     case "Candidates":
-      return [
-        { label: "Who needs my review?", prompt: "Who needs my review right now?" },
-        { label: "Compare top candidates", prompt: "Compare the top candidates for ", prefill: true },
-        { label: "Find duplicates", prompt: "Are there duplicate candidates I should merge?" },
-      ];
+      return [{}, { prefill: true }, {}];
     case "Tasks":
-      return [
-        { label: "What's overdue?", prompt: "Which of my tasks are overdue or due today?" },
-        { label: "Create a task", prompt: "Create a task to ", prefill: true },
-      ];
+      return [{}, { prefill: true }];
     case "Interview calendar":
-      return [
-        { label: "Who do I interview today?", prompt: "Who am I interviewing today, and what should I know?" },
-        { label: "Prepare my next interview", prompt: "Prepare a brief for my next interview." },
-      ];
+      return [{}, {}];
     case "Reports":
-      return [
-        { label: "Summarize this month", prompt: "Summarize this month's hiring: applications, hires and time to hire." },
-        { label: "Where do candidates drop off?", prompt: "Where do candidates drop off in my funnel?" },
-      ];
+      return [{}, {}];
     default:
-      return [
-        { label: "What needs me today?", prompt: "What needs my attention today?" },
-        { label: "Who needs my review?", prompt: "Who needs my review right now?" },
-        { label: "Which jobs are at risk?", prompt: "Which of my jobs are at risk, and why?" },
-        { label: "Summarize this week", prompt: "Summarize this week's hiring activity." },
-      ];
+      return [{}, {}, {}, {}];
   }
 }
 
@@ -227,6 +201,18 @@ export function getToolLabel(partType: string): string {
   return spaced ? `Looking at ${spaced}` : "Working";
 }
 
+function getLocalizedToolLabel(
+  partType: string,
+  translate: (key: keyof typeof TOOL_LABELS) => string,
+  fallback: (name: string) => string,
+  working: string,
+): string {
+  if (partType in TOOL_LABELS) return translate(partType as keyof typeof TOOL_LABELS);
+  const name = partType.startsWith("tool-") ? partType.slice(5) : partType;
+  const spaced = name.replace(/([A-Z])/g, " $1").toLowerCase().trim();
+  return spaced ? fallback(spaced) : working;
+}
+
 /**
  * An assistant turn that ran tools but produced neither prose nor a write
  * confirmation card is stranded — the stream was cut (route timeout, provider
@@ -248,8 +234,16 @@ export function isStrandedAssistantTurn(input: {
   );
 }
 
-/** Normalize `useChat`'s `error` (Error | string | unknown) to display text. */
-export function chatErrorMessage(error: unknown): string | null {
+/**
+ * Normalize `useChat`'s `error` (Error | string | unknown) to display text.
+ * `unavailable` is the localized fallback for errors that carry no message;
+ * callers pass `t("unavailable")`. The English default only serves callers
+ * outside the panel.
+ */
+export function chatErrorMessage(
+  error: unknown,
+  unavailable = "Harly AI is temporarily unavailable. Please try again in a moment.",
+): string | null {
   if (error == null) return null;
   if (typeof error === "string") return unwrapJsonError(error.trim()) || null;
   if (error instanceof Error) return unwrapJsonError(error.message.trim()) || null;
@@ -257,7 +251,7 @@ export function chatErrorMessage(error: unknown): string | null {
     const message = (error as { message?: unknown }).message;
     if (typeof message === "string" && message.trim()) return unwrapJsonError(message.trim());
   }
-  return "Harly AI is temporarily unavailable. Please try again in a moment.";
+  return unavailable;
 }
 
 /** The chat transport surfaces non-2xx bodies verbatim; show `{ error }` text, not raw JSON. */
@@ -301,8 +295,9 @@ const MARKDOWN_COMPONENTS = {
 
 // ─── Typing / tool indicator ─────────────────────────────────────────────────
 
-function ThinkingShimmer({ label = "Thinking" }: { label?: string }) {
-  return <TextShimmer className="text-[13px] font-medium">{`${label}…`}</TextShimmer>;
+function ThinkingShimmer({ label }: { label?: string }) {
+  const t = useTranslations("shell.harlyAI");
+  return <TextShimmer className="text-[13px] font-medium">{`${label ?? t("thinking")}…`}</TextShimmer>;
 }
 
 function ToolStatus({
@@ -312,11 +307,12 @@ function ToolStatus({
   label: string;
   state: "running" | "done" | "error" | "interrupted";
 }) {
+  const t = useTranslations("shell.harlyAI");
   if (state === "interrupted") {
     return (
       <div className="flex items-center gap-1.5 text-[12px] text-soft-ink">
         <PhWarning className="shrink-0 text-warning-clay" />
-        <span>{label} stopped before finishing.</span>
+        <span>{t("stoppedBeforeFinishing", { label })}</span>
       </div>
     );
   }
@@ -443,6 +439,27 @@ const SEVERITY_TONE: Record<string, string> = {
   warning: "bg-yellow-500",
 };
 
+// Agent actions with a human label under `actionLabels` in the messages.
+const ACTION_LABEL_IDS = new Set([
+  "moveCandidateStage",
+  "rejectCandidate",
+  "createTask",
+  "updateTask",
+  "completeMyOpenTasks",
+  "createJob",
+  "addCandidateNote",
+  "addCandidateTag",
+  "createOffer",
+  "sendOffer",
+  "decideOffer",
+  "scheduleInterview",
+  "addToTalentPool",
+  "assignFromPoolToJob",
+  "createScorecard",
+  "sendCandidateEmail",
+  "undoAgentAction",
+]);
+
 function ToolResultCard({
   toolName,
   output,
@@ -450,39 +467,35 @@ function ToolResultCard({
   toolName: string;
   output: unknown;
 }) {
+  const t = useTranslations("shell.harlyAI");
+  const locale = useLocale();
+  const recommendationLabel = (value: string) => {
+    const labels: Record<string, string> = {
+      strong_yes: t("recommendStrongYes"),
+      yes: t("recommendYes"),
+      maybe: t("recommendMaybe"),
+      no: t("recommendNo"),
+      advance: t("recommendAdvance"),
+      hold: t("recommendHold"),
+    };
+    return labels[value] ?? value.replace(/_/g, " ");
+  };
   if (!output || typeof output !== "object") return null;
   const o = output as Record<string, unknown>;
 
   if (toolName === "recentAgentActions" && Array.isArray(o.actions)) {
     const labelFor = (name: unknown) => {
-      const labels: Record<string, string> = {
-        moveCandidateStage: "Moved candidate",
-        rejectCandidate: "Rejected candidate",
-        createTask: "Created task",
-        updateTask: "Updated task",
-        completeMyOpenTasks: "Completed open tasks",
-        createJob: "Created draft job",
-        addCandidateNote: "Added candidate note",
-        addCandidateTag: "Added candidate tag",
-        createOffer: "Created draft offer",
-        sendOffer: "Sent offer",
-        decideOffer: "Recorded offer decision",
-        scheduleInterview: "Scheduled interview",
-        addToTalentPool: "Added candidate to talent pool",
-        assignFromPoolToJob: "Assigned candidate to job",
-        createScorecard: "Created scorecard",
-        sendCandidateEmail: "Sent candidate email",
-        undoAgentAction: "Undid an action",
-      };
-      if (typeof name !== "string") return "Harly action";
-      return labels[name] ?? name.replace(/([a-z])([A-Z])/g, "$1 $2");
+      if (typeof name !== "string") return t("harlyAction");
+      return ACTION_LABEL_IDS.has(name)
+        ? t(`actionLabels.${name}`)
+        : name.replace(/([a-z])([A-Z])/g, "$1 $2");
     };
     const actions = o.actions as Array<Record<string, unknown>>;
     return (
       <Card className="gap-0 border-border/70 p-2 shadow-none">
         {actions.length === 0 ? (
           <span className="px-1 py-0.5 text-[12px] text-muted-foreground">
-            No recent actions.
+            {t("noRecentActions")}
           </span>
         ) : (
           actions.map((action, index) => {
@@ -495,12 +508,12 @@ function ToolResultCard({
                   : "text-muted-foreground";
             const stateLabel =
               action.status === "processing"
-                ? "In progress"
+                ? t("inProgress")
                 : success === true
-                  ? "Done"
+                  ? t("done")
                   : success === false
-                    ? "Failed"
-                    : "Unknown";
+                    ? t("failed")
+                    : t("unknown");
             return (
               <div
                 key={
@@ -528,7 +541,7 @@ function ToolResultCard({
                 </div>
                 {action.undoable === true && (
                   <span className="shrink-0 text-[10px] text-muted-foreground">
-                    Undo available
+                    {t("undoAvailable")}
                   </span>
                 )}
                 <span className={cn("shrink-0 text-[10px]", tone)}>
@@ -551,10 +564,10 @@ function ToolResultCard({
       <Card className="gap-2 border-border/70 p-3 shadow-none">
         <div className="flex items-baseline justify-between">
           <span className="text-[12px] font-semibold tracking-tight">
-            {job ?? "Pipeline"}
+            {job ?? t("pipeline")}
           </span>
           <span className="text-[11px] text-muted-foreground">
-            {String(o.totalActive ?? 0)} active
+            {t("activeCount", { count: String(o.totalActive ?? 0) })}
           </span>
         </div>
         <div className="flex flex-col gap-1.5">
@@ -620,10 +633,10 @@ function ToolResultCard({
                 REC_TONE[rec] ?? "",
               )}
             >
-              {rec.replace(/_/g, " ") || "Scored"}
+              {rec ? recommendationLabel(rec) : t("scored")}
             </span>
             <span className="text-[11px] text-muted-foreground">
-              AI fit score · out of 100
+              {t("aiFitScore")}
             </span>
           </div>
         </div>
@@ -669,17 +682,17 @@ function ToolResultCard({
       { value: number; deltaPct: number; positive: boolean; isRate: boolean }
     >;
     const labels: Record<string, string> = {
-      applications: "Applications",
-      interviews: "Interviews",
-      hires: "Hires",
-      offerAcceptance: "Offer accept.",
+      applications: "applications",
+      interviews: "interviews",
+      hires: "hires",
+      offerAcceptance: "offerAcceptance",
     };
     return (
       <Card className="grid grid-cols-2 gap-2 border-border/70 p-3 shadow-none">
         {Object.entries(metrics).map(([key, m]) => (
           <div key={key} className="flex flex-col gap-0.5">
             <span className="text-[11px] text-muted-foreground">
-              {labels[key] ?? key}
+              {labels[key] ? t(labels[key] as "applications" | "interviews" | "hires" | "offerAcceptance") : key}
             </span>
             <div className="flex items-baseline gap-1.5">
               <span className="text-[15px] font-semibold tabular-nums">
@@ -771,7 +784,7 @@ function ToolResultCard({
         ))}
         {list.length > 8 && (
           <p className="px-2 pt-1 text-[10px] text-muted-foreground">
-            +{list.length - 8} more
+            {t("moreCount", { count: list.length - 8 })}
           </p>
         )}
       </Card>
@@ -908,7 +921,7 @@ function ToolResultCard({
               </span>
             </div>
             <div className="flex shrink-0 items-center gap-2 text-[11px] tabular-nums text-muted-foreground">
-              <span>{j.activeApplicants} active</span>
+              <span>{t("activeCount", { count: j.activeApplicants })}</span>
               {j.newThisWeek > 0 && (
                 <span className="rounded-full bg-emerald-500/10 px-1.5 py-0.5 text-emerald-600 dark:text-emerald-400">
                   +{j.newThisWeek}
@@ -939,11 +952,11 @@ function ToolResultCard({
       if (!d) return "";
       const date = new Date(d);
       return toolName === "todayInterviews"
-        ? date.toLocaleTimeString("en-US", {
+        ? date.toLocaleTimeString(locale, {
             hour: "numeric",
             minute: "2-digit",
           })
-        : date.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+        : date.toLocaleDateString(locale, { month: "short", day: "numeric" });
     };
     return (
       <Card className="gap-0.5 border-border/70 p-2 shadow-none">
@@ -954,7 +967,7 @@ function ToolResultCard({
             </span>
             <div className="flex min-w-0 flex-1 flex-col">
               <span className="truncate text-[12px] font-medium text-foreground">
-                {iv.candidate ?? "Unknown candidate"}
+                {iv.candidate ?? t("unknownCandidate")}
               </span>
               <span className="truncate text-[11px] text-muted-foreground">
                 {iv.label ?? iv.type ?? ""}
@@ -1045,7 +1058,7 @@ function ToolResultCard({
     return (
       <Card className="gap-0.5 border-border/70 p-2 shadow-none">
         {list.slice(0, 8).map((it, i) => {
-          const title = String(it.title ?? it.label ?? it.candidate ?? "Item");
+          const title = String(it.title ?? it.label ?? it.candidate ?? t("item"));
           const sub = String(it.subtitle ?? it.detail ?? it.job ?? "");
           const due = String(it.due ?? it.dueState ?? "");
           return (
@@ -1151,7 +1164,9 @@ function ToolResultCard({
                 <span className="truncate text-[11px] text-muted-foreground">
                   {of.currency ?? ""} {of.salaryAmount.toLocaleString()}
                   {of.salaryPeriod
-                    ? `/${of.salaryPeriod === "annual" ? "yr" : "mo"}`
+                    ? of.salaryPeriod === "annual"
+                      ? t("perYearShort")
+                      : t("perMonthShort")
                     : ""}
                 </span>
               )}
@@ -1183,10 +1198,10 @@ function ToolResultCard({
       <Card className="gap-2 border-border/70 p-3 shadow-none">
         <div className="flex items-baseline justify-between">
           <span className="text-[12px] font-semibold tracking-tight">
-            Talent pool
+            {t("talentPool")}
           </span>
           <span className="text-[11px] text-muted-foreground">
-            {String(o.total ?? list.length)} total
+            {t("totalCount", { count: String(o.total ?? list.length) })}
           </span>
         </div>
         {list.length > 0 && (
@@ -1224,10 +1239,10 @@ function ToolResultCard({
       <Card className="gap-3 border-border/70 p-3 shadow-none">
         <div className="grid grid-cols-2 gap-2">
           {[
-            ["Open roles", s.openRoles],
-            ["Candidates", s.totalCandidates],
-            ["Apps (90d)", s.applications90d],
-            ["Hires", s.hires],
+            [t("openRoles"), s.openRoles],
+            [t("candidates"), s.totalCandidates],
+            [t("applications90d"), s.applications90d],
+            [t("hires"), s.hires],
           ].map(([label, val]) => (
             <div key={String(label)} className="flex flex-col">
               <span className="text-[15px] font-semibold tabular-nums">
@@ -1306,7 +1321,7 @@ function ToolResultCard({
                   REC_TONE[c.recommendation] ?? "",
                 )}
               >
-                {c.recommendation.replace(/_/g, " ")}
+                {recommendationLabel(c.recommendation)}
               </span>
               <span className="line-clamp-2 text-[11px] leading-snug text-muted-foreground">
                 {c.summary}
@@ -1324,7 +1339,7 @@ function ToolResultCard({
       <Card className="gap-0 overflow-hidden border-border/70 p-0 shadow-none">
         <div className="border-b border-border/50 bg-muted/40 px-3 py-2">
           <span className="text-[10px] uppercase tracking-wide text-muted-foreground">
-            Subject
+            {t("subject")}
           </span>
           <p className="text-[12px] font-medium text-foreground">
             {String(o.subject ?? "")}
@@ -1353,7 +1368,7 @@ function ToolResultCard({
       return (
         <Card className="border-border/70 p-3 shadow-none">
           <span className="flex items-center gap-1.5 text-[12px] text-emerald-600 dark:text-emerald-400">
-            <PhCheck className="shrink-0" /> No duplicates found.
+            <PhCheck className="shrink-0" /> {t("noDuplicates")}
           </span>
         </Card>
       );
@@ -1377,7 +1392,7 @@ function ToolResultCard({
               </span>
             </div>
             <span className="shrink-0 text-[10px] capitalize text-muted-foreground">
-              {m.confidence}
+              {m.confidence === "high" ? t("confidenceHigh") : m.confidence === "medium" ? t("confidenceMedium") : m.confidence}
             </span>
           </Row>
         ))}
@@ -1393,14 +1408,14 @@ function ToolResultCard({
           <span className="text-[15px] font-semibold tabular-nums text-emerald-600 dark:text-emerald-400">
             {String(o.succeeded ?? 0)}
           </span>
-          <span className="text-[11px] text-muted-foreground">scored</span>
+          <span className="text-[11px] text-muted-foreground">{t("scored")}</span>
         </div>
         {Number(o.failed ?? 0) > 0 && (
           <div className="flex items-baseline gap-1.5">
             <span className="text-[15px] font-semibold tabular-nums text-rose-600 dark:text-rose-400">
               {String(o.failed)}
             </span>
-            <span className="text-[11px] text-muted-foreground">failed</span>
+            <span className="text-[11px] text-muted-foreground">{t("failed")}</span>
           </div>
         )}
         {Number(o.remaining ?? 0) > 0 && (
@@ -1408,7 +1423,7 @@ function ToolResultCard({
             <span className="text-[15px] font-semibold tabular-nums">
               {String(o.remaining)}
             </span>
-            <span className="text-[11px] text-muted-foreground">remaining</span>
+            <span className="text-[11px] text-muted-foreground">{t("remaining")}</span>
           </div>
         )}
       </Card>
@@ -1446,24 +1461,28 @@ function formatDateTime(value: unknown): string | null {
   });
 }
 
-function formatMoney(input: Record<string, unknown>): string | null {
+function formatMoney(
+  input: Record<string, unknown>,
+  t: ReturnType<typeof useTranslations>,
+): string | null {
   const amount = input.salaryAmount;
   if (typeof amount !== "number") return null;
 
   const currency = optionalText(input.currency) ?? "";
   const period =
     input.salaryPeriod === "annual"
-      ? "/ year"
+      ? t("periodYear")
       : input.salaryPeriod === "monthly"
-        ? "/ month"
+        ? t("periodMonth")
         : "";
   return `${currency ? `${currency} ` : ""}${amount.toLocaleString()}${period}`;
 }
 
-function getWriteActionPreview(
+function useWriteActionPreview(
   toolName: string,
   input: Record<string, unknown>,
 ): { title: string; details: WriteActionDetail[] } {
+  const t = useTranslations("shell.harlyAI");
   const detail = (label: string, value: string | null): WriteActionDetail[] =>
     value ? [{ label, value }] : [];
   const taskIds = Array.isArray(input.taskIds)
@@ -1474,166 +1493,166 @@ function getWriteActionPreview(
 
   switch (toolName) {
     case "undoAgentAction":
-      return { title: "Undo action", details: [] };
+      return { title: t("writeActions.undoAgentAction"), details: [] };
     case "moveCandidateStage":
       return {
-        title: "Move candidate",
+        title: t("writeActions.moveCandidateStage"),
         details: [
-          ...detail("Candidate", optionalText(input.candidateName)),
-          ...detail("From", optionalText(input.fromStageName)),
-          ...detail("To", optionalText(input.toStageName)),
+          ...detail(t("detailCandidate"), optionalText(input.candidateName)),
+          ...detail(t("detailFrom"), optionalText(input.fromStageName)),
+          ...detail(t("detailTo"), optionalText(input.toStageName)),
         ],
       };
     case "rejectCandidate":
-      return { title: "Reject candidate", details: [] };
+      return { title: t("writeActions.rejectCandidate"), details: [] };
     case "createTask":
       return {
-        title: "Create task",
+        title: t("writeActions.createTask"),
         details: [
-          ...detail("Task", optionalText(input.title)),
-          ...detail("Priority", optionalText(input.priority)),
-          ...detail("Due", formatDateTime(input.dueDate)),
+          ...detail(t("detailTask"), optionalText(input.title)),
+          ...detail(t("detailPriority"), optionalText(input.priority)),
+          ...detail(t("detailDue"), formatDateTime(input.dueDate)),
         ],
       };
     case "updateTask": {
       const count = taskIds.length || (optionalText(input.taskId) ? 1 : 0);
       const changes = [
         input.status
-          ? `Status: ${String(input.status).replace(/_/g, " ")}`
+          ? t("changeStatus", { status: String(input.status).replace(/_/g, " ") })
           : null,
         optionalText(input.title)
-          ? `Title: ${optionalText(input.title)}`
+          ? t("changeTitle", { title: optionalText(input.title) ?? "" })
           : null,
-        input.priority ? `Priority: ${String(input.priority)}` : null,
+        input.priority ? t("changePriority", { priority: String(input.priority) }) : null,
         input.clearDueDate === true
-          ? "Due date: remove"
+          ? t("changeDueRemove")
           : formatDateTime(input.dueDate)
-            ? `Due date: ${formatDateTime(input.dueDate)}`
+          ? t("changeDueDate", { date: formatDateTime(input.dueDate) ?? "" })
             : null,
-        optionalText(input.ownerId) ? "Owner: change" : null,
+        optionalText(input.ownerId) ? t("changeOwner") : null,
       ].filter((change): change is string => Boolean(change));
       return {
-        title: count > 1 ? `Update ${count} tasks` : "Update task",
+        title: count > 1 ? t("writeActions.updateTasks", { count }) : t("writeActions.updateTask"),
         details: [
           ...detail(
-            "Affected",
-            count ? `${count} task${count === 1 ? "" : "s"}` : null,
+            t("detailAffected"),
+            count ? t("tasksCount", { count }) : null,
           ),
-          ...detail("Changes", changes.join(", ") || null),
+          ...detail(t("detailChanges"), changes.join(", ") || null),
         ],
       };
     }
     case "createJob":
       return {
-        title: "Create draft job",
+        title: t("writeActions.createJob"),
         details: [
-          ...detail("Role", optionalText(input.title)),
-          ...detail("Workplace", optionalText(input.workplaceType)),
+          ...detail(t("detailRole"), optionalText(input.title)),
+          ...detail(t("detailWorkplace"), optionalText(input.workplaceType)),
           ...detail(
-            "Employment",
+            t("detailEmployment"),
             optionalText(input.employmentType)?.replace(/_/g, " ") ?? null,
           ),
-          ...detail("Location", optionalText(input.location)),
+          ...detail(t("detailLocation"), optionalText(input.location)),
         ],
       };
     case "addCandidateNote":
       return {
-        title: "Add candidate note",
+        title: t("writeActions.addCandidateNote"),
         details: detail(
-          "Note",
+          t("detailNote"),
           optionalText(input.body)?.slice(0, 180) ?? null,
         ),
       };
     case "addCandidateTag":
       return {
-        title: "Add candidate tag",
-        details: detail("Tag", optionalText(input.label)),
+        title: t("writeActions.addCandidateTag"),
+        details: detail(t("detailTag"), optionalText(input.label)),
       };
     case "createOffer":
       return {
-        title: "Create draft offer",
+        title: t("writeActions.createOffer"),
         details: [
-          ...detail("Role", optionalText(input.title)),
-          ...detail("Compensation", formatMoney(input)),
-          ...detail("Start date", formatDateTime(input.startDate)),
-          ...detail("Expires", formatDateTime(input.expiresAt)),
+          ...detail(t("detailRole"), optionalText(input.title)),
+          ...detail(t("detailCompensation"), formatMoney(input, t)),
+          ...detail(t("detailStartDate"), formatDateTime(input.startDate)),
+          ...detail(t("detailExpires"), formatDateTime(input.expiresAt)),
         ],
       };
     case "sendOffer":
-      return { title: "Send offer", details: [] };
+      return { title: t("writeActions.sendOffer"), details: [] };
     case "decideOffer":
       return {
-        title: "Record offer decision",
-        details: detail("Decision", optionalText(input.decision)),
+        title: t("writeActions.decideOffer"),
+        details: detail(t("detailDecision"), optionalText(input.decision)),
       };
     case "scheduleInterview":
       return {
-        title: "Schedule interview",
+        title: t("writeActions.scheduleInterview"),
         details: [
           ...detail(
-            "Type",
+            t("detailType"),
             optionalText(input.type)?.replace(/_/g, " ") ?? null,
           ),
-          ...detail("When", formatDateTime(input.scheduledAt)),
+          ...detail(t("detailWhen"), formatDateTime(input.scheduledAt)),
           ...detail(
-            "Duration",
+            t("detailDuration"),
             typeof input.durationMins === "number"
-              ? `${input.durationMins} minutes`
+              ? t("minutes", { count: input.durationMins })
               : null,
           ),
-          ...detail("Mode", optionalText(input.mode)),
+          ...detail(t("detailMode"), optionalText(input.mode)),
         ],
       };
     case "addToTalentPool":
       return {
-        title: "Add candidate to talent pool",
+        title: t("writeActions.addToTalentPool"),
         details: [
-          ...detail("Source", optionalText(input.source)),
-          ...detail("Reason", optionalText(input.reason)),
+          ...detail(t("detailSource"), optionalText(input.source)),
+          ...detail(t("detailReason"), optionalText(input.reason)),
         ],
       };
     case "assignFromPoolToJob":
-      return { title: "Assign candidate to job", details: [] };
+      return { title: t("writeActions.assignFromPoolToJob"), details: [] };
     case "createScorecard":
       return {
-        title: "Create scorecard",
+        title: t("writeActions.createScorecard"),
         details: [
-          ...detail("Rating", optionalText(input.rating)),
-          ...detail("Stage", optionalText(input.stageName)),
+          ...detail(t("detailRating"), optionalText(input.rating)),
+          ...detail(t("detailStage"), optionalText(input.stageName)),
           ...detail(
-            "Comment",
+            t("detailComment"),
             optionalText(input.comment)?.slice(0, 180) ?? null,
           ),
         ],
       };
     case "sendCandidateEmail":
       return {
-        title: "Send candidate email",
+        title: t("writeActions.sendCandidateEmail"),
         details: [
-          ...detail("To", optionalText(input.toEmail)),
-          ...detail("Subject", optionalText(input.subject)),
+          ...detail(t("detailTo"), optionalText(input.toEmail)),
+          ...detail(t("detailSubject"), optionalText(input.subject)),
         ],
       };
     case "generateCandidateScore":
       return {
-        title: "Generate candidate evaluation",
+        title: t("writeActions.generateCandidateScore"),
         details: [
-          ...detail("Candidate", optionalText(input.candidateName)),
-          ...detail("Role", optionalText(input.jobTitle)),
-          { label: "Data sent", value: "Resume and application answers" },
+          ...detail(t("detailCandidate"), optionalText(input.candidateName)),
+          ...detail(t("detailRole"), optionalText(input.jobTitle)),
+          { label: t("detailDataSent"), value: t("resumeAndAnswers") },
         ],
       };
     case "bulkScoreJob":
       return {
-        title: "Evaluate applicants",
+        title: t("writeActions.bulkScoreJob"),
         details: [
-          ...detail("Role", optionalText(input.jobTitle)),
-          { label: "Scope", value: "All currently unscored applicants" },
-          { label: "Data sent", value: "Resumes and application answers" },
+          ...detail(t("detailRole"), optionalText(input.jobTitle)),
+          { label: t("detailScope"), value: t("unscoredApplicants") },
+          { label: t("detailDataSent"), value: t("resumesAndAnswers") },
         ],
       };
     default:
-      return { title: "Confirm action", details: [] };
+      return { title: t("confirmAction"), details: [] };
   }
 }
 
@@ -1677,11 +1696,12 @@ function WriteConfirmCard({
   onCancel: () => void;
   onUndo?: () => void;
 }) {
+  const t = useTranslations("shell.harlyAI");
   const isMove = toolName === "moveCandidateStage";
   const from = String(input.fromStageName ?? "");
   const to = String(input.toStageName ?? "");
   const who = String(input.candidateName ?? "");
-  const localPreview = getWriteActionPreview(toolName, input);
+  const localPreview = useWriteActionPreview(toolName, input);
   const requiresCanonicalPreview = [
     "moveCandidateStage",
     "rejectCandidate",
@@ -1698,7 +1718,7 @@ function WriteConfirmCard({
     requiresCanonicalPreview &&
     (!serverPreview || serverPreview.title === "Verifying action…");
   const preview = verifying
-    ? { title: "Checking details…", details: [] }
+    ? { title: t("checkingDetails"), details: [] }
     : serverPreview?.canonical && serverPreview.ok
       ? serverPreview
       : localPreview;
@@ -1726,10 +1746,10 @@ function WriteConfirmCard({
             {done.error
               ? done.error
               : done.undone
-                ? "Undone."
+                ? t("undone")
                 : ok
-                  ? (done.message ?? "Done.")
-                  : "Cancelled. Nothing changed."}
+                  ? (done.message ?? t("donePeriod"))
+                  : t("cancelledNoChanges")}
           </p>
           {isMove && ok && !done.undone && from && to ? (
             <div className="mt-1.5">
@@ -1745,7 +1765,7 @@ function WriteConfirmCard({
             onClick={onUndo}
             disabled={done.undoing}
           >
-            {done.undoing ? "Undoing…" : "Undo"}
+            {done.undoing ? t("undoing") : t("undo")}
           </Button>
         ) : null}
       </div>
@@ -1774,7 +1794,7 @@ function WriteConfirmCard({
                 aria-hidden="true"
                 className={cn("size-1.5 rounded-full", reversible ? "bg-success-olive" : "bg-warning-clay")}
               />
-              {reversible ? "Reversible" : "Can't be undone"}
+              {reversible ? t("reversible") : t("cannotUndo")}
             </span>
           ) : null}
         </div>
@@ -1783,7 +1803,7 @@ function WriteConfirmCard({
             className="rounded-[var(--radius-btn)] bg-danger-rust/10 px-2.5 py-2 text-[12.5px] leading-snug text-danger-rust"
             role="alert"
           >
-            {serverPreview?.error ?? "This action couldn't be verified, so it can't run."}
+            {serverPreview?.error ?? t("actionCouldNotBeVerified")}
           </p>
         ) : verifying ? (
           <div className="space-y-1.5" aria-hidden="true">
@@ -1828,9 +1848,9 @@ function WriteConfirmCard({
           className="h-8 px-3 text-[13px]"
           onClick={onCancel}
           disabled={pending}
-          aria-label={`Cancel: ${preview.title}`}
+          aria-label={t("cancelAction", { title: preview.title })}
         >
-          Cancel
+          {t("cancel")}
         </Button>
         <Button
           size="sm"
@@ -1838,7 +1858,7 @@ function WriteConfirmCard({
           onClick={onConfirm}
           disabled={pending || verifying || blocked}
         >
-          {pending ? "Working…" : verifying ? "Checking…" : preview.title}
+          {pending ? t("working") : verifying ? t("checking") : preview.title}
         </Button>
       </div>
     </section>
@@ -1866,13 +1886,8 @@ function humanizeAutomationLabel(value: string): string {
     .join(" ");
 }
 
-const PROPOSAL_CHANGE_VERBS: Record<string, string> = {
-  node_added: "Added step",
-  node_changed: "Updated step",
-  node_removed: "Removed step",
-};
-
 function AutomationProposalCard({ preview }: { preview: AgentWritePreview }) {
+  const t = useTranslations("shell.harlyAI");
   const changes = preview.automationChanges ?? [];
   const visible = changes.slice(0, 8);
   const hidden = changes.length - visible.length;
@@ -1880,46 +1895,46 @@ function AutomationProposalCard({ preview }: { preview: AgentWritePreview }) {
   const simulationLabel = !simulation
     ? null
     : simulation.status === "verified"
-      ? "All paths tested"
+      ? t("allPathsTested")
       : simulation.status === "partial"
-        ? "Partially tested"
-        : "Tests failed";
+        ? t("partiallyTested")
+        : t("testsFailed");
   const requirements = preview.automationRequirements;
   const needLines: string[] = [];
   if (requirements) {
     if (requirements.permissions.length > 0) {
-      needLines.push(
-        `Needs permission: ${requirements.permissions.map(humanizeAutomationLabel).join(", ")}`,
-      );
+      needLines.push(t("needsPermission", { permissions: requirements.permissions.map(humanizeAutomationLabel).join(", ") }));
     }
     const uses = [...requirements.integrations, ...requirements.resources].map(
       humanizeAutomationLabel,
     );
     if (uses.length > 0) {
-      needLines.push(`Uses: ${uses.join(", ")}`);
+      needLines.push(t("usesResources", { resources: uses.join(", ") }));
     }
   }
   return (
     <div className="space-y-1.5 rounded-lg bg-muted/45 px-2.5 py-2 text-[11px] leading-snug">
-      <p className="font-medium text-foreground">What this automation does</p>
-      <ul className="max-h-28 space-y-1 overflow-y-auto text-muted-foreground" aria-label="Automation steps">
+      <p className="font-medium text-foreground">{t("automationSummary")}</p>
+      <ul className="max-h-28 space-y-1 overflow-y-auto text-muted-foreground" aria-label={t("automationSteps")}>
         {visible.map((change) => (
           <li key={`${change.kind}:${change.id}`} className="flex gap-1.5">
             <span aria-hidden="true">·</span>
             <span>
-              {PROPOSAL_CHANGE_VERBS[change.kind] ?? "Changed step"}:{" "}
-              {change.title || humanizeAutomationLabel(change.id)}
+              {t("stepLine", {
+                step: change.kind === "node_added" ? t("stepAdded") : change.kind === "node_removed" ? t("stepRemoved") : t("stepUpdated"),
+                title: change.title || humanizeAutomationLabel(change.id),
+              })}
             </span>
           </li>
         ))}
-        {hidden > 0 ? <li>Plus {hidden} more steps.</li> : null}
-        {visible.length === 0 ? <li>No step changes.</li> : null}
+        {hidden > 0 ? <li>{t("plusSteps", { count: hidden })}</li> : null}
+        {visible.length === 0 ? <li>{t("noStepChanges")}</li> : null}
       </ul>
       {simulation && simulationLabel ? (
         <p className="border-t border-border/50 pt-1.5 text-muted-foreground">
           {simulationLabel} · {simulation.coveragePercent}%
           {simulation.uncoveredNodeCount > 0
-            ? ` · ${simulation.uncoveredNodeCount} steps untested`
+            ? ` · ${t("stepsUntested", { count: simulation.uncoveredNodeCount })}`
             : ""}
         </p>
       ) : null}
@@ -2017,12 +2032,26 @@ function EmptyState({
   surface?: { kind: "candidate" | "section"; label: string };
   onStarter: (starter: Starter) => void;
 }) {
+  const t = useTranslations("shell.harlyAI");
   const { assistant } = useHarlyAI();
-  const starters = startersFor(surface);
+  const group = surface?.kind === "candidate" ? "candidate" :
+    surface?.label === "Jobs" ? "jobs" :
+    surface?.label === "Candidates" ? "candidates" :
+    surface?.label === "Tasks" ? "tasks" :
+    surface?.label === "Interview calendar" ? "interviews" :
+    surface?.label === "Reports" ? "reports" : "home";
+  const candidateName = surface?.kind === "candidate" && surface.label !== "Current candidate"
+    ? surface.label
+    : t("thisCandidate");
+  const starters = startersFor(surface).map((slot, index) => ({
+    prefill: slot.prefill,
+    label: t(`starterLabels.${group}.${index}`, { name: candidateName }),
+    prompt: t(`starterPrompts.${group}.${index}`, { name: candidateName }),
+  }));
   const heading =
     surface?.kind === "candidate" && surface.label !== "Current candidate"
-      ? `What do you need on ${surface.label}?`
-      : `How can I help, ${firstName}?`;
+      ? t("candidateHeading", { name: surface.label })
+      : t("greeting", { name: firstName });
   return (
     <div className="flex flex-col gap-3.5 px-1 pt-1 pb-1">
       <div className="flex flex-col items-start gap-2.5">
@@ -2045,8 +2074,7 @@ function EmptyState({
         ))}
       </ul>
       <p className="text-[12px] leading-snug text-soft-ink">
-        I can also move candidates, schedule interviews, send emails and create
-        tasks. Nothing changes until you confirm.
+        {t("capabilities")}
       </p>
     </div>
   );
@@ -2054,16 +2082,18 @@ function EmptyState({
 
 /** Tiny attribution under the composer, only for white-labelled (renamed) assistants. */
 function PoweredByFootnote() {
+  const t = useTranslations("shell.harlyAI");
   const { assistant } = useHarlyAI();
   if (!assistant.showPoweredBy || assistant.name === DEFAULT_ASSISTANT_NAME) return null;
   return (
     <p className="pt-1.5 text-center text-[11px] leading-none text-quiet-mist">
-      Powered by Harly
+      {t("poweredBy")}
     </p>
   );
 }
 
 function NotConfiguredState({ canConfigure }: { canConfigure: boolean }) {
+  const t = useTranslations("shell.harlyAI");
   const { assistant } = useHarlyAI();
   return (
     <div className="flex flex-col items-center gap-4 px-6 py-12 text-center">
@@ -2074,19 +2104,19 @@ function NotConfiguredState({ canConfigure }: { canConfigure: boolean }) {
       />
       <div className="flex flex-col gap-1">
         <h2 className="text-[16px] font-semibold tracking-tight">
-          {assistant.name} isn&apos;t set up yet
+          {t("notConfiguredTitle", { name: assistant.name })}
         </h2>
         <p className="text-[13px] leading-relaxed text-muted-foreground">
           {canConfigure
-            ? "Connect an AI provider key to start chatting with your hiring copilot."
-            : "Ask a workspace admin to connect an AI provider in Settings."}
+            ? t("configurePrompt")
+            : t("askAdminPrompt")}
         </p>
       </div>
       {canConfigure ? (
         <Button asChild size="sm" className="gap-1.5">
           <Link href="/settings/ai">
             <Settings className="size-3.5" />
-            Open AI settings
+            {t("openAISettings")}
           </Link>
         </Button>
       ) : null}
@@ -2163,6 +2193,7 @@ function HarlyChat({
   pendingPrompt,
   onPendingPromptConsumed,
 }: HarlyChatProps) {
+  const t = useTranslations("shell.harlyAI");
   const { assistant } = useHarlyAI();
   const [input, setInput] = useState("");
   const [mentionQuery, setMentionQuery] = useState<string | null>(null);
@@ -2404,7 +2435,7 @@ function HarlyChat({
   function continueConversation() {
     if (isBusy) return;
     sendMessage(
-      { text: "Continue where you stopped. Finish my previous request and tell me what's ready for my review." },
+      { text: t("continuePrompt") },
       {
         body: {
           conversationId,
@@ -2481,7 +2512,7 @@ function HarlyChat({
         toolCallId,
         output: res.success
           ? { confirmed: true, ...res }
-          : { confirmed: true, error: res.error ?? "Action failed." },
+          : { confirmed: true, error: res.error ?? t("actionFailed") },
       });
     } finally {
       pendingWriteIdsRef.current.delete(toolCallId);
@@ -2510,7 +2541,7 @@ function HarlyChat({
         undoable: result.success ? false : current.undoable,
         error: result.success ? undefined : result.error,
         message: result.success
-          ? (result.message ?? "Action undone.")
+          ? (result.message ?? t("actionUndone"))
           : current.message,
       },
     }));
@@ -2549,7 +2580,7 @@ function HarlyChat({
                     {contextChanged ? (
                       <div className="flex items-center gap-2 text-[11.5px] text-soft-ink" role="separator">
                         <span className="h-px flex-1 bg-hairline" />
-                        <span>Now about {mark}</span>
+                        <span>{t("contextChanged", { name: mark ?? "" })}</span>
                         <span className="h-px flex-1 bg-hairline" />
                       </div>
                     ) : null}
@@ -2603,7 +2634,7 @@ function HarlyChat({
                   return;
                 }
                 if (part.type === "error") {
-                  partErrorMessage = chatErrorMessage(part.error);
+                  partErrorMessage = chatErrorMessage(part.error, t("unavailable"));
                   return;
                 }
                 if (!part.type.startsWith("tool-")) return;
@@ -2634,7 +2665,7 @@ function HarlyChat({
                       key={callId}
                       toolCallId={callId}
                       toolName={toolName}
-                      summary={inputData.summary ?? "Confirm this action?"}
+                      summary={inputData.summary ?? t("confirmThisAction")}
                       input={inputData}
                       serverPreview={preparedWritePreviews[callId]}
                       done={writeResults[callId] ?? null}
@@ -2663,7 +2694,12 @@ function HarlyChat({
                 }
 
                 // Read tool → status line + (when done) a rich card.
-                const label = getToolLabel(part.type);
+                const label = getLocalizedToolLabel(
+                  part.type,
+                  (key) => t(`toolLabels.${key}`),
+                  (name) => t("lookingAt", { name }),
+                  t("working"),
+                );
                 if (part.state === "output-error") {
                   toolExecutions.push({
                     id: part.toolCallId ?? `s-${i}`,
@@ -2724,7 +2760,7 @@ function HarlyChat({
                   <div className="flex items-center gap-2" aria-live="polite">
                     <ThinkingShimmer label={runningExecution.label} />
                     {doneCount > 0 ? (
-                      <span className="text-[12px] text-quiet-mist">· {doneCount} done</span>
+                      <span className="text-[12px] text-quiet-mist">· {t("doneCount", { count: doneCount })}</span>
                     ) : null}
                   </div>
                 );
@@ -2756,8 +2792,13 @@ function HarlyChat({
                         <PhCheck className="shrink-0 text-success-olive" />
                       )}
                       <span>
-                        {first} · {toolExecutions.length - 1} more
-                        {errorCount > 0 ? ` (${errorCount} with issues)` : ""}
+                        {errorCount > 0
+                          ? t("moreToolStatusesWithIssues", {
+                              label: first,
+                              count: toolExecutions.length - 1,
+                              issues: errorCount,
+                            })
+                          : t("moreToolStatuses", { label: first, count: toolExecutions.length - 1 })}
                       </span>
                       <ChevronDown className="size-3 transition-transform duration-150 group-open:rotate-180" />
                     </summary>
@@ -2803,14 +2844,14 @@ function HarlyChat({
                   className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[12px] leading-snug text-soft-ink"
                   role="status"
                 >
-                  <span>I stopped before finishing.</span>
+                  <span>{t("stoppedBeforeFinishingSelf")}</span>
                   <button
                     type="button"
                     onClick={continueConversation}
                     className="font-medium text-foreground underline decoration-border underline-offset-2 transition-colors hover:decoration-foreground disabled:cursor-not-allowed disabled:opacity-50"
                     disabled={isBusy}
                   >
-                    Continue
+                    {t("continue")}
                   </button>
                 </div>
               ) : null;
@@ -2840,11 +2881,10 @@ function HarlyChat({
                       <div
                         className="self-start rounded-lg border border-border/60 bg-muted/30 p-2"
                         role="group"
-                        aria-label={`Batch confirmation for ${pendingUpdateTasks.length} task updates`}
+                        aria-label={t("batchConfirmation", { count: pendingUpdateTasks.length })}
                       >
                         <p className="mb-1.5 text-[11px] leading-snug text-muted-foreground">
-                          Review each task card, then confirm all{" "}
-                          {pendingUpdateTasks.length} updates together.
+                          {t("reviewTaskCards", { count: pendingUpdateTasks.length })}
                         </p>
                         <Button
                           size="sm"
@@ -2855,7 +2895,7 @@ function HarlyChat({
                               pendingWriteIds.has(task.callId),
                             )
                           }
-                          aria-label={`Confirm all ${pendingUpdateTasks.length} task updates`}
+                          aria-label={t("confirmAllTasks", { count: pendingUpdateTasks.length })}
                           onClick={() => {
                             for (const t of pendingUpdateTasks) {
                               void handleWriteConfirm(
@@ -2867,7 +2907,7 @@ function HarlyChat({
                             }
                           }}
                         >
-                          Confirm all {pendingUpdateTasks.length} updates
+                          {t("confirmAllTasks", { count: pendingUpdateTasks.length })}
                         </Button>
                       </div>
                     )}
@@ -2886,7 +2926,7 @@ function HarlyChat({
                 Without this the panel swallows the server's friendly message
                 and the turn looks like a silent non-answer. */}
             {error != null && !isBusy && (() => {
-              const text = chatErrorMessage(error);
+              const text = chatErrorMessage(error, t("unavailable"));
               return text ? (
                 <div
                   className="flex items-start gap-2 rounded-[var(--radius-inner)] bg-danger-rust/10 px-3 py-2.5"
@@ -2900,7 +2940,7 @@ function HarlyChat({
                     className="h-7 shrink-0 px-2.5 text-[12.5px]"
                     onClick={retryLast}
                   >
-                    Try again
+                    {t("tryAgain")}
                   </Button>
                 </div>
               ) : null;
@@ -2916,7 +2956,7 @@ function HarlyChat({
             {mentionCandidates.length > 0 ? (
               <div className="absolute inset-x-0 bottom-full z-10 mb-2 overflow-hidden rounded-[var(--radius-inner)] border border-hairline bg-popover p-1 shadow-[var(--shadow-float)]">
                 <p className="type-col-head px-2 py-1">
-                  Mention candidate
+                  {t("mentionCandidate")}
                 </p>
                 {mentionCandidates.map((candidate) => (
                   <button
@@ -2956,22 +2996,22 @@ function HarlyChat({
               <PromptInputTextarea
                 placeholder={
                   surfaceContext?.kind === "candidate" && surfaceContext.label !== "Current candidate"
-                    ? `Ask about ${surfaceContext.label}…`
-                    : `Ask ${assistant.name}…`
+                    ? t("askAbout", { name: surfaceContext.label })
+                    : t("askAssistant", { name: assistant.name })
                 }
                 className="min-h-[36px] bg-transparent py-1 text-base md:text-[13.5px] dark:bg-transparent"
               />
               <PromptInputActions className="items-center justify-between pt-1">
                 <span className="text-[11.5px] text-quiet-mist">
-                  @ to mention · Enter to send
+                  {t("composerHint")}
                 </span>
-                <PromptInputAction tooltip={isBusy ? "Stop" : "Send (Enter)"}>
+                <PromptInputAction tooltip={isBusy ? t("stop") : t("sendEnter")}>
                   {isBusy ? (
                     <Button
                       type="button"
                       size="icon-sm"
                       onClick={() => void stop()}
-                      aria-label="Stop"
+                      aria-label={t("stop")}
                     >
                       <Square className="size-3 fill-current" strokeWidth={0} />
                     </Button>
@@ -2979,7 +3019,7 @@ function HarlyChat({
                     <Button
                       size="icon-sm"
                       onClick={submit}
-                      aria-label="Send"
+                      aria-label={t("send")}
                       aria-disabled={!input.trim()}
                       className={cn(
                         !input.trim() && "pointer-events-none opacity-50",
@@ -3018,19 +3058,22 @@ function HistoryDrawer({
   onDelete: (id: string) => void;
   onClose: () => void;
 }) {
+  const t = useTranslations("shell.harlyAI");
+  const locale = useLocale();
+  const relativeFormat = new Intl.RelativeTimeFormat(locale, { numeric: "auto" });
   // eslint-disable-next-line react-hooks/purity -- relative time display, intentionally uses current time
   const now = Date.now();
   const relative = (iso: string) => {
     const diff = now - new Date(iso).getTime();
     const m = Math.floor(diff / 60000);
-    if (m < 1) return "just now";
-    if (m < 60) return `${m}m ago`;
+    if (m < 1) return relativeFormat.format(0, "second");
+    if (m < 60) return relativeFormat.format(-m, "minute");
     const h = Math.floor(m / 60);
-    if (h < 24) return `${h}h ago`;
+    if (h < 24) return relativeFormat.format(-h, "hour");
     const d = Math.floor(h / 24);
     return d < 7
-      ? `${d}d ago`
-      : new Date(iso).toLocaleDateString("en-US", {
+      ? relativeFormat.format(-d, "day")
+      : new Date(iso).toLocaleDateString(locale, {
           month: "short",
           day: "numeric",
         });
@@ -3055,14 +3098,14 @@ function HistoryDrawer({
       >
         <div className="flex shrink-0 items-center justify-between border-b border-border/60 px-3 py-3">
           <span className="text-[12px] font-semibold tracking-tight">
-            Chats
+            {t("chats")}
           </span>
           <Button
             variant="ghost"
             size="icon"
             className="size-7 text-muted-foreground"
             onClick={onClose}
-            aria-label="Close history"
+            aria-label={t("closeHistory")}
           >
             <X className="size-4" />
           </Button>
@@ -3074,13 +3117,13 @@ function HistoryDrawer({
             className="flex w-full items-center gap-2 rounded-lg border border-dashed border-border/70 px-2.5 py-2 text-[12px] font-medium text-muted-foreground transition-colors hover:border-primary/40 hover:text-foreground"
           >
             <Plus className="size-3.5" />
-            New chat
+            {t("newChat")}
           </button>
         </div>
         <div className="flex min-h-0 flex-1 flex-col gap-0.5 overflow-y-auto p-2">
           {conversations.length === 0 ? (
             <p className="px-2 py-4 text-center text-[11px] text-muted-foreground">
-              No conversations yet.
+              {t("noConversations")}
             </p>
           ) : (
             conversations.map((c, i) => (
@@ -3099,7 +3142,7 @@ function HistoryDrawer({
                   className="flex min-w-0 flex-1 flex-col text-left"
                 >
                   <span className="truncate text-[12px] font-medium text-foreground">
-                    {c.title ?? "New chat"}
+                    {c.title ?? t("newChat")}
                   </span>
                   <span className="text-[10px] text-muted-foreground">
                     {relative(c.lastMessageAt)}
@@ -3109,7 +3152,7 @@ function HistoryDrawer({
                   type="button"
                   onClick={() => onDelete(c.id)}
                   className="shrink-0 text-muted-foreground/0 transition-colors group-hover:text-muted-foreground hover:!text-rose-500"
-                  aria-label="Delete conversation"
+                  aria-label={t("deleteConversation")}
                 >
                   <Trash2 className="size-3.5" />
                 </button>
@@ -3167,6 +3210,7 @@ export function HarlyAIPanel({
   automationContext,
   onAutomationApplied,
 }: HarlyAIPanelProps) {
+  const t = useTranslations("shell.harlyAI");
   const [conversationId, setConversationId] = useState<string>(() => freshId());
   const [initialMessages, setInitialMessages] = useState<StoredUIMessage[]>([]);
   const [restoredPersistenceKey, setRestoredPersistenceKey] = useState<
@@ -3250,9 +3294,9 @@ export function HarlyAIPanel({
   async function removeConversation(id: string) {
     const ok = await confirm({
       tone: "destructive",
-      title: "Delete this conversation?",
-      description: "Its messages are removed for you. Actions it already ran stay done.",
-      confirmLabel: "Delete conversation",
+      title: t("deleteConfirmTitle"),
+      description: t("deleteConfirmDescription"),
+      confirmLabel: t("deleteConversation"),
     });
     if (!ok) return;
     await deleteConversationAction(id);
@@ -3325,8 +3369,8 @@ export function HarlyAIPanel({
                     size="icon-sm"
                     className="text-soft-ink"
                     onClick={() => setHistoryOpen(true)}
-                    aria-label="Chat history"
-                    title="Chat history"
+                    aria-label={t("chatHistory")}
+                    title={t("chatHistory")}
                   >
                     <History className="size-4" />
                   </Button>
@@ -3335,8 +3379,8 @@ export function HarlyAIPanel({
                     size="icon-sm"
                     className="text-soft-ink"
                     onClick={startNewChat}
-                    aria-label="New chat"
-                    title="New chat"
+                    aria-label={t("newChat")}
+                    title={t("newChat")}
                   >
                     <Plus className="size-4" />
                   </Button>
@@ -3347,8 +3391,8 @@ export function HarlyAIPanel({
                 size="icon-sm"
                 className="text-soft-ink"
                 onClick={onClose}
-                aria-label={`Close ${assistant.name}`}
-                title="Close (Esc)"
+                aria-label={t("closeAssistant", { name: assistant.name })}
+                title={t("closeEsc")}
               >
                 <X className="size-4" />
               </Button>
@@ -3368,7 +3412,7 @@ export function HarlyAIPanel({
                     type="button"
                     onClick={() => setDetachedPath(surfaceContext.path)}
                     className="grid size-4 place-items-center rounded-full hover:bg-sage-ink/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-near-ink"
-                    aria-label={`Stop using ${surfaceContext.label} as context`}
+                    aria-label={t("stopUsingContext", { name: surfaceContext.label })}
                   >
                     <X className="size-3" strokeWidth={2.2} />
                   </button>
@@ -3380,7 +3424,7 @@ export function HarlyAIPanel({
                   className="inline-flex items-center gap-1.5 rounded-full border border-dashed border-mist-border px-2 py-0.5 text-[12px] text-soft-ink hover:text-near-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-near-ink"
                 >
                   <Plus className="size-3" strokeWidth={2.2} />
-                  Use {surfaceContext.label} as context
+                  {t("useContext", { name: surfaceContext.label })}
                 </button>
               )}
             </div>
@@ -3395,7 +3439,7 @@ export function HarlyAIPanel({
           <>
             {restoringConversation ? (
               <div className="flex flex-1 items-center justify-center">
-                <ThinkingShimmer label="Restoring your chat" />
+                <ThinkingShimmer label={t("restoringChat")} />
               </div>
             ) : (
               <HarlyChat

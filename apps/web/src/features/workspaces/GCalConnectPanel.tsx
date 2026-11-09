@@ -5,6 +5,7 @@ import type { IntegrationHealthView } from "@/features/integrations/health/model
 import { providerStatusLabel, providerStatusTone } from "@/features/integrations/health/connection-label";
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { toast } from "@/lib/notification-island/toast";
 
 import {
@@ -46,6 +47,7 @@ export function GCalConnectPanel({
   tileClassName: string;
   description: string;
 }) {
+  const t = useTranslations("features.workspaces.gcalConnectPanel");
   const router = useRouter();
   const isConnected = status.hasRefreshToken;
   const [open, setOpen] = useState(isConnected);
@@ -55,9 +57,9 @@ export function GCalConnectPanel({
   const statusTone = providerStatusTone(health, isConnected ? (status.enabled ? "on" : "off") : "neutral");
   const statusLabel = providerStatusLabel(health, isConnected
     ? status.enabled
-      ? "Connected"
-      : "Disabled"
-    : "Not connected");
+      ? t("connected")
+      : t("disabled")
+    : t("notConnected"));
 
   const installUrl = `/api/integrations/google/install?ws=${workspaceId}`;
 
@@ -65,10 +67,10 @@ export function GCalConnectPanel({
     startDisconnect(async () => {
       const result = await disconnectGCalAction();
       if (!result.ok) {
-        toast.error(result.error ?? "Could not disconnect.");
+        toast.error(result.error ?? t("disconnectFailed"));
         return;
       }
-      toast.success("Google Calendar disconnected");
+      toast.success(t("disconnected"));
       router.refresh();
     });
   }
@@ -77,9 +79,9 @@ export function GCalConnectPanel({
     startTest(async () => {
       const result = await testGCalConnectionAction();
       if (result.ok) {
-        toast.success("Connection is working!");
+        toast.success(t("connectionWorking"));
       } else {
-        toast.error(result.error ?? "Connection test failed.");
+        toast.error(result.error ?? t("testFailed"));
         // An invalid_grant clears the stored token server-side. Refresh here so
         // the panel immediately changes from the stale connected state to the
         // actionable Connect Google state.
@@ -106,19 +108,19 @@ export function GCalConnectPanel({
                 aria-expanded={open}
               >
                 <GearSixIcon className="size-4" />
-                {open ? "Hide settings" : "Manage"}
+                {open ? t("hideSettings") : t("manage")}
               </Button>
             ) : status.hasCredentials ? (
               <Button asChild>
                 <a href={installUrl}>
                   <GoogleCalendarLogo className="size-4" />
-                  Connect Google
+                  {t("connectGoogle")}
                 </a>
               </Button>
             ) : (
               <Button disabled>
                 <GoogleCalendarLogo className="size-4" />
-                Credentials not set
+                {t("credentialsNotSet")}
               </Button>
             )
           ) : null
@@ -130,9 +132,9 @@ export function GCalConnectPanel({
         <div className="flex items-start gap-2 rounded-xl border border-clay/30 bg-clay/5 px-3 py-2 text-sm text-clay">
           <WarningCircleIcon className="mt-0.5 size-4 shrink-0" />
           <p>
-            Set <code className="font-mono text-xs">GOOGLE_CLIENT_ID</code> and{" "}
-            <code className="font-mono text-xs">GOOGLE_CLIENT_SECRET</code> on
-            the server to enable Google Calendar.
+            {t.rich("credentialsHelp", {
+              code: (chunks) => <code className="font-mono text-xs">{chunks}</code>,
+            })}
           </p>
         </div>
       ) : null}
@@ -140,16 +142,16 @@ export function GCalConnectPanel({
       {isConnected ? (
         <Card className="overflow-hidden p-0">
           <div className="grid grid-cols-1 divide-y sm:grid-cols-3 sm:divide-x sm:divide-y-0">
-            <StatCell label="Account">
+            <StatCell label={t("account")}>
               <GoogleCalendarLogo className="size-4" />
-              {status.accountEmail ?? "Not connected"}
+              {status.accountEmail ?? t("notConnected")}
             </StatCell>
-            <StatCell label="Calendar">
+            <StatCell label={t("calendar")}>
               {status.calendarId === "primary"
-                ? "Primary calendar"
-                : status.calendarId ?? "Not selected"}
+                ? t("primaryCalendar")
+                : status.calendarId ?? t("notSelected")}
             </StatCell>
-            <StatCell label="Status">
+            <StatCell label={t("status")}>
               <button
                 type="button"
                 onClick={testConnection}
@@ -161,7 +163,7 @@ export function GCalConnectPanel({
                 ) : (
                   <SealCheckDuotoneIcon className="size-3.5" />
                 )}
-                {testing ? "Testing…" : "Test connection"}
+                {testing ? t("testing") : t("testConnection")}
               </button>
             </StatCell>
           </div>
@@ -193,6 +195,7 @@ function GCalConfigForm({
   onDisconnect: () => void;
   disconnecting: boolean;
 }) {
+  const t = useTranslations("features.workspaces.gcalConfigForm");
   const [calendars, setCalendars] = useState<GCalCalendar[] | null>(null);
   const [selected, setSelected] = useState(currentCalendarId ?? "primary");
   const [loading, startLoad] = useTransition();
@@ -202,7 +205,7 @@ function GCalConfigForm({
     startLoad(async () => {
       const result = await listGCalCalendarsAction();
       if (!result.ok) {
-        toast.error(result.error ?? "Could not load calendars.");
+        toast.error(result.error ?? t("couldNotLoadCalendars"));
         return;
       }
       setCalendars(result.calendars);
@@ -213,10 +216,10 @@ function GCalConfigForm({
     startSave(async () => {
       const result = await saveGCalSettingsAction({ calendarId: selected });
       if (!result.ok) {
-        toast.error(result.error ?? "Could not save.");
+        toast.error(result.error ?? t("saveFailed"));
         return;
       }
-      toast.success("Calendar saved");
+      toast.success(t("saved"));
       onSaved();
     });
   }
@@ -225,15 +228,15 @@ function GCalConfigForm({
     <Card className="p-6">
       <div className="mb-5 space-y-0.5">
         <h2 className="font-display text-base font-semibold tracking-tight">
-          Configure Google Calendar
+          {t("title")}
         </h2>
         <p className="text-sm text-muted-foreground">
-          Choose which calendar to use for interview events.
+          {t("description")}
         </p>
       </div>
 
       <div className="space-y-2">
-        <Label>Calendar</Label>
+        <Label>{t("calendar")}</Label>
         {calendars === null ? (
           <Button
             variant="outline"
@@ -242,7 +245,7 @@ function GCalConfigForm({
             disabled={loading}
           >
             {loading ? <SpinnerIcon className="size-3.5" /> : null}
-            {loading ? "Loading calendars…" : "Load calendars"}
+            {loading ? t("loadingCalendars") : t("loadCalendars")}
           </Button>
         ) : (
           <select
@@ -252,8 +255,7 @@ function GCalConfigForm({
           >
             {calendars.map((cal) => (
               <option key={cal.id} value={cal.id}>
-                {cal.name}
-                {cal.primary ? " (Primary)" : ""}
+                {cal.primary ? t("primaryOption", { name: cal.name }) : cal.name}
               </option>
             ))}
           </select>
@@ -270,11 +272,11 @@ function GCalConfigForm({
           disabled={disconnecting}
         >
           {disconnecting ? <SpinnerIcon className="size-3.5" /> : null}
-          Disconnect
+          {t("disconnect")}
         </Button>
         <Button onClick={save} disabled={saving}>
           {saving ? <SpinnerIcon className="size-3.5" /> : null}
-          Save
+          {t("save")}
         </Button>
       </div>
     </Card>

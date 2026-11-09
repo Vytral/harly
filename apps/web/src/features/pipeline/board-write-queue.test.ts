@@ -1,5 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 
+import { makeT } from "@/test-support/translator";
+
 vi.mock("@/features/pipeline/actions", () => ({
   bulkMoveApplications: vi.fn(),
   moveApplicationInPipeline: vi.fn(),
@@ -15,6 +17,8 @@ import type {
   MoveOperation,
   WriteOutcome,
 } from "@/features/pipeline/board-state";
+
+const t = makeT("labels.pipeline.board");
 
 function move(id: string, applicationId: string): MoveOperation {
   return {
@@ -57,8 +61,8 @@ describe("BoardWriteQueue", () => {
     const { write, pending } = controlledWrites();
     const queue = new BoardWriteQueue(write);
 
-    queue.enqueue(move("op-1", "a"));
-    queue.enqueue(move("op-2", "b"));
+    queue.enqueue(move("op-1", "a"), t);
+    queue.enqueue(move("op-2", "b"), t);
 
     expect(write).toHaveBeenCalledTimes(1);
     expect(pending[0].operation.id).toBe("op-1");
@@ -76,8 +80,8 @@ describe("BoardWriteQueue", () => {
     const firstSink = vi.fn();
     const detachFirst = queue.attach({ onSettled: firstSink });
 
-    queue.enqueue(move("op-1", "a"));
-    queue.enqueue(move("op-2", "b"));
+    queue.enqueue(move("op-1", "a"), t);
+    queue.enqueue(move("op-2", "b"), t);
 
     // The board remounts while op-1 is in flight: the old instance detaches.
     detachFirst();
@@ -102,8 +106,8 @@ describe("BoardWriteQueue", () => {
     const sink = vi.fn();
     queue.attach({ onSettled: sink });
 
-    queue.enqueue(move("op-1", "a"));
-    queue.enqueue(move("op-2", "b"));
+    queue.enqueue(move("op-1", "a"), t);
+    queue.enqueue(move("op-2", "b"), t);
     pending[0].resolve({ ok: false, thrown: false, error: "Workspace access denied." });
     await flush();
 
@@ -118,8 +122,8 @@ describe("BoardWriteQueue", () => {
     const { write, pending } = controlledWrites();
     const queue = new BoardWriteQueue(write);
 
-    queue.enqueue(move("op-1", "a"));
-    queue.enqueue(move("op-2", "b"));
+    queue.enqueue(move("op-1", "a"), t);
+    queue.enqueue(move("op-2", "b"), t);
     pending[0].resolve({ ok: true });
     await flush();
 
@@ -132,7 +136,7 @@ describe("BoardWriteQueue", () => {
     const listener = vi.fn();
     queue.subscribe(listener);
 
-    queue.enqueue(move("op-1", "a"));
+    queue.enqueue(move("op-1", "a"), t);
     expect(listener).toHaveBeenCalled();
 
     pending[0].resolve({ ok: true });
@@ -154,7 +158,7 @@ describe("BoardWriteQueue", () => {
     queue.attach({ onSettled: second });
 
     detachFirst();
-    queue.enqueue(move("op-1", "a"));
+    queue.enqueue(move("op-1", "a"), t);
     pending[0].resolve({ ok: true });
     await flush();
 

@@ -1,5 +1,7 @@
 import sanitizeHtml from "sanitize-html";
 
+import type { Translate } from "./translate";
+
 /**
  * Isomorphic sanitizer for recruiter-authored rich text (career intro, job
  * descriptions). Runs identically on the server and in the browser, so the
@@ -28,12 +30,20 @@ const TAGS = [
 
 const STYLE_VALUE = /^[#\w\s%.,()-]+$/;
 
-/** Embeds are the organization's choice; the visitor still has to opt in. */
-export const EMBED_PLACEHOLDER_HTML = `<div class="not-prose my-4 rounded-[12px] border border-hairline bg-card-inset px-4 py-5 text-center"><p class="text-sm text-soft-ink">This content is embedded from another site. It stays off until you allow embeds.</p><button type="button" data-allow-embeds class="mt-3 inline-flex items-center justify-center rounded-[10px] bg-near-ink px-3.5 py-2 text-[13px] font-semibold text-pure-snow">Allow embeds</button></div>`;
+/**
+ * Opt-in placeholder for third-party embeds. Embeds are the organization's
+ * choice; the visitor still has to opt in. `t` is `labels.careerPage.embed`.
+ */
+export function embedPlaceholderHtml(t: Translate): string {
+  return `<div class="not-prose my-4 rounded-[12px] border border-hairline bg-card-inset px-4 py-5 text-center"><p class="text-sm text-soft-ink">${t("notice")}</p><button type="button" data-allow-embeds class="mt-3 inline-flex items-center justify-center rounded-[10px] bg-near-ink px-3.5 py-2 text-[13px] font-semibold text-pure-snow">${t("allowEmbeds")}</button></div>`;
+}
 
 const IFRAME_RE = /<iframe\b[^>]*>[\s\S]*?<\/iframe>/gi;
 
-export function sanitizeRichHtml(html: string, opts: { allowEmbeds: boolean }): string {
+export function sanitizeRichHtml(
+  html: string,
+  opts: { allowEmbeds: boolean; placeholder: string },
+): string {
   if (!html) return "";
   const clean = sanitizeHtml(html, {
     allowedTags: TAGS,
@@ -70,5 +80,5 @@ export function sanitizeRichHtml(html: string, opts: { allowEmbeds: boolean }): 
   });
   // Iframes were sanitized above (http(s) src only). Without embed consent they
   // are replaced by an opt-in placeholder, string-side so SSR and client agree.
-  return opts.allowEmbeds ? clean : clean.replace(IFRAME_RE, EMBED_PLACEHOLDER_HTML);
+  return opts.allowEmbeds ? clean : clean.replace(IFRAME_RE, () => opts.placeholder);
 }

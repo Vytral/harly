@@ -1,6 +1,7 @@
 "use client";
 
 import { useSyncExternalStore, type ReactNode } from "react";
+import { useLocale } from "next-intl";
 import { formatShort, formatRelative, daysSince } from "./date";
 
 /**
@@ -25,12 +26,14 @@ function useClientValue<T>(compute: () => T, placeholder: T): T {
 
 /** Hydration-safe short date wrapper. Use in client components instead of formatShort(). */
 export function ShortDate({ value }: { value: Date | string }): ReactNode {
-  return useClientValue(() => formatShort(value), "");
+  const locale = useLocale();
+  return useClientValue(() => formatShort(value, locale), "");
 }
 
 /** Hydration-safe relative time wrapper. Use in client components instead of formatRelative(). */
 export function RelativeTime({ value }: { value: Date | string }): ReactNode {
-  return useClientValue(() => formatRelative(value), "");
+  const locale = useLocale();
+  return useClientValue(() => formatRelative(value, locale), "");
 }
 
 /** Hydration-safe days-since wrapper. Use in client components instead of daysSince(). */

@@ -7,6 +7,13 @@ export type EditorSnapshot = {
   layout: EditorLayout;
 };
 
+/**
+ * A user-facing message as a translation key under `labels.automations` plus
+ * its values. Editor state stores this shape, not English text, so the UI can
+ * translate it at render time.
+ */
+export type BuilderMessage = { key: string; values?: Record<string, string> };
+
 export function newGraphId(prefix: string): string {
   return `${prefix}_${Math.random().toString(36).slice(2, 10)}`;
 }
@@ -72,19 +79,19 @@ export function explainConnect(
   source: string,
   port: string,
   target: string,
-): string | null {
-  if (source === target) return "A step cannot connect to itself.";
+): BuilderMessage | null {
+  if (source === target) return { key: "connect.self" };
   const sourceNode = graph.nodes.find((node) => node.id === source);
   const targetNode = graph.nodes.find((node) => node.id === target);
-  if (!sourceNode || !targetNode) return "That step is missing.";
-  if (targetNode.type === "trigger") return "Nothing can connect back to the trigger.";
+  if (!sourceNode || !targetNode) return { key: "connect.missingStep" };
+  if (targetNode.type === "trigger") return { key: "connect.triggerTarget" };
   if (!sourcePorts(sourceNode).includes(port) && !(sourceNode.type === "action" && port === "error")) {
-    return `Port “${port}” is not valid on this step.`;
+    return { key: "connect.invalidPort", values: { port } };
   }
   if (graph.edges.some((edge) => edge.source === source && edge.port === port)) {
-    return "This output is already connected.";
+    return { key: "connect.alreadyConnected" };
   }
-  if (reaches(graph, target, source)) return "That connection would create a cycle.";
+  if (reaches(graph, target, source)) return { key: "connect.cycle" };
   return null;
 }
 
@@ -111,7 +118,7 @@ export function moveNodes(
 export function connectNodes(
   snapshot: EditorSnapshot,
   input: { source: string; port: string; target: string },
-): { ok: true; snapshot: EditorSnapshot } | { ok: false; reason: string } {
+): { ok: true; snapshot: EditorSnapshot } | { ok: false; reason: BuilderMessage } {
   let working = snapshot;
   const sourceNode = snapshot.graph.nodes.find((node) => node.id === input.source);
   if (sourceNode?.type === "action" && input.port === "error" && sourceNode.failurePolicy !== "route_error") {
@@ -143,11 +150,11 @@ export function insertOnEdge(
   snapshot: EditorSnapshot,
   edgeId: string,
   node: WorkflowNode,
-): { ok: true; snapshot: EditorSnapshot } | { ok: false; reason: string } {
+): { ok: true; snapshot: EditorSnapshot } | { ok: false; reason: BuilderMessage } {
   const edge = snapshot.graph.edges.find((item) => item.id === edgeId);
-  if (!edge) return { ok: false, reason: "That connection is gone." };
+  if (!edge) return { ok: false, reason: { key: "connect.connectionGone" } };
   const port = primaryPort(node);
-  if (!port) return { ok: false, reason: "This block has no output to continue the flow." };
+  if (!port) return { ok: false, reason: { key: "connect.noOutput" } };
   const sourcePos = snapshot.layout.positions[edge.source] ?? { x: 0, y: 0 };
   const targetPos = snapshot.layout.positions[edge.target] ?? { x: 0, y: 160 };
   let next = addNode(snapshot, node, {

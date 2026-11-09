@@ -1,12 +1,14 @@
 import { Skeleton } from "@/components/ui/skeleton";
+import { getTranslations } from "next-intl/server";
 
-export default function NativeSignLoading() {
+export default async function NativeSignLoading() {
+  const t = await getTranslations("pages.dashboardDocumentsDocumentIdSign.loading");
   return (
     <div
       className="mx-auto flex min-h-[calc(100dvh-4rem)] w-full max-w-[1600px] flex-col px-4 py-4 sm:px-6 lg:px-8"
       aria-busy="true"
     >
-      <span className="sr-only">Loading…</span>
+      <span className="sr-only">{t("label")}</span>
 
       <header className="flex items-center gap-3 border-b border-hairline pb-3">
         <Skeleton className="-ml-2 h-8 w-16 shrink-0 rounded-[var(--radius-btn)]" />

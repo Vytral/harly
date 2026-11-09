@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import type { Route } from "next";
+import { useTranslations } from "next-intl";
 import { ArrowUpRight } from "lucide-react";
 
 import { cn } from "@/lib/utils";
@@ -44,7 +45,18 @@ export function CareerPositions({
   filters?: FilterKind[];
   portalEnabled?: boolean;
 }) {
+  const t = useTranslations("features.careerPage.careerPositions");
   const base = boardBase(boardRoot);
+  const facetLabel: Record<FilterKind, string> = {
+    department: t("facet.department"),
+    location: t("facet.location"),
+    type: t("facet.type"),
+  };
+  const facetGroupLabel: Record<FilterKind, string> = {
+    department: t("filterGroup.department"),
+    location: t("filterGroup.location"),
+    type: t("filterGroup.type"),
+  };
 
   const facetValues = useMemo(() => {
     const result: Record<FilterKind, string[]> = { department: [], location: [], type: [] };
@@ -80,12 +92,12 @@ export function CareerPositions({
         <div
           key={f}
           role="group"
-          aria-label={`Filter by ${FILTER_META[f].label.toLowerCase()}`}
+          aria-label={facetGroupLabel[f]}
           className="mb-4 flex flex-wrap items-center gap-2"
         >
           {activeFilters.length > 1 && (
             <span className="mr-1 w-20 text-xs font-medium uppercase tracking-wide text-soft-ink">
-              {FILTER_META[f].label}
+              {facetLabel[f]}
             </span>
           )}
           <button
@@ -94,7 +106,7 @@ export function CareerPositions({
             aria-pressed={sel[f].size === 0}
             className={cn(pill, sel[f].size === 0 ? pillOn : pillOff)}
           >
-            All
+            {t("all")}
           </button>
           {facetValues[f].map((value) => {
             const on = sel[f].has(value);
@@ -131,7 +143,7 @@ export function CareerPositions({
                   aria-hidden
                 />
               </span>
-              <span className="text-sm text-soft-ink">{job.department ?? "Other"}</span>
+              <span className="text-sm text-soft-ink">{job.department ?? t("other")}</span>
               <span className="text-sm text-soft-ink">{jobType(job)}</span>
               <span className="text-sm text-soft-ink">{jobLocation(job)}</span>
             </Link>

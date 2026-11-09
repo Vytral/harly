@@ -29,6 +29,12 @@ describe("document helpers", () => {
 
 describe("signature state helpers", () => {
   const now = Date.parse("2026-03-10T12:00:00Z");
+  const keyOnly = (key: string) => key;
+  const t = (key: string, values?: Record<string, string | number | Date>) => {
+    if (key === "expiry.upcoming") return `in ${values?.count} days`;
+    if (key === "expiry.passed") return `${values?.count} days ago`;
+    return key;
+  };
 
   it("derives per-signer state from the recipient row", () => {
     expect(deriveSignerState({ status: "created", linkExpiresAt: null }, now)).toBe("waiting");
@@ -39,15 +45,15 @@ describe("signature state helpers", () => {
   });
 
   it("combines archive, signature and date into one document state", () => {
-    expect(documentStateMeta({ status: "archived", signatureStatus: "signed", expiresAt: null }).key).toBe("archived");
-    expect(documentStateMeta({ status: "active", signatureStatus: "pending", expiresAt: null }).key).toBe("pending");
-    expect(documentStateMeta({ status: "active", signatureStatus: "signed", expiresAt: "2020-01-01T00:00:00Z" }).key).toBe("signed");
-    expect(documentStateMeta({ status: "active", signatureStatus: "unsigned", expiresAt: "2020-01-01T00:00:00Z" }).key).toBe("lapsed");
+    expect(documentStateMeta({ status: "archived", signatureStatus: "signed", expiresAt: null }, keyOnly).key).toBe("archived");
+    expect(documentStateMeta({ status: "active", signatureStatus: "pending", expiresAt: null }, keyOnly).key).toBe("pending");
+    expect(documentStateMeta({ status: "active", signatureStatus: "signed", expiresAt: "2020-01-01T00:00:00Z" }, keyOnly).key).toBe("signed");
+    expect(documentStateMeta({ status: "active", signatureStatus: "unsigned", expiresAt: "2020-01-01T00:00:00Z" }, keyOnly).key).toBe("lapsed");
   });
 
   it("describes a date relative to now", () => {
-    expect(describeExpiry(null, now)).toBeNull();
-    expect(describeExpiry("2026-03-22T12:00:00Z", now)).toMatchObject({ label: "in 12 days", tone: "warning" });
-    expect(describeExpiry("2026-03-07T12:00:00Z", now)).toMatchObject({ label: "3 days ago", tone: "danger" });
+    expect(describeExpiry(null, t, now)).toBeNull();
+    expect(describeExpiry("2026-03-22T12:00:00Z", t, now)).toMatchObject({ label: "in 12 days", tone: "warning" });
+    expect(describeExpiry("2026-03-07T12:00:00Z", t, now)).toMatchObject({ label: "3 days ago", tone: "danger" });
   });
 });

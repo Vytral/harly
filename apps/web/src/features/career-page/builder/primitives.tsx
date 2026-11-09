@@ -9,6 +9,7 @@ import {
   useRef,
   useState,
 } from "react";
+import { useTranslations } from "next-intl";
 
 import { FileDropzone } from "@/components/ui/FileDropzone";
 import { Input } from "@/components/ui/input";
@@ -208,6 +209,7 @@ export function ColorField({
   /** Rendered under the field (contrast warnings). */
   children?: React.ReactNode;
 }) {
+  const t = useTranslations("features.careerPage.primitives");
   // While typing, the field shows a local draft; otherwise the committed
   // value (so resets and one-click fixes show up, and an unfinished hex
   // reverts to the last valid colour on blur).
@@ -223,8 +225,8 @@ export function ColorField({
         path={path}
         hint={
           draftInvalid
-            ? "Finish the hex code, e.g. #1F2937. The last valid colour stays until then."
-            : hint ?? (nullable && !value ? "Using the default." : undefined)
+            ? t("hexDraftHint")
+            : hint ?? (nullable && !value ? t("usingDefault") : undefined)
         }
       >
         {({ id, describedBy, invalid }) => (
@@ -234,7 +236,7 @@ export function ColorField({
               value={swatch}
               onChange={(e) => onChange(e.target.value)}
               className="size-9 shrink-0 cursor-pointer rounded-[var(--radius-btn)] border border-hairline bg-transparent p-0.5"
-              aria-label={`${label} swatch`}
+              aria-label={t("colorSwatch", { label })}
             />
             <Input
               id={id}
@@ -261,7 +263,7 @@ export function ColorField({
                 onClick={() => onChange(null)}
                 className="shrink-0 rounded-[var(--radius-btn)] px-2 py-1.5 text-[12px] font-medium text-soft-ink transition-colors hover:bg-card-inset hover:text-near-ink"
               >
-                Default
+                {t("useDefault")}
               </button>
             ) : null}
           </div>
@@ -328,9 +330,9 @@ export function ListEditor<T>({
   label,
   items,
   max,
-  addLabel = "Add",
+  addLabel,
   emptyText,
-  itemName = "Item",
+  itemName,
   onAdd,
   onRemove,
   onRestore,
@@ -351,14 +353,16 @@ export function ListEditor<T>({
   onMove: (i: number, dir: -1 | 1) => void;
   render: (item: T, i: number) => React.ReactNode;
 }) {
+  const t = useTranslations("features.careerPage.primitives");
   const full = max !== undefined && items.length >= max;
+  const addText = addLabel ?? t("add");
 
   function remove(i: number) {
     const item = structuredClone(items[i]);
     onRemove(i);
     if (onRestore) {
-      toast(`${itemName} removed`, {
-        action: { label: "Undo", onClick: () => onRestore(i, item) },
+      toast(t("itemRemoved", { name: itemName ?? t("defaultItemName") }), {
+        action: { label: t("undo"), onClick: () => onRestore(i, item) },
       });
     }
   }
@@ -380,7 +384,7 @@ export function ListEditor<T>({
           disabled={full}
           className="inline-flex items-center gap-1 rounded-[var(--radius-btn)] px-2 py-1 text-[12px] font-medium text-near-ink transition-colors hover:bg-card-inset focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-40"
         >
-          <PlusIcon className="size-3.5" /> {addLabel}
+          <PlusIcon className="size-3.5" /> {addText}
         </button>
       </div>
       {items.length === 0 && emptyText ? (
@@ -396,17 +400,17 @@ export function ListEditor<T>({
           <div className="flex items-start gap-2">
             <div className="min-w-0 flex-1">{render(item, i)}</div>
             <div className="flex shrink-0 flex-col gap-0.5">
-              <IconBtn onClick={() => onMove(i, -1)} disabled={i === 0} label="Move up">
+              <IconBtn onClick={() => onMove(i, -1)} disabled={i === 0} label={t("moveUp")}>
                 <ArrowUpIcon className="size-3.5" />
               </IconBtn>
               <IconBtn
                 onClick={() => onMove(i, 1)}
                 disabled={i === items.length - 1}
-                label="Move down"
+                label={t("moveDown")}
               >
                 <ArrowDownIcon className="size-3.5" />
               </IconBtn>
-              <IconBtn onClick={() => remove(i)} label="Remove" danger>
+              <IconBtn onClick={() => remove(i)} label={t("remove")} danger>
                 <TrashIcon className="size-3.5" />
               </IconBtn>
             </div>
@@ -461,6 +465,7 @@ export function ImageListEditor({
   max: number;
   onChange: (images: string[]) => void;
 }) {
+  const t = useTranslations("features.careerPage.primitives");
   const full = images.length >= max;
 
   function moveAt(i: number, dir: -1 | 1) {
@@ -472,9 +477,9 @@ export function ImageListEditor({
     const removed = images[i];
     const next = images.filter((_, j) => j !== i);
     onChange(next);
-    toast("Photo removed", {
+    toast(t("photoRemoved"), {
       action: {
-        label: "Undo",
+        label: t("undo"),
         onClick: () => {
           const restored = [...next];
           restored.splice(i, 0, removed);
@@ -487,7 +492,7 @@ export function ImageListEditor({
   return (
     <div className="space-y-2">
       <span className="text-[13px] font-medium text-near-ink">
-        Photos
+        {t("photos")}
         <span className="ml-1.5 font-normal tabular-nums text-quiet-mist">
           {images.length}/{max}
         </span>
@@ -499,18 +504,18 @@ export function ImageListEditor({
             className="group relative aspect-square overflow-hidden rounded-[var(--radius-inner)] border border-hairline bg-card-inset"
           >
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={src} alt={`Gallery photo ${i + 1}`} className="size-full object-cover" />
+            <img src={src} alt={t("galleryPhotoAlt", { number: i + 1 })} className="size-full object-cover" />
             <div className="absolute inset-x-1 bottom-1 flex justify-between gap-1 opacity-0 transition-opacity duration-150 focus-within:opacity-100 group-hover:opacity-100 motion-reduce:transition-none">
               <div className="flex gap-0.5 rounded-md bg-pure-snow/90 p-0.5 shadow-sm">
-                <IconBtn onClick={() => moveAt(i, -1)} disabled={i === 0} label="Move earlier">
+                <IconBtn onClick={() => moveAt(i, -1)} disabled={i === 0} label={t("moveEarlier")}>
                   <ArrowUpIcon className="size-3.5 -rotate-90" />
                 </IconBtn>
-                <IconBtn onClick={() => moveAt(i, 1)} disabled={i === images.length - 1} label="Move later">
+                <IconBtn onClick={() => moveAt(i, 1)} disabled={i === images.length - 1} label={t("moveLater")}>
                   <ArrowDownIcon className="size-3.5 -rotate-90" />
                 </IconBtn>
               </div>
               <div className="rounded-md bg-pure-snow/90 p-0.5 shadow-sm">
-                <IconBtn onClick={() => removeAt(i)} label="Remove photo" danger>
+                <IconBtn onClick={() => removeAt(i)} label={t("removePhoto")} danger>
                   <TrashIcon className="size-3.5" />
                 </IconBtn>
               </div>
@@ -528,10 +533,10 @@ export function ImageListEditor({
       </div>
       <p className="text-[12px] leading-snug text-soft-ink">
         {images.length === 0
-          ? "Add team and office photos. The gallery stays hidden until it has at least one."
+          ? t("addPhotosHint")
           : full
-            ? `That's the maximum of ${max} photos.`
-            : "Hover a photo to reorder or remove it."}
+            ? t("maxPhotos", { max })
+            : t("hoverToReorder")}
       </p>
     </div>
   );
@@ -545,6 +550,7 @@ export function AvatarField({
   value: string;
   onChange: (url: string) => void;
 }) {
+  const t = useTranslations("features.careerPage.primitives");
   return (
     <div className="flex items-center gap-3">
       <FileDropzone
@@ -554,7 +560,7 @@ export function AvatarField({
         className="size-12 [&>div]:rounded-full [&>button]:rounded-full"
       />
       <span className="text-[12px] leading-snug text-soft-ink">
-        {value ? "Photo shown next to the quote." : "Optional photo. Initials are shown otherwise."}
+        {value ? t("photoNextToQuote") : t("optionalPhoto")}
       </span>
     </div>
   );
@@ -571,6 +577,7 @@ export function IconSelect({
   value: string;
   onChange: (v: string) => void;
 }) {
+  const t = useTranslations("features.careerPage.primitives");
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const rootRef = useRef<HTMLDivElement>(null);
@@ -611,8 +618,8 @@ export function IconSelect({
         onClick={() => setOpen((o) => !o)}
         aria-haspopup="dialog"
         aria-expanded={open}
-        aria-label={value ? `Icon: ${value}. Change icon` : "Choose an icon"}
-        title={value ? `Icon: ${value}` : "Choose an icon"}
+        aria-label={value ? t("changeIcon", { name: value }) : t("chooseIcon")}
+        title={value ? t("iconTitle", { name: value }) : t("chooseIcon")}
         className="flex size-9 items-center justify-center rounded-[var(--radius-btn)] border border-hairline bg-pure-snow text-soft-ink transition-colors hover:bg-card-inset focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
       >
         {hasIcon ? (
@@ -625,7 +632,7 @@ export function IconSelect({
       {open && (
         <div
           role="dialog"
-          aria-label="Icon picker"
+          aria-label={t("iconPicker")}
           className="absolute left-0 z-30 mt-1.5 w-64 origin-top-left rounded-[var(--radius-inner)] bg-pure-snow p-2 shadow-[var(--shadow-float)] duration-150 animate-in fade-in slide-in-from-top-1 motion-reduce:animate-none"
         >
           <div className="flex items-center gap-2 rounded-[var(--radius-btn)] border border-hairline px-2 py-1.5">
@@ -634,8 +641,8 @@ export function IconSelect({
               autoFocus
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              placeholder="Search icons"
-              aria-label="Search icons"
+              placeholder={t("searchIcons")}
+              aria-label={t("searchIcons")}
               className="w-full bg-transparent text-base sm:text-sm text-near-ink outline-none placeholder:text-quiet-mist"
             />
           </div>
@@ -643,9 +650,9 @@ export function IconSelect({
             <button
               type="button"
               onClick={() => pick("")}
-              aria-label="No icon"
+              aria-label={t("noIcon")}
               aria-pressed={!value}
-              title="No icon"
+              title={t("noIcon")}
               className={cn(
                 "flex aspect-square items-center justify-center rounded-md border text-soft-ink transition-colors hover:bg-card-inset focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
                 !value ? "border-near-ink/30 bg-lime-wash" : "border-transparent",
@@ -674,7 +681,7 @@ export function IconSelect({
               );
             })}
             {filtered.length === 0 ? (
-              <p className="col-span-6 py-4 text-center text-xs text-soft-ink">No match.</p>
+              <p className="col-span-6 py-4 text-center text-xs text-soft-ink">{t("noMatch")}</p>
             ) : null}
           </div>
         </div>

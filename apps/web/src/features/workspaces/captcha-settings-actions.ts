@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { eq } from "drizzle-orm";
 import { z } from "zod";
+import { getTranslations } from "@/i18n/server";
 
 import { db, workspaceSettings } from "@harly/db";
 
@@ -43,13 +44,17 @@ const COLUMNS: Record<
   },
 };
 
-const saveSchema = z.object({
-  provider: z.string().refine(isCaptchaProvider, "Unknown provider."),
-  enabled: z.boolean(),
-  siteKey: z.string().trim().max(500).optional(),
-  // When blank, the previously stored secret is kept.
-  secretKey: z.string().trim().max(500).optional(),
-});
+type Translate = (key: string, values?: Record<string, string | number>) => string;
+
+function buildSaveSchema(t: Translate) {
+  return z.object({
+    provider: z.string().refine(isCaptchaProvider, t("unknownProvider")),
+    enabled: z.boolean(),
+    siteKey: z.string().trim().max(500).optional(),
+    // When blank, the previously stored secret is kept.
+    secretKey: z.string().trim().max(500).optional(),
+  });
+}
 
 export async function saveCaptchaSettingsAction(input: {
   provider: CaptchaProvider;
@@ -59,20 +64,20 @@ export async function saveCaptchaSettingsAction(input: {
 }): Promise<CaptchaSettingsActionResult> {
   assertNotDemo();
   const context = await requirePermission("integrations:manage");
+  const t = await getTranslations("server.workspaces.captchaSettingsActions");
 
   if (!isEncryptionConfigured()) {
     return {
       ok: false,
-      error:
-        "Server is missing AI_ENCRYPTION_KEY. Set it to store the CAPTCHA secret.",
+      error: t("encryptionKeyMissing"),
     };
   }
 
-  const parsed = saveSchema.safeParse(input);
+  const parsed = buildSaveSchema(t).safeParse(input);
   if (!parsed.success) {
     return {
       ok: false,
-      error: parsed.error.issues[0]?.message ?? "Invalid settings.",
+      error: parsed.error.issues[0]?.message ?? t("invalidSettings"),
     };
   }
 
@@ -87,7 +92,7 @@ export async function saveCaptchaSettingsAction(input: {
   if (enabled && (!willHaveSiteKey || !willHaveSecret)) {
     return {
       ok: false,
-      error: "Add both the site key and secret key before enabling.",
+      error: t("siteAndSecretRequired"),
     };
   }
 

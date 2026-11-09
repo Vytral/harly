@@ -8,6 +8,7 @@ import { eq, sql } from "drizzle-orm";
 import {
   candidatePortalCodes,
   candidatePortalCredentials,
+  candidates,
   db,
   organization,
   workspaceSettings,
@@ -18,6 +19,7 @@ import {
   consumeRecoveryCode,
   countRecoveryCodes,
   createPortalCandidate,
+  findActiveCandidateByEmail,
   issueOneTimeCode,
   regenerateRecoveryCodes,
   setCandidatePassword,
@@ -70,6 +72,20 @@ describe.skipIf(!run)("portal credentials (database)", () => {
       lastName: "Y",
     });
     expect(again).toBeNull();
+  });
+
+  it("returns the saved email locale with the active candidate lookup", async () => {
+    await db
+      .update(candidates)
+      .set({ preferredEmailLocale: "fr" })
+      .where(eq(candidates.id, candidateId));
+
+    await expect(
+      findActiveCandidateByEmail(workspaceId, `JANE.${tag}@EXAMPLE.COM`),
+    ).resolves.toMatchObject({
+      id: candidateId,
+      preferredEmailLocale: "fr",
+    });
   });
 
   it("stores only a hash and verifies logins without revealing why they fail", async () => {

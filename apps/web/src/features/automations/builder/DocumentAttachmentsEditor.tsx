@@ -1,5 +1,7 @@
 "use client";
 
+import { useTranslations } from "next-intl";
+
 import { CaretDownIcon, TrashIcon } from "@/components/ui/icons/phosphor";
 import { BuilderSelect } from "./inspector/BuilderSelect";
 
@@ -31,6 +33,7 @@ export function DocumentAttachmentsEditor({
   documents: AvailableDocument[];
   onChange: (value: DocumentAttachmentDraft[]) => void;
 }) {
+  const t = useTranslations("features.automations.DocumentAttachmentsEditor");
   const attachments = normalize(value);
   const selected = new Set(attachments.map((attachment) => attachment.documentId));
   const add = (documentId: string) => {
@@ -50,31 +53,31 @@ export function DocumentAttachmentsEditor({
   return (
     <div className="space-y-2 rounded-lg border border-border bg-pure-snow p-2.5">
       <div className="flex items-center justify-between gap-2">
-        <p className="text-[11px] text-soft-ink">Append up to ten existing PDFs.</p>
+        <p className="text-[11px] text-soft-ink">{t("hint")}</p>
         <BuilderSelect
-          aria-label="Add PDF attachment"
+          aria-label={t("addLabel")}
           value=""
           onChange={(event) => add(event.target.value)}
           disabled={documents.length === selected.size || attachments.length >= 10}
           className="h-8 max-w-[12rem] rounded-lg border border-border bg-warm-paper px-2 text-[11px] text-foreground outline-none transition-colors duration-150 ease-out focus:border-foreground/40 disabled:opacity-50"
         >
-          <option value="">Add PDF</option>
+          <option value="">{t("addOption")}</option>
           {documents.filter((document) => !selected.has(document.id)).map((document) => (
             <option key={document.id} value={document.id}>{document.name}</option>
           ))}
         </BuilderSelect>
       </div>
-      {documents.length === 0 ? <p className="rounded-md border border-dashed border-border p-3 text-xs text-soft-ink">No active PDF documents are available.</p> : null}
+      {documents.length === 0 ? <p className="rounded-md border border-dashed border-border p-3 text-xs text-soft-ink">{t("none")}</p> : null}
       {attachments.map((attachment, index) => (
         <div key={`${attachment.documentId}-${index}`} className="flex items-center gap-2 rounded-md border border-border/70 bg-warm-paper px-2 py-1.5">
           <span className="min-w-0 flex-1 truncate text-xs text-foreground">{index + 1}. {attachment.name}</span>
-          <button type="button" onClick={() => move(index, -1)} disabled={index === 0} aria-label={`Move ${attachment.name} up`} className="rounded p-1 text-soft-ink hover:bg-soft-kraft disabled:opacity-25">
+          <button type="button" onClick={() => move(index, -1)} disabled={index === 0} aria-label={t("moveUp", { name: attachment.name })} className="rounded p-1 text-soft-ink hover:bg-soft-kraft disabled:opacity-25">
             <CaretDownIcon className="size-3.5 rotate-180" />
           </button>
-          <button type="button" onClick={() => move(index, 1)} disabled={index === attachments.length - 1} aria-label={`Move ${attachment.name} down`} className="rounded p-1 text-soft-ink hover:bg-soft-kraft disabled:opacity-25">
+          <button type="button" onClick={() => move(index, 1)} disabled={index === attachments.length - 1} aria-label={t("moveDown", { name: attachment.name })} className="rounded p-1 text-soft-ink hover:bg-soft-kraft disabled:opacity-25">
             <CaretDownIcon className="size-3.5" />
           </button>
-          <button type="button" onClick={() => remove(index)} aria-label={`Remove ${attachment.name}`} className="rounded p-1 text-soft-ink hover:bg-danger-rust/10 hover:text-danger-rust">
+          <button type="button" onClick={() => remove(index)} aria-label={t("remove", { name: attachment.name })} className="rounded p-1 text-soft-ink hover:bg-danger-rust/10 hover:text-danger-rust">
             <TrashIcon className="size-3.5" />
           </button>
         </div>

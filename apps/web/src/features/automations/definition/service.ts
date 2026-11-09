@@ -1,3 +1,4 @@
+import { getTranslations } from "@/i18n/server";
 import "server-only";
 
 import { and, desc, eq, inArray, isNull, max, sql } from "drizzle-orm";
@@ -93,6 +94,7 @@ async function publishIssues(
   workspaceId: string,
   database: DbTx | typeof db = db,
 ) {
+  const t = await getTranslations("server.automations.definitionService");
   const { getAutomationTool } = await import("../registry");
   const issues = validateGraphForPublish({ name, graph }, getAutomationTool);
   const automaticEraseIds = listAutomaticEraseNodeIds(graph);
@@ -112,7 +114,7 @@ async function publishIssues(
         nodeId,
         fieldPath: "input.executionMode",
         message:
-          "Automatic erase candidate data requires workspace data retention to be enabled in settings. Turn retention on, or use require_approval with an approval step on every path.",
+          t("eraseRetentionRequired"),
       });
     }
   }
@@ -130,6 +132,7 @@ async function assertAiProposalPublishGate(
   tx: DbTx,
   input: { workspaceId: string; workflowId: string; revision: number; contentHash: string },
 ): Promise<void> {
+  const t = await getTranslations("server.automations.definitionService");
   const [proposal] = await tx
     .select({ simulation: automationAiProposals.simulation })
     .from(automationAiProposals)
@@ -154,7 +157,7 @@ async function assertAiProposalPublishGate(
     (simulation as { coveragePercent?: unknown }).coveragePercent === 100;
   if (!verified) {
     throw ApiError.conflict(
-      "This AI-authored draft cannot be published until its current graph has a verified simulation.",
+      t("aiDraftUnverified"),
     );
   }
 }
@@ -217,6 +220,7 @@ async function loadDefinition(
   workspaceId: string,
   id: string,
 ): Promise<WorkflowDefinition> {
+  const t = await getTranslations("server.automations.definitionService");
   const [row] = await tx
     .select()
     .from(workflowDefinitions)
@@ -228,7 +232,7 @@ async function loadDefinition(
       ),
     )
     .limit(1);
-  if (!row) throw ApiError.notFound("Workflow not found.");
+  if (!row) throw ApiError.notFound(t("workflowNotFound"));
   return row;
 }
 
@@ -255,6 +259,7 @@ export async function ensureDraftRow(
   def: WorkflowDefinition,
   actorId?: string | null,
 ): Promise<WorkflowDraft> {
+  const t = await getTranslations("server.automations.definitionService");
   const existing = await loadDraft(tx, def.workspaceId, def.id);
   if (existing) return existing;
   const graph = legacyToGraph(recipeFromDefinition(def));
@@ -272,7 +277,7 @@ export async function ensureDraftRow(
       validationIssues: validateGraph(graph),
     })
     .returning();
-  if (!created) throw ApiError.internal("Workflow draft could not be created.");
+  if (!created) throw ApiError.internal(t("draftCreateFailed"));
   return created;
 }
 
@@ -284,6 +289,7 @@ export async function createWorkflowWithDraft(input: {
   layout?: EditorLayout;
   database?: typeof db;
 }): Promise<HydratedWorkflow> {
+  const t = await getTranslations("server.automations.definitionService");
   const parsed = workflowInputSchema.parse(input.values);
   const recipe = recipeFromInput(parsed);
   const graph = input.graph ? parseGraph(input.graph) : legacyToGraph(recipe);
@@ -328,7 +334,7 @@ export async function createWorkflowWithDraft(input: {
           : {}),
       })
       .returning();
-    if (!row) throw ApiError.internal("Workflow could not be created.");
+    if (!row) throw ApiError.internal(t("createFailed"));
 
     const [draft] = await tx
       .insert(workflowDrafts)
@@ -343,7 +349,7 @@ export async function createWorkflowWithDraft(input: {
         validationIssues: validateGraph(graph),
       })
       .returning();
-    if (!draft) throw ApiError.internal("Workflow draft could not be created.");
+    if (!draft) throw ApiError.internal(t("draftCreateFailed"));
     return overlayDraft(row, draft);
   });
 }
@@ -358,6 +364,7 @@ export async function saveWorkflowDraft(input: {
   layout?: EditorLayout;
   database?: typeof db;
 }): Promise<HydratedWorkflow> {
+  const t = await getTranslations("server.automations.definitionService");
   const patch = workflowInputSchema.partial().parse(input.patch);
   const database = input.database ?? db;
 
@@ -367,7 +374,7 @@ export async function saveWorkflowDraft(input: {
     const expected = input.expectedRevision ?? draft.revision;
     if (draft.revision !== expected) {
       throw ApiError.conflict(
-        "This draft was saved elsewhere. Reload and copy your changes.",
+        t("draftSavedElsewhere"),
       );
     }
 
@@ -379,7 +386,7 @@ export async function saveWorkflowDraft(input: {
       patch.actions !== undefined;
     if (def.engineVersion === 2 && !input.graph && semanticPatchRequested) {
       throw ApiError.conflict(
-        "This v2 workflow must be saved with its graph. Reload the builder and try again.",
+        t("graphRequired"),
       );
     }
     const nextRecipe: LegacyRecipe = {
@@ -430,7 +437,7 @@ export async function saveWorkflowDraft(input: {
       .returning();
     if (!updatedDraft) {
       throw ApiError.conflict(
-        "This draft was saved elsewhere. Reload and copy your changes.",
+        t("draftSavedElsewhere"),
       );
     }
 
@@ -445,7 +452,7 @@ export async function saveWorkflowDraft(input: {
         : new Date(patch.circuitOpenUntil);
     if (requestedCircuitOpenUntil && requestedCircuitOpenUntil <= now) {
       throw ApiError.unprocessable(
-        "The circuit open-until time must be in the future.",
+        t("circuitOpenUntilPast"),
       );
     }
     const currentCircuitOpenUntil = def.circuitOpenUntil;
@@ -523,7 +530,7 @@ export async function saveWorkflowDraft(input: {
         ),
       )
       .returning();
-    if (!updatedDef) throw ApiError.notFound("Workflow not found.");
+    if (!updatedDef) throw ApiError.notFound(t("workflowNotFound"));
     const publishedContentHash = await loadPublishedContentHash(
       tx,
       updatedDef.workspaceId,
@@ -543,19 +550,20 @@ export async function requestDraftApproval(input: {
   expectedRevision: number;
   database?: typeof db;
 }): Promise<HydratedWorkflow> {
+  const t = await getTranslations("server.automations.definitionService");
   const database = input.database ?? db;
   return database.transaction(async (tx) => {
     const def = await loadDefinition(tx, input.workspaceId, input.id);
     const draft = await ensureDraftRow(tx, def);
     if (draft.revision !== input.expectedRevision) {
       throw ApiError.conflict(
-        "This draft changed before approval was requested. Save the latest revision and try again.",
+        t("approvalRequestDraftChanged"),
       );
     }
     const compiled = compileGraph(draft.graph);
     if (!compiled.ok) {
       throw ApiError.unprocessable(
-        "This recipe isn't ready to publish.",
+        t("notReadyToPublish"),
         compiled.issues,
       );
     }
@@ -563,7 +571,7 @@ export async function requestDraftApproval(input: {
     const issues = await publishIssues(def.name, graph, def.workspaceId, tx);
     if (issues.length > 0) {
       throw ApiError.unprocessable(
-        "This recipe isn't ready to publish.",
+        t("notReadyToPublish"),
         issues,
       );
     }
@@ -580,7 +588,7 @@ export async function requestDraftApproval(input: {
       .returning();
     if (!updatedDraft) {
       throw ApiError.conflict(
-        "This draft changed before approval was requested. Save the latest revision and try again.",
+        t("approvalRequestDraftChanged"),
       );
     }
     const [updatedDef] = await tx
@@ -595,7 +603,7 @@ export async function requestDraftApproval(input: {
       .where(eq(workflowDefinitions.id, def.id))
       .returning();
     if (!updatedDef)
-      throw ApiError.notFound("Workflow not found.");
+      throw ApiError.notFound(t("workflowNotFound"));
     const publishedContentHash = await loadPublishedContentHash(
       tx,
       updatedDef.workspaceId,
@@ -612,29 +620,30 @@ export async function approveDraft(input: {
   expectedRevision: number;
   database?: typeof db;
 }): Promise<HydratedWorkflow> {
+  const t = await getTranslations("server.automations.definitionService");
   const database = input.database ?? db;
   return database.transaction(async (tx) => {
     const def = await loadDefinition(tx, input.workspaceId, input.id);
     const draft = await ensureDraftRow(tx, def);
     if (draft.revision !== input.expectedRevision) {
       throw ApiError.conflict(
-        "This draft changed before approval. Review the latest saved revision and try again.",
+        t("approvalDraftChanged"),
       );
     }
     if (!def.approvalRequestedAt || !draft.reviewHash) {
-      throw ApiError.conflict("This workflow has no approval request.");
+      throw ApiError.conflict(t("noApprovalRequest"));
     }
     if (!def.approvalRequestedById) {
-      throw ApiError.conflict("This approval request has no reviewer identity.");
+      throw ApiError.conflict(t("noReviewerIdentity"));
     }
     if (def.approvalRequestedById === input.approverId) {
       throw ApiError.conflict(
-        "The person who requested this review cannot approve it.",
+        t("requesterCannotApprove"),
       );
     }
     if (draft.reviewHash !== draft.contentHash) {
       throw ApiError.conflict(
-        "The draft changed after approval was requested.",
+        t("draftChangedAfterApproval"),
       );
     }
     const [lockedDraft] = await tx
@@ -652,7 +661,7 @@ export async function approveDraft(input: {
       .returning({ id: workflowDrafts.id });
     if (!lockedDraft) {
       throw ApiError.conflict(
-        "This draft changed before approval. Review the latest saved revision and try again.",
+        t("approvalDraftChanged"),
       );
     }
     const [updatedDef] = await tx
@@ -664,7 +673,7 @@ export async function approveDraft(input: {
       })
       .where(eq(workflowDefinitions.id, def.id))
       .returning();
-    if (!updatedDef) throw ApiError.notFound("Workflow not found.");
+    if (!updatedDef) throw ApiError.notFound(t("workflowNotFound"));
     const publishedContentHash = await loadPublishedContentHash(
       tx,
       updatedDef.workspaceId,
@@ -681,18 +690,19 @@ export async function publishDraft(input: {
   expectedRevision: number;
   database?: typeof db;
 }): Promise<HydratedWorkflow> {
+  const t = await getTranslations("server.automations.definitionService");
   const database = input.database ?? db;
   return database.transaction(async (tx) => {
     const def = await loadDefinition(tx, input.workspaceId, input.id);
     const draft = await ensureDraftRow(tx, def);
     if (draft.revision !== input.expectedRevision) {
       throw ApiError.conflict(
-        "This draft changed before publishing. Save the latest revision and try again.",
+        t("publishDraftChanged"),
       );
     }
     if (!def.approvedAt || !def.approvedById) {
       throw ApiError.conflict(
-        "Workflow needs approval from another member before publishing.",
+        t("needsApproval"),
       );
     }
     if (
@@ -700,12 +710,12 @@ export async function publishDraft(input: {
       def.approvedById === def.approvalRequestedById
     ) {
       throw ApiError.conflict(
-        "Workflow needs independent approval from another member before publishing.",
+        t("needsIndependentApproval"),
       );
     }
     if (!draft.reviewHash || draft.reviewHash !== draft.contentHash) {
       throw ApiError.conflict(
-        "Approval applies to a previous revision. Request approval again.",
+        t("approvalPreviousRevision"),
       );
     }
 
@@ -724,14 +734,14 @@ export async function publishDraft(input: {
       .returning({ id: workflowDrafts.id });
     if (!lockedDraft) {
       throw ApiError.conflict(
-        "This draft changed before publishing. Request approval for the latest revision.",
+        t("publishDraftChangedRequest"),
       );
     }
 
     const compiled = compileGraph(draft.graph);
     if (!compiled.ok) {
       throw ApiError.unprocessable(
-        "This recipe isn't ready to publish.",
+        t("notReadyToPublish"),
         compiled.issues,
       );
     }
@@ -739,7 +749,7 @@ export async function publishDraft(input: {
     const issues = await publishIssues(def.name, graph, def.workspaceId, tx);
     if (issues.length > 0) {
       throw ApiError.unprocessable(
-        "This recipe isn't ready to publish.",
+        t("notReadyToPublish"),
         issues,
       );
     }
@@ -789,7 +799,7 @@ export async function publishDraft(input: {
       })
       .returning();
     if (!versionRow)
-      throw ApiError.internal("Published version could not be stored.");
+      throw ApiError.internal(t("versionStoreFailed"));
 
     const nextStatus = def.status === "paused" ? "paused" : "published";
     const nextEnabled = def.status === "paused" ? false : true;
@@ -816,7 +826,7 @@ export async function publishDraft(input: {
       })
       .where(eq(workflowDefinitions.id, def.id))
       .returning();
-    if (!updatedDef) throw ApiError.notFound("Workflow not found.");
+    if (!updatedDef) throw ApiError.notFound(t("workflowNotFound"));
     return overlayDraft(updatedDef, draft, versionRow.contentHash);
   });
 }
@@ -827,6 +837,7 @@ export async function rollbackVersionToDraft(input: {
   version: number;
   actorId?: string | null;
 }): Promise<HydratedWorkflow> {
+  const t = await getTranslations("server.automations.definitionService");
   return db.transaction(async (tx) => {
     const def = await loadDefinition(tx, input.workspaceId, input.workflowId);
     const [source] = await tx
@@ -840,7 +851,7 @@ export async function rollbackVersionToDraft(input: {
         ),
       )
       .limit(1);
-    if (!source) throw ApiError.notFound("Workflow version not found.");
+    if (!source) throw ApiError.notFound(t("versionNotFound"));
 
     const graph =
       source.schemaVersion === GRAPH_SCHEMA_VERSION && source.graph
@@ -878,7 +889,7 @@ export async function rollbackVersionToDraft(input: {
       .where(eq(workflowDefinitions.id, def.id))
       .returning();
     if (!updatedDef || !updatedDraft)
-      throw ApiError.notFound("Workflow not found.");
+      throw ApiError.notFound(t("workflowNotFound"));
     const publishedContentHash = await loadPublishedContentHash(
       tx,
       updatedDef.workspaceId,

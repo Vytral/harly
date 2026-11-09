@@ -1,6 +1,10 @@
 import type { Metadata } from "next";
+import { getTranslations } from "next-intl/server";
 
-export const metadata: Metadata = { title: "Connect an AI app", robots: { index: false, follow: false } };
+export async function generateMetadata(): Promise<Metadata> {
+  const t = await getTranslations("oauthConsent");
+  return { title: t("metadata.title"), robots: { index: false, follow: false } };
+}
 
 // Same warm-paper canvas as the staff auth screens.
 export default function OAuthLayout({ children }: { children: React.ReactNode }) {

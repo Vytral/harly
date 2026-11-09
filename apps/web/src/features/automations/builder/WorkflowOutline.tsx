@@ -1,11 +1,12 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { useTranslations } from "next-intl";
 
 import { SearchIcon } from "@/components/ui/icons/phosphor";
 import { cn } from "@/lib/utils";
 
-import { NODE_KIND_LABEL, getNodeVisualMeta, nodeTitle } from "./node-copy";
+import { NODE_KIND_KEY, getNodeVisualMeta, nodeTitle } from "./node-copy";
 import type { WorkflowGraphV2 } from "../definition/schema-v2";
 
 export function outlineOrder(graph: WorkflowGraphV2): string[] {
@@ -42,6 +43,8 @@ export function WorkflowOutline({
   selectedId?: string;
   onSelect: (nodeId: string) => void;
 }) {
+  const t = useTranslations("features.automations.workflowOutline");
+  const tl = useTranslations("labels.automations");
   const [query, setQuery] = useState("");
   const nodes = useMemo(() => {
     const byId = new Map(graph.nodes.map((node) => [node.id, node]));
@@ -51,23 +54,23 @@ export function WorkflowOutline({
     const needle = query.trim().toLowerCase();
     if (!needle) return ordered;
     return ordered.filter((node) =>
-      `${nodeTitle(node)} ${NODE_KIND_LABEL[node.type]} ${node.type}`.toLowerCase().includes(needle),
+      `${nodeTitle(node, tl)} ${tl(NODE_KIND_KEY[node.type])} ${node.type}`.toLowerCase().includes(needle),
     );
-  }, [graph, query]);
+  }, [graph, query, tl]);
 
   return (
     <div className="flex min-h-0 flex-col border-t border-hairline-c bg-warm-paper">
       <div className="px-3 pt-2.5">
-        <p className="type-col-head uppercase">Steps</p>
+        <p className="type-col-head uppercase">{t("steps")}</p>
         <label className="mt-1.5 flex items-center gap-2 rounded-lg border border-border bg-pure-snow px-2.5 py-1.5">
           <SearchIcon className="size-3.5 text-soft-ink" />
           <input
             type="search"
             value={query}
             onChange={(event) => setQuery(event.target.value)}
-            placeholder="Find a step"
+            placeholder={t("findStep")}
             className="w-full bg-transparent text-xs text-foreground outline-none placeholder:text-soft-ink"
-            aria-label="Find a step"
+            aria-label={t("findStep")}
           />
         </label>
       </div>
@@ -90,9 +93,9 @@ export function WorkflowOutline({
                     meta.badgeClass,
                   )}
                 >
-                  {NODE_KIND_LABEL[node.type]}
+                  {tl(NODE_KIND_KEY[node.type])}
                 </span>
-                <span className="block truncate text-xs font-medium text-foreground">{nodeTitle(node)}</span>
+                <span className="block truncate text-xs font-medium text-foreground">{nodeTitle(node, tl)}</span>
               </button>
             </li>
           );

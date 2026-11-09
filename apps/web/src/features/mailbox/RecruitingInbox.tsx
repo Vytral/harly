@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState, useSyncExternalStore, useTransiti
 import Link from "next/link";
 import type { Route } from "next";
 import { useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -61,16 +62,17 @@ function ConnectionStrip({ status, onRetry, retrying }: { status: InboxMailboxSt
   const conflict = status.route === "conflict";
   const connected = status.enabled && status.configured && !conflict;
   const syncFailed = connected && Boolean(status.lastError);
+  const t = useTranslations("features.mailbox.recruitingInbox.connectionStrip");
   const title = conflict
-    ? "Two incoming email routes are enabled"
+    ? t("conflictTitle")
     : syncFailed
-      ? "The last mailbox sync failed"
-      : "Incoming email is not connected yet";
+      ? t("syncFailedTitle")
+      : t("notConnectedTitle");
   const description = conflict
-    ? "A shared mailbox and a webhook are both on. Choose one to avoid duplicate conversations."
+    ? t("conflictDescription")
     : syncFailed
-      ? "New replies may be missing. Try again, or check the mailbox in Email settings."
-      : "Connect a shared mailbox or threaded replies so candidate messages land here.";
+      ? t("syncFailedDescription")
+      : t("notConnectedDescription");
 
   return (
     <div
@@ -79,16 +81,16 @@ function ConnectionStrip({ status, onRetry, retrying }: { status: InboxMailboxSt
     >
       <WarningCircleIcon className="size-4 shrink-0 text-warning" />
       <p className="min-w-0 flex-1 sm:truncate">
-        <span className="font-semibold text-foreground">{title}.</span>{" "}
+        <span className="font-semibold text-foreground">{title}</span>{" "}
         <span className="text-muted-foreground">{description}</span>
       </p>
       {syncFailed ? (
         <button type="button" onClick={onRetry} disabled={retrying} className="shrink-0 font-semibold text-foreground underline underline-offset-4 hover:text-soft-ink disabled:opacity-50">
-          {retrying ? "Retrying…" : "Retry"}
+          {retrying ? t("retrying") : t("retry")}
         </button>
       ) : null}
       <Link href="/settings/email/replies" className="shrink-0 font-semibold text-foreground underline underline-offset-4 hover:text-soft-ink">
-        Email settings
+        {t("emailSettings")}
       </Link>
     </div>
   );
@@ -113,6 +115,8 @@ function FilterTabs({
 }) {
   const moreActive = MORE_INBOX_FILTERS.includes(filter);
   const [moreOpen, setMoreOpen] = useState(false);
+  const t = useTranslations("features.mailbox.recruitingInbox.filterTabs");
+  const tRoot = useTranslations();
 
   // Only the active view's count is known (the server returns one view at a
   // time); unread has its own total. Showing a count on every tab would lie.
@@ -125,7 +129,7 @@ function FilterTabs({
   return (
     <nav
       role="tablist"
-      aria-label="Inbox filters"
+      aria-label={t("filters")}
       className="-mx-3 flex items-center gap-1.5 overflow-x-auto px-3 pb-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
     >
       {PRIMARY_INBOX_FILTERS.map((value) => {
@@ -141,7 +145,7 @@ function FilterTabs({
             onClick={() => onChange(value)}
             className={cn(pillBase, active ? pillOn : pillOff)}
           >
-            {inboxFilterLabel(value)}
+            {inboxFilterLabel(value, tRoot)}
             {count > 0 ? (
               <span className={cn("tabular-nums", active ? "text-pure-snow/70" : value === "unread" ? "font-semibold text-near-ink" : "text-quiet-mist")}>
                 {count}
@@ -153,8 +157,8 @@ function FilterTabs({
       })}
       <Popover open={moreOpen} onOpenChange={setMoreOpen}>
         <PopoverTrigger asChild>
-          <button type="button" className={cn(pillBase, "gap-1", moreActive ? pillOn : pillOff)} aria-label="More filters">
-            {moreActive ? inboxFilterLabel(filter) : "More"}
+          <button type="button" className={cn(pillBase, "gap-1", moreActive ? pillOn : pillOff)} aria-label={t("moreFilters")}>
+            {moreActive ? inboxFilterLabel(filter, tRoot) : t("more")}
             <CaretDownIcon className="size-3" />
           </button>
         </PopoverTrigger>
@@ -166,7 +170,7 @@ function FilterTabs({
               onClick={() => { setMoreOpen(false); onChange(value); }}
               className={cn("flex w-full items-center justify-between gap-2 rounded-md px-2.5 py-1.5 text-sm transition-colors", filter === value ? "bg-lime-wash text-near-ink" : "hover:bg-row-wash")}
             >
-              {inboxFilterLabel(value)}
+              {inboxFilterLabel(value, tRoot)}
             </button>
           ))}
         </PopoverContent>
@@ -176,6 +180,7 @@ function FilterTabs({
 }
 
 function InboxEmptyState({ status, demoMode = false }: { status: InboxMailboxStatus; demoMode?: boolean }) {
+  const t = useTranslations("features.mailbox.recruitingInbox.emptyState");
   const isConnected = demoMode || (status.enabled && status.configured && status.route !== "conflict");
 
   if (!isConnected) {
@@ -185,10 +190,10 @@ function InboxEmptyState({ status, demoMode = false }: { status: InboxMailboxSta
           <span className="mx-auto flex size-11 items-center justify-center rounded-[var(--radius-inner)] bg-warning/10 text-warning">
             <EnvelopeIcon className="size-5" />
           </span>
-          <h2 className="mt-4 text-base font-semibold">Connect incoming email to start receiving replies</h2>
-          <p className="mt-2 text-sm leading-6 text-muted-foreground">Choose a shared mailbox or threaded replies in Email settings. Once connected, candidate replies become conversations here.</p>
+          <h2 className="mt-4 text-base font-semibold">{t("connectTitle")}</h2>
+          <p className="mt-2 text-sm leading-6 text-muted-foreground">{t("connectDescription")}</p>
           <Button asChild className="mt-5" size="sm">
-            <Link href="/settings/email/replies">Set up incoming email</Link>
+            <Link href="/settings/email/replies">{t("setUp")}</Link>
           </Button>
         </div>
       </div>
@@ -202,14 +207,14 @@ function InboxEmptyState({ status, demoMode = false }: { status: InboxMailboxSta
           <span className="mx-auto flex size-11 items-center justify-center rounded-[var(--radius-inner)] bg-lime-wash text-success-olive">
             <CheckCircleIcon className="size-5" />
           </span>
-          <h2 className="mt-4 text-lg font-semibold tracking-[-0.02em]">Your inbox is ready</h2>
-          <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-muted-foreground">No candidate has replied yet. When they reply to a Harly email, the message appears here automatically.</p>
+          <h2 className="mt-4 text-lg font-semibold tracking-[-0.02em]">{t("readyTitle")}</h2>
+          <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-muted-foreground">{t("readyDescription")}</p>
         </div>
         <div className="mt-8 grid grid-cols-1 gap-3 sm:grid-cols-3">
           {[
-            ["1", "Send an email", "Contact a candidate from Harly."],
-            ["2", "Candidate replies", "Their reply goes to your Harly address."],
-            ["3", "Review here", "The conversation appears in this Inbox."],
+            ["1", t("sendTitle"), t("sendDescription")],
+            ["2", t("repliesTitle"), t("repliesDescription")],
+            ["3", t("reviewTitle"), t("reviewDescription")],
           ].map(([step, title, description]) => (
             <div key={step} className="rounded-[var(--radius-inner)] bg-card-inset px-4 py-3.5 text-left">
               <span className="font-mono text-xs font-semibold text-success-olive">{step}</span>
@@ -224,19 +229,20 @@ function InboxEmptyState({ status, demoMode = false }: { status: InboxMailboxSta
 }
 
 function ReaderPlaceholder() {
+  const t = useTranslations("features.mailbox.recruitingInbox.readerPlaceholder");
   return (
     <div className="flex h-full flex-col items-center justify-center px-6 text-center">
       <span className="flex size-12 items-center justify-center rounded-[var(--radius-inner)] bg-card-inset text-soft-ink">
         <EnvelopeIcon className="size-5" />
       </span>
-      <h2 className="mt-4 text-sm font-semibold">Select a conversation</h2>
-      <p className="mt-1.5 max-w-xs text-xs leading-5 text-soft-ink">Pick one from the list to read it and reply.</p>
+      <h2 className="mt-4 text-sm font-semibold">{t("title")}</h2>
+      <p className="mt-1.5 max-w-xs text-xs leading-5 text-soft-ink">{t("description")}</p>
       <dl className="mt-5 grid grid-cols-[auto_auto] items-center gap-x-3 gap-y-2 text-xs text-soft-ink">
         {[
-          ["J / K", "Next, previous"],
-          ["R", "Reply"],
-          ["E", "Archive"],
-          ["/", "Search"],
+          ["J / K", t("next")],
+          ["R", t("reply")],
+          ["E", t("archive")],
+          ["/", t("search")],
         ].map(([key, label]) => (
           <div key={key} className="contents">
             <dt className="justify-self-end"><Kbd>{key}</Kbd></dt>
@@ -305,6 +311,8 @@ export function RecruitingInbox({
   const [navPending, startNav] = useTransition();
   const searchRef = useRef<HTMLInputElement>(null);
   const autoReadRef = useRef<Set<string>>(new Set());
+  const t = useTranslations("features.mailbox.recruitingInbox.main");
+  const tRoot = useTranslations();
 
   // The URL (initialFilter/initialThreadId) is the source of truth; local
   // state resyncs when those props change (back/forward), by adjusting state
@@ -371,22 +379,22 @@ export function RecruitingInbox({
         if (!quiet) setAnnouncement(success);
         router.refresh();
       } else {
-        const message = result.error ?? "Action failed.";
+        const message = result.error ?? t("actionFailed");
         setAnnouncement(message);
         toast.error(message);
       }
       return result;
     } catch {
-      const result = { ok: false, error: "You do not have permission to change this thread." } as T;
-      setAnnouncement(result.error ?? "Action failed.");
-      toast.error(result.error ?? "Action failed.");
+      const result = { ok: false, error: t("noPermissionThread") } as T;
+      setAnnouncement(result.error ?? t("actionFailed"));
+      toast.error(result.error ?? t("actionFailed"));
       return result;
     }
   }
 
   function markRead(target: InboxThread, { quiet = false }: { quiet?: boolean } = {}) {
     setReadAt((current) => ({ ...current, [target.id]: target.unreadCount }));
-    startTransition(() => { void runAction(() => markInboxThreadReadAction({ threadId: target.id, source: target.source }), `Marked “${target.subject}” as read.`, { quiet }); });
+    startTransition(() => { void runAction(() => markInboxThreadReadAction({ threadId: target.id, source: target.source }), t("markedRead", { subject: target.subject }), { quiet }); });
   }
 
   // A conversation that is on screen counts as read, including the one the
@@ -437,13 +445,13 @@ export function RecruitingInbox({
       void (async () => {
         const result = await runAction(
           () => updateMailboxThreadAction({ threadId: target.id, status: archiving ? "archived" : "open" }),
-          archiving ? "Conversation archived." : "Moved back to inbox.",
+          archiving ? t("conversationArchived") : t("movedBack"),
           { quiet: true },
         );
         if (!result.ok) return;
-        toast(archiving ? "Conversation archived" : "Moved back to inbox", {
+        toast(archiving ? t("conversationArchivedToast") : t("movedBackToast"), {
           action: archiving
-            ? { label: "Undo", onClick: () => { void runAction(() => updateMailboxThreadAction({ threadId: target.id, status: "open" }), "Archive undone.", { quiet: true }); } }
+            ? { label: t("undo"), onClick: () => { void runAction(() => updateMailboxThreadAction({ threadId: target.id, status: "open" }), t("archiveUndone"), { quiet: true }); } }
             : undefined,
         });
         if (target.id !== effectiveId) return;
@@ -480,10 +488,10 @@ export function RecruitingInbox({
 
   async function retrySync() {
     setSyncing(true);
-    const result = await retryMailboxSyncAction().catch(() => ({ ok: false as const, error: "You do not have permission to sync the mailbox." }));
-    const message = result.ok ? `Sync complete. Imported ${"imported" in result ? result.imported : 0} messages; skipped ${"skipped" in result ? result.skipped : 0} duplicates.` : result.error ?? "Sync failed.";
+    const result = await retryMailboxSyncAction().catch(() => ({ ok: false as const, error: t("noPermissionSync") }));
+    const message = result.ok ? t("syncComplete", { imported: "imported" in result ? result.imported : 0, skipped: "skipped" in result ? result.skipped : 0 }) : result.error ?? t("syncFailed");
     setAnnouncement(message);
-    if (result.ok) toast.success("Mailbox synced");
+    if (result.ok) toast.success(t("mailboxSynced"));
     else toast.error(message);
     setSyncing(false);
     router.refresh();
@@ -505,13 +513,13 @@ export function RecruitingInbox({
     setNewThread("closed");
     setActiveThreadId(newThreadId);
     setMobileView("thread");
-    toast.success("Email sent");
+    toast.success(t("emailSent"));
     startNav(() => router.push(inboxUrl((params) => params.set("thread", newThreadId)), { scroll: false }));
     router.refresh();
   }
 
   const contextPerson: InboxPerson | undefined = thread?.participantEmail
-    ? { candidateId: thread.candidateId, name: threadPersonName(thread), email: thread.participantEmail }
+    ? { candidateId: thread.candidateId, name: threadPersonName(thread, tRoot), email: thread.participantEmail }
     : undefined;
   const newThreadTemplates = useMemo(() => {
     const name = newThread === "person" && contextPerson ? contextPerson.name : "";
@@ -528,12 +536,12 @@ export function RecruitingInbox({
       candidates={candidates}
       applications={applications}
       isPending={pending}
-      onAssign={(ownerId) => runAction(() => updateMailboxThreadAction({ threadId: thread.id, ownerId }), ownerId ? "Thread assigned." : "Thread unassigned.")}
-      onCandidateChange={(candidateId) => runAction(() => linkMailboxThreadToCandidateAction({ threadId: thread.id, candidateId }), candidateId ? "Candidate linked." : "Candidate unlinked.")}
-      onApplicationChange={(applicationId) => runAction(() => linkMailboxThreadToApplicationAction({ threadId: thread.id, applicationId: applicationId ?? null }), applicationId ? "Application linked." : "Application unlinked.")}
-      onCreateCandidate={() => { startTransition(() => { void runAction(() => createCandidateFromMailboxThreadAction({ threadId: thread.id }), "Candidate created from this thread."); }); }}
+      onAssign={(ownerId) => runAction(() => updateMailboxThreadAction({ threadId: thread.id, ownerId }), ownerId ? t("threadAssigned") : t("threadUnassigned"))}
+      onCandidateChange={(candidateId) => runAction(() => linkMailboxThreadToCandidateAction({ threadId: thread.id, candidateId }), candidateId ? t("candidateLinked") : t("candidateUnlinked"))}
+      onApplicationChange={(applicationId) => runAction(() => linkMailboxThreadToApplicationAction({ threadId: thread.id, applicationId: applicationId ?? null }), applicationId ? t("applicationLinked") : t("applicationUnlinked"))}
+      onCreateCandidate={() => { startTransition(() => { void runAction(() => createCandidateFromMailboxThreadAction({ threadId: thread.id }), t("candidateCreated")); }); }}
       onArchive={() => toggleArchive(thread)}
-      onMarkSpam={() => { startTransition(() => { void runAction(() => updateMailboxThreadAction({ threadId: thread.id, status: "spam" }), "Thread marked as spam.").then((result) => { if (result.ok) clearSelection(); }); }); }}
+      onMarkSpam={() => { startTransition(() => { void runAction(() => updateMailboxThreadAction({ threadId: thread.id, status: "spam" }), t("markedSpam")).then((result) => { if (result.ok) clearSelection(); }); }); }}
       onNewEmail={contextPerson ? () => { setContextOpen(false); setNewThread("person"); } : undefined}
       onSummarize={() => summarizeMailboxThreadAction({ threadId: thread.id })}
       onSuggestReply={() => suggestMailboxReplyAction({ threadId: thread.id }).then((result) => { if (result.ok && result.draft) { setSuggestedReply({ threadId: thread.id, body: result.draft.body }); setContextOpen(false); setComposerThreadId(thread.id); } return result; })}
@@ -541,7 +549,7 @@ export function RecruitingInbox({
   ) : null;
 
   const fullEmpty = !threads.length && filter === "all";
-  const listLabel = inboxFilterLabel(filter);
+  const listLabel = inboxFilterLabel(filter, tRoot);
 
   return (
     <div className="flex h-[calc(100dvh-15rem)] min-h-[34rem] min-w-0 flex-col overflow-hidden rounded-[var(--radius-card)] bg-card shadow-[var(--shadow-card)] duration-300 animate-in fade-in-0 motion-reduce:animate-none">
@@ -555,7 +563,7 @@ export function RecruitingInbox({
           <div className="relative flex min-h-0 flex-1 overflow-hidden">
             {/* Conversations */}
             <section
-              aria-label="Conversations"
+              aria-label={t("conversations")}
               id="inbox-conversations"
               className={cn(
                 "min-h-0 shrink-0 flex-col border-r border-hairline bg-card lg:w-[340px] xl:w-[360px]",
@@ -565,7 +573,7 @@ export function RecruitingInbox({
               <div className="shrink-0 space-y-2.5 border-b border-hairline px-3 py-3">
                 <div className="flex items-center gap-1.5">
                   <label className="relative flex min-w-0 flex-1 items-center">
-                    <span className="sr-only">Search conversations</span>
+                    <span className="sr-only">{t("searchConversations")}</span>
                     <SearchIcon className="pointer-events-none absolute left-3.5 size-4 text-soft-ink" />
                     <input
                       ref={searchRef}
@@ -583,13 +591,13 @@ export function RecruitingInbox({
                           event.currentTarget.blur();
                         }
                       }}
-                      placeholder="Search conversations"
+                      placeholder={t("searchConversations")}
                       aria-keyshortcuts="/"
                       className="h-9 w-full rounded-full border border-transparent bg-card-inset pl-9 pr-9 text-base outline-none md:text-sm transition-[border-color,background-color] placeholder:text-quiet-mist hover:bg-row-wash focus:border-near-ink focus:bg-pure-snow [&::-webkit-search-cancel-button]:hidden dark:focus:bg-card"
                     />
                     {query ? null : <Kbd className="pointer-events-none absolute right-2.5 hidden h-5 min-w-5 text-[11px] lg:inline-flex">/</Kbd>}
                     {query ? (
-                      <button type="button" onClick={() => { setQuery(""); searchRef.current?.focus(); }} className="absolute right-2 flex size-6 items-center justify-center rounded-full text-soft-ink hover:bg-row-wash focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-near-ink" aria-label="Clear search">
+                      <button type="button" onClick={() => { setQuery(""); searchRef.current?.focus(); }} className="absolute right-2 flex size-6 items-center justify-center rounded-full text-soft-ink hover:bg-row-wash focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-near-ink" aria-label={t("clearSearch")}>
                         <span aria-hidden="true" className="text-base leading-none">×</span>
                       </button>
                     ) : null}
@@ -601,13 +609,13 @@ export function RecruitingInbox({
                     className="shrink-0 active:scale-[0.97] motion-reduce:active:scale-100"
                     onClick={handleRefresh}
                     disabled={syncing}
-                    aria-label="Check for new messages"
-                    title={lastSyncedLabel ? `Check for new messages · last synced ${lastSyncedLabel}` : "Check for new messages"}
+                    aria-label={t("checkForMessages")}
+                    title={lastSyncedLabel ? t("checkForMessagesSynced", { time: lastSyncedLabel }) : t("checkForMessages")}
                   >
                     <ArrowsClockwiseIcon className={cn("size-4", syncing && "animate-spin motion-reduce:animate-none")} />
                   </Button>
                   {candidates.length && mailboxStatus.canReply ? (
-                    <Button type="button" size="icon-sm" className="shrink-0 active:scale-[0.97] motion-reduce:active:scale-100" onClick={() => setNewThread("pick")} aria-label="New email" title="New email">
+                    <Button type="button" size="icon-sm" className="shrink-0 active:scale-[0.97] motion-reduce:active:scale-100" onClick={() => setNewThread("pick")} aria-label={t("newEmail")} title={t("newEmail")}>
                       <PlusIcon className="size-4" />
                     </Button>
                   ) : null}
@@ -634,7 +642,7 @@ export function RecruitingInbox({
                         className="rounded-full bg-soft-kraft px-4 py-1.5 text-[13px] font-medium transition-colors hover:bg-row-wash focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-near-ink disabled:opacity-60"
                         onClick={() => startNav(() => router.push(inboxUrl((params) => params.set("page", String((page ?? 0) + 1))), { scroll: false }))}
                       >
-                        {navPending ? "Loading…" : "Load more conversations"}
+                        {navPending ? t("loading") : t("loadMore")}
                       </button>
                     </div>
                   ) : null
@@ -672,10 +680,10 @@ export function RecruitingInbox({
                       attachments: payload.attachments.map((file) => ({ filename: file.filename, contentType: file.contentType, base64: file.base64 })),
                     }).then((result) => {
                       if (result.ok) {
-                        const message = result.sentCopySaved === false ? "Reply sent, but the copy could not be saved in Sent." : "Reply sent.";
+                        const message = result.sentCopySaved === false ? t("replySentCopyNotSaved") : t("replySent");
                         setAnnouncement(message);
                         if (result.sentCopySaved === false) toast.warning(message);
-                        else toast.success("Reply sent");
+                        else toast.success(t("replySentToast"));
                         router.refresh();
                       }
                       return result;
@@ -688,7 +696,7 @@ export function RecruitingInbox({
             </div>
 
             {/* Context: a third pane on wide screens, a sheet below that. */}
-            <aside className="hidden min-h-0 w-[300px] shrink-0 border-l border-hairline bg-card-inset/50 xl:block" aria-label="Candidate details and actions">
+            <aside className="hidden min-h-0 w-[300px] shrink-0 border-l border-hairline bg-card-inset/50 xl:block" aria-label={t("candidateDetails")}>
               {actionsPanel}
             </aside>
           </div>
@@ -698,8 +706,8 @@ export function RecruitingInbox({
       <Sheet open={contextOpen} onOpenChange={setContextOpen}>
         <SheetContent side="right" className="w-full max-w-sm overflow-hidden p-0 sm:max-w-sm xl:hidden">
           <SheetHeader className="sr-only">
-            <SheetTitle>Conversation details</SheetTitle>
-            <SheetDescription>Candidate, routing and actions for this conversation.</SheetDescription>
+            <SheetTitle>{t("conversationDetails")}</SheetTitle>
+            <SheetDescription>{t("conversationDetailsDescription")}</SheetDescription>
           </SheetHeader>
           {contextOpen ? actionsPanel : null}
         </SheetContent>

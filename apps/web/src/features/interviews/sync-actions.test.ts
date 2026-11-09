@@ -1,3 +1,4 @@
+vi.mock("next-intl/server", async () => (await import("@/test-support/intl-server-mock")).intlServerMock);
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
@@ -176,7 +177,7 @@ describe("retryInterviewSyncAction", () => {
     const result = await retryInterviewSyncAction({ syncId: "sync-1" });
 
     expect(result.success).toBe(false);
-    expect(result.error).toMatch(/Google Calendar could not/i);
+    expect(result.error).toMatch(/Google Calendar couldn't/i);
   });
 
   it("does not cross workspace boundaries", async () => {
@@ -186,7 +187,7 @@ describe("retryInterviewSyncAction", () => {
 
     expect(result).toEqual({
       success: false,
-      error: "Sync attempt not found.",
+      error: "We couldn't find that sync attempt.",
     });
     expect(mocks.syncInterviewToZoom).not.toHaveBeenCalled();
   });
@@ -204,7 +205,7 @@ describe("retryInterviewSyncAction", () => {
     const result = await retryInterviewSyncAction({ syncId: "sync-1" });
 
     expect(result.success).toBe(false);
-    expect(result.error).toMatch(/Google Calendar could not/i);
+    expect(result.error).toMatch(/Google Calendar couldn't complete the cancellation/i);
     expect(mocks.cancelInterviewGCalEvent).not.toHaveBeenCalled();
   });
 
@@ -215,7 +216,7 @@ describe("retryInterviewSyncAction", () => {
 
     expect(result).toEqual({
       success: false,
-      error: "This synchronization is already being retried or is no longer retryable.",
+      error: "This sync is already being retried or can't be retried anymore.",
     });
     expect(mocks.syncInterviewToZoom).not.toHaveBeenCalled();
     expect(mocks.trackInterviewSync).not.toHaveBeenCalled();

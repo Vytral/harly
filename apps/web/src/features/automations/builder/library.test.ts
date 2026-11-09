@@ -1,17 +1,20 @@
 import { describe, expect, it } from "vitest";
 
+import { makeT } from "@/test-support/translator";
 import { filterLibraryItems, libraryItems } from "./library";
+
+const t = makeT("labels.automations");
 
 describe("T07 — library search and clickable blocks", () => {
   it("filters actions by label without requiring JSON", () => {
-    const items = libraryItems();
+    const items = libraryItems(undefined, t);
     const email = filterLibraryItems(items, "email");
     expect(email.some((item) => item.label.toLowerCase().includes("email"))).toBe(true);
     expect(email.every((item) => item.blurb.length > 0 || item.label.length > 0)).toBe(true);
   });
 
   it("carries the manifest-selected tool version into new action blocks", () => {
-    const items = libraryItems([{ type: "send_email", version: 3 }]);
+    const items = libraryItems([{ type: "send_email", version: 3 }], t);
     expect(items.find((item) => item.id === "action:send_email")).toMatchObject({
       toolVersion: 3,
     });
@@ -19,12 +22,12 @@ describe("T07 — library search and clickable blocks", () => {
   });
 
   it("keeps control blocks discoverable by everyday words", () => {
-    const wait = filterLibraryItems(libraryItems(), "approval");
+    const wait = filterLibraryItems(libraryItems(undefined, t), "approval");
     expect(wait.map((item) => item.kind)).toContain("approval");
   });
 
   it("prioritizes exact matches like 'End' over partial matches like 'Send email'", () => {
-    const results = filterLibraryItems(libraryItems(), "end");
+    const results = filterLibraryItems(libraryItems(undefined, t), "end");
     expect(results[0]?.kind).toBe("end");
   });
 });

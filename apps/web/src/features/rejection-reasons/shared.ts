@@ -1,3 +1,4 @@
+import type { useTranslations } from "next-intl";
 import { z } from "zod";
 
 /**
@@ -121,8 +122,14 @@ export type RejectTarget = {
   jobTitle?: string | null;
 };
 
-/** Title, job line and button copy for one or many targets. Pure for tests. */
-export function rejectDialogCopy(targets: RejectTarget[]) {
+/**
+ * Title, job line and button copy for one or many targets. Pure for tests.
+ * `t` is a translator for `labels.rejectionReasons.dialogCopy`.
+ */
+export function rejectDialogCopy(
+  t: ReturnType<typeof useTranslations>,
+  targets: RejectTarget[],
+) {
   const count = targets.length;
   const single = count === 1 ? targets[0] : null;
   const jobs = [
@@ -137,15 +144,15 @@ export function rejectDialogCopy(targets: RejectTarget[]) {
       ? null
       : jobs.length === 1
         ? single
-          ? `Applies to ${jobs[0]}.`
-          : `All for ${jobs[0]}.`
-        : `Across ${jobs.length} jobs.`;
+          ? t("appliesTo", { job: jobs[0] })
+          : t("allFor", { job: jobs[0] })
+        : t("acrossJobs", { count: jobs.length });
   return {
-    title: single ? `Reject ${single.candidateName}?` : `Reject ${count} candidates?`,
+    title: single ? t("rejectOne", { name: single.candidateName }) : t("rejectMany", { count }),
     jobLine,
-    confirmLabel: single ? "Reject candidate" : `Reject ${count} candidates`,
+    confirmLabel: single ? t("confirmOne") : t("confirmMany", { count }),
     successMessage: single
-      ? `${single.candidateName} rejected.`
-      : `${count} candidates rejected.`,
+      ? t("successOne", { name: single.candidateName })
+      : t("successMany", { count }),
   };
 }

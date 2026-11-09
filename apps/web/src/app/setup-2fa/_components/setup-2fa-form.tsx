@@ -1,6 +1,8 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { useTranslations } from "next-intl";
+import { authErrorKey } from "@/features/auth/i18n/error-keys";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { QRCodeSVG } from "qrcode.react";
@@ -28,6 +30,8 @@ function currentIssuer(): string | undefined {
 }
 
 export function Setup2FAForm() {
+  const errorText = useTranslations("accessAuthErrors");
+  const t = useTranslations("accessTwoFactor");
   const router = useRouter();
   const [step, setStep] = useState<Step>("password");
   const [totpUri, setTotpUri] = useState("");
@@ -45,7 +49,7 @@ export function Setup2FAForm() {
         issuer: currentIssuer(),
       });
       if (res.error) {
-        toast.error(res.error.message ?? "Invalid password");
+        toast.error(errorText(authErrorKey(res.error.code, "enableFailed")));
         return;
       }
       const data = res.data as {
@@ -64,7 +68,7 @@ export function Setup2FAForm() {
     startTransition(async () => {
       const res = await authClient.twoFactor.verifyTotp({ code: otp });
       if (res.error) {
-        toast.error(res.error.message ?? "Invalid code , try again");
+        toast.error(errorText(authErrorKey(res.error.code, "verificationFailed")));
         return;
       }
       setOtp("");
@@ -74,13 +78,13 @@ export function Setup2FAForm() {
 
   function copyBackupCodes() {
     copyText(backupCodes.join("\n"));
-    toast.success("Backup codes copied");
+    toast.success(t("copied"));
   }
 
   function downloadBackupCodes() {
     const blob = new Blob(
       [
-        `Harly two-factor backup codes\nEach code works once.\n\n${backupCodes.join("\n")}\n`,
+        `${t("fileHeading")}\n${t("fileHelp")}\n\n${backupCodes.join("\n")}\n`,
       ],
       { type: "text/plain" },
     );
@@ -101,10 +105,9 @@ export function Setup2FAForm() {
             <CheckIcon className="size-3 text-pine" />
           </span>
           <div className="space-y-1">
-            <p className="text-sm font-medium">2FA is now active</p>
+            <p className="text-sm font-medium">{t("active")}</p>
             <p className="text-sm text-muted-foreground">
-              Store your backup codes in a safe place , each works once if you
-              lose access to your authenticator.
+              {t("backupHelp")}
             </p>
           </div>
         </div>
@@ -117,7 +120,7 @@ export function Setup2FAForm() {
             router.refresh();
           }}
         >
-          Continue to dashboard
+          {t("dashboard")}
         </Button>
       </div>
     );
@@ -129,12 +132,12 @@ export function Setup2FAForm() {
       <div className="space-y-4">
         <div className="space-y-2">
           <div className="flex items-baseline justify-between">
-            <Label htmlFor="2fa-pw">Password</Label>
+            <Label htmlFor="2fa-pw">{t("password")}</Label>
             <Link
               href="/forgot-password"
               className="text-xs font-medium text-muted-foreground transition hover:text-pine"
             >
-              Forgot password?
+              {t("forgotPassword")}
             </Link>
           </div>
           <div className="relative">
@@ -147,20 +150,20 @@ export function Setup2FAForm() {
                 e.key === "Enter" && password && handleEnable()
               }
               autoComplete="current-password"
-              placeholder="Enter your password"
+              placeholder={t("passwordPlaceholder")}
               className="pr-10"
             />
             <button
               type="button"
               onClick={() => setShowPassword((v) => !v)}
               className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground transition hover:text-foreground"
-              aria-label={showPassword ? "Hide password" : "Show password"}
+              aria-label={showPassword ? t("hidePassword") : t("showPassword")}
             >
               {showPassword ? <EyeOffIcon /> : <EyeIcon />}
             </button>
           </div>
           <p className="text-xs text-muted-foreground">
-            Confirm your password to generate an authenticator QR code.
+            {t("confirmHelp")}
           </p>
         </div>
         <Button
@@ -170,7 +173,7 @@ export function Setup2FAForm() {
           disabled={!password || isPending}
         >
           {isPending && <SpinnerIcon className="mr-1.5 size-4" />}
-          Continue
+          {t("continue")}
         </Button>
       </div>
     );
@@ -180,8 +183,7 @@ export function Setup2FAForm() {
   return (
     <div className="space-y-5">
       <p className="text-sm text-muted-foreground">
-        Scan this QR code with your authenticator app (Authy, Google
-        Authenticator, 1Password…), then enter the 6-digit code to confirm.
+        {t("scanHelp")}
       </p>
 
       {/* QR code */}
@@ -197,7 +199,7 @@ export function Setup2FAForm() {
       {backupCodes.length > 0 && (
         <div className="space-y-2">
           <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-            Backup codes
+            {t("backupCodes")}
           </p>
           <div className="grid grid-cols-2 gap-1 rounded-lg border bg-card p-2.5 font-mono text-xs">
             {backupCodes.map((c) => (
@@ -214,7 +216,7 @@ export function Setup2FAForm() {
               onClick={copyBackupCodes}
             >
               <CopyIcon className="mr-1 size-3" />
-              Copy
+              {t("copy")}
             </Button>
             <Button
               variant="ghost"
@@ -223,7 +225,7 @@ export function Setup2FAForm() {
               onClick={downloadBackupCodes}
             >
               <DownloadDuotoneIcon className="mr-1 size-3" />
-              Download
+              {t("download")}
             </Button>
           </div>
         </div>
@@ -231,7 +233,7 @@ export function Setup2FAForm() {
 
       {/* OTP input */}
       <div className="space-y-2">
-        <Label htmlFor="2fa-code">Enter code from app</Label>
+        <Label htmlFor="2fa-code">{t("enterCode")}</Label>
         <div className="flex gap-2">
           <Input
             id="2fa-code"
@@ -254,7 +256,7 @@ export function Setup2FAForm() {
             disabled={otp.length !== 6 || isPending}
           >
             {isPending && <SpinnerIcon className="mr-1.5 size-3.5" />}
-            Verify & Enable
+            {t("verify")}
           </Button>
         </div>
       </div>

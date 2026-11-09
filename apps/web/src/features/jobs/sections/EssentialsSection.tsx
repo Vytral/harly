@@ -1,4 +1,5 @@
 import type { Job } from "@harly/db";
+import { useTranslations } from "next-intl";
 
 import { DepartmentCombobox } from "../DepartmentCombobox";
 import { FieldBox, fieldBoxControlClassName, fieldBoxSelectTriggerClassName } from "@/components/ui/field-box";
@@ -10,19 +11,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-
-const employmentTypes = [
-  { value: "full_time", label: "Full-time" },
-  { value: "part_time", label: "Part-time" },
-  { value: "contract", label: "Contract" },
-  { value: "internship", label: "Internship" },
-];
-
-const workplaceTypes = [
-  { value: "remote", label: "Remote" },
-  { value: "hybrid", label: "Hybrid" },
-  { value: "onsite", label: "Onsite" },
-];
 
 export function EssentialsSection({
   job,
@@ -43,15 +31,27 @@ export function EssentialsSection({
   workplace: string;
   setWorkplace: (value: string) => void;
 }) {
+  const t = useTranslations("jobs.essentials");
+  const employmentTypes = [
+    { value: "full_time", label: t("fullTime") },
+    { value: "part_time", label: t("partTime") },
+    { value: "contract", label: t("contract") },
+    { value: "internship", label: t("internship") },
+  ];
+  const workplaceTypes = [
+    { value: "remote", label: t("remote") },
+    { value: "hybrid", label: t("hybrid") },
+    { value: "onsite", label: t("onsite") },
+  ];
   return (
     <section data-section="essentials" className="space-y-4">
       <div className="grid gap-4 sm:grid-cols-2">
         <FieldBox
           className="sm:col-span-2"
-          label="Job name"
+          label={t("jobName")}
           htmlFor="title"
           required
-          error={titleError ? "Add a job title (at least 3 characters) to continue." : undefined}
+          error={titleError ? t("titleError") : undefined}
         >
           <Input
             id="title"
@@ -62,12 +62,12 @@ export function EssentialsSection({
               if (titleError) setTitleError(false);
             }}
             aria-invalid={titleError}
-            placeholder="Senior Full Stack Engineer"
+            placeholder={t("titlePlaceholder")}
             className={fieldBoxControlClassName}
           />
         </FieldBox>
 
-        <FieldBox label="Department">
+        <FieldBox label={t("department")}>
           <DepartmentCombobox
             name="department"
             departments={departments}
@@ -76,7 +76,7 @@ export function EssentialsSection({
           />
         </FieldBox>
 
-        <FieldBox label="Country code for search" htmlFor="jobLocationCountry">
+        <FieldBox label={t("countryCode")} htmlFor="jobLocationCountry">
           <Input
             id="jobLocationCountry"
             name="jobLocationCountry"
@@ -87,27 +87,27 @@ export function EssentialsSection({
           />
         </FieldBox>
 
-        <FieldBox label="State or region" htmlFor="jobLocationRegion">
+        <FieldBox label={t("region")} htmlFor="jobLocationRegion">
           <Input
             id="jobLocationRegion"
             name="jobLocationRegion"
             defaultValue={job?.jobLocationRegion ?? ""}
-            placeholder="California"
+            placeholder={t("regionPlaceholder")}
             className={fieldBoxControlClassName}
           />
         </FieldBox>
 
-        <FieldBox label="Location" htmlFor="location" hint="Shown on your public posting.">
+        <FieldBox label={t("location")} htmlFor="location" hint={t("locationHint")}>
           <Input
             id="location"
             name="location"
             defaultValue={job?.location ?? ""}
-            placeholder="Remote, LATAM"
+            placeholder={t("locationPlaceholder")}
             className={fieldBoxControlClassName}
           />
         </FieldBox>
 
-        <FieldBox label="Employment type" htmlFor="employmentType">
+        <FieldBox label={t("employmentType")} htmlFor="employmentType">
           <Select name="employmentType" defaultValue={job?.employmentType ?? "full_time"}>
             <SelectTrigger id="employmentType" className={fieldBoxSelectTriggerClassName}>
               <SelectValue />
@@ -122,7 +122,7 @@ export function EssentialsSection({
           </Select>
         </FieldBox>
 
-        <FieldBox label="Workplace type" htmlFor="workplaceType">
+        <FieldBox label={t("workplaceType")} htmlFor="workplaceType">
           <Select name="workplaceType" value={workplace} onValueChange={setWorkplace}>
             <SelectTrigger id="workplaceType" className={fieldBoxSelectTriggerClassName}>
               <SelectValue />
@@ -140,9 +140,9 @@ export function EssentialsSection({
 
       {workplace === "remote" ? (
         <FieldBox
-          label="Eligible remote countries"
+          label={t("eligibleCountries")}
           htmlFor="remoteEligibleCountries"
-          hint="Leave empty for worldwide."
+          hint={t("worldwideHint")}
         >
           <Input
             id="remoteEligibleCountries"
@@ -154,7 +154,7 @@ export function EssentialsSection({
         </FieldBox>
       ) : null}
 
-      <FieldBox label="Posting expires" htmlFor="validThrough">
+      <FieldBox label={t("postingExpires")} htmlFor="validThrough">
         <Input
           id="validThrough"
           name="validThrough"

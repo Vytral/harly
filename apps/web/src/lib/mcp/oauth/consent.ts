@@ -92,37 +92,13 @@ export async function evaluateConsentGate(
   return { ok: true, settings, grantedScopes, ip };
 }
 
-export const CONSENT_BLOCK_COPY: Record<ConsentBlock["reason"], { title: string; body: string }> = {
-  mcp_disabled: {
-    title: "AI connections are turned off",
-    body: "An owner or admin has disabled AI client connections for this workspace.",
-  },
-  no_permission: {
-    title: "You can't connect AI apps",
-    body: "Your role doesn't include permission to connect AI apps. Ask a workspace admin to grant it.",
-  },
-  client_not_allowed: {
-    title: "This app isn't allowed",
-    body: "This workspace only allows connections from recognised AI apps, and this one isn't on the list.",
-  },
-  ip_blocked: {
-    title: "Access is restricted",
-    body: "Your current network isn't on this workspace's IP allowlist. Connect from an approved network.",
-  },
-  domain_blocked: {
-    title: "Email domain not allowed",
-    body: "Your email domain isn't allowed for this workspace.",
-  },
-  needs_2fa: {
-    title: "Set up two-factor authentication first",
-    body: "This workspace requires two-factor authentication before you can connect AI apps.",
-  },
-  needs_passkey: {
-    title: "Add a passkey first",
-    body: "This workspace requires a passkey before you can connect AI apps.",
-  },
-  must_change_password: {
-    title: "Change your password first",
-    body: "You need to replace your temporary password before connecting AI apps.",
-  },
+export const CONSENT_BLOCK_MESSAGE_KEYS: Record<ConsentBlock["reason"], { title: string; body: string }> = {
+  mcp_disabled: { title: "block.mcp_disabled.title", body: "block.mcp_disabled.body" },
+  no_permission: { title: "block.no_permission.title", body: "block.no_permission.body" },
+  client_not_allowed: { title: "block.client_not_allowed.title", body: "block.client_not_allowed.body" },
+  ip_blocked: { title: "block.ip_blocked.title", body: "block.ip_blocked.body" },
+  domain_blocked: { title: "block.domain_blocked.title", body: "block.domain_blocked.body" },
+  needs_2fa: { title: "block.needs_2fa.title", body: "block.needs_2fa.body" },
+  needs_passkey: { title: "block.needs_passkey.title", body: "block.needs_passkey.body" },
+  must_change_password: { title: "block.must_change_password.title", body: "block.must_change_password.body" },
 };

@@ -13,6 +13,7 @@ import {
   Archive,
   Check,
 } from "lucide-react";
+import { useTranslations } from "next-intl";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -32,13 +33,11 @@ import { duration, easing, useMotionSafe } from "@/lib/motion";
 import { cn } from "@/lib/utils";
 
 import {
-  KIND_DESCRIPTIONS,
   KIND_OPTIONS,
-  OUTCOME_EXPLANATIONS,
   STAGE_SWATCHES,
-  countLabel,
   isOutcomeKind,
   kindLockNote,
+  nameErrorMessage,
   type EditorStage,
   type KindDecision,
   type NameCheck,
@@ -85,6 +84,9 @@ export function StageRow({
   onArchive,
   onDelete,
 }: StageRowProps) {
+  const t = useTranslations("features.pipeline.StageRow");
+  const labels = useTranslations("labels.pipeline.stageEditor");
+  const kindNames = useTranslations("labels.pipeline.stageKinds");
   const motionSafe = useMotionSafe();
   const sortable = useSortable({ id: stage.id, disabled: busy });
   const { attributes, listeners, setActivatorNodeRef, setNodeRef, transform, isDragging } =
@@ -98,7 +100,7 @@ export function StageRow({
   const shownName = draft && draft.base === stage.name ? draft.value : stage.name;
   const editingName = draft !== null && draft.base === stage.name;
 
-  const lockNote = kindLockNote(stage);
+  const lockNote = kindLockNote(stage, labels);
   const hasCandidates = stage.applicationCount > 0;
   const nameInputId = `stage-name-${stage.id}`;
   const emailId = `stage-email-${stage.id}`;
@@ -107,7 +109,7 @@ export function StageRow({
     if (!editingName || busy) return;
     const check = checkName(shownName);
     if (!check.ok) {
-      setNameError(check.error);
+      setNameError(nameErrorMessage(check, labels));
       return;
     }
     setNameError(null);
@@ -155,7 +157,7 @@ export function StageRow({
           size="icon"
           className="size-8 shrink-0 cursor-grab text-muted-foreground active:cursor-grabbing"
           disabled={busy}
-          aria-label={`Drag to reorder ${stage.name}. Or use the arrow buttons. Position ${position} of ${total}.`}
+          aria-label={t("dragToReorder", { name: stage.name, position, total })}
           {...attributes}
           {...listeners}
         >
@@ -167,15 +169,15 @@ export function StageRow({
             <button
               type="button"
               disabled={busy}
-              aria-label={`Colour for ${stage.name}`}
+              aria-label={t("stageColour", { name: stage.name })}
               className="size-6 shrink-0 rounded-full border border-hairline transition-transform hover:scale-105 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-50"
               style={{ backgroundColor: stage.color ?? "transparent" }}
             >
-              {stage.color ? null : <span className="sr-only">No colour</span>}
+              {stage.color ? null : <span className="sr-only">{t("noColour")}</span>}
             </button>
           </PopoverTrigger>
           <PopoverContent align="start" className="w-auto p-2">
-            <p className="px-1 pb-2 text-xs font-medium text-muted-foreground">Stage colour</p>
+            <p className="px-1 pb-2 text-xs font-medium text-muted-foreground">{t("stageColourHeading")}</p>
             <div className="grid grid-cols-4 gap-2">
               {STAGE_SWATCHES.map((swatch) => {
                 const selected = stage.color === swatch.value;
@@ -183,7 +185,7 @@ export function StageRow({
                   <button
                     key={swatch.value}
                     type="button"
-                    aria-label={swatch.label}
+                    aria-label={labels(`swatches.${swatch.id}`)}
                     aria-pressed={selected}
                     onClick={() => onRecolor(swatch.value)}
                     className={cn(
@@ -204,14 +206,14 @@ export function StageRow({
               className="mt-2 w-full justify-start"
               onClick={() => onRecolor(null)}
             >
-              No colour
+              {t("noColour")}
             </Button>
           </PopoverContent>
         </Popover>
 
         <div className="min-w-0 flex-1">
           <Label htmlFor={nameInputId} className="sr-only">
-            Stage name
+            {t("stageName")}
           </Label>
           <Input
             id={nameInputId}
@@ -239,7 +241,7 @@ export function StageRow({
             className="size-8"
             disabled={busy || !canMoveUp}
             onClick={() => onMoveStep(-1)}
-            aria-label={`Move ${stage.name} up`}
+            aria-label={t("moveUp", { name: stage.name })}
           >
             <ChevronUp className="size-4" aria-hidden="true" />
           </Button>
@@ -250,7 +252,7 @@ export function StageRow({
             className="size-8"
             disabled={busy || !canMoveDown}
             onClick={() => onMoveStep(1)}
-            aria-label={`Move ${stage.name} down`}
+            aria-label={t("moveDown", { name: stage.name })}
           >
             <ChevronDown className="size-4" aria-hidden="true" />
           </Button>
@@ -263,7 +265,7 @@ export function StageRow({
               size="icon"
               className="size-8 shrink-0"
               disabled={busy}
-              aria-label={`More actions for ${stage.name}`}
+              aria-label={t("moreActions", { name: stage.name })}
             >
               <MoreHorizontal className="size-4" aria-hidden="true" />
             </Button>
@@ -271,14 +273,14 @@ export function StageRow({
           <DropdownMenuContent align="end">
             <DropdownMenuItem onSelect={onArchive}>
               <Archive className="size-4" aria-hidden="true" />
-              Archive…
+              {t("archive")}
             </DropdownMenuItem>
             {hasCandidates ? null : (
               <>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem variant="destructive" onSelect={onDelete}>
                   <Trash2 className="size-4" aria-hidden="true" />
-                  Delete stage
+                  {t("deleteStage")}
                 </DropdownMenuItem>
               </>
             )}
@@ -298,16 +300,16 @@ export function StageRow({
           disabled={busy}
           onValueChange={(value) => onChangeKind(value as StageKind)}
         >
-          <SelectTrigger size="sm" className="w-36" aria-label={`Kind of ${stage.name}`}>
+          <SelectTrigger size="sm" className="w-36" aria-label={t("kindOf", { name: stage.name })}>
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
             {KIND_OPTIONS.map((option) => {
-              const decision = decideKind(option.value);
-              const disabled = !decision.allowed && option.value !== stage.kind;
+              const decision = decideKind(option);
+              const disabled = !decision.allowed && option !== stage.kind;
               return (
-                <SelectItem key={option.value} value={option.value} disabled={disabled}>
-                  {option.label}
+                <SelectItem key={option} value={option} disabled={disabled}>
+                  {kindNames(option)}
                 </SelectItem>
               );
             })}
@@ -315,7 +317,7 @@ export function StageRow({
         </Select>
 
         <StatusPill size="sm" tone={hasCandidates ? "info" : "neutral"}>
-          {countLabel(stage.applicationCount)}
+          {labels("candidateCount", { count: stage.applicationCount })}
         </StatusPill>
 
         <div className="flex items-center gap-2">
@@ -324,10 +326,10 @@ export function StageRow({
             checked={stage.emailConfig.candidateUpdatesEnabled}
             disabled={busy}
             onCheckedChange={onToggleEmail}
-            aria-label={`Email candidates when they reach ${stage.name}`}
+            aria-label={t("emailToggleLabel", { name: stage.name })}
           />
           <Label htmlFor={emailId} className="text-xs font-normal text-muted-foreground">
-            Email candidates
+            {t("emailCandidates")}
           </Label>
         </div>
 
@@ -336,8 +338,8 @@ export function StageRow({
       <div className="mt-1.5 space-y-1 pl-[4.5rem] text-xs leading-5 text-muted-foreground">
         <p>
           {isOutcomeKind(stage.kind)
-            ? OUTCOME_EXPLANATIONS[stage.kind]
-            : KIND_DESCRIPTIONS[stage.kind]}
+            ? labels(`outcomeExplanations.${stage.kind}`)
+            : labels(`kindDescriptions.${stage.kind}`)}
         </p>
         {lockNote ? <p>{lockNote}</p> : null}
       </div>

@@ -5,6 +5,7 @@ import type { IntegrationHealthView } from "@/features/integrations/health/model
 import { providerStatusLabel, providerStatusTone } from "@/features/integrations/health/connection-label";
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { toast } from "@/lib/notification-island/toast";
 
 import {
@@ -46,6 +47,7 @@ export function ZoomConnectPanel({
   tileClassName: string;
   description: string;
 }) {
+  const t = useTranslations("features.workspaces.zoomConnectPanel");
   const router = useRouter();
   const isConnected = health
     ? health.connected
@@ -58,16 +60,16 @@ export function ZoomConnectPanel({
   const installUrl = `/api/integrations/zoom/install?ws=${workspaceId}`;
 
   const statusTone = providerStatusTone(health, isConnected ? "on" : "neutral");
-  const statusLabel = providerStatusLabel(health, isConnected ? "Connected" : "Not connected");
+  const statusLabel = providerStatusLabel(health, isConnected ? t("connected") : t("notConnected"));
 
   function disconnect() {
     startDisconnect(async () => {
       const result = await uninstallZoom();
       if (!result.success) {
-        toast.error(result.error ?? "Could not disconnect.");
+        toast.error(result.error ?? t("couldNotDisconnect"));
         return;
       }
-      toast.success("Zoom disconnected");
+      toast.success(t("disconnected"));
       router.refresh();
     });
   }
@@ -77,9 +79,9 @@ export function ZoomConnectPanel({
     const result = await testZoomConnectionAction();
     setTesting(false);
     if (result.success) {
-      toast.success("Zoom connection is working");
+      toast.success(t("connectionWorking"));
     } else {
-      toast.error(result.error ?? "Zoom connection test failed.");
+      toast.error(result.error ?? t("connectionTestFailed"));
     }
     router.refresh();
   }
@@ -108,9 +110,9 @@ export function ZoomConnectPanel({
                 )}
                 {config.configured
                   ? open
-                    ? "Hide settings"
-                    : "Manage"
-                  : "Set up Zoom"}
+                    ? t("hideSettings")
+                    : t("manage")
+                  : t("setUp")}
               </Button>
             )
           ) : null
@@ -122,8 +124,9 @@ export function ZoomConnectPanel({
         <div className="flex items-start gap-2 rounded-xl border border-clay/30 bg-clay/5 px-3 py-2 text-sm text-clay">
           <WarningCircleIcon className="mt-0.5 size-4 shrink-0" />
           <p>
-            Set <code className="font-mono text-xs">AI_ENCRYPTION_KEY</code> on
-            the server to enable encrypted credential storage.
+            {t.rich("encryptionKeyMissing", {
+              code: (chunks) => <code className="font-mono text-xs">{chunks}</code>,
+            })}
           </p>
         </div>
       ) : null}
@@ -131,18 +134,18 @@ export function ZoomConnectPanel({
       {isConnected ? (
         <Card className="overflow-hidden p-0">
           <div className="grid grid-cols-1 divide-y sm:grid-cols-2 sm:divide-x sm:divide-y-0">
-            <StatCell label="Account">
+            <StatCell label={t("account")}>
               <ZoomLogo className="size-4" />
-              {config.accountEmail ?? "Not connected"}
+              {config.accountEmail ?? t("notConnected")}
             </StatCell>
-            <StatCell label="Dashboard">
+            <StatCell label={t("dashboard")}>
               <a
                 href="https://zoom.us/profile"
                 target="_blank"
                 rel="noopener noreferrer"
                 className="inline-flex items-center gap-1.5 text-sm font-medium text-pine transition-colors hover:text-pine-strong"
               >
-                Zoom profile
+                {t("zoomProfile")}
                 <ArrowUpRightIcon className="size-3.5" />
               </a>
             </StatCell>
@@ -158,7 +161,7 @@ export function ZoomConnectPanel({
             onClick={testConnection}
             disabled={testing}
           >
-            {testing ? "Testing…" : "Test connection"}
+            {testing ? t("testing") : t("testConnection")}
           </Button>
           <Button
             variant="ghost"
@@ -168,7 +171,7 @@ export function ZoomConnectPanel({
             disabled={disconnecting}
           >
             {disconnecting ? <SpinnerIcon className="size-3.5" /> : null}
-            Disconnect Zoom
+            {t("disconnectZoom")}
           </Button>
         </div>
       ) : null}
@@ -192,6 +195,7 @@ function ZoomCredentialsForm({
   installUrl: string;
   configured: boolean;
 }) {
+  const t = useTranslations("features.workspaces.zoomConnectPanel");
   const [clientId, setClientId] = useState("");
   const [clientSecret, setClientSecret] = useState("");
   const [saving, startSave] = useTransition();
@@ -206,7 +210,7 @@ function ZoomCredentialsForm({
       if (hasNewCreds) {
         const result = await saveZoomCredentialsAction({ clientId, clientSecret });
         if (!result.success) {
-          toast.error(result.error ?? "Could not save.");
+          toast.error(result.error ?? t("couldNotSave"));
           return;
         }
       }
@@ -231,12 +235,12 @@ function ZoomCredentialsForm({
       <div className="mb-5 flex items-start justify-between gap-4">
         <div className="space-y-0.5">
           <h2 className="font-display text-base font-semibold tracking-tight">
-            {configured ? "Manage Zoom" : "Set up Zoom"}
+            {configured ? t("manageZoom") : t("setUp")}
           </h2>
           <p className="text-sm text-muted-foreground">
             {configured
-              ? "Your credentials are saved. Click Connect to authorize Zoom, or paste new credentials to replace them."
-              : "Create an OAuth app on the Zoom Marketplace, then paste the credentials and connect. Your Client Secret is encrypted at rest."}
+              ? t("savedCredentialsDescription")
+              : t("newCredentialsDescription")}
           </p>
         </div>
         <a
@@ -245,7 +249,7 @@ function ZoomCredentialsForm({
           rel="noopener noreferrer"
           className="inline-flex shrink-0 items-center gap-1 text-xs font-medium text-pine transition-colors hover:text-pine-strong"
         >
-          Zoom Marketplace
+          {t("zoomMarketplace")}
           <ArrowUpRightIcon className="size-3.5" />
         </a>
       </div>
@@ -253,85 +257,100 @@ function ZoomCredentialsForm({
       <div className="space-y-4">
         <div className="rounded-lg border bg-muted/30 px-3 py-2.5 text-xs text-muted-foreground space-y-1.5">
           <p className="font-medium text-foreground">
-            How to get your credentials:
+            {t("howToGetCredentials")}
           </p>
           <ol className="list-decimal space-y-1 pl-4">
             <li>
-              Open{" "}
-              <a
-                href="https://marketplace.zoom.us/user/build"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="underline"
-              >
-                marketplace.zoom.us
-              </a>{" "}
-              → Develop → Build App, and create a{" "}
-              <span className="font-medium text-foreground">
-                General App (User-managed OAuth)
-              </span>
-              .
+              {t.rich("stepOpenMarketplace", {
+                link: (chunks) => (
+                  <a
+                    href="https://marketplace.zoom.us/user/build"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="underline"
+                  >
+                    {chunks}
+                  </a>
+                ),
+                b: (chunks) => (
+                  <span className="font-medium text-foreground">{chunks}</span>
+                ),
+              })}
             </li>
             <li>
-              In <span className="font-medium text-foreground">OAuth</span>, set
-              the Redirect URL <em>and</em> add it to the OAuth allow list:
-              <br />
-              <code className="break-all">{redirectUrl}</code>
+              {t.rich("stepOAuthRedirect", {
+                b: (chunks) => (
+                  <span className="font-medium text-foreground">{chunks}</span>
+                ),
+                em: (chunks) => <em>{chunks}</em>,
+                newline: (chunks) => (
+                  <>
+                    <br />
+                    {chunks}
+                  </>
+                ),
+                code: (chunks) => <code className="break-all">{chunks}</code>,
+                redirectUrl,
+              })}
             </li>
             <li>
-              Under <span className="font-medium text-foreground">Scopes</span>,
-              add <code>meeting:write</code>.
+              {t.rich("stepScopes", {
+                b: (chunks) => (
+                  <span className="font-medium text-foreground">{chunks}</span>
+                ),
+                code: (chunks) => <code>{chunks}</code>,
+              })}
             </li>
             <li>
-              Copy the{" "}
-              <span className="font-medium text-foreground">Client ID</span> and{" "}
-              <span className="font-medium text-foreground">Client Secret</span>{" "}
-              from the App Credentials tab and paste them below.
+              {t.rich("stepCopyCredentials", {
+                b: (chunks) => (
+                  <span className="font-medium text-foreground">{chunks}</span>
+                ),
+              })}
             </li>
             <li>
-              Click{" "}
-              <span className="font-medium text-foreground">Connect Zoom</span> —
-              you&apos;ll authorize on Zoom and land back here connected.
+              {t.rich("stepConnect", {
+                b: (chunks) => (
+                  <span className="font-medium text-foreground">{chunks}</span>
+                ),
+              })}
             </li>
           </ol>
         </div>
 
         <div className="space-y-2">
-          <Label htmlFor="zoom-client-id">Client ID</Label>
+          <Label htmlFor="zoom-client-id">{t("clientId")}</Label>
           <Input
             id="zoom-client-id"
             value={clientId}
             onChange={(e) => setClientId(e.target.value)}
-            placeholder={
-              configured ? "Saved · enter a new ID to replace" : "e.g. AbCdEfGhIjKlMnOp"
-            }
+            placeholder={configured ? t("savedIdPlaceholder") : t("idPlaceholder")}
             autoComplete="off"
             className="font-mono text-xs"
           />
         </div>
 
         <div className="space-y-2">
-          <Label htmlFor="zoom-client-secret">Client Secret</Label>
+          <Label htmlFor="zoom-client-secret">{t("clientSecret")}</Label>
           <SecretInput
             id="zoom-client-secret"
             value={clientSecret}
             onChange={(e) => setClientSecret(e.target.value)}
             placeholder={
               configured
-                ? "Saved · enter a new secret to replace"
-                : "e.g. abcdef1234567890abcdef1234567890"
+                ? t("savedSecretPlaceholder")
+                : t("secretPlaceholder")
             }
             className="font-mono text-xs"
           />
           <p className="text-xs text-muted-foreground">
-            Encrypted at rest. Never visible again after saving.
+            {t("secretHint")}
           </p>
         </div>
 
         {partiallyFilled ? (
           <p className="text-xs text-clay">
-            Enter both Client ID and Client Secret to replace the saved
-            credentials.
+            {t("partialCredentials")}
           </p>
         ) : null}
       </div>
@@ -339,7 +358,7 @@ function ZoomCredentialsForm({
       <div className="mt-6 flex justify-end">
         <Button onClick={saveAndConnect} disabled={saving || !canConnect}>
           {saving ? <SpinnerIcon className="size-4" /> : <ZoomLogo className="size-4" />}
-          Connect Zoom
+          {t("connectZoom")}
         </Button>
       </div>
     </Card>

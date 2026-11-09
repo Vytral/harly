@@ -5,6 +5,7 @@ import {
   SortableContext,
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
+import { useTranslations } from "next-intl";
 import { BellIcon, BellSlashIcon } from "@/components/ui/icons/phosphor";
 import { CandidateCard } from "@/features/pipeline/CandidateCard";
 import type {
@@ -92,11 +93,12 @@ export function StageColumn({
   const kind = kindOf(stage);
   const terminal = isTerminalStage(stage);
   const displayName = stageDisplayName(stage);
+  const t = useTranslations("features.pipeline.StageColumn");
 
   return (
     <section
       ref={setNodeRef}
-      aria-label={`${displayName}, ${totalCount} candidate${totalCount === 1 ? "" : "s"}`}
+      aria-label={t("columnLabel", { name: displayName, count: totalCount })}
       className={cn(
         // The column is a region of paper, not a bordered grey box. Depth is
         // luminance: paper column on the snow stage, and the drop target lights
@@ -141,7 +143,7 @@ export function StageColumn({
           */}
           <DropdownMenu>
             <DropdownMenuTrigger
-              aria-label={`${displayName} settings`}
+              aria-label={t("stageSettings", { name: displayName })}
               className="flex size-6 shrink-0 items-center justify-center rounded-full text-quiet-mist opacity-0 transition-opacity hover:text-near-ink focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring group-hover/board:opacity-100 data-[state=open]:opacity-100"
             >
               <svg
@@ -169,8 +171,8 @@ export function StageColumn({
                   <BellIcon className="size-4 text-soft-ink" />
                 )}
                 {emailOn
-                  ? "Stop emailing candidates here"
-                  : "Email candidates who reach here"}
+                  ? t("stopEmailing")
+                  : t("emailWhenReached")}
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
@@ -195,10 +197,10 @@ export function StageColumn({
             <button
               type="button"
               onClick={() => onShowMore(stage.id)}
-              aria-label={`Show ${revealCount} more of ${remainingCount} hidden candidates in ${displayName}`}
+              aria-label={t("showMoreHidden", { count: revealCount, remaining: remainingCount, name: displayName })}
               className="font-chrome rounded-[var(--radius-md)] px-2 py-2 text-center text-[12px] text-soft-ink transition-colors hover:bg-row-wash hover:text-near-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-near-ink"
             >
-              Show {revealCount} more
+              {t("showMore", { count: revealCount })}
             </button>
           ) : null}
           {totalCount === 0 ? (
@@ -214,7 +216,7 @@ export function StageColumn({
               )}
             >
               <span className="font-chrome text-[11px]">
-                {isOver ? "Drop to move here" : "Empty"}
+                {isOver ? t("dropToMove") : t("empty")}
               </span>
             </div>
           ) : null}

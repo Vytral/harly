@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useTranslations } from "next-intl";
 
 import { rebuildVectorMark, type VectorMark } from "./signature-vector";
 
@@ -13,9 +14,10 @@ type Props = {
 };
 
 export function VectorSignaturePreview({ d, areContours, viewBox, strokeWidth = 0, className }: Props) {
+  const t = useTranslations("features.documents.vectorSignaturePreview");
   if (!d) return null;
   return (
-    <div className={className ?? "rounded-lg border bg-white p-2"} aria-label="Vector signature preview">
+    <div className={className ?? "rounded-lg border bg-white p-2"} aria-label={t("previewLabel")}>
       <svg viewBox={viewBox || "0 0 1 1"} preserveAspectRatio="xMidYMid meet" className="h-20 w-full" role="img">
         <path
           d={d}
@@ -31,6 +33,7 @@ export function VectorSignaturePreview({ d, areContours, viewBox, strokeWidth = 
 }
 
 export function SavedVectorThumb({ vectorData }: { vectorData: string }) {
+  const t = useTranslations("features.documents.vectorSignaturePreview");
   const [mark, setMark] = useState<VectorMark | null>(null);
   const [failed, setFailed] = useState(false);
 
@@ -51,13 +54,13 @@ export function SavedVectorThumb({ vectorData }: { vectorData: string }) {
   }, [vectorData]);
 
   if (failed) {
-    return <span className="px-2 text-center text-[11px] text-muted-foreground">Unreadable vector</span>;
+    return <span className="px-2 text-center text-[11px] text-muted-foreground">{t("unreadable")}</span>;
   }
   if (!mark) {
     return <span className="h-10 w-3/4 animate-pulse rounded bg-muted" />;
   }
   return (
-    <svg viewBox={mark.viewBox} preserveAspectRatio="xMidYMid meet" className="max-h-full max-w-full" role="img" aria-label="Saved vector signature">
+    <svg viewBox={mark.viewBox} preserveAspectRatio="xMidYMid meet" className="max-h-full max-w-full" role="img" aria-label={t("savedLabel")}>
       <path
         d={mark.outlinePath}
         fill={mark.areContours ? "#171717" : "none"}

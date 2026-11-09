@@ -9,6 +9,7 @@ import {
   type ReactNode,
 } from "react";
 import { useRouter } from "next/navigation";
+import { useLocale, useTranslations } from "next-intl";
 import { toast } from "@/lib/notification-island/toast";
 
 import {
@@ -101,8 +102,8 @@ const initialActionState = { success: false } as {
   error?: string;
 };
 
-function formatInvitationDate(date: Date) {
-  return new Intl.DateTimeFormat("en-US", {
+function formatInvitationDate(date: Date, locale: string) {
+  return new Intl.DateTimeFormat(locale, {
     month: "short",
     day: "numeric",
     year: "numeric",
@@ -138,6 +139,7 @@ export function MembersAndRoles({
   canEditMemberAccess: boolean;
   emailIdentity: WorkspaceEmailIdentityStatus;
 }) {
+  const t = useTranslations("features.workspaces.membersSection");
   const [creatingRole, setCreatingRole] = useState(false);
   const [tab, setTab] = useState("members");
 
@@ -150,7 +152,7 @@ export function MembersAndRoles({
             className="gap-2 rounded-[var(--radius-sm)] px-4 data-[state=active]:shadow-sm"
           >
             <UsersThreeIcon className="size-4" />
-            Members
+            {t("tabMembers")}
             <CountChip active={tab === "members"}>{members.length}</CountChip>
           </TabsTrigger>
           {canManageRoles ? (
@@ -159,7 +161,7 @@ export function MembersAndRoles({
               className="gap-2 rounded-[var(--radius-sm)] px-4 data-[state=active]:shadow-sm"
             >
               <ShieldCheckDuotoneIcon className="size-4" />
-              Roles
+              {t("tabRoles")}
               <CountChip active={tab === "roles"}>{roles.length}</CountChip>
             </TabsTrigger>
           ) : null}
@@ -170,7 +172,7 @@ export function MembersAndRoles({
             <SheetTrigger asChild>
               <Button>
                 <PlusIcon className="size-4" />
-                New role
+                {t("newRole")}
               </Button>
             </SheetTrigger>
             <RoleEditor mode="create" onDone={() => setCreatingRole(false)} />
@@ -286,6 +288,8 @@ function MembersPanel({
   canEditMemberAccess: boolean;
   emailIdentity: WorkspaceEmailIdentityStatus;
 }) {
+  const t = useTranslations("features.workspaces.membersSection");
+  const locale = useLocale();
   const router = useRouter();
   const [overrides, setOverrides] = useState<Record<string, string>>({});
   const [query, setQuery] = useState("");
@@ -329,12 +333,10 @@ function MembersPanel({
         changes: dirty.map((m) => ({ memberId: m.id, role: overrides[m.id] })),
       });
       if (!result.success) {
-        toast.error(result.error ?? "Could not save changes.");
+        toast.error(result.error ?? t("saveFailed"));
         return;
       }
-      toast.success(
-        `Saved ${dirty.length} role ${dirty.length === 1 ? "change" : "changes"}`,
-      );
+      toast.success(t("savedRoleChanges", { count: dirty.length }));
       setOverrides({});
       router.refresh();
     });
@@ -351,12 +353,12 @@ function MembersPanel({
             <Input
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              placeholder="Search name or email…"
+              placeholder={t("searchPlaceholder")}
               className="pl-9"
             />
           </div>
           <p className="hidden shrink-0 text-xs text-muted-foreground md:block">
-            Showing {visible.length} member{visible.length !== 1 ? "s" : ""}
+            {t("showingMembers", { count: visible.length })}
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -365,7 +367,7 @@ function MembersPanel({
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">All roles</SelectItem>
+              <SelectItem value="all">{t("allRoles")}</SelectItem>
               {assignableRoles.map((r) => (
                 <SelectItem key={r.key} value={r.key}>
                   {r.name}
@@ -391,7 +393,7 @@ function MembersPanel({
                   trigger={
                     <Button>
                       <UserPlusIcon className="size-4" />
-                      Invite
+                      {t("invite")}
                     </Button>
                   }
                 />
@@ -404,10 +406,10 @@ function MembersPanel({
       <Card className="gap-0 overflow-hidden py-0">
         <div className="flex items-center justify-between border-b border-hairline bg-card-inset px-5 py-2.5">
           <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-            {visible.length} {visible.length === 1 ? "member" : "members"}
+            {t("memberCount", { count: visible.length })}
           </p>
           <p className="hidden text-xs font-medium uppercase tracking-wide text-muted-foreground sm:block">
-            Role
+            {t("roleColumn")}
           </p>
         </div>
         <CardContent className="p-0">
@@ -431,7 +433,7 @@ function MembersPanel({
                       ) : null}
                       {member.isCurrentUser ? (
                         <Badge variant="secondary" className="shrink-0">
-                          You
+                          {t("you")}
                         </Badge>
                       ) : null}
                     </p>
@@ -440,7 +442,7 @@ function MembersPanel({
                     </p>
                     {member.status !== "active" ? (
                       <Badge variant={member.status === "suspended" ? "warning" : "outline"} className="mt-1 text-[10px]">
-                        {member.status === "suspended" ? "Suspended" : "Inactive"}
+                        {member.status === "suspended" ? t("suspended") : t("inactive")}
                       </Badge>
                     ) : null}
                     {emailIdentity.enabled ? (
@@ -454,7 +456,7 @@ function MembersPanel({
                               type="button"
                               onClick={() => setEditingIdentity(member)}
                               className="shrink-0 text-muted-foreground/70 hover:text-foreground"
-                              title="Edit sender address"
+                              title={t("editSenderAddress")}
                             >
                               <PencilIcon className="size-3" />
                             </button>
@@ -470,7 +472,7 @@ function MembersPanel({
                               });
                               if (!result.success) {
                                 toast.error(
-                                  result.error ?? "Could not generate a sender address.",
+                                  result.error ?? t("generateSenderFailed"),
                                 );
                                 return;
                               }
@@ -479,7 +481,7 @@ function MembersPanel({
                           }
                           className="text-[11px] text-muted-foreground underline-offset-2 hover:underline"
                         >
-                          Not set — generate
+                          {t("notSetGenerate")}
                         </button>
                       ) : null
                     ) : null}
@@ -535,9 +537,9 @@ function MembersPanel({
                 <span className="flex size-11 items-center justify-center rounded-2xl bg-muted text-muted-foreground">
                   <UsersThreeIcon className="size-5" />
                 </span>
-                <p className="text-sm font-medium">No members match</p>
+                <p className="text-sm font-medium">{t("noMembersMatch")}</p>
                 <p className="text-xs text-muted-foreground">
-                  Try a different search or role filter.
+                  {t("tryDifferentSearch")}
                 </p>
               </li>
             ) : null}
@@ -548,7 +550,7 @@ function MembersPanel({
       {pendingInvitations.length > 0 ? (
         <div className="space-y-2.5">
           <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-            Pending invitations
+            {t("pendingInvitations")}
           </p>
           <Card className="gap-0 overflow-hidden py-0">
             <ul className="divide-y">
@@ -565,12 +567,14 @@ function MembersPanel({
                       <p className="flex items-center gap-2 truncate text-sm font-medium">
                         <span className="truncate">{item.email}</span>
                         <Badge variant="warning" className="shrink-0">
-                          Invited
+                          {t("invited")}
                         </Badge>
                       </p>
                       <p className="text-xs text-muted-foreground">
-                        {roleName(item.role)} · expires{" "}
-                        {formatInvitationDate(item.expiresAt)}
+                        {t("roleExpires", {
+                          role: roleName(item.role),
+                          date: formatInvitationDate(item.expiresAt, locale),
+                        })}
                       </p>
                     </div>
                   </div>
@@ -590,8 +594,10 @@ function MembersPanel({
       {canEditMembers && dirty.length > 0 ? (
         <div className="sticky bottom-4 z-10 flex items-center justify-between gap-3 rounded-2xl border border-pine/30 bg-card px-4 py-3 shadow-[0_8px_24px_-12px_rgba(31,41,38,0.25)]">
           <p className="text-sm">
-            <span className="font-medium">{dirty.length}</span> unsaved role{" "}
-            {dirty.length === 1 ? "change" : "changes"}
+            {t.rich("unsavedRoleChanges", {
+              count: dirty.length,
+              strong: (chunks) => <span className="font-medium">{chunks}</span>,
+            })}
           </p>
           <div className="flex items-center gap-2">
             <Button
@@ -600,10 +606,10 @@ function MembersPanel({
               disabled={saving}
               onClick={() => setOverrides({})}
             >
-              Discard
+              {t("discard")}
             </Button>
             <Button size="sm" disabled={saving} onClick={saveChanges}>
-              {saving ? "Saving…" : "Save changes"}
+              {saving ? t("saving") : t("saveChanges")}
             </Button>
           </div>
         </div>
@@ -631,6 +637,7 @@ function SenderIdentityDialog({
   onClose: () => void;
   onSaved: () => void;
 }) {
+  const t = useTranslations("features.workspaces.membersSection");
   const [localPart, setLocalPart] = useState("");
   const [displayName, setDisplayName] = useState("");
   const [saving, startSaving] = useTransition();
@@ -653,12 +660,12 @@ function SenderIdentityDialog({
           }}
         >
           <DialogHeader>
-            <DialogTitle>Sender address for {member.name}</DialogTitle>
+            <DialogTitle>{t("senderAddressTitle", { name: member.name })}</DialogTitle>
           </DialogHeader>
           <div className="space-y-3">
             <div className="space-y-1.5">
               <Label htmlFor="sender-local-part" className="text-xs text-muted-foreground">
-                Local-part
+                {t("localPart")}
               </Label>
               <Input
                 id="sender-local-part"
@@ -669,7 +676,7 @@ function SenderIdentityDialog({
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="sender-display-name" className="text-xs text-muted-foreground">
-                Display name
+                {t("displayName")}
               </Label>
               <Input
                 id="sender-display-name"
@@ -681,7 +688,7 @@ function SenderIdentityDialog({
           </div>
           <DialogFooter>
             <Button variant="ghost" onClick={onClose} disabled={saving}>
-              Cancel
+              {t("cancel")}
             </Button>
             <Button
               disabled={saving}
@@ -693,15 +700,15 @@ function SenderIdentityDialog({
                     displayName,
                   });
                   if (!result.success) {
-                    toast.error(result.error ?? "Could not update the sender address.");
+                    toast.error(result.error ?? t("senderUpdateFailed"));
                     return;
                   }
-                  toast.success("Sender address updated.");
+                  toast.success(t("senderUpdated"));
                   onSaved();
                 })
               }
             >
-              {saving ? "Saving…" : "Save"}
+              {saving ? t("saving") : t("save")}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -725,6 +732,7 @@ function MemberRowActions({
   canEditMemberAccess: boolean;
   canRemoveMembers: boolean;
 }) {
+  const t = useTranslations("features.workspaces.membersSection");
   const [manageOpen, setManageOpen] = useState(false);
   const [accessOpen, setAccessOpen] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
@@ -738,7 +746,7 @@ function MemberRowActions({
             variant="ghost"
             size="icon"
             className="text-muted-foreground hover:text-foreground"
-            aria-label={`Actions for ${member.name}`}
+            aria-label={t("actionsFor", { name: member.name })}
           >
             <DotsThreeVerticalIcon className="size-4" />
           </Button>
@@ -747,13 +755,13 @@ function MemberRowActions({
           {canEditMemberAccess ? (
             <DropdownMenuItem onSelect={() => setAccessOpen(true)}>
               <ShieldCheckDuotoneIcon className="size-4" />
-              Access profile
+              {t("accessProfile")}
             </DropdownMenuItem>
           ) : null}
           {canManageMemberAccounts ? (
             <DropdownMenuItem onSelect={() => setManageOpen(true)}>
               <GearSixIcon className="size-4" />
-              Manage account
+              {t("manageAccount")}
             </DropdownMenuItem>
           ) : null}
           {canManageMemberAccounts && canRemoveMembers ? (
@@ -765,7 +773,7 @@ function MemberRowActions({
               onSelect={() => setConfirmOpen(true)}
             >
               <TrashIcon className="size-4" />
-              Remove
+              {t("remove")}
             </DropdownMenuItem>
           ) : null}
         </DropdownMenuContent>
@@ -781,7 +789,7 @@ function MemberRowActions({
       ) : null}
       {canEditMemberAccess ? (
         <Sheet open={accessOpen} onOpenChange={setAccessOpen} mobilePresentation="bottom-on-mobile">
-          <DrawerLayout title={`Access profile · ${member.name}`} className="sm:max-w-lg" description="Manage this member's organizational scope and lifecycle status.">
+          <DrawerLayout title={t("accessProfileTitle", { name: member.name })} className="sm:max-w-lg" description={t("accessProfileDescription")}>
             <MemberAccessForm member={member} workspaceMembers={workspaceMembers} onDone={() => setAccessOpen(false)} />
           </DrawerLayout>
         </Sheet>
@@ -806,6 +814,7 @@ function RemoveMemberDialog({
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }) {
+  const t = useTranslations("features.workspaces.membersSection");
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
 
@@ -815,11 +824,11 @@ function RemoveMemberDialog({
       fd.set("memberId", member.id);
       const result = await removeWorkspaceMemberAction(initialActionState, fd);
       if (!result.success) {
-        toast.error(result.error ?? "Unable to remove member.");
+        toast.error(result.error ?? t("removeMemberFailed"));
         return;
       }
       onOpenChange(false);
-      toast.success(`${member.name} removed.`);
+      toast.success(t("memberRemoved", { name: member.name }));
       router.refresh();
     });
   }
@@ -828,11 +837,9 @@ function RemoveMemberDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Remove {member.name}?</DialogTitle>
+          <DialogTitle>{t("removeMemberTitle", { name: member.name })}</DialogTitle>
           <DialogDescription>
-            {member.name} ({member.email}) loses access to this workspace
-            immediately. Their candidate notes and activity stay. You can invite
-            them back later.
+            {t("removeMemberDescription", { name: member.name, email: member.email })}
           </DialogDescription>
         </DialogHeader>
         <DialogFooter>
@@ -841,10 +848,10 @@ function RemoveMemberDialog({
             onClick={() => onOpenChange(false)}
             disabled={isPending}
           >
-            Cancel
+            {t("cancel")}
           </Button>
           <Button variant="destructive" onClick={remove} disabled={isPending}>
-            {isPending ? "Removing…" : "Remove member"}
+            {isPending ? t("removing") : t("removeMember")}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -853,6 +860,7 @@ function RemoveMemberDialog({
 }
 
 function ResendInvitationButton({ invitationId }: { invitationId: string }) {
+  const t = useTranslations("features.workspaces.membersSection");
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
 
@@ -866,20 +874,21 @@ function ResendInvitationButton({ invitationId }: { invitationId: string }) {
         startTransition(async () => {
           const result = await resendWorkspaceInvitationAction(invitationId);
           if (result.success) {
-            toast.success("Invitation resent.");
+            toast.success(t("invitationResent"));
             router.refresh();
           } else {
-            toast.error(result.error ?? "Unable to resend invitation.");
+            toast.error(result.error ?? t("resendFailed"));
           }
         });
       }}
     >
-      {isPending ? "Sending…" : "Resend"}
+      {isPending ? t("sending") : t("resend")}
     </Button>
   );
 }
 
 function CancelInvitationButton({ invitationId }: { invitationId: string }) {
+  const t = useTranslations("features.workspaces.membersSection");
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
 
@@ -893,15 +902,15 @@ function CancelInvitationButton({ invitationId }: { invitationId: string }) {
         startTransition(async () => {
           const result = await cancelWorkspaceInvitationAction(invitationId);
           if (result.success) {
-            toast.success("Invitation canceled.");
+            toast.success(t("invitationCanceled"));
             router.refresh();
           } else {
-            toast.error(result.error ?? "Unable to cancel invitation.");
+            toast.error(result.error ?? t("cancelInvitationFailed"));
           }
         });
       }}
     >
-      {isPending ? "Canceling…" : "Cancel"}
+      {isPending ? t("canceling") : t("cancel")}
     </Button>
   );
 }
@@ -919,26 +928,27 @@ function ManageMemberAccountSheet({
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }) {
+  const t = useTranslations("features.workspaces.membersSection");
   return (
     <Sheet open={open} onOpenChange={onOpenChange} mobilePresentation="bottom-on-mobile">
       <DrawerLayout
-        title={`Manage ${member.name}`}
+        title={t("manageTitle", { name: member.name })}
         className="sm:max-w-lg"
-        description="Update this member's profile or reset their password. Changes take effect immediately."
+        description={t("manageDescription")}
       >
         <Tabs defaultValue="profile" className="gap-5">
           <TabsList className="w-full">
             <TabsTrigger value="profile" className="flex-1 gap-2">
               <GearSixIcon className="size-4" />
-              Profile
+              {t("tabProfile")}
             </TabsTrigger>
             <TabsTrigger value="password" className="flex-1 gap-2">
               <KeyDuotoneIcon className="size-4" />
-              Password
+              {t("tabPassword")}
             </TabsTrigger>
             <TabsTrigger value="access" className="flex-1 gap-2">
               <ShieldCheckDuotoneIcon className="size-4" />
-              Access
+              {t("tabAccess")}
             </TabsTrigger>
           </TabsList>
           <TabsContent value="profile">
@@ -963,6 +973,7 @@ function ManageMemberAccountSheet({
 }
 
 function MemberAccessForm({ member, workspaceMembers, onDone }: { member: WorkspaceMemberItem; workspaceMembers: WorkspaceMemberItem[]; onDone: () => void }) {
+  const t = useTranslations("features.workspaces.membersSection");
   const router = useRouter();
   const [saving, startSave] = useTransition();
   const [sessions, setSessions] = useState<SessionDevice[] | null>(null);
@@ -973,23 +984,23 @@ function MemberAccessForm({ member, workspaceMembers, onDone }: { member: Worksp
     startSave(async () => {
       const result = await updateMemberAccessAction({ memberId: member.id, ...form, managerMemberId: form.managerMemberId === "none" ? null : form.managerMemberId });
       if (!result.success) {
-        toast.error(result.error ?? "Could not update access profile.");
+        toast.error(result.error ?? t("accessUpdateFailed"));
         return;
       }
-      toast.success("Access profile updated."); onDone(); router.refresh();
+      toast.success(t("accessUpdated")); onDone(); router.refresh();
     });
   }
   return <div className="space-y-4">
-    <p className="text-sm text-muted-foreground">These attributes control contextual access and reporting inside this workspace.</p>
+    <p className="text-sm text-muted-foreground">{t("accessDescription")}</p>
     <div className="grid gap-4 sm:grid-cols-2">
-      <div className="space-y-1.5"><Label htmlFor="mm-department">Department</Label><Input id="mm-department" value={form.department} onChange={(e) => setForm((p) => ({ ...p, department: e.target.value }))} placeholder="Engineering" /></div>
-      <div className="space-y-1.5"><Label htmlFor="mm-region">Region</Label><Input id="mm-region" value={form.region} onChange={(e) => setForm((p) => ({ ...p, region: e.target.value }))} placeholder="LATAM" /></div>
-      <div className="space-y-1.5"><Label htmlFor="mm-team">Team</Label><Input id="mm-team" value={form.team} onChange={(e) => setForm((p) => ({ ...p, team: e.target.value }))} placeholder="People Operations" /></div>
-      <div className="space-y-1.5"><Label htmlFor="mm-manager">Manager</Label><Select value={form.managerMemberId} onValueChange={(value) => setForm((p) => ({ ...p, managerMemberId: value }))}><SelectTrigger id="mm-manager"><SelectValue placeholder="No manager" /></SelectTrigger><SelectContent><SelectItem value="none">No manager</SelectItem>{workspaceMembers.filter((candidate) => candidate.id !== member.id && candidate.status === "active").map((candidate) => <SelectItem key={candidate.id} value={candidate.id}>{candidate.name}</SelectItem>)}</SelectContent></Select></div>
+      <div className="space-y-1.5"><Label htmlFor="mm-department">{t("department")}</Label><Input id="mm-department" value={form.department} onChange={(e) => setForm((p) => ({ ...p, department: e.target.value }))} placeholder={t("departmentPlaceholder")} /></div>
+      <div className="space-y-1.5"><Label htmlFor="mm-region">{t("region")}</Label><Input id="mm-region" value={form.region} onChange={(e) => setForm((p) => ({ ...p, region: e.target.value }))} placeholder={t("regionPlaceholder")} /></div>
+      <div className="space-y-1.5"><Label htmlFor="mm-team">{t("team")}</Label><Input id="mm-team" value={form.team} onChange={(e) => setForm((p) => ({ ...p, team: e.target.value }))} placeholder={t("teamPlaceholder")} /></div>
+      <div className="space-y-1.5"><Label htmlFor="mm-manager">{t("manager")}</Label><Select value={form.managerMemberId} onValueChange={(value) => setForm((p) => ({ ...p, managerMemberId: value }))}><SelectTrigger id="mm-manager"><SelectValue placeholder={t("noManager")} /></SelectTrigger><SelectContent><SelectItem value="none">{t("noManager")}</SelectItem>{workspaceMembers.filter((candidate) => candidate.id !== member.id && candidate.status === "active").map((candidate) => <SelectItem key={candidate.id} value={candidate.id}>{candidate.name}</SelectItem>)}</SelectContent></Select></div>
     </div>
-    <div className="space-y-1.5"><Label htmlFor="mm-status">Membership status</Label><Select value={form.status} onValueChange={(value: typeof form.status) => setForm((p) => ({ ...p, status: value }))}><SelectTrigger id="mm-status"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="active">Active</SelectItem><SelectItem value="suspended">Suspended</SelectItem><SelectItem value="inactive">Inactive</SelectItem></SelectContent></Select></div>
-    <div className="space-y-2 border-t pt-4"><div><p className="text-sm font-medium">Active devices</p><p className="text-xs text-muted-foreground">Revoke a session if this member loses a device or leaves the team.</p></div>{sessions === null ? <p className="text-xs text-muted-foreground">Loading sessions…</p> : sessions.length === 0 ? <p className="text-xs text-muted-foreground">No active sessions.</p> : <div className="divide-y rounded-lg border">{sessions.map((item) => <div key={item.id} className="flex items-center gap-3 px-3 py-2.5"><div className="min-w-0 flex-1"><p className="truncate text-xs font-medium">{item.userAgent ?? "Unknown device"}</p><p className="text-[11px] text-muted-foreground">{item.ipAddress ?? "Unknown IP"} · {item.updatedAt.toLocaleString()}</p></div><Button type="button" size="sm" variant="outline" disabled={sessionPending} onClick={() => startSession(async () => { const result = await revokeMemberSessionAction(member.id, item.id); if (!result.ok) { toast.error(result.error); return; } setSessions((previous) => previous?.filter((session) => session.id !== item.id) ?? []); toast.success("Session revoked."); })}>Revoke</Button></div>)}</div>}</div>
-    <div className="flex justify-end gap-2 border-t pt-4"><SheetClose asChild><Button variant="ghost" disabled={saving}>Cancel</Button></SheetClose><Button onClick={submit} disabled={saving}>{saving ? "Saving…" : "Save access"}</Button></div>
+    <div className="space-y-1.5"><Label htmlFor="mm-status">{t("membershipStatus")}</Label><Select value={form.status} onValueChange={(value: typeof form.status) => setForm((p) => ({ ...p, status: value }))}><SelectTrigger id="mm-status"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="active">{t("active")}</SelectItem><SelectItem value="suspended">{t("suspended")}</SelectItem><SelectItem value="inactive">{t("inactive")}</SelectItem></SelectContent></Select></div>
+    <div className="space-y-2 border-t pt-4"><div><p className="text-sm font-medium">{t("activeDevices")}</p><p className="text-xs text-muted-foreground">{t("revokeHint")}</p></div>{sessions === null ? <p className="text-xs text-muted-foreground">{t("loadingSessions")}</p> : sessions.length === 0 ? <p className="text-xs text-muted-foreground">{t("noActiveSessions")}</p> : <div className="divide-y rounded-lg border">{sessions.map((item) => <div key={item.id} className="flex items-center gap-3 px-3 py-2.5"><div className="min-w-0 flex-1"><p className="truncate text-xs font-medium">{item.userAgent ?? t("unknownDevice")}</p><p className="text-[11px] text-muted-foreground">{item.ipAddress ?? t("unknownIp")} · {item.updatedAt.toLocaleString()}</p></div><Button type="button" size="sm" variant="outline" disabled={sessionPending} onClick={() => startSession(async () => { const result = await revokeMemberSessionAction(member.id, item.id); if (!result.ok) { toast.error(result.error); return; } setSessions((previous) => previous?.filter((session) => session.id !== item.id) ?? []); toast.success(t("sessionRevoked")); })}>{t("revoke")}</Button></div>)}</div>}</div>
+    <div className="flex justify-end gap-2 border-t pt-4"><SheetClose asChild><Button variant="ghost" disabled={saving}>{t("cancel")}</Button></SheetClose><Button onClick={submit} disabled={saving}>{saving ? t("saving") : t("saveAccess")}</Button></div>
   </div>;
 }
 
@@ -1000,6 +1011,7 @@ function EditMemberProfileForm({
   member: WorkspaceMemberItem;
   onDone: () => void;
 }) {
+  const t = useTranslations("features.workspaces.membersSection");
   const router = useRouter();
   const [saving, startSave] = useTransition();
   const [form, setForm] = useState({
@@ -1024,10 +1036,10 @@ function EditMemberProfileForm({
         ...form,
       });
       if (!result.success) {
-        toast.error(result.error ?? "Could not update profile.");
+        toast.error(result.error ?? t("profileUpdateFailed"));
         return;
       }
-      toast.success("Profile updated.");
+      toast.success(t("profileUpdated"));
       onDone();
       router.refresh();
     });
@@ -1037,7 +1049,7 @@ function EditMemberProfileForm({
     <div className="space-y-4">
       <div className="grid gap-4 sm:grid-cols-2">
         <div className="space-y-1.5">
-          <Label htmlFor="mm-name">Name</Label>
+          <Label htmlFor="mm-name">{t("name")}</Label>
           <Input
             id="mm-name"
             value={form.name}
@@ -1045,7 +1057,7 @@ function EditMemberProfileForm({
           />
         </div>
         <div className="space-y-1.5">
-          <Label htmlFor="mm-email">Login email</Label>
+          <Label htmlFor="mm-email">{t("loginEmail")}</Label>
           <Input
             id="mm-email"
             type="email"
@@ -1057,16 +1069,16 @@ function EditMemberProfileForm({
 
       <div className="grid gap-4 sm:grid-cols-2">
         <div className="space-y-1.5">
-          <Label htmlFor="mm-title">Job title</Label>
+          <Label htmlFor="mm-title">{t("jobTitle")}</Label>
           <Input
             id="mm-title"
             value={form.jobTitle}
             onChange={(e) => set("jobTitle")(e.target.value)}
-            placeholder="Technical Recruiter"
+            placeholder={t("jobTitlePlaceholder")}
           />
         </div>
         <div className="space-y-1.5">
-          <Label htmlFor="mm-phone">Phone</Label>
+          <Label htmlFor="mm-phone">{t("phone")}</Label>
           <Input
             id="mm-phone"
             value={form.phone}
@@ -1076,7 +1088,7 @@ function EditMemberProfileForm({
       </div>
 
       <div className="space-y-1.5">
-        <Label htmlFor="mm-location">Location</Label>
+        <Label htmlFor="mm-location">{t("location")}</Label>
         <Input
           id="mm-location"
           value={form.location}
@@ -1085,7 +1097,7 @@ function EditMemberProfileForm({
       </div>
 
       <div className="space-y-1.5">
-        <Label htmlFor="mm-bio">Bio</Label>
+        <Label htmlFor="mm-bio">{t("bio")}</Label>
         <Textarea
           id="mm-bio"
           value={form.bio}
@@ -1098,7 +1110,7 @@ function EditMemberProfileForm({
         <SocialLinkField
           id="mm-linkedin"
           icon={LinkedinLogo}
-          label="LinkedIn"
+          label={t("linkedin")}
           placeholder="https://linkedin.com/in/username"
           value={form.linkedinUrl}
           onChange={set("linkedinUrl")}
@@ -1106,7 +1118,7 @@ function EditMemberProfileForm({
         <SocialLinkField
           id="mm-github"
           icon={GithubIcon}
-          label="GitHub"
+          label={t("github")}
           placeholder="https://github.com/username"
           value={form.githubUrl}
           onChange={set("githubUrl")}
@@ -1114,7 +1126,7 @@ function EditMemberProfileForm({
         <SocialLinkField
           id="mm-website"
           icon={GlobeIcon}
-          label="Website"
+          label={t("website")}
           placeholder="https://yoursite.com"
           value={form.websiteUrl}
           onChange={set("websiteUrl")}
@@ -1124,11 +1136,11 @@ function EditMemberProfileForm({
       <div className="flex justify-end gap-2 border-t pt-4">
         <SheetClose asChild>
           <Button variant="ghost" disabled={saving}>
-            Cancel
+            {t("cancel")}
           </Button>
         </SheetClose>
         <Button onClick={submit} disabled={saving || !form.name || !form.email}>
-          {saving ? "Saving…" : "Save profile"}
+          {saving ? t("saving") : t("saveProfile")}
         </Button>
       </div>
     </div>
@@ -1142,6 +1154,7 @@ function ResetMemberPasswordForm({
   member: WorkspaceMemberItem;
   onDone: () => void;
 }) {
+  const t = useTranslations("features.workspaces.membersSection");
   const [saving, startSave] = useTransition();
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
@@ -1151,7 +1164,7 @@ function ResetMemberPasswordForm({
 
   function submit() {
     if (password !== confirm) {
-      toast.error("Passwords do not match.");
+      toast.error(t("passwordsMismatch"));
       return;
     }
     startSave(async () => {
@@ -1160,10 +1173,10 @@ function ResetMemberPasswordForm({
         password,
       });
       if (!result.success) {
-        toast.error(result.error ?? "Could not reset password.");
+        toast.error(result.error ?? t("passwordResetFailed"));
         return;
       }
-      toast.success(`Password reset. ${member.name} must sign in again.`);
+      toast.success(t("passwordReset", { name: member.name }));
       setPassword("");
       setConfirm("");
       onDone();
@@ -1173,11 +1186,10 @@ function ResetMemberPasswordForm({
   return (
     <div className="space-y-4">
       <div className="rounded-lg border border-clay/25 bg-clay/5 px-3 py-2.5 text-xs text-muted-foreground">
-        Setting a new password signs {member.name} out of all sessions. Share
-        the new password with them over a secure channel.
+        {t("passwordWarning", { name: member.name })}
       </div>
       <div className="space-y-1.5">
-        <Label htmlFor="mm-pw">New password</Label>
+        <Label htmlFor="mm-pw">{t("newPassword")}</Label>
         <Input
           id="mm-pw"
           type="password"
@@ -1187,12 +1199,12 @@ function ResetMemberPasswordForm({
         />
         {tooShort ? (
           <p className="text-xs text-destructive">
-            Use at least 8 characters.
+            {t("atLeast8Characters")}
           </p>
         ) : null}
       </div>
       <div className="space-y-1.5">
-        <Label htmlFor="mm-pw2">Confirm password</Label>
+        <Label htmlFor="mm-pw2">{t("confirmPassword")}</Label>
         <Input
           id="mm-pw2"
           type="password"
@@ -1201,13 +1213,13 @@ function ResetMemberPasswordForm({
           autoComplete="new-password"
         />
         {mismatch ? (
-          <p className="text-xs text-destructive">Passwords do not match.</p>
+          <p className="text-xs text-destructive">{t("passwordsMismatch")}</p>
         ) : null}
       </div>
       <div className="flex justify-end gap-2 border-t pt-4">
         <SheetClose asChild>
           <Button variant="ghost" disabled={saving}>
-            Cancel
+            {t("cancel")}
           </Button>
         </SheetClose>
         <Button
@@ -1215,7 +1227,7 @@ function ResetMemberPasswordForm({
           onClick={submit}
           disabled={saving || password.length < 8 || password !== confirm}
         >
-          {saving ? "Resetting…" : "Reset password"}
+          {saving ? t("resetting") : t("resetPassword")}
         </Button>
       </div>
     </div>
@@ -1237,6 +1249,7 @@ function CreateMemberButton({
 }: {
   assignableRoles: AssignableRole[];
 }) {
+  const t = useTranslations("features.workspaces.membersSection");
   const [open, setOpen] = useState(false);
 
   return (
@@ -1244,13 +1257,13 @@ function CreateMemberButton({
       <SheetTrigger asChild>
         <Button variant="outline">
           <PlusIcon className="size-4" />
-          Create member
+          {t("createMember")}
         </Button>
       </SheetTrigger>
       <DrawerLayout
-        title="Create a member"
+        title={t("createMemberTitle")}
         className="sm:max-w-lg"
-        description="Provision an account directly. The member signs in with the password you set, then must choose a new one."
+        description={t("createMemberDescription")}
       >
         <CreateMemberForm
           assignableRoles={assignableRoles}
@@ -1268,6 +1281,7 @@ function CreateMemberForm({
   assignableRoles: AssignableRole[];
   onDone: () => void;
 }) {
+  const t = useTranslations("features.workspaces.membersSection");
   const router = useRouter();
   const [saving, startSave] = useTransition();
   const assignable = assignableRoles.filter((r) => r.key !== "owner");
@@ -1288,7 +1302,7 @@ function CreateMemberForm({
 
   function copyPassword() {
     copyText(form.password);
-    toast.success("Password copied");
+    toast.success(t("passwordCopied"));
   }
 
   function submit() {
@@ -1302,10 +1316,10 @@ function CreateMemberForm({
         jobTitle: form.jobTitle || undefined,
       });
       if (!result.success) {
-        toast.error(result.error ?? "Could not create member.");
+        toast.error(result.error ?? t("createMemberFailed"));
         return;
       }
-      toast.success(`${form.name} added. Share their password securely.`);
+      toast.success(t("memberAdded", { name: form.name }));
       onDone();
       router.refresh();
     });
@@ -1318,10 +1332,10 @@ function CreateMemberForm({
           value={form.image || null}
           onChange={(url) => set("image")(url ?? "")}
           variant="avatar"
-          hint="Photo · optional"
+          hint={t("photoHint")}
         />
         <div className="flex-1 space-y-1.5">
-          <Label htmlFor="cm-name">Full name</Label>
+          <Label htmlFor="cm-name">{t("fullName")}</Label>
           <Input
             id="cm-name"
             value={form.name}
@@ -1333,7 +1347,7 @@ function CreateMemberForm({
 
       <div className="grid gap-4 sm:grid-cols-2">
         <div className="space-y-1.5">
-          <Label htmlFor="cm-email">Login email</Label>
+          <Label htmlFor="cm-email">{t("loginEmail")}</Label>
           <Input
             id="cm-email"
             type="email"
@@ -1343,7 +1357,7 @@ function CreateMemberForm({
           />
         </div>
         <div className="space-y-1.5">
-          <Label htmlFor="cm-role">Role</Label>
+          <Label htmlFor="cm-role">{t("role")}</Label>
           <Select value={form.role} onValueChange={set("role")}>
             <SelectTrigger id="cm-role" className="w-full">
               <SelectValue />
@@ -1360,17 +1374,17 @@ function CreateMemberForm({
       </div>
 
       <div className="space-y-1.5">
-        <Label htmlFor="cm-title">Job title</Label>
+        <Label htmlFor="cm-title">{t("jobTitle")}</Label>
         <Input
           id="cm-title"
           value={form.jobTitle}
           onChange={(e) => set("jobTitle")(e.target.value)}
-          placeholder="Technical Recruiter"
+          placeholder={t("jobTitlePlaceholder")}
         />
       </div>
 
       <div className="space-y-1.5">
-        <Label htmlFor="cm-pw">Temporary password</Label>
+        <Label htmlFor="cm-pw">{t("temporaryPassword")}</Label>
         <div className="flex gap-2">
           <Input
             id="cm-pw"
@@ -1383,7 +1397,7 @@ function CreateMemberForm({
             variant="outline"
             size="icon"
             onClick={() => set("password")(generatePassword())}
-            aria-label="Regenerate password"
+            aria-label={t("regeneratePassword")}
           >
             <ArrowsClockwiseIcon className="size-4" />
           </Button>
@@ -1392,20 +1406,20 @@ function CreateMemberForm({
             variant="outline"
             size="icon"
             onClick={copyPassword}
-            aria-label="Copy password"
+            aria-label={t("copyPassword")}
           >
             <CopyIcon className="size-4" />
           </Button>
         </div>
         <p className="text-xs text-muted-foreground">
-          The member is forced to set their own password on first sign-in.
+          {t("mustChangePassword")}
         </p>
       </div>
 
       <div className="flex justify-end gap-2 border-t pt-4">
         <SheetClose asChild>
           <Button variant="ghost" disabled={saving}>
-            Cancel
+            {t("cancel")}
           </Button>
         </SheetClose>
         <Button
@@ -1414,7 +1428,7 @@ function CreateMemberForm({
             saving || !form.name || !form.email || form.password.length < 8
           }
         >
-          {saving ? "Creating…" : "Create member"}
+          {saving ? t("creating") : t("createMember")}
         </Button>
       </div>
     </div>

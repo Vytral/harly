@@ -67,6 +67,7 @@ vi.mock("@/lib/concurrent", () => ({
   withConcurrencyRetry: async (operation: () => Promise<unknown>) => operation(),
 }));
 
+vi.mock("next-intl/server", async () => (await import("@/test-support/intl-server-mock")).intlServerMock);
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 
 import {

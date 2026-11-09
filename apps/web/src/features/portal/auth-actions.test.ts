@@ -1,3 +1,4 @@
+vi.mock("next-intl/server", async () => (await import("@/test-support/intl-server-mock")).intlServerMock);
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const m = vi.hoisted(() => ({
@@ -21,6 +22,8 @@ const m = vi.hoisted(() => ({
   hasCandidatePassword: vi.fn(async () => false),
   audit: vi.fn(async () => undefined),
   send: vi.fn(async () => undefined),
+  createElement: vi.fn(),
+  portalPasswordResetSubject: vi.fn(() => "localized-reset-subject"),
   sender: { send: vi.fn() } as { send: ReturnType<typeof vi.fn> } | null,
 }));
 
@@ -28,11 +31,11 @@ vi.mock("next/headers", () => ({
   cookies: async () => ({ get: () => m.session ? { value: "verified-session" } : undefined, set: vi.fn(), delete: vi.fn() }),
   headers: async () => new Headers({ "user-agent": "vitest" }),
 }));
-vi.mock("react", async (orig) => ({ ...(await orig<typeof import("react")>()), createElement: vi.fn() }));
+vi.mock("react", async (orig) => ({ ...(await orig<typeof import("react")>()), createElement: m.createElement }));
 vi.mock("@harly/db", () => ({ candidates: {}, db: {} }));
 vi.mock("@harly/emails", () => ({
-  PortalPasswordResetEmail: () => null,
-  portalPasswordResetSubject: () => "s",
+  PortalPasswordResetEmail: "PortalPasswordResetEmail",
+  portalPasswordResetSubject: m.portalPasswordResetSubject,
 }));
 vi.mock("@/lib/portal-auth", () => ({
   PORTAL_SESSION_COOKIE: "harly_portal_session",
@@ -204,6 +207,26 @@ describe("requestPortalPasswordResetEmailAction", () => {
     const unknown = await requestPortalPasswordResetEmailAction({ email: "ghost@x.com" });
     expect(known).toEqual(unknown);
     expect(m.send).toHaveBeenCalledTimes(1);
+  });
+
+  it("uses the candidate's saved locale for the reset subject and template", async () => {
+    m.findActiveCandidateByEmail.mockResolvedValueOnce({
+      id: "c1",
+      email: "k@x.com",
+      firstName: "Casey",
+      preferredEmailLocale: "nl-NL",
+    });
+
+    await requestPortalPasswordResetEmailAction({ email: "k@x.com" });
+
+    expect(m.portalPasswordResetSubject).toHaveBeenCalledWith("nl-NL");
+    expect(m.send).toHaveBeenCalledWith(expect.objectContaining({
+      subject: "localized-reset-subject",
+    }));
+    expect(m.createElement).toHaveBeenCalledWith("PortalPasswordResetEmail", expect.objectContaining({
+      candidateName: "Casey",
+      locale: "nl-NL",
+    }));
   });
 
   it("works without email by pointing to recovery codes", async () => {

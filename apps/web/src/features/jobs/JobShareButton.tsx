@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useTranslations } from "next-intl";
 import { Check, Link2 } from "lucide-react";
 import { toast } from "@/lib/notification-island/toast";
 
@@ -44,13 +45,14 @@ export function JobShareButton({
   workspaceSlug,
   slug,
 }: JobShareButtonProps) {
+  const t = useTranslations("jobs.share");
   const [copied, setCopied] = useState(false);
   const [embedCopied, setEmbedCopied] = useState(false);
 
   async function copyUrl() {
     await copyText(url);
     setCopied(true);
-    toast.success("Public link copied to clipboard.");
+    toast.success(t("linkCopied"));
     window.setTimeout(() => setCopied(false), 1800);
   }
 
@@ -64,11 +66,11 @@ export function JobShareButton({
     if (!embedSnippet) return;
     await copyText(embedSnippet);
     setEmbedCopied(true);
-    toast.success("Embed snippet copied.");
+    toast.success(t("embedCopied"));
     window.setTimeout(() => setEmbedCopied(false), 1800);
   }
 
-  const shareText = `We're hiring: ${title}`;
+  const shareText = t("shareText", { title });
   const linkedin = `https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(url)}`;
   const x = `https://twitter.com/intent/tweet?text=${encodeURIComponent(shareText)}&url=${encodeURIComponent(url)}`;
   const email = `mailto:?subject=${encodeURIComponent(shareText)}&body=${encodeURIComponent(`${shareText}\n\n${url}`)}`;
@@ -78,14 +80,14 @@ export function JobShareButton({
       <PopoverTrigger asChild>
         <Button type="button" variant="outline" size="sm" className="w-full justify-start">
           <Link2 className="size-4" />
-          Share job
+          {t("shareJob")}
         </Button>
       </PopoverTrigger>
       <PopoverContent align="end" className="w-80 max-w-[calc(100vw-2rem)] p-0">
         <div className="border-b p-3">
-          <p className="text-sm font-medium">Share this role</p>
+          <p className="text-sm font-medium">{t("title")}</p>
           <p className="mt-0.5 text-xs text-muted-foreground">
-            Post it, send it, or embed it on your own site.
+            {t("description")}
           </p>
         </div>
 
@@ -107,7 +109,7 @@ export function JobShareButton({
               ) : (
                 <CopyIcon className="size-3.5" />
               )}
-              {copied ? "Copied" : "Copy"}
+              {copied ? t("copied") : t("copy")}
             </Button>
           </div>
 
@@ -125,7 +127,7 @@ export function JobShareButton({
             <ShareChannel
               href={email}
               icon={<EnvelopeSimpleDuotoneIcon className="size-4" />}
-              label="Email"
+              label={t("email")}
               external={false}
             />
           </div>
@@ -140,9 +142,9 @@ export function JobShareButton({
                 <CodeDuotoneIcon className="size-4" />
               </span>
               <span className="min-w-0 flex-1">
-                <span className="block text-sm font-medium">Embed on your site</span>
+                <span className="block text-sm font-medium">{t("embedTitle")}</span>
                 <span className="block text-xs text-muted-foreground">
-                  Copy the single-job widget snippet
+                  {t("embedDescription")}
                 </span>
               </span>
               {embedCopied ? (

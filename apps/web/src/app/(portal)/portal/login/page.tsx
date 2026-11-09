@@ -1,5 +1,6 @@
 import { Suspense } from "react";
 import type { Metadata } from "next";
+import { getTranslations } from "next-intl/server";
 import { and, eq, sql } from "drizzle-orm";
 
 import { db, jobs, organization, workspaceSettings } from "@harly/db";
@@ -13,9 +14,10 @@ export const dynamic = "force-dynamic";
 export async function generateMetadata(): Promise<Metadata> {
   const workspace = await getSinglePortalWorkspace();
   if (!workspace) return {};
+  const t = await getTranslations("pages.portalLogin.page");
   const org = await getOrgBranding(workspace.id);
   return {
-    title: `${org.name} Candidate Portal`,
+    title: t("metadataTitle", { orgName: org.name }),
     icons: {
       icon: org.logo ?? "/favicon.svg",
     },
@@ -23,6 +25,7 @@ export async function generateMetadata(): Promise<Metadata> {
 }
 
 async function getOrgBranding(workspaceId: string) {
+  const t = await getTranslations("pages.portalLogin.page");
   const [row] = await db
     .select({
       name: organization.name,
@@ -52,7 +55,7 @@ async function getOrgBranding(workspaceId: string) {
 
   return {
     ...(row ?? {
-      name: "Careers Portal",
+      name: t("fallbackOrgName"),
       logo: null,
       tagline: null,
       primaryColor: null,
@@ -63,15 +66,16 @@ async function getOrgBranding(workspaceId: string) {
 }
 
 export default async function PortalLoginPage() {
+  const t = await getTranslations("pages.portalLogin.page");
   const workspace = await getSinglePortalWorkspace();
 
   if (!workspace) {
     return (
       <main className="flex min-h-screen items-center justify-center bg-background px-6 text-center">
         <div className="max-w-sm space-y-2">
-          <h1 className="text-xl font-semibold">Candidate portal unavailable</h1>
+          <h1 className="text-xl font-semibold">{t("unavailableTitle")}</h1>
           <p className="text-sm text-muted-foreground">
-            Use the careers page for the company you applied to, then open its candidate portal.
+            {t("unavailableBody")}
           </p>
         </div>
       </main>
@@ -88,7 +92,11 @@ export default async function PortalLoginPage() {
   const departments =
     org.departments.length > 0
       ? org.departments
-      : ["Engineering", "Design", "Product"];
+      : [
+          t("fallbackDepartments.engineering"),
+          t("fallbackDepartments.design"),
+          t("fallbackDepartments.product"),
+        ];
 
   return (
     <div className="flex min-h-screen flex-col bg-background lg:flex-row">
@@ -146,7 +154,7 @@ export default async function PortalLoginPage() {
 
           <p className="mt-3 max-w-xs text-sm leading-relaxed text-white/70">
             {org.tagline ??
-              "Sign in to track your applications and explore open opportunities."}
+              t("fallbackTagline")}
           </p>
 
           {/* Decorative role pills */}
@@ -168,10 +176,10 @@ export default async function PortalLoginPage() {
         <div className="w-full max-w-sm space-y-8">
           <div>
             <h2 className="text-2xl font-bold tracking-tight text-foreground">
-              Welcome back
+              {t("welcomeBack")}
             </h2>
             <p className="mt-1.5 text-sm text-muted-foreground">
-              Sign in to your candidate portal
+              {t("signInSubtitle")}
             </p>
           </div>
 
@@ -191,8 +199,11 @@ export default async function PortalLoginPage() {
           </Suspense>
 
           <p className="text-center text-xs text-muted-foreground">
-            Powered by{" "}
-            <span className="font-medium text-foreground">Harly</span>
+            {t.rich("poweredBy", {
+              b: (chunks) => (
+                <span className="font-medium text-foreground">{chunks}</span>
+              ),
+            })}
           </p>
         </div>
       </div>

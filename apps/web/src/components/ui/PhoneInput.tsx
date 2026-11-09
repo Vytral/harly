@@ -2,72 +2,73 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Check, ChevronDown, Search } from "lucide-react";
+import { useTranslations } from "next-intl";
 
 import { cn } from "@/lib/utils";
 
-type Country = { code: string; name: string; dial: string };
+type Country = { code: string; dial: string };
 
 // Curated set , majors + full LATAM + Europe + common. `dial` has no "+".
 const COUNTRIES: Country[] = [
-  { code: "CL", name: "Chile", dial: "56" },
-  { code: "AR", name: "Argentina", dial: "54" },
-  { code: "BO", name: "Bolivia", dial: "591" },
-  { code: "BR", name: "Brazil", dial: "55" },
-  { code: "CO", name: "Colombia", dial: "57" },
-  { code: "CR", name: "Costa Rica", dial: "506" },
-  { code: "EC", name: "Ecuador", dial: "593" },
-  { code: "MX", name: "Mexico", dial: "52" },
-  { code: "PA", name: "Panama", dial: "507" },
-  { code: "PE", name: "Peru", dial: "51" },
-  { code: "PY", name: "Paraguay", dial: "595" },
-  { code: "UY", name: "Uruguay", dial: "598" },
-  { code: "VE", name: "Venezuela", dial: "58" },
-  { code: "US", name: "United States", dial: "1" },
-  { code: "CA", name: "Canada", dial: "1" },
-  { code: "GB", name: "United Kingdom", dial: "44" },
-  { code: "IE", name: "Ireland", dial: "353" },
-  { code: "ES", name: "Spain", dial: "34" },
-  { code: "PT", name: "Portugal", dial: "351" },
-  { code: "FR", name: "France", dial: "33" },
-  { code: "DE", name: "Germany", dial: "49" },
-  { code: "IT", name: "Italy", dial: "39" },
-  { code: "NL", name: "Netherlands", dial: "31" },
-  { code: "BE", name: "Belgium", dial: "32" },
-  { code: "CH", name: "Switzerland", dial: "41" },
-  { code: "AT", name: "Austria", dial: "43" },
-  { code: "SE", name: "Sweden", dial: "46" },
-  { code: "NO", name: "Norway", dial: "47" },
-  { code: "DK", name: "Denmark", dial: "45" },
-  { code: "FI", name: "Finland", dial: "358" },
-  { code: "PL", name: "Poland", dial: "48" },
-  { code: "CZ", name: "Czechia", dial: "420" },
-  { code: "RO", name: "Romania", dial: "40" },
-  { code: "GR", name: "Greece", dial: "30" },
-  { code: "UA", name: "Ukraine", dial: "380" },
-  { code: "RU", name: "Russia", dial: "7" },
-  { code: "TR", name: "Turkey", dial: "90" },
-  { code: "IL", name: "Israel", dial: "972" },
-  { code: "AE", name: "United Arab Emirates", dial: "971" },
-  { code: "SA", name: "Saudi Arabia", dial: "966" },
-  { code: "ZA", name: "South Africa", dial: "27" },
-  { code: "NG", name: "Nigeria", dial: "234" },
-  { code: "KE", name: "Kenya", dial: "254" },
-  { code: "EG", name: "Egypt", dial: "20" },
-  { code: "IN", name: "India", dial: "91" },
-  { code: "PK", name: "Pakistan", dial: "92" },
-  { code: "BD", name: "Bangladesh", dial: "880" },
-  { code: "CN", name: "China", dial: "86" },
-  { code: "JP", name: "Japan", dial: "81" },
-  { code: "KR", name: "South Korea", dial: "82" },
-  { code: "HK", name: "Hong Kong", dial: "852" },
-  { code: "SG", name: "Singapore", dial: "65" },
-  { code: "MY", name: "Malaysia", dial: "60" },
-  { code: "TH", name: "Thailand", dial: "66" },
-  { code: "VN", name: "Vietnam", dial: "84" },
-  { code: "ID", name: "Indonesia", dial: "62" },
-  { code: "PH", name: "Philippines", dial: "63" },
-  { code: "AU", name: "Australia", dial: "61" },
-  { code: "NZ", name: "New Zealand", dial: "64" },
+  { code: "CL", dial: "56" },
+  { code: "AR", dial: "54" },
+  { code: "BO", dial: "591" },
+  { code: "BR", dial: "55" },
+  { code: "CO", dial: "57" },
+  { code: "CR", dial: "506" },
+  { code: "EC", dial: "593" },
+  { code: "MX", dial: "52" },
+  { code: "PA", dial: "507" },
+  { code: "PE", dial: "51" },
+  { code: "PY", dial: "595" },
+  { code: "UY", dial: "598" },
+  { code: "VE", dial: "58" },
+  { code: "US", dial: "1" },
+  { code: "CA", dial: "1" },
+  { code: "GB", dial: "44" },
+  { code: "IE", dial: "353" },
+  { code: "ES", dial: "34" },
+  { code: "PT", dial: "351" },
+  { code: "FR", dial: "33" },
+  { code: "DE", dial: "49" },
+  { code: "IT", dial: "39" },
+  { code: "NL", dial: "31" },
+  { code: "BE", dial: "32" },
+  { code: "CH", dial: "41" },
+  { code: "AT", dial: "43" },
+  { code: "SE", dial: "46" },
+  { code: "NO", dial: "47" },
+  { code: "DK", dial: "45" },
+  { code: "FI", dial: "358" },
+  { code: "PL", dial: "48" },
+  { code: "CZ", dial: "420" },
+  { code: "RO", dial: "40" },
+  { code: "GR", dial: "30" },
+  { code: "UA", dial: "380" },
+  { code: "RU", dial: "7" },
+  { code: "TR", dial: "90" },
+  { code: "IL", dial: "972" },
+  { code: "AE", dial: "971" },
+  { code: "SA", dial: "966" },
+  { code: "ZA", dial: "27" },
+  { code: "NG", dial: "234" },
+  { code: "KE", dial: "254" },
+  { code: "EG", dial: "20" },
+  { code: "IN", dial: "91" },
+  { code: "PK", dial: "92" },
+  { code: "BD", dial: "880" },
+  { code: "CN", dial: "86" },
+  { code: "JP", dial: "81" },
+  { code: "KR", dial: "82" },
+  { code: "HK", dial: "852" },
+  { code: "SG", dial: "65" },
+  { code: "MY", dial: "60" },
+  { code: "TH", dial: "66" },
+  { code: "VN", dial: "84" },
+  { code: "ID", dial: "62" },
+  { code: "PH", dial: "63" },
+  { code: "AU", dial: "61" },
+  { code: "NZ", dial: "64" },
 ];
 
 const DEFAULT = COUNTRIES[0]; // Chile
@@ -107,6 +108,7 @@ export function PhoneInput({
   // `country` is the user's explicit pick; the *active* country is derived from
   // the value when it carries a dial code (e.g. resume autofill) , derived at
   // render, so no effect/setState sync is needed.
+  const t = useTranslations("ui.phoneInput");
   const [country, setCountry] = useState<Country>(
     () => detectCountry(value) ?? DEFAULT,
   );
@@ -161,11 +163,11 @@ export function PhoneInput({
     if (!q) return COUNTRIES;
     return COUNTRIES.filter(
       (c) =>
-        c.name.toLowerCase().includes(q) ||
+        t(`countries.${c.code}`).toLowerCase().includes(q) ||
         c.dial.includes(q.replace(/\D/g, "")) ||
         c.code.toLowerCase().includes(q),
     );
-  }, [query]);
+  }, [query, t]);
 
   return (
     <div ref={rootRef} className={cn("relative", className)}>
@@ -181,7 +183,7 @@ export function PhoneInput({
           disabled={disabled}
           onClick={() => setOpen((o) => !o)}
           className="flex shrink-0 items-center gap-1.5 border-r border-inherit pl-3 pr-2 transition-colors hover:bg-muted disabled:cursor-not-allowed"
-          aria-label="Select country"
+          aria-label={t("selectCountry")}
         >
           <span className="text-base leading-none">{flagOf(activeCountry.code)}</span>
           <span className="tabular-nums text-muted-foreground">+{activeCountry.dial}</span>
@@ -199,7 +201,7 @@ export function PhoneInput({
           value={national}
           disabled={disabled}
           onChange={(e) => onNationalChange(e.target.value)}
-          placeholder="9 1234 5678"
+          placeholder={t("placeholder")}
           className="min-w-0 flex-1 bg-transparent px-3 text-base text-foreground outline-none sm:text-sm placeholder:text-muted-foreground"
         />
       </div>
@@ -213,14 +215,14 @@ export function PhoneInput({
               autoFocus
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              placeholder="Search country or code"
+              placeholder={t("searchPlaceholder")}
               className="w-full bg-transparent text-sm outline-none"
             />
           </div>
           <div className="max-h-64 overflow-y-auto py-1">
             {filtered.length === 0 ? (
               <p className="px-3 py-4 text-center text-sm text-muted-foreground">
-                No match.
+                {t("noMatch")}
               </p>
             ) : (
               filtered.map((c) => (
@@ -236,7 +238,7 @@ export function PhoneInput({
                   className="flex w-full items-center gap-2.5 px-3 py-2 text-left text-sm transition-colors hover:bg-accent"
                 >
                   <span className="text-base leading-none">{flagOf(c.code)}</span>
-                  <span className="flex-1 truncate">{c.name}</span>
+                  <span className="flex-1 truncate">{t(`countries.${c.code}`)}</span>
                   <span className="tabular-nums text-muted-foreground">
                     +{c.dial}
                   </span>

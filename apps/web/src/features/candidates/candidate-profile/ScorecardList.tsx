@@ -1,3 +1,4 @@
+import { useTranslations } from "next-intl";
 import { Minus, ThumbsDown, ThumbsUp } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
@@ -8,19 +9,16 @@ import type { Scorecard } from "./types";
 
 const RATING_META = {
   strong: {
-    label: "Strong",
     icon: ThumbsUp,
     className: "text-primary",
     accent: "bg-lime",
   },
   mixed: {
-    label: "Mixed",
     icon: Minus,
     className: "text-clay",
     accent: "bg-clay",
   },
   weak: {
-    label: "Weak",
     icon: ThumbsDown,
     className: "text-destructive",
     accent: "bg-destructive",
@@ -28,6 +26,7 @@ const RATING_META = {
 } as const;
 
 export function ScorecardList({ scorecards }: { scorecards: Scorecard[] }) {
+  const t = useTranslations("features.candidates.scorecardList");
   return (
     <div className="space-y-3 duration-300 animate-in fade-in slide-in-from-bottom-1">
       {scorecards.map((scorecard) => {
@@ -50,7 +49,7 @@ export function ScorecardList({ scorecards }: { scorecards: Scorecard[] }) {
                   )}
                 >
                   <meta.icon className="size-4" strokeWidth={2} />
-                  {meta.label}
+                  {t(`rating.${scorecard.rating}`)}
                 </span>
                 {scorecard.stageName ? (
                   <Badge variant="neutral">{scorecard.stageName}</Badge>
@@ -60,7 +59,7 @@ export function ScorecardList({ scorecards }: { scorecards: Scorecard[] }) {
                 <p className="whitespace-pre-line text-sm">{scorecard.comment}</p>
               ) : null}
               <p className="text-xs text-muted-foreground">
-                {scorecard.authorName ?? "Someone"} ·{" "}
+                {scorecard.authorName ?? t("someone")} ·{" "}
                 <RelativeTime value={scorecard.createdAt} />
               </p>
             </div>

@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { z } from "zod";
+import { getTranslations } from "@/i18n/server";
 
 import {
   activityEvents,
@@ -36,6 +37,13 @@ import { fetchLeverCandidateImportRows, LeverImportError } from "./lever";
 import { fetchJoinCandidateImportRows, JoinImportError } from "./join";
 
 const log = createLogger("candidate-import");
+
+/** Zod messages are i18n ids; anything else passes through unchanged. */
+async function issueMessage(message: string | undefined, fallbackId: string) {
+  const t = await getTranslations("server.candidates.validation");
+  if (!message) return t(fallbackId);
+  return t.has(message) ? t(message) : message;
+}
 
 const optionalText = z
   .string()
@@ -140,12 +148,12 @@ const optionalProfileUrl = z.string().transform((value) => {
 });
 
 const importRowSchema = z.object({
-  firstName: z.string().trim().min(1, "First name is required."),
-  lastName: z.string().trim().min(1, "Last name is required."),
+  firstName: z.string().trim().min(1, "firstNameRequired"),
+  lastName: z.string().trim().min(1, "lastNameRequired"),
   email: z
     .string()
     .trim()
-    .email("Invalid email address.")
+    .email("invalidEmailAddress")
     .transform((value) => value.toLowerCase()),
   phone: optionalText,
   location: optionalText,
@@ -168,8 +176,8 @@ const importSchema = z.object({
         values: z.record(z.string(), z.string()),
       }),
     )
-    .min(1, "No rows to import.")
-    .max(500, "You can import up to 500 rows at a time."),
+    .min(1, "noRowsToImport")
+    .max(500, "maxRowsPerImport"),
 });
 
 export type ImportCandidatesResult =
@@ -183,10 +191,6 @@ export type ImportCandidatesResult =
 
 /** External ATS importers call third-party APIs with visitor-supplied keys;
  * the public demo has no reason to make those outbound requests. */
-const DEMO_IMPORT_DISABLED = {
-  success: false as const,
-  error: "Importing from other ATS providers is disabled in the demo.",
-};
 
 /** Imports a full Greenhouse candidate export into one existing Harly pipeline.
  * The credential is used only for this request and is never written to the DB or logs. */
@@ -194,12 +198,13 @@ export async function importGreenhouseCandidatesAction(input: {
   jobId: string;
   apiKey: string;
 }): Promise<ImportCandidatesResult & { skipped?: number }> {
-  if (isDemoMode()) return DEMO_IMPORT_DISABLED;
+  const t = await getTranslations("server.candidates.import");
+  if (isDemoMode()) return { success: false as const, error: t("importDisabledInDemo") };
   if (
     !z.uuid().safeParse(input.jobId).success ||
     typeof input.apiKey !== "string"
   ) {
-    return { success: false, error: "Invalid Greenhouse import request." };
+    return { success: false, error: t("invalidGreenhouseRequest") };
   }
   try {
     await requireJobPermission("candidates:edit", input.jobId);
@@ -207,7 +212,7 @@ export async function importGreenhouseCandidatesAction(input: {
     log.error(error, "Greenhouse import permission failed");
     return {
       success: false,
-      error: "You do not have permission to add candidates.",
+      error: t("noPermissionToAddCandidates"),
     };
   }
   const apiKey = input.apiKey.trim();
@@ -243,7 +248,7 @@ export async function importGreenhouseCandidatesAction(input: {
     log.error(error, "Greenhouse candidate import failed");
     return {
       success: false,
-      error: "Could not import candidates from Greenhouse.",
+      error: t("importFailedGreenhouse"),
     };
   }
 }
@@ -253,13 +258,14 @@ export async function importWorkableCandidatesAction(input: {
   subdomain: string;
   apiToken: string;
 }): Promise<ImportCandidatesResult & { skipped?: number }> {
-  if (isDemoMode()) return DEMO_IMPORT_DISABLED;
+  const t = await getTranslations("server.candidates.import");
+  if (isDemoMode()) return { success: false as const, error: t("importDisabledInDemo") };
   if (
     !z.uuid().safeParse(input.jobId).success ||
     typeof input.subdomain !== "string" ||
     typeof input.apiToken !== "string"
   )
-    return { success: false, error: "Invalid Workable import request." };
+    return { success: false, error: t("invalidWorkableRequest") };
   try {
     await requireJobPermission("candidates:edit", input.jobId);
     const exportRows = await fetchWorkableCandidateImportRows(input);
@@ -293,7 +299,7 @@ export async function importWorkableCandidatesAction(input: {
     log.error(error, "Workable candidate import failed");
     return {
       success: false,
-      error: "Could not import candidates from Workable.",
+      error: t("importFailedWorkable"),
     };
   }
 }
@@ -302,12 +308,13 @@ export async function importAshbyCandidatesAction(input: {
   jobId: string;
   apiKey: string;
 }): Promise<ImportCandidatesResult & { skipped?: number }> {
-  if (isDemoMode()) return DEMO_IMPORT_DISABLED;
+  const t = await getTranslations("server.candidates.import");
+  if (isDemoMode()) return { success: false as const, error: t("importDisabledInDemo") };
   if (
     !z.uuid().safeParse(input.jobId).success ||
     typeof input.apiKey !== "string"
   )
-    return { success: false, error: "Invalid Ashby import request." };
+    return { success: false, error: t("invalidAshbyRequest") };
   try {
     await requireJobPermission("candidates:edit", input.jobId);
     const exportRows = await fetchAshbyCandidateImportRows(input.apiKey);
@@ -339,7 +346,7 @@ export async function importAshbyCandidatesAction(input: {
     if (error instanceof AshbyImportError)
       return { success: false, error: error.message };
     log.error(error, "Ashby candidate import failed");
-    return { success: false, error: "Could not import candidates from Ashby." };
+    return { success: false, error: t("importFailedAshby") };
   }
 }
 
@@ -347,12 +354,13 @@ export async function importLeverCandidatesAction(input: {
   jobId: string;
   apiKey: string;
 }): Promise<ImportCandidatesResult & { skipped?: number }> {
-  if (isDemoMode()) return DEMO_IMPORT_DISABLED;
+  const t = await getTranslations("server.candidates.import");
+  if (isDemoMode()) return { success: false as const, error: t("importDisabledInDemo") };
   if (
     !z.uuid().safeParse(input.jobId).success ||
     typeof input.apiKey !== "string"
   )
-    return { success: false, error: "Invalid Lever import request." };
+    return { success: false, error: t("invalidLeverRequest") };
   try {
     await requireJobPermission("candidates:edit", input.jobId);
     const exportRows = await fetchLeverCandidateImportRows(input.apiKey);
@@ -384,7 +392,7 @@ export async function importLeverCandidatesAction(input: {
     if (error instanceof LeverImportError)
       return { success: false, error: error.message };
     log.error(error, "Lever candidate import failed");
-    return { success: false, error: "Could not import candidates from Lever." };
+    return { success: false, error: t("importFailedLever") };
   }
 }
 
@@ -394,12 +402,13 @@ export async function importJoinCandidatesAction(input: {
   jobId: string;
   apiToken: string;
 }): Promise<ImportCandidatesResult & { skipped?: number }> {
-  if (isDemoMode()) return DEMO_IMPORT_DISABLED;
+  const t = await getTranslations("server.candidates.import");
+  if (isDemoMode()) return { success: false as const, error: t("importDisabledInDemo") };
   if (
     !z.uuid().safeParse(input.jobId).success ||
     typeof input.apiToken !== "string"
   ) {
-    return { success: false, error: "Invalid JOIN import request." };
+    return { success: false, error: t("invalidJoinRequest") };
   }
   try {
     await requireJobPermission("candidates:edit", input.jobId);
@@ -433,7 +442,7 @@ export async function importJoinCandidatesAction(input: {
     if (error instanceof JoinImportError)
       return { success: false, error: error.message };
     log.error(error, "JOIN candidate import failed");
-    return { success: false, error: "Could not import candidates from JOIN." };
+    return { success: false, error: t("importFailedJoin") };
   }
 }
 
@@ -441,11 +450,12 @@ export async function importCandidatesAction(input: {
   jobId: string;
   rows: { rowNumber: number; values: Record<string, string> }[];
 }): Promise<ImportCandidatesResult> {
+  const t = await getTranslations("server.candidates.import");
   const parsed = importSchema.safeParse(input);
   if (!parsed.success) {
     return {
       success: false,
-      error: parsed.error.issues[0]?.message ?? "Invalid import data.",
+      error: await issueMessage(parsed.error.issues[0]?.message, "invalidImportData"),
     };
   }
 
@@ -456,7 +466,7 @@ export async function importCandidatesAction(input: {
     log.error(error, "importCandidatesAction permission failed");
     return {
       success: false,
-      error: "You do not have permission to add candidates.",
+      error: t("noPermissionToAddCandidates"),
     };
   }
   const workspaceId = context.organization.id;
@@ -470,7 +480,7 @@ export async function importCandidatesAction(input: {
     .limit(1);
 
   if (!job) {
-    return { success: false, error: "Job not found." };
+    return { success: false, error: t("jobNotFound") };
   }
 
   const firstStage = await resolveEntryStage(db, {
@@ -481,7 +491,7 @@ export async function importCandidatesAction(input: {
   if (!firstStage) {
     return {
       success: false,
-      error: "This job has no open pipeline stage to receive applications.",
+      error: t("noOpenPipelineStage"),
     };
   }
 
@@ -511,7 +521,7 @@ export async function importCandidatesAction(input: {
       errors.push({
         row: importedRow.rowNumber,
         email: raw.email ?? "",
-        reason: row.error.issues[0]?.message ?? "Invalid row.",
+        reason: await issueMessage(row.error.issues[0]?.message, "invalidRow"),
       });
       continue;
     }
@@ -641,7 +651,7 @@ export async function importCandidatesAction(input: {
       errors.push({
         row: importedRow.rowNumber,
         email: values.email,
-        reason: "Could not import this row.",
+        reason: t("importRowFailed"),
       });
     }
   }

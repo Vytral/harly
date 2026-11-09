@@ -161,26 +161,55 @@ export function getBrowserTimeZone(): string {
   }
 }
 
-const TYPE_LABELS: Record<InterviewType, string> = {
-  screening: "Screening",
-  culture_fit: "Culture fit",
-  technical: "Technical",
-  onsite: "Onsite",
-  final: "Final round",
+/** The translator these label helpers take: a `labels.interviews` translator. */
+export type LabelTranslator = (
+  key: string,
+  values?: Record<string, string | number>,
+) => string;
+
+const TYPE_LABEL_KEYS: Record<InterviewType, string> = {
+  screening: "screening",
+  culture_fit: "cultureFit",
+  technical: "technical",
+  onsite: "onsite",
+  final: "finalRound",
 };
 
-const MODE_LABELS: Record<InterviewMode, string> = {
-  video: "Video",
-  phone: "Phone",
-  onsite: "Onsite",
+const MODE_LABEL_KEYS: Record<InterviewMode, string> = {
+  video: "video",
+  phone: "phone",
+  onsite: "onsite",
 };
 
-export function interviewTypeLabel(type: InterviewType): string {
-  return TYPE_LABELS[type] ?? type;
+/** Short type label for lists and calendars, e.g. "Culture fit". */
+export function interviewTypeLabel(type: InterviewType, t: LabelTranslator): string {
+  const key = TYPE_LABEL_KEYS[type];
+  return key ? t(`types.${key}`) : type;
 }
 
-export function interviewModeLabel(mode: InterviewMode): string {
-  return MODE_LABELS[mode] ?? mode;
+/** Short mode label, e.g. "Video". */
+export function interviewModeLabel(mode: InterviewMode, t: LabelTranslator): string {
+  const key = MODE_LABEL_KEYS[mode];
+  return key ? t(`modes.${key}`) : mode;
+}
+
+const TYPE_TITLE_KEYS: Record<string, string> = {
+  screening: "screening",
+  culture_fit: "cultureFit",
+  technical: "technical",
+  onsite: "onsite",
+  final: "final",
+};
+
+/** Calendar and email title for an interview type, e.g. "Screening interview". */
+export function interviewTypeTitle(t: LabelTranslator, type: string): string {
+  const key = TYPE_TITLE_KEYS[type];
+  return key ? t(`typeTitles.${key}`) : t("typeTitles.fallback");
+}
+
+/** Calendar and email title for a mode, e.g. "Video call". Unknown modes pass through. */
+export function interviewModeTitle(t: LabelTranslator, mode: string): string {
+  return ["video", "phone", "onsite"].includes(mode) ? t(`modeTitles.${mode}`) : mode;
 }
 
 /**

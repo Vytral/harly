@@ -1,3 +1,4 @@
+import { useTranslations } from "next-intl";
 import { Check } from "lucide-react";
 import type { StageKind } from "@harly/db/stage-kind";
 
@@ -24,6 +25,7 @@ export function CandidateStageStepper({
   stageName: string | null;
   className?: string;
 }) {
+  const t = useTranslations("features.candidates.stageStepper");
   if (!stageName) return null;
   const model = buildSpine({
     current: { name: stageName },
@@ -33,7 +35,7 @@ export function CandidateStageStepper({
 
   return (
     <ol
-      aria-label={`Pipeline progress: ${model.label}`}
+      aria-label={t("progress", { label: model.label })}
       className={cn("flex min-w-0 items-center gap-1.5 text-xs", className)}
     >
       {model.segments.map((segment, index) => (

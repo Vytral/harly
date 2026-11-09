@@ -4,6 +4,7 @@ import * as React from "react"
 import { XIcon } from "lucide-react"
 import { Dialog as SheetPrimitive } from "radix-ui"
 import { Drawer as DrawerPrimitive } from "vaul"
+import { useTranslations } from "next-intl"
 
 import { cn } from "@/lib/utils"
 
@@ -108,6 +109,7 @@ function SheetContent({
   side?: "top" | "right" | "bottom" | "left"
   showCloseButton?: boolean
 }) {
+  const t = useTranslations("ui.sheet")
   const { useMobileDrawer } = React.useContext(SheetContext)
 
   if (useMobileDrawer) {
@@ -127,7 +129,7 @@ function SheetContent({
           {showCloseButton && (
             <DrawerPrimitive.Close className={sheetCloseClasses}>
               <XIcon className="size-4" />
-              <span className="sr-only">Close</span>
+              <span className="sr-only">{t("close")}</span>
             </DrawerPrimitive.Close>
           )}
         </DrawerPrimitive.Content>
@@ -159,7 +161,7 @@ function SheetContent({
         {showCloseButton && (
           <SheetPrimitive.Close className={sheetCloseClasses}>
             <XIcon className="size-4" />
-            <span className="sr-only">Close</span>
+            <span className="sr-only">{t("close")}</span>
           </SheetPrimitive.Close>
         )}
       </SheetPrimitive.Content>

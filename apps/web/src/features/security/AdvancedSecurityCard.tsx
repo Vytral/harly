@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { useTranslations } from "next-intl";
 import { toast } from "@/lib/notification-island/toast";
 
 import { Button } from "@/components/ui/button";
@@ -33,12 +34,14 @@ export function AdvancedSecurityCard({
   const [reauthMinutes, setReauthMinutes] = useState(String(settings.reauthMinutes));
   const [requirePasskey, setRequirePasskey] = useState(settings.requirePasskey);
   const [pending, startTransition] = useTransition();
+  const t = useTranslations("features.security.advancedSecurityCard");
+  const tReauth = useTranslations("labels.security.reauth");
 
   function save() {
     startTransition(async () => {
       let result;
       try {
-        await ensureSensitiveActionReauth();
+        await ensureSensitiveActionReauth(tReauth);
         result = await updateAdvancedSecurityPolicyAction({
         ipAllowlist: ips.split(",").map((value) => value.trim()).filter(Boolean),
         allowedDomains: domains.split(",").map((value) => value.trim()).filter(Boolean),
@@ -47,11 +50,11 @@ export function AdvancedSecurityCard({
         requirePasskey,
         });
       } catch (error) {
-        toast.error(error instanceof Error ? error.message : "Reauthentication failed.");
+        toast.error(error instanceof Error ? error.message : t("reauthFailed"));
         return;
       }
-      if (!result.ok) toast.error(result.error ?? "Could not update security policy.");
-      else toast.success("Enterprise security policy updated.");
+      if (!result.ok) toast.error(result.error ?? t("updateFailed"));
+      else toast.success(t("updated"));
     });
   }
 
@@ -59,36 +62,36 @@ export function AdvancedSecurityCard({
     <Card className="gap-5 p-6">
       <SectionHeader
         icon={ShieldCheckDuotoneIcon}
-        title="Enterprise access controls"
-        description="Restrict workspace access, detect risky session changes, and require reauthentication for sensitive actions."
-        badge={<StatusPill tone={settings.ipAllowlist.length || settings.allowedDomains.length ? "on" : "neutral"}>{settings.ipAllowlist.length || settings.allowedDomains.length ? "Restricted" : "Open"}</StatusPill>}
+        title={t("title")}
+        description={t("description")}
+        badge={<StatusPill tone={settings.ipAllowlist.length || settings.allowedDomains.length ? "on" : "neutral"}>{settings.ipAllowlist.length || settings.allowedDomains.length ? t("restricted") : t("open")}</StatusPill>}
       />
       <div className="grid gap-4 md:grid-cols-2">
-        <FormField label="Allowed IPs / CIDRs" htmlFor="security-ips" hint="Comma-separated. Empty means any IP.">
+        <FormField label={t("allowedIps")} htmlFor="security-ips" hint={t("allowedIpsHint")}>
           <Input id="security-ips" value={ips} onChange={(event) => setIps(event.target.value)} placeholder="203.0.113.10, 10.0.0.0/8" disabled={!isOwner} />
         </FormField>
-        <FormField label="Allowed email domains" htmlFor="security-domains" hint="Used for workspace identity and SSO policy.">
+        <FormField label={t("allowedDomains")} htmlFor="security-domains" hint={t("allowedDomainsHint")}>
           <Input id="security-domains" value={domains} onChange={(event) => setDomains(event.target.value)} placeholder="acme.com, subsidiary.acme.com" disabled={!isOwner} />
         </FormField>
-        <FormField label="Reauthentication window (minutes)" htmlFor="security-reauth">
+        <FormField label={t("reauthWindow")} htmlFor="security-reauth">
           <Input id="security-reauth" type="number" min={5} max={60} value={reauthMinutes} onChange={(event) => setReauthMinutes(event.target.value)} disabled={!isOwner} />
         </FormField>
       </div>
       <SettingRows className="-mx-6 border-t border-hairline [&>[data-slot=setting-row]]:px-6">
         <SettingRow
-          title="Suspicious session detection"
-          description="Flag simultaneous IP and browser-family changes."
+          title={t("suspiciousSession")}
+          description={t("suspiciousSessionHint")}
           htmlFor="security-risk"
           control={<Switch id="security-risk" checked={risk} onCheckedChange={setRisk} disabled={!isOwner} />}
         />
         <SettingRow
-          title="Require passkey"
-          description="Future-ready policy: members must register a passkey before access."
+          title={t("requirePasskey")}
+          description={t("requirePasskeyHint")}
           htmlFor="security-passkey"
           control={<Switch id="security-passkey" checked={requirePasskey} onCheckedChange={setRequirePasskey} disabled={!isOwner} />}
         />
       </SettingRows>
-      {isOwner ? <Button onClick={save} disabled={pending}>{pending ? "Saving…" : "Save security policy"}</Button> : <p className="text-[12.5px] text-soft-ink">Only workspace owners can change these controls.</p>}
+      {isOwner ? <Button onClick={save} disabled={pending}>{pending ? t("saving") : t("save")}</Button> : <p className="text-[12.5px] text-soft-ink">{t("ownersOnly")}</p>}
     </Card>
   );
 }

@@ -1,9 +1,9 @@
 import {
-  NODE_KIND_LABEL,
+  NODE_KIND_KEY,
   getNodeVisualMeta,
   nodeCaption,
   nodeTitle,
   type NodeVisualMeta,
 } from "./node-visuals";
 
-export { NODE_KIND_LABEL, getNodeVisualMeta, nodeCaption, nodeTitle, type NodeVisualMeta };
+export { NODE_KIND_KEY, getNodeVisualMeta, nodeCaption, nodeTitle, type NodeVisualMeta };

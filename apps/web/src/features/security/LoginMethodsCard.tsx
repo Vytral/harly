@@ -2,6 +2,7 @@
 
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 
 import { toast } from "@/lib/notification-island/toast";
 import { SectionHeader, StatusPill } from "@/features/workspaces/settings-ui";
@@ -17,20 +18,17 @@ import {
   type LoginMethod,
 } from "@/features/auth/login-methods";
 
-/** Human labels + helper text for each method row. */
-const METHOD_META: Record<
-  LoginMethod,
-  { label: string; hint: string }
-> = {
-  password: { label: "Email & password", hint: "Standard email + password sign-in." },
-  google: { label: "Google", hint: "OAuth via Google Workspace." },
-  microsoft: { label: "Microsoft / Entra ID", hint: "OAuth via Microsoft accounts." },
-  github: { label: "GitHub", hint: "OAuth via GitHub." },
-  linkedin: { label: "LinkedIn", hint: "OAuth via LinkedIn." },
-  sso: { label: "Enterprise SSO", hint: "SAML or OIDC single sign-on." },
-  magic_link: { label: "Magic link", hint: "Passwordless email sign-in link." },
-  passkey: { label: "Passkey", hint: "WebAuthn device / platform authenticator." },
-};
+/** Message key for each method's label and helper text. */
+const METHOD_KEY = {
+  password: "password",
+  google: "google",
+  microsoft: "microsoft",
+  github: "github",
+  linkedin: "linkedin",
+  sso: "sso",
+  magic_link: "magicLink",
+  passkey: "passkey",
+} as const satisfies Record<LoginMethod, string>;
 
 /**
  * Map a configured-methods object onto the flat LoginMethod keys so we can tell,
@@ -59,6 +57,7 @@ export function LoginMethodsCard({
 }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
+  const t = useTranslations("features.security.loginMethodsCard");
 
   const configuredSet = useMemo(
     () => toConfiguredSet(configured),
@@ -101,21 +100,17 @@ export function LoginMethodsCard({
       : [];
 
     if (customize && payload.length === 0) {
-      toast.error("Select at least one configured method, or turn off customization.");
+      toast.error(t("selectOneToast"));
       return;
     }
 
     startTransition(async () => {
       const result = await updateEnabledLoginMethodsAction(payload);
       if (!result.ok) {
-        toast.error(result.error ?? "Could not update login methods.");
+        toast.error(result.error ?? t("updateFailed"));
         return;
       }
-      toast.success(
-        customize
-          ? "Login methods updated."
-          : "Login screen will show all configured methods.",
-      );
+      toast.success(customize ? t("savedCustom") : t("savedAuto"));
       router.refresh();
     });
   }
@@ -128,22 +123,22 @@ export function LoginMethodsCard({
     <Card className="gap-5 p-6">
       <SectionHeader
         icon={SsoDuotoneIcon}
-        title="Sign-in methods"
-        description="Choose which authentication methods appear on the staff login screen. Methods that aren't configured are never shown."
+        title={t("title")}
+        description={t("description")}
         badge={
           <StatusPill tone={customize ? "on" : "off"}>
-            {customize ? `${activeCount} selected` : "Auto (all configured)"}
+            {customize ? t("selectedCount", { count: activeCount }) : t("autoAll")}
           </StatusPill>
         }
         action={
           isOwner ? (
             <div className="flex items-center gap-2">
-              <span className="text-xs text-muted-foreground">Customize</span>
+              <span className="text-xs text-muted-foreground">{t("customize")}</span>
               <Switch
                 checked={customize}
                 onCheckedChange={handleToggleCustomize}
                 disabled={isPending}
-                aria-label="Customize which login methods are shown"
+                aria-label={t("customizeLabel")}
               />
             </div>
           ) : null
@@ -151,16 +146,15 @@ export function LoginMethodsCard({
       />
 
       {!isOwner ? (
-        <p className="text-xs text-muted-foreground">
-          Only workspace owners can change this setting.
-        </p>
+        <p className="text-xs text-muted-foreground">{t("ownersOnly")}</p>
       ) : (
         <>
           {!customize ? (
             <p className="rounded-[var(--radius-inner)] bg-card-inset px-4 py-3 text-sm text-muted-foreground">
-              The login screen automatically shows every method you&apos;ve
-              configured. Turn on <span className="font-medium">Customize</span>{" "}
-              to restrict staff to a specific set (for example, SSO only).
+              {t.rich("autoHint", {
+                customize: t("customize"),
+                b: (chunks) => <span className="font-medium">{chunks}</span>,
+              })}
             </p>
           ) : (
             <div className="space-y-3">
@@ -168,37 +162,35 @@ export function LoginMethodsCard({
                 {LOGIN_METHODS.map((method) => {
                   const isConfigured = configuredSet.has(method);
                   const isOn = selected.has(method) && isConfigured;
+                  const methodKey = METHOD_KEY[method];
+                  const methodLabel = t(`methods.${methodKey}.label`);
                   return (
                     <SettingRow
                       key={method}
                       title={
                         <>
-                          {METHOD_META[method].label}
+                          {methodLabel}
                           {!isConfigured ? (
                             <span className="ml-2 align-middle">
-                              <StatusPill tone="off">Not configured</StatusPill>
+                              <StatusPill tone="off">{t("notConfigured")}</StatusPill>
                             </span>
                           ) : null}
                         </>
                       }
-                      description={METHOD_META[method].hint}
+                      description={t(`methods.${methodKey}.hint`)}
                       control={
                         <Switch
                           checked={isOn}
                           onCheckedChange={(v) => toggleMethod(method, v)}
                           disabled={isPending || !isConfigured}
-                          aria-label={`Show ${METHOD_META[method].label} on the login screen`}
+                          aria-label={t("showOnLogin", { method: methodLabel })}
                         />
                       }
                     />
                   );
                 })}
               </SettingRows>
-              <p className="text-[12.5px] text-soft-ink">
-                A method must be configured before it can be shown. Configure
-                OAuth providers and enterprise SSO above, and email delivery in
-                the email settings.
-              </p>
+              <p className="text-[12.5px] text-soft-ink">{t("customizeHelp")}</p>
             </div>
           )}
 

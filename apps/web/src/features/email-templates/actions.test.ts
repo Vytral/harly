@@ -12,6 +12,8 @@ const mocks = vi.hoisted(() => {
   };
 });
 
+vi.mock("next-intl/server", async () => (await import("@/test-support/intl-server-mock")).intlServerMock);
+
 vi.mock("@harly/db", () => {
   const query = () => {
     const result: Record<string, unknown> = {};

@@ -2,6 +2,7 @@
 
 import crypto from "node:crypto";
 import { headers } from "next/headers";
+import { getTranslations } from "@/i18n/server";
 import { and, eq, ne } from "drizzle-orm";
 import {
   db,
@@ -30,9 +31,10 @@ import {
 const log = createLogger("security");
 
 async function requireSensitiveReauth(userId: string, workspaceId: string) {
+  const t = await getTranslations("server.security.actions");
   const [settings] = await db.select({ minutes: workspaceSettings.securityReauthMinutes }).from(workspaceSettings).where(eq(workspaceSettings.organizationId, workspaceId)).limit(1);
   if ((settings?.minutes ?? 15) > 0 && !(await requireRecentReauth({ userId, workspaceId, purpose: "sensitive_action" }))) {
-    throw new Error("Reauthentication required. Confirm with a registered passkey and try again.");
+    throw new Error(t("reauthRequired"));
   }
 }
 
@@ -67,12 +69,13 @@ export async function deletePasskeyAction(passkeyId: string) {
 export async function toggleForce2FAAction(
   require2fa: boolean,
 ): Promise<{ ok: boolean; error?: string }> {
+  const t = await getTranslations("server.security.actions");
   try {
     assertNotDemo();
     const { organization, roleKey, user } =
       await requirePermission("security:manage");
     if (roleKey !== "owner")
-      throw new Error("Only owners can change this setting.");
+      throw new Error(t("ownersOnlySetting"));
     await requireSensitiveReauth(user.id, organization.id);
 
     await db
@@ -97,7 +100,7 @@ export async function toggleForce2FAAction(
     log.error(error, "toggleForce2FAAction failed");
     return {
       ok: false,
-      error: error instanceof Error ? error.message : "Failed.",
+      error: error instanceof Error ? error.message : t("failed"),
     };
   }
 }
@@ -109,10 +112,11 @@ export async function updateAdvancedSecurityPolicyAction(input: {
   reauthMinutes: number;
   requirePasskey: boolean;
 }): Promise<{ ok: boolean; error?: string }> {
+  const t = await getTranslations("server.security.actions");
   try {
     assertNotDemo();
     const { organization, roleKey, user } = await requirePermission("security:manage");
-    if (roleKey !== "owner") throw new Error("Only owners can change security policy.");
+    if (roleKey !== "owner") throw new Error(t("ownersOnlySecurityPolicy"));
     await requireSensitiveReauth(user.id, organization.id);
     const policy = normalizeSecurityPolicy(input);
     await db.insert(workspaceSettings).values({
@@ -144,7 +148,7 @@ export async function updateAdvancedSecurityPolicyAction(input: {
     return { ok: true };
   } catch (error) {
     log.error(error, "updateAdvancedSecurityPolicyAction failed");
-    return { ok: false, error: error instanceof Error ? error.message : "Failed." };
+    return { ok: false, error: error instanceof Error ? error.message : t("failed") };
   }
 }
 
@@ -197,18 +201,19 @@ export async function saveOAuthProviderAction(input: {
   clientSecret?: string;
   enabled?: boolean;
 }): Promise<OAuthActionResult> {
+  const t = await getTranslations("server.security.actions");
   try {
     const { organization, roleKey, user } =
       await requirePermission("security:manage");
     if (roleKey !== "owner") {
-      return { ok: false, error: "Only owners can configure OAuth providers." };
+      return { ok: false, error: t("ownersOnlyOAuth") };
     }
     assertNotDemo();
 
     if (!isEncryptionConfigured()) {
       return {
         ok: false,
-        error: "Server encryption key not configured. Set AI_ENCRYPTION_KEY.",
+        error: t("encryptionKeyMissing"),
       };
     }
 
@@ -216,7 +221,7 @@ export async function saveOAuthProviderAction(input: {
     const clientSecret = input.clientSecret?.trim();
 
     if (!clientId) {
-      return { ok: false, error: "Client ID is required." };
+      return { ok: false, error: t("clientIdRequired") };
     }
 
     const existing = await db.query.oauthProviders.findFirst({
@@ -229,7 +234,7 @@ export async function saveOAuthProviderAction(input: {
     if (!clientSecret && !existing?.clientSecretCiphertext) {
       return {
         ok: false,
-        error: "Client Secret is required for new configurations.",
+        error: t("clientSecretRequired"),
       };
     }
 
@@ -276,7 +281,7 @@ export async function saveOAuthProviderAction(input: {
     log.error(error, "saveOAuthProviderAction failed");
     return {
       ok: false,
-      error: error instanceof Error ? error.message : "Failed.",
+      error: error instanceof Error ? error.message : t("failed"),
     };
   }
 }
@@ -286,12 +291,13 @@ export async function toggleOAuthProviderAction(
   providerId: string,
   enabled: boolean,
 ): Promise<OAuthActionResult> {
+  const t = await getTranslations("server.security.actions");
   try {
     assertNotDemo();
     const { organization, roleKey, user } =
       await requirePermission("security:manage");
     if (roleKey !== "owner") {
-      return { ok: false, error: "Only owners can change this setting." };
+      return { ok: false, error: t("ownersOnlySetting") };
     }
 
     await db
@@ -318,7 +324,7 @@ export async function toggleOAuthProviderAction(
     log.error(error, "toggleOAuthProviderAction failed");
     return {
       ok: false,
-      error: error instanceof Error ? error.message : "Failed.",
+      error: error instanceof Error ? error.message : t("failed"),
     };
   }
 }
@@ -327,6 +333,7 @@ export async function toggleOAuthProviderAction(
 export async function deleteOAuthProviderAction(
   providerId: string,
 ): Promise<OAuthActionResult> {
+  const t = await getTranslations("server.security.actions");
   try {
     assertNotDemo();
     const { organization, roleKey, user } =
@@ -334,7 +341,7 @@ export async function deleteOAuthProviderAction(
     if (roleKey !== "owner") {
       return {
         ok: false,
-        error: "Only owners can delete OAuth configurations.",
+        error: t("ownersOnlyOAuthDelete"),
       };
     }
 
@@ -350,7 +357,7 @@ export async function deleteOAuthProviderAction(
       .limit(1);
 
     if (!row) {
-      return { ok: false, error: "Provider not found." };
+      return { ok: false, error: t("providerNotFound") };
     }
 
     await db
@@ -376,7 +383,7 @@ export async function deleteOAuthProviderAction(
     log.error(error, "deleteOAuthProviderAction failed");
     return {
       ok: false,
-      error: error instanceof Error ? error.message : "Failed.",
+      error: error instanceof Error ? error.message : t("failed"),
     };
   }
 }
@@ -435,13 +442,14 @@ export async function getOAuthProviderStatus(): Promise<
 export async function completeForcedPasswordChangeAction(input: {
   password: string;
 }): Promise<{ ok: boolean; error?: string }> {
+  const t = await getTranslations("server.security.actions");
   try {
     assertNotDemo();
     const session = await auth.api.getSession({ headers: await headers() });
-    if (!session?.user) return { ok: false, error: "Not signed in." };
+    if (!session?.user) return { ok: false, error: t("notSignedIn") };
 
     if (typeof input.password !== "string" || input.password.length < 8) {
-      return { ok: false, error: "Password must be at least 8 characters." };
+      return { ok: false, error: t("passwordTooShort") };
     }
 
     const [userRow] = await db
@@ -450,7 +458,7 @@ export async function completeForcedPasswordChangeAction(input: {
       .where(eq(authUsers.id, session.user.id))
       .limit(1);
     if (!userRow?.mustChangePassword) {
-      return { ok: false, error: "No password change is required." };
+      return { ok: false, error: t("noPasswordChangeRequired") };
     }
 
     const { hashPassword } = await import("better-auth/crypto");
@@ -507,7 +515,7 @@ export async function completeForcedPasswordChangeAction(input: {
     return { ok: true };
   } catch (error) {
     log.error(error, "completeForcedPasswordChangeAction failed");
-    return { ok: false, error: "Unable to change password." };
+    return { ok: false, error: t("passwordChangeFailed") };
   }
 }
 
@@ -543,12 +551,13 @@ export async function getEnabledLoginMethodsAction(): Promise<LoginMethod[]> {
 export async function updateEnabledLoginMethodsAction(
   methods: LoginMethod[],
 ): Promise<{ ok: boolean; error?: string }> {
+  const t = await getTranslations("server.security.actions");
   try {
     assertNotDemo();
     const { organization, roleKey, user } =
       await requirePermission("security:manage");
     if (roleKey !== "owner") {
-      return { ok: false, error: "Only owners can change this setting." };
+      return { ok: false, error: t("ownersOnlySetting") };
     }
 
     // Validate + de-duplicate against the known method set, preserving the
@@ -589,7 +598,7 @@ export async function updateEnabledLoginMethodsAction(
     log.error(error, "updateEnabledLoginMethodsAction failed");
     return {
       ok: false,
-      error: error instanceof Error ? error.message : "Failed.",
+      error: error instanceof Error ? error.message : t("failed"),
     };
   }
 }

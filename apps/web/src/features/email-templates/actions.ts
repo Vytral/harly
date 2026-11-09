@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { and, eq, ne } from "drizzle-orm";
+import { getTranslations } from "@/i18n/server";
 import { z } from "zod";
 
 import { db, emailTemplates } from "@harly/db";
@@ -21,12 +22,16 @@ const TEMPLATE_TYPES = [
   "stage_change",
 ] as const;
 
-const templateFieldsSchema = z.object({
-  name: z.string().trim().min(1, "Name is required.").max(120),
-  type: z.enum(TEMPLATE_TYPES).default("general"),
-  subject: z.string().trim().min(1, "Subject is required.").max(300),
-  body: z.string().trim().min(1, "Body is required.").max(10_000),
-});
+type EmailTemplatesTranslator = (key: string, values?: Record<string, string | number | Date>) => string;
+
+function templateFieldsSchema(t: EmailTemplatesTranslator) {
+  return z.object({
+    name: z.string().trim().min(1, t("actions.nameRequired")).max(120),
+    type: z.enum(TEMPLATE_TYPES).default("general"),
+    subject: z.string().trim().min(1, t("actions.subjectRequired")).max(300),
+    body: z.string().trim().min(1, t("actions.bodyRequired")).max(10_000),
+  });
+}
 
 type ActionResult = { success: boolean; error?: string };
 
@@ -52,11 +57,12 @@ export async function createEmailTemplate(input: {
   subject: string;
   body: string;
 }): Promise<ActionResult> {
-  const parsed = templateFieldsSchema.safeParse(input);
+  const t = await getTranslations("server.emailTemplates");
+  const parsed = templateFieldsSchema(t).safeParse(input);
   if (!parsed.success) {
     return {
       success: false,
-      error: parsed.error.issues[0]?.message ?? "Invalid template.",
+      error: parsed.error.issues[0]?.message ?? t("actions.invalidTemplate"),
     };
   }
 
@@ -67,7 +73,7 @@ export async function createEmailTemplate(input: {
     log.error(error, "template permission check failed");
     return {
       success: false,
-      error: "You do not have permission to manage templates.",
+      error: t("actions.noPermission"),
     };
   }
 
@@ -98,8 +104,8 @@ export async function createEmailTemplate(input: {
     return {
       success: false,
       error: isUniqueViolation(error)
-        ? "A template with that name already exists."
-        : "Could not save the template. Please try again.",
+        ? t("actions.nameTaken")
+        : t("actions.saveFailed"),
     };
   }
 
@@ -114,13 +120,14 @@ export async function updateEmailTemplate(input: {
   subject: string;
   body: string;
 }): Promise<ActionResult> {
-  const parsed = templateFieldsSchema
+  const t = await getTranslations("server.emailTemplates");
+  const parsed = templateFieldsSchema(t)
     .extend({ templateId: z.uuid() })
     .safeParse(input);
   if (!parsed.success) {
     return {
       success: false,
-      error: parsed.error.issues[0]?.message ?? "Invalid template.",
+      error: parsed.error.issues[0]?.message ?? t("actions.invalidTemplate"),
     };
   }
 
@@ -131,7 +138,7 @@ export async function updateEmailTemplate(input: {
     log.error(error, "template permission check failed");
     return {
       success: false,
-      error: "You do not have permission to manage templates.",
+      error: t("actions.noPermission"),
     };
   }
 
@@ -189,7 +196,7 @@ export async function updateEmailTemplate(input: {
       { isolationLevel: "serializable" },
     );
 
-    if (!updated) return { success: false, error: "Template not found." };
+    if (!updated) return { success: false, error: t("actions.notFound") };
     await logAuditEvent({
       workspaceId: context.organization.id,
       actorId: context.user.id,
@@ -205,10 +212,10 @@ export async function updateEmailTemplate(input: {
     return {
       success: false,
       error: isUniqueViolation(error)
-        ? "A template with that name already exists, or another active template was saved at the same time."
+        ? t("actions.updateNameConflict")
         : isTransactionConflict(error)
-          ? "Another template was updated at the same time. Please try again."
-          : "Could not update the template. Please try again.",
+          ? t("actions.updateConflict")
+          : t("actions.updateFailed"),
     };
   }
 
@@ -226,10 +233,11 @@ export async function setActiveEmailTemplate(input: {
   templateId: string;
   active: boolean;
 }): Promise<ActionResult> {
+  const t = await getTranslations("server.emailTemplates");
   const parsed = z
     .object({ templateId: z.uuid(), active: z.boolean() })
     .safeParse(input);
-  if (!parsed.success) return { success: false, error: "Invalid template." };
+  if (!parsed.success) return { success: false, error: t("actions.invalidTemplate") };
 
   let context;
   try {
@@ -238,7 +246,7 @@ export async function setActiveEmailTemplate(input: {
     log.error(error, "template permission check failed");
     return {
       success: false,
-      error: "You do not have permission to manage templates.",
+      error: t("actions.noPermission"),
     };
   }
 
@@ -296,12 +304,12 @@ export async function setActiveEmailTemplate(input: {
       success: false,
       error:
         isUniqueViolation(error) || isTransactionConflict(error)
-          ? "Another template was activated at the same time. Please try again."
-          : "Could not update the template. Please try again.",
+          ? t("actions.activateConflict")
+          : t("actions.updateFailed"),
     };
   }
 
-  if (!template) return { success: false, error: "Template not found." };
+  if (!template) return { success: false, error: t("actions.notFound") };
 
   await logAuditEvent({
     workspaceId,
@@ -323,8 +331,9 @@ export async function setActiveEmailTemplate(input: {
 export async function deleteEmailTemplate(input: {
   templateId: string;
 }): Promise<ActionResult> {
+  const t = await getTranslations("server.emailTemplates");
   const parsed = z.object({ templateId: z.uuid() }).safeParse(input);
-  if (!parsed.success) return { success: false, error: "Invalid template." };
+  if (!parsed.success) return { success: false, error: t("actions.invalidTemplate") };
 
   let context;
   try {
@@ -333,7 +342,7 @@ export async function deleteEmailTemplate(input: {
     log.error(error, "template permission check failed");
     return {
       success: false,
-      error: "You do not have permission to manage templates.",
+      error: t("actions.noPermission"),
     };
   }
 

@@ -24,7 +24,7 @@ describe("validatePortalApplication", () => {
         answers: { work_authorization: "Yes" },
         questions,
       }),
-    ).toEqual({ ok: false, error: "Resume is required." });
+    ).toEqual({ ok: false, code: "resumeRequired" });
   });
 
   it("rejects unknown answers and invalid select values", () => {
@@ -35,7 +35,7 @@ describe("validatePortalApplication", () => {
         answers: { work_authorization: "Maybe", injected: "value" },
         questions,
       }),
-    ).toEqual({ ok: false, error: "Select a valid option." });
+    ).toEqual({ ok: false, code: "invalidOption" });
   });
 
   it("accepts only configured answers and a workspace-scoped resume", () => {
@@ -79,7 +79,7 @@ describe("validatePortalApplication", () => {
       }),
     ).toEqual({
       ok: false,
-      error: "You must agree to continue with your application.",
+      code: "consentRequired",
     });
     expect(
       validatePortalApplication({

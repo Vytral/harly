@@ -4,6 +4,7 @@ import { Fragment, useId, useMemo, useState } from "react";
 import Link from "next/link";
 import type { Route } from "next";
 import { ArrowRight, ArrowUpRight, ChevronDown, ChevronRight, Search } from "lucide-react";
+import { useLocale, useTranslations } from "next-intl";
 
 import { cn } from "@/lib/utils";
 import { formatEmploymentType, formatWorkplaceType } from "@/lib/format";
@@ -55,10 +56,10 @@ type FilterKind = "department" | "location" | "type";
 
 const locationOf = (j: Job) => j.location ?? formatWorkplaceType(j.workplaceType);
 
-const FACETS: Record<FilterKind, { label: string; all: string; pick: (j: Job) => string | null }> = {
-  department: { label: "Department", all: "All departments", pick: (j) => j.department },
-  location: { label: "Location", all: "All locations", pick: locationOf },
-  type: { label: "Type", all: "All types", pick: (j) => formatEmploymentType(j.employmentType) },
+const FACETS: Record<FilterKind, { pick: (j: Job) => string | null }> = {
+  department: { pick: (j) => j.department },
+  location: { pick: locationOf },
+  type: { pick: (j) => formatEmploymentType(j.employmentType) },
 };
 
 function distinct(jobs: Job[], pick: (j: Job) => string | null): string[] {
@@ -81,10 +82,6 @@ function initials(name: string): string {
     .slice(0, 2)
     .map((w) => w.charAt(0).toUpperCase())
     .join("");
-}
-
-function plural(n: number, one: string, many: string) {
-  return `${n} ${n === 1 ? one : many}`;
 }
 
 /** Cut a headline into words and slot up to three photos between them. */
@@ -114,6 +111,9 @@ export function ShowcaseTemplate({
   portalEnabled?: boolean;
 }) {
   const uid = useId();
+  const t = useTranslations("features.careerPage.showcaseTemplate");
+  const tMeta = useTranslations("labels.careerPage.jobMeta");
+  const locale = useLocale();
   const accent = config.theme.accent ?? workspace.primaryColor;
   const pal = accentPalette(accent);
   const sharp = config.theme.rounded === "sharp";
@@ -122,7 +122,7 @@ export function ShowcaseTemplate({
 
   // ── Content gates ──────────────────────────────────────────────────────────
   const name = workspace.name;
-  const headline = config.hero.headline.trim() || `Careers at ${name}`;
+  const headline = config.hero.headline.trim() || t("defaultHeadline", { name });
   const subhead = config.hero.subhead.trim() || workspace.tagline?.trim() || "";
   const photos = config.gallery.enabled
     ? config.gallery.images.map(safeImageUrl).filter((u): u is string => u !== null)
@@ -145,8 +145,10 @@ export function ShowcaseTemplate({
   const ctaHref = config.cta.url?.trim() || workspace.websiteUrl || (portalEnabled ? "/portal" : "");
   const showCta = config.cta.enabled && Boolean(config.cta.title.trim());
   const ctaFill = config.cta.color ?? accent;
+  // Labels for the one-line department/group names and the "Other roles" bucket.
+  const groupLabel = (dept: string) => (dept === OTHER_GROUP ? t("otherRoles") : dept);
 
-  const eyebrowLabel = config.hero.eyebrow?.trim() || (jobs.length > 0 ? "We're hiring" : "Careers");
+  const eyebrowLabel = config.hero.eyebrow?.trim() || (jobs.length > 0 ? t("weAreHiring") : t("careers"));
 
   const logoSrc =
     config.hero.logoType === "fullLogo"
@@ -224,7 +226,7 @@ export function ShowcaseTemplate({
           focusRing,
         )}
       >
-        Skip to open roles
+        {t("skipToRoles")}
       </a>
 
       {/* ── Top bar ──────────────────────────────────────────────────────── */}
@@ -264,7 +266,7 @@ export function ShowcaseTemplate({
                 focusRing,
               )}
             >
-              Open roles
+              {t("openRolesLabel")}
               <span className="tabular-nums text-soft-ink">{jobs.length}</span>
             </a>
           )}
@@ -281,7 +283,7 @@ export function ShowcaseTemplate({
                 <>
                   <span aria-hidden> / </span>
                   <span className="sr-only">, </span>
-                  <span className="tabular-nums">{plural(jobs.length, "open role", "open roles")}</span>
+                  <span className="tabular-nums">{t("openRoles", { count: jobs.length })}</span>
                 </>
               )}
             </p>
@@ -332,7 +334,7 @@ export function ShowcaseTemplate({
                   focusRing,
                 )}
               >
-                {config.hero.ctaButtonText || "See open roles"}
+                {config.hero.ctaButtonText || t("seeOpenRoles")}
                 <ArrowRight className="size-4" strokeWidth={2} aria-hidden />
               </a>
               {hasCulture && (
@@ -343,7 +345,7 @@ export function ShowcaseTemplate({
                     focusRing,
                   )}
                 >
-                  Life at {name}
+                  {t("lifeAt", { name })}
                 </a>
               )}
             </div>
@@ -354,7 +356,7 @@ export function ShowcaseTemplate({
         {stats.length > 0 && (
           <section aria-labelledby={`${uid}-stats`} className="mx-auto max-w-6xl px-4 sm:px-6">
             <h2 id={`${uid}-stats`} className="sr-only">
-              {config.overview.title || "In numbers"}
+              {config.overview.title || t("inNumbers")}
             </h2>
             <dl
               className={cn(
@@ -395,12 +397,12 @@ export function ShowcaseTemplate({
           >
             <div className={cn("grid gap-10 lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)] lg:gap-16", sectionRule)}>
               <div>
-                <p className="text-sm font-medium text-soft-ink">Life at {name}</p>
+                <p className="text-sm font-medium text-soft-ink">{t("lifeAt", { name })}</p>
                 <h2
                   id={`${uid}-culture`}
                   className="mt-4 text-3xl font-semibold leading-[1.05] tracking-[-0.035em] [text-wrap:balance] sm:text-5xl"
                 >
-                  {benefits.length > 0 ? config.values.title || "Why you'll like it here" : `About ${name}`}
+                  {benefits.length > 0 ? config.values.title || t("whyYoullLikeIt") : t("aboutCompany", { name })}
                 </h2>
                 {introHtml && (
                   <div className="mt-5 max-w-prose text-[17px] leading-relaxed text-soft-ink">
@@ -436,7 +438,7 @@ export function ShowcaseTemplate({
 
         {/* ── Photo mosaic ───────────────────────────────────────────────── */}
         {mosaic.length > 0 && (
-          <section aria-label={`Photos of the ${name} team`} className="mx-auto max-w-6xl px-4 pt-24 sm:px-6 sm:pt-32">
+          <section aria-label={t("photosOfTeam", { name })} className="mx-auto max-w-6xl px-4 pt-24 sm:px-6 sm:pt-32">
             <ul
               className={cn(
                 "grid grid-cols-2 items-start gap-3 sm:gap-4",
@@ -477,23 +479,21 @@ export function ShowcaseTemplate({
               id={`${uid}-jobs`}
               className="text-3xl font-semibold tracking-[-0.035em] sm:text-5xl"
             >
-              {config.positions.title || "Open roles"}
+              {config.positions.title || t("openRolesLabel")}
             </h2>
             {jobs.length > 0 && (
               <p className="text-sm tabular-nums text-soft-ink" aria-live="polite">
                 {filtersActive
-                  ? `${filtered.length} of ${plural(jobs.length, "role", "roles")}`
-                  : plural(jobs.length, "role", "roles")}
+                  ? t("filteredCount", { shown: filtered.length, total: jobs.length })
+                  : t("rolesCount", { count: jobs.length })}
               </p>
             )}
           </div>
 
           {jobs.length === 0 ? (
             <div className={cn("mt-8 border border-dashed border-hairline bg-pure-snow/60 px-6 py-16 text-center", card)}>
-              <p className="text-lg font-medium tracking-tight">No open roles right now</p>
-              <p className="mx-auto mt-1.5 max-w-sm text-[15px] text-soft-ink">
-                We&apos;re not hiring for anything specific at the moment. New roles show up here first.
-              </p>
+              <p className="text-lg font-medium tracking-tight">{t("noOpenRoles")}</p>
+              <p className="mx-auto mt-1.5 max-w-sm text-[15px] text-soft-ink">{t("noOpenRolesBody")}</p>
               {portalEnabled && (
                 <a
                   href="/portal"
@@ -502,7 +502,7 @@ export function ShowcaseTemplate({
                     focusRing,
                   )}
                 >
-                  Join our talent pool
+                  {t("joinTalentPool")}
                   <ArrowRight className="size-4" strokeWidth={2} aria-hidden />
                 </a>
               )}
@@ -511,7 +511,7 @@ export function ShowcaseTemplate({
             <>
               {/* Department overview: jump links with counts (3+ departments). */}
               {allDepartments.length >= 3 && !filtersActive && (
-                <nav aria-label="Departments" className="mt-6">
+                <nav aria-label={t("departments")} className="mt-6">
                   <ul className="flex flex-wrap gap-x-4 gap-y-1">
                     {allDepartments.map(([dept, count]) => (
                       <li key={dept}>
@@ -522,7 +522,7 @@ export function ShowcaseTemplate({
                             focusRing,
                           )}
                         >
-                          {dept}
+                          {groupLabel(dept)}
                           <span className="text-xs tabular-nums text-soft-ink">{count}</span>
                         </a>
                       </li>
@@ -535,7 +535,7 @@ export function ShowcaseTemplate({
                 {/* Filters */}
                 <div
                   role="search"
-                  aria-label="Filter roles"
+                  aria-label={t("filterRoles")}
                   className={cn(
                     "grid gap-2 border-b border-hairline p-3 sm:gap-3 sm:p-4",
                     facets.length === 1 && "sm:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]",
@@ -544,7 +544,7 @@ export function ShowcaseTemplate({
                   )}
                 >
                   <label className={cn("relative block", facets.length === 2 && "sm:col-span-2 lg:col-span-1", facets.length === 3 && "sm:col-span-2 lg:col-span-1")}>
-                    <span className="sr-only">Search roles</span>
+                    <span className="sr-only">{t("searchRoles")}</span>
                     <Search
                       className="pointer-events-none absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-soft-ink"
                       strokeWidth={1.8}
@@ -554,7 +554,7 @@ export function ShowcaseTemplate({
                       type="search"
                       value={query}
                       onChange={(e) => setQuery(e.target.value)}
-                      placeholder="Search roles"
+                      placeholder={t("searchRoles")}
                       className={cn(
                         "h-11 w-full border border-hairline bg-warm-paper pl-10 pr-3 text-[15px] text-near-ink placeholder:text-soft-ink focus-visible:border-near-ink/40",
                         inner,
@@ -566,7 +566,7 @@ export function ShowcaseTemplate({
                     const active = sel[kind] !== ANY;
                     return (
                       <label key={kind} className="relative block">
-                        <span className="sr-only">{FACETS[kind].label}</span>
+                        <span className="sr-only">{t(`facets.${kind}`)}</span>
                         {active && (
                           <span
                             aria-hidden
@@ -585,7 +585,7 @@ export function ShowcaseTemplate({
                           )}
                           style={active ? { borderColor: accent } : undefined}
                         >
-                          <option value={ANY}>{FACETS[kind].all}</option>
+                          <option value={ANY}>{t(`allFacets.${kind}`)}</option>
                           {values.map((v) => (
                             <option key={v} value={v}>
                               {v}
@@ -605,8 +605,8 @@ export function ShowcaseTemplate({
                 {/* Grouped rows */}
                 {groups.length === 0 ? (
                   <div className="px-6 py-14 text-center">
-                    <p className="font-medium tracking-tight">No roles match</p>
-                    <p className="mt-1 text-[15px] text-soft-ink">Try another search or clear the filters.</p>
+                    <p className="font-medium tracking-tight">{t("noRolesMatch")}</p>
+                    <p className="mt-1 text-[15px] text-soft-ink">{t("tryAnotherSearch")}</p>
                     <button
                       type="button"
                       onClick={clearFilters}
@@ -615,7 +615,7 @@ export function ShowcaseTemplate({
                         focusRing,
                       )}
                     >
-                      Clear filters
+                      {t("clearFilters")}
                     </button>
                   </div>
                 ) : (
@@ -631,16 +631,15 @@ export function ShowcaseTemplate({
                           id={`${groupId(dept)}-h`}
                           className="flex items-center gap-2 px-2 pb-2 text-sm font-semibold tracking-tight sm:px-3"
                         >
-                          {dept}
+                          {groupLabel(dept)}
                           <span className="text-xs font-normal tabular-nums text-soft-ink">
-                            <span className="sr-only">(</span>
-                            {list.length}
-                            <span className="sr-only"> {list.length === 1 ? "role" : "roles"})</span>
+                            <span aria-hidden>{list.length}</span>
+                            <span className="sr-only">{t("roleCountSr", { count: list.length })}</span>
                           </span>
                         </h3>
                         <ul>
                           {list.map((job, rowIdx) => {
-                            const salary = formatCompensation(job);
+                            const salary = formatCompensation(job, locale, tMeta);
                             const meta = [locationOf(job), formatEmploymentType(job.employmentType), salary].filter(
                               (v): v is string => Boolean(v),
                             );
@@ -699,17 +698,17 @@ export function ShowcaseTemplate({
         {testimonials.length > 0 && (
           <section aria-labelledby={`${uid}-voices`} className="mx-auto max-w-6xl px-4 pt-24 sm:px-6 sm:pt-32">
             <h2 id={`${uid}-voices`} className="text-3xl font-semibold tracking-[-0.035em] sm:text-5xl">
-              {config.testimonials.title || "From the team"}
+              {config.testimonials.title || t("fromTheTeam")}
             </h2>
             <ul className="mt-8 grid gap-3 sm:gap-4 md:grid-cols-2">
-              {testimonials.map((t, i) => {
-                const avatar = safeImageUrl(t.avatar);
+              {testimonials.map((item, i) => {
+                const avatar = safeImageUrl(item.avatar);
                 const wash = tint(accent, [0.78, 0.86, 0.7][i % 3]);
                 return (
-                  <li key={`${t.name}-${i}`}>
+                  <li key={`${item.name}-${i}`}>
                     <figure className={cn("flex h-full flex-col gap-6 border border-hairline bg-pure-snow p-6 sm:p-8", card)}>
                       <blockquote className="flex-1 text-lg leading-relaxed tracking-[-0.01em] [text-wrap:pretty] [overflow-wrap:anywhere] sm:text-xl">
-                        <p>&ldquo;{t.quote}&rdquo;</p>
+                        <p>&ldquo;{item.quote}&rdquo;</p>
                       </blockquote>
                       <figcaption className="flex items-center gap-3.5">
                         <span
@@ -720,7 +719,7 @@ export function ShowcaseTemplate({
                             // eslint-disable-next-line @next/next/no-img-element
                             <img
                               src={avatar}
-                              alt={`Portrait of ${t.name}`}
+                              alt={t("portraitOf", { name: item.name })}
                               width={56}
                               height={56}
                               loading="lazy"
@@ -732,13 +731,13 @@ export function ShowcaseTemplate({
                               style={{ color: pal.ink }}
                               aria-hidden
                             >
-                              {initials(t.name) || "?"}
+                              {initials(item.name) || "?"}
                             </span>
                           )}
                         </span>
                         <span className="min-w-0">
-                          <span className="block truncate font-semibold tracking-tight">{t.name}</span>
-                          {t.role?.trim() && <span className="block truncate text-sm text-soft-ink">{t.role}</span>}
+                          <span className="block truncate font-semibold tracking-tight">{item.name}</span>
+                          {item.role?.trim() && <span className="block truncate text-sm text-soft-ink">{item.role}</span>}
                         </span>
                       </figcaption>
                     </figure>
@@ -756,7 +755,7 @@ export function ShowcaseTemplate({
               process={config.process}
               accent={accent}
               rounded={config.theme.rounded}
-              title={config.process?.title || "How we hire"}
+              title={config.process?.title || t("howWeHire")}
               headingId={`${uid}-process`}
             />
           </section>
@@ -766,7 +765,7 @@ export function ShowcaseTemplate({
         {faqItems.length > 0 && (
           <section aria-labelledby={`${uid}-faq`} className="mx-auto max-w-3xl px-4 pt-24 sm:px-6 sm:pt-32">
             <h2 id={`${uid}-faq`} className="mb-8 text-3xl font-semibold tracking-[-0.035em] sm:text-5xl">
-              {config.faq.title || "Questions"}
+              {config.faq.title || t("questions")}
             </h2>
             <CareerFaq items={faqItems} accent={pal.ink} />
           </section>
@@ -807,7 +806,7 @@ export function ShowcaseTemplate({
                   className="relative mt-8 inline-flex h-12 items-center gap-2 rounded-full px-6 text-[15px] font-medium outline-none transition-transform duration-150 ease-out hover:-translate-y-px active:scale-[0.97] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white motion-reduce:transition-none"
                   style={{ backgroundColor: ctaFill, color: readableInk(ctaFill) }}
                 >
-                  {config.cta.buttonText || "Get in touch"}
+                  {config.cta.buttonText || t("getInTouch")}
                   <ArrowUpRight className="size-4" strokeWidth={2} aria-hidden />
                 </a>
               )}

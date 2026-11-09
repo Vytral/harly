@@ -6,6 +6,7 @@ import { randomUUID } from "node:crypto";
 import { revalidatePath } from "next/cache";
 import { and, desc, eq, inArray, isNull, ne, or, sql } from "drizzle-orm";
 import { z } from "zod";
+import { getTranslations } from "@/i18n/server";
 
 import { db } from "@harly/db";
 import {
@@ -102,6 +103,13 @@ export type CandidateActionState = {
   error?: string;
 };
 
+/** Zod messages are i18n ids; anything else (another area's English message) passes through. */
+async function issueMessage(message: string | undefined, fallbackId: string) {
+  const t = await getTranslations("server.candidates.validation");
+  if (!message) return t(fallbackId);
+  return t.has(message) ? t(message) : message;
+}
+
 const bulkStatusSchema = z.object({
   applicationIds: z.array(z.string().min(1)).min(1).max(200),
   status: z.enum(["active", "hired", "rejected", "withdrawn"]),
@@ -122,8 +130,9 @@ const directoryExportSchema = z.object({
 });
 
 export async function exportCandidateDirectoryAction(input: CandidateDirectoryFilters) {
+  const t = await getTranslations("server.candidates.actions");
   const parsed = directoryExportSchema.safeParse(input);
-  if (!parsed.success) return { success: false as const, error: "Invalid export filters." };
+  if (!parsed.success) return { success: false as const, error: t("invalidExportFilters") };
 
   const context = await requirePermission("candidates:export");
   const pageSize = 100;
@@ -132,7 +141,7 @@ export async function exportCandidateDirectoryAction(input: CandidateDirectoryFi
   if (first.total > maxRows) {
     return {
       success: false as const,
-      error: `This export contains ${first.total.toLocaleString()} rows. Narrow the filters to ${maxRows.toLocaleString()} or fewer candidates.`,
+      error: t("exportTooLarge", { total: first.total, max: maxRows }),
     };
   }
 
@@ -184,9 +193,10 @@ export async function bulkUpdateCandidateStatusAction(input: {
   status: "active" | "hired" | "rejected" | "withdrawn";
   rejection?: RejectionDecision;
 }): Promise<{ success: boolean; error?: string; emailWarning?: string }> {
+  const t = await getTranslations("server.candidates.actions");
   const parsed = bulkStatusSchema.safeParse(input);
   if (!parsed.success) {
-    return { success: false, error: "Invalid selection." };
+    return { success: false, error: t("invalidSelection") };
   }
 
   await requirePermission(
@@ -225,7 +235,7 @@ export async function rejectApplicationsAction(
   if (!parsed.success) {
     return {
       success: false,
-      error: parsed.error.issues[0]?.message ?? "Invalid rejection.",
+      error: await issueMessage(parsed.error.issues[0]?.message, "invalidRejection"),
     };
   }
 
@@ -257,8 +267,8 @@ const candidateNoteSchema = z.object({
   body: z
     .string()
     .trim()
-    .min(1, "Note body is required.")
-    .max(5000, "Notes must be 5000 characters or fewer."),
+    .min(1, "noteBodyRequired")
+    .max(5000, "noteTooLong"),
   mentions: z.array(mentionSchema).max(20).default([]),
 });
 
@@ -273,15 +283,15 @@ const optionalHttpsUrl = z
   .string()
   .trim()
   .transform((value) => (value.length > 0 ? value : null))
-  .refine((value) => !value || URL.canParse(value), "Enter a valid URL.")
+  .refine((value) => !value || URL.canParse(value), "invalidUrl")
   .refine((value) => !value || value.startsWith("https://"), {
-    message: "URL must start with https://",
+    message: "urlMustUseHttps",
   });
 
 const candidateUpdateSchema = z.object({
-  firstName: z.string().trim().min(1, "First name is required."),
-  lastName: z.string().trim().min(1, "Last name is required."),
-  email: z.string().trim().email("Enter a valid email address."),
+  firstName: z.string().trim().min(1, "firstNameRequired"),
+  lastName: z.string().trim().min(1, "lastNameRequired"),
+  email: z.string().trim().email("invalidEmail"),
   phone: optionalText,
   address: optionalText,
   linkedinUrl: optionalHttpsUrl,
@@ -293,17 +303,17 @@ const candidateUpdateSchema = z.object({
 });
 
 const candidateFileSchema = z.object({
-  fileName: z.string().trim().min(1, "Filename is required.").max(255),
-  fileUrl: z.string().trim().min(1, "File URL is required."),
+  fileName: z.string().trim().min(1, "filenameRequired").max(255),
+  fileUrl: z.string().trim().min(1, "fileUrlRequired"),
   fileType: z.enum(allowedResumeContentTypes),
   fileSize: z.coerce
     .number()
     .int()
-    .positive("File is required.")
-    .max(maxResumeFileSize, "File must be 10MB or smaller."),
+    .positive("fileRequired")
+    .max(maxResumeFileSize, "fileTooLarge"),
   contentHash: z
     .string()
-    .regex(/^[a-f0-9]{64}$/i, "Invalid file hash.")
+    .regex(/^[a-f0-9]{64}$/i, "invalidFileHash")
     .optional(),
 });
 
@@ -451,6 +461,7 @@ export async function createCandidateNote(input: {
     mentions: NoteMention[];
   };
 }> {
+  const t = await getTranslations("server.candidates.actions");
   try {
     const parsed = candidateNoteSchema.safeParse({
       body: input.body,
@@ -460,7 +471,7 @@ export async function createCandidateNote(input: {
     if (!parsed.success) {
       return {
         success: false,
-        error: parsed.error.issues[0]?.message ?? "Invalid note.",
+        error: await issueMessage(parsed.error.issues[0]?.message, "invalidNote"),
       };
     }
 
@@ -469,7 +480,7 @@ export async function createCandidateNote(input: {
     if (workspace.id !== input.workspaceId) {
       return {
         success: false,
-        error: "Workspace access denied.",
+        error: t("workspaceAccessDenied"),
       };
     }
 
@@ -505,7 +516,7 @@ export async function createCandidateNote(input: {
         .limit(1);
 
       if (!candidate) {
-        return { success: false, error: "Candidate not found" };
+        return { success: false, error: t("candidateNotFound") };
       }
 
       const [note] = await tx
@@ -591,7 +602,7 @@ export async function createCandidateNote(input: {
 
     return result;
   } catch (error) {
-    const message = "Unable to create note.";
+    const message = t("unableToCreateNote");
 
     console.error("Failed to create candidate note", error);
 
@@ -612,9 +623,9 @@ const createReferralInputSchema = z
   .optional();
 
 const createCandidateSchema = z.object({
-  firstName: z.string().trim().min(1, "First name is required."),
-  lastName: z.string().trim().min(1, "Last name is required."),
-  email: z.string().trim().email("Enter a valid email address."),
+  firstName: z.string().trim().min(1, "firstNameRequired"),
+  lastName: z.string().trim().min(1, "lastNameRequired"),
+  email: z.string().trim().email("invalidEmail"),
   phone: optionalText,
   address: optionalText,
   headline: optionalText,
@@ -648,18 +659,19 @@ export async function createCandidate(input: {
     featured?: boolean;
   };
 }): Promise<{ success: boolean; error?: string; candidateId?: string }> {
+  const t = await getTranslations("server.candidates.actions");
   try {
     const parsed = createCandidateSchema.safeParse(input);
     if (!parsed.success) {
       return {
         success: false,
-        error: parsed.error.issues[0]?.message ?? "Invalid candidate.",
+        error: await issueMessage(parsed.error.issues[0]?.message, "invalidCandidate"),
       };
     }
 
     const { organization: workspace, user } = await getWorkspaceContext();
     if (workspace.id !== input.workspaceId) {
-      return { success: false, error: "Workspace access denied." };
+      return { success: false, error: t("workspaceAccessDenied") };
     }
 
     await requirePermission("candidates:edit");
@@ -685,7 +697,7 @@ export async function createCandidate(input: {
       if (!member) {
         return {
           success: false,
-          error: "Referrer is not an active member of this workspace.",
+          error: t("referrerNotActive"),
         };
       }
     }
@@ -704,7 +716,7 @@ export async function createCandidate(input: {
         )
         .limit(1);
       if (existing) {
-        return { error: "A candidate with this email already exists." } as const;
+        return { error: t("candidateEmailExists") } as const;
       }
 
       const [created] = await tx
@@ -801,11 +813,11 @@ export async function createCandidate(input: {
     if (isCandidateEmailConflict(error)) {
       return {
         success: false,
-        error: "A candidate with this email already exists.",
+        error: t("candidateEmailExists"),
       };
     }
     console.error("Failed to create candidate", error);
-    return { success: false, error: "Unable to create candidate." };
+    return { success: false, error: t("unableToCreateCandidate") };
   }
 }
 
@@ -824,20 +836,21 @@ export async function updateCandidateProfile(input: {
   headline: string;
   summary: string;
 }): Promise<{ success: boolean; error?: string }> {
+  const t = await getTranslations("server.candidates.actions");
   try {
     const parsed = candidateUpdateSchema.safeParse(input);
 
     if (!parsed.success) {
       return {
         success: false,
-        error: parsed.error.issues[0]?.message ?? "Invalid candidate profile.",
+        error: await issueMessage(parsed.error.issues[0]?.message, "invalidCandidateProfile"),
       };
     }
 
     const { organization: workspace, user } = await getWorkspaceContext();
 
     if (workspace.id !== input.workspaceId) {
-      return { success: false, error: "Workspace access denied." };
+      return { success: false, error: t("workspaceAccessDenied") };
     }
 
     await requireCandidatePermission("candidates:edit", input.candidateId);
@@ -859,7 +872,7 @@ export async function updateCandidateProfile(input: {
         .limit(1);
 
       if (existingEmail) {
-        return { error: "A candidate with this email already exists." } as const;
+        return { error: t("candidateEmailExists") } as const;
       }
 
       const [row] = await tx
@@ -887,7 +900,7 @@ export async function updateCandidateProfile(input: {
         .returning({ id: candidates.id });
 
       if (!row) {
-        return { error: "Candidate not found." } as const;
+        return { error: t("candidateNotFound") } as const;
       }
 
       await tx.insert(activityEvents).values({
@@ -914,7 +927,7 @@ export async function updateCandidateProfile(input: {
     return { success: true };
   } catch (error) {
     emailLog.error(error, "Failed to update candidate profile");
-    return { success: false, error: "Unable to update candidate." };
+    return { success: false, error: t("unableToUpdateCandidate") };
   }
 }
 
@@ -923,10 +936,11 @@ export async function updateCandidateAvatarAction(input: {
   workspaceId: string;
   avatarUrl: string | null;
 }): Promise<{ success: boolean; error?: string }> {
+  const t = await getTranslations("server.candidates.actions");
   try {
     const { organization: workspace } = await getWorkspaceContext();
     if (workspace.id !== input.workspaceId) {
-      return { success: false, error: "Workspace access denied." };
+      return { success: false, error: t("workspaceAccessDenied") };
     }
 
     await requireCandidatePermission("candidates:edit", input.candidateId);
@@ -946,14 +960,14 @@ export async function updateCandidateAvatarAction(input: {
       .returning({ id: candidates.id });
 
     if (!candidate) {
-      return { success: false, error: "Candidate not found." };
+      return { success: false, error: t("candidateNotFound") };
     }
 
     revalidatePath(`/dashboard/candidates/${input.candidateId}`);
     return { success: true };
   } catch (error) {
     console.error("Failed to update candidate avatar", error);
-    return { success: false, error: "Unable to update avatar." };
+    return { success: false, error: t("unableToUpdateAvatar") };
   }
 }
 
@@ -1047,27 +1061,28 @@ export async function attachCandidateFile(input: {
     uploadedByName: string;
   };
 }> {
+  const t = await getTranslations("server.candidates.actions");
   try {
     const parsed = candidateFileSchema.safeParse(input);
 
     if (!parsed.success) {
       return {
         success: false,
-        error: parsed.error.issues[0]?.message ?? "Invalid file.",
+        error: await issueMessage(parsed.error.issues[0]?.message, "invalidFile"),
       };
     }
 
     const { organization: workspace, user } = await getWorkspaceContext();
 
     if (workspace.id !== input.workspaceId) {
-      return { success: false, error: "Workspace access denied." };
+      return { success: false, error: t("workspaceAccessDenied") };
     }
 
     await requireCandidatePermission("candidates:edit", input.candidateId);
 
     const key = resumeKeyFromUrl(parsed.data.fileUrl);
     if (!key || !isWorkspaceStorageKey(workspace.id, key, "resumes")) {
-      return { success: false, error: "File upload is invalid." };
+      return { success: false, error: t("fileUploadInvalid") };
     }
 
     const [candidateName] = await db
@@ -1133,7 +1148,7 @@ export async function attachCandidateFile(input: {
         .limit(1);
 
       if (!candidate) {
-        return { success: false, error: "Candidate not found." };
+        return { success: false, error: t("candidateNotFound") };
       }
 
       if (parsed.data.contentHash) {
@@ -1218,7 +1233,7 @@ export async function attachCandidateFile(input: {
 
     return result;
   } catch (error) {
-    const message = "Unable to upload file.";
+    const message = t("unableToUploadFile");
 
     console.error("Failed to attach candidate file", error);
 
@@ -1258,21 +1273,22 @@ export async function createScorecard(input: {
   rating: "strong" | "mixed" | "weak";
   comment?: string;
 }): Promise<{ success: boolean; error?: string }> {
+  const t = await getTranslations("server.candidates.actions");
   try {
     const parsed = scorecardSchema.safeParse(input);
     if (!parsed.success) {
       return {
         success: false,
-        error: parsed.error.issues[0]?.message ?? "Invalid evaluation.",
+        error: await issueMessage(parsed.error.issues[0]?.message, "invalidEvaluation"),
       };
     }
     const { organization: workspace, user } = await getWorkspaceContext();
     if (workspace.id !== input.workspaceId) {
-      return { success: false, error: "Workspace access denied." };
+      return { success: false, error: t("workspaceAccessDenied") };
     }
     await requireCandidatePermission("collab:write", input.candidateId);
     if (!(await assertCandidate(input.candidateId, input.workspaceId))) {
-      return { success: false, error: "Candidate not found." };
+      return { success: false, error: t("candidateNotFound") };
     }
     const [application] = await db
       .select({ id: applications.id, jobId: applications.jobId })
@@ -1286,7 +1302,7 @@ export async function createScorecard(input: {
       )
       .limit(1);
     if (!application) {
-      return { success: false, error: "Application not found." };
+      return { success: false, error: t("applicationNotFound") };
     }
     let stageName: string | null = null;
     if (parsed.data.stageId) {
@@ -1298,7 +1314,7 @@ export async function createScorecard(input: {
       if (!stage) {
         return {
           success: false,
-          error: "Stage is archived or does not belong to this application.",
+          error: t("stageUnavailable"),
         };
       }
       stageName = stage.name;
@@ -1345,7 +1361,7 @@ export async function createScorecard(input: {
   } catch {
     return {
       success: false,
-      error: "Unable to save evaluation.",
+      error: t("unableToSaveEvaluation"),
     };
   }
 }
@@ -1362,21 +1378,22 @@ export async function addCandidateTag(input: {
   workspaceId: string;
   label: string;
 }): Promise<{ success: boolean; error?: string }> {
+  const t = await getTranslations("server.candidates.actions");
   try {
     const parsed = tagSchema.safeParse(input);
     if (!parsed.success) {
       return {
         success: false,
-        error: parsed.error.issues[0]?.message ?? "Invalid tag.",
+        error: await issueMessage(parsed.error.issues[0]?.message, "invalidTag"),
       };
     }
     const { organization: workspace, user } = await getWorkspaceContext();
     if (workspace.id !== input.workspaceId) {
-      return { success: false, error: "Workspace access denied." };
+      return { success: false, error: t("workspaceAccessDenied") };
     }
     await requireCandidatePermission("candidates:edit", input.candidateId);
     if (!(await assertCandidate(input.candidateId, input.workspaceId))) {
-      return { success: false, error: "Candidate not found." };
+      return { success: false, error: t("candidateNotFound") };
     }
     await db
       .insert(candidateTags)
@@ -1392,7 +1409,7 @@ export async function addCandidateTag(input: {
   } catch {
     return {
       success: false,
-      error: "Unable to add tag.",
+      error: t("unableToAddTag"),
     };
   }
 }
@@ -1402,10 +1419,11 @@ export async function removeCandidateTag(input: {
   candidateId: string;
   workspaceId: string;
 }): Promise<{ success: boolean; error?: string }> {
+  const t = await getTranslations("server.candidates.actions");
   try {
     const { organization: workspace } = await getWorkspaceContext();
     if (workspace.id !== input.workspaceId) {
-      return { success: false, error: "Workspace access denied." };
+      return { success: false, error: t("workspaceAccessDenied") };
     }
     await requireCandidatePermission("candidates:edit", input.candidateId);
     // Match the tag to the candidate the caller was checked against. Without
@@ -1425,28 +1443,30 @@ export async function removeCandidateTag(input: {
   } catch {
     return {
       success: false,
-      error: "Unable to remove tag.",
+      error: t("unableToRemoveTag"),
     };
   }
 }
 
 // ── Candidate messages (email via Resend) ──
-const messageSchema = z.object({
-  candidateId: z.string().min(1),
-  workspaceId: z.string().min(1),
-  toEmail: z.string().email(),
-  subject: z.string().trim().min(1).max(200),
-  body: z.string().trim().min(1).max(20000),
-  html: z.string().max(500_000).optional(),
-  attachments: composerAttachmentsSchema,
-  idempotencyKey: z.string().trim().min(1).max(200).optional(),
-  threadId: z.string().uuid().nullable().optional(),
-});
+function messageSchema(attachments: ReturnType<typeof composerAttachmentsSchema>) {
+  return z.object({
+    candidateId: z.string().min(1),
+    workspaceId: z.string().min(1),
+    toEmail: z.string().email(),
+    subject: z.string().trim().min(1).max(200),
+    body: z.string().trim().min(1).max(20000),
+    html: z.string().max(500_000).optional(),
+    attachments,
+    idempotencyKey: z.string().trim().min(1).max(200).optional(),
+    threadId: z.string().uuid().nullable().optional(),
+  });
+}
 
 const bulkEmailSchema = z.object({
   candidateIds: z.array(z.uuid()).min(1).max(50),
-  subject: z.string().trim().min(1, "Subject is required.").max(300),
-  body: z.string().trim().min(1, "Message body is required.").max(10_000),
+  subject: z.string().trim().min(1, "subjectRequired").max(300),
+  body: z.string().trim().min(1, "messageBodyRequired").max(10_000),
 });
 
 /**
@@ -1464,11 +1484,12 @@ export async function sendBulkCandidateEmail(input: {
   sent: number;
   failed: number;
 }> {
+  const t = await getTranslations("server.candidates.actions");
   const parsed = bulkEmailSchema.safeParse(input);
   if (!parsed.success) {
     return {
       success: false,
-      error: parsed.error.issues[0]?.message ?? "Invalid bulk email.",
+      error: await issueMessage(parsed.error.issues[0]?.message, "invalidBulkEmail"),
       sent: 0,
       failed: 0,
     };
@@ -1503,7 +1524,7 @@ export async function sendBulkCandidateEmail(input: {
   if (rows.length === 0) {
     return {
       success: false,
-      error: "No matching candidates.",
+      error: t("noMatchingCandidates"),
       sent: 0,
       failed: 0,
     };
@@ -1554,7 +1575,7 @@ export async function sendBulkCandidateEmail(input: {
     return {
       success: false,
       error:
-        "Email sending is not configured. Go to Settings → Email to set up your sender.",
+        t("emailNotConfigured"),
       sent: 0,
       failed: 0,
     };
@@ -1683,9 +1704,10 @@ export async function generateEmailDraftAction(input: {
   type: "screening" | "interview_invite" | "rejection" | "offer" | "followup";
   additionalInstructions?: string | null;
 }): Promise<GenerateEmailDraftResult> {
+  const t = await getTranslations("server.candidates.actions");
   const parsed = draftEmailSchema.safeParse(input);
   if (!parsed.success) {
-    return { ok: false, error: "Invalid input." };
+    return { ok: false, error: t("invalidInput") };
   }
 
   await requireCandidatePermission("collab:write", parsed.data.candidateId);
@@ -1696,7 +1718,7 @@ export async function generateEmailDraftAction(input: {
   if (!config) {
     return {
       ok: false,
-      error: "Enable AI in Settings to draft with AI.",
+      error: t("aiDraftDisabled"),
       reason: "not_configured",
     };
   }
@@ -1761,7 +1783,7 @@ export async function generateEmailDraftAction(input: {
   }
 
   if (!row) {
-    return { ok: false, error: "Candidate not found." };
+    return { ok: false, error: t("candidateNotFound") };
   }
 
   // Also grab latest AI evaluation for context.
@@ -1810,9 +1832,9 @@ export async function generateEmailDraftAction(input: {
       )
       .limit(1);
     if (!thread || thread.candidateId !== parsed.data.candidateId)
-      return { ok: false, error: "Thread not found." };
+      return { ok: false, error: t("threadNotFound") };
     if (thread.applicationId && thread.applicationId !== row.applicationId) {
-      return { ok: false, error: "Thread not found." };
+      return { ok: false, error: t("threadNotFound") };
     }
     threadSubject = thread.subject;
     const threadMessages = await db
@@ -1874,7 +1896,7 @@ export async function generateEmailDraftAction(input: {
     console.error("Email draft AI failed", error);
     return {
       ok: false,
-      error: "Draft generation failed. Check your AI settings.",
+      error: t("draftGenerationFailed"),
     };
   }
 }
@@ -1893,21 +1915,22 @@ export async function sendCandidateMessage(input: {
   }>;
   threadId?: string | null;
 }): Promise<{ success: boolean; error?: string; delivered?: boolean }> {
+  const t = await getTranslations("server.candidates.actions");
   try {
-    const parsed = messageSchema.safeParse(input);
+    const parsed = messageSchema(composerAttachmentsSchema(await getTranslations("server.mailbox"))).safeParse(input);
     if (!parsed.success) {
       return {
         success: false,
-        error: parsed.error.issues[0]?.message ?? "Invalid message.",
+        error: await issueMessage(parsed.error.issues[0]?.message, "invalidMessage"),
       };
     }
     const { organization: workspace } = await getWorkspaceContext();
     if (workspace.id !== input.workspaceId) {
-      return { success: false, error: "Workspace access denied." };
+      return { success: false, error: t("workspaceAccessDenied") };
     }
     await requireCandidatePermission("collab:write", input.candidateId);
     if (!(await assertCandidate(input.candidateId, input.workspaceId))) {
-      return { success: false, error: "Candidate not found." };
+      return { success: false, error: t("candidateNotFound") };
     }
 
     // Latest application for this candidate , used to route inbound replies
@@ -1953,7 +1976,7 @@ export async function sendCandidateMessage(input: {
       parsed.data.threadId &&
       (!explicitThread || explicitThread.candidateId !== input.candidateId)
     ) {
-      return { success: false, error: "Thread not found." };
+      return { success: false, error: t("threadNotFound") };
     }
     const replyTo = latestApplication
       ? await getInboundReplyTo(workspace.id, latestApplication.id)
@@ -2040,7 +2063,7 @@ export async function sendCandidateMessage(input: {
     if (status === "failed") {
       return {
         success: false,
-        error: "Email failed to send.",
+        error: t("emailFailedToSend"),
         delivered: false,
       };
     }
@@ -2052,7 +2075,7 @@ export async function sendCandidateMessage(input: {
     );
     return {
       success: false,
-      error: "Unable to send message.",
+      error: t("unableToSendMessage"),
     };
   }
 }
@@ -2094,9 +2117,10 @@ export async function trashCandidateAction(
 export async function bulkTrashCandidatesAction(
   candidateIds: string[],
 ): Promise<CandidateActionState & { count?: number }> {
+  const t = await getTranslations("server.candidates.actions");
   const parsed = candidateIdsSchema.safeParse(candidateIds);
   if (!parsed.success) {
-    return { success: false, error: "Invalid selection." };
+    return { success: false, error: t("invalidSelection") };
   }
 
   await requirePermission("candidates:delete");
@@ -2130,6 +2154,7 @@ export async function restoreCandidateAction(
 export async function permanentlyDeleteCandidateAction(
   candidateId: string,
 ): Promise<CandidateActionState> {
+  const t = await getTranslations("server.candidates.actions");
   await requireCandidatePermission("candidates:delete", candidateId);
   const { organization, user } = await getWorkspaceContext();
   const job = await enqueueCandidateDeletionJob({
@@ -2139,18 +2164,18 @@ export async function permanentlyDeleteCandidateAction(
     requeueCompleted: true,
   });
   if (!job)
-    return { success: false, error: "Could not queue candidate deletion." };
+    return { success: false, error: t("deletionQueueFailed") };
   if (["processing", "blocked", "dead_letter"].includes(job.status)) {
     return {
       success: false,
-      error: "Candidate deletion is already being processed or blocked.",
+      error: t("deletionInProgressOrBlocked"),
     };
   }
   const claimed = await startCandidateDeletionJob(job.id, `trash:${user.id}`);
   if (!claimed) {
     return {
       success: false,
-      error: "Candidate deletion is already being processed.",
+      error: t("deletionInProgress"),
     };
   }
   const result = await permanentlyDeleteCandidate(candidateId, user.email);
@@ -2196,6 +2221,7 @@ export async function permanentlyDeleteCandidateAction(
 export async function requeueCandidateDeletionJobAction(
   jobId: string,
 ): Promise<CandidateActionState> {
+  const t = await getTranslations("server.candidates.actions");
   await requirePermission("candidates:delete");
   const { organization, user } = await getWorkspaceContext();
   const job = await requeueCandidateDeletionJob({
@@ -2206,7 +2232,7 @@ export async function requeueCandidateDeletionJobAction(
   if (!job) {
     return {
       success: false,
-      error: "Deletion job is not blocked, failed, or dead-lettered.",
+      error: t("deletionNotRetryable"),
     };
   }
   revalidatePath("/dashboard/candidates");
@@ -2221,7 +2247,7 @@ export type RefineScorecardResult =
   | { ok: false; error: string; reason?: "not_configured" };
 
 const refineScorecardSchema = z.object({
-  comment: z.string().trim().min(1, "Write a comment first.").max(6000),
+  comment: z.string().trim().min(1, "commentRequired").max(6000),
   candidateId: z.string().min(1),
 });
 
@@ -2230,11 +2256,12 @@ export async function refineScorecardTextAction(input: {
   comment: string;
   candidateId: string;
 }): Promise<RefineScorecardResult> {
+  const t = await getTranslations("server.candidates.actions");
   const parsed = refineScorecardSchema.safeParse(input);
   if (!parsed.success) {
     return {
       ok: false,
-      error: parsed.error.issues[0]?.message ?? "Invalid input.",
+      error: await issueMessage(parsed.error.issues[0]?.message, "invalidInput"),
     };
   }
 
@@ -2245,7 +2272,7 @@ export async function refineScorecardTextAction(input: {
   if (!config) {
     return {
       ok: false,
-      error: "Enable AI in Settings to refine with AI.",
+      error: t("refineAiDisabled"),
       reason: "not_configured",
     };
   }
@@ -2254,7 +2281,7 @@ export async function refineScorecardTextAction(input: {
     workspace.id,
     parsed.data.candidateId,
   );
-  if (!job) return { ok: false, error: "No authorized job found for this candidate." };
+  if (!job) return { ok: false, error: t("noAuthorizedJob") };
 
   try {
     const { refineScorecardTextWithAI } =
@@ -2269,7 +2296,7 @@ export async function refineScorecardTextAction(input: {
       return { ok: false, error: error.message };
     }
     console.error("Scorecard refine AI failed", error);
-    return { ok: false, error: "Refinement failed. Check your AI settings." };
+    return { ok: false, error: t("refinementFailed") };
   }
 }
 
@@ -2289,11 +2316,12 @@ export async function suggestScorecardAttributesAction(input: {
   candidateId: string;
   existingAttributes?: string[];
 }): Promise<SuggestScorecardAttributesResult> {
+  const t = await getTranslations("server.candidates.actions");
   const parsed = suggestAttributesSchema.safeParse(input);
   if (!parsed.success) {
     return {
       ok: false,
-      error: parsed.error.issues[0]?.message ?? "Invalid input.",
+      error: await issueMessage(parsed.error.issues[0]?.message, "invalidInput"),
     };
   }
 
@@ -2304,7 +2332,7 @@ export async function suggestScorecardAttributesAction(input: {
   if (!config) {
     return {
       ok: false,
-      error: "Enable AI in Settings to suggest attributes.",
+      error: t("suggestAiDisabled"),
       reason: "not_configured",
     };
   }
@@ -2315,7 +2343,7 @@ export async function suggestScorecardAttributesAction(input: {
   );
 
   if (!job) {
-    return { ok: false, error: "No job found for this candidate." };
+    return { ok: false, error: t("noJobForCandidate") };
   }
 
   try {
@@ -2330,7 +2358,7 @@ export async function suggestScorecardAttributesAction(input: {
     return { ok: true, attributes };
   } catch (error) {
     console.error("Scorecard attribute AI failed", error);
-    return { ok: false, error: "Suggestion failed. Check your AI settings." };
+    return { ok: false, error: t("suggestionFailed") };
   }
 }
 

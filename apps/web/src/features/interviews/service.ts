@@ -21,6 +21,7 @@ import {
 } from "@/server/events/emit";
 import { deriveMeetLink } from "./shared";
 import {
+  interviewApiTranslator,
   interviewPortalNotification,
   runApiInterviewSideEffects,
   type ApiMeetingProvider,
@@ -342,7 +343,7 @@ export async function createInterviewForApi(input: {
     });
     await tx.insert(candidatePortalNotifications).values({
       workspaceId: input.workspaceId,
-      ...interviewPortalNotification({ action: "scheduled", interview }),
+      ...interviewPortalNotification({ action: "scheduled", interview }, await interviewApiTranslator()),
     });
     return {
       created: interview,
@@ -504,7 +505,7 @@ export async function updateInterviewForApi(input: {
     });
     await tx.insert(candidatePortalNotifications).values({
       workspaceId: input.workspaceId,
-      ...interviewPortalNotification({ action: "rescheduled", interview: next }),
+      ...interviewPortalNotification({ action: "rescheduled", interview: next }, await interviewApiTranslator()),
     });
     return {
       updated: next,
@@ -597,7 +598,7 @@ export async function setInterviewStatusForApi(input: {
     if (input.status === "canceled") {
       await tx.insert(candidatePortalNotifications).values({
         workspaceId: input.workspaceId,
-        ...interviewPortalNotification({ action: "canceled", interview: next }),
+        ...interviewPortalNotification({ action: "canceled", interview: next }, await interviewApiTranslator()),
       });
     }
     return {

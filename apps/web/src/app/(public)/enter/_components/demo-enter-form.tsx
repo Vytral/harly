@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useTranslations } from "next-intl";
 import { Turnstile } from "@marsidev/react-turnstile";
 
 /**
@@ -10,6 +11,7 @@ import { Turnstile } from "@marsidev/react-turnstile";
  * button shows a quiet "Verifying…" state and stays disabled.
  */
 export function DemoEnterForm({ siteKey, style }: { siteKey: string; style: string }) {
+  const t = useTranslations("accessDemo");
   const [token, setToken] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const verified = Boolean(token);
@@ -33,7 +35,7 @@ export function DemoEnterForm({ siteKey, style }: { siteKey: string; style: stri
         </div>
       ) : (
         <p className="text-center text-sm text-danger-rust">
-          Turnstile is not configured (missing site key).
+          {t("turnstileMissing")}
         </p>
       )}
 
@@ -50,14 +52,14 @@ export function DemoEnterForm({ siteKey, style }: { siteKey: string; style: stri
         {submitting ? (
           <>
             <Spinner />
-            Entering the demo…
+            {t("entering")}
           </>
         ) : verified ? (
-          "Enter the demo"
+          t("title")
         ) : (
           <>
             <Spinner />
-            Verifying…
+            {t("verifying")}
           </>
         )}
       </button>

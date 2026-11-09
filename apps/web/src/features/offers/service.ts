@@ -1,5 +1,7 @@
 import "server-only";
 
+import { getTranslations } from "@/i18n/server";
+
 import { and, desc, eq, exists, getTableColumns, isNull, lt, or, sql } from "drizzle-orm";
 
 import { ApiError, type Cursor } from "@harly/api";
@@ -502,7 +504,7 @@ export async function sendOfferForApi(input: {
     .where(eq(emailOutbox.id, outboxId))
     .limit(1);
   if (delivery?.status !== "sent") {
-    throw ApiError.internal(offerSendOutcomeMessage(delivery?.status ?? "missing"));
+    throw ApiError.internal(offerSendOutcomeMessage(delivery?.status ?? "missing", await getTranslations("server.emailDelivery")));
   }
   return getOfferForApi({ ...input, database });
 }
