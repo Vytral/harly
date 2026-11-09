@@ -21,7 +21,7 @@ import { BuilderTopBar, type PublishState } from "./BuilderTopBar";
 import { BuilderSidebar } from "./BuilderSidebar";
 import { errorsBySection, sectionOfPath, validateConfig } from "./builder-logic";
 import { FieldErrorsContext } from "./primitives";
-import { capabilitiesFor, templateLabel } from "./template-capabilities";
+import { templateLabel } from "./template-capabilities";
 import {
   TemplatePanel,
   ContentPanel,
@@ -176,7 +176,6 @@ export function CareerPageBuilder({
   );
 
   const state: PublishState = publishing ? "publishing" : neverPublished ? "never" : dirty ? "dirty" : "live";
-  const caps = capabilitiesFor(config.template);
   const panelProps = { config, update, workspace };
   const boardPath = `/board/${workspace.slug}`;
 

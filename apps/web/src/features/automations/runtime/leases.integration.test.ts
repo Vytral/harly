@@ -1,5 +1,3 @@
-vi.mock("next-intl/server", async () => (await import("@/test-support/intl-server-mock")).intlServerMock);
-
 import { createHash, randomUUID } from "node:crypto";
 import { mkdtemp, rm } from "node:fs/promises";
 import os from "node:os";
@@ -73,6 +71,8 @@ import {
 } from "@/features/documents/requests-service";
 import { storage } from "@/lib/storage";
 import { pruneDomainEventOutbox } from "@/server/events/outbox";
+
+vi.mock("next-intl/server", async () => (await import("@/test-support/intl-server-mock")).intlServerMock);
 
 const url = process.env.AUTOMATIONS_TEST_DATABASE_URL;
 // Never run fixture writes against the user's ordinary database.

@@ -1,5 +1,3 @@
-vi.mock("next-intl/server", async () => (await import("@/test-support/intl-server-mock")).intlServerMock);
-
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
@@ -47,6 +45,8 @@ import {
   requireOwnerOrAdmin,
 } from "./permissions-server";
 import { updateMemberSenderIdentityAction } from "./sender-identity-actions";
+
+vi.mock("next-intl/server", async () => (await import("@/test-support/intl-server-mock")).intlServerMock);
 
 function contextFor(roleKey: string) {
   return {

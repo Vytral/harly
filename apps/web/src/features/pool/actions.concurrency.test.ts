@@ -1,4 +1,3 @@
-vi.mock("next-intl/server", async () => (await import("@/test-support/intl-server-mock")).intlServerMock);
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
@@ -45,6 +44,8 @@ vi.mock("@/features/workspaces/permissions-server", () => ({
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 
 import { addToPoolAction } from "./actions";
+
+vi.mock("next-intl/server", async () => (await import("@/test-support/intl-server-mock")).intlServerMock);
 
 describe("addToPoolAction concurrency handling", () => {
   beforeEach(() => {

@@ -1,3 +1,5 @@
+import { translatorFor } from "@/i18n/translator";
+import { interviewModeTitle, interviewTypeTitle } from "@/features/interviews/shared";
 import { and, eq, exists, inArray, isNull, sql } from "drizzle-orm";
 import { createElement } from "react";
 import { createHash, randomUUID } from "node:crypto";
@@ -1646,6 +1648,9 @@ type InterviewEmailPayload = {
   companyName?: string;
   jobTitle?: string;
   interviewType?: string;
+  /** Stable ids; rendered in the recipient's language. `interviewType` and `mode` are the sender's-language fallback for older rows. */
+  interviewTypeId?: string;
+  modeId?: string;
   scheduledAt?: string;
   /** IANA zone the interview was scheduled in. Missing on older payloads. */
   timeZone?: string | null;
@@ -1676,9 +1681,16 @@ async function deliverInterviewEmail(row: OutboxRow, database: typeof db = db): 
   }
 
   const timeZone = resolveInterviewTimeZone(payload.timeZone);
-  const whenLabel = formatInterviewWhen(when, timeZone);
-  const branding = await getWorkspaceEmailBranding(row.workspaceId);
   const recipientLocale = resolveEmailLocale(payload.recipientLocale);
+  const whenLabel = formatInterviewWhen(when, timeZone, recipientLocale);
+  const branding = await getWorkspaceEmailBranding(row.workspaceId);
+  const recipientLabels = translatorFor(recipientLocale, "labels.interviews");
+  const interviewTypeLabel = payload.interviewTypeId
+    ? interviewTypeTitle(recipientLabels, payload.interviewTypeId)
+    : (payload.interviewType ?? "Interview");
+  const interviewModeLabel = payload.modeId
+    ? interviewModeTitle(recipientLabels, payload.modeId)
+    : payload.mode;
   const [firstName, ...lastName] = (payload.candidateName ?? "")
     .trim()
     .split(/\s+/);
@@ -1747,9 +1759,9 @@ async function deliverInterviewEmail(row: OutboxRow, database: typeof db = db): 
               replyTo: payload.replyTo ?? undefined,
               react: createElement(InterviewScheduled, {
                 ...common,
-                interviewType: payload.interviewType ?? "Interview",
+                interviewType: interviewTypeLabel,
                 when: whenLabel,
-                mode: payload.mode ?? "Video call",
+                mode: interviewModeLabel ?? "Video call",
                 location: payload.location,
                 duration,
                 startIso: when.toISOString(),
@@ -1776,9 +1788,9 @@ async function deliverInterviewEmail(row: OutboxRow, database: typeof db = db): 
           replyTo: payload.replyTo ?? undefined,
           react: createElement(InterviewRescheduled, {
             ...common,
-            interviewType: payload.interviewType ?? "Interview",
+            interviewType: interviewTypeLabel,
             when: whenLabel,
-            mode: payload.mode ?? "Video call",
+            mode: interviewModeLabel ?? "Video call",
             location: payload.location,
             duration,
             startIso: when.toISOString(),
@@ -1803,7 +1815,7 @@ async function deliverInterviewEmail(row: OutboxRow, database: typeof db = db): 
           replyTo: payload.replyTo ?? undefined,
           react: createElement(InterviewCanceled, {
             ...common,
-            interviewType: payload.interviewType ?? "Interview",
+            interviewType: interviewTypeLabel,
             when: whenLabel,
           }),
           ...deliveryOptions(row),

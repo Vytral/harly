@@ -1,5 +1,3 @@
-vi.mock("next-intl/server", async () => (await import("@/test-support/intl-server-mock")).intlServerMock);
-
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
@@ -31,6 +29,8 @@ vi.mock("@/lib/jitsi/config", () => ({
 vi.mock("@/lib/ssrf", () => ({ safeFetchWebhook: mocks.safeFetchWebhook }));
 
 import { testJitsiConnectionAction } from "./jitsi-settings-actions";
+
+vi.mock("next-intl/server", async () => (await import("@/test-support/intl-server-mock")).intlServerMock);
 
 describe("Jitsi outbound security", () => {
   beforeEach(() => {

@@ -21,7 +21,7 @@ import {
 } from "@/server/events/emit";
 
 import { generateUniqueJobSlug } from "./data";
-import { getPublishBlockers, type JobStatus } from "./validation";
+import { getPublishBlockers, publishBlockerMessage, type JobStatus } from "./validation";
 
 /**
  * Workspace-scoped job service consumed by the REST API. Session-free: every
@@ -167,7 +167,7 @@ export async function createJobForApi(input: {
   const status: JobStatus = values.status ?? "draft";
   if (status === "open") {
     const blockers = getPublishBlockers(values);
-    if (blockers.length) throw ApiError.unprocessable(blockers[0]);
+    if (blockers.length) throw ApiError.unprocessable(publishBlockerMessage(blockers[0]!));
   }
 
   const { job, event } = await db.transaction(async (tx) => {
@@ -250,7 +250,7 @@ export async function updateJobForApi(input: {
       description: nextDescription,
       contentSections: existing.contentSections,
     });
-    if (blockers.length) throw ApiError.unprocessable(blockers[0]);
+    if (blockers.length) throw ApiError.unprocessable(publishBlockerMessage(blockers[0]!));
   }
   if (nextStatus === "open") {
     const [pending] = await db.select({ id: jobApprovalRequests.id }).from(jobApprovalRequests).where(and(eq(jobApprovalRequests.workspaceId, input.workspaceId), eq(jobApprovalRequests.jobId, input.jobId), eq(jobApprovalRequests.status, "pending"))).limit(1);

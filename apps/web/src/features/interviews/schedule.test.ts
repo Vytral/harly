@@ -1,4 +1,3 @@
-vi.mock("next-intl/server", async () => (await import("@/test-support/intl-server-mock")).intlServerMock);
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 // F1-12: the server rejects an interview that overlaps an existing `scheduled`
@@ -180,6 +179,8 @@ import {
   summarizeInterviewNotesAction,
   updateInterview,
 } from "./actions";
+
+vi.mock("next-intl/server", async () => (await import("@/test-support/intl-server-mock")).intlServerMock);
 
 beforeEach(() => {
   mocks.selectQueue.length = 0;

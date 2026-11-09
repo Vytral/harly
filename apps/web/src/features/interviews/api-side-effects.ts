@@ -170,6 +170,8 @@ async function sendInterviewEmail(
       companyName: context.companyName,
       jobTitle: context.jobTitle,
       interviewType: interviewTypeTitle(tl, interview.type),
+      interviewTypeId: interview.type,
+      modeId: interview.mode,
       scheduledAt,
       timeZone,
       mode: interviewModeTitle(tl, interview.mode),

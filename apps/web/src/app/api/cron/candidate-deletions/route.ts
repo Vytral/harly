@@ -51,7 +51,7 @@ export async function POST(request: NextRequest) {
       if (result.ok) {
         await markCandidateDeletionCompleted(job.id, result.stats, workerId);
         succeeded += 1;
-      } else if (result.error.includes("legal hold")) {
+      } else if ("legalHold" in result && result.legalHold) {
         await markCandidateDeletionBlocked(job.id, result.error, workerId);
         if (job.requestId) {
           await db

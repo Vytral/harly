@@ -263,7 +263,7 @@ export async function fulfilDsarErasureAction(
     context.user.email,
   );
   if (!deleted.ok) {
-    if (deleted.error.includes("legal hold")) {
+    if ("legalHold" in deleted && deleted.legalHold) {
       await markCandidateDeletionBlocked(
         job.id,
         deleted.error,

@@ -1,4 +1,3 @@
-vi.mock("next-intl/server", async () => (await import("@/test-support/intl-server-mock")).intlServerMock);
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
@@ -112,6 +111,8 @@ vi.mock("@harly/emails", () => ({}));
 vi.mock("@/lib/email", () => ({ getWorkspaceEmailSender: vi.fn() }));
 
 import { applyToJobAction } from "./actions";
+
+vi.mock("next-intl/server", async () => (await import("@/test-support/intl-server-mock")).intlServerMock);
 
 function query(value: unknown) {
   const builder = new Proxy(

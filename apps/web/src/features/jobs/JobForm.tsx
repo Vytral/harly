@@ -519,7 +519,7 @@ export function JobForm({
     if (fieldName === "title") {
       setTitleError(true);
     }
-  }, [job]);
+  }, [job, tValidation]);
 
   const handleActiveChange = useCallback(
     (key: string) => {

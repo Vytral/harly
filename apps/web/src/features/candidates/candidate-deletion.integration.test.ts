@@ -483,7 +483,7 @@ integration("permanent candidate deletion", () => {
     // requisition from destructive deletion.
     await expect(permanentlyDeleteJob(jobId)).resolves.toMatchObject({
       ok: false,
-      error: expect.stringMatching(/applications/i),
+      code: "hasApplications",
     });
 
     await expect(

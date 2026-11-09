@@ -1,4 +1,3 @@
-vi.mock("next-intl/server", async () => (await import("@/test-support/intl-server-mock")).intlServerMock);
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
@@ -72,6 +71,8 @@ vi.mock("@/server/webhooks/emit", () => ({
 
 import { createTask, deleteTask, updateTask } from "./actions";
 import { TaskMessageError } from "./service";
+
+vi.mock("next-intl/server", async () => (await import("@/test-support/intl-server-mock")).intlServerMock);
 
 describe("Tasks actions , RBAC (F2-04 / readiness)", () => {
   beforeEach(() => {

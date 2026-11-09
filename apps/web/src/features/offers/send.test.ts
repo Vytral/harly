@@ -1,4 +1,3 @@
-vi.mock("next-intl/server", async () => (await import("@/test-support/intl-server-mock")).intlServerMock);
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 // F1-13: an offer is only marked `sent` after the email provider accepts it.
@@ -122,6 +121,8 @@ vi.mock("@/lib/esign/config", () => ({
 }));
 
 import { sendOffer } from "./actions";
+
+vi.mock("next-intl/server", async () => (await import("@/test-support/intl-server-mock")).intlServerMock);
 
 const OFFER = {
   id: "33333333-3333-4333-8333-333333333333",

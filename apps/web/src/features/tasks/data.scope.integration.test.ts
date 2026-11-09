@@ -1,4 +1,3 @@
-vi.mock("next-intl/server", async () => (await import("@/test-support/intl-server-mock")).intlServerMock);
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 
 import { db, tasks } from "@harly/db";
@@ -25,6 +24,8 @@ vi.mock("@/features/workspaces/context", () => ({
 }));
 
 import { getTask, getTaskCounts, listTaskContextOptions, listTasks } from "./data";
+
+vi.mock("next-intl/server", async () => (await import("@/test-support/intl-server-mock")).intlServerMock);
 
 describe.skipIf(!runPipelineIntegration)("tasks: role scope (database)", () => {
   let fx: AuthorizationFixture;

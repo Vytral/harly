@@ -271,6 +271,21 @@ export function getPublishBlockers(input: {
       ];
 }
 
+/**
+ * English text for each publish blocker code. Used where there is no
+ * translator or the reader is not the signed-in recruiter, such as the public
+ * API. The dashboard form and actions translate the same codes with
+ * `jobs.validation` and `jobs.errors`.
+ */
+export const PUBLISH_BLOCKER_MESSAGES: Record<string, string> = {
+  descriptionRequired:
+    "Add a description or fill in at least one section before publishing. You can still save a draft without it.",
+};
+
+export function publishBlockerMessage(code: string): string {
+  return PUBLISH_BLOCKER_MESSAGES[code] ?? code;
+}
+
 export const jobStatusSchema = z.enum(["draft", "open", "closed"]);
 
 export type JobFormValues = z.infer<typeof jobFormSchema>;

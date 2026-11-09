@@ -2265,8 +2265,9 @@ export async function permanentlyDeleteCandidate(
   if (heldDocument) {
     return {
       ok: false,
-      error:
-        t("legalHoldBlocksErase"),
+      error: t("legalHoldBlocksErase"),
+      // Stable marker: callers must not match on the (translated) message.
+      legalHold: true,
     } as const;
   }
 

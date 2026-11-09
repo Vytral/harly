@@ -89,6 +89,12 @@ export type JobActionState = {
 };
 
 /** Failed result with the translated message and the stable code the UI branches on. */
+/** Translates a publish blocker code for the form; unknown text passes through. */
+async function publishBlockerMessage(code: string): Promise<string> {
+  const t = await getTranslations("jobs.errors");
+  return t.has(code as never) ? t(code as never) : code;
+}
+
 async function failure(code: JobActionErrorKey): Promise<JobActionState> {
   const t = await getTranslations("jobs.errors");
   return { success: false, error: t(code), code };
@@ -105,7 +111,7 @@ export async function createJobAction(formData: FormData) {
       description: values.description,
       contentSections: values.contentSections,
     });
-    if (blockers.length > 0) throw new Error(blockers[0]);
+    if (blockers.length > 0) throw new Error(await publishBlockerMessage(blockers[0]!));
   }
   const job = await createJob(values);
 
@@ -149,7 +155,7 @@ export async function updateJobAction(formData: FormData) {
     if (!current) notFound();
     if (current.job.status === "open") {
       const blockers = getPublishBlockers(values);
-      if (blockers.length) throw new Error(blockers[0]);
+      if (blockers.length) throw new Error(await publishBlockerMessage(blockers[0]!));
     }
   }
   const job = await updateJob(jobId, values);
@@ -191,7 +197,7 @@ export async function updateJobStatusAction(formData: FormData) {
       description: current.job.description,
       contentSections: current.job.contentSections,
     });
-    if (blockers.length > 0) throw new Error(blockers[0]);
+    if (blockers.length > 0) throw new Error(await publishBlockerMessage(blockers[0]!));
   }
   const job = await updateJobStatus(jobId, status);
 

@@ -1,4 +1,3 @@
-vi.mock("next-intl/server", async () => (await import("@/test-support/intl-server-mock")).intlServerMock);
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
@@ -86,6 +85,8 @@ vi.mock("@/lib/logger", () => ({
 }));
 
 import { retryInterviewSyncAction } from "./sync-actions";
+
+vi.mock("next-intl/server", async () => (await import("@/test-support/intl-server-mock")).intlServerMock);
 
 beforeEach(() => {
   mocks.getWorkspaceContext.mockResolvedValue({ organization: { id: "ws-1" } });

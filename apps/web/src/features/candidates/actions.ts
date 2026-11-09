@@ -2181,7 +2181,7 @@ export async function permanentlyDeleteCandidateAction(
   const result = await permanentlyDeleteCandidate(candidateId, user.email);
 
   if (!result.ok) {
-    if (result.error.includes("legal hold"))
+    if ("legalHold" in result && result.legalHold)
       await markCandidateDeletionBlocked(
         job.id,
         result.error,

@@ -1,4 +1,3 @@
-vi.mock("next-intl/server", async () => (await import("@/test-support/intl-server-mock")).intlServerMock);
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 // decideOffer: sent → accepted | declined. Accepting also moves the
@@ -175,6 +174,8 @@ vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 
 import { decideOffer, withdrawOffer } from "./actions";
 import * as dbModule from "@harly/db";
+
+vi.mock("next-intl/server", async () => (await import("@/test-support/intl-server-mock")).intlServerMock);
 
 // The vi.mock factory below exposes a `__makeTx` side channel (not part of the
 // real @harly/db types) so tests can build a fake `tx` for the transaction
