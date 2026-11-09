@@ -1,4 +1,5 @@
 import { relations, sql } from "drizzle-orm";
+import { supportedEmailLocales, type EmailLocale } from "@harly/config/email-locale";
 import {
   boolean,
   bigint,
@@ -230,6 +231,7 @@ export const user = pgTable(
     websiteUrl: text("website_url"),
     username: text("username"),
     timezone: text("timezone"),
+    preferredEmailLocale: text("preferred_email_locale").$type<EmailLocale>(),
     specialties: text("specialties").array(),
     languages: text("languages").array(),
     weeklyAvailability: jsonb(
@@ -253,7 +255,13 @@ export const user = pgTable(
       .$onUpdate(() => new Date())
       .notNull(),
   },
-  (table) => [uniqueIndex("user_username_uidx").on(table.username)],
+  (table) => [
+    uniqueIndex("user_username_uidx").on(table.username),
+    check(
+      "user_preferred_email_locale_check",
+      sql`${table.preferredEmailLocale} is null or ${table.preferredEmailLocale} in (${sql.raw(supportedEmailLocales.map((locale) => `'${locale}'`).join(", "))})`,
+    ),
+  ],
 );
 
 export type TimeRange = { start: string; end: string };
@@ -1530,6 +1538,7 @@ export const candidates = pgTable(
     firstName: text("first_name").notNull(),
     lastName: text("last_name").notNull(),
     email: text("email").notNull(),
+    preferredEmailLocale: text("preferred_email_locale").$type<EmailLocale>(),
     phone: text("phone"),
     address: text("address"),
     location: text("location"),
@@ -1559,6 +1568,10 @@ export const candidates = pgTable(
     ...timestamps(),
   },
   (table) => [
+    check(
+      "candidates_preferred_email_locale_check",
+      sql`${table.preferredEmailLocale} is null or ${table.preferredEmailLocale} in (${sql.raw(supportedEmailLocales.map((locale) => `'${locale}'`).join(", "))})`,
+    ),
     uniqueIndex("candidates_workspace_email_idx")
       .on(table.workspaceId, sql`lower(${table.email})`)
       .where(sql`${table.deletedAt} is null`),

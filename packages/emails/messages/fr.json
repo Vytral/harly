@@ -1,0 +1,177 @@
+{
+  "common": {
+    "fallback": "Le bouton ne fonctionne pas ? Copiez et collez ce lien dans votre navigateur :",
+    "sentBy": "Envoyé par {name}",
+    "poweredBy": "Propulsé par",
+    "greeting": "Bonjour {name},",
+    "ignore": "Vous n’avez pas demandé ce lien ? Vous pouvez ignorer cet e-mail.",
+    "signIn": "Se connecter",
+    "logo": "Logo de {name}"
+  },
+  "reset": {
+    "subject": "Réinitialisez votre mot de passe",
+    "preview": "Réinitialisez votre mot de passe Harly. Ce lien expire dans 1 heure.",
+    "heading": "Réinitialisez votre mot de passe",
+    "body": "Une demande de réinitialisation du mot de passe de votre compte Harly a été effectuée. Utilisez le bouton ci-dessous pour choisir un nouveau mot de passe.",
+    "button": "Modifier le mot de passe",
+    "notice": "Si vous n’êtes pas à l’origine de cette demande, ignorez cet e-mail. Votre mot de passe ne changera que si vous ouvrez le lien et en créez un nouveau."
+  },
+  "verify": {
+    "subject": "Vérifiez votre adresse e-mail",
+    "preview": "Vérifiez votre adresse e-mail Harly.",
+    "heading": "Vérifiez votre adresse e-mail",
+    "greeting": "Bonjour {name},",
+    "body": "Utilisez le bouton ci-dessous pour confirmer votre adresse et terminer la configuration de votre compte. Ce lien expire dans 24 heures.",
+    "button": "Vérifier mon adresse",
+    "notice": "Vous ne vous êtes pas inscrit sur Harly ? Vous pouvez ignorer cet e-mail."
+  },
+  "portalMagic": {
+    "subject": "Votre lien de connexion",
+    "preview": "Votre lien de connexion est prêt et expire dans 15 minutes.",
+    "heading": "Connectez-vous à votre portail",
+    "body": "Utilisez le lien ci-dessous pour vous connecter. Il est à usage unique et expire dans 15 minutes."
+  },
+  "staffMagic": {
+    "subject": "Connectez-vous à Harly",
+    "preview": "Votre lien de connexion est prêt.",
+    "body": "Utilisez le lien ci-dessous pour vous connecter. Si vous ne l’avez pas demandé, vous pouvez ignorer cet e-mail."
+  },
+  "portalReset": {
+    "subject": "Réinitialisez le mot de passe de votre portail",
+    "preview": "Réinitialisez le mot de passe de votre portail. Le lien expire dans 1 heure.",
+    "heading": "Réinitialisez votre mot de passe",
+    "body": "Utilisez le lien ci-dessous pour choisir un nouveau mot de passe. Il est à usage unique et expire dans 1 heure.",
+    "button": "Réinitialiser le mot de passe",
+    "notice": "Vous n’avez pas demandé ce lien ? Vous pouvez ignorer cet e-mail. Votre mot de passe n’a pas changé."
+  },
+  "welcome": {
+    "subject": "Bienvenue sur Harly",
+    "preview": "Bienvenue chez {workspace}, {name}. Commençons.",
+    "heading": "Bienvenue, {name}",
+    "body": "Votre espace de travail {workspace} est prêt. Publiez votre première offre sur votre page carrière et suivez vos candidatures au même endroit.",
+    "button": "Ouvrir le tableau de bord"
+  },
+  "invitation": {
+    "subject": "{inviter} vous a invité à rejoindre {workspace}",
+    "preview": "{inviter} vous a ajouté à {workspace} sur Harly.",
+    "heading": "Vous êtes invité à rejoindre {workspace}",
+    "body": "<strong>{inviter}</strong> vous a ajouté à <strong>{workspace}</strong> avec le rôle <strong>{role}</strong>. Acceptez l’invitation pour configurer votre compte.",
+    "button": "Accepter l’invitation",
+    "notice": "Cette invitation expire dans 7 jours. Vous ne l’attendiez pas ? Vous pouvez ignorer cet e-mail.",
+    "roles": {
+      "owner": "Propriétaire",
+      "admin": "Administrateur",
+      "hiring_manager": "Responsable du recrutement",
+      "recruiter": "Recruteur",
+      "coordinator": "Coordinateur",
+      "sourcer": "Sourceur",
+      "interviewer": "Intervieweur",
+      "viewer": "Observateur",
+      "fallback": "membre de l’équipe"
+    }
+  },
+  "rejection": {
+    "subject": "Votre candidature au poste {job} chez {company}",
+    "preview": "Des nouvelles de votre candidature au poste {job} chez {company}.",
+    "heading": "Nouvelles de votre candidature",
+    "body": "Merci d’avoir postulé au poste {job} chez {company}. Après examen de votre candidature, nous avons décidé de poursuivre avec d’autres personnes.",
+    "signoff": "Merci,",
+    "button": "Voir le statut de ma candidature"
+  },
+  "stageUpdate": {
+    "subject": "Votre candidature passe à l’étape {stage} : {job}",
+    "preview": "Votre candidature au poste {job} est passée à l’étape {stage}.",
+    "heading": "Votre candidature avance",
+    "body": "Votre candidature au poste <strong>{job}</strong> chez {company} est passée à l’étape <strong>{stage}</strong>.",
+    "next": "Un membre de l’équipe vous contactera prochainement pour la suite.",
+    "button": "Voir le statut de ma candidature"
+  },
+  "applicationCandidate": {
+    "subject": "Nous avons reçu votre candidature au poste {job} chez {company}",
+    "preview": "Votre candidature au poste {job} a bien été reçue. Nous reviendrons vers vous.",
+    "heading": "Candidature reçue",
+    "body": "Nous avons reçu votre candidature au poste <strong>{job}</strong>. L’équipe l’examinera et vous contactera si votre profil correspond.",
+    "thanks": "Merci d’avoir pris le temps de postuler.",
+    "application": "Consulter ma candidature",
+    "profile": "Compléter mon profil",
+    "jobs": "Voir les autres postes ouverts"
+  },
+  "applicationRecruiter": {
+    "subject": "{candidate} a postulé au poste {job}",
+    "preview": "{candidate} vient de postuler au poste {job}.",
+    "heading": "Nouvelle candidature",
+    "body": "<strong>{candidate}</strong> a postulé au poste <strong>{job}</strong>.",
+    "button": "Consulter la candidature"
+  },
+  "offer": {
+    "subject": "Offre de {company} : {job}",
+    "preview": "{company} souhaite vous accueillir dans son équipe. Voici son offre.",
+    "heading": "Vous avez reçu une offre",
+    "body": "Nous serions ravis de vous accueillir chez {company} au poste de <strong>{job}</strong>. Voici les détails de notre offre :",
+    "role": "Poste",
+    "compensation": "Rémunération",
+    "equity": "Participation au capital",
+    "start": "Date de début",
+    "expires": "Réponse attendue avant le",
+    "button": "Consulter l’offre",
+    "outro": "Consultez l’offre à l’aide du lien ci-dessus ou répondez à cet e-mail si vous avez des questions. Nous attendons votre réponse."
+  },
+  "offerWithdrawn": {
+    "subject": "Mise à jour de votre offre : {job} chez {company}",
+    "preview": "Des nouvelles de votre offre pour le poste {job} chez {company}.",
+    "heading": "Mise à jour de l’offre",
+    "body": "L’offre pour le poste {job} chez {company} a été retirée.",
+    "questions": "Des questions ? Répondez à cet e-mail et nous vous expliquerons ce qui s’est passé."
+  },
+  "interviewCanceled": {
+    "subject": "Entretien annulé : {job} chez {company}",
+    "preview": "Votre entretien ({type}) pour le poste {job} a été annulé.",
+    "heading": "Entretien annulé",
+    "body": "Votre entretien (<strong>{type}</strong>) pour le poste <strong>{job}</strong> a été annulé. Nous sommes désolés pour ce contretemps.",
+    "bodyWithTime": "Votre entretien (<strong>{type}</strong>) pour le poste <strong>{job}</strong>, prévu le <strong>{when}</strong>, a été annulé. Nous sommes désolés pour ce contretemps.",
+    "reschedule": "Répondez à cet e-mail et nous trouverons un autre créneau qui vous convient."
+  },
+  "interviewScheduled": {
+    "subject": "Entretien confirmé : {job} chez {company}",
+    "preview": "Votre entretien ({type}) est confirmé pour {when}.",
+    "heading": "Entretien confirmé",
+    "body": "Bonjour {name}, votre entretien (<strong>{type}</strong>) pour le poste <strong>{job}</strong> chez {company} est confirmé.",
+    "time": "Quand",
+    "calendar": "Ajouter à votre calendrier",
+    "outro": "Vous devez changer le rendez-vous ? Répondez à cet e-mail."
+  },
+  "interviewRescheduled": {
+    "subject": "Entretien reporté : {job} chez {company}",
+    "preview": "Votre entretien ({type}) a été reporté à {when}.",
+    "heading": "Entretien reporté",
+    "body": "Bonjour {name}, votre entretien (<strong>{type}</strong>) pour le poste <strong>{job}</strong> chez {company} a été déplacé :",
+    "time": "Nouveau créneau",
+    "calendar": "Mettre à jour votre calendrier",
+    "outro": "Vous devez modifier à nouveau le rendez-vous ? Répondez à cet e-mail."
+  },
+  "interviewShared": {
+    "format": "Format",
+    "where": "Lieu",
+    "duration": "Durée",
+    "download": "Télécharger le fichier .ics"
+  },
+  "signatureInvitation": {
+    "subject": "{company} vous demande de signer {document}",
+    "reminderSubject": "Rappel : {company} vous demande de signer {document}",
+    "preview": "{company} attend votre signature pour {document}.",
+    "heading": "Veuillez vérifier et signer",
+    "reminderHeading": "Votre signature est toujours attendue",
+    "body": "{company} vous demande de vérifier et de signer un document.",
+    "reminderBody": "Petit rappel : {company} attend toujours votre signature.",
+    "document": "Document",
+    "requestedBy": "Demandé par",
+    "yourTurn": "À votre tour",
+    "signerPosition": "Signataire {order} sur {total}",
+    "expires": "Lien valable jusqu’au",
+    "button": "Vérifier et signer",
+    "notice": "Ce lien vous est personnel. Ne le transférez pas. Si vous n’attendiez pas cette demande, vous pouvez ignorer cet e-mail ou répondre à la personne qui l’a envoyé."
+  },
+  "customTemplate": {
+    "preview": "Une actualité de {company}."
+  }
+}

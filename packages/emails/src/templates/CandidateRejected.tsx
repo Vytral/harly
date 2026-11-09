@@ -1,11 +1,13 @@
 import { Button, Hr, Section, Text } from "@react-email/components";
 
+import { emailTranslator } from "../i18n";
 import { WorkspaceLayout } from "./WorkspaceLayout";
 import type { SocialLink } from "./HarlyLayout";
 import { EmailFallbackLink } from "./EmailFallbackLink";
 
 export type CandidateRejectedProps = {
   candidateName: string;
+  locale?: string | null;
   jobTitle: string;
   companyName: string;
   companyLogoUrl?: string;
@@ -19,12 +21,14 @@ export type CandidateRejectedProps = {
 export function candidateRejectedSubject({
   companyName,
   jobTitle,
-}: Pick<CandidateRejectedProps, "companyName" | "jobTitle">) {
-  return `Your application for ${jobTitle} at ${companyName}`;
+  locale,
+}: Pick<CandidateRejectedProps, "companyName" | "jobTitle" | "locale">) {
+  return emailTranslator(locale)("rejection.subject", { company: companyName, job: jobTitle });
 }
 
 export function CandidateRejected({
   candidateName,
+  locale,
   jobTitle,
   companyName,
   companyLogoUrl,
@@ -34,9 +38,11 @@ export function CandidateRejected({
   customMessage,
   portalUrl,
 }: CandidateRejectedProps) {
+  const t = emailTranslator(locale);
   return (
     <WorkspaceLayout
-      preview={`An update on your application for ${jobTitle} at ${companyName}.`}
+      preview={t("rejection.preview", { job: jobTitle, company: companyName })}
+      locale={locale}
       companyName={companyName}
       companyLogoUrl={companyLogoUrl}
       accentColor={accentColor}
@@ -44,18 +50,17 @@ export function CandidateRejected({
       hideBranding={hideBranding}
     >
       <Text className="text-[40px] leading-[1.05] tracking-[-1px] font-inter text-fg m-0 mb-3.5 font-medium">
-        Update on your application
+        {t("rejection.heading")}
       </Text>
       <Text className="text-[14px] leading-[1.5] font-inter text-fg-2 m-0 mb-4">
-        Hi {candidateName},
+        {t("common.greeting", { name: candidateName })}
       </Text>
       <Text className="text-[14px] leading-[1.5] font-inter text-fg-2 m-0 mb-4">
-        {customMessage ??
-          `Thank you for applying to ${jobTitle} at ${companyName}. After careful consideration, we've decided to move forward with other candidates.`}
+        {customMessage ?? t("rejection.body", { job: jobTitle, company: companyName })}
       </Text>
       <Hr className="border-stroke border-t my-7" />
       <Text className="text-[13px] leading-[1.5] tracking-[-0.039px] font-inter text-fg-3 m-0">
-        Thanks,
+        {t("rejection.signoff")}
         <br />
         {companyName}
       </Text>
@@ -65,9 +70,9 @@ export function CandidateRejected({
             href={portalUrl}
             className="border border-stroke text-[14px] leading-[1.5] font-inter text-fg inline-block px-4 py-2.5 text-center box-border no-underline"
           >
-            View application status
+            {t("rejection.button")}
           </Button>
-          <EmailFallbackLink url={portalUrl} />
+          <EmailFallbackLink url={portalUrl} locale={locale} />
         </Section>
       ) : null}
     </WorkspaceLayout>

@@ -147,6 +147,12 @@ jobs:
       - name: Type-check
         run: pnpm typecheck
 
+      - name: Check translation catalogs
+        run: pnpm --filter web check:i18n
+
+      - name: Check translation key references
+        run: pnpm --filter web check:i18n:references
+
   automation-capabilities:
     name: Automation capability matrix
     runs-on: ubuntu-latest

@@ -3,7 +3,8 @@
   "version": "0.1.0",
   "private": true,
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./email-locale": "./src/email-locale.ts"
   },
   "dependencies": {
     "zod": "^4.6.6"

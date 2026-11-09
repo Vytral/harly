@@ -10,20 +10,22 @@ import {
   organization as organizationTable,
   workspaceSettings,
   oauthProviders,
+  user as userTable,
 } from "@harly/db";
 import { eq, and, sql } from "drizzle-orm";
 import {
   createEmailSender,
-  ResetPasswordEmail,
-  resetPasswordSubject,
-  StaffMagicLinkEmail,
-  staffMagicLinkSubject,
   type EmailProviderConfig,
   type SendEmailOptions,
 } from "@harly/emails";
 import { decryptSecret, isEncryptionConfigured } from "./crypto-adapter";
 import { loadHarlyConfig } from "@harly/config";
 import { authorizeUserCreation, setupClaimCookieName } from "./setup";
+import {
+  buildResetPasswordAuthMessage,
+  buildStaffMagicLinkAuthMessage,
+  resolveAuthRecipientEmailLocale,
+} from "./auth-logic";
 import { demoGuardMiddleware } from "./demo-guard";
 
 const config = loadHarlyConfig(
@@ -163,7 +165,23 @@ async function sendAuthEmail(options: {
   }
 }
 
+async function getRecipientEmailLocale(email: string) {
+  return resolveAuthRecipientEmailLocale(email, async (normalizedEmail) => {
+    const [recipient] = await db
+      .select({ preferredEmailLocale: userTable.preferredEmailLocale })
+      .from(userTable)
+      .where(sql`lower(${userTable.email}) = ${normalizedEmail}`)
+      .limit(1);
+    return recipient?.preferredEmailLocale;
+  });
+}
+
 async function sendMagicLinkEmail(email: string, url: string) {
+  const preferredEmailLocale = await getRecipientEmailLocale(email);
+  const message = buildStaffMagicLinkAuthMessage({
+    loginUrl: url,
+    preferredEmailLocale,
+  });
   const config = await getSingleWorkspaceEmailConfig();
   const sender = createEmailSender(config);
 
@@ -178,8 +196,8 @@ async function sendMagicLinkEmail(email: string, url: string) {
   try {
     await sender.send({
       to: email,
-      subject: staffMagicLinkSubject(),
-      react: StaffMagicLinkEmail({ loginUrl: url }),
+      subject: message.subject,
+      react: message.react,
     });
   } catch (error) {
     console.error("[Harly] Failed to send magic link email:", error);
@@ -423,13 +441,15 @@ export const auth = betterAuth({
     requireEmailVerification: false,
     minPasswordLength: 8,
     sendResetPassword: async ({ user, url }) => {
+      const preferredEmailLocale = await getRecipientEmailLocale(user.email);
+      const message = buildResetPasswordAuthMessage({
+        userName: user.name || user.email,
+        resetUrl: url,
+        preferredEmailLocale,
+      });
       await sendAuthEmail({
         to: user.email,
-        subject: resetPasswordSubject,
-        react: ResetPasswordEmail({
-          userName: user.name || user.email,
-          resetUrl: url,
-        }),
+        ...message,
         fallbackLog: `Password reset for ${user.email}: ${url}`,
       });
     },

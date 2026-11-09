@@ -1,0 +1,177 @@
+{
+  "common": {
+    "fallback": "Button not working? Copy and paste this link into your browser:",
+    "sentBy": "Sent by {name}",
+    "poweredBy": "Powered by",
+    "greeting": "Hi {name},",
+    "ignore": "Didn't request this? You can safely ignore it.",
+    "signIn": "Sign in",
+    "logo": "{name} logo"
+  },
+  "reset": {
+    "subject": "Reset your password",
+    "preview": "Reset your Harly password — this link expires in 1 hour.",
+    "heading": "Reset your password",
+    "body": "Someone requested a password reset for your Harly account. Use the button below to choose a new password.",
+    "button": "Change password",
+    "notice": "If you didn't request this, please ignore this email. Your password won't change until you access the link above and create a new one."
+  },
+  "verify": {
+    "subject": "Verify your email",
+    "preview": "One click and you're in — verify your Harly email.",
+    "heading": "Verify your email",
+    "greeting": "Hi {name},",
+    "body": "Click the button below to confirm your address and finish setting up your account. This link expires in 24 hours.",
+    "button": "Verify email",
+    "notice": "Didn't sign up for Harly? You can safely ignore this email."
+  },
+  "portalMagic": {
+    "subject": "Your sign-in link",
+    "preview": "Your sign-in link is ready — expires in 15 minutes.",
+    "heading": "Sign in to your portal",
+    "body": "Click below to sign in. This link works once and expires in 15 minutes."
+  },
+  "staffMagic": {
+    "subject": "Sign in to Harly",
+    "preview": "Your sign-in link is ready.",
+    "body": "Click below to sign in. If you did not request this, you can safely ignore this email."
+  },
+  "portalReset": {
+    "subject": "Reset your portal password",
+    "preview": "Reset your portal password — the link expires in 1 hour.",
+    "heading": "Reset your password",
+    "body": "Click below to choose a new password. This link works once and expires in 1 hour.",
+    "button": "Reset password",
+    "notice": "Didn't request this? You can safely ignore it. Your password has not changed."
+  },
+  "welcome": {
+    "subject": "Welcome to Harly",
+    "preview": "Welcome to {workspace}, {name}. Let's get started.",
+    "heading": "Welcome, {name}",
+    "body": "Your {workspace} workspace is ready. Post your first job, publish it to your career page, and start tracking candidates — all in one place.",
+    "button": "Open dashboard"
+  },
+  "invitation": {
+    "subject": "{inviter} invited you to {workspace}",
+    "preview": "{inviter} added you to {workspace} on Harly.",
+    "heading": "You're invited to {workspace}",
+    "body": "<strong>{inviter}</strong> has added you to <strong>{workspace}</strong> as a <strong>{role}</strong>. Click below to accept and set up your account.",
+    "button": "Accept invitation",
+    "notice": "This invitation expires in 7 days. Not expecting this? You can safely ignore it.",
+    "roles": {
+      "owner": "Owner",
+      "admin": "Admin",
+      "hiring_manager": "Hiring Manager",
+      "recruiter": "Recruiter",
+      "coordinator": "Coordinator",
+      "sourcer": "Sourcer",
+      "interviewer": "Interviewer",
+      "viewer": "Viewer",
+      "fallback": "team member"
+    }
+  },
+  "rejection": {
+    "subject": "Your application for {job} at {company}",
+    "preview": "An update on your application for {job} at {company}.",
+    "heading": "Update on your application",
+    "body": "Thank you for applying to {job} at {company}. After careful consideration, we've decided to move forward with other candidates.",
+    "signoff": "Thanks,",
+    "button": "View application status"
+  },
+  "stageUpdate": {
+    "subject": "You're moving to {stage} — {job}",
+    "preview": "Good news — your {job} application has moved to {stage}.",
+    "heading": "You're moving forward",
+    "body": "Your application for <strong>{job}</strong> at {company} has moved to the <strong>{stage}</strong> stage.",
+    "next": "Someone from the team will reach out shortly with next steps.",
+    "button": "View application status"
+  },
+  "applicationCandidate": {
+    "subject": "Got your application — {job} at {company}",
+    "preview": "Your application for {job} is in. We'll be in touch.",
+    "heading": "Application received",
+    "body": "We got your application for <strong>{job}</strong>. The team will review it carefully and reach out if there's a fit.",
+    "thanks": "Thanks for taking the time — we appreciate it.",
+    "application": "Review your application",
+    "profile": "Complete your profile",
+    "jobs": "See other open roles"
+  },
+  "applicationRecruiter": {
+    "subject": "{candidate} applied for {job}",
+    "preview": "{candidate} just applied for {job}.",
+    "heading": "New application",
+    "body": "<strong>{candidate}</strong> applied for <strong>{job}</strong>.",
+    "button": "Review application"
+  },
+  "offer": {
+    "subject": "Offer from {company} — {job}",
+    "preview": "{company} wants you on the team. Here's your offer.",
+    "heading": "You have an offer",
+    "body": "We'd love to have you join {company} as <strong>{job}</strong>. Here's what we're offering:",
+    "role": "Role",
+    "compensation": "Compensation",
+    "equity": "Equity",
+    "start": "Start date",
+    "expires": "Respond by",
+    "button": "Review offer",
+    "outro": "Review the offer using the link above, or reply to this email with any questions. We're excited to hear from you."
+  },
+  "offerWithdrawn": {
+    "subject": "Update on your offer — {job} at {company}",
+    "preview": "An update on your offer for {job} at {company}.",
+    "heading": "Offer update",
+    "body": "The offer for {job} at {company} has been withdrawn.",
+    "questions": "Questions? Reply to this email and we'll walk you through what happened."
+  },
+  "interviewCanceled": {
+    "subject": "Interview canceled — {job} at {company}",
+    "preview": "Your {type} for {job} has been canceled.",
+    "heading": "Interview canceled",
+    "body": "Your <strong>{type}</strong> for <strong>{job}</strong> has been canceled. We’re sorry for the inconvenience.",
+    "bodyWithTime": "Your <strong>{type}</strong> for <strong>{job}</strong> scheduled for <strong>{when}</strong> has been canceled. We’re sorry for the inconvenience.",
+    "reschedule": "Reply to this email and we'll find a new time that works."
+  },
+  "interviewScheduled": {
+    "subject": "Interview confirmed — {job} at {company}",
+    "preview": "Your {type} is confirmed for {when}.",
+    "heading": "Interview confirmed",
+    "body": "Hi {name}, your <strong>{type}</strong> for <strong>{job}</strong> at {company} is on the calendar.",
+    "time": "When",
+    "calendar": "Add it to your calendar",
+    "outro": "Need to reschedule? Just reply to this email."
+  },
+  "interviewRescheduled": {
+    "subject": "Interview rescheduled — {job} at {company}",
+    "preview": "Your {type} has moved to {when}.",
+    "heading": "Interview rescheduled",
+    "body": "Hi {name}, your <strong>{type}</strong> for <strong>{job}</strong> at {company} has a new time:",
+    "time": "New time",
+    "calendar": "Update your calendar",
+    "outro": "Need to adjust again? Just reply to this email."
+  },
+  "interviewShared": {
+    "format": "Format",
+    "where": "Where",
+    "duration": "Duration",
+    "download": "Download .ics"
+  },
+  "signatureInvitation": {
+    "subject": "{company} asked you to sign {document}",
+    "reminderSubject": "Reminder: {company} asked you to sign {document}",
+    "preview": "{company} is waiting for your signature on {document}.",
+    "heading": "Please review and sign",
+    "reminderHeading": "Still waiting on your signature",
+    "body": "{company} has asked you to review and sign a document.",
+    "reminderBody": "This is a friendly reminder that {company} is still waiting for your signature.",
+    "document": "Document",
+    "requestedBy": "Requested by",
+    "yourTurn": "Your turn",
+    "signerPosition": "Signer {order} of {total}",
+    "expires": "Link works until",
+    "button": "Review and sign",
+    "notice": "This link is personal to you. Do not forward it. If you were not expecting this request, you can ignore this email or reply to ask the sender."
+  },
+  "customTemplate": {
+    "preview": "An update from {company}."
+  }
+}

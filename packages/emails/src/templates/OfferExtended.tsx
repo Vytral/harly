@@ -1,5 +1,6 @@
 import { Button, Section, Text } from "@react-email/components";
 
+import { emailTranslator } from "../i18n";
 import { WorkspaceLayout } from "./WorkspaceLayout";
 import { DetailTable } from "./DetailTable";
 import { EmailFallbackLink } from "./EmailFallbackLink";
@@ -7,6 +8,7 @@ import type { SocialLink } from "./HarlyLayout";
 
 export type OfferExtendedProps = {
   candidateName: string;
+  locale?: string | null;
   companyName: string;
   companyLogoUrl?: string;
   accentColor?: string;
@@ -23,12 +25,14 @@ export type OfferExtendedProps = {
 export function offerExtendedSubject({
   companyName,
   jobTitle,
-}: Pick<OfferExtendedProps, "companyName" | "jobTitle">) {
-  return `Offer from ${companyName} — ${jobTitle}`;
+  locale,
+}: Pick<OfferExtendedProps, "companyName" | "jobTitle" | "locale">) {
+  return emailTranslator(locale)("offer.subject", { company: companyName, job: jobTitle });
 }
 
 export function OfferExtended({
   candidateName,
+  locale,
   companyName,
   companyLogoUrl,
   accentColor,
@@ -41,17 +45,19 @@ export function OfferExtended({
   equity,
   offerUrl,
 }: OfferExtendedProps) {
+  const t = emailTranslator(locale);
   const rows = [
-    { label: "Role", value: jobTitle },
-    ...(salary ? [{ label: "Compensation", value: salary }] : []),
-    ...(equity ? [{ label: "Equity", value: equity }] : []),
-    ...(startDate ? [{ label: "Start date", value: startDate }] : []),
-    ...(expiresAt ? [{ label: "Respond by", value: expiresAt }] : []),
+    { label: t("offer.role"), value: jobTitle },
+    ...(salary ? [{ label: t("offer.compensation"), value: salary }] : []),
+    ...(equity ? [{ label: t("offer.equity"), value: equity }] : []),
+    ...(startDate ? [{ label: t("offer.start"), value: startDate }] : []),
+    ...(expiresAt ? [{ label: t("offer.expires"), value: expiresAt }] : []),
   ];
 
   return (
     <WorkspaceLayout
-      preview={`${companyName} wants you on the team. Here's your offer.`}
+      preview={t("offer.preview", { company: companyName })}
+      locale={locale}
       companyName={companyName}
       companyLogoUrl={companyLogoUrl}
       accentColor={accentColor}
@@ -59,12 +65,11 @@ export function OfferExtended({
       hideBranding={hideBranding}
     >
       <Text className="text-[40px] leading-[1.05] tracking-[-1px] font-inter text-fg m-0 mb-3.5 font-medium">
-        You have an offer
+        {t("offer.heading")}
       </Text>
-      <Text className="text-[14px] leading-[1.5] font-inter text-fg-2 m-0 mb-4">Hi {candidateName},</Text>
+      <Text className="text-[14px] leading-[1.5] font-inter text-fg-2 m-0 mb-4">{t("common.greeting", { name: candidateName })}</Text>
       <Text className="text-[14px] leading-[1.5] font-inter text-fg-2 m-0 mb-4">
-        We&apos;d love to have you join {companyName} as{" "}
-        <span className="text-fg font-semibold">{jobTitle}</span>. Here&apos;s what we&apos;re offering:
+        {t.rich("offer.body", { company: companyName, job: jobTitle, strong: (chunks) => <span className="text-fg font-semibold">{chunks}</span> })}
       </Text>
       <DetailTable rows={rows} />
       <Section className="mt-3">
@@ -72,13 +77,12 @@ export function OfferExtended({
           href={offerUrl}
           className="bg-brand text-[14px] leading-[1.5] font-inter text-fg-inverted inline-block border-none px-4 py-2.5 text-center box-border no-underline"
         >
-          Review offer
+          {t("offer.button")}
         </Button>
-        <EmailFallbackLink url={offerUrl} />
+        <EmailFallbackLink url={offerUrl} locale={locale} />
       </Section>
       <Text className="text-[14px] leading-[1.5] font-inter text-fg-2 m-0 mb-4">
-        Review the offer using the link above, or reply to this email with any questions.
-        We&apos;re excited to hear from you.
+        {t("offer.outro")}
       </Text>
     </WorkspaceLayout>
   );

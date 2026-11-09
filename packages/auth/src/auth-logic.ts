@@ -1,4 +1,11 @@
 import { APIError } from "better-auth/api";
+import { resolveEmailLocale } from "@harly/config/email-locale";
+import {
+  getResetPasswordSubject,
+  ResetPasswordEmail,
+  staffMagicLinkSubject,
+  StaffMagicLinkEmail,
+} from "@harly/emails";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Types
@@ -13,6 +20,46 @@ export interface AuthDb {
 
 export interface EmailSender {
   send(options: { to: string; subject: string }): Promise<void>;
+}
+
+/** Resolve the recipient's saved preference. Missing rows, invalid values and
+ * lookup failures all fall back to English without changing the auth response. */
+export async function resolveAuthRecipientEmailLocale(
+  email: string,
+  readPreference: (normalizedEmail: string) => Promise<unknown>,
+) {
+  try {
+    return resolveEmailLocale(await readPreference(email.trim().toLowerCase()));
+  } catch {
+    return "en" as const;
+  }
+}
+
+export function buildResetPasswordAuthMessage(input: {
+  userName: string;
+  resetUrl: string;
+  preferredEmailLocale?: unknown;
+}) {
+  const locale = resolveEmailLocale(input.preferredEmailLocale);
+  return {
+    subject: getResetPasswordSubject(locale),
+    react: ResetPasswordEmail({
+      userName: input.userName,
+      resetUrl: input.resetUrl,
+      locale,
+    }),
+  };
+}
+
+export function buildStaffMagicLinkAuthMessage(input: {
+  loginUrl: string;
+  preferredEmailLocale?: unknown;
+}) {
+  const locale = resolveEmailLocale(input.preferredEmailLocale);
+  return {
+    subject: staffMagicLinkSubject(locale),
+    react: StaffMagicLinkEmail({ loginUrl: input.loginUrl, locale }),
+  };
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

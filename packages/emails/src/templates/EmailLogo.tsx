@@ -1,4 +1,5 @@
 import { Img, Link, Text } from "@react-email/components";
+import { emailTranslator } from "../i18n";
 
 // Harly full wordmark served from the product CDN (raster PNG — Gmail and
 // Outlook won't render an inline SVG <img>, so the brand logo must be PNG).
@@ -12,6 +13,7 @@ type EmailLogoProps = {
   logoUrl?: string | null;
   /** Display name shown as the typographic lockup when no logo image exists. */
   name: string;
+  locale?: string | null;
   /** When true, render the fixed Harly product logo regardless of name. */
   variant?: "workspace" | "harly";
 };
@@ -25,12 +27,12 @@ type EmailLogoProps = {
  * Logo images must be raster — SVG is not supported by Gmail and many
  * Outlook clients, so we never render an inline SVG <img> here.
  */
-export function EmailLogo({ logoUrl, name, variant = "workspace" }: EmailLogoProps) {
+export function EmailLogo({ logoUrl, name, locale, variant = "workspace" }: EmailLogoProps) {
   if (logoUrl) {
     return (
       <Img
         src={logoUrl}
-        alt={`${name} logo`}
+        alt={emailTranslator(locale)("common.logo", { name })}
         width={140}
         height={40}
         style={{ display: "block", maxHeight: "40px", objectFit: "contain" }}
@@ -93,10 +95,10 @@ export function EmailLogo({ logoUrl, name, variant = "workspace" }: EmailLogoPro
  * standalone. Uses an inline-styled link so it composes inside any footer
  * <Text> regardless of the surrounding Tailwind className.
  */
-export function poweredByHarlyInline() {
+export function poweredByHarlyInline(label = "Powered by") {
   return (
     <>
-      Powered by{" "}
+      {label}{" "}
       <Link
         href="https://harly.dev"
         style={{

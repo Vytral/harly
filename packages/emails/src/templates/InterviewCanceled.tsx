@@ -1,10 +1,12 @@
 import { Text } from "@react-email/components";
 
+import { emailTranslator } from "../i18n";
 import { WorkspaceLayout } from "./WorkspaceLayout";
 import type { SocialLink } from "./HarlyLayout";
 
 export type InterviewCanceledProps = {
   candidateName: string;
+  locale?: string | null;
   companyName: string;
   companyLogoUrl?: string;
   accentColor?: string;
@@ -19,12 +21,14 @@ export type InterviewCanceledProps = {
 export function interviewCanceledSubject({
   companyName,
   jobTitle,
-}: Pick<InterviewCanceledProps, "companyName" | "jobTitle">) {
-  return `Interview canceled — ${jobTitle} at ${companyName}`;
+  locale,
+}: Pick<InterviewCanceledProps, "companyName" | "jobTitle" | "locale">) {
+  return emailTranslator(locale)("interviewCanceled.subject", { company: companyName, job: jobTitle });
 }
 
 export function InterviewCanceled({
   candidateName,
+  locale,
   companyName,
   companyLogoUrl,
   accentColor,
@@ -35,9 +39,12 @@ export function InterviewCanceled({
   when,
   reason,
 }: InterviewCanceledProps) {
+  const t = emailTranslator(locale);
+  const strong = (chunks: React.ReactNode) => <span className="text-fg font-semibold">{chunks}</span>;
   return (
     <WorkspaceLayout
-      preview={`Your ${interviewType.toLowerCase()} for ${jobTitle} has been canceled.`}
+      preview={t("interviewCanceled.preview", { type: interviewType.toLowerCase(), job: jobTitle })}
+      locale={locale}
       companyName={companyName}
       companyLogoUrl={companyLogoUrl}
       accentColor={accentColor}
@@ -45,24 +52,19 @@ export function InterviewCanceled({
       hideBranding={hideBranding}
     >
       <Text className="text-[40px] leading-[1.05] tracking-[-1px] font-inter text-fg m-0 mb-3.5 font-medium">
-        Interview canceled
+        {t("interviewCanceled.heading")}
       </Text>
-      <Text className="text-[14px] leading-[1.5] font-inter text-fg-2 m-0 mb-4">Hi {candidateName},</Text>
+      <Text className="text-[14px] leading-[1.5] font-inter text-fg-2 m-0 mb-4">{t("common.greeting", { name: candidateName })}</Text>
       <Text className="text-[14px] leading-[1.5] font-inter text-fg-2 m-0 mb-4">
-        Your <span className="text-fg font-semibold">{interviewType.toLowerCase()}</span> for{" "}
-        <span className="text-fg font-semibold">{jobTitle}</span>
-        {when ? (
-          <>
-            {" "}scheduled for <span className="text-fg font-semibold">{when}</span>
-          </>
-        ) : null}{" "}
-        has been canceled. We&apos;re sorry for the inconvenience.
+        {when
+          ? t.rich("interviewCanceled.bodyWithTime", { type: interviewType.toLowerCase(), job: jobTitle, when, strong })
+          : t.rich("interviewCanceled.body", { type: interviewType.toLowerCase(), job: jobTitle, strong })}
       </Text>
       {reason ? (
         <Text className="text-[14px] leading-[1.5] font-inter text-fg-2 m-0 mb-4">{reason}</Text>
       ) : null}
       <Text className="text-[14px] leading-[1.5] font-inter text-fg-2 m-0 mb-4">
-        Reply to this email and we&apos;ll find a new time that works.
+        {t("interviewCanceled.reschedule")}
       </Text>
     </WorkspaceLayout>
   );

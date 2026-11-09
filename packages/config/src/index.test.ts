@@ -1,6 +1,41 @@
 import { describe, expect, it, vi } from "vitest";
 
 import { demoSandboxSettings, loadHarlyConfig } from "./index";
+import {
+  isEmailLocale,
+  normalizeEmailLocale,
+  resolveEmailLocale,
+  supportedEmailLocales,
+} from "./email-locale";
+
+describe("email locale", () => {
+  it("normalizes case and whitespace to a supported canonical locale", () => {
+    expect(normalizeEmailLocale(" PT-br ")).toBe("pt-BR");
+    expect(normalizeEmailLocale("NL-nl")).toBe("nl-NL");
+  });
+
+  it("rejects unsupported and non-string values without guessing", () => {
+    expect(normalizeEmailLocale("pt-PT")).toBeNull();
+    expect(normalizeEmailLocale("es-MX")).toBeNull();
+    expect(normalizeEmailLocale(null)).toBeNull();
+    expect(normalizeEmailLocale({})).toBeNull();
+  });
+
+  it("resolves missing or invalid preferences to English and validates canonical tags", () => {
+    expect(resolveEmailLocale(undefined)).toBe("en");
+    expect(resolveEmailLocale("pt-PT")).toBe("en");
+    expect(supportedEmailLocales).toEqual([
+      "en",
+      "es",
+      "pt-BR",
+      "de",
+      "fr",
+      "nl-NL",
+    ]);
+    expect(isEmailLocale("pt-BR")).toBe(true);
+    expect(isEmailLocale("PT-br")).toBe(false);
+  });
+});
 
 const production = {
   NODE_ENV: "production",
@@ -96,10 +131,16 @@ describe("demoSandboxSettings", () => {
 
   it("reads valid overrides and ignores out-of-range values", () => {
     expect(
-      demoSandboxSettings({ DEMO_SANDBOX_TTL_MINUTES: "60", DEMO_SANDBOX_MAX_ACTIVE: "10" }),
+      demoSandboxSettings({
+        DEMO_SANDBOX_TTL_MINUTES: "60",
+        DEMO_SANDBOX_MAX_ACTIVE: "10",
+      }),
     ).toEqual({ ttlMinutes: 60, maxActive: 10 });
     expect(
-      demoSandboxSettings({ DEMO_SANDBOX_TTL_MINUTES: "1", DEMO_SANDBOX_MAX_ACTIVE: "abc" }),
+      demoSandboxSettings({
+        DEMO_SANDBOX_TTL_MINUTES: "1",
+        DEMO_SANDBOX_MAX_ACTIVE: "abc",
+      }),
     ).toEqual({ ttlMinutes: 240, maxActive: 40 });
   });
 });

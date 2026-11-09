@@ -210,3 +210,7 @@ that a nav entry's `requiredPermission` matches the guard of the page it links t
 Report suspected vulnerabilities privately through [SECURITY.md](SECURITY.md),
 never in a public issue or discussion. Be respectful, assume good intent, and
 keep feedback focused on the code, its users, and its operational impact.
+
+## Translations
+
+User-facing text lives in `apps/web/messages/en.json`; never hard-code text in components. Add English messages there and use `useTranslations` or `getTranslations`. Other languages are translated in Crowdin, so do not edit `es`, `pt-BR`, `de`, `fr`, or `nl-NL` files by hand except to fix a mistake. See [docs/localization.md](docs/localization.md) for the Crowdin workflow and the checks to run.

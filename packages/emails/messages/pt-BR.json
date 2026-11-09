@@ -1,0 +1,177 @@
+{
+  "common": {
+    "fallback": "O botão não funciona? Copie e cole este link no navegador:",
+    "sentBy": "Enviado por {name}",
+    "poweredBy": "Tecnologia",
+    "greeting": "Olá, {name}!",
+    "ignore": "Não solicitou este link? Você pode ignorar este e-mail.",
+    "signIn": "Entrar",
+    "logo": "Logotipo de {name}"
+  },
+  "reset": {
+    "subject": "Redefina sua senha",
+    "preview": "Redefina sua senha do Harly. Este link expira em 1 hora.",
+    "heading": "Redefina sua senha",
+    "body": "Alguém solicitou a redefinição da senha da sua conta no Harly. Use o botão abaixo para escolher uma nova senha.",
+    "button": "Alterar senha",
+    "notice": "Se você não fez essa solicitação, ignore este e-mail. Sua senha não será alterada até você acessar o link e criar uma nova."
+  },
+  "verify": {
+    "subject": "Verifique seu e-mail",
+    "preview": "Verifique seu endereço de e-mail no Harly.",
+    "heading": "Verifique seu e-mail",
+    "greeting": "Olá, {name}!",
+    "body": "Use o botão abaixo para confirmar seu endereço e concluir a configuração da sua conta. Este link expira em 24 horas.",
+    "button": "Verificar e-mail",
+    "notice": "Não se cadastrou no Harly? Você pode ignorar este e-mail."
+  },
+  "portalMagic": {
+    "subject": "Seu link de acesso",
+    "preview": "Seu link de acesso está pronto e expira em 15 minutos.",
+    "heading": "Entre no seu portal",
+    "body": "Use o link abaixo para entrar. Ele só pode ser usado uma vez e expira em 15 minutos."
+  },
+  "staffMagic": {
+    "subject": "Entre no Harly",
+    "preview": "Seu link de acesso está pronto.",
+    "body": "Use o link abaixo para entrar. Se você não o solicitou, pode ignorar este e-mail."
+  },
+  "portalReset": {
+    "subject": "Redefina a senha do seu portal",
+    "preview": "Redefina a senha do seu portal. O link expira em 1 hora.",
+    "heading": "Redefina sua senha",
+    "body": "Use o link abaixo para escolher uma nova senha. Ele só pode ser usado uma vez e expira em 1 hora.",
+    "button": "Redefinir senha",
+    "notice": "Não solicitou este link? Você pode ignorar este e-mail. Sua senha não foi alterada."
+  },
+  "welcome": {
+    "subject": "Boas-vindas ao Harly",
+    "preview": "Boas-vindas ao {workspace}, {name}. Vamos começar.",
+    "heading": "Boas-vindas, {name}",
+    "body": "Seu espaço de trabalho {workspace} está pronto. Publique sua primeira vaga na página de carreiras e acompanhe candidatos em um só lugar.",
+    "button": "Abrir painel"
+  },
+  "invitation": {
+    "subject": "{inviter} convidou você para {workspace}",
+    "preview": "{inviter} adicionou você ao {workspace} no Harly.",
+    "heading": "Você foi convidado para {workspace}",
+    "body": "<strong>{inviter}</strong> adicionou você ao <strong>{workspace}</strong> com a função de <strong>{role}</strong>. Aceite o convite para configurar sua conta.",
+    "button": "Aceitar convite",
+    "notice": "Este convite expira em 7 dias. Não estava esperando por ele? Você pode ignorar este e-mail.",
+    "roles": {
+      "owner": "Proprietário",
+      "admin": "Administrador",
+      "hiring_manager": "Gestor de contratação",
+      "recruiter": "Recrutador",
+      "coordinator": "Coordenador",
+      "sourcer": "Buscador de talentos",
+      "interviewer": "Entrevistador",
+      "viewer": "Visualizador",
+      "fallback": "membro da equipe"
+    }
+  },
+  "rejection": {
+    "subject": "Sua candidatura para {job} na {company}",
+    "preview": "Uma atualização sobre sua candidatura para {job} na {company}.",
+    "heading": "Atualização sobre sua candidatura",
+    "body": "Agradecemos sua candidatura para {job} na {company}. Após analisar seu perfil, decidimos seguir com outras pessoas candidatas.",
+    "signoff": "Obrigado,",
+    "button": "Ver status da candidatura"
+  },
+  "stageUpdate": {
+    "subject": "Você avançou para {stage}: {job}",
+    "preview": "Sua candidatura para {job} avançou para {stage}.",
+    "heading": "Sua candidatura avançou",
+    "body": "Sua candidatura para <strong>{job}</strong> na {company} avançou para a etapa <strong>{stage}</strong>.",
+    "next": "Alguém da equipe entrará em contato em breve com os próximos passos.",
+    "button": "Ver status da candidatura"
+  },
+  "applicationCandidate": {
+    "subject": "Recebemos sua candidatura para {job} na {company}",
+    "preview": "Recebemos sua candidatura para {job}. Entraremos em contato.",
+    "heading": "Candidatura recebida",
+    "body": "Recebemos sua candidatura para <strong>{job}</strong>. A equipe vai analisá-la e entrará em contato se houver compatibilidade.",
+    "thanks": "Agradecemos pelo tempo dedicado à candidatura.",
+    "application": "Revisar sua candidatura",
+    "profile": "Completar seu perfil",
+    "jobs": "Ver outras vagas"
+  },
+  "applicationRecruiter": {
+    "subject": "{candidate} se candidatou para {job}",
+    "preview": "{candidate} acabou de se candidatar para {job}.",
+    "heading": "Nova candidatura",
+    "body": "<strong>{candidate}</strong> se candidatou para <strong>{job}</strong>.",
+    "button": "Revisar candidatura"
+  },
+  "offer": {
+    "subject": "Oferta da {company}: {job}",
+    "preview": "A {company} quer você na equipe. Confira sua oferta.",
+    "heading": "Você recebeu uma oferta",
+    "body": "Gostaríamos que você se juntasse à {company} como <strong>{job}</strong>. Estes são os detalhes da oferta:",
+    "role": "Cargo",
+    "compensation": "Remuneração",
+    "equity": "Participação societária",
+    "start": "Data de início",
+    "expires": "Responder até",
+    "button": "Revisar oferta",
+    "outro": "Revise a oferta pelo link acima ou responda a este e-mail se tiver dúvidas. Aguardamos sua resposta."
+  },
+  "offerWithdrawn": {
+    "subject": "Atualização sobre sua oferta: {job} na {company}",
+    "preview": "Uma atualização sobre sua oferta para {job} na {company}.",
+    "heading": "Atualização da oferta",
+    "body": "A oferta para {job} na {company} foi retirada.",
+    "questions": "Tem dúvidas? Responda a este e-mail e explicaremos o que aconteceu."
+  },
+  "interviewCanceled": {
+    "subject": "Entrevista cancelada: {job} na {company}",
+    "preview": "Sua entrevista ({type}) para {job} foi cancelada.",
+    "heading": "Entrevista cancelada",
+    "body": "Sua entrevista (<strong>{type}</strong>) para <strong>{job}</strong> foi cancelada. Pedimos desculpas pelo transtorno.",
+    "bodyWithTime": "Sua entrevista (<strong>{type}</strong>) para <strong>{job}</strong>, marcada para <strong>{when}</strong>, foi cancelada. Pedimos desculpas pelo transtorno.",
+    "reschedule": "Responda a este e-mail e encontraremos outro horário que funcione para você."
+  },
+  "interviewScheduled": {
+    "subject": "Entrevista confirmada: {job} na {company}",
+    "preview": "Sua entrevista ({type}) está confirmada para {when}.",
+    "heading": "Entrevista confirmada",
+    "body": "Olá, {name}! Sua entrevista (<strong>{type}</strong>) para <strong>{job}</strong> na {company} está confirmada.",
+    "time": "Quando",
+    "calendar": "Adicionar ao calendário",
+    "outro": "Precisa remarcar? Responda a este e-mail."
+  },
+  "interviewRescheduled": {
+    "subject": "Entrevista remarcada: {job} na {company}",
+    "preview": "Sua entrevista ({type}) foi remarcada para {when}.",
+    "heading": "Entrevista remarcada",
+    "body": "Olá, {name}! Sua entrevista (<strong>{type}</strong>) para <strong>{job}</strong> na {company} tem um novo horário:",
+    "time": "Novo horário",
+    "calendar": "Atualizar calendário",
+    "outro": "Precisa alterar novamente? Responda a este e-mail."
+  },
+  "interviewShared": {
+    "format": "Formato",
+    "where": "Local",
+    "duration": "Duração",
+    "download": "Baixar .ics"
+  },
+  "signatureInvitation": {
+    "subject": "{company} pediu que você assine {document}",
+    "reminderSubject": "Lembrete: {company} pediu que você assine {document}",
+    "preview": "{company} está aguardando sua assinatura em {document}.",
+    "heading": "Revise e assine",
+    "reminderHeading": "Ainda estamos aguardando sua assinatura",
+    "body": "{company} pediu que você revise e assine um documento.",
+    "reminderBody": "Este é um lembrete: {company} ainda está aguardando sua assinatura.",
+    "document": "Documento",
+    "requestedBy": "Solicitado por",
+    "yourTurn": "Sua vez",
+    "signerPosition": "Signatário {order} de {total}",
+    "expires": "Link válido até",
+    "button": "Revisar e assinar",
+    "notice": "Este link é pessoal. Não o encaminhe. Se você não esperava esta solicitação, pode ignorar este e-mail ou responder para perguntar a quem o enviou."
+  },
+  "customTemplate": {
+    "preview": "Uma atualização de {company}."
+  }
+}

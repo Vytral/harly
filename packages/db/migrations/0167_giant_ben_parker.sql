@@ -1,0 +1,4 @@
+ALTER TABLE "candidates" ADD COLUMN "preferred_email_locale" text;--> statement-breakpoint
+ALTER TABLE "user" ADD COLUMN "preferred_email_locale" text;--> statement-breakpoint
+ALTER TABLE "candidates" ADD CONSTRAINT "candidates_preferred_email_locale_check" CHECK ("candidates"."preferred_email_locale" is null or "candidates"."preferred_email_locale" in ('en', 'es', 'pt-BR', 'de', 'fr', 'nl-NL'));--> statement-breakpoint
+ALTER TABLE "user" ADD CONSTRAINT "user_preferred_email_locale_check" CHECK ("user"."preferred_email_locale" is null or "user"."preferred_email_locale" in ('en', 'es', 'pt-BR', 'de', 'fr', 'nl-NL'));

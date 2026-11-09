@@ -4,8 +4,10 @@ import { WorkspaceLayout } from "./WorkspaceLayout";
 import { DetailTable } from "./DetailTable";
 import { EmailFallbackLink } from "./EmailFallbackLink";
 import type { SocialLink } from "./HarlyLayout";
+import { emailTranslator } from "../i18n";
 
 export type SignatureNoticeProps = {
+  locale?: string | null;
   recipientName: string;
   companyName: string;
   companyLogoUrl?: string;
@@ -21,6 +23,7 @@ export type SignatureNoticeProps = {
 };
 
 export function SignatureNotice({
+  locale,
   recipientName,
   companyName,
   companyLogoUrl,
@@ -33,6 +36,7 @@ export function SignatureNotice({
   cta,
   footnote,
 }: SignatureNoticeProps) {
+  const t = emailTranslator(locale);
   return (
     <WorkspaceLayout
       preview={heading}
@@ -41,11 +45,12 @@ export function SignatureNotice({
       accentColor={accentColor}
       socialLinks={socialLinks}
       hideBranding={hideBranding}
+      locale={locale}
     >
       <Text className="text-[40px] leading-[1.05] tracking-[-1px] font-inter text-fg m-0 mb-3.5 font-medium">
         {heading}
       </Text>
-      <Text className="text-[14px] leading-[1.5] font-inter text-fg-2 m-0 mb-4">Hi {recipientName},</Text>
+      <Text className="text-[14px] leading-[1.5] font-inter text-fg-2 m-0 mb-4">{t("common.greeting", { name: recipientName })}</Text>
       {paragraphs.map((paragraph, index) => (
         <Text key={index} className="text-[14px] leading-[1.5] font-inter text-fg-2 m-0 mb-4" style={{ whiteSpace: "pre-wrap" }}>
           {paragraph}
@@ -60,7 +65,7 @@ export function SignatureNotice({
           >
             {cta.label}
           </Button>
-          <EmailFallbackLink url={cta.url} />
+          <EmailFallbackLink url={cta.url} locale={locale} />
         </Section>
       ) : null}
       {footnote ? (
