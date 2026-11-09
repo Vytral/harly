@@ -89,16 +89,26 @@ export function parseClientMetadataDocument(clientId: string, doc: unknown): Cli
   if (method !== undefined && method !== "none") {
     throw new ClientMetadataError("only token_endpoint_auth_method \"none\" is supported");
   }
+  // Real documents list grants this server never issues (Claude: jwt-bearer,
+  // VS Code: device_code). As with DCR (RFC 7591 section 2) we ignore what we
+  // don't support; the token endpoint only ever runs code + refresh anyway.
+  // The client must still be able to use the authorization code flow.
   const grantTypes = body.grant_types;
   if (grantTypes !== undefined) {
-    if (!Array.isArray(grantTypes) || !grantTypes.every((g) => g === "authorization_code" || g === "refresh_token")) {
-      throw new ClientMetadataError("unsupported grant_types");
+    if (!Array.isArray(grantTypes) || !grantTypes.every((g) => typeof g === "string")) {
+      throw new ClientMetadataError("grant_types must be an array of strings");
+    }
+    if (grantTypes.length > 0 && !grantTypes.includes("authorization_code")) {
+      throw new ClientMetadataError("grant_types must include authorization_code");
     }
   }
   const responseTypes = body.response_types;
   if (responseTypes !== undefined) {
-    if (!Array.isArray(responseTypes) || !responseTypes.every((t) => t === "code")) {
-      throw new ClientMetadataError("unsupported response_types");
+    if (!Array.isArray(responseTypes) || !responseTypes.every((t) => typeof t === "string")) {
+      throw new ClientMetadataError("response_types must be an array of strings");
+    }
+    if (responseTypes.length > 0 && !responseTypes.includes("code")) {
+      throw new ClientMetadataError("response_types must include code");
     }
   }
   const redirectUris = body.redirect_uris;
