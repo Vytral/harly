@@ -244,6 +244,13 @@ All optional, with safe defaults.
 | `HARLY_DISABLE_UPDATE_CHECK` | `false` | Set to `true` on an air-gapped host. The app then never contacts the release channel. `harly update` on the host keeps working. |
 | `HARLY_UPDATER_INTERVAL` | `60` | Host updater only (read from its environment, not the app's): seconds between polls, 15 to 3600. |
 | `MCP_ALLOWED_ORIGINS` | empty | Extra browser origins, comma separated, that may call the [MCP server](/developers/mcp). Empty answers only your own origin and loopback. |
+| `HARLY_MODELS_DEV` | on | Set to `0` so the AI model picker never contacts models.dev and uses only its built-in list. Use it on an air-gapped host. |
+| `HARLY_ALLOW_LOCAL_LLM` | off | Set to `1` to let a [custom AI endpoint](/product/ai-features#custom-api-endpoint) use localhost or a private network address, for example Ollama, LM Studio, or vLLM on the same host or LAN. Restart Harly after changing it. |
+
+Neither the bundled `compose.yaml` nor the one `harly init` writes forwards
+`HARLY_MODELS_DEV` or `HARLY_ALLOW_LOCAL_LLM`. To use them, add them to the
+shared environment block at the top of `compose.yaml` (`x-harly-env` in the
+bundled file, `x-env` in the generated one).
 
 The in-app updater needs the host updater service from the CLI; see
 [Update from the app](/self-hosting/operations#update-from-the-app). `/mcp` is a
