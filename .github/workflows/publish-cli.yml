@@ -140,6 +140,10 @@ jobs:
           if gh release view "$tag" >/dev/null 2>&1; then
             gh release edit "$tag" --title "@harly/cli $VERSION" --notes-file "${{ steps.notes.outputs.notes }}" "${flags[@]}"
           else
-            gh release create "$tag" --target "$(git rev-parse HEAD)" --title "@harly/cli $VERSION" \
+            # Tag the commit npm recorded for this version, not today's main:
+            # on a retry, main may have moved since the package was published.
+            target=$(npm view "@harly/cli@$VERSION" gitHead 2>/dev/null || true)
+            target=${target:-$(git rev-parse HEAD)}
+            gh release create "$tag" --target "$target" --title "@harly/cli $VERSION" \
               --notes-file "${{ steps.notes.outputs.notes }}" "${flags[@]}"
           fi
