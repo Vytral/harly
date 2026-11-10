@@ -77,7 +77,7 @@ Harly builds upload presign URLs, authenticated file URLs, OAuth callbacks, redi
 HARLY_URL=https://careers.example.com
 ```
 
-Never point `HARLY_URL` at the container's internal bind address. In production, Harly rejects `HARLY_URL` values that use `http://` or resolve to `localhost`, the IPv4 loopback range `127.0.0.0/8`, `::1`, `0.0.0.0`, or `::`, and refuses to start. See [`HARLY_URL` validation](/deployment/configuration#harly-url-validation) for the full list of rules.
+Never point `HARLY_URL` at the container's internal bind address. In production, Harly rejects `HARLY_URL` values that use `http://` or resolve to `localhost`, the IPv4 loopback range `127.0.0.0/8`, `::1`, `0.0.0.0`, or `::`, and refuses to start. See [`HARLY_URL` validation](/deployment/configuration#harly_url-validation) for the full list of rules.
 
 ### Trust your reverse proxy for client IPs
 
