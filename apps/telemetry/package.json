@@ -18,12 +18,12 @@
   },
   "dependencies": {
     "pg": "^8",
-    "zod": "^4.6.6"
+    "zod": "^4.6.7"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.4",
     "@types/node": "^22",
-    "@types/pg": "8.20.0",
+    "@types/pg": "8.23.1",
     "esbuild": "^0.28.2",
     "eslint": "^9",
     "tsx": "^4.23.13",
