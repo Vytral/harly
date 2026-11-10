@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { and, eq, ilike, isNull, or } from "drizzle-orm";
 
-import { getTranslations } from "next-intl/server";
+import { getTranslations } from "@/i18n/server";
 
 import {
   USERNAME_MAX_LENGTH,

@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { and, eq } from "drizzle-orm";
 import { z } from "zod";
-import { getTranslations } from "next-intl/server";
+import { getTranslations } from "@/i18n/server";
 import { db, updateRequests, workspaceUpdateSettings } from "@harly/db";
 
 import { logAuditEvent } from "@/lib/audit-log";

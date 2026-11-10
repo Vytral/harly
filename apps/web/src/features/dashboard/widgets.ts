@@ -2,7 +2,7 @@ import "server-only";
 
 import { cache } from "react";
 import { and, asc, count, desc, eq, exists, gte, inArray, isNull, lt, or, sql } from "drizzle-orm";
-import { getTranslations } from "next-intl/server";
+import { getTranslations } from "@/i18n/server";
 
 import {
   applications,

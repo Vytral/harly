@@ -1,7 +1,7 @@
 "use server";
 
 import { and, eq, isNull } from "drizzle-orm";
-import { getTranslations } from "next-intl/server";
+import { getTranslations } from "@/i18n/server";
 
 import { aiConversations, candidates, db } from "@harly/db";
 
