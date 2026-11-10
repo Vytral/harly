@@ -1,15 +1,13 @@
-# Harly Apps
+# Apps
 
-This directory contains deployable applications.
+Deployable applications in the monorepo.
 
-## Apps
+| App | Description |
+| --- | --- |
+| `web` | The Harly product: dashboard, REST API, MCP server, candidate portal and career pages. |
+| `docs` | The documentation site, published at [docs.harly.dev](https://docs.harly.dev). |
+| `telemetry` | Collector for the CLI's opt-in, anonymous install telemetry. |
+| `marketing` | Placeholder for the marketing site; no code yet. |
 
-| App | Description | Status |
-|-----|-------------|--------|
-| `web` | Core Harly ATS — self-hostable and cloud-hostable from the same codebase. | **Active** |
-| `docs` | Public documentation site (`docs.harly.dev`). | **Active** |
-| `marketing` | Marketing site (`harly.dev`). | Placeholder |
-
-## Direction
-
-Keep product, marketing, and docs independent. The core app should remain self-hostable and cloud-hostable from the same codebase.
+The web app stays self-hostable from this one codebase. Product, docs and
+marketing do not import from each other.

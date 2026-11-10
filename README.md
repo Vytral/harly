@@ -3,165 +3,144 @@
 </p>
 
 <p align="center">
-  A self-hosted, open-source applicant tracking system for teams that want control over their hiring stack.
+  The open-source applicant tracking system you run on your own server.
 </p>
 
 <p align="center">
+  <a href="https://github.com/Vytral/harly/releases/latest"><img src="https://img.shields.io/github/v/release/Vytral/harly?label=release" alt="Latest release" /></a>
+  <a href="https://www.npmjs.com/package/@harly/cli"><img src="https://img.shields.io/npm/v/@harly/cli?label=%40harly%2Fcli" alt="@harly/cli on npm" /></a>
   <a href="https://github.com/Vytral/harly/actions/workflows/ci.yml"><img src="https://github.com/Vytral/harly/actions/workflows/ci.yml/badge.svg" alt="CI" /></a>
-  <a href="https://www.npmjs.com/package/@harly/cli"><img src="https://img.shields.io/npm/v/@harly/cli?label=%40harly%2Fcli" alt="npm version for @harly/cli" /></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="MIT license" /></a>
-  <a href="https://github.com/Vytral/harly"><img src="https://img.shields.io/github/stars/Vytral/harly?style=flat" alt="GitHub stars" /></a>
 </p>
 
 <p align="center">
   <a href="https://docs.harly.dev">Documentation</a> ·
   <a href="https://docs.harly.dev/quickstart">Quickstart</a> ·
-  <a href="https://docs.harly.dev/self-hosting/overview">Self-hosting</a> ·
-  <a href="https://docs.harly.dev/developers/api-reference">API reference</a> ·
-  <a href="CONTRIBUTING.md">Contributing</a> ·
-  <a href="SECURITY.md">Security</a>
+  <a href="https://docs.harly.dev/developers/api-overview">API</a> ·
+  <a href="CHANGELOG.md">Changelog</a> ·
+  <a href="ROADMAP.md">Roadmap</a> ·
+  <a href="https://github.com/Vytral/harly/discussions">Discussions</a>
 </p>
 
-<p align="center">
-  <a href="https://render.com/deploy?repo=https://github.com/Vytral/harly"><img src="https://img.shields.io/badge/Deploy-Render-46E3B7?logo=render&logoColor=white" alt="Deploy to Render" /></a>
-  <a href="https://cloud.digitalocean.com/apps/new?repo=https://github.com/Vytral/harly/tree/main"><img src="https://img.shields.io/badge/Deploy-DigitalOcean-0080FF?logo=digitalocean&logoColor=white" alt="Deploy on DigitalOcean" /></a>
-  <a href="#deployment"><img src="https://img.shields.io/badge/Self--host-Docker%20%2F%20Fly%20%2F%20Railway-2496ED?logo=docker&logoColor=white" alt="Self-host with the Harly CLI" /></a>
-</p>
+Harly keeps jobs, candidates, interviews, offers and the email around them in
+one place, on infrastructure you control. It is built for startups, agencies
+and technical teams that want a modern ATS without a per-seat SaaS contract or
+handing candidate data to another vendor.
 
-> **Public beta.** Harly is intended for small, self-hosted teams while the
-> product and deployment workflows continue to mature. Review the [release
-> readiness guide](docs/release-readiness.md), test upgrades on a disposable
-> installation, and verify backups before importing real candidate data.
+> [!NOTE]
+> Harly is in **public beta** (0.x). It is used in production by small teams,
+> but test upgrades on a copy and keep verified backups before you import real
+> candidate data. See the [release readiness checklist](docs/release-readiness.md).
 
-## What is Harly?
+## Features
 
-Harly is a self-hostable ATS for startups, agencies, and technical teams. It
-keeps recruiting workflows, candidate data, documents, integrations, and
-automation in one place, without a closed SaaS subscription.
+**Hiring**
+- Jobs drafted from a title, custom application questions, and a pipeline
+  board with stage kinds, scorecards and tasks
+- A review queue with keyboard shortcuts, rejection reasons, duplicate
+  detection and talent pools
+- Interviews with calendar sync and video links, offers, document templates
+  and **native e-signature** (multiple signers, reminders, signed copy with a
+  certificate)
+- Reports, a home dashboard, global search and realtime updates
 
-## Product capabilities
+**Candidates**
+- A career page builder with templates, live preview, SEO and structured job
+  data, plus an embeddable jobs widget
+- A candidate portal for status, interviews and offers, with sign-in by
+  password, access code, magic link, Google, GitHub, LinkedIn or passkey
+- Privacy tooling: consent records, retention rules, export and deletion
+  requests
 
-| Area | Included capabilities |
+**Team and inbox**
+- A shared recruiting inbox with Google and Microsoft mailbox sync, templates
+  and an outbox that retries
+- Role-based access with built-in roles (owner, admin, recruiter, coordinator,
+  interviewer, sourcer, viewer) and granular permissions
+- MFA, passkeys, SSO and SCIM, and an audit log
+
+**AI, optional and reviewable**
+- Harly AI: a chat assistant that searches, summarizes, drafts and proposes
+  actions you confirm
+- Candidate scoring with cited evidence, and a deterministic rules-based
+  evaluator when you do not want an LLM
+- Bring your own provider: OpenAI, Anthropic, Google, Azure OpenAI, Groq,
+  DeepSeek, Mistral, Together, Fireworks, Cerebras, Ollama or any
+  OpenAI-compatible endpoint. Keys are encrypted at rest.
+
+**Integrations and API**
+- An **MCP server** so Claude, ChatGPT, Cursor and VS Code can work in Harly
+  with the signed-in person's own permissions (OAuth 2.1, scopes, audit,
+  revocation)
+- A REST API with scoped keys, an OpenAPI spec, webhooks and automations
+- Imports from Greenhouse, Lever, Ashby, Workable and CSV; notifications to
+  Slack, Discord and Telegram; local or S3-compatible storage
+
+**Operations**
+- One command to install on a VPS, with automatic HTTPS through Caddy
+- `harly status`, `doctor`, backups, restore, and updates that take a rollback
+  backup first, from the CLI or from Settings → Updates
+- Works with no external services: no mail provider or AI key is required to
+  start
+
+The [documentation](https://docs.harly.dev) covers every feature in detail.
+
+## Quickstart
+
+You need a Linux server with Docker Engine 24+ and Compose 2.20+ (2 vCPU and
+4 GB of RAM is comfortable for a small team), Node.js 20.12+ for the CLI, and
+a domain pointing at the server.
+
+```bash
+npm install -g @harly/cli
+harly init
+```
+
+The installer checks the host, asks for your domain, generates secrets, starts
+PostgreSQL, the app, the scheduler and Caddy, runs migrations, and prints the
+link and setup secret for `/setup`, where you create the owner account.
+
+From the installation directory afterwards:
+
+```bash
+harly status     # version, health, last backup, certificate
+harly backup     # database and uploads to an archive
+harly update     # newest stable release, with a rollback backup first
+harly doctor     # diagnose problems
+```
+
+The [self-hosting guide](https://docs.harly.dev/self-hosting/overview) covers
+sizing, DNS and proxy modes, and the [CLI reference](https://docs.harly.dev/deployment/cli)
+lists every command. `npx @harly/cli` works too if you do not want a global
+install.
+
+### Other platforms
+
+| Platform | How |
 | --- | --- |
-| Recruiting | Jobs, application questions, candidate pipelines, interviews, offers, tasks, scorecards, talent pools, search, and reports |
-| Candidate experience | Public jobs, career pages, embeddable widgets, candidate portal, SEO metadata, and structured job data |
-| Communication | Inbox, email, templates, calendars, video interviews, and team notifications |
-| Integrations and automation | ATS imports, storage, signatures, REST API, webhooks, automations, realtime events, and an MCP server for AI agents (Claude, ChatGPT, Cursor) |
-| AI assistance | Candidate matching, contextual chat, anonymization, generation, and drafting; optional and human-reviewed |
-| Security and privacy | RBAC, MFA, passkeys, SSO, SCIM, API-key scopes, audit logs, consent, retention, export, and deletion workflows |
+| Render | [![Deploy to Render](https://img.shields.io/badge/Deploy-Render-46E3B7?logo=render&logoColor=white)](https://render.com/deploy?repo=https://github.com/Vytral/harly) (uses `render.yaml`) |
+| DigitalOcean | [![Deploy on DigitalOcean](https://img.shields.io/badge/Deploy-DigitalOcean-0080FF?logo=digitalocean&logoColor=white)](https://cloud.digitalocean.com/apps/new?repo=https://github.com/Vytral/harly/tree/main) (uses `.do/app.yaml`) |
+| Railway | `harly deploy railway` |
+| Fly.io | `harly deploy fly prepare` |
 
-See the [product documentation](https://docs.harly.dev) for the complete
-feature guide and integration-specific requirements. Provider credentials,
-permissions, and commercial access are separate from product capability.
+Managed platforms need S3-compatible storage for uploads. Serverless-only hosts
+such as Vercel are not supported, because Harly runs a persistent background
+scheduler. Details are in the [cloud guide](https://docs.harly.dev/deployment/cloud).
 
-## Why self-host Harly?
+## Before you invite your team
 
-- **Own your data.** Run Harly on infrastructure you control with PostgreSQL
-  and local or S3-compatible storage.
-- **Adapt the workflow.** Harly is MIT-licensed open source: inspect it,
-  contribute to it, or customize it for your team.
-- **Keep AI optional.** Core recruiting workflows do not require an AI provider;
-  workspace AI keys are encrypted at rest when AI is enabled.
-- **Operate transparently.** The repository includes the application, CLI,
-  deployment assets, migrations, API contracts, and operational documentation.
+1. Serve Harly over HTTPS and keep the generated secrets unique.
+2. Set up off-host backups and restore one on a test install.
+3. Configure email so invitations and candidate messages are delivered.
+4. Review roles, retention and consent settings.
 
-## Privacy and compliance tooling
-
-Harly includes tooling for candidate export, authenticated deletion requests,
-permanent-erasure review, configurable retention, consent evidence, audit
-trails, workspace-scoped legal notices, and human-reviewed AI assistance.
-
-Harly provides compliance tooling, not legal advice. Each organization remains
-responsible for its lawful basis, notices, processor contracts, international
-transfers, retention decisions, production configuration, and legal obligations.
-Read the [privacy documentation](https://docs.harly.dev/security/privacy) and
-[privacy and AI operations guide](docs/compliance-operations.md) before using
-Harly with real candidate data.
-
-## Deployment
-
-### Self-host with the Harly CLI
-
-The Harly CLI uses a version-pinned GHCR image; your VPS does not need to
-compile Next.js or install the monorepo. On a fresh Linux host with Docker:
-
-```bash
-npx -y @harly/cli
-```
-
-The guided installer checks the host, creates PostgreSQL, the migrator, web
-app, scheduler, and optional Caddy topology, generates independent secrets,
-runs migrations, and waits for public readiness. From the installation
-directory, the same CLI manages health checks, backups, restores, upgrades, and
-uninstallation:
-
-```bash
-npx @harly/cli doctor
-npx @harly/cli backup
-npx @harly/cli update
-```
-
-Read the [self-hosting guide](https://docs.harly.dev/self-hosting/overview),
-[CLI reference](https://docs.harly.dev/deployment/cli), and
-[operations guide](https://docs.harly.dev/self-hosting/operations) before
-production use.
-
-### Managed platforms
-
-| Platform                  | Entry point                                                                                                      | Notes                                                                                                              |
-| ------------------------- | ---------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
-| Render                    | [Deploy to Render](https://render.com/deploy?repo=https://github.com/Vytral/harly)                               | Provisions web, scheduler, and managed PostgreSQL from `render.yaml`; S3-compatible storage is required for uploads. |
-| DigitalOcean App Platform | [Deploy on DigitalOcean](https://cloud.digitalocean.com/apps/new?repo=https://github.com/Vytral/harly/tree/main) | Uses `.do/app.yaml`; S3-compatible storage is required for uploads.                                                  |
-| Railway                   | `npx @harly/cli deploy railway`                                                                                    | The CLI provisions the full multi-service topology through Railway's API.                                          |
-| Fly.io                    | `npx @harly/cli deploy fly prepare`                                                                                | Generates the deployment configuration; attach Managed Postgres and deploy.                                        |
-
-See the [cloud deployment guide](https://docs.harly.dev/deployment/cloud) for
-secrets, databases, storage, domains, and platform-specific recovery details.
-Harly is not designed for serverless-only platforms such as Vercel because the
-scheduler requires a persistent background process.
-
-### Before inviting your team
-
-1. Use an HTTPS `HARLY_URL` and independent production secrets.
-2. Run `npx @harly/cli doctor` after deployment and after upgrades.
-3. Configure encrypted, off-host backups of PostgreSQL and uploads, then prove
-   a restore on a disposable installation.
-4. Complete `/setup` with `HARLY_SETUP_SECRET` and the intended owner email;
-   registration becomes invite-only afterward.
-5. Review retention, consent, API-key scopes, integrations, and operator access
-   before importing candidate data.
-
-## Documentation
-
-The user-facing manual is published at **[docs.harly.dev](https://docs.harly.dev)**.
-Start with the [quickstart](https://docs.harly.dev/quickstart), then choose the
-[CLI reference](https://docs.harly.dev/deployment/cli),
-[cloud deployment guide](https://docs.harly.dev/deployment/cloud), or
-[API overview](https://docs.harly.dev/developers/api-overview).
-
-The apps/docs directory is the source for the published manual. Repository notes
-under docs/ are implementation and operator records; use the public docs for
-the supported user-facing procedures.
-
-## Stack
-
-- Next.js App Router, React, TypeScript, and Turborepo
-- Drizzle ORM with PostgreSQL 16
-- Better Auth with workspace organizations and role-based permissions
-- Tailwind CSS, shadcn/ui, and Radix UI
-- Local or S3-compatible storage, including AWS S3, Cloudflare R2, and MinIO
-- Resend and React Email
-- Vercel AI SDK with configurable OpenAI-compatible providers
+Harly provides compliance tooling, not legal advice: your organization is
+responsible for its notices, lawful basis and retention decisions. See
+[privacy](https://docs.harly.dev/security/privacy).
 
 ## Development
 
-### Requirements
-
-- Node.js 22 or newer
-- pnpm 9.15.0 (corepack enable)
-- Docker Engine 24+ and Docker Compose 2.20+
-
-### Run locally
+Requirements: Node.js 22, pnpm 9.15 (`corepack enable`), and Docker.
 
 ```bash
 git clone https://github.com/Vytral/harly.git
@@ -169,60 +148,36 @@ cd harly
 corepack enable
 pnpm install --frozen-lockfile
 cp .env.example .env.local
-pnpm dev
+pnpm dev          # starts PostgreSQL, applies migrations, serves http://localhost:3000
 ```
 
-pnpm dev starts PostgreSQL, applies Drizzle migrations, and starts the web app
-at `http://localhost:3000`. If PostgreSQL is already running, set `DATABASE_URL`
-in `.env.local` and use `pnpm dev:web` instead.
+`pnpm db:seed:demo` loads sample data. `pnpm lint`, `pnpm typecheck` and
+`pnpm test` are the main checks.
 
-Useful commands:
+| Path | Contents |
+| --- | --- |
+| `apps/web` | The Next.js app: dashboard, REST API, MCP server, portal, career pages |
+| `apps/docs` | The documentation site ([docs.harly.dev](https://docs.harly.dev)) |
+| `apps/telemetry` | The opt-in install telemetry collector |
+| `packages/*` | Database schema and migrations, auth, API contracts, emails, storage, UI |
+| `tooling/harly` | `@harly/cli` |
+| `docs/` | Architecture decisions and maintainer notes |
 
-```bash
-pnpm db:seed:demo
-pnpm db:studio
-pnpm lint
-pnpm typecheck
-pnpm test
-pnpm build
-pnpm --filter @harly/cli test
-```
+Built with Next.js, React, TypeScript, PostgreSQL 16 with Drizzle, Better Auth,
+Tailwind CSS with Radix UI, React Email, and the Vercel AI SDK.
 
-For contribution expectations, migration rules, validation, and safe test data,
-read CONTRIBUTING.md. For private vulnerability reporting, read SECURITY.md.
+## Contributing
 
-## Repository layout
+Bug reports, fixes, docs and ideas are all welcome. Start with
+[CONTRIBUTING.md](CONTRIBUTING.md); AI coding agents should read
+[AGENTS.md](AGENTS.md).
 
-```txt
-apps/web          Core Harly ATS application
-apps/docs         Public documentation site
-apps/marketing    Marketing site placeholder
-packages/db       Drizzle schema, migrations, and database client
-packages/auth     Better Auth integration
-packages/api      REST API contracts, keys, and webhooks
-packages/storage  Local and S3-compatible storage adapters
-packages/emails   React Email templates and sender
-tooling/harly     @harly/cli installer and operations CLI
-tooling/docker    Development Compose and deployment helpers
-docs/             Operator, architecture, and contributor notes
-```
-
-## Project status and support
-
-Harly is maintained by its open-source contributors and currently targets small
-self-hosted teams. We do not offer a hosted service, SLA, or managed recovery;
-operators remain responsible for infrastructure, backups, access controls, and
-legal obligations.
-
-- Feature requests and reproducible bugs: [GitHub Issues](https://github.com/Vytral/harly/issues)
-- Roadmap: [ROADMAP.md](ROADMAP.md)
-- Security reports: [SECURITY.md](SECURITY.md) and private GitHub Security Advisories
-- CLI package: [@harly/cli on npm](https://www.npmjs.com/package/@harly/cli)
+- **Questions and ideas:** [Discussions](https://github.com/Vytral/harly/discussions)
+- **Bugs:** [Issues](https://github.com/Vytral/harly/issues/new/choose)
+- **Vulnerabilities:** privately, as described in [SECURITY.md](SECURITY.md)
 
 ## License
 
-Harly is licensed under the MIT License. Dependencies with weak-copyleft licenses are listed in
-[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
-
-The Harly name and logo are trademarks or brand assets of their respective
-owner and are not automatically licensed under the MIT License.
+[MIT](LICENSE). Weak-copyleft dependencies are listed in
+[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md). The Harly name and logo are
+not covered by the MIT license.

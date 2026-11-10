@@ -11,38 +11,31 @@ deployment from the command line.
 Requires Node.js 20.12 or newer. A local installation also requires Docker
 Engine 24+ and Docker Compose 2.20+.
 
-## What's new in 0.6.0
-
-- `harly status` shows the URL, version against the latest release, container
-  health, database, disk, last backup, and certificate expiry on one screen.
-- `harly` opens a menu of common actions; `harly --help` groups commands by
-  purpose, and `harly help <command>` lists a command's options and examples.
-- Mistyped commands and options suggest the closest match.
-- Errors end with next steps. `--quiet` hides the header and hints.
-- `harly install-global` installs the CLI so you can just type `harly`, and the
-  npx offer is asked once and remembered.
-
-See [CHANGELOG.md](CHANGELOG.md) for the release notes.
-
 ## Quick start
 
-Run the guided installer on a fresh VPS:
+Install the CLI once, then run the guided installer on a fresh VPS:
 
 ```bash
-npx --yes @harly/cli
+npm install -g @harly/cli
+harly init
 ```
 
 The installer checks the host, asks for the public URL and storage settings,
 generates independent runtime secrets, writes the deployment files, and can
 launch the services immediately.
 
-For an existing installation:
+For an existing installation, from its directory:
 
 ```bash
-npx @harly/cli doctor
-npx @harly/cli backup
-npx @harly/cli update
+harly status
+harly doctor
+harly backup
+harly update
 ```
+
+Upgrade the CLI itself with `npm install -g @harly/cli@latest`. To try it
+without installing, prefix any command with `harly` instead of
+`harly`. Release notes are in [CHANGELOG.md](CHANGELOG.md).
 
 ## Installation lifecycle
 
@@ -78,7 +71,7 @@ web service, the scheduler, and Caddy when enabled. With automatic HTTPS,
 | `harly deploy digitalocean prepare` | Generate a DigitalOcean App Platform specification. |
 | `harly install-global` | Install this CLI globally with npm so you can type `harly` instead of `npx @harly/cli`. |
 
-Run `npx @harly/cli --help` for the commands grouped by purpose, and
+Run `harly --help` for the commands grouped by purpose, and
 `harly help <command>` (or `harly <command> --help`) for one command's options
 and examples. A mistyped command or option suggests the closest match, for
 example `harly docter` answers `Did you mean harly doctor?`.
@@ -123,8 +116,8 @@ error keeps the deployment running; you can keep using npx.
 To do it explicitly, at any time:
 
 ```bash
-npx @harly/cli install-global          # asks first in a terminal
-npx @harly/cli install-global --yes    # for scripts; --dry-run previews
+harly install-global          # asks first in a terminal
+harly install-global --yes    # for scripts; --dry-run previews
 ```
 
 ### Update notices
@@ -145,7 +138,7 @@ If installation fails after configuration was saved, fix the reported problem
 and retry without repeating the setup questions:
 
 ```bash
-npx @harly/cli resume ./harly --yes
+harly resume ./harly --yes
 ```
 
 Without a path, `resume` checks the installation containing the current
@@ -165,7 +158,7 @@ status. If it times out, it includes the command to inspect Caddy's logs.
 Interactive installation:
 
 ```bash
-npx @harly/cli init ./harly
+harly init ./harly
 ```
 
 Fully automated local installation:
@@ -173,7 +166,7 @@ Fully automated local installation:
 ```bash
 HARLY_INITIAL_ADMIN_EMAIL=owner@example.com \
 STORAGE_PROVIDER=local \
-npx --yes @harly/cli init ./harly \
+harly init ./harly \
   --url https://careers.example.com \
   --proxy caddy \
   --resource-profile standard \
@@ -208,7 +201,7 @@ S3_BUCKET=harly-production \
 S3_REGION=auto \
 S3_ACCESS_KEY_ID=... \
 S3_SECRET_ACCESS_KEY=... \
-npx @harly/cli init ./harly --url https://careers.example.com --non-interactive
+harly init ./harly --url https://careers.example.com --non-interactive
 ```
 
 The generated `.env` is owner-readable only (`0600`). Do not commit it.
@@ -222,7 +215,7 @@ RAILWAY_TOKEN=... \
 S3_BUCKET=harly-production \
 S3_ACCESS_KEY_ID=... \
 S3_SECRET_ACCESS_KEY=... \
-npx --yes @harly/cli deploy railway \
+harly deploy railway \
   --project-name harly-production \
   --email owner@example.com \
   --non-interactive
@@ -243,8 +236,8 @@ package that topology as a one-click multi-service install.
 Fly.io and DigitalOcean currently use a safe preparation flow:
 
 ```bash
-npx @harly/cli deploy fly prepare --url https://careers.example.com
-npx @harly/cli deploy digitalocean prepare --url https://careers.example.com
+harly deploy fly prepare --url https://careers.example.com
+harly deploy digitalocean prepare --url https://careers.example.com
 ```
 
 These commands finish with `ready-to-deploy`, generate provider files, and
@@ -253,7 +246,7 @@ print the exact remaining commands. They do not create provider resources.
 Railway secrets are not written to a local file by default. Opt in explicitly:
 
 ```bash
-npx @harly/cli deploy railway --save-env
+harly deploy railway --save-env
 ```
 
 The file is written with mode `0600` and a warning is shown. Secrets are never
@@ -281,7 +274,7 @@ stderr. Results are versioned with `schemaVersion: 1`.
 Example:
 
 ```bash
-npx @harly/cli --json init ./harly \
+harly --json init ./harly \
   --dry-run \
   --url http://127.0.0.1:3000 \
   --proxy local \
