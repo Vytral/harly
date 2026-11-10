@@ -1,18 +1,66 @@
 ---
 title: "Documents"
-description: "Request documents from candidates, collect them securely through the candidate portal, and apply retention, expiry, and access rules to protect sensitive files."
+description: "Generate documents from templates, send them for e-signature, track each signer, manage versions, and apply retention and expiry rules to sensitive files."
 ---
 
-Documents keep the files a hire produces — resumes, signed offers, right-to-work
-proof, certifications — on the candidate record instead of scattered across
-inboxes. You can request documents from a candidate and review what they upload.
+Documents keep the files a hire produces on the candidate record instead of
+scattered across inboxes. These include resumes, offer letters, signed
+agreements, right-to-work proof, and certifications. You can generate a
+document from a template, upload a file, request one from a candidate, and send
+any PDF for signature.
+
+## Documents hub
+
+Open **Documents** to see every file in your workspace. The **Files** tab lists
+documents. The **Templates** tab lists reusable document templates if you can
+manage templates.
+
+- **Status filters:** switch between **Active**, **Awaiting signature**,
+  **Expiring in 30 days**, **Date passed**, and **Archived**. **Date passed**
+  only shows documents whose date has lapsed and that are not signed.
+- **Filters:** narrow the list by owner, category, signature status, or the
+  candidate or job a document is linked to.
+- **Sorting:** sort by **Recently updated**, **Oldest update**, **Name A to Z**,
+  **Name Z to A**, or **Expires soonest**.
+- **Drop to upload:** drag files anywhere onto the page to upload them. Harly
+  accepts PDF, DOCX, and image files up to 25 MB. If you filtered the view by a
+  linked candidate or job, dropped files are linked to that record too.
+- **Bulk actions:** select documents to set a category, archive, restore, or
+  delete them together.
+
+## Generate a document from a template
+
+Templates are reusable documents with candidate details filled in, such as an
+offer letter or an agreement. Generate one by hand for a candidate, or let an
+[automation](/developers/automations) create it. Generated PDFs land in
+your document library.
+
+<Steps>
+  <Step title="Open the dialog">
+    On the candidate profile, open the **Documents** section and choose
+    **Generate document**. You can also choose **Generate from template** in the
+    documents hub, or start from a template on the **Templates** tab.
+  </Step>
+  <Step title="Choose a template and application">
+    Select a template, then the candidate application the document is for. From
+    the hub, search by candidate or job name.
+  </Step>
+  <Step title="Check the preview">
+    Harly renders the filled-in text. If the candidate is missing a detail the
+    template uses, Harly warns you that the field will be left blank in the PDF.
+  </Step>
+  <Step title="Generate">
+    Choose **Generate PDF**. Harly saves the PDF to the library, linked to the
+    candidate and application.
+  </Step>
+</Steps>
 
 ## Request a document
 
 <Steps>
   <Step title="Open the candidate">
     From the candidate record, choose **Request document** and name what you
-    need — for example, "Signed offer letter" or "Proof of eligibility to work."
+    need. For example, "Proof of eligibility to work."
   </Step>
   <Step title="Send the request">
     The candidate receives the request in their [portal](/product/candidate-portal)
@@ -24,15 +72,123 @@ inboxes. You can request documents from a candidate and review what they upload.
   </Step>
 </Steps>
 
+## Document page
+
+Each document has its own page with a preview, details, people, an activity
+timeline, and a signature card. The signature card shows one primary action
+based on the document's state. For example, **Send for signature** on an
+unsigned PDF, or **Signed PDF** on a completed one.
+
+### Versions
+
+The versions panel lists every version with its number, upload date, uploader,
+size, and checksum. The current version is marked **Current**. Download any
+version with its download button. Older versions stay available for audit.
+
+Choose **New version** to upload a replacement file. Signed documents are final.
+To change a signed document, upload the revised file as a new document.
+
+## Send a document for signature
+
+Native signing requires **Remote signing links** to be enabled in
+**Settings → Signature**. See [signatures](/integrations/signatures) for
+signing settings and DocuSeal.
+
+<Steps>
+  <Step title="Open the prepare dialog">
+    On the document page, choose **Send for signature**. Harly opens
+    **Prepare for signing**.
+  </Step>
+  <Step title="Add signers">
+    Enter each signer's name and email. Choose **Add signer** to add more.
+    People sign in the order listed. Each signer receives their link only after
+    the previous signer finishes.
+  </Step>
+  <Step title="Place fields">
+    Pick a signer, then add **Signature**, **Date**, or **Text** fields and drag
+    them into place on the PDF. Each signer needs at least one signature field.
+    Date fields default to the day the signer signs.
+  </Step>
+  <Step title="Add a message and send">
+    Optionally add an email subject and a message for the signers, then choose
+    **Send signing link**.
+  </Step>
+</Steps>
+
+<Note>
+  PDFs with rotated pages cannot be sent. Re-export the PDF without rotation
+  first.
+</Note>
+
+You can also choose **Sign myself** to sign a PDF directly in the dashboard, or
+**Record offline signature** to note a signature collected on paper.
+
+### Track signers
+
+The signature card lists each signer in order with their status. Depending on
+the status, it shows when they were invited, last reminded, signed, or
+declined, plus the decline reason and when their link expires.
+
+For a signer who has not signed yet, you can:
+
+- **Remind:** email a fresh link. Earlier links keep working. Manual reminders
+  are limited to one per hour per signer and do not count toward the automatic
+  reminder limit.
+- **Copy link:** copy a new signing link to share yourself. The new link
+  replaces the one in their inbox.
+
+When every signer finishes, download the **Signed PDF** and the
+**Certificate**. The certificate lists each signer, when they signed, how they
+were verified, and the document fingerprint. Harly also emails the signed copy
+and certificate to the sender and every signer.
+
+### Reminders
+
+Harly sends automatic reminders to the signer whose turn it is. The interval is
+measured from when the current signer was invited or last reminded, not from
+when the document was first sent. By default, Harly reminds every 3 days, at
+most 3 times per signer. Change both values in
+[signature settings](/integrations/signatures#reminders-and-link-lifetime).
+
+Each reminder includes a fresh link. Links from earlier emails keep working
+until the signer finishes.
+
+### Void a request
+
+Choose **Void request** to cancel a signature request in progress, and enter a
+reason. If someone has already signed, Harly warns you before you confirm.
+Signatures already given stay in the audit record, and Harly keeps the partially
+signed copy as evidence. They are not carried over, so a new request starts from
+scratch.
+
+### Signer experience
+
+Signers open the secure link on any device, including a phone. No account is
+required.
+
+1. **Verify email:** if email OTP is enabled, the signer requests a code and
+   enters it. They can choose **Resend code** if it does not arrive.
+2. **Fill fields:** the signer draws or types a signature once, and it fills
+   every signature box assigned to them. They complete any required text
+   fields. Date fields are filled with today's date.
+3. **Consent:** the signer accepts the e-sign disclosure. Harly stamps the
+   consent time on the server and stores it with the disclosure version.
+4. **Sign:** the signer chooses **Sign document** and can download their copy.
+   Harly also emails a signed-copy receipt with the document attached.
+
+A signer can choose **Decline to sign** and optionally give a reason. Declining
+ends the whole request. Harly notifies the sender with the reason and shows it
+on the signer's row. You can edit the document and send it again.
+
 ## Retention and expiry
 
 Documents carry personal data, so Harly supports retention and expiry:
 
-- **Expiry** — a document (for example a certification) can carry an expiry date
+- **Expiry:** a document (for example a certification) can carry an expiry date
   and surface when it lapses.
-- **Retention** — an opt-in retention job anonymizes or removes documents after
+- **Retention:** an opt-in retention job anonymizes or removes documents after
   a defined period, in line with your [privacy settings](/security/privacy).
-- **Legal hold** — a document under legal hold is protected from deletion until
+- **Legal hold:** a document under legal hold is protected from deletion until
   the hold is released.
 
 <Warning>
@@ -44,6 +200,9 @@ Documents carry personal data, so Harly supports retention and expiry:
 ## Next steps
 
 <CardGroup cols={2}>
+  <Card title="Signatures" icon="file-signature" href="/integrations/signatures">
+    Configure signing settings, reminders, and DocuSeal.
+  </Card>
   <Card title="Candidate portal" icon="id-card" href="/product/candidate-portal">
     Where candidates upload requested documents.
   </Card>
