@@ -1,0 +1,5 @@
+# Codacy configuration. Repository maintenance scripts run only in our own CI
+# with fixed inputs, so the web-application security rules (dynamic file
+# paths, HTML in console output) do not apply to them.
+exclude_paths:
+  - "tooling/scripts/**"

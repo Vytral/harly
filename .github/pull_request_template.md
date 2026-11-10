@@ -1,35 +1,21 @@
 ## Summary
 
-What user or operator outcome does this change provide?
+<!-- What changes for users, operators or developers, and why. -->
 
-## Verification
+Closes #
 
-- [ ] Tests added or updated where behavior changed
-- [ ] `pnpm lint` passes
-- [ ] `pnpm typecheck` passes
-- [ ] `pnpm test` passes
-- [ ] `pnpm build` passes
-- [ ] `pnpm audit --prod --audit-level=high` passes, or the exception is explained
-- [ ] `pnpm exec drizzle-kit check --config packages/db/drizzle.config.ts` passes (when applicable)
-- [ ] `pnpm db:verify-migrations` passes (when schema or migrations change)
-- [ ] Database-backed pipeline tests ran with `RUN_PIPELINE_STAGE_INTEGRATION=1` (when pipeline behavior changes)
-- [ ] `pnpm docs:validate`, `pnpm docs:broken-links`, and `pnpm docs:a11y` pass (when documentation changes)
-- [ ] `pnpm --filter @harly/cli test` passes (when CLI/distribution changes)
+## How it was tested
 
-## Data and pipeline rules
+<!-- Commands you ran and what you checked by hand. Say which relevant checks you could not run. -->
 
-- [ ] Stage meaning comes from the stored stage kind, never from a stage name; archived stages are excluded from current pipelines (when stages change)
-- [ ] Schema changes are additive; any data backfill is a documented custom migration that is idempotent (when migrations change)
+## Checklist
 
-## Release notes
-
-- [ ] No migration, configuration, or documentation change is required
-- [ ] Migration/configuration/operator documentation is included below
-
-## Impact
-
-- User-visible impact:
-- Migration/configuration/deployment impact:
-- Security impact:
+- [ ] The title follows Conventional Commits, for example `fix(portal): keep the interview tile from re-rendering`.
+- [ ] Tests cover the changed behavior.
+- [ ] `CHANGELOG.md` has an entry under `[Unreleased]`, or this change is not user-visible.
+- [ ] Documentation in `apps/docs` is updated, or not needed.
+- [ ] New environment variables are in `.env.example` and the configuration reference.
+- [ ] Schema changes are generated with `pnpm db:generate` and are additive.
+- [ ] UI changes include screenshots, using synthetic data.
 
 <!-- Never include vulnerability details here. Use SECURITY.md for private reporting. -->

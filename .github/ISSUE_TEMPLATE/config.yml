@@ -1,0 +1,14 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Report a security vulnerability
+    url: https://github.com/Vytral/harly/security/advisories/new
+    about: Report vulnerabilities privately. Never open a public issue for them.
+  - name: Ask a question
+    url: https://github.com/Vytral/harly/discussions/categories/q-a
+    about: Setup help, how-to questions and troubleshooting.
+  - name: Suggest an idea
+    url: https://github.com/Vytral/harly/discussions/categories/ideas
+    about: Feature ideas start as a discussion, so we can agree on the problem first.
+  - name: Read the documentation
+    url: https://docs.harly.dev
+    about: Installation, configuration, features and the API reference.

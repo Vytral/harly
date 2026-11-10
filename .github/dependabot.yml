@@ -15,6 +15,9 @@ updates:
       semver-patch-days: 3
     labels:
       - dependencies
+    commit-message:
+      prefix: "build(deps)"
+      prefix-development: "build(deps-dev)"
     groups:
       production:
         dependency-type: production
@@ -33,6 +36,9 @@ updates:
       interval: weekly
     labels:
       - dependencies
+      - ci
+    commit-message:
+      prefix: "ci(deps)"
 
   - package-ecosystem: docker
     directory: /
@@ -40,3 +46,5 @@ updates:
       interval: weekly
     labels:
       - dependencies
+    commit-message:
+      prefix: "build(docker)"

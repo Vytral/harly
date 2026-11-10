@@ -5,7 +5,10 @@ description: "Reference for every Harly environment variable — required secret
 
 `HARLY_URL` is the canonical public origin. Use a bare origin without a path:
 `https://hiring.example.com`. Every secret must be independent — do not reuse
-values between variables.
+values between variables. The older `NEXT_PUBLIC_APP_URL` and
+`BETTER_AUTH_URL` variables still work as temporary fallbacks for `HARLY_URL`
+and log a deprecation warning. Production startup fails before accepting
+traffic when a required value is missing or malformed.
 
 ## `HARLY_URL` validation
 
@@ -61,7 +64,7 @@ HARLY_SETUP_SECRET=<independent-32-byte-secret>
 HARLY_INITIAL_ADMIN_EMAIL=owner@example.com
 ```
 
-`npx @harly/cli` generates independent values and writes `.env` with mode
+`harly` generates independent values and writes `.env` with mode
 `0600`. On managed platforms, store all values as secret variables rather than
 plain configuration.
 
@@ -113,7 +116,18 @@ GET /api/metrics
 Authorization: Bearer <METRICS_TOKEN>
 ```
 
-Never put either secret in a URL or query string.
+Never put either secret in a URL or query string. GET and query-string
+secrets are rejected. The metrics endpoint returns `401` without the token;
+with `Accept: application/json` it also returns queue and cron summaries.
+
+Workspace members can read coarse connector health at
+`GET /api/health/integrations` with their Harly session. Members who can manage
+integrations also receive per-provider status and the last sanitized error; the
+endpoint never returns credentials or webhook secrets. To alert on failed cron
+runs, high SSE p95 latency, and elevated HTTP 5xx rates, import
+`docs/observability/prometheus-alerts.yml` from the repository into your
+monitoring stack. The full job list and intervals are in the
+[scheduler runbook](/self-hosting/operations#scheduler-and-queue-runbook).
 
 The scheduler handles the email outbox, domain-event replay, webhooks dispatch,
 interview calendar sync, mailbox sync, document expiry, retention enforcement,
@@ -202,6 +216,24 @@ startup validation error.
 See [integrations overview](/integrations/overview) for provider-specific
 redirect URIs and setup steps.
 
+## Pinning third-party images
+
+The Compose stack pulls `postgres:16-bookworm` and `caddy:2.10-alpine` by
+floating tag. The optional e-signature profile pulls `docuseal/docuseal` at the
+version in `HARLY_DOCUSEAL_VERSION` (default `3.3.4`; change it to upgrade
+DocuSeal deliberately). The Harly image itself is always pinned by
+`HARLY_IMAGE`. For fully reproducible deployments, pin the others by digest:
+
+```bash
+docker buildx imagetools inspect postgres:16-bookworm | head -3   # note the Digest
+docker buildx imagetools inspect caddy:2.10-alpine | head -3
+```
+
+Replace the `image:` lines in `compose.yaml` with
+`postgres:16-bookworm@sha256:<digest>` and `caddy:2.10-alpine@sha256:<digest>`.
+A pinned image receives no security rebuilds, so review and bump the digests on
+your own schedule.
+
 ## Updates and AI agents
 
 All optional, with safe defaults.
@@ -214,7 +246,9 @@ All optional, with safe defaults.
 | `MCP_ALLOWED_ORIGINS` | empty | Extra browser origins, comma separated, that may call the [MCP server](/developers/mcp). Empty answers only your own origin and loopback. |
 
 The in-app updater needs the host updater service from the CLI; see
-[Update from the app](/self-hosting/operations#update-from-the-app).
+[Update from the app](/self-hosting/operations#update-from-the-app). `/mcp` is a
+streaming endpoint: a reverse proxy must not compress or buffer it (the bundled
+Caddyfile already does not).
 
 ## Security-sensitive settings
 

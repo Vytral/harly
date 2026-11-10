@@ -61,6 +61,17 @@ Do not add a trailing slash or path prefix.
   </Step>
 </Steps>
 
+## Candidate portal sign-in
+
+This setup is separate from candidate-portal login. The portal may reuse
+`GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` as a fallback for Google sign-in,
+but it requests only `openid email profile` and never receives Calendar access.
+Workspace-specific portal credentials take precedence for portal login and do
+not replace the installation credentials used by Calendar and Meet. Google
+Meet is not a second credential: connecting or disconnecting Calendar does the
+same for Meet. The refresh token is stored encrypted and the browser never
+receives it or the client secret.
+
 ## Common errors
 
 ### `redirect_uri_mismatch`
@@ -70,9 +81,14 @@ Check protocol, host, port, and trailing slash.
 
 ### `invalid_grant`
 
-Google revoked or expired the refresh token. Disconnect the stale connection,
-connect again, and authorize the intended account. Existing Harly interviews
-remain safe and can be synced again.
+Google revoked or expired the refresh token. Common causes: the user or a
+Workspace admin revoked access, the OAuth app is still in Testing (refresh
+tokens then expire after seven days), the OAuth client or project changed, or
+too many refresh tokens were issued for the account. Disconnect the stale
+connection, connect again, authorize the intended account, and run **Test
+connection**. Harly invalidates the rejected token and keeps local interview
+records safe, but interviews saved while Calendar was unavailable may need an
+explicit resync or reschedule to create their external event.
 
 ### No refresh token
 
