@@ -5,33 +5,11 @@ All notable changes to Harly are documented in this file.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## Versioning
-
-A Harly version is `MAJOR.MINOR.PATCH`. The git tag is that version with a
-`v` prefix. `v0.2.0` publishes a release. `0.2.0`, without the `v`, does not.
-
-| Change | Bump | Tag | Who receives it |
-| --- | --- | --- | --- |
-| Incompatible change after 1.0.0 | Major | `v1.0.0` | Everyone. Also moves `ghcr.io/vytral/harly:latest`. |
-| New feature. Before 1.0.0 this may include incompatible changes | Minor | `v0.3.0` | Everyone. Also moves `latest`. |
-| Compatible fix | Patch | `v0.2.1` | Everyone. Also moves `latest`. |
-| Opt-in preview | Prerelease | `v0.3.0-beta.1` | Only `harly update --to 0.3.0-beta.1`. Does not move `latest`. |
-| Opt-in preview, closer to stable | Prerelease | `v0.3.0-rc.1` | Only `harly update --to 0.3.0-rc.1`. Does not move `latest`. |
-
-`0.3.0` above is the shape of a version, not a scheduled release. Use the
-number you are actually shipping.
-
-`ghcr.io/vytral/harly:latest` is the newest stable image. It is the same
-digest as the version tag it was published with. A beta or release candidate
-does not move it. `npx @harly/cli update` and `--to latest` both install that
-stable version and pin its digest.
-
-Pushing commits to `main` runs CI. It does not build an image, move `latest`,
-or change the release manifest.
-
-Before tagging, write the version section below. Use these headings when they
-apply: `Added`, `Changed`, `Fixed`, `Removed`, `Security`. Note migrations and
-anything an operator must do before upgrading.
+Each version section is also the body of its GitHub Release: the release
+workflow copies the section for the tag it publishes, so write it for
+operators. How to cut a release is in [RELEASING.md](RELEASING.md). The
+`@harly/cli` package has its own changelog in
+[tooling/harly/CHANGELOG.md](tooling/harly/CHANGELOG.md).
 
 ## [Unreleased]
 
@@ -47,6 +25,12 @@ anything an operator must do before upgrading.
 
 ### Changed
 
+- GitHub Releases now carry the full changelog section for their version,
+  and `@harly/cli` versions get their own `cli-vX.Y.Z` release with the CLI
+  changelog. Earlier releases were updated to match.
+- The README and documentation use the globally installed CLI
+  (`npm install -g @harly/cli`, then `harly <command>`); `npx @harly/cli`
+  still works for one-off use.
 - The first-run Home is quieter: no "Your workspace is ready" label, no icon
   on the primary button, and the optional AI card no longer uses a robot icon.
   The sparkle icon is gone from "For you today".
@@ -60,7 +44,7 @@ anything an operator must do before upgrading.
   anywhere on the page, and no longer loads the live preview unless there is
   room to show it.
 
-## [0.4.0]
+## [0.4.0] - 2026-11-08
 
 A release that makes a fresh installation usable without a mail provider, an AI
 provider or any other external service, and gives candidates and recruiters
@@ -172,7 +156,7 @@ more ways to sign in. Contains two database migrations (`0165`, `0166`); run
 - Existing installations keep their `.env` and `compose.yaml`. To prefill the
   company name on a new deployment, set `HARLY_ORG_NAME`.
 
-## [0.3.3]
+## [0.3.3] - 2026-11-04
 
 A patch release for Harly AI on OpenAI reasoning models and the public demo.
 No database migrations.
@@ -195,7 +179,7 @@ No database migrations.
 - Existing CLI installations keep their `compose.yaml`. On a demo instance, add
   the `DEMO_*` lines to its `x-env` block by hand (see the generated template).
 
-## [0.3.2]
+## [0.3.2] - 2026-11-04
 
 A patch release for the public demo and scheduler reliability. No database
 migrations.
@@ -233,7 +217,7 @@ migrations.
   Without it `demo-reset` refuses to run (HTTP 503) and never purges expired
   sandboxes.
 
-## [0.3.1]
+## [0.3.1] - 2026-11-01
 
 A patch release with fixes for the public demo, career page polish and a
 mobile layout pass. No database migrations.
@@ -257,13 +241,13 @@ mobile layout pass. No database migrations.
   sample legal pages, shown only in demo mode and only where a workspace has
   written none.
 
-## [0.3.0]
+## [0.3.0] - 2026-11-01
 
 A feature release: a redesigned product, an MCP server so AI agents can work in
 Harly, an in-app updater, native e-signature and document generation, and a
 rebuilt career page builder. **It contains database migrations
 (`0159`–`0164`) and a few behavior changes.** Read
-[the upgrade notes](docs/release-0.3.0-upgrade-notes.md) before upgrading an
+[the upgrade notes](https://docs.harly.dev/operations/upgrade-notes#upgrading-to-0-3-0) before upgrading an
 existing installation. All migrations are additive.
 
 ### Added
@@ -421,12 +405,12 @@ restoring a backup.
   or signature under `/uploads/` stop working. Use the links Harly shows in the
   app instead.
 
-## [0.2.4]
+## [0.2.4] - 2026-10-30
 
 A feature release that makes the hiring pipeline, reports, search, email and
 role-based access trustworthy. **It contains database migrations
 (`0153`–`0158`) and a few deliberate behavior changes.** Read
-[the upgrade notes](docs/release-0.2.4-upgrade-notes.md) before upgrading an
+[the upgrade notes](https://docs.harly.dev/operations/upgrade-notes#upgrading-to-0-2-4) before upgrading an
 existing installation.
 
 ### Added
@@ -522,12 +506,12 @@ archived stage, and `workspace_settings.gravatar_enabled`. They are additive and
 safe to run on a live installation of 0.2.x; rolling back to a 0.2.x image
 after archiving stages is not supported.
 
-## [0.2.3]
+## [0.2.3] - 2026-10-29
 
 A compatible release focused on the public demo. No database migration is
 required. Operators of the public demo may set two optional variables,
 `DEMO_SANDBOX_TTL_MINUTES` and `DEMO_SANDBOX_MAX_ACTIVE`; normal installations
-are unaffected. See [the release notes](docs/release-0.2.3-demo-sandbox.md).
+are unaffected.
 
 ### Added
 
@@ -571,7 +555,7 @@ are unaffected. See [the release notes](docs/release-0.2.3-demo-sandbox.md).
   disabled in the demo. Dashboard sessions that do not point at a live sandbox,
   such as cookies from the old shared account, are redirected to the entry page.
 
-## [0.2.2]
+## [0.2.2] - 2026-10-27
 
 A compatible release focused on verification, recovery, and daily recruiting
 workflows. No database migration or new runtime configuration is required.
@@ -617,7 +601,7 @@ workflows. No database migration or new runtime configuration is required.
 The release manifest and embedded CLI metadata continue to identify the last
 published image until the release workflow publishes and records the new digest.
 
-## [0.2.1]
+## [0.2.1] - 2026-09-29
 
 A patch release focused on the public demo: a working entry redirect, a
 tidier first impression, a platform-funded Harly AI with spend limits, and a
@@ -696,19 +680,7 @@ project with a hard monthly budget) and optionally `DEMO_AI_MODEL` and
 `DEMO_AI_DAILY_REQUEST_LIMIT`, then restart. Run `pnpm db:seed:demo`, or wait
 for the next scheduled reset, to load the new demo tasks.
 
-## @harly/cli 0.5.2
-
-- `harly resume` and a guided menu action retry startup with the saved
-  configuration and secrets.
-- The global install runs npm through a shell on Windows, where npm is a
-  `.cmd` shim.
-- Caddy readiness checks the public endpoint once the app is healthy, with
-  elapsed time and the last status shown. `launch` and `resume` accept
-  `--timeout <seconds>`.
-- Interactive installs through npx offer to install the CLI globally, behind a
-  separate confirmation.
-
-## [0.2.0]
+## [0.2.0] - 2026-09-25
 
 The public demo, a deterministic candidate evaluator, a rebuilt automation
 runtime, and native multi-signer e-sign. This release adds nine migrations, four
@@ -859,175 +831,14 @@ upgrade holds locks until it commits. On managed Postgres, check that
 `statement_timeout` and `idle_in_transaction_session_timeout` are high enough to
 let it finish.
 
-## @harly/cli 0.5.0
-
-### Added
-
-- `harly update` finds the installation from the current directory and upgrades
-  it to the stable version in `release-manifest.json`. No version flag and no
-  directory argument are required when you run it from the install, or from a
-  folder inside it.
-- `--to latest` is the same stable update. The installation is pinned to that
-  version's digest.
-
-### Changed
-
-- An update that is already on the stable version stops before writing a
-  backup or pulling an image.
-- An update refuses to downgrade a newer install unless `--to` names the
-  version on purpose.
-- `edge` and `sha-…` tags are rejected. A release version is `0.2.0`,
-  `0.2.0-beta.1`, `0.2.0-rc.1`, or the official image digest.
-- `--image` accepts a private registry or mirror again, which an air-gapped
-  install needs. The official repository still only accepts a release version
-  or a digest; any other registry only has to name an explicit tag or digest.
-- `--image 0.2.0` means the official image at that version, so `--image` and
-  `--to` now accept the same bare version instead of disagreeing.
-
-### Fixed
-
-- The stable channel refuses to install a prerelease. Betas stayed opt-in only
-  because of a workflow condition; if a prerelease ever reached the release
-  manifest, `harly update` would have installed it as though it were stable.
-- A failed upgrade no longer leaves the installation pointing at the new image
-  with the old services running. The recovery path is `harly restore` from the
-  archive the upgrade writes first, and the error says so.
-- `.env` no longer records the literal `current` as `HARLY_VERSION` while an
-  upgrade is in flight, which the application reported as its own version.
-
-
-## @harly/cli 0.4.0
-
-- Report the running deployment by release name instead of a 64-character
-  digest. `harly` resolves the friendliest honest label available — a semver
-  tag, a digest that matches the published release manifest, or the
-  `org.opencontainers.image.version` and `.revision` labels CI bakes into every
-  image — and degrades to a short digest only when nothing else is known. A
-  moving channel is reported with its build commit (`edge · cd78e8e`) so two
-  `edge` deployments can be told apart.
-- Record a resolved release name in `HARLY_VERSION` at install and upgrade time.
-  A digest-pinned installation previously wrote the literal string `digest`,
-  which the application then reported as its own version at
-  `/api/health/ready` and in its OpenAPI document.
-- Split the rollback backup out of `harly update` into its own reported phase.
-  The upgrade now renders as four numbered steps (rollback point, images,
-  migrations, health) and names the archive it wrote, instead of running the
-  backup silently and printing a bare path mid-flow.
-- Keep the interactive vertical rail unbroken. `doctor`, `backup`, `launch`,
-  `uninstall`, and the install outro wrote directly to stdout inside a prompt
-  flow, which severed the rail and left output floating unindented; the setup
-  secret block was the worst affected. Automation output is unchanged: `--json`
-  and non-interactive runs still carry the machine check keys, and
-  `harly backup` still prints the bare archive path for `$(harly backup)`.
-- Group `doctor` checks with per-domain glyphs and an aligned detail column, and
-  drop the internal check keys (`service:postgres`, `readiness`) from the
-  interactive render. They remain in `--json` and non-interactive output.
-- Report download rate and active layers while pulling images. Layer counts
-  stay the progress measure because Docker never reports a layer's total size,
-  so a byte percentage would be fiction.
-- Add `HARLY_ASCII=1` for terminals without box-drawing glyph coverage.
-
-## @harly/cli 0.3.1
-
-- Treat restricted `EACCES`/`EPERM` port probes as inconclusive so the CLI can
-  continue in constrained runners and let Docker perform the authoritative
-  publish check.
-- Polish the interactive installer summaries, progress labels, and compact
-  branding for narrow SSH sessions.
-- Make CLI tests resilient to shared ports and ANSI-formatted dry-run output.
-
-## @harly/cli 0.4.0
-
-- Report the running deployment by release name instead of a 64-character
-  digest. `harly` resolves the friendliest honest label available — a semver
-  tag, a digest that matches the published release manifest, or the
-  `org.opencontainers.image.version` and `.revision` labels CI bakes into every
-  image — and degrades to a short digest only when nothing else is known. A
-  moving channel is reported with its build commit (`edge · cd78e8e`) so two
-  `edge` deployments can be told apart.
-- Record a resolved release name in `HARLY_VERSION` at install and upgrade time.
-  A digest-pinned installation previously wrote the literal string `digest`,
-  which the application then reported as its own version at
-  `/api/health/ready` and in its OpenAPI document.
-- Split the rollback backup out of `harly update` into its own reported phase.
-  The upgrade now renders as four numbered steps (rollback point, images,
-  migrations, health) and names the archive it wrote, instead of running the
-  backup silently and printing a bare path mid-flow.
-- Keep the interactive vertical rail unbroken. `doctor`, `backup`, `launch`,
-  `uninstall`, and the install outro wrote directly to stdout inside a prompt
-  flow, which severed the rail and left output floating unindented; the setup
-  secret block was the worst affected. Automation output is unchanged: `--json`
-  and non-interactive runs still carry the machine check keys, and
-  `harly backup` still prints the bare archive path for `$(harly backup)`.
-- Group `doctor` checks with per-domain glyphs and an aligned detail column, and
-  drop the internal check keys (`service:postgres`, `readiness`) from the
-  interactive render. They remain in `--json` and non-interactive output.
-- Report download rate and active layers while pulling images. Layer counts
-  stay the progress measure because Docker never reports a layer's total size,
-  so a byte percentage would be fiction.
-- Add `HARLY_ASCII=1` for terminals without box-drawing glyph coverage.
-
-## @harly/cli 0.3.1
-
-- Treat restricted `EACCES`/`EPERM` port probes as inconclusive so the CLI can
-  continue in constrained runners and let Docker perform the authoritative
-  publish check.
-- Polish the interactive installer summaries, progress labels, and compact
-  branding for narrow SSH sessions.
-- Make CLI tests resilient to shared ports and ANSI-formatted dry-run output.
-
-## @harly/cli 0.3.0
-
-- New `harly check` command that prints a host requirements table (Docker
-  version, Compose, free memory, free disk, firewall) without touching the
-  install. Useful for "is my VPS ready?" before running the wizard.
-- New `harly setup-secret` command that prints `HARLY_SETUP_SECRET` from
-  `.env` so operators can finish `/setup` without opening the file.
-- New `harly init --dry-run` flag that lists the files that would be created
-  without writing anything.
-- New `harly doctor --fix` flag that offers to restart stopped services or
-  bring the stack up when interactive.
-- Demoted managed-cloud providers (Railway, Fly.io, DigitalOcean) from the
-  welcome menu to a discoverable `harly deploy <provider>` subcommand. The
-  welcome menu is now `Install / Deploy to a managed cloud / Show advanced
-  commands`.
-- Port-conflict errors are now actionable: the CLI classifies the owner
-  (systemd unit, container, raw process) and offers to stop it, switch to
-  external-proxy mode, or pick a different port. In CI it prints the exact
-  command to fix it instead of "port already in use".
-- DNS failures in interactive mode run a 5-minute wait-and-retry loop so
-  propagation can finish on its own.
-- `launch` now polls each service individually and reports per-service timing
-  (`✓ postgres ready · 8.2s`, `✓ migrate applied · 1.4s`, `✓ app ready · 14.1s`,
-  …) plus a public-URL smoke test at the end.
-- `init` prints the install outro with the setup secret copy-pasted, so the
-  `/setup` flow is one read-and-paste away.
-- Resource profile detection now uses `os.freemem()` minus Harly's known
-  reservations instead of `os.totalmem()`, so a VPS that already runs other
-  services isn't mis-sized.
-- Added a `ufw` firewall check that warns when 80/443 are not allowed on
-  active firewalls (cloud security groups, transparent proxies, and
-  no-firewall VPS providers remain valid configurations).
-- Removed the duplicate "Welcome to Harly" `p.intro` inside the install flow
-  — `showBrand` is the single branding surface.
-
-## @harly/cli 0.2.4
-
-- Redesigned the CLI around the Harly palette: the full mark renders once per
-  session and later screens use a compact wordmark, replacing the cyan styling
-  that repeated the logo on every surface.
-- Streamed `docker compose pull` instead of buffering it, so a cold install
-  reports live per-layer progress rather than freezing a spinner for minutes.
-- Rewrote `doctor` output in plain language and stylised `harly --help`.
-  The `--json` keys and exit codes are unchanged.
-
-## 0.1.0-beta.1 — unreleased
-
-- Added shared fail-fast runtime configuration and canonical `HARLY_URL`.
-- Added protected singleton first-owner bootstrap.
-- Added standalone image commands, production Compose topology, scheduler, and
-  Caddy profile.
-- Added durable queue leases, PostgreSQL advisory locks, and opaque health
-  probes.
-- Added `@harly/cli` init, launch, doctor, backup, restore, and upgrade
-  commands.
+[Unreleased]: https://github.com/Vytral/harly/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/Vytral/harly/releases/tag/v0.4.0
+[0.3.3]: https://github.com/Vytral/harly/releases/tag/v0.3.3
+[0.3.2]: https://github.com/Vytral/harly/releases/tag/v0.3.2
+[0.3.1]: https://github.com/Vytral/harly/releases/tag/v0.3.1
+[0.3.0]: https://github.com/Vytral/harly/releases/tag/v0.3.0
+[0.2.4]: https://github.com/Vytral/harly/releases/tag/v0.2.4
+[0.2.3]: https://github.com/Vytral/harly/releases/tag/v0.2.3
+[0.2.2]: https://github.com/Vytral/harly/releases/tag/v0.2.2
+[0.2.1]: https://github.com/Vytral/harly/releases/tag/v0.2.1
+[0.2.0]: https://github.com/Vytral/harly/releases/tag/v0.2.0

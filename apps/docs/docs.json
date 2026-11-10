@@ -110,6 +110,7 @@
         "pages": [
           "self-hosting/operations",
           "operations/backups",
+          "operations/upgrade-notes",
           "operations/troubleshooting",
           "operations/screenshots"
         ]

@@ -4,7 +4,7 @@
 #
 # Provisions a managed dev PostgreSQL database alongside the app. For
 # production traffic, replace the `databases` entry below with an existing
-# DigitalOcean Managed PostgreSQL cluster (see docs/cloud-deployments.md).
+# DigitalOcean Managed PostgreSQL cluster (see https://docs.harly.dev/deployment/cloud).
 #
 # IMPORTANT: HARLY_SETUP_SECRET is the token that claims the first owner
 # account at https://<your-app>/setup after deploy. You type its value into

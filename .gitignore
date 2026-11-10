@@ -79,8 +79,10 @@ graphify-out/
 skills-lock.json
 /skills/
 /referencias/
-**/AGENTS.md
-**/CLAUDE.md
+# Shared agent instructions (AGENTS.md, CLAUDE.md) are tracked; personal ones are not.
+CLAUDE.local.md
+**/CLAUDE.local.md
+strix_runs/
 .qwen
 
 # local Git worktrees and generated CLI release output

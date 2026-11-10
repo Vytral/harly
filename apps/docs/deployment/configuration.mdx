@@ -5,7 +5,50 @@ description: "Reference for every Harly environment variable — required secret
 
 `HARLY_URL` is the canonical public origin. Use a bare origin without a path:
 `https://hiring.example.com`. Every secret must be independent — do not reuse
-values between variables.
+values between variables. The older `NEXT_PUBLIC_APP_URL` and
+`BETTER_AUTH_URL` variables still work as temporary fallbacks for `HARLY_URL`
+and log a deprecation warning. Production startup fails before accepting
+traffic when a required value is missing or malformed.
+
+## `HARLY_URL` validation
+
+Harly derives every public URL from `HARLY_URL` rather than the incoming
+request origin. That includes upload presign URLs, authenticated file URLs,
+OAuth callbacks, redirects, page metadata, outbound webhook payloads,
+candidate notifications, and integration callbacks. A misconfigured value
+therefore leaks into links your candidates and integrations receive, so Harly
+validates it at startup and refuses to boot when it is unsafe.
+
+In production (`NODE_ENV=production`), `HARLY_URL` must:
+
+- Be an absolute URL with an `https://` scheme. Plain `http://` is rejected.
+- Resolve to a routable public hostname. Harly rejects `localhost`, any
+  `*.localhost` subdomain, the IPv4 loopback range `127.0.0.0/8`, the IPv6
+  loopback `::1` (and `[::1]`), and the unspecified bind addresses `0.0.0.0`,
+  `::`, and `[::]`.
+- Contain no userinfo, query string, or fragment. Only scheme, host, and
+  optional port are accepted.
+
+Outside production, `http://` is allowed so local development against
+`http://localhost:3000` continues to work.
+
+If `HARLY_URL` is unset, Harly falls back to the legacy `NEXT_PUBLIC_APP_URL`
+or `BETTER_AUTH_URL` and applies the same rules. Set `HARLY_URL` explicitly;
+the fallbacks exist only for older deployments.
+
+If validation fails, Harly throws at startup with a message such as
+`HARLY_URL must use HTTPS in production.` or `HARLY_URL must use a reachable
+public hostname, not a local or bind address.`. Fix the value in `.env` (or
+your platform's secret manager) and restart the app.
+
+<Warning>
+  Behind a reverse proxy, set `HARLY_URL` to the public hostname candidates
+  and integrations see — never the container's internal bind address. Values
+  like `http://0.0.0.0:3000` or `http://127.0.0.1:3000` are rejected in
+  production, and even when accepted they would produce broken links in
+  emails, webhooks, and OAuth callbacks. See
+  [proxy modes](/self-hosting/proxy-modes) for reverse-proxy setup.
+</Warning>
 
 ## Required runtime values
 
@@ -21,7 +64,7 @@ HARLY_SETUP_SECRET=<independent-32-byte-secret>
 HARLY_INITIAL_ADMIN_EMAIL=owner@example.com
 ```
 
-`npx @harly/cli` generates independent values and writes `.env` with mode
+`harly` generates independent values and writes `.env` with mode
 `0600`. On managed platforms, store all values as secret variables rather than
 plain configuration.
 
@@ -73,7 +116,18 @@ GET /api/metrics
 Authorization: Bearer <METRICS_TOKEN>
 ```
 
-Never put either secret in a URL or query string.
+Never put either secret in a URL or query string. GET and query-string
+secrets are rejected. The metrics endpoint returns `401` without the token;
+with `Accept: application/json` it also returns queue and cron summaries.
+
+Workspace members can read coarse connector health at
+`GET /api/health/integrations` with their Harly session. Members who can manage
+integrations also receive per-provider status and the last sanitized error; the
+endpoint never returns credentials or webhook secrets. To alert on failed cron
+runs, high SSE p95 latency, and elevated HTTP 5xx rates, import
+`docs/observability/prometheus-alerts.yml` from the repository into your
+monitoring stack. The full job list and intervals are in the
+[scheduler runbook](/self-hosting/operations#scheduler-and-queue-runbook).
 
 The scheduler handles the email outbox, domain-event replay, webhooks dispatch,
 interview calendar sync, mailbox sync, document expiry, retention enforcement,
@@ -102,6 +156,40 @@ HARLY_SCHEDULER_MEMORY=192m
 HARLY_CADDY_MEMORY=128m
 ```
 
+## Database connection pools
+
+Each Harly process keeps its own PostgreSQL connection pools. The generated
+`compose.yaml` forwards these variables to the app, scheduler, and migrate
+services. Leave them unset to use the defaults.
+
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `HARLY_DB_POOL_MAX` | `10` | Main application pool used by web requests and background jobs. |
+| `HARLY_DB_LOCK_POOL_MAX` | `20` | Reserved pool for cron overlap guards. Each running cron job holds one connection for its whole run. |
+| `HARLY_DB_MAILBOX_LOCK_POOL_MAX` | `4` | Reserved pool for per-mailbox sync locks. |
+
+Lock pools are separate from the main pool so that long-running jobs holding a
+lock can never take every connection away from web requests. The cron and
+mailbox lock pools are also separate from each other because the mailbox-sync
+cron holds a cron lock while it takes a mailbox lock. Harly opens a lock pool
+only when a process first takes that kind of lock.
+
+```dotenv
+# Example: larger app pool on a busy installation
+HARLY_DB_POOL_MAX=20
+HARLY_DB_LOCK_POOL_MAX=20
+HARLY_DB_MAILBOX_LOCK_POOL_MAX=4
+```
+
+Size the pools against PostgreSQL `max_connections` (`100` by default). A
+single Harly process can open up to `HARLY_DB_POOL_MAX + HARLY_DB_LOCK_POOL_MAX +
+HARLY_DB_MAILBOX_LOCK_POOL_MAX` connections, which is 34 with the defaults.
+Multiply that by the number of Harly processes that connect to the database,
+and keep the total below `max_connections` with headroom for backups,
+`psql` sessions, and other clients. If you raise the pools, raise
+`max_connections` on PostgreSQL as well, or lower the lock pools on small
+installations.
+
 ## Optional integration credentials
 
 Installation-level OAuth credentials enable each integration's connect flow.
@@ -128,6 +216,24 @@ startup validation error.
 See [integrations overview](/integrations/overview) for provider-specific
 redirect URIs and setup steps.
 
+## Pinning third-party images
+
+The Compose stack pulls `postgres:16-bookworm` and `caddy:2.10-alpine` by
+floating tag. The optional e-signature profile pulls `docuseal/docuseal` at the
+version in `HARLY_DOCUSEAL_VERSION` (default `3.3.4`; change it to upgrade
+DocuSeal deliberately). The Harly image itself is always pinned by
+`HARLY_IMAGE`. For fully reproducible deployments, pin the others by digest:
+
+```bash
+docker buildx imagetools inspect postgres:16-bookworm | head -3   # note the Digest
+docker buildx imagetools inspect caddy:2.10-alpine | head -3
+```
+
+Replace the `image:` lines in `compose.yaml` with
+`postgres:16-bookworm@sha256:<digest>` and `caddy:2.10-alpine@sha256:<digest>`.
+A pinned image receives no security rebuilds, so review and bump the digests on
+your own schedule.
+
 ## Updates and AI agents
 
 All optional, with safe defaults.
@@ -140,7 +246,9 @@ All optional, with safe defaults.
 | `MCP_ALLOWED_ORIGINS` | empty | Extra browser origins, comma separated, that may call the [MCP server](/developers/mcp). Empty answers only your own origin and loopback. |
 
 The in-app updater needs the host updater service from the CLI; see
-[Update from the app](/self-hosting/operations#update-from-the-app).
+[Update from the app](/self-hosting/operations#update-from-the-app). `/mcp` is a
+streaming endpoint: a reverse proxy must not compress or buffer it (the bundled
+Caddyfile already does not).
 
 ## Security-sensitive settings
 

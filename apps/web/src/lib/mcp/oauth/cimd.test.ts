@@ -84,6 +84,10 @@ describe("parseClientMetadataDocument", () => {
     expect(() => parseClientMetadataDocument(ID, { ...goodDoc, grant_types: ["client_credentials"] })).toThrow(/grant_types/);
     expect(() => parseClientMetadataDocument(ID, { ...goodDoc, grant_types: "authorization_code" })).toThrow(/grant_types/);
     expect(() => parseClientMetadataDocument(ID, { ...goodDoc, response_types: ["token"] })).toThrow(/response_types/);
+    expect(() => parseClientMetadataDocument(ID, { ...goodDoc, grant_types: [] })).toThrow(/grant_types/);
+    expect(() => parseClientMetadataDocument(ID, { ...goodDoc, response_types: [] })).toThrow(/response_types/);
+    expect(() => parseClientMetadataDocument(ID, { ...goodDoc, grant_types: ["authorization_code", ""] })).toThrow(/grant_types/);
+    expect(() => parseClientMetadataDocument(ID, { ...goodDoc, response_types: ["code", ""] })).toThrow(/response_types/);
   });
 
   it("ignores extra grant types that real clients publish", () => {
@@ -95,7 +99,7 @@ describe("parseClientMetadataDocument", () => {
       client_uri: "https://claude.ai",
       redirect_uris: ["https://claude.ai/api/mcp/auth_callback"],
       grant_types: ["authorization_code", "refresh_token", "urn:ietf:params:oauth:grant-type:jwt-bearer"],
-      response_types: ["code"],
+      response_types: ["code", "urn:example:extra"],
       token_endpoint_auth_method: "none",
     });
     expect(claude).toMatchObject({ name: "Claude", redirectUris: ["https://claude.ai/api/mcp/auth_callback"] });

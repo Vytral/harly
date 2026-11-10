@@ -50,6 +50,12 @@ integrations.
 | API keys | List, create, rotate, delete | `api_keys:read`, `api_keys:write` |
 | Automations | Withdrawn (HTTP 410) | Dashboard only until automations v2 |
 
+The legacy `webhooks:manage` scope is still accepted on existing keys and covers
+every webhook operation. `GET /api/v1/me` needs no scope and introspects the
+presented key. Every `/automations` path returns `410 Gone`, even when
+Automations is enabled in the dashboard; use the dashboard or see
+[Automations](/developers/automations).
+
 ## Mutation examples
 
 ### List jobs
@@ -115,9 +121,13 @@ curl --fail-with-body -X POST \
 curl --fail-with-body -X POST \
   'https://hiring.example.com/api/v1/applications/app_01j1abc/reject' \
   -H 'Authorization: Bearer harly_sk_live_YOUR_KEY' \
-  -H 'Content-Type: application/json' \
-  --data '{"reason":"Not a fit at this time"}'
+  -H 'Idempotency-Key: reject-app_01j1abc-2026-07-27T12:00:00Z'
 ```
+
+The endpoint takes no request body and doesn't accept a rejection reason. Harly
+records the reason as **Other** and sends the workspace's rejection email. To
+choose a reason, add an internal note, or skip the email, reject from the app.
+See [Reject and hire](/product/candidates-and-pipeline#reject-and-hire).
 
 ### Rotate an API key
 

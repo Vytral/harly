@@ -13,17 +13,39 @@ For a single-region self-hosted deployment, a practical target is RPO 15
 minutes and RTO 60 minutes. Validate the target against provider quotas,
 credentials, and restore capacity.
 
+Recommended practice:
+
+- Run `harly backup --encrypt` at least every 15 minutes from an
+  external scheduler and copy archives to an off-host bucket with versioning,
+  encryption, and a retention lock. Keep at least 30 daily and 12 monthly
+  versions.
+- Back up S3-compatible uploads independently with object versioning;
+  local-mode uploads are included in the archive.
+- On Railway, Fly.io, or DigitalOcean, use managed PostgreSQL backups or
+  snapshots plus an encrypted, versioned bucket. On a VPS, copy archives to S3,
+  R2, or Backblaze B2. This needs no extra host packages or private keys.
+- `harly update` automatically writes a private (`0600`) local
+  rollback archive first. It is not an off-host backup.
+
 ## Create a backup
 
 ```bash
-npx @harly/cli backup
-npx @harly/cli backup --encrypt
+harly backup
+harly backup --encrypt
 ```
 
 The CLI stops application workers, creates a PostgreSQL custom-format dump,
 includes local uploads and configuration, checksums archive contents, and
-writes a private rollback archive. Encrypted archives require an `age`
-recipient and a private identity stored outside the server.
+writes a private rollback archive. Encrypted archives use the optional `age` format and require a recipient and a
+private identity stored outside the server:
+
+```bash
+AGE_RECIPIENT=age1... harly backup --encrypt
+AGE_IDENTITY=/secure/backup.agekey harly restore backup.tar.gz.age --force
+```
+
+`AGE_RECIPIENT` is public and can live in the deployment configuration. Without
+the private identity an encrypted archive cannot be recovered.
 
 <Warning>
   A local archive disappears with the VPS. Copy it to an encrypted off-host
@@ -34,8 +56,8 @@ recipient and a private identity stored outside the server.
 ## Restore
 
 ```bash
-npx @harly/cli restore backups/harly-2026-...tar.gz --force
-npx @harly/cli doctor
+harly restore backups/harly-2026-...tar.gz --force
+harly doctor
 ```
 
 Restore verifies checksums, creates a safety backup, stops workers, restores
@@ -51,4 +73,6 @@ HARLY_DESTRUCTIVE_OK=1 \
 ```
 
 Run a restore drill monthly and after backup code changes. Record the archive
-checksum, restore duration, row counts, and upload checksum.
+checksum, restore duration, row counts, and upload checksum, together with the
+last successful backup, in your recovery log. A backup that has not been
+restored is not verified.

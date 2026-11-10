@@ -3859,7 +3859,7 @@ async function cloudSubmenu() {
       "Render and DigitalOcean have one-click deploy buttons from the README;",
       "the CLI writes the spec and secrets for the platforms below.",
       "",
-      "See docs/cloud-deployments.md for the full guide.",
+      "See https://docs.harly.dev/deployment/cloud for the full guide.",
     ].join("\n"),
     "Managed cloud",
   );

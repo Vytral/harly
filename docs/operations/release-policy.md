@@ -99,61 +99,8 @@ deleted from the package settings. New commits do not add more of them.
 
 ## Cut a release
 
-**The tag has to be on `main`.** The job that updates the manifest and the
-deployment assets refuses to run otherwise, because it regenerates those files
-from `main`'s templates and committing assets generated from a commit that was
-never merged would not match what was released. Merge first, then tag.
-
-Stable, including the first `0.2.0`:
-
-```bash
-git switch main
-git pull
-git tag v0.2.0
-git push origin v0.2.0
-```
-
-Tag the commit you want people to run. The `v` is required. The workflow runs CI
-against the tagged commit, builds `linux/amd64` and `linux/arm64`, scans the
-image before publishing it, tags it as that version and as `latest`, points the
-manifest at that digest, and only then opens the GitHub Release. Self-hosted
-installs then run:
-
-```bash
-npx @harly/cli update
-```
-
-A discreet beta, which does not move those installs or `latest`:
-
-```bash
-git tag v0.2.1-beta.1
-git push origin v0.2.1-beta.1
-```
-
-Someone who wants that build opts in:
-
-```bash
-npx @harly/cli update --to 0.2.1-beta.1
-```
-
-Before the tag: merge the intended changes into `main`, wait for CI, and write
-the changelog and migration notes.
-
-`@harly/cli` is published by the **Publish CLI** workflow
-(`.github/workflows/publish-cli.yml`) through npm Trusted Publishing, with no
-token. It runs after the image workflow succeeds for a stable tag, from `main`
-including the release commit, because that commit rewrites the release
-metadata embedded in the CLI; publishing earlier would ship an offline
-fallback that still points at the previous image. It publishes only when
-`tooling/harly/package.json` names a version that is not on npm yet, and only
-after the CLI's typecheck, tests and a matching `CHANGELOG.md` section pass.
-
-So, before tagging, bump the CLI version and add its changelog entry in the
-same release. For a CLI-only change (no new image), merge the version bump and
-run **Publish CLI** from the Actions tab.
-
-The CLI embedded in an image release is the fallback for an offline install.
-Online installs and updates read the manifest.
+The step-by-step checklist, including how release notes are produced from
+`CHANGELOG.md`, is in [RELEASING.md](../../RELEASING.md).
 
 Stable releases are planned about every two to four weeks during this phase.
 Ship sooner for a security fix, a data-integrity bug, an authentication
@@ -161,13 +108,13 @@ problem, or an outage.
 
 ## Self-hosted upgrades
 
-Operators choose when to upgrade. Harly does not update containers by itself,
-and the product UI does not nag about versions.
+Operators choose when to upgrade. Harly never updates containers without an
+operator's decision.
 
 From the installation directory, or any directory inside it:
 
 ```bash
-npx @harly/cli update
+harly update
 ```
 
 The CLI finds `harly.config.json`, compares it with the stable manifest, and
@@ -180,11 +127,13 @@ the backup from that update and restore it. Putting the previous image back is
 not a rollback.
 
 ```bash
-npx @harly/cli doctor
+harly doctor
 ```
 
 ## Scope boundaries
 
-Harly does not build an image per commit and does not show an in-app update
-banner. `latest` is the current stable image. `harly update` is the supported
-way to move an installation onto that version and pin its digest.
+Harly does not build an image per commit. `latest` is the current stable
+image. Operators choose when to upgrade: with `harly update`, or from
+Settings → Updates when the host updater is installed
+(`harly updater install-service`), either on demand or in a maintenance
+window. Both paths take a rollback backup first and pin the digest.
