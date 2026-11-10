@@ -13,6 +13,13 @@ operators. How to cut a release is in [RELEASING.md](RELEASING.md). The
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-11-10
+
+Harly now speaks six languages. The web app and the interview emails are
+translated into Spanish, French, German, Brazilian Portuguese and Dutch, with
+English as the source language. There are no database migrations and nothing
+to configure; run `harly update` as usual.
+
 ### Added
 
 - The web app is available in English, Spanish, French, German, Brazilian
@@ -43,6 +50,10 @@ operators. How to cut a release is in [RELEASING.md](RELEASING.md). The
 - The job editor form now uses the full width on narrow windows, scrolls from
   anywhere on the page, and no longer loads the live preview unless there is
   room to show it.
+- MCP clients that publish a client metadata document listing grant types or
+  response types the server does not issue (for example Claude and VS Code)
+  can connect again. The document still has to include `authorization_code` and
+  `code`.
 
 ## [0.4.0] - 2026-11-08
 
@@ -831,7 +842,8 @@ upgrade holds locks until it commits. On managed Postgres, check that
 `statement_timeout` and `idle_in_transaction_session_timeout` are high enough to
 let it finish.
 
-[Unreleased]: https://github.com/Vytral/harly/compare/v0.4.0...HEAD
+[Unreleased]: https://github.com/Vytral/harly/compare/v0.5.0...HEAD
+[0.5.0]: https://github.com/Vytral/harly/releases/tag/v0.5.0
 [0.4.0]: https://github.com/Vytral/harly/releases/tag/v0.4.0
 [0.3.3]: https://github.com/Vytral/harly/releases/tag/v0.3.3
 [0.3.2]: https://github.com/Vytral/harly/releases/tag/v0.3.2
