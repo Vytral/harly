@@ -1,6 +1,6 @@
 ---
 title: "Deploy with the Harly CLI"
-description: "Install, deploy, upgrade, and automate a self-hosted Harly instance from the terminal using the @harly/cli v0.6.0 command reference."
+description: "Install, deploy, upgrade, and automate a self-hosted Harly instance from the terminal using the @harly/cli v0.7.0 command reference."
 ---
 
 The Harly CLI installs and operates a self-hosted Harly deployment. It
@@ -27,10 +27,19 @@ For a local VPS installation, install:
 - At least 5 GB of free disk space by default.
 - A public DNS record when using Caddy or an external HTTPS proxy.
 
+Install the CLI once, globally:
+
+```bash
+npm install -g @harly/cli
+```
+
+Every example below uses the `harly` command. To run a one-off command without
+installing, use `harly <command>` instead.
+
 Run the host check first:
 
 ```bash
-npx --yes @harly/cli check
+harly check
 ```
 
 The check reports Docker, Compose, memory, disk, firewall, and the public
@@ -41,10 +50,11 @@ ports used by the selected deployment topology.
 ### Run the guided installer
 
 ```bash
-npx --yes @harly/cli
+harly init
 ```
 
-On a fresh host, the menu opens the installer. It asks for the public URL,
+On a fresh host, running `harly` with no command opens the same installer from
+the menu. It asks for the public URL,
 proxy mode, owner email, organization name, storage provider, and resource
 profile. Before writing files it shows a complete summary.
 
@@ -61,7 +71,7 @@ The installer then:
 ### Generate configuration without launching
 
 ```bash
-npx @harly/cli init ./harly \
+harly init ./harly \
   --url https://careers.example.com \
   --proxy caddy \
   --email owner@example.com \
@@ -71,7 +81,7 @@ npx @harly/cli init ./harly \
 `init` writes configuration but does not pull images or start containers. Run:
 
 ```bash
-npx @harly/cli launch ./harly --yes
+harly launch ./harly --yes
 ```
 
 To do both steps in one command, add `--launch` to `init`.
@@ -82,7 +92,7 @@ After configuration has been saved, use **Start or resume installation** in the
 guided menu or run:
 
 ```bash
-npx @harly/cli resume ./harly --yes
+harly resume ./harly --yes
 ```
 
 This reuses the saved answers and secrets, validates configuration, pulls any
@@ -97,9 +107,9 @@ timeout for `launch` or `resume`, add `--timeout <seconds>`.
 The CLI reports elapsed time and the latest connection or HTTP status while
 waiting. On timeout, it shows how to inspect Caddy's logs and retry.
 
-### Install the CLI globally
+### Installing globally from npx
 
-When you run the CLI through npx in a terminal, it asks once:
+If you start with `npx @harly/cli` in a terminal, the CLI asks once:
 `Install Harly globally so you can just type harly?` The default answer is yes.
 The CLI asks at the start of the interactive menu and after `init`, `launch`,
 and `resume`. After installing, it checks that `harly` resolves. If npm's global
@@ -117,12 +127,13 @@ The CLI remembers a declined offer in `config.json` under
 `$XDG_CONFIG_HOME/harly` (default `~/.config/harly`), or `%APPDATA%\harly` on
 Windows. Set `HARLY_CONFIG_DIR` to use another directory.
 
-To install the CLI explicitly at any time, run `install-global`:
+`install-global` does the same on request, for example from a script that
+started with `npx @harly/cli install-global --yes`:
 
 ```bash
-npx @harly/cli install-global          # asks first in a terminal
-npx @harly/cli install-global --yes    # for scripts
-npx @harly/cli install-global --dry-run
+harly install-global          # asks first in a terminal
+harly install-global --yes    # for scripts
+harly install-global --dry-run
 ```
 
 `--dry-run` previews the installation without running it.
@@ -136,6 +147,28 @@ In a terminal, the header notes when a newer CLI version is published. The CLI
 checks the npm registry at most once a day, with a short timeout. Set
 `HARLY_NO_UPDATE_CHECK=1` to turn the check off. It never runs in CI, with
 `--json`, or with `--quiet`.
+
+### Anonymous telemetry
+
+`harly init` asks once, in an interactive terminal, whether to share anonymous
+usage data. The default is no. The payload is a random instance id, the CLI
+version, the operating system and architecture, the deployment mode, and an
+optional answer to how you heard about Harly. It never includes your domain,
+email, organization name, or IP address.
+
+```bash
+harly telemetry status
+harly telemetry enable
+harly telemetry disable
+```
+
+`--no-telemetry`, `HARLY_TELEMETRY=0`, or `DO_NOT_TRACK=1` turn it off and win
+over a saved yes. Non-interactive runs send nothing unless you pass
+`--telemetry` or set `HARLY_TELEMETRY=1`. `HARLY_TELEMETRY_URL` changes the
+endpoint.
+
+`init` also writes `HARLY_ORG_NAME` to `.env`, so the setup wizard does not ask
+for the company name again.
 
 ## Configure installer inputs
 
@@ -169,7 +202,7 @@ S3_BUCKET=harly-production \
 S3_REGION=auto \
 S3_ACCESS_KEY_ID=... \
 S3_SECRET_ACCESS_KEY=... \
-npx @harly/cli init ./harly \
+harly init ./harly \
   --url https://careers.example.com \
   --non-interactive
 ```
@@ -241,7 +274,7 @@ written to stderr only.
 Example dry run:
 
 ```bash
-npx @harly/cli --json init ./harly \
+harly --json init ./harly \
   --dry-run \
   --url http://127.0.0.1:3000 \
   --proxy local \
@@ -286,7 +319,7 @@ explicit stdin source per execution:
 
 ```bash
 printf '%s\n' "$RAILWAY_TOKEN" |
-  npx @harly/cli --json deploy railway --railway-token-stdin \
+  harly --json deploy railway --railway-token-stdin \
     --project-name harly-production \
     --email owner@example.com
 ```
@@ -318,7 +351,7 @@ RAILWAY_TOKEN=... \
 S3_BUCKET=harly-production \
 S3_ACCESS_KEY_ID=... \
 S3_SECRET_ACCESS_KEY=... \
-npx --yes @harly/cli deploy railway \
+harly deploy railway \
   --project-name harly-production \
   --email owner@example.com \
   --non-interactive
@@ -332,7 +365,7 @@ Railway secrets are not saved locally by default. Add `--save-env` only when a
 local copy is explicitly required:
 
 ```bash
-npx @harly/cli deploy railway --save-env
+harly deploy railway --save-env
 ```
 
 The resulting file has mode `0600`, and the CLI prints a warning. If Railway
@@ -360,11 +393,11 @@ These providers currently use a preparation flow and finish with
 `status: "ready-to-deploy"`:
 
 ```bash
-npx @harly/cli deploy fly prepare \
+harly deploy fly prepare \
   --url https://careers.example.com \
   --email owner@example.com
 
-npx @harly/cli deploy digitalocean prepare \
+harly deploy digitalocean prepare \
   --url https://careers.example.com \
   --email owner@example.com
 ```
@@ -391,7 +424,7 @@ harly status ./harly
 ```text
 INSTANCE
 ✓ URL      https://ats.example.com  answers ready · 120 ms
-✓ Version  v0.3.3  latest
+✓ Version  v0.4.0  latest
 SERVICES
 ✓ Database     running · healthy
 ✓ Application  running · healthy
@@ -423,8 +456,8 @@ For detailed checks and automatic repairs, use `harly doctor` (and `--fix`).
 ### Check readiness
 
 ```bash
-npx @harly/cli doctor ./harly
-npx @harly/cli --json doctor ./harly
+harly doctor ./harly
+harly --json doctor ./harly
 ```
 
 Use `doctor --fix` only in an interactive terminal. It can restart stopped
@@ -433,8 +466,8 @@ services or bring the Compose project back up.
 ### Back up before updates
 
 ```bash
-npx @harly/cli backup ./harly
-npx @harly/cli update
+harly backup ./harly
+harly update
 ```
 
 Run `update` from the installation directory, or from any directory inside it.
@@ -494,8 +527,8 @@ Then set the values in `.env` and restart the services with
 ### Restore or uninstall
 
 ```bash
-npx @harly/cli restore ./harly/backups/harly-2026-01-01.tar.gz ./harly --force
-npx @harly/cli uninstall ./harly
+harly restore ./harly/backups/harly-2026-01-01.tar.gz ./harly --force
+harly uninstall ./harly
 ```
 
 Restore replaces the current database and uploads. Back up first. The
@@ -532,7 +565,7 @@ dig +short A careers.example.com
 Run:
 
 ```bash
-npx @harly/cli doctor ./harly
+harly doctor ./harly
 docker compose -f ./harly/compose.yaml ps
 docker compose -f ./harly/compose.yaml logs --tail=100 app scheduler migrate
 ```
