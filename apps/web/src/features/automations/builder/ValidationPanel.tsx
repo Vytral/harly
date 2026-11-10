@@ -7,6 +7,7 @@ import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { cn } from "@/lib/utils";
 
 import { looksLikeRawJson, visibleIssues, type VisibleIssue } from "./validation-view";
+import { translateIssueMessage } from "../definition/issues";
 import type { WorkflowGraphV2 } from "../definition/schema-v2";
 
 export function ValidationPanel({
@@ -128,9 +129,10 @@ export function ValidationPanel({
 
 function IssueRow({ issue, onSelect }: { issue: VisibleIssue; onSelect: (nodeId: string) => void }) {
   const t = useTranslations("features.automations.validationPanel");
+  const tl = useTranslations("labels.automations");
   const message = looksLikeRawJson(issue.message)
     ? t("needsAttention")
-    : issue.message;
+    : translateIssueMessage(issue, tl);
   return (
     <li>
       <button

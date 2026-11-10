@@ -49,13 +49,16 @@ type CanonicalSendOutcome =
  * typed `delivery_unknown` / `delivery_in_progress` result and any other
  * failure becomes a plain error the user can retry.
  */
-async function sendCanonicalForMailbox(input: SendCanonicalEmailInput): Promise<CanonicalSendOutcome> {
+async function sendCanonicalForMailbox(
+  input: SendCanonicalEmailInput,
+  t: Awaited<ReturnType<typeof getTranslations>>,
+): Promise<CanonicalSendOutcome> {
   try {
     return { ok: true, result: await sendCanonicalEmail(input) };
   } catch (error) {
-    if (isMailDeliveryConflictError(error)) return conflictResult(error.code);
+    if (isMailDeliveryConflictError(error)) return conflictResult(error.code, t);
     log.error(error, "canonical mailbox send failed");
-    return { ok: false, error: canonicalSendFailureMessage(error) };
+    return { ok: false, error: canonicalSendFailureMessage(error, t) };
   }
 }
 
@@ -348,7 +351,7 @@ export async function replyMailboxThreadAction(input: {
       attachments: (attachments ?? []).map((attachment) => ({ filename: attachment.filename, contentType: attachment.contentType ?? "application/octet-stream", content: attachment.content! })),
       sourceHint: "smtp",
       authorId: user.id,
-    });
+    }, t);
     if (!outcome.ok) return outcome;
     revalidatePath("/dashboard/inbox");
     return { ok: true, threadId: outcome.result.threadId, idempotentReplay: outcome.result.idempotentReplay, legacyWriteWarning: outcome.result.legacyWriteWarning, note: outcome.result.persisted === false ? outcome.result.legacyWriteWarning : undefined };
@@ -366,8 +369,8 @@ export async function replyMailboxThreadAction(input: {
       threadId: thread.id,
     });
     if (delivery.kind === "replay") return { ok: true, threadId: delivery.threadId ?? thread.id, idempotentReplay: true };
-    if (delivery.kind === "unknown") return conflictResult("delivery_unknown");
-    if (delivery.kind === "in_progress") return conflictResult("delivery_in_progress");
+    if (delivery.kind === "unknown") return conflictResult("delivery_unknown", t);
+    if (delivery.kind === "in_progress") return conflictResult("delivery_in_progress", t);
     try {
       const { default: nodemailer } = await import("nodemailer");
       const transport = nodemailer.createTransport({ host: mailboxConfig.smtp.host, port: mailboxConfig.smtp.port, secure: mailboxConfig.smtp.tls, auth: { user: mailboxConfig.smtp.user, pass: mailboxConfig.smtp.password } });
@@ -421,8 +424,8 @@ export async function replyMailboxThreadAction(input: {
     threadId: thread.id,
   });
   if (delivery.kind === "replay") return { ok: true, threadId: delivery.threadId ?? thread.id, idempotentReplay: true };
-  if (delivery.kind === "unknown") return conflictResult("delivery_unknown");
-  if (delivery.kind === "in_progress") return conflictResult("delivery_in_progress");
+  if (delivery.kind === "unknown") return conflictResult("delivery_unknown", t);
+  if (delivery.kind === "in_progress") return conflictResult("delivery_in_progress", t);
 
   const replyTo = applicationId
     ? await getInboundReplyTo(organization.id, applicationId)
@@ -540,7 +543,7 @@ export async function createMailboxThreadAction(input: {
       htmlBody: parsed.data.html ?? null,
       attachments: (attachments ?? []).map((attachment) => ({ filename: attachment.filename, contentType: attachment.contentType ?? "application/octet-stream", content: attachment.content! })),
       authorId: user.id,
-    });
+    }, t);
     if (!outcome.ok) return outcome;
     revalidatePath("/dashboard/inbox");
     return { ok: true, threadId: outcome.result.threadId, delivered: outcome.result.delivered, legacyWriteWarning: outcome.result.legacyWriteWarning, note: outcome.result.persisted === false ? outcome.result.legacyWriteWarning : undefined };
@@ -559,8 +562,8 @@ export async function createMailboxThreadAction(input: {
     applicationId: application?.id ?? null,
   });
   if (delivery.kind === "replay") return { ok: true, threadId: delivery.threadId ?? "", delivered: true, idempotentReplay: true };
-  if (delivery.kind === "unknown") return conflictResult("delivery_unknown");
-  if (delivery.kind === "in_progress") return conflictResult("delivery_in_progress");
+  if (delivery.kind === "unknown") return conflictResult("delivery_unknown", t);
+  if (delivery.kind === "in_progress") return conflictResult("delivery_in_progress", t);
 
   try {
     const result = await sender.send({

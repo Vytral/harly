@@ -60,6 +60,7 @@ export function FileDropzone({
   className?: string;
 }) {
   const t = useTranslations("ui.fileDropzone");
+  const tStorage = useTranslations("labels.storageValidation");
   const hintText = hint ?? t("defaultHint");
   const inputRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
@@ -71,7 +72,7 @@ export function FileDropzone({
 
   async function handleFile(file: File | null) {
     if (!file) return;
-    const error = getImageFileValidationError(file);
+    const error = getImageFileValidationError(file, tStorage);
     if (error) {
       toast.error(error);
       return;

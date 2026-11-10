@@ -299,7 +299,7 @@ export function PdfSignaturePlacer({
 
   if (error)
     return (
-      <Callout tone="danger">{error}</Callout>
+      <Callout tone="danger">{t("loadError")}</Callout>
     );
   return (
     <div ref={rootRef} className="space-y-5">

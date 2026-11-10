@@ -18,7 +18,6 @@ import {
   requestUpdateAction,
 } from "./actions";
 import {
-  UPDATE_STATUS_LABEL,
   isActiveUpdateStatus,
   type UpdateStatus,
 } from "./update-request-state";
@@ -71,6 +70,7 @@ export function formatWhen(iso: string, timeZone: string, locale: string): strin
 
 export function UpdatesPanel({ view }: { view: UpdatesView }) {
   const t = useTranslations("features.updates.updatesPanel");
+  const tStatus = useTranslations("labels.updates.status");
   const locale = useLocale();
   const router = useRouter();
   const [pending, startTransition] = useTransition();
@@ -115,7 +115,7 @@ export function UpdatesPanel({ view }: { view: UpdatesView }) {
   }
 
   const headline = active
-    ? { tone: "warn" as const, text: UPDATE_STATUS_LABEL[active.status] }
+    ? { tone: "warn" as const, text: tStatus(active.status) }
     : updateAvailable && view.latestVersion
       ? { tone: "warn" as const, text: t("updateAvailable", { version: view.latestVersion }) }
       : view.latestVersion
@@ -220,7 +220,7 @@ export function UpdatesPanel({ view }: { view: UpdatesView }) {
                     </span>
                   </p>
                   <StatusPill tone={STATUS_TONE[request.status]}>
-                    {UPDATE_STATUS_LABEL[request.status]}
+                    {tStatus(request.status)}
                   </StatusPill>
                 </div>
                 <p className="text-[12.5px] text-soft-ink">
@@ -275,6 +275,7 @@ function ActiveRequest({
   busy: boolean;
 }) {
   const t = useTranslations("features.updates.updatesPanel");
+  const tStatus = useTranslations("labels.updates.status");
   const locale = useLocale();
   const message = request.message ?? t("waitingForUpdater");
   const when = formatWhen(request.createdAt, timezone, locale);
@@ -283,7 +284,7 @@ function ActiveRequest({
     <Callout
       tone="info"
       title={t("activeTitle", {
-        status: UPDATE_STATUS_LABEL[request.status],
+        status: tStatus(request.status),
         from: request.fromVersion,
         to: request.targetVersion,
       })}

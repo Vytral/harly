@@ -11,7 +11,7 @@ import {
   Trash2,
   X,
 } from "lucide-react";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import { toast } from "@/lib/notification-island/toast";
 
 import { removeFromPoolAction, bulkRemoveFromPoolAction } from "@/features/pool/actions";
@@ -97,6 +97,7 @@ type PoolViewProps = {
 
 export function PoolView({ candidates, openJobs = [] }: PoolViewProps) {
   const t = useTranslations("features.pool.PoolView");
+  const locale = useLocale();
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [search, setSearch] = useState("");
@@ -334,7 +335,7 @@ export function PoolView({ candidates, openJobs = [] }: PoolViewProps) {
           ) : null}
         </FilterBar>
 
-        <TotalLine total={filtered.length} noun="candidate" />
+        <TotalLine total={filtered.length} noun={t("nounSingular")} pluralNoun={t("nounPlural")} />
 
         {filtered.length === 0 ? (
           <EmptyState
@@ -414,7 +415,7 @@ export function PoolView({ candidates, openJobs = [] }: PoolViewProps) {
                         <td className={dirTd}>{renderScore(candidate)}</td>
                         <td className={dirTd}>{renderSource(candidate)}</td>
                         <td className={cn(dirTd, "whitespace-nowrap text-[13px] text-soft-ink")} suppressHydrationWarning>
-                          {new Date(candidate.addedAt).toLocaleDateString()}
+                          {new Date(candidate.addedAt).toLocaleDateString(locale)}
                         </td>
                         <td className={dirTd}>{renderRowActions(candidate)}</td>
                       </tr>
@@ -464,7 +465,7 @@ export function PoolView({ candidates, openJobs = [] }: PoolViewProps) {
                       </div>
                       {candidate.skills.length > 0 ? renderSkills(candidate) : null}
                       <p className="text-xs text-soft-ink" suppressHydrationWarning>
-                        {t("addedOn", { date: new Date(candidate.addedAt).toLocaleDateString() })}
+                        {t("addedOn", { date: new Date(candidate.addedAt).toLocaleDateString(locale) })}
                       </p>
                     </div>
                     {renderRowActions(candidate)}
@@ -507,7 +508,7 @@ export function PoolView({ candidates, openJobs = [] }: PoolViewProps) {
             if (!open) setSelectedIds(new Set());
           }}
           candidateId={Array.from(selectedIds)[0] ?? ""}
-          candidateName={`${selectedIds.size} candidates`}
+          candidateName={t("bulkCandidates", { count: selectedIds.size })}
           candidateEmail=""
           jobs={openJobs}
           isBulk

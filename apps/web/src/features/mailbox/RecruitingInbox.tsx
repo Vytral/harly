@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState, useSyncExternalStore, useTransiti
 import Link from "next/link";
 import type { Route } from "next";
 import { useRouter } from "next/navigation";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -313,6 +313,7 @@ export function RecruitingInbox({
   const autoReadRef = useRef<Set<string>>(new Set());
   const t = useTranslations("features.mailbox.recruitingInbox.main");
   const tRoot = useTranslations();
+  const locale = useLocale();
 
   // The URL (initialFilter/initialThreadId) is the source of truth; local
   // state resyncs when those props change (back/forward), by adjusting state
@@ -336,7 +337,7 @@ export function RecruitingInbox({
   // Locale/timezone formatting only after hydration, so server markup matches.
   const lastSyncedLabel = useSyncExternalStore(
     noopSubscribe,
-    () => (mailboxStatus.lastSyncedAt ? new Date(mailboxStatus.lastSyncedAt).toLocaleString() : null),
+    () => (mailboxStatus.lastSyncedAt ? new Date(mailboxStatus.lastSyncedAt).toLocaleString(locale) : null),
     () => null,
   );
   const connectionActive = mailboxStatus.enabled && mailboxStatus.configured && mailboxStatus.route !== "conflict";

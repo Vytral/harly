@@ -69,6 +69,7 @@ export async function requestJobApproval(input: {
     body: "Review this job before recruiting starts.",
     href: `/dashboard/jobs/${job.id}`,
     metadata: { jobId: job.id, requestId: request.id },
+    copy: { key: "jobApprovalRequested", values: { jobTitle: job.title } },
     dedupeKey: `approval:${request.id}:requested`,
   });
   await logAuditEvent({
@@ -157,6 +158,10 @@ export async function decideJobApproval(input: {
     body: input.comment?.trim() || undefined,
     href: `/dashboard/jobs/${request.jobId}`,
     metadata: { jobId: request.jobId, requestId: request.id },
+    copy: {
+      key: input.decision === "approved" ? "jobApprovalApproved" : "jobApprovalRejected",
+      values: { jobId: request.jobId },
+    },
     dedupeKey: `approval:${request.id}:${input.decision}`,
   });
   return updated;

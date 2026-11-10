@@ -116,7 +116,7 @@ export async function generateJobMatchesAction(
   if (unindexed > 0) {
     return {
       success: false,
-      error: `${unindexed} candidate${unindexed === 1 ? "" : "s"} not indexed yet. Index the pool first.`,
+      error: t("notIndexed", { count: unindexed }),
     };
   }
 

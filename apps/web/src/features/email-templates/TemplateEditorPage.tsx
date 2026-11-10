@@ -42,7 +42,8 @@ export function TemplateEditorPage({ template, workspaceName }: { template: Emai
   const [mode, setMode] = useState<"edit" | "preview">("edit");
   const editorRef = useRef<{ insertText: (text: string) => void } | null>(null);
   const unknown = findUnknownVariables(`${subject}\n${body}`);
-  const previewValues = { candidate_first_name: "Ava", candidate_last_name: "Thompson", candidate_full_name: "Ava Thompson", job_title: "Senior Frontend Engineer", stage_name: "Technical Interview", interview_date: "Tuesday, July 8", interview_time: "10:00 AM PST", interview_location: "Video call", offer_salary: "$140,000 / yr", offer_expiry: "July 12, 2026", offer_url: "#", company_name: workspaceName, portal_link: "#", sender_name: "You" };
+  const tSamples = useTranslations("labels.emailTemplates.samples");
+  const previewValues = { candidate_first_name: "Ava", candidate_last_name: "Thompson", candidate_full_name: "Ava Thompson", job_title: tSamples("jobTitle"), stage_name: tSamples("stageName"), interview_date: tSamples("interviewDate"), interview_time: tSamples("interviewTime"), interview_location: tSamples("interviewLocation"), offer_salary: tSamples("offerSalary"), offer_expiry: tSamples("offerExpiry"), offer_url: "#", company_name: workspaceName, portal_link: "#", sender_name: tSamples("senderName") };
 
   function save() {
     startTransition(async () => {

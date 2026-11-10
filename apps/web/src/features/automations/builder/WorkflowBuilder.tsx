@@ -58,6 +58,7 @@ import { editorReducer, initialEditorState } from "./state/editor-reducer";
 import { ConflictDialog } from "./ConflictDialog";
 import { SaveStatus } from "./SaveStatus";
 import { graphToLegacy } from "../definition/legacy-adapter";
+import { translateIssueMessage } from "../definition/issues";
 import {
   diffGraphSummaries,
   summarizeGraph,
@@ -921,7 +922,7 @@ export function WorkflowBuilder({
                     key={`${issue.nodeId}:${issue.fieldPath}:${issue.message}`}
                     className="text-sm text-danger-rust"
                   >
-                    {issue.message}
+                    {translateIssueMessage(issue, tl)}
                   </li>
                 ))}
               </ul>
@@ -1046,7 +1047,7 @@ export function WorkflowBuilder({
           })}
           surfaceContext={{
             kind: "section",
-            label: draft.name || "Automation Builder",
+            label: draft.name || t("aiSurfaceFallback"),
             path: draft.id ? `/dashboard/automations/${draft.id}` : "/dashboard/automations/new",
           }}
           onAutomationApplied={handleAutomationApplied}

@@ -305,7 +305,7 @@ const ACTION_ROWS: ActionRow[] = [
     icon: ChatCircleDotsIcon,
     available: true,
     config: [
-      { key: "message", kind: "textarea", required: true, maxLength: 2000, placeholder: "New application received for {{job_title}}" },
+      { key: "message", kind: "textarea", required: true, maxLength: 2000, placeholder: true },
     ],
   },
   {
@@ -327,8 +327,8 @@ const ACTION_ROWS: ActionRow[] = [
     available: true,
     config: [
       { key: "toEmail", kind: "text", placeholder: true },
-      { key: "subject", kind: "text", maxLength: 200, placeholder: "Choose a time to meet with {{company_name}}" },
-      { key: "body", kind: "textarea", maxLength: 10000, placeholder: "Pick a time that works for you: {{booking_link}}" },
+      { key: "subject", kind: "text", maxLength: 200, placeholder: true },
+      { key: "body", kind: "textarea", maxLength: 10000, placeholder: true },
     ],
   },
   {
@@ -353,7 +353,7 @@ const ACTION_ROWS: ActionRow[] = [
         key: "body",
         kind: "textarea",
         maxLength: 50_000,
-        placeholder: "Dear {{candidate_full_name}},\n\nThis document is for {{job_title}} at {{company_name}}.",
+        placeholder: true,
       },
       { key: "attachments", kind: "document-attachments" },
     ],
@@ -438,14 +438,14 @@ const ACTION_ROWS: ActionRow[] = [
     group: "Communication",
     icon: PaperPlaneDuotoneIcon,
     available: true,
-    config: [{ key: "message", kind: "textarea", required: true, maxLength: 2000, placeholder: "New candidate received: {{candidate_name}}" }],
+    config: [{ key: "message", kind: "textarea", required: true, maxLength: 2000, placeholder: true }],
   },
   {
     type: "send_discord",
     group: "Communication",
     icon: ChatCircleDotsIcon,
     available: true,
-    config: [{ key: "message", kind: "textarea", required: true, maxLength: 2000, placeholder: "New candidate received: {{candidate_name}}" }],
+    config: [{ key: "message", kind: "textarea", required: true, maxLength: 2000, placeholder: true }],
   },
   {
     type: "send_in_app_alert",

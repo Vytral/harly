@@ -2,6 +2,7 @@
 
 import * as React from "react"
 import { AlertTriangleIcon, Loader2Icon, Trash2Icon } from "lucide-react"
+import { useTranslations } from "next-intl"
 
 import { cn } from "@/lib/utils"
 import {
@@ -99,8 +100,8 @@ function ConfirmBody({
   title,
   description,
   children,
-  confirmLabel = "Confirm",
-  cancelLabel = "Cancel",
+  confirmLabel,
+  cancelLabel,
   requireAck,
   icon,
   busyProp,
@@ -111,6 +112,7 @@ function ConfirmBody({
   onConfirm: () => void | Promise<void>
   onClose?: () => void
 }) {
+  const t = useTranslations("ui.confirmDialog")
   const [ack, setAck] = React.useState(false)
   const [running, setRunning] = React.useState(false)
   const busy = Boolean(busyProp) || running
@@ -172,14 +174,14 @@ function ConfirmBody({
       ) : null}
 
       <AlertDialogFooter layout="split">
-        <AlertDialogCancel disabled={busy}>{cancelLabel}</AlertDialogCancel>
+        <AlertDialogCancel disabled={busy}>{cancelLabel ?? t("cancel")}</AlertDialogCancel>
         <AlertDialogAction
           variant={tone === "destructive" ? "destructive" : "default"}
           disabled={busy || Boolean(requireAck && !ack)}
           onClick={handleConfirm}
         >
           {busy ? <Loader2Icon className="animate-spin" aria-hidden="true" /> : null}
-          {confirmLabel}
+          {confirmLabel ?? t("confirm")}
         </AlertDialogAction>
       </AlertDialogFooter>
     </>

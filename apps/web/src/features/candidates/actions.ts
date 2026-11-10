@@ -88,6 +88,7 @@ import { resumeKeyFromUrl } from "@/lib/resume/storage-key";
 import { isCandidateEmailConflict } from "./create-candidate-errors";
 import { isWorkspaceStorageKey } from "@/lib/storage-validation";
 import { storage } from "@/lib/storage";
+import { withNotificationCopy } from "@/features/notifications/copy";
 import { createLogger } from "@/lib/logger";
 import {
   enqueueCandidateDeletionJob,
@@ -578,7 +579,16 @@ export async function createCandidateNote(input: {
             title: `${user.name} mentioned you on ${candidate.firstName} ${candidate.lastName}`,
             body: parsed.data.body.slice(0, 200),
             href: `/dashboard/candidates/${input.candidateId}`,
-            metadata: { noteId: note.id },
+            metadata: withNotificationCopy(
+              { noteId: note.id },
+              {
+                key: "noteMentioned",
+                values: {
+                  actor: user.name,
+                  candidate: `${candidate.firstName} ${candidate.lastName}`,
+                },
+              },
+            ),
           })),
         );
       }

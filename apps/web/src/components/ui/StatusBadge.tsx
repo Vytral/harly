@@ -1,4 +1,5 @@
 import type { ApplicationOutcome } from "@harly/db/stage-kind";
+import { useTranslations } from "next-intl";
 
 import { Badge } from "@/components/ui/badge";
 import {
@@ -24,10 +25,10 @@ const applicationStatusVariant: Record<ApplicationOutcome, BadgeVariant> = {
   withdrawn: "neutral",
 };
 
-const jobStatusMap: Record<string, { variant: BadgeVariant; label: string }> = {
-  draft: { variant: "neutral", label: "Draft" },
-  open: { variant: "success", label: "Open" },
-  closed: { variant: "warning", label: "Closed" },
+const jobStatusMap: Record<string, { variant: BadgeVariant; labelKey: "draft" | "open" | "closed" }> = {
+  draft: { variant: "neutral", labelKey: "draft" },
+  open: { variant: "success", labelKey: "open" },
+  closed: { variant: "warning", labelKey: "closed" },
 };
 
 /** Badge variant for a tone; shared so every stage or outcome badge agrees. */
@@ -51,13 +52,11 @@ export function JobStatusBadge({
   status: string;
   className?: string;
 }) {
-  const entry = jobStatusMap[status] ?? {
-    variant: "neutral" as const,
-    label: status,
-  };
+  const t = useTranslations("ui.statusBadge");
+  const entry = jobStatusMap[status];
   return (
-    <Badge variant={entry.variant} className={className}>
-      {entry.label}
+    <Badge variant={entry?.variant ?? "neutral"} className={className}>
+      {entry ? t(entry.labelKey) : status}
     </Badge>
   );
 }

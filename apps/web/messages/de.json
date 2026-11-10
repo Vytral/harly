@@ -724,7 +724,18 @@
       "mentionCandidate": "Kandidat erwähnen",
       "moreToolStatusesWithIssues": "{label} · {count} weitere ({issues} mit Problemen)",
       "stepLine": "{step}: {title}",
-      "thisCandidate": "diesen Kandidaten"
+      "thisCandidate": "diesen Kandidaten",
+      "currentCandidate": "Aktueller Kandidat",
+      "sections": {
+        "dashboard": "Dashboard",
+        "tasks": "Aufgaben",
+        "calendars": "Interviewkalender",
+        "reports": "Berichte",
+        "inbox": "Posteingang",
+        "jobs": "Stellen",
+        "candidates": "Kandidaten",
+        "workspace": "Aktueller Arbeitsbereich"
+      }
     },
     "uiBlocks": {
       "today": "heute",
@@ -1160,7 +1171,8 @@
     "workspace": "Dein Arbeitsbereich",
     "readyHelp": "Du kannst sofort mit dem Recruiting beginnen. Das ist erledigt und das kannst du als Nächstes tun.",
     "dashboard": "Zum Dashboard",
-    "companyPlaceholder": "Acme Recruiting"
+    "companyPlaceholder": "Acme Recruiting",
+    "defaultWorkspaceName": "Arbeitsbereich von {name}"
   },
   "accessAuthErrors": {
     "invalidEmail": "Gib eine gültige E-Mail-Adresse ein.",
@@ -1352,7 +1364,9 @@
         "advanced": "Schlagwörter verbessern die Suche auf deiner Karriereseite. Ein eigener Slug hält URLs übersichtlich.",
         "review": "Weise ein Recruitingteam zu und prüfe die Anzeige aus Sicht der Bewerbenden."
       },
-      "viewJob": "Job ansehen"
+      "viewJob": "Job ansehen",
+      "sectionRequirements": "Anforderungen",
+      "sectionBenefits": "Leistungen"
     },
     "table": {
       "search": "Jobs suchen…",
@@ -2437,6 +2451,9 @@
     "onboarding": {
       "layout": {
         "workspace": "Arbeitsbereich"
+      },
+      "page": {
+        "fallbackName": "du"
       }
     },
     "portalRoot": {
@@ -2641,6 +2658,9 @@
         "title": "Seite nicht gefunden",
         "description": "Die gesuchte Seite existiert nicht oder wurde verschoben.",
         "backToCareers": "Zurück zu Karriere"
+      },
+      "layout": {
+        "metaDescription": "Quelloffenes Bewerbermanagementsystem für moderne Teams."
       }
     },
     "sign": {
@@ -2726,6 +2746,14 @@
         "privacy": "Datenschutz",
         "contactSender": "Absender kontaktieren",
         "poweredBy": "Unterschreiben mit Harly"
+      },
+      "page": {
+        "metadataTitle": "Prüfen und unterschreiben"
+      }
+    },
+    "legal": {
+      "page": {
+        "metadataTitle": "Rechtliches und Datenschutz · {workspaceName}"
       }
     }
   },
@@ -2881,7 +2909,8 @@
       "insert": "Einfügen"
     },
     "breadcrumb": {
-      "more": "Mehr"
+      "more": "Mehr",
+      "label": "Breadcrumb-Navigation"
     },
     "dialog": {
       "close": "Schließen",
@@ -2917,6 +2946,66 @@
         "success": "Hochgeladen",
         "error": "Fehlgeschlagen"
       }
+    },
+    "oauthFeedback": {
+      "connected": "{provider} erfolgreich verbunden!",
+      "failed": "Verbindung mit {provider} fehlgeschlagen: {error}"
+    },
+    "skeletons": {
+      "content": "Inhalt wird geladen",
+      "loading": "Wird geladen…",
+      "stats": "Statistiken werden geladen",
+      "calendar": "Kalender wird geladen",
+      "pipeline": "Pipeline wird geladen"
+    },
+    "previewFrame": {
+      "frameTitle": "Vorschau: {device}",
+      "devices": {
+        "desktop": "Desktop",
+        "tablet": "Tablet",
+        "mobile": "Mobil"
+      }
+    },
+    "pipelineSpine": {
+      "stageProgress": "Phase: {label} ({position} von {total})",
+      "stageOnly": "Phase: {label}"
+    },
+    "statusBadge": {
+      "draft": "Entwurf",
+      "open": "Offen",
+      "closed": "Geschlossen"
+    },
+    "command": {
+      "title": "Befehlspalette",
+      "description": "Nach einem auszuführenden Befehl suchen..."
+    },
+    "dropZone": {
+      "title": "Datei hierher ziehen oder klicken, um zu suchen",
+      "dropTitle": "Zum Anhängen loslassen"
+    },
+    "formFooter": {
+      "save": "Änderungen speichern",
+      "discard": "Verwerfen",
+      "saving": "Wird gespeichert…"
+    },
+    "infoRow": {
+      "notSpecified": "Nicht angegeben"
+    },
+    "secretField": {
+      "defaultLabel": "Geheimnis",
+      "hiddenLabel": "{label} (verborgen)",
+      "show": "{label} anzeigen",
+      "hide": "{label} ausblenden",
+      "copyLabel": "{label} kopieren",
+      "copy": "Kopieren",
+      "copied": "Kopiert"
+    },
+    "aiButton": {
+      "generating": "Wird erstellt"
+    },
+    "confirmDialog": {
+      "confirm": "Bestätigen",
+      "cancel": "Abbrechen"
     }
   },
   "features": {
@@ -3023,7 +3112,9 @@
         "sessionRevoked": "Sitzung beendet.",
         "sessionRevokeFailed": "Sitzung konnte nicht beendet werden.",
         "otherSessionsRevoked": "Andere Sitzungen beendet.",
-        "accountIdCopied": "Konto-ID kopiert."
+        "accountIdCopied": "Konto-ID kopiert.",
+        "uploadPrepareFailed": "Der Upload konnte nicht vorbereitet werden.",
+        "uploadRetryFailed": "Upload fehlgeschlagen. Versuch es noch einmal."
       }
     },
     "applications": {
@@ -3280,7 +3371,8 @@
         "pauseConfirm": "Alle Automatisierungen pausieren",
         "reasonLabel": "Grund <hint>(wird im Audit-Log gespeichert)</hint>",
         "reasonPlaceholderPause": "z. B. Vorlage korrigieren, bevor weitere E-Mails rausgehen",
-        "reasonPlaceholderResume": "z. B. Vorlage korrigiert"
+        "reasonPlaceholderResume": "z. B. Vorlage korrigiert",
+        "you": "dir"
       },
       "ConflictDialog": {
         "title": "Dieser Entwurf wurde woanders gespeichert",
@@ -3570,7 +3662,17 @@
         "documentPackage": "Dokumentenpaket",
         "eventWait": "Ereigniswartezeit",
         "approval": "Genehmigung",
-        "wait": "Warten"
+        "wait": "Warten",
+        "terminal": {
+          "succeeded": "erfolgreich",
+          "completedWithWarnings": "mit Warnungen abgeschlossen",
+          "stopped": "gestoppt",
+          "failed": "fehlgeschlagen",
+          "uncertain": "unklar",
+          "cancelled": "abgebrochen",
+          "needsFixture": "simulierte Antwort fehlt",
+          "invalid": "ungültig"
+        }
       },
       "triggerPanel": {
         "close": "Schließen",
@@ -3744,7 +3846,8 @@
         "testView": {
           "title": "Workflow-Ausführung simulieren",
           "description": "Führe diesen Workflow-Pfad mit Beispieldaten für Kandidaten aus. Es werden keine Nachrichten oder E-Mails gesendet und keine echten Kandidatendaten geändert."
-        }
+        },
+        "aiSurfaceFallback": "Automatisierungs-Editor"
       },
       "WorkflowEdge": {
         "insertStepTitle": "Schritt einfügen",
@@ -3841,7 +3944,8 @@
           "secretNotShown": "Es wird nicht erneut angezeigt.",
           "urlLabel": "URL",
           "copy": "Kopieren",
-          "hideSecret": "Ich habe es gespeichert. Secret ausblenden."
+          "hideSecret": "Ich habe es gespeichert. Secret ausblenden.",
+          "defaultEndpointName": "Partner-Webhook"
         },
         "action": {
           "action": "Aktion",
@@ -3918,6 +4022,10 @@
           "resource": "Ressource",
           "deadlineHours": "Frist (Stunden)"
         }
+      },
+      "WorkflowNode": {
+        "inputFor": "Eingang für {kind}",
+        "outputFor": "Ausgang von {kind}: {port}"
       }
     },
     "candidates": {
@@ -4067,7 +4175,13 @@
         "similarNames": "{count, plural, one {# Kandidat:in mit ähnlichem Namen existiert in deinem Arbeitsbereich.} other {# Kandidat:innen mit ähnlichen Namen existieren in deinem Arbeitsbereich.}}",
         "verifyWithAi": "Mit KI prüfen",
         "checking": "Wird geprüft",
-        "viewCandidate": "{name} anzeigen"
+        "viewCandidate": "{name} anzeigen",
+        "sharedIdentity": "Gemeinsame Identität: {signals}.",
+        "signals": {
+          "email": "dieselbe E-Mail-Adresse",
+          "phone": "dieselbe Telefonnummer",
+          "linkedin": "dasselbe LinkedIn-Profil"
+        }
       },
       "DurationInput": {
         "label": "Dauer",
@@ -4496,7 +4610,17 @@
         "skippedSummary": "{count} unvollständige {source}-{count, plural, one {Profil wurde} other {Profile wurden}} übersprungen.",
         "skippedRows": "{count, plural, one {# Zeile} other {# Zeilen}} übersprungen:",
         "rowError": "Zeile {row}: {reason}",
-        "rowErrorWithEmail": "Zeile {row} ({email}): {reason}"
+        "rowErrorWithEmail": "Zeile {row} ({email}): {reason}",
+        "fileErrors": {
+          "needsHeaderAndRow": "Die Datei braucht eine Kopfzeile und mindestens einen Kandidaten.",
+          "noCandidateRows": "Die Datei enthält keine Kandidatenzeilen.",
+          "duplicateHeader": "Die Spalte \"{header}\" kommt mehrfach vor. Benenne doppelte Spalten um und versuche es erneut."
+        },
+        "mappingErrors": {
+          "duplicateColumn": "Jede Quellspalte kann nur einmal zugeordnet werden.",
+          "nameRequired": "Ordne {fullName} zu oder beide Felder {firstName} und {lastName}.",
+          "emailRequired": "Ordne die Spalte {email} zu."
+        }
       },
       "candidateReferrals": {
         "updateError": "Empfehlung konnte nicht aktualisiert werden.",
@@ -4578,7 +4702,9 @@
         "movedToTrash": "{name} in den Papierkorb verschoben.",
         "removedFromPool": "{name} aus dem Talentpool entfernt.",
         "addedToPool": "{name} zum Talentpool hinzugefügt.",
-        "bulkMovedToTrash": "{count, plural, one {# Kandidat} other {# Kandidaten}} in den Papierkorb verschoben."
+        "bulkMovedToTrash": "{count, plural, one {# Kandidat} other {# Kandidaten}} in den Papierkorb verschoben.",
+        "nounSingular": "Kandidat",
+        "nounPlural": "Kandidaten"
       },
       "scorecardList": {
         "rating": {
@@ -4910,7 +5036,8 @@
         "ctaWebsiteWithUrl": "Der Button verlinkt auf deine Unternehmenswebsite ({url}).",
         "ctaWebsite": "Der Button verlinkt auf deine Unternehmenswebsite.",
         "colour": "Farbe",
-        "colourHint": "Leer lassen, um deine Akzentfarbe zu verwenden."
+        "colourHint": "Leer lassen, um deine Akzentfarbe zu verwenden.",
+        "processDefaultTitle": "So stellen wir ein"
       },
       "templatePanel": {
         "title": "Vorlage",
@@ -5060,6 +5187,9 @@
         "all": "Alle",
         "notSpecified": "Nicht angegeben",
         "noMatches": "Keine offenen Stellen passen zu diesen Filtern."
+      },
+      "careerGallery": {
+        "label": "Fotogalerie"
       }
     },
     "dashboard": {
@@ -5100,6 +5230,9 @@
         "preview": "Vorschau der Harly-Demo-Sandbox",
         "expires": "läuft um {time} UTC ab",
         "backToBuilder": "Zurück zum Builder"
+      },
+      "demoLockedNotice": {
+        "default": "In der Demo deaktiviert: Diese Aktion würde die Kontosicherheit ändern oder Daten außerhalb deiner Sandbox senden."
       }
     },
     "developers": {
@@ -5794,7 +5927,8 @@
         "changeSignature": "Unterschrift ändern",
         "addSignature": "Unterschrift hinzufügen",
         "tapToSign": "Zum Unterschreiben tippen",
-        "loadingPdf": "PDF wird geladen…"
+        "loadingPdf": "PDF wird geladen…",
+        "loadError": "Die PDF-Datei konnte nicht geladen werden."
       },
       "pdfSignaturePlacer": {
         "kinds": {
@@ -5824,7 +5958,8 @@
         "actionsFor": "Aktionen für Feld {index}",
         "keyboardHelp": "Mit den Pfeiltasten verschiebst du das Feld, mit Umschalt weiter, mit Alt skalierst du es, mit Entf entfernst du es.",
         "loadingLabel": "PDF wird geladen",
-        "dragHelp": "Zieh ein Feld, um es zu verschieben, oder markiere es und nutze die Pfeiltasten (Umschalt für größere Schritte, Alt zum Skalieren). Halte ein gezogenes Feld nahe dem oberen oder unteren Rand, um zu scrollen."
+        "dragHelp": "Zieh ein Feld, um es zu verschieben, oder markiere es und nutze die Pfeiltasten (Umschalt für größere Schritte, Alt zum Skalieren). Halte ein gezogenes Feld nahe dem oberen oder unteren Rand, um zu scrollen.",
+        "loadError": "Die PDF-Datei konnte nicht geladen werden."
       },
       "signaturePad": {
         "tabs": {
@@ -5959,6 +6094,11 @@
         "rotatedPages": "Dieses PDF hat gedrehte Seiten. Exportiere es ohne Drehung erneut, bevor du es sendest.",
         "missingSignatures": "Es fehlt ein Pflicht-Unterschriftsfeld für: {signers}.",
         "missingSignature": "Füge mindestens ein Pflicht-Unterschriftsfeld hinzu."
+      },
+      "documentFieldPlacementDialog": {
+        "submitLabel": "Signierlink senden",
+        "sendFallbackError": "Das Dokument konnte nicht gesendet werden.",
+        "sent": "Signierlink gesendet"
       }
     },
     "emailOutbox": {
@@ -6051,23 +6191,28 @@
         "starters": {
           "interviewInvitation": {
             "name": "Einladung zum Vorstellungsgespräch",
-            "subject": "Einladung zum Vorstellungsgespräch für '{{job_title}}' bei '{{company_name}}'"
+            "subject": "Einladung zum Vorstellungsgespräch für '{{job_title}}' bei '{{company_name}}'",
+            "body": "Hallo '{{candidate_first_name}}',\n\nwir würden dich gern zu einem Vorstellungsgespräch für die Stelle '{{job_title}}' bei '{{company_name}}' einladen.\n\nDatum: '{{interview_date}}'\nUhrzeit: '{{interview_time}}'\nOrt: '{{interview_location}}'\n\nSag uns bitte Bescheid, ob dir dieser Termin passt.\n\nViele Grüße\n'{{sender_name}}'"
           },
           "applicationRejection": {
             "name": "Absage",
-            "subject": "Deine Bewerbung für '{{job_title}}'"
+            "subject": "Deine Bewerbung für '{{job_title}}'",
+            "body": "Hallo '{{candidate_first_name}}',\n\nvielen Dank für dein Interesse an der Stelle '{{job_title}}' bei '{{company_name}}' und dafür, dass du dir die Zeit für deine Bewerbung genommen hast.\n\nNach sorgfältiger Abwägung haben wir uns für andere Bewerberinnen und Bewerber entschieden, deren Erfahrung besser zu unseren aktuellen Anforderungen passt.\n\nWir behalten dein Profil im Blick und ermutigen dich, dich auf künftige Stellen zu bewerben, die besser zu dir passen könnten.\n\nAlles Gute für dich!\n'{{sender_name}}'"
           },
           "offerExtended": {
             "name": "Angebot",
-            "subject": "Angebotsschreiben für '{{job_title}}' bei '{{company_name}}'"
+            "subject": "Angebotsschreiben für '{{job_title}}' bei '{{company_name}}'",
+            "body": "Hallo '{{candidate_first_name}}',\n\nwir freuen uns sehr, dir die Stelle '{{job_title}}' bei '{{company_name}}' anzubieten.\n\nVergütung: '{{offer_salary}}'\nAngebot gültig bis: '{{offer_expiry}}'\n\nBitte sieh dir das beigefügte Angebotsschreiben an und melde dich, wenn du Fragen hast.\n\nWir freuen uns darauf, dich im Team zu haben.\n'{{sender_name}}'"
           },
           "screeningCall": {
             "name": "Screening-Gespräch",
-            "subject": "Kurzes Kennenlerngespräch zu '{{job_title}}'"
+            "subject": "Kurzes Kennenlerngespräch zu '{{job_title}}'",
+            "body": "Hallo '{{candidate_first_name}}',\n\nwir haben deine Bewerbung für '{{job_title}}' bei '{{company_name}}' angesehen und sind von deinem Werdegang beeindruckt.\n\nWir würden uns freuen, ein kurzes 30-minütiges Gespräch zu vereinbaren, um dich besser kennenzulernen und dir mehr über die Stelle zu erzählen.\n\nWir freuen uns auf den Austausch.\n'{{sender_name}}'"
           },
           "stageUpdate": {
             "name": "Statusupdate",
-            "subject": "Du wechselst zu '{{stage_name}}', '{{job_title}}'"
+            "subject": "Du wechselst zu '{{stage_name}}', '{{job_title}}'",
+            "body": "Hallo '{{candidate_first_name}}',\n\ngute Nachrichten: Deine Bewerbung für '{{job_title}}' bei '{{company_name}}' ist in die Phase '{{stage_name}}' übergegangen.\n\nJemand aus dem Team meldet sich in Kürze mit den nächsten Schritten.\n\nViele Grüße\n'{{sender_name}}'"
           }
         },
         "searchLabel": "Vorlagen suchen",
@@ -6614,7 +6759,14 @@
         "expires": "Läuft ab am <date></date>",
         "someone": "Jemand",
         "createdBy": "{name} · <time></time>",
-        "decidedBy": "{name} · <time></time> · entschieden <decidedTime></decidedTime>"
+        "decidedBy": "{name} · <time></time> · entschieden <decidedTime></decidedTime>",
+        "statusLabel": {
+          "draft": "Entwurf",
+          "sent": "Gesendet",
+          "accepted": "Angenommen",
+          "declined": "Abgelehnt",
+          "withdrawn": "Zurückgezogen"
+        }
       },
       "offerFieldPlacementDialog": {
         "signerLabel": "Kandidat",
@@ -6920,7 +7072,10 @@
           "added": "Hinzugefügt",
           "actions": "Aktionen"
         },
-        "remove": "Entfernen"
+        "remove": "Entfernen",
+        "nounSingular": "Kandidat",
+        "nounPlural": "Kandidaten",
+        "bulkCandidates": "{count, plural, one {# Kandidat} other {# Kandidaten}}"
       }
     },
     "portal": {
@@ -7124,7 +7279,9 @@
         "addPasskey": "Passkey hinzufügen",
         "passkeyCancelled": "Die Einrichtung des Passkeys wurde abgebrochen.",
         "passkeyAddFailed": "Dieser Passkey konnte nicht hinzugefügt werden. Versuche es erneut.",
-        "passkeyRemoveFailed": "Der Passkey konnte nicht entfernt werden."
+        "passkeyRemoveFailed": "Der Passkey konnte nicht entfernt werden.",
+        "thisDevice": "Dieses Gerät",
+        "defaultPasskeyName": "Passkey: {device}"
       },
       "portalFormUi": {
         "saveRecoveryCodes": "Speichere deine Wiederherstellungscodes",
@@ -7133,6 +7290,9 @@
         "copy": "Kopieren",
         "download": "Herunterladen",
         "savedCodes": "Ich habe diese Codes gespeichert"
+      },
+      "PortalShellServer": {
+        "orgFallback": "Karriere"
       }
     },
     "publicJob": {
@@ -7172,7 +7332,8 @@
         "rejectFallback": "Ablehnung fehlgeschlagen.",
         "rejecting": "Wird abgelehnt…",
         "description": "Die Person verlässt die aktive Pipeline. Du kannst sie später wieder aktivieren.",
-        "cancel": "Abbrechen"
+        "cancel": "Abbrechen",
+        "successWithWarning": "{message} {warning}"
       },
       "rejectionReasonTag": {
         "rejectedWithReason": "Abgelehnt · {reason}",
@@ -9182,6 +9343,11 @@
         "partialCredentials": "Gib sowohl Client ID als auch Client Secret ein, um die gespeicherten Zugangsdaten zu ersetzen.",
         "connectZoom": "Zoom verbinden"
       }
+    },
+    "search": {
+      "useWorkspaceSearch": {
+        "timeout": "Die Suche hat zu lange gedauert. Versuch es noch einmal."
+      }
     }
   },
   "labels": {
@@ -9413,6 +9579,9 @@
             "blurb": "Eine Nachricht in deinen Slack- oder Discord-Kanal posten.",
             "fields": {
               "message": "Nachricht"
+            },
+            "placeholders": {
+              "message": "Neue Bewerbung eingegangen für '{{job_title}}'"
             }
           },
           "sendEmail": {
@@ -9439,7 +9608,9 @@
               "body": "Nachricht"
             },
             "placeholders": {
-              "toEmail": "Leer lassen für den Kandidaten"
+              "toEmail": "Leer lassen für den Kandidaten",
+              "subject": "Wähle einen Termin für ein Gespräch mit '{{company_name}}'",
+              "body": "Wähle einen Termin, der dir passt: '{{booking_link}}'"
             }
           },
           "requestDocuments": {
@@ -9460,7 +9631,8 @@
               "attachments": "PDF-Anhänge"
             },
             "placeholders": {
-              "title": "Vertraulichkeitsvereinbarung"
+              "title": "Vertraulichkeitsvereinbarung",
+              "body": "Hallo '{{candidate_full_name}}',\n\ndieses Dokument betrifft die Stelle '{{job_title}}' bei '{{company_name}}'."
             }
           },
           "sendDocumentForSignature": {
@@ -9555,6 +9727,9 @@
             "blurb": "Eine Nachricht im konfigurierten Telegram-Chat posten.",
             "fields": {
               "message": "Nachricht"
+            },
+            "placeholders": {
+              "message": "Neuer Kandidat eingegangen: '{{candidate_name}}'"
             }
           },
           "sendDiscord": {
@@ -9562,6 +9737,9 @@
             "blurb": "Eine Nachricht im konfigurierten Discord-Kanal posten.",
             "fields": {
               "message": "Nachricht"
+            },
+            "placeholders": {
+              "message": "Neuer Kandidat eingegangen: '{{candidate_name}}'"
             }
           },
           "sendInAppAlert": {
@@ -9799,7 +9977,9 @@
         "offline": "Offline",
         "conflict": "Konflikt",
         "error": "Fehler beim Speichern",
-        "interrupted": "Das Speichern wurde unterbrochen. Der Server wird vor einem neuen Versuch geprüft."
+        "interrupted": "Das Speichern wurde unterbrochen. Der Server wird vor einem neuen Versuch geprüft.",
+        "retry": "Speichern erneut versuchen",
+        "saveDraft": "Entwurf speichern"
       },
       "library": {
         "groups": {
@@ -9872,6 +10052,79 @@
           "tagNewCandidate": {
             "name": "Neue Kandidaten nach Quelle taggen",
             "description": "Wird ein Kandidat angelegt, versieh ihn mit seiner Quelle, damit du später danach filtern kannst."
+          }
+        }
+      },
+      "graphValidation": {
+        "graphNotSerializable": "Der Graph muss als serialisierbares JSON vorliegen.",
+        "graphTooLarge": "Der Graph überschreitet das Limit von 1 MiB.",
+        "maxNodes": "Ein Workflow darf höchstens {max} Schritte haben.",
+        "maxEdges": "Ein Workflow darf höchstens {max} Verbindungen haben.",
+        "duplicateStepId": "Die Schritt-ID ist doppelt vergeben.",
+        "conditionTooManyClauses": "Diese Bedingung hat zu viele Klauseln.",
+        "conditionTooDeep": "Diese Bedingung ist zu tief verschachtelt.",
+        "exactlyOneTrigger": "Ein Workflow braucht genau einen Auslöser.",
+        "entryMissing": "Der Startschritt existiert nicht.",
+        "entryNotTrigger": "Der Startschritt muss der Auslöser sein.",
+        "selfConnection": "Ein Schritt kann nicht mit sich selbst verbunden werden.",
+        "outputAlreadyConnected": "Dieser Ausgang ist bereits verbunden.",
+        "connectionSourceMissing": "Der Verbindungsursprung fehlt.",
+        "connectionTargetMissing": "Das Verbindungsziel fehlt.",
+        "connectBackToTrigger": "Auf den Auslöser kann nichts zurückverweisen.",
+        "portInvalid": "Der Ausgang „{port}“ ist bei diesem Schritt nicht gültig.",
+        "portRequired": "Verbinde den Ausgang „{port}“.",
+        "cycle": "Zyklen sind nicht erlaubt.",
+        "unreachable": "Dieser Schritt ist vom Auslöser aus nicht erreichbar.",
+        "mustEndWithEnd": "Jeder Pfad muss in einem expliziten Ende-Schritt enden.",
+        "durationRequired": "Lege fest, wie lange dieser Schritt warten soll.",
+        "localTimeInvalid": "Lege eine gültige Ortszeit im Format HH:MM fest.",
+        "timeZoneRequired": "Wähle die Zeitzone, die für diese Verzögerung gilt.",
+        "timeZoneInvalid": "Wähle eine gültige IANA-Zeitzone, zum Beispiel America/Santiago.",
+        "eventRequired": "Wähle das Ereignis, mit dem dieser Schritt fortgesetzt werden soll.",
+        "eventUnsupported": "Wähle ein Ereignis, das der Workflow-Dispatcher unterstützt.",
+        "resourceRequired": "Wähle die Bewerbung oder das Dokument, das überwacht werden soll.",
+        "approverRequired": "Wähle mindestens eine Person, die genehmigen darf.",
+        "bindingMissingStep": "Diese Bindung verweist auf einen fehlenden Schritt.",
+        "bindingNotGuaranteed": "Dieser Wert stammt aus einem Zweig, der nicht sicher ausgeführt wird.",
+        "triggerActionMismatch": "Dieser Auslöser garantiert nicht die {requirements}, die {action} benötigt. Wähle einen passenden Auslöser oder verknüpfe die fehlende Datensatz-ID.",
+        "nameRequired": "Benenne dieses Rezept, bevor du es veröffentlichst.",
+        "actionRequired": "Füge vor dem Veröffentlichen mindestens eine Aktion hinzu.",
+        "toolUnavailable": "Das Tool {action} in Version {version} kann nicht ausgeführt werden.",
+        "eraseApprovalRequired": "Das Löschen von Kandidatendaten braucht auf jedem Pfad zu dieser Aktion einen Genehmigungsschritt, oder executionMode muss auf automatic stehen, wenn die Datenaufbewahrung des Arbeitsbereichs aktiv ist.",
+        "eraseAutomaticLiteral": "Die automatische Löschung braucht executionMode mit dem Wert automatic.",
+        "actionUnavailable": "{action} ist zum Ausführen nicht verfügbar.",
+        "actionIssue": "Aktion {index}: {message}",
+        "graphInvalid": "Der Workflow-Graph ist ungültig: {detail}"
+      },
+      "lifecycle": {
+        "stages": {
+          "suggested": {
+            "label": "Vorgeschlagen",
+            "description": "Es gibt einen KI-Vorschlag, der aber noch nicht nutzbar ist."
+          },
+          "validated": {
+            "label": "Validiert",
+            "description": "Der Graph besteht die Prüfung. Es gibt noch keine Simulation."
+          },
+          "simulated": {
+            "label": "Simuliert",
+            "description": "Die Zweigabdeckung mit Testdaten ist für den aktuellen Graphen bestanden. Anbieter wurden nicht aufgerufen."
+          },
+          "queued": {
+            "label": "In Warteschlange",
+            "description": "Angenommen und ausstehend. Anwendung, Veröffentlichung, Auftrag oder Lauf läuft gerade."
+          },
+          "executed": {
+            "label": "Ausgeführt",
+            "description": "Der Lauf hat einen Endzustand erreicht. Das Ergebnis steht im Laufstatus."
+          },
+          "delivered": {
+            "label": "Zugestellt",
+            "description": "Mindestens eine externe Wirkung ist mit Nachweis des Anbieters abgeschlossen."
+          },
+          "uncertain": {
+            "label": "Unsicher",
+            "description": "Eine manuelle Prüfung ist nötig. Wirkungen sind nicht bestätigt oder die Prüfung ist fehlgeschlagen."
           }
         }
       }
@@ -10036,6 +10289,19 @@
         "documentActivity": "Dokumentaktivität",
         "labelWithDetail": "{label}, {detail}",
         "anonymized": "Kandidatendaten anonymisiert (Aufbewahrungsrichtlinie)"
+      },
+      "origin": {
+        "review": "Prüf-Warteschlange",
+        "pipeline": "Pipeline",
+        "candidates": "Kandidaten",
+        "filteredCandidates": "Gefilterte Kandidaten",
+        "backToReview": "Zurück zur Prüf-Warteschlange",
+        "backToPipeline": "Zurück zur Pipeline",
+        "backToCandidates": "Zurück zu den Kandidaten"
+      },
+      "queue": {
+        "next": "{action} · Als Nächstes: {name}",
+        "cleared": "{action} · Warteschlange leer"
       }
     },
     "portal": {
@@ -10227,6 +10493,14 @@
         "rejectDescription": "{count, plural, one {Die ausgewählte Bewerbung wird} other {Alle # ausgewählten Bewerbungen werden}} als abgelehnt markiert. Kandidaten werden je nach deinen Phasen-E-Mails möglicherweise benachrichtigt.",
         "hireConfirm": "{count, plural, one {# Bewerbung einstellen} other {# Bewerbungen einstellen}}",
         "rejectConfirm": "{count, plural, one {# Bewerbung ablehnen} other {# Bewerbungen ablehnen}}"
+      },
+      "stages": {
+        "applied": "Eingegangen",
+        "screening": "Vorauswahl",
+        "interview": "Gespräch",
+        "offer": "Angebot",
+        "hired": "Eingestellt",
+        "rejected": "Abgelehnt"
       }
     },
     "reports": {
@@ -10316,6 +10590,10 @@
         "applicationFor": "Bewerbung für {job}",
         "documentFallback": "Dokument zur Unterschrift",
         "signingCode": "Einmaliger Unterschriftscode"
+      },
+      "salaryPeriod": {
+        "annual": "/ Jahr",
+        "monthly": "/ Monat"
       }
     },
     "emailTemplates": {
@@ -10345,6 +10623,16 @@
         "interview": "Gespräch",
         "offer": "Angebot",
         "workspace": "Arbeitsbereich"
+      },
+      "samples": {
+        "jobTitle": "Senior Frontend-Entwickler/in",
+        "stageName": "Technisches Interview",
+        "interviewDate": "Dienstag, 8. Juli",
+        "interviewTime": "10:00 AM PST",
+        "interviewLocation": "Videoanruf",
+        "offerSalary": "140.000 $ / Jahr",
+        "offerExpiry": "12. Juli 2026",
+        "senderName": "Dein Name"
       }
     },
     "emailDelivery": {
@@ -10512,6 +10800,246 @@
         "registerPasskey": "Richte einen Passkey ein, bevor du die Sicherheitseinstellungen für Unternehmen änderst.",
         "failed": "Die erneute Anmeldung ist fehlgeschlagen."
       }
+    },
+    "notifications": {
+      "noteMentioned": {
+        "title": "{actor} hat dich in {candidate} erwähnt"
+      },
+      "taskAssigned": {
+        "title": "Neue Aufgabe: {title}",
+        "body": "{actor} hat dir eine Aufgabe zugewiesen."
+      },
+      "taskReassigned": {
+        "title": "Aufgabe dir neu zugewiesen",
+        "body": "{actor} hat dir eine Aufgabe zugewiesen."
+      },
+      "candidateReplied": {
+        "title": "{candidateName} hat geantwortet"
+      },
+      "candidateApplied": {
+        "title": "{candidateName} hat sich beworben"
+      },
+      "candidateHired": {
+        "title": "{candidateName} wurde eingestellt"
+      },
+      "candidateRejected": {
+        "title": "{candidateName} wurde abgelehnt"
+      },
+      "candidateMovedStageForJob": {
+        "title": "{candidateName} ist in eine neue Phase gewechselt, {jobTitle}"
+      },
+      "candidateMovedStage": {
+        "title": "{candidateName} ist in eine neue Phase gewechselt"
+      },
+      "candidateAdded": {
+        "title": "{candidateName} als Kandidat angelegt"
+      },
+      "interviewScheduledWith": {
+        "title": "Vorstellungsgespräch mit {candidateName}"
+      },
+      "interviewCanceledWith": {
+        "title": "Vorstellungsgespräch mit {candidateName} abgesagt"
+      },
+      "interviewCompletedWith": {
+        "title": "Vorstellungsgespräch mit {candidateName} abgeschlossen"
+      },
+      "interviewRescheduledWith": {
+        "title": "Vorstellungsgespräch mit {candidateName} verschoben"
+      },
+      "jobPublishedNamed": {
+        "title": "{jobTitle} veröffentlicht"
+      },
+      "candidateRepliedNoSubject": {
+        "title": "{candidateName} hat geantwortet",
+        "body": "Neue Antwort des Kandidaten"
+      },
+      "documentExpired": {
+        "title": "Dokument abgelaufen",
+        "body": "„{documentName}“ hat das Ablaufdatum überschritten und muss geprüft werden."
+      },
+      "documentSubmitted": {
+        "title": "Dokument eingereicht",
+        "body": "{candidateName} hat „{documentTitle}“ zur Prüfung hochgeladen."
+      },
+      "possibleDuplicateCandidate": {
+        "title": "Mögliches doppeltes Profil",
+        "body": "Harly AI hat eine mögliche Übereinstimmung mit {names} gefunden."
+      },
+      "jobApprovalRequested": {
+        "title": "Freigabe angefordert: {jobTitle}",
+        "body": "Prüfe diese Stelle, bevor die Besetzung beginnt."
+      },
+      "jobApprovalApproved": {
+        "title": "Stelle freigegeben: {jobId}"
+      },
+      "jobApprovalRejected": {
+        "title": "Stelle abgelehnt: {jobId}"
+      },
+      "offerAccepted": {
+        "title": "Angebot angenommen, {offerTitle}"
+      },
+      "offerDeclined": {
+        "title": "Angebot abgelehnt, {offerTitle}"
+      },
+      "signatureDeclined": {
+        "title": "Unterschrift abgelehnt",
+        "body": "{name} hat die Unterschrift für „{documentName}“ abgelehnt."
+      },
+      "signatureDeclinedWithReason": {
+        "title": "Unterschrift abgelehnt",
+        "body": "{name} hat die Unterschrift für „{documentName}“ abgelehnt. Grund: {reason}"
+      },
+      "eventApplicationCreated": {
+        "title": "Bewerbung eingegangen"
+      },
+      "eventApplicationStageChanged": {
+        "title": "Bewerbung in andere Phase verschoben"
+      },
+      "eventApplicationStatusChanged": {
+        "title": "Bewerbungsstatus geändert"
+      },
+      "eventApplicationHired": {
+        "title": "Kandidat eingestellt"
+      },
+      "eventApplicationRejected": {
+        "title": "Bewerbung abgelehnt"
+      },
+      "eventCandidateCreated": {
+        "title": "Kandidat angelegt"
+      },
+      "eventCandidateUpdated": {
+        "title": "Kandidat aktualisiert"
+      },
+      "eventCandidateReferred": {
+        "title": "Kandidat empfohlen"
+      },
+      "eventCandidateReferralDeleted": {
+        "title": "Kandidatenempfehlung gelöscht"
+      },
+      "eventInterviewScheduled": {
+        "title": "Vorstellungsgespräch geplant"
+      },
+      "eventInterviewCanceled": {
+        "title": "Vorstellungsgespräch abgesagt"
+      },
+      "eventInterviewCompleted": {
+        "title": "Vorstellungsgespräch abgeschlossen"
+      },
+      "eventInterviewRescheduled": {
+        "title": "Vorstellungsgespräch verschoben"
+      },
+      "eventTaskCreated": {
+        "title": "Aufgabe erstellt"
+      },
+      "eventTaskUpdated": {
+        "title": "Aufgabe aktualisiert"
+      },
+      "eventTaskCompleted": {
+        "title": "Aufgabe abgeschlossen"
+      },
+      "eventTaskDeleted": {
+        "title": "Aufgabe gelöscht"
+      },
+      "eventDocumentSignatureSent": {
+        "title": "Dokument zur Unterschrift gesendet"
+      },
+      "eventDocumentSignatureChanged": {
+        "title": "Status der Unterschrift geändert"
+      },
+      "eventDocumentSignatureVoided": {
+        "title": "Unterschrift annulliert"
+      },
+      "eventJobPublished": {
+        "title": "Stelle veröffentlicht"
+      },
+      "eventJobUpdated": {
+        "title": "Stelle aktualisiert"
+      },
+      "eventJobClosed": {
+        "title": "Stelle geschlossen"
+      },
+      "eventMailReceived": {
+        "title": "E-Mail empfangen"
+      },
+      "eventEvaluationCompleted": {
+        "title": "KI-Bewertung abgeschlossen"
+      },
+      "eventWebhookReceived": {
+        "title": "Eingehender Webhook empfangen"
+      },
+      "documentRequested": {
+        "title": "{count, plural, one {Ein Dokument wurde angefordert} other {# Dokumente wurden angefordert}}",
+        "body": "{count, plural, one {Bitte lade Folgendes hoch: {title}.} other {Du musst {count} Dokumente für deine Bewerbung hochladen.}}"
+      },
+      "documentRequestExpired": {
+        "title": "Dokumentanfrage abgelaufen",
+        "body": "Eine Dokumentanfrage hat ihre Frist überschritten. Wende dich an das Recruiting-Team, wenn du mehr Zeit brauchst."
+      },
+      "documentAccepted": {
+        "title": "Dokument akzeptiert",
+        "body": "Dein Upload für „{title}“ wurde akzeptiert."
+      },
+      "documentDeclined": {
+        "title": "Dokument muss erneut hochgeladen werden",
+        "body": "Dein Upload für „{title}“ wurde abgelehnt. Bitte lade es erneut hoch."
+      }
+    },
+    "onboarding": {
+      "checklist": {
+        "createJob": {
+          "title": "Erstelle deine erste Stelle",
+          "value": "Beschreibe die Stelle einmal und teile sie dann über deine Karriereseite."
+        },
+        "publishJob": {
+          "title": "Veröffentliche sie",
+          "value": "Eine veröffentlichte Stelle erscheint auf deiner Karriereseite und nimmt Bewerbungen an."
+        },
+        "pipelineCandidates": {
+          "title": "Bring Kandidat:innen in die Pipeline",
+          "value": "Lade Beispieldaten zum Ausprobieren, teile deinen Stellenlink oder importiere eine CSV-Datei."
+        },
+        "inviteTeammate": {
+          "title": "Lade einen Kollegen ein",
+          "value": "Mit einem zweiten Blick auf jede Bewerbung geht die Einstellung schneller."
+        },
+        "connectEmail": {
+          "title": "E-Mail verbinden",
+          "value": "Sende und verfolge Kandidatenmails aus einem einzigen Postfach."
+        },
+        "connectCalendar": {
+          "title": "Kalender verbinden",
+          "value": "Lass Kandidat:innen Gespräche buchen, ohne hin und her zu schreiben."
+        },
+        "connectAi": {
+          "title": "KI verbinden (optional)",
+          "value": "Bring deinen eigenen Anbieter mit, um Kandidat:innen zu sichten und Nachrichten zu entwerfen. Harly funktioniert auch ohne ihn vollständig."
+        },
+        "automateWorkflow": {
+          "title": "Einen Workflow automatisieren",
+          "value": "Starte mit einem von zehn Rezepten für Tags, Benachrichtigungen und Phasenwechsel."
+        },
+        "open": "Öffnen",
+        "start": "Starten"
+      }
+    },
+    "updates": {
+      "status": {
+        "pending": "Warte auf den Updater",
+        "claimed": "Wird gestartet",
+        "running": "Wird aktualisiert",
+        "succeeded": "Aktualisiert",
+        "failed": "Fehlgeschlagen",
+        "rolled_back": "Zurückgesetzt",
+        "cancelled": "Abgebrochen"
+      }
+    },
+    "storageValidation": {
+      "resumeType": "Lade einen Lebenslauf als PDF, DOC oder DOCX hoch.",
+      "resumeTooLarge": "Der Lebenslauf darf höchstens 10 MB groß sein.",
+      "resumeRequired": "Ein Lebenslauf ist erforderlich.",
+      "imageType": "Lade ein Bild als PNG, JPG, SVG oder WEBP hoch.",
+      "imageTooLarge": "Das Bild darf höchstens 5 MB groß sein.",
+      "imageRequired": "Ein Bild ist erforderlich."
     }
   },
   "server": {
@@ -10646,7 +11174,35 @@
         "saveBeforeWebhookTest": "Speichere den Workflow und wähle seinen eingehenden Endpunkt, bevor du einen Webhook-Auslöser testest.",
         "endpointNotOwned": "Der ausgewählte Webhook-Endpunkt gehört nicht zu diesem Workflow.",
         "endpointSchemaInvalid": "Der ausgewählte Endpunkt hat ein ungültiges Payload-Schema.",
-        "dryRunFailed": "Der Testlauf ist fehlgeschlagen."
+        "dryRunFailed": "Der Testlauf ist fehlgeschlagen.",
+        "webhookSchemaMismatch": "Die Webhook-Nutzlast entspricht nicht dem Schema des Endpunkts: {issues}",
+        "toolVersionUnavailable": "Tool-Version {version} für {action} steht zur Ausführung nicht zur Verfügung.",
+        "fixtureNodeNotRunnable": "Eine simulierte Antwort verweist auf einen Schritt, der kein Anbieterergebnis erhalten kann: {node}.",
+        "fixturePortInvalid": "Die simulierte Antwort für {node} verwendet einen ungültigen Ausgangsport: {port}."
+      },
+      "resourceResolution": {
+        "calConnectRequired": "Verbinde Cal.com, bevor du einen Termintyp auswählst.",
+        "calConnectionInvalid": "Die Cal.com-Verbindung ist ungültig. Verbinde Cal.com neu, bevor du einen Termintyp auswählst.",
+        "calEventTypesUnavailable": "Die Termintypen von Cal.com sind nicht verfügbar.",
+        "calEventTypesUnavailableDetail": "Die Termintypen von Cal.com sind nicht verfügbar: {detail}",
+        "integrationNames": {
+          "email": "E-Mail-Versand",
+          "meetingProvider": "Meeting-Anbieter"
+        },
+        "integrationDescriptions": {
+          "slack": "Benachrichtigungen für das Team",
+          "telegram": "Telegram-Bot-Benachrichtigungen",
+          "discord": "Discord-Webhook-Benachrichtigungen",
+          "cal": "Buchungslinks für Kandidaten",
+          "gcal": "Kalender- und Videosynchronisierung",
+          "outlook": "Synchronisierung von Kalender, E-Mail und Video",
+          "zoom": "Videomeetings",
+          "jitsi": "Selbst gehostete Videomeetings",
+          "docuseal": "Anbieter für E-Signaturen",
+          "harlySign": "Native E-Signaturen in der App",
+          "email": "Dauerhafte Warteschlange für E-Mails an Kandidaten",
+          "meetingProvider": "Mindestens ein verbundener Anbieter für Interview-Terminplanung oder Video"
+        }
       }
     },
     "workspaces": {
@@ -11234,7 +11790,9 @@
         "maxRowsPerImport": "Du kannst höchstens 500 Zeilen auf einmal importieren.",
         "invalidImportData": "Ungültige Importdaten.",
         "invalidReferral": "Ungültige Empfehlung.",
-        "invalidRow": "Ungültige Zeile."
+        "invalidRow": "Ungültige Zeile.",
+        "chooseRejectionReason": "Wähle einen Ablehnungsgrund.",
+        "duplicateApplications": "Jede Bewerbung darf nur einmal aufgeführt werden."
       },
       "ai": {
         "invalidApplication": "Ungültige Bewerbung.",
@@ -11288,6 +11846,49 @@
         "referralNotFound": "Empfehlung nicht gefunden.",
         "unableToUpdateReferral": "Empfehlung konnte nicht aktualisiert werden.",
         "unableToDeleteReferral": "Empfehlung konnte nicht gelöscht werden."
+      },
+      "importProviders": {
+        "greenhouse": {
+          "unsafePagination": "Greenhouse hat einen unsicheren Seitenlink zurückgegeben.",
+          "unauthorized": "Greenhouse hat den API-Schlüssel abgelehnt, oder die Berechtigung für Candidates fehlt.",
+          "requestFailed": "Die Anfrage an Greenhouse ist fehlgeschlagen.",
+          "invalidKey": "Gib einen gültigen Greenhouse-Harvest-API-Schlüssel ein.",
+          "invalidResponse": "Greenhouse hat eine ungültige Antwort mit Kandidaten geliefert.",
+          "listFailed": "Greenhouse konnte die Kandidaten nicht auflisten (HTTP {status})."
+        },
+        "lever": {
+          "unauthorized": "Lever hat den API-Schlüssel abgelehnt, oder ihm fehlt der Lesezugriff auf Opportunities.",
+          "requestFailed": "Die Anfrage an Lever ist fehlgeschlagen.",
+          "invalidKey": "Gib einen gültigen Lever-API-Schlüssel ein.",
+          "invalidResponse": "Lever hat eine ungültige Antwort zu Opportunities geliefert.",
+          "missingCursor": "Lever hat eine Seite ohne den nächsten Offset geliefert.",
+          "httpFailed": "Die Anfrage an Lever ist fehlgeschlagen (HTTP {status})."
+        },
+        "ashby": {
+          "unauthorized": "Ashby hat den API-Schlüssel abgelehnt, oder die Berechtigung candidatesRead fehlt.",
+          "requestFailed": "Die Anfrage an Ashby ist fehlgeschlagen.",
+          "invalidKey": "Gib einen gültigen Ashby-API-Schlüssel ein.",
+          "invalidResponse": "Ashby hat eine ungültige Antwort mit Kandidaten geliefert.",
+          "missingCursor": "Ashby hat eine Seite ohne den nächsten Cursor geliefert.",
+          "httpFailed": "Die Anfrage an Ashby ist fehlgeschlagen (HTTP {status})."
+        },
+        "workable": {
+          "invalidSubdomain": "Gib die Workable-Subdomain aus der URL deines Kontos ein.",
+          "unauthorized": "Workable hat den Token abgelehnt, oder der Scope r_candidates fehlt.",
+          "requestFailed": "Die Anfrage an Workable ist fehlgeschlagen.",
+          "unsafePagination": "Workable hat einen unsicheren Seitenlink zurückgegeben.",
+          "invalidToken": "Gib einen gültigen Workable-API-Token ein.",
+          "invalidResponse": "Workable hat eine ungültige Antwort mit Kandidaten geliefert.",
+          "httpFailed": "Die Anfrage an Workable ist fehlgeschlagen (HTTP {status})."
+        },
+        "join": {
+          "unauthorized": "JOIN hat den API-Token abgelehnt, oder ihm fehlt der Lesezugriff auf Bewerbungen.",
+          "requestFailed": "Die Anfrage an JOIN ist fehlgeschlagen.",
+          "invalidToken": "Gib einen gültigen JOIN-API-Token ein.",
+          "httpFailed": "Die Anfrage an JOIN ist fehlgeschlagen (HTTP {status})."
+        },
+        "capCandidates": "Dieser Import überschreitet {limit, number} Kandidaten. Wende dich an den Support, um eine Migration in Etappen durchzuführen.",
+        "capOpportunities": "Dieser Import überschreitet {limit, number} Opportunities. Wende dich an den Support, um eine Migration in Etappen durchzuführen."
       }
     },
     "evaluations": {
@@ -11307,7 +11908,8 @@
         "matchingNeedsAccess": "Der semantische Abgleich erfordert Zugriff auf alle Kandidaten im Arbeitsbereich.",
         "addCandidatesFirst": "Füge zuerst Kandidaten zu deinem Pool hinzu, bevor du abgleichst.",
         "needsOpenAiProvider": "Der semantische Abgleich braucht OpenAI als KI-Anbieter des Arbeitsbereichs, denn er nutzt das Embedding-Modell von OpenAI. Wechsle den Anbieter unter Einstellungen → KI.",
-        "invalidInput": "Ungültige Eingabe."
+        "invalidInput": "Ungültige Eingabe.",
+        "notIndexed": "{count, plural, one {# Kandidat ist noch nicht indexiert. Indexiere zuerst den Pool.} other {# Kandidaten sind noch nicht indexiert. Indexiere zuerst den Pool.}}"
       },
       "validation": {
         "invalidInput": "Ungültige Eingabe."
@@ -11323,7 +11925,8 @@
     "sampleData": {
       "actions": {
         "loadFailed": "Beispieldaten konnten nicht geladen werden. Versuche es erneut.",
-        "removeFailed": "Beispieldaten konnten nicht entfernt werden. Versuche es erneut."
+        "removeFailed": "Beispieldaten konnten nicht entfernt werden. Versuche es erneut.",
+        "emailConflict": "Die Beispieldaten wurden nicht geladen: Ein Kandidat verwendet bereits eine der Beispiel-E-Mail-Adressen, etwa amara.okafor@sample.invalid. Benenne diesen Kandidaten um oder entferne ihn und lade dann erneut."
       }
     },
     "portal": {
@@ -11451,6 +12054,35 @@
         "reviewFields": "Prüfe die markierten Felder und versuche es erneut.",
         "received": "Bewerbung eingegangen. Das Einstellungsteam prüft sie und meldet sich, falls es passt.",
         "submitFailed": "Deine Bewerbung konnte nicht abgeschickt werden. Bitte versuche es gleich noch einmal."
+      },
+      "validation": {
+        "urlInvalid": "Gib eine gültige URL ein.",
+        "urlNotHttps": "Die URL muss mit https:// beginnen.",
+        "resumeRequired": "Ein Lebenslauf ist erforderlich.",
+        "resumeInvalid": "Der Lebenslauf-Upload ist ungültig.",
+        "resumeFilenameRequired": "Der Lebenslauf braucht einen Dateinamen.",
+        "resumeTooLarge": "Der Lebenslauf darf höchstens 10 MB groß sein.",
+        "dateInvalid": "Gib ein gültiges Datum ein.",
+        "schoolRequired": "Die Schule ist erforderlich.",
+        "companyRequired": "Das Unternehmen ist erforderlich.",
+        "jobTitleRequired": "Die Berufsbezeichnung ist erforderlich.",
+        "firstNameRequired": "Der Vorname ist erforderlich.",
+        "lastNameRequired": "Der Nachname ist erforderlich.",
+        "emailInvalid": "Gib eine gültige E-Mail-Adresse ein.",
+        "phoneRequired": "Die Telefonnummer ist erforderlich.",
+        "addressRequired": "Die Adresse ist erforderlich.",
+        "headlineRequired": "Die Überschrift ist erforderlich.",
+        "photoRequired": "Ein Foto ist erforderlich.",
+        "linkedinRequired": "Dein LinkedIn-Profil ist erforderlich.",
+        "githubRequired": "Dein GitHub-Profil ist erforderlich.",
+        "websiteRequired": "Die Website ist erforderlich.",
+        "coverLetterRequired": "Das Anschreiben ist erforderlich.",
+        "educationRequired": "Füge mindestens einen Ausbildungseintrag hinzu.",
+        "experienceRequired": "Füge mindestens einen Berufseintrag hinzu.",
+        "questionRequired": "Diese Frage ist erforderlich.",
+        "consentRequired": "Du musst zustimmen, um mit deiner Bewerbung fortzufahren.",
+        "minLength": "Gib mindestens {min} Zeichen ein.",
+        "optionInvalid": "Wähle eine gültige Option aus."
       }
     },
     "careerPage": {
@@ -11684,7 +12316,10 @@
         "archiveScorecards": "In dieser Phase wurden Bewertungsbögen erfasst. Archiviere sie stattdessen, damit sie ihre Phase behalten.",
         "archiveDocuments": "An dieser Phase hängen Dokumentanforderungen. Archiviere sie stattdessen oder verschiebe die Anforderungen zuerst.",
         "archiveAutomations": "Automatisierungen verweisen auf diese Phase. Aktualisiere sie zuerst oder archiviere die Phase stattdessen.",
-        "archiveReferenced": "Diese Phase wird noch referenziert. Archiviere sie stattdessen."
+        "archiveReferenced": "Diese Phase wird noch referenziert. Archiviere sie stattdessen.",
+        "kindChangeHistory": "Bewerbungen haben diese Phase bereits durchlaufen, und Berichte leiten Einstellungen und Absagen aus diesem Verlauf ab. Eine Änderung des Typs zu einem Endergebnis oder davon weg würde diesen Verlauf umschreiben. Lege eine neue Phase mit dem gewünschten Typ an und archiviere stattdessen diese.",
+        "shapeNoActiveStage": "Die Pipeline braucht mindestens eine aktive Phase, die weder eingestellt, abgelehnt noch zurückgezogen ist, damit neue Bewerber einen Einstieg haben.",
+        "shapeEmptyName": "Phasennamen dürfen nicht leer sein."
       }
     },
     "mailbox": {
@@ -11723,6 +12358,14 @@
         "empty": "Dieser Anhang ist leer oder ungültig.",
         "tooLarge": "Dieser Anhang ist größer als das Limit von 25 MB.",
         "unsupportedType": "Dieser Dateityp wird als Anhang nicht unterstützt."
+      },
+      "deliveryConflict": {
+        "unknown": "Wir konnten nicht bestätigen, dass die Nachricht gesendet wurde. Prüfe den Ordner „Gesendet“, bevor du sie erneut sendest.",
+        "inProgress": "Diese Nachricht wird bereits gesendet. Warte kurz und prüfe dann den Verlauf."
+      },
+      "sendFailure": {
+        "sampleRecipient": "Dies ist eine Beispieladresse und kann keine E-Mails empfangen.",
+        "generic": "Senden fehlgeschlagen. Bitte versuche es erneut."
       }
     },
     "emailOutbox": {
@@ -11822,6 +12465,60 @@
       "session": {
         "sessionNotFound": "Sitzung nicht gefunden.",
         "memberNotFound": "Mitglied nicht gefunden."
+      }
+    },
+    "onboarding": {
+      "actions": {
+        "invalid": "Ungültige Eingabe.",
+        "failed": "Etwas ist schiefgelaufen. Versuch es erneut.",
+        "hexColorInvalid": "Verwende eine Hex-Farbe wie #3f6212.",
+        "avatarInvalid": "Der Avatar muss eine gültige URL sein.",
+        "twoFactorRequired": "Dieser Arbeitsbereich verlangt die Zwei-Faktor-Authentifizierung. Richte sie ein, um fortzufahren."
+      },
+      "checklistActions": {
+        "notSkippable": "Dieser Schritt kann nicht übersprungen werden.",
+        "failed": "Etwas ist schiefgelaufen. Versuch es erneut."
+      }
+    },
+    "updates": {
+      "actions": {
+        "onlyOwners": "Nur Inhaber des Workspaces können Updates verwalten.",
+        "somethingWrong": "Etwas ist schiefgelaufen.",
+        "checkFailed": "Updates konnten nicht geprüft werden: {reason}",
+        "upToDate": "Harly ist bereits auf dem neuesten Stand.",
+        "versionChanged": "Version {version} wurde veröffentlicht, während diese Seite geöffnet war. Prüfe sie und bestätige erneut.",
+        "updaterNotConnected": "Der Updater auf dem Host ist nicht verbunden. Starte ihn mit `harly updater run` und versuch es dann erneut.",
+        "alreadyInProgress": "Ein Update läuft bereits.",
+        "alreadyPickedUp": "Der Updater hat diese Anfrage schon übernommen, daher kann sie nicht mehr abgebrochen werden.",
+        "invalidSettings": "Diese Einstellungen sind ungültig.",
+        "window": {
+          "noDays": "Wähle mindestens einen Tag aus.",
+          "hours": "Die Stunden müssen zwischen 0 und 23 liegen.",
+          "sameHours": "Das Zeitfenster braucht eine Startstunde, die sich von der Endstunde unterscheidet.",
+          "timezone": "Unbekannte Zeitzone."
+        }
+      }
+    },
+    "people": {
+      "username": {
+        "tooShort": "Der Benutzername muss mindestens {min} Zeichen lang sein.",
+        "tooLong": "Der Benutzername darf höchstens {max} Zeichen lang sein.",
+        "invalidChars": "Der Benutzername darf nur Kleinbuchstaben, Zahlen, Bindestriche und Unterstriche enthalten.",
+        "reserved": "Dieser Benutzername ist reserviert.",
+        "invalid": "Ungültiger Benutzername.",
+        "taken": "Dieser Benutzername ist bereits vergeben."
+      }
+    },
+    "aiChat": {
+      "actions": {
+        "notSignedIn": "Nicht angemeldet."
+      }
+    },
+    "ai": {
+      "assistantBranding": {
+        "nameRequired": "Gib deinem Assistenten einen Namen.",
+        "nameTooLong": "Verwende höchstens {max} Zeichen.",
+        "avatarUrlInvalid": "Der Avatar muss eine gültige URL sein."
       }
     }
   }

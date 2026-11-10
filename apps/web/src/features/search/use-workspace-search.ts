@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useSyncExternalStore } from "react";
+import { useTranslations } from "next-intl";
 
 import { searchWorkspaceAction } from "./actions";
 import {
@@ -16,9 +17,17 @@ export function useWorkspaceSearch(): {
   state: WorkspaceSearchState;
   controller: WorkspaceSearchController;
 } {
+  const t = useTranslations("features.search.useWorkspaceSearch");
+  const tActions = useTranslations("server.search.actions");
+  const timeoutMessage = t("timeout");
+  const failedMessage = tActions("searchFailed");
   const controller = useMemo(
-    () => new WorkspaceSearchController({ search: searchWorkspaceAction }),
-    [],
+    () =>
+      new WorkspaceSearchController({
+        search: searchWorkspaceAction,
+        messages: { timeout: timeoutMessage, failed: failedMessage },
+      }),
+    [timeoutMessage, failedMessage],
   );
 
   useEffect(() => () => controller.cancel(), [controller]);

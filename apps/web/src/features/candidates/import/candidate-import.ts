@@ -15,6 +15,14 @@ export type CandidateImportRow = {
   values: CandidateImportValues;
 };
 
+/** Stable failure codes; the drawer translates them, so no user copy lives here. */
+export type CandidateImportFileError =
+  | { code: "needsHeaderAndRow" }
+  | { code: "noCandidateRows" }
+  | { code: "duplicateHeader"; header: string };
+
+export type CandidateImportMappingError = "duplicateColumn" | "nameRequired" | "emailRequired";
+
 export type PreparedCandidateImport =
   | {
       headers: string[];
@@ -22,7 +30,7 @@ export type PreparedCandidateImport =
       delimiter: "," | ";" | "\t";
       truncated: boolean;
     }
-  | { error: string };
+  | { error: CandidateImportFileError };
 
 /**
  * Prepares an export from a spreadsheet or another ATS for column mapping.
@@ -34,21 +42,19 @@ export function prepareCandidateImport(text: string): PreparedCandidateImport {
   const delimiter = detectDelimiter(normalized);
   const rows = parseCsv(normalized, delimiter);
   if (rows.length < 2) {
-    return { error: "The file needs a header row and at least one candidate." };
+    return { error: { code: "needsHeaderAndRow" } };
   }
 
   const [rawHeaders, ...rawDataRows] = rows;
   const headers = rawHeaders.map((header) => header.trim());
   const duplicateHeader = findDuplicateHeader(headers);
   if (duplicateHeader) {
-    return {
-      error: `The header "${duplicateHeader}" is repeated. Rename duplicate columns and try again.`,
-    };
+    return { error: { code: "duplicateHeader", header: duplicateHeader } };
   }
 
   const dataRows = rawDataRows.filter((row) => row.some((value) => value.trim().length > 0));
   if (dataRows.length === 0) {
-    return { error: "The file does not contain any candidate rows." };
+    return { error: { code: "noCandidateRows" } };
   }
 
   return {
@@ -88,16 +94,16 @@ export function buildCandidateImportRows({
   });
 }
 
-export function validateCandidateImportMapping(mapping: ImportMapping): string | null {
+export function validateCandidateImportMapping(mapping: ImportMapping): CandidateImportMappingError | null {
   const indexes = Object.values(mapping).filter((index): index is number => index !== undefined);
   if (new Set(indexes).size !== indexes.length) {
-    return "Each source column can only be mapped once.";
+    return "duplicateColumn";
   }
   if (mapping.fullName === undefined && (mapping.firstName === undefined || mapping.lastName === undefined)) {
-    return "Map Full name, or both First name and Last name.";
+    return "nameRequired";
   }
   if (mapping.email === undefined) {
-    return "Map the Email column.";
+    return "emailRequired";
   }
   return null;
 }

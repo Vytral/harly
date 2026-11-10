@@ -3,7 +3,14 @@
 import { revalidatePath } from "next/cache";
 import { and, eq, ilike, isNull, or } from "drizzle-orm";
 
-import { db, schema } from "@harly/db";
+import { getTranslations } from "next-intl/server";
+
+import {
+  USERNAME_MAX_LENGTH,
+  USERNAME_MIN_LENGTH,
+  db,
+  schema,
+} from "@harly/db";
 
 import { assertNotDemo } from "@/features/demo/assert-not-demo";
 import { getWorkspaceContext } from "@/features/workspaces/context";
@@ -118,17 +125,22 @@ async function isUsernameTaken(username: string, excludeUserId?: string) {
 
 export async function checkUsernameAvailableAction(username: string) {
   const parsed = usernameSchema.safeParse(username);
+  const t = await getTranslations("server.people.username");
   if (!parsed.success) {
+    const issue = parsed.error.issues[0]?.message;
     return {
       available: false,
-      error: parsed.error.issues[0]?.message ?? "Invalid username.",
+      code: "invalid",
+      error: issue
+        ? t(issue, { min: USERNAME_MIN_LENGTH, max: USERNAME_MAX_LENGTH })
+        : t("invalid"),
     } as const;
   }
 
   const context = await getWorkspaceContext();
   const taken = await isUsernameTaken(parsed.data, context.user.id);
   if (taken) {
-    return { available: false, error: "Username is already taken." } as const;
+    return { available: false, code: "taken", error: t("taken") } as const;
   }
   return { available: true } as const;
 }
@@ -150,7 +162,8 @@ export async function changeUsernameAction(newUsername: string) {
 
   const taken = await isUsernameTaken(parsed, context.user.id);
   if (taken) {
-    return { success: false, error: "Username is already taken." } as const;
+    const t = await getTranslations("server.people.username");
+    return { success: false, code: "taken", error: t("taken") } as const;
   }
 
   await db.transaction(async (tx) => {

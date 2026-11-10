@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 
 import { issueCandidatePortalCodeAction } from "@/features/portal/admin-actions";
 import { Button } from "@/components/ui/button";
@@ -15,6 +15,7 @@ type Issued = { kind: "access" | "reset"; url: string; expiresAt: string };
  */
 export function CandidatePortalAccessCard({ candidateId }: { candidateId: string }) {
   const t = useTranslations("features.portal.CandidatePortalAccessCard");
+  const locale = useLocale();
   const [issued, setIssued] = useState<Issued | null>(null);
   const [pending, start] = useTransition();
 
@@ -66,7 +67,7 @@ export function CandidatePortalAccessCard({ candidateId }: { candidateId: string
           >
             {issued.kind === "access" ? t("accessLink") : t("resetLink")}{" "}
             <span className="font-normal text-muted-foreground">
-              {t("expires", { date: new Date(issued.expiresAt).toLocaleString() })}
+              {t("expires", { date: new Date(issued.expiresAt).toLocaleString(locale) })}
             </span>
           </label>
           <div className="flex gap-2">

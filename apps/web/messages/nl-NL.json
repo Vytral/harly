@@ -724,7 +724,18 @@
       "mentionCandidate": "Kandidaat vermelden",
       "moreToolStatusesWithIssues": "{label} · {count} meer ({issues} met problemen)",
       "stepLine": "{step}: {title}",
-      "thisCandidate": "deze kandidaat"
+      "thisCandidate": "deze kandidaat",
+      "currentCandidate": "Huidige kandidaat",
+      "sections": {
+        "dashboard": "Dashboard",
+        "tasks": "Taken",
+        "calendars": "Interviewagenda",
+        "reports": "Rapportages",
+        "inbox": "Inbox",
+        "jobs": "Vacatures",
+        "candidates": "Kandidaten",
+        "workspace": "Huidige werkruimte"
+      }
     },
     "uiBlocks": {
       "today": "vandaag",
@@ -1160,7 +1171,8 @@
     "workspace": "Je werkruimte",
     "readyHelp": "Je kunt direct beginnen met werven. Dit is gedaan en dit kun je hierna doen.",
     "dashboard": "Naar dashboard",
-    "companyPlaceholder": "Acme Recruiting"
+    "companyPlaceholder": "Acme Recruiting",
+    "defaultWorkspaceName": "Werkruimte van {name}"
   },
   "accessAuthErrors": {
     "invalidEmail": "Vul een geldig e-mailadres in.",
@@ -1352,7 +1364,9 @@
         "advanced": "Trefwoorden verbeteren de zoekresultaten op je vacaturepagina. Een eigen slug houdt URL’s overzichtelijk.",
         "review": "Wijs een wervingsteam toe en bekijk de vacature zoals kandidaten die zien."
       },
-      "viewJob": "Vacature bekijken"
+      "viewJob": "Vacature bekijken",
+      "sectionRequirements": "Vereisten",
+      "sectionBenefits": "Voordelen"
     },
     "table": {
       "search": "Vacatures zoeken…",
@@ -2437,6 +2451,9 @@
     "onboarding": {
       "layout": {
         "workspace": "Werkruimte"
+      },
+      "page": {
+        "fallbackName": "jij"
       }
     },
     "portalRoot": {
@@ -2641,6 +2658,9 @@
         "title": "Pagina niet gevonden",
         "description": "De pagina die je zoekt bestaat niet of is verplaatst.",
         "backToCareers": "Terug naar vacatures"
+      },
+      "layout": {
+        "metaDescription": "Open-source sollicitatiesysteem voor moderne teams."
       }
     },
     "sign": {
@@ -2726,6 +2746,14 @@
         "privacy": "Privacy",
         "contactSender": "Afzender contacteren",
         "poweredBy": "Ondertekenen mogelijk gemaakt door Harly"
+      },
+      "page": {
+        "metadataTitle": "Bekijken en ondertekenen"
+      }
+    },
+    "legal": {
+      "page": {
+        "metadataTitle": "Juridisch en privacy · {workspaceName}"
       }
     }
   },
@@ -2881,7 +2909,8 @@
       "insert": "Invoegen"
     },
     "breadcrumb": {
-      "more": "Meer"
+      "more": "Meer",
+      "label": "Broodkruimelpad"
     },
     "dialog": {
       "close": "Sluiten",
@@ -2917,6 +2946,66 @@
         "success": "Geüpload",
         "error": "Mislukt"
       }
+    },
+    "oauthFeedback": {
+      "connected": "{provider} succesvol gekoppeld!",
+      "failed": "Koppelen met {provider} mislukt: {error}"
+    },
+    "skeletons": {
+      "content": "Inhoud laden",
+      "loading": "Laden…",
+      "stats": "Statistieken laden",
+      "calendar": "Agenda laden",
+      "pipeline": "Pipeline laden"
+    },
+    "previewFrame": {
+      "frameTitle": "Voorbeeld {device}",
+      "devices": {
+        "desktop": "desktop",
+        "tablet": "tablet",
+        "mobile": "mobiel"
+      }
+    },
+    "pipelineSpine": {
+      "stageProgress": "Fase: {label} ({position} van {total})",
+      "stageOnly": "Fase: {label}"
+    },
+    "statusBadge": {
+      "draft": "Concept",
+      "open": "Open",
+      "closed": "Gesloten"
+    },
+    "command": {
+      "title": "Opdrachtenpalet",
+      "description": "Zoek een opdracht om uit te voeren..."
+    },
+    "dropZone": {
+      "title": "Sleep een bestand hierheen of klik om te bladeren",
+      "dropTitle": "Laat los om te bijvoegen"
+    },
+    "formFooter": {
+      "save": "Wijzigingen opslaan",
+      "discard": "Verwerpen",
+      "saving": "Opslaan…"
+    },
+    "infoRow": {
+      "notSpecified": "Niet opgegeven"
+    },
+    "secretField": {
+      "defaultLabel": "Geheim",
+      "hiddenLabel": "{label} (verborgen)",
+      "show": "{label} tonen",
+      "hide": "{label} verbergen",
+      "copyLabel": "{label} kopiëren",
+      "copy": "Kopiëren",
+      "copied": "Gekopieerd"
+    },
+    "aiButton": {
+      "generating": "Bezig met genereren"
+    },
+    "confirmDialog": {
+      "confirm": "Bevestigen",
+      "cancel": "Annuleren"
     }
   },
   "features": {
@@ -3023,7 +3112,9 @@
         "sessionRevoked": "Sessie ingetrokken.",
         "sessionRevokeFailed": "De sessie kon niet worden ingetrokken.",
         "otherSessionsRevoked": "Andere sessies ingetrokken.",
-        "accountIdCopied": "Account-ID gekopieerd."
+        "accountIdCopied": "Account-ID gekopieerd.",
+        "uploadPrepareFailed": "Het uploaden kon niet worden voorbereid.",
+        "uploadRetryFailed": "Uploaden mislukt. Probeer het opnieuw."
       }
     },
     "applications": {
@@ -3280,7 +3371,8 @@
         "pauseConfirm": "Alle automatiseringen pauzeren",
         "reasonLabel": "Reden <hint>(wordt opgeslagen in het auditlogboek)</hint>",
         "reasonPlaceholderPause": "bijv. Een sjabloon repareren voordat er meer e-mails uitgaan",
-        "reasonPlaceholderResume": "bijv. Sjabloon is gerepareerd"
+        "reasonPlaceholderResume": "bijv. Sjabloon is gerepareerd",
+        "you": "jou"
       },
       "ConflictDialog": {
         "title": "Dit concept is elders opgeslagen",
@@ -3570,7 +3662,17 @@
         "documentPackage": "Documentpakket",
         "eventWait": "Wachten op event",
         "approval": "Goedkeuring",
-        "wait": "Wachten"
+        "wait": "Wachten",
+        "terminal": {
+          "succeeded": "geslaagd",
+          "completedWithWarnings": "voltooid met waarschuwingen",
+          "stopped": "gestopt",
+          "failed": "mislukt",
+          "uncertain": "onzeker",
+          "cancelled": "geannuleerd",
+          "needsFixture": "gesimuleerd antwoord nodig",
+          "invalid": "ongeldig"
+        }
       },
       "triggerPanel": {
         "close": "Sluiten",
@@ -3744,7 +3846,8 @@
         "testView": {
           "title": "Workflowuitvoering simuleren",
           "description": "Voer dit workflowpad uit met voorbeeldgegevens van een kandidaat. Er worden geen berichten of e-mails verstuurd en er worden geen echte kandidaatgegevens gewijzigd."
-        }
+        },
+        "aiSurfaceFallback": "Automatiseringsbouwer"
       },
       "WorkflowEdge": {
         "insertStepTitle": "Stap invoegen",
@@ -3841,7 +3944,8 @@
           "secretNotShown": "Het wordt niet opnieuw getoond.",
           "urlLabel": "URL",
           "copy": "Kopiëren",
-          "hideSecret": "Ik heb het opgeslagen. Verberg het geheim."
+          "hideSecret": "Ik heb het opgeslagen. Verberg het geheim.",
+          "defaultEndpointName": "Partner-webhook"
         },
         "action": {
           "action": "Actie",
@@ -3918,6 +4022,10 @@
           "resource": "Bron",
           "deadlineHours": "Deadline (uren)"
         }
+      },
+      "WorkflowNode": {
+        "inputFor": "Invoer voor {kind}",
+        "outputFor": "Uitvoer van {kind}: {port}"
       }
     },
     "candidates": {
@@ -4067,7 +4175,13 @@
         "similarNames": "{count, plural, one {# kandidaat met een vergelijkbare naam staat in je werkruimte.} other {# kandidaten met vergelijkbare namen staan in je werkruimte.}}",
         "verifyWithAi": "Controleren met AI",
         "checking": "Controleren",
-        "viewCandidate": "{name} bekijken"
+        "viewCandidate": "{name} bekijken",
+        "sharedIdentity": "Gedeelde identiteit: {signals}.",
+        "signals": {
+          "email": "zelfde e-mailadres",
+          "phone": "zelfde telefoonnummer",
+          "linkedin": "zelfde LinkedIn-profiel"
+        }
       },
       "DurationInput": {
         "label": "Duur",
@@ -4496,7 +4610,17 @@
         "skippedSummary": "{count} {count, plural, one {onvolledig {source}-profiel overgeslagen} other {onvolledige {source}-profielen overgeslagen}}.",
         "skippedRows": "{count, plural, one {# rij} other {# rijen}} overgeslagen:",
         "rowError": "Rij {row}: {reason}",
-        "rowErrorWithEmail": "Rij {row} ({email}): {reason}"
+        "rowErrorWithEmail": "Rij {row} ({email}): {reason}",
+        "fileErrors": {
+          "needsHeaderAndRow": "Het bestand heeft een kopregel en minstens één kandidaat nodig.",
+          "noCandidateRows": "Het bestand bevat geen kandidaatrijen.",
+          "duplicateHeader": "De kolomkop \"{header}\" komt vaker voor. Hernoem de dubbele kolommen en probeer het opnieuw."
+        },
+        "mappingErrors": {
+          "duplicateColumn": "Elke bronkolom kan maar één keer worden gekoppeld.",
+          "nameRequired": "Koppel {fullName}, of {firstName} en {lastName}.",
+          "emailRequired": "Koppel de kolom {email}."
+        }
       },
       "candidateReferrals": {
         "updateError": "Verwijzing kon niet worden bijgewerkt.",
@@ -4578,7 +4702,9 @@
         "movedToTrash": "{name} naar de prullenbak verplaatst.",
         "removedFromPool": "{name} uit de talentenpool verwijderd.",
         "addedToPool": "{name} aan de talentenpool toegevoegd.",
-        "bulkMovedToTrash": "{count, plural, one {# kandidaat} other {# kandidaten}} naar de prullenbak verplaatst."
+        "bulkMovedToTrash": "{count, plural, one {# kandidaat} other {# kandidaten}} naar de prullenbak verplaatst.",
+        "nounSingular": "kandidaat",
+        "nounPlural": "kandidaten"
       },
       "scorecardList": {
         "rating": {
@@ -4910,7 +5036,8 @@
         "ctaWebsiteWithUrl": "De knop linkt naar de website van je bedrijf ({url}).",
         "ctaWebsite": "De knop linkt naar de website van je bedrijf.",
         "colour": "Kleur",
-        "colourHint": "Leeg gebruikt je accentkleur."
+        "colourHint": "Leeg gebruikt je accentkleur.",
+        "processDefaultTitle": "Zo werven we"
       },
       "templatePanel": {
         "title": "Sjabloon",
@@ -5060,6 +5187,9 @@
         "all": "Alle",
         "notSpecified": "Niet opgegeven",
         "noMatches": "Geen open vacatures die aan deze filters voldoen."
+      },
+      "careerGallery": {
+        "label": "Fotogalerij"
       }
     },
     "dashboard": {
@@ -5100,6 +5230,9 @@
         "preview": "Voorbeeld van de Harly-demosandbox",
         "expires": "verloopt {time} UTC",
         "backToBuilder": "Terug naar de builder"
+      },
+      "demoLockedNotice": {
+        "default": "Uitgeschakeld in de demo: deze actie zou de accountbeveiliging wijzigen of gegevens buiten je sandbox versturen."
       }
     },
     "developers": {
@@ -5794,7 +5927,8 @@
         "changeSignature": "Je handtekening wijzigen",
         "addSignature": "Voeg je handtekening toe",
         "tapToSign": "Tik om te ondertekenen",
-        "loadingPdf": "PDF laden…"
+        "loadingPdf": "PDF laden…",
+        "loadError": "De pdf kon niet worden geladen."
       },
       "pdfSignaturePlacer": {
         "kinds": {
@@ -5824,7 +5958,8 @@
         "actionsFor": "Acties voor veld {index}",
         "keyboardHelp": "Met de pijltjestoetsen verplaats je het veld, met Shift verplaats je het verder, met Alt pas je de grootte aan en met Delete verwijder je het.",
         "loadingLabel": "PDF laden",
-        "dragHelp": "Sleep een veld om het te verplaatsen, of selecteer het en gebruik de pijltjestoetsen (Shift voor grotere stappen, Alt om de grootte aan te passen). Houd een gesleept veld bij de bovenste of onderste rand vast om te scrollen."
+        "dragHelp": "Sleep een veld om het te verplaatsen, of selecteer het en gebruik de pijltjestoetsen (Shift voor grotere stappen, Alt om de grootte aan te passen). Houd een gesleept veld bij de bovenste of onderste rand vast om te scrollen.",
+        "loadError": "De pdf kon niet worden geladen."
       },
       "signaturePad": {
         "tabs": {
@@ -5959,6 +6094,11 @@
         "rotatedPages": "Deze pdf heeft gedraaide pagina's. Exporteer hem opnieuw zonder rotatie voordat je hem verstuurt.",
         "missingSignatures": "Er is een verplicht handtekeningveld nodig voor: {signers}.",
         "missingSignature": "Voeg minstens één verplicht handtekeningveld toe."
+      },
+      "documentFieldPlacementDialog": {
+        "submitLabel": "Ondertekeningslink verzenden",
+        "sendFallbackError": "Het document kon niet worden verzonden.",
+        "sent": "Ondertekeningslink verzonden"
       }
     },
     "emailOutbox": {
@@ -6051,23 +6191,28 @@
         "starters": {
           "interviewInvitation": {
             "name": "Uitnodiging voor een gesprek",
-            "subject": "Uitnodiging voor een gesprek, '{{job_title}}' bij '{{company_name}}'"
+            "subject": "Uitnodiging voor een gesprek, '{{job_title}}' bij '{{company_name}}'",
+            "body": "Hoi '{{candidate_first_name}}',\n\nWe nodigen je graag uit voor een gesprek voor de functie '{{job_title}}' bij '{{company_name}}'.\n\nDatum: '{{interview_date}}'\nTijd: '{{interview_time}}'\nLocatie: '{{interview_location}}'\n\nLaat ons weten of dit je uitkomt.\n\nMet vriendelijke groet,\n'{{sender_name}}'"
           },
           "applicationRejection": {
             "name": "Afwijzing sollicitatie",
-            "subject": "Je sollicitatie voor '{{job_title}}'"
+            "subject": "Je sollicitatie voor '{{job_title}}'",
+            "body": "Hoi '{{candidate_first_name}}',\n\nBedankt voor je interesse in de functie '{{job_title}}' bij '{{company_name}}' en dat je de tijd hebt genomen om te solliciteren.\n\nNa zorgvuldige overweging hebben we besloten verder te gaan met andere kandidaten wiens ervaring beter aansluit bij onze huidige behoeften.\n\nWe bewaren je profiel en moedigen je aan te solliciteren op toekomstige vacatures die misschien beter bij je passen.\n\nVeel succes!\n'{{sender_name}}'"
           },
           "offerExtended": {
             "name": "Aanbod gedaan",
-            "subject": "Aanbiedingsbrief, '{{job_title}}' bij '{{company_name}}'"
+            "subject": "Aanbiedingsbrief, '{{job_title}}' bij '{{company_name}}'",
+            "body": "Hoi '{{candidate_first_name}}',\n\nWe zijn verheugd je de functie '{{job_title}}' bij '{{company_name}}' aan te bieden.\n\nSalaris: '{{offer_salary}}'\nAanbod geldig tot: '{{offer_expiry}}'\n\nBekijk de bijgevoegde aanbiedingsbrief en laat ons weten als je vragen hebt.\n\nWe kijken ernaar uit je in het team te verwelkomen,\n'{{sender_name}}'"
           },
           "screeningCall": {
             "name": "Screeningsgesprek",
-            "subject": "Kort kennismakingsgesprek, '{{job_title}}'"
+            "subject": "Kort kennismakingsgesprek, '{{job_title}}'",
+            "body": "Hoi '{{candidate_first_name}}',\n\nWe hebben je sollicitatie voor '{{job_title}}' bij '{{company_name}}' bekeken en je achtergrond maakt indruk op ons.\n\nWe zouden graag een kort gesprek van 30 minuten inplannen om je beter te leren kennen en je meer te vertellen over de functie.\n\nTot snel,\n'{{sender_name}}'"
           },
           "stageUpdate": {
             "name": "Update fase",
-            "subject": "Je gaat naar '{{stage_name}}', '{{job_title}}'"
+            "subject": "Je gaat naar '{{stage_name}}', '{{job_title}}'",
+            "body": "Hoi '{{candidate_first_name}}',\n\nGoed nieuws. Je sollicitatie voor '{{job_title}}' bij '{{company_name}}' is doorgeschoven naar de fase '{{stage_name}}'.\n\nIemand uit het team neemt binnenkort contact op over de volgende stappen.\n\nMet vriendelijke groet,\n'{{sender_name}}'"
           }
         },
         "searchLabel": "Sjablonen zoeken",
@@ -6614,7 +6759,14 @@
         "expires": "Verloopt op <date></date>",
         "someone": "Iemand",
         "createdBy": "{name} · <time></time>",
-        "decidedBy": "{name} · <time></time> · besloten <decidedTime></decidedTime>"
+        "decidedBy": "{name} · <time></time> · besloten <decidedTime></decidedTime>",
+        "statusLabel": {
+          "draft": "Concept",
+          "sent": "Verstuurd",
+          "accepted": "Geaccepteerd",
+          "declined": "Afgewezen",
+          "withdrawn": "Ingetrokken"
+        }
       },
       "offerFieldPlacementDialog": {
         "signerLabel": "Kandidaat",
@@ -6920,7 +7072,10 @@
           "added": "Toegevoegd",
           "actions": "Acties"
         },
-        "remove": "Verwijderen"
+        "remove": "Verwijderen",
+        "nounSingular": "kandidaat",
+        "nounPlural": "kandidaten",
+        "bulkCandidates": "{count, plural, one {# kandidaat} other {# kandidaten}}"
       }
     },
     "portal": {
@@ -7124,7 +7279,9 @@
         "addPasskey": "Een toegangssleutel toevoegen",
         "passkeyCancelled": "Het instellen van de toegangssleutel is geannuleerd.",
         "passkeyAddFailed": "We konden die toegangssleutel niet toevoegen. Probeer het opnieuw.",
-        "passkeyRemoveFailed": "De toegangssleutel kon niet worden verwijderd."
+        "passkeyRemoveFailed": "De toegangssleutel kon niet worden verwijderd.",
+        "thisDevice": "Dit apparaat",
+        "defaultPasskeyName": "Passkey: {device}"
       },
       "portalFormUi": {
         "saveRecoveryCodes": "Bewaar je herstelcodes",
@@ -7133,6 +7290,9 @@
         "copy": "Kopiëren",
         "download": "Downloaden",
         "savedCodes": "Ik heb deze codes opgeslagen"
+      },
+      "PortalShellServer": {
+        "orgFallback": "Vacatures"
       }
     },
     "publicJob": {
@@ -7172,7 +7332,8 @@
         "rejectFallback": "Afwijzen is niet gelukt.",
         "rejecting": "Afwijzen…",
         "description": "Ze verdwijnen uit de actieve pipeline. Later kun je ze weer activeren.",
-        "cancel": "Annuleren"
+        "cancel": "Annuleren",
+        "successWithWarning": "{message} {warning}"
       },
       "rejectionReasonTag": {
         "rejectedWithReason": "Afgewezen · {reason}",
@@ -9182,6 +9343,11 @@
         "partialCredentials": "Vul zowel de Client ID als de Client Secret in om de opgeslagen gegevens te vervangen.",
         "connectZoom": "Zoom verbinden"
       }
+    },
+    "search": {
+      "useWorkspaceSearch": {
+        "timeout": "Zoeken duurde te lang. Probeer het opnieuw."
+      }
     }
   },
   "labels": {
@@ -9413,6 +9579,9 @@
             "blurb": "Plaats een bericht in je Slack- of Discord-kanaal.",
             "fields": {
               "message": "Bericht"
+            },
+            "placeholders": {
+              "message": "Nieuwe sollicitatie ontvangen voor '{{job_title}}'"
             }
           },
           "sendEmail": {
@@ -9439,7 +9608,9 @@
               "body": "Bericht"
             },
             "placeholders": {
-              "toEmail": "Leeg laten voor de kandidaat"
+              "toEmail": "Leeg laten voor de kandidaat",
+              "subject": "Kies een tijdstip om af te spreken met '{{company_name}}'",
+              "body": "Kies een tijd die je uitkomt: '{{booking_link}}'"
             }
           },
           "requestDocuments": {
@@ -9460,7 +9631,8 @@
               "attachments": "PDF-bijlagen"
             },
             "placeholders": {
-              "title": "Geheimhoudingsovereenkomst"
+              "title": "Geheimhoudingsovereenkomst",
+              "body": "Beste '{{candidate_full_name}}',\n\nDit document is voor de functie '{{job_title}}' bij '{{company_name}}'."
             }
           },
           "sendDocumentForSignature": {
@@ -9555,6 +9727,9 @@
             "blurb": "Plaats een bericht in de ingestelde Telegram-chat.",
             "fields": {
               "message": "Bericht"
+            },
+            "placeholders": {
+              "message": "Nieuwe kandidaat ontvangen: '{{candidate_name}}'"
             }
           },
           "sendDiscord": {
@@ -9562,6 +9737,9 @@
             "blurb": "Plaats een bericht in het ingestelde Discord-kanaal.",
             "fields": {
               "message": "Bericht"
+            },
+            "placeholders": {
+              "message": "Nieuwe kandidaat ontvangen: '{{candidate_name}}'"
             }
           },
           "sendInAppAlert": {
@@ -9799,7 +9977,9 @@
         "offline": "Offline",
         "conflict": "Conflict",
         "error": "Opslaan mislukt",
-        "interrupted": "Opslaan is onderbroken. De server wordt gecontroleerd voordat het opnieuw wordt geprobeerd."
+        "interrupted": "Opslaan is onderbroken. De server wordt gecontroleerd voordat het opnieuw wordt geprobeerd.",
+        "retry": "Opslaan opnieuw proberen",
+        "saveDraft": "Concept opslaan"
       },
       "library": {
         "groups": {
@@ -9872,6 +10052,79 @@
           "tagNewCandidate": {
             "name": "Nieuwe kandidaten taggen op bron",
             "description": "Wanneer een kandidaat is aangemaakt, tag je de kandidaat met de bron om later op te filteren."
+          }
+        }
+      },
+      "graphValidation": {
+        "graphNotSerializable": "De graaf moet serialiseerbare JSON zijn.",
+        "graphTooLarge": "De graaf overschrijdt de limiet van 1 MiB.",
+        "maxNodes": "Een workflow mag maximaal {max} stappen hebben.",
+        "maxEdges": "Een workflow mag maximaal {max} verbindingen hebben.",
+        "duplicateStepId": "Stap-id komt dubbel voor.",
+        "conditionTooManyClauses": "Deze voorwaarde heeft te veel clausules.",
+        "conditionTooDeep": "Deze voorwaarde is te diep genest.",
+        "exactlyOneTrigger": "Een workflow heeft precies één trigger nodig.",
+        "entryMissing": "De startstap bestaat niet.",
+        "entryNotTrigger": "De startstap moet de trigger zijn.",
+        "selfConnection": "Een stap kan niet met zichzelf verbonden worden.",
+        "outputAlreadyConnected": "Deze uitvoer is al verbonden.",
+        "connectionSourceMissing": "De bron van de verbinding ontbreekt.",
+        "connectionTargetMissing": "Het doel van de verbinding ontbreekt.",
+        "connectBackToTrigger": "Niets kan terugverbinden naar de trigger.",
+        "portInvalid": "De uitvoer “{port}” is niet geldig bij deze stap.",
+        "portRequired": "Verbind de uitvoer “{port}”.",
+        "cycle": "Cycli zijn niet toegestaan.",
+        "unreachable": "Deze stap is vanaf de trigger niet bereikbaar.",
+        "mustEndWithEnd": "Elk pad moet eindigen bij een expliciete eindstap.",
+        "durationRequired": "Stel in hoe lang deze stap moet wachten.",
+        "localTimeInvalid": "Stel een geldige lokale tijd in, in de notatie UU:MM.",
+        "timeZoneRequired": "Kies de tijdzone die voor deze vertraging geldt.",
+        "timeZoneInvalid": "Kies een geldige IANA-tijdzone, zoals America/Santiago.",
+        "eventRequired": "Kies de gebeurtenis die deze stap moet hervatten.",
+        "eventUnsupported": "Kies een gebeurtenis die de workflow-dispatcher ondersteunt.",
+        "resourceRequired": "Kies de sollicitatie of het document om te volgen.",
+        "approverRequired": "Kies minstens één persoon die kan goedkeuren.",
+        "bindingMissingStep": "Deze koppeling verwijst naar een stap die niet bestaat.",
+        "bindingNotGuaranteed": "Deze waarde komt uit een tak die niet zeker wordt uitgevoerd.",
+        "triggerActionMismatch": "Deze trigger garandeert niet de {requirements} die nodig zijn voor {action}. Kies een passende trigger of koppel de ontbrekende record-id.",
+        "nameRequired": "Geef dit recept een naam voordat je het publiceert.",
+        "actionRequired": "Voeg minstens één actie toe voordat je publiceert.",
+        "toolUnavailable": "De tool {action} versie {version} kan niet worden uitgevoerd.",
+        "eraseApprovalRequired": "Het wissen van kandidaatgegevens vereist een goedkeuringsstap op elk pad naar deze actie, of executionMode op automatic zetten wanneer gegevensbewaring in de werkruimte aanstaat.",
+        "eraseAutomaticLiteral": "Automatisch wissen vereist dat executionMode op automatic staat.",
+        "actionUnavailable": "{action} is niet beschikbaar om uit te voeren.",
+        "actionIssue": "Actie {index}: {message}",
+        "graphInvalid": "De workflowgraaf is ongeldig: {detail}"
+      },
+      "lifecycle": {
+        "stages": {
+          "suggested": {
+            "label": "Voorgesteld",
+            "description": "Er is een AI-suggestie, maar die is nog niet bruikbaar."
+          },
+          "validated": {
+            "label": "Gevalideerd",
+            "description": "De graaf slaagt voor de validatie. Er is nog geen simulatie."
+          },
+          "simulated": {
+            "label": "Gesimuleerd",
+            "description": "De takdekking met testdata is geslaagd voor de huidige graaf. Providers zijn niet aangeroepen."
+          },
+          "queued": {
+            "label": "In wachtrij",
+            "description": "Geaccepteerd en in afwachting. Een toepassing, publicatie, taak of run is bezig."
+          },
+          "executed": {
+            "label": "Uitgevoerd",
+            "description": "De run heeft een eindstatus bereikt. Zie de runstatus voor het resultaat."
+          },
+          "delivered": {
+            "label": "Afgeleverd",
+            "description": "Minstens één externe actie is afgerond met bewijs van de provider."
+          },
+          "uncertain": {
+            "label": "Onzeker",
+            "description": "Vraagt om menselijke controle. Effecten zijn niet bevestigd of de verificatie is mislukt."
           }
         }
       }
@@ -10036,6 +10289,19 @@
         "documentActivity": "Documentactiviteit",
         "labelWithDetail": "{label}, {detail}",
         "anonymized": "Kandidaatgegevens geanonimiseerd (bewaarbeleid)"
+      },
+      "origin": {
+        "review": "Beoordelingswachtrij",
+        "pipeline": "Pipeline",
+        "candidates": "Kandidaten",
+        "filteredCandidates": "Gefilterde kandidaten",
+        "backToReview": "Terug naar beoordelingswachtrij",
+        "backToPipeline": "Terug naar pipeline",
+        "backToCandidates": "Terug naar kandidaten"
+      },
+      "queue": {
+        "next": "{action} · Volgende: {name}",
+        "cleared": "{action} · Wachtrij leeg"
       }
     },
     "portal": {
@@ -10227,6 +10493,14 @@
         "rejectDescription": "Alle {count, plural, one {# geselecteerde sollicitatie} other {# geselecteerde sollicitaties}} worden gemarkeerd als afgewezen. Kandidaten krijgen mogelijk een melding, afhankelijk van je fase-e-mails.",
         "hireConfirm": "{count, plural, one {# sollicitatie aannemen} other {# sollicitaties aannemen}}",
         "rejectConfirm": "{count, plural, one {# sollicitatie afwijzen} other {# sollicitaties afwijzen}}"
+      },
+      "stages": {
+        "applied": "Gesolliciteerd",
+        "screening": "Voorselectie",
+        "interview": "Gesprek",
+        "offer": "Aanbod",
+        "hired": "Aangenomen",
+        "rejected": "Afgewezen"
       }
     },
     "reports": {
@@ -10316,6 +10590,10 @@
         "applicationFor": "Sollicitatie voor {job}",
         "documentFallback": "Document om te ondertekenen",
         "signingCode": "Eenmalige ondertekeningscode"
+      },
+      "salaryPeriod": {
+        "annual": "/ jaar",
+        "monthly": "/ maand"
       }
     },
     "emailTemplates": {
@@ -10345,6 +10623,16 @@
         "interview": "Gesprek",
         "offer": "Aanbod",
         "workspace": "Werkruimte"
+      },
+      "samples": {
+        "jobTitle": "Senior frontend engineer",
+        "stageName": "Technisch interview",
+        "interviewDate": "Dinsdag 8 juli",
+        "interviewTime": "10:00 AM PST",
+        "interviewLocation": "Videogesprek",
+        "offerSalary": "$140.000 / jaar",
+        "offerExpiry": "12 juli 2026",
+        "senderName": "Jouw naam"
       }
     },
     "emailDelivery": {
@@ -10512,6 +10800,246 @@
         "registerPasskey": "Registreer eerst een passkey voordat je de beveiligingsinstellingen voor enterprise wijzigt.",
         "failed": "Opnieuw aanmelden is mislukt."
       }
+    },
+    "notifications": {
+      "noteMentioned": {
+        "title": "{actor} heeft je genoemd bij {candidate}"
+      },
+      "taskAssigned": {
+        "title": "Nieuwe taak: {title}",
+        "body": "{actor} heeft je een taak toegewezen."
+      },
+      "taskReassigned": {
+        "title": "Taak opnieuw aan jou toegewezen",
+        "body": "{actor} heeft je een taak toegewezen."
+      },
+      "candidateReplied": {
+        "title": "{candidateName} heeft gereageerd"
+      },
+      "candidateApplied": {
+        "title": "{candidateName} heeft gesolliciteerd"
+      },
+      "candidateHired": {
+        "title": "{candidateName} is aangenomen"
+      },
+      "candidateRejected": {
+        "title": "{candidateName} is afgewezen"
+      },
+      "candidateMovedStageForJob": {
+        "title": "{candidateName} naar een andere fase, {jobTitle}"
+      },
+      "candidateMovedStage": {
+        "title": "{candidateName} is naar een andere fase verplaatst"
+      },
+      "candidateAdded": {
+        "title": "{candidateName} toegevoegd als kandidaat"
+      },
+      "interviewScheduledWith": {
+        "title": "Gesprek met {candidateName}"
+      },
+      "interviewCanceledWith": {
+        "title": "Gesprek met {candidateName} geannuleerd"
+      },
+      "interviewCompletedWith": {
+        "title": "Gesprek met {candidateName} afgerond"
+      },
+      "interviewRescheduledWith": {
+        "title": "Gesprek met {candidateName} verzet"
+      },
+      "jobPublishedNamed": {
+        "title": "{jobTitle} gepubliceerd"
+      },
+      "candidateRepliedNoSubject": {
+        "title": "{candidateName} heeft gereageerd",
+        "body": "Nieuw antwoord van kandidaat"
+      },
+      "documentExpired": {
+        "title": "Document verlopen",
+        "body": "\"{documentName}\" heeft de vervaldatum overschreden en moet worden nagekeken."
+      },
+      "documentSubmitted": {
+        "title": "Document ingediend",
+        "body": "{candidateName} heeft \"{documentTitle}\" geüpload voor beoordeling."
+      },
+      "possibleDuplicateCandidate": {
+        "title": "Mogelijke dubbele kandidaat",
+        "body": "Harly AI vond een mogelijke overeenkomst met {names}."
+      },
+      "jobApprovalRequested": {
+        "title": "Goedkeuring gevraagd: {jobTitle}",
+        "body": "Bekijk deze vacature voordat de werving begint."
+      },
+      "jobApprovalApproved": {
+        "title": "Vacature goedgekeurd: {jobId}"
+      },
+      "jobApprovalRejected": {
+        "title": "Vacature afgewezen: {jobId}"
+      },
+      "offerAccepted": {
+        "title": "Aanbieding geaccepteerd, {offerTitle}"
+      },
+      "offerDeclined": {
+        "title": "Aanbieding afgewezen, {offerTitle}"
+      },
+      "signatureDeclined": {
+        "title": "Ondertekening geweigerd",
+        "body": "{name} heeft geweigerd \"{documentName}\" te ondertekenen."
+      },
+      "signatureDeclinedWithReason": {
+        "title": "Ondertekening geweigerd",
+        "body": "{name} heeft geweigerd \"{documentName}\" te ondertekenen. Reden: {reason}"
+      },
+      "eventApplicationCreated": {
+        "title": "Sollicitatie ingediend"
+      },
+      "eventApplicationStageChanged": {
+        "title": "Sollicitatie naar andere fase verplaatst"
+      },
+      "eventApplicationStatusChanged": {
+        "title": "Status sollicitatie gewijzigd"
+      },
+      "eventApplicationHired": {
+        "title": "Kandidaat aangenomen"
+      },
+      "eventApplicationRejected": {
+        "title": "Sollicitatie afgewezen"
+      },
+      "eventCandidateCreated": {
+        "title": "Kandidaat aangemaakt"
+      },
+      "eventCandidateUpdated": {
+        "title": "Kandidaat bijgewerkt"
+      },
+      "eventCandidateReferred": {
+        "title": "Kandidaat aanbevolen"
+      },
+      "eventCandidateReferralDeleted": {
+        "title": "Aanbeveling van kandidaat verwijderd"
+      },
+      "eventInterviewScheduled": {
+        "title": "Gesprek ingepland"
+      },
+      "eventInterviewCanceled": {
+        "title": "Gesprek geannuleerd"
+      },
+      "eventInterviewCompleted": {
+        "title": "Gesprek afgerond"
+      },
+      "eventInterviewRescheduled": {
+        "title": "Gesprek verzet"
+      },
+      "eventTaskCreated": {
+        "title": "Taak aangemaakt"
+      },
+      "eventTaskUpdated": {
+        "title": "Taak bijgewerkt"
+      },
+      "eventTaskCompleted": {
+        "title": "Taak afgerond"
+      },
+      "eventTaskDeleted": {
+        "title": "Taak verwijderd"
+      },
+      "eventDocumentSignatureSent": {
+        "title": "Document ter ondertekening verstuurd"
+      },
+      "eventDocumentSignatureChanged": {
+        "title": "Ondertekeningsstatus document gewijzigd"
+      },
+      "eventDocumentSignatureVoided": {
+        "title": "Ondertekening van document ingetrokken"
+      },
+      "eventJobPublished": {
+        "title": "Vacature gepubliceerd"
+      },
+      "eventJobUpdated": {
+        "title": "Vacature bijgewerkt"
+      },
+      "eventJobClosed": {
+        "title": "Vacature gesloten"
+      },
+      "eventMailReceived": {
+        "title": "E-mail ontvangen"
+      },
+      "eventEvaluationCompleted": {
+        "title": "AI-beoordeling afgerond"
+      },
+      "eventWebhookReceived": {
+        "title": "Inkomende webhook ontvangen"
+      },
+      "documentRequested": {
+        "title": "{count, plural, one {Er is een document gevraagd} other {Er zijn # documenten gevraagd}}",
+        "body": "{count, plural, one {Upload dit: {title}.} other {Je moet {count} documenten uploaden voor je sollicitatie.}}"
+      },
+      "documentRequestExpired": {
+        "title": "Documentverzoek verlopen",
+        "body": "Een documentverzoek is over de deadline heen. Neem contact op met het wervingsteam als je meer tijd nodig hebt."
+      },
+      "documentAccepted": {
+        "title": "Document geaccepteerd",
+        "body": "Je upload voor “{title}” is geaccepteerd."
+      },
+      "documentDeclined": {
+        "title": "Document moet opnieuw worden geüpload",
+        "body": "Je upload voor “{title}” is afgewezen. Upload het opnieuw."
+      }
+    },
+    "onboarding": {
+      "checklist": {
+        "createJob": {
+          "title": "Maak je eerste vacature aan",
+          "value": "Beschrijf de functie één keer en deel die daarna via je carrièrepagina."
+        },
+        "publishJob": {
+          "title": "Publiceer hem",
+          "value": "Een gepubliceerde vacature verschijnt op je carrièrepagina en ontvangt sollicitaties."
+        },
+        "pipelineCandidates": {
+          "title": "Zet kandidaten in de pipeline",
+          "value": "Laad voorbeelddata om te verkennen, deel je vacaturelink of importeer een CSV."
+        },
+        "inviteTeammate": {
+          "title": "Nodig een collega uit",
+          "value": "Werven gaat sneller met een tweede paar ogen op elke kandidaat."
+        },
+        "connectEmail": {
+          "title": "E-mail koppelen",
+          "value": "Verstuur en volg e-mails naar kandidaten vanuit één inbox."
+        },
+        "connectCalendar": {
+          "title": "Een agenda koppelen",
+          "value": "Laat kandidaten interviews inplannen zonder heen-en-weer-gemail."
+        },
+        "connectAi": {
+          "title": "AI koppelen (optioneel)",
+          "value": "Gebruik je eigen provider om kandidaten te screenen en berichten op te stellen. Harly werkt volledig zonder."
+        },
+        "automateWorkflow": {
+          "title": "Automatiseer een workflow",
+          "value": "Begin met een van tien recepten voor taggen, meldingen en fasewijzigingen."
+        },
+        "open": "Openen",
+        "start": "Starten"
+      }
+    },
+    "updates": {
+      "status": {
+        "pending": "Wachten op de updater",
+        "claimed": "Starten",
+        "running": "Bezig met updaten",
+        "succeeded": "Bijgewerkt",
+        "failed": "Mislukt",
+        "rolled_back": "Teruggezet",
+        "cancelled": "Geannuleerd"
+      }
+    },
+    "storageValidation": {
+      "resumeType": "Upload een cv in PDF-, DOC- of DOCX-formaat.",
+      "resumeTooLarge": "Het cv mag niet groter zijn dan 10 MB.",
+      "resumeRequired": "Een cv is verplicht.",
+      "imageType": "Upload een afbeelding in PNG-, JPG-, SVG- of WEBP-formaat.",
+      "imageTooLarge": "De afbeelding mag niet groter zijn dan 5 MB.",
+      "imageRequired": "Een afbeelding is verplicht."
     }
   },
   "server": {
@@ -10646,7 +11174,35 @@
         "saveBeforeWebhookTest": "Sla de workflow op en kies het inkomende eindpunt voordat je een webhooktrigger test.",
         "endpointNotOwned": "Het gekozen webhook-eindpunt hoort niet bij deze workflow.",
         "endpointSchemaInvalid": "Het gekozen eindpunt heeft een ongeldig payloadschema.",
-        "dryRunFailed": "De proefrun is mislukt."
+        "dryRunFailed": "De proefrun is mislukt.",
+        "webhookSchemaMismatch": "De webhookpayload komt niet overeen met het schema van het eindpunt: {issues}",
+        "toolVersionUnavailable": "Toolversie {version} van {action} is niet beschikbaar om uit te voeren.",
+        "fixtureNodeNotRunnable": "Een gesimuleerd antwoord verwijst naar een stap die geen providerresultaat kan ontvangen: {node}.",
+        "fixturePortInvalid": "Het gesimuleerde antwoord voor {node} gebruikt een ongeldige uitvoerpoort: {port}."
+      },
+      "resourceResolution": {
+        "calConnectRequired": "Verbind Cal.com voordat je een afspraaktype kiest.",
+        "calConnectionInvalid": "De verbinding met Cal.com is ongeldig. Verbind Cal.com opnieuw voordat je een afspraaktype kiest.",
+        "calEventTypesUnavailable": "De afspraaktypen van Cal.com zijn niet beschikbaar.",
+        "calEventTypesUnavailableDetail": "De afspraaktypen van Cal.com zijn niet beschikbaar: {detail}",
+        "integrationNames": {
+          "email": "E-mailbezorging",
+          "meetingProvider": "Vergaderprovider"
+        },
+        "integrationDescriptions": {
+          "slack": "Meldingen voor het team",
+          "telegram": "Telegram-botmeldingen",
+          "discord": "Discord-webhookmeldingen",
+          "cal": "Afspraaklinks voor kandidaten",
+          "gcal": "Synchronisatie van agenda en video",
+          "outlook": "Synchronisatie van agenda, mail en video",
+          "zoom": "Videovergaderingen",
+          "jitsi": "Zelfgehoste videovergaderingen",
+          "docuseal": "Provider voor e-handtekeningen",
+          "harlySign": "Ingebouwde e-handtekeningen in de app",
+          "email": "Duurzame uitgaande wachtrij voor e-mails aan kandidaten",
+          "meetingProvider": "Minstens één verbonden provider voor sollicitatiegesprekken of video"
+        }
       }
     },
     "workspaces": {
@@ -11234,7 +11790,9 @@
         "maxRowsPerImport": "Je kunt maximaal 500 rijen tegelijk importeren.",
         "invalidImportData": "Ongeldige importgegevens.",
         "invalidReferral": "Ongeldige doorverwijzing.",
-        "invalidRow": "Ongeldige rij."
+        "invalidRow": "Ongeldige rij.",
+        "chooseRejectionReason": "Kies een afwijzingsreden.",
+        "duplicateApplications": "Elke sollicitatie kan maar één keer worden opgenomen."
       },
       "ai": {
         "invalidApplication": "Ongeldige sollicitatie.",
@@ -11288,6 +11846,49 @@
         "referralNotFound": "Doorverwijzing niet gevonden.",
         "unableToUpdateReferral": "Doorverwijzing kon niet worden bijgewerkt.",
         "unableToDeleteReferral": "Doorverwijzing kon niet worden verwijderd."
+      },
+      "importProviders": {
+        "greenhouse": {
+          "unsafePagination": "Greenhouse gaf een onveilige paginatielink terug.",
+          "unauthorized": "Greenhouse heeft de API-sleutel geweigerd, of de Candidates-rechten ontbreken.",
+          "requestFailed": "Het verzoek aan Greenhouse is mislukt.",
+          "invalidKey": "Vul een geldige Greenhouse Harvest API-sleutel in.",
+          "invalidResponse": "Greenhouse gaf een ongeldig kandidatenantwoord terug.",
+          "listFailed": "Greenhouse kon de kandidaten niet ophalen (HTTP {status})."
+        },
+        "lever": {
+          "unauthorized": "Lever heeft de API-sleutel geweigerd, of er ontbreken leesrechten voor opportunities.",
+          "requestFailed": "Het verzoek aan Lever is mislukt.",
+          "invalidKey": "Vul een geldige Lever API-sleutel in.",
+          "invalidResponse": "Lever gaf een ongeldig antwoord voor opportunities terug.",
+          "missingCursor": "Lever gaf een pagina terug zonder volgende offset.",
+          "httpFailed": "Het verzoek aan Lever is mislukt (HTTP {status})."
+        },
+        "ashby": {
+          "unauthorized": "Ashby heeft de API-sleutel geweigerd, of de candidatesRead-rechten ontbreken.",
+          "requestFailed": "Het verzoek aan Ashby is mislukt.",
+          "invalidKey": "Vul een geldige Ashby API-sleutel in.",
+          "invalidResponse": "Ashby gaf een ongeldig kandidatenantwoord terug.",
+          "missingCursor": "Ashby gaf een pagina terug zonder volgende cursor.",
+          "httpFailed": "Het verzoek aan Ashby is mislukt (HTTP {status})."
+        },
+        "workable": {
+          "invalidSubdomain": "Vul het Workable-subdomein in uit de URL van je account.",
+          "unauthorized": "Workable heeft het token geweigerd, of de r_candidates-scope ontbreekt.",
+          "requestFailed": "Het verzoek aan Workable is mislukt.",
+          "unsafePagination": "Workable gaf een onveilige paginatielink terug.",
+          "invalidToken": "Vul een geldig Workable API-token in.",
+          "invalidResponse": "Workable gaf een ongeldig kandidatenantwoord terug.",
+          "httpFailed": "Het verzoek aan Workable is mislukt (HTTP {status})."
+        },
+        "join": {
+          "unauthorized": "JOIN heeft het API-token geweigerd, of er ontbreken leesrechten voor sollicitaties.",
+          "requestFailed": "Het verzoek aan JOIN is mislukt.",
+          "invalidToken": "Vul een geldig JOIN API-token in.",
+          "httpFailed": "Het verzoek aan JOIN is mislukt (HTTP {status})."
+        },
+        "capCandidates": "Deze import overschrijdt {limit, number} kandidaten. Neem contact op met support om een migratie in fases uit te voeren.",
+        "capOpportunities": "Deze import overschrijdt {limit, number} opportunities. Neem contact op met support om een migratie in fases uit te voeren."
       }
     },
     "evaluations": {
@@ -11307,7 +11908,8 @@
         "matchingNeedsAccess": "Semantisch matchen vereist toegang tot alle kandidaten in de werkruimte.",
         "addCandidatesFirst": "Voeg eerst kandidaten toe aan je pool voordat je gaat matchen.",
         "needsOpenAiProvider": "Semantisch matchen vereist OpenAI als AI-provider van je werkruimte, omdat het het embeddingmodel van OpenAI gebruikt. Wijzig de provider via Instellingen → AI.",
-        "invalidInput": "Ongeldige invoer."
+        "invalidInput": "Ongeldige invoer.",
+        "notIndexed": "{count, plural, one {# kandidaat is nog niet geïndexeerd. Indexeer eerst de pool.} other {# kandidaten zijn nog niet geïndexeerd. Indexeer eerst de pool.}}"
       },
       "validation": {
         "invalidInput": "Ongeldige invoer."
@@ -11323,7 +11925,8 @@
     "sampleData": {
       "actions": {
         "loadFailed": "Voorbeeldgegevens konden niet worden geladen. Probeer het opnieuw.",
-        "removeFailed": "Voorbeeldgegevens konden niet worden verwijderd. Probeer het opnieuw."
+        "removeFailed": "Voorbeeldgegevens konden niet worden verwijderd. Probeer het opnieuw.",
+        "emailConflict": "Voorbeeldgegevens zijn niet geladen: een kandidaat gebruikt al een van de voorbeeld-e-mailadressen, zoals amara.okafor@sample.invalid. Hernoem of verwijder die kandidaat en laad daarna opnieuw."
       }
     },
     "portal": {
@@ -11451,6 +12054,35 @@
         "reviewFields": "Controleer de gemarkeerde velden en probeer het opnieuw.",
         "received": "Sollicitatie ontvangen. Het wervingsteam bekijkt hem en neemt contact op als je goed past.",
         "submitFailed": "We konden je sollicitatie niet verzenden. Probeer het over een moment opnieuw."
+      },
+      "validation": {
+        "urlInvalid": "Voer een geldige URL in.",
+        "urlNotHttps": "De URL moet beginnen met https://",
+        "resumeRequired": "Een cv is verplicht.",
+        "resumeInvalid": "De upload van het cv is ongeldig.",
+        "resumeFilenameRequired": "Het cv heeft een bestandsnaam nodig.",
+        "resumeTooLarge": "Het cv mag niet groter zijn dan 10 MB.",
+        "dateInvalid": "Voer een geldige datum in.",
+        "schoolRequired": "School is verplicht.",
+        "companyRequired": "Bedrijf is verplicht.",
+        "jobTitleRequired": "Functietitel is verplicht.",
+        "firstNameRequired": "Voornaam is verplicht.",
+        "lastNameRequired": "Achternaam is verplicht.",
+        "emailInvalid": "Voer een geldig e-mailadres in.",
+        "phoneRequired": "Telefoonnummer is verplicht.",
+        "addressRequired": "Adres is verplicht.",
+        "headlineRequired": "Kop is verplicht.",
+        "photoRequired": "Foto is verplicht.",
+        "linkedinRequired": "LinkedIn is verplicht.",
+        "githubRequired": "GitHub is verplicht.",
+        "websiteRequired": "Website is verplicht.",
+        "coverLetterRequired": "Motivatiebrief is verplicht.",
+        "educationRequired": "Voeg minstens één opleiding toe.",
+        "experienceRequired": "Voeg minstens één werkervaring toe.",
+        "questionRequired": "Deze vraag is verplicht.",
+        "consentRequired": "Je moet akkoord gaan om door te gaan met je sollicitatie.",
+        "minLength": "Voer minstens {min} tekens in.",
+        "optionInvalid": "Kies een geldige optie."
       }
     },
     "careerPage": {
@@ -11684,7 +12316,10 @@
         "archiveScorecards": "Er zijn scorecards in deze fase vastgelegd. Archiveer de fase in plaats daarvan, zodat de scorecards hun fase behouden.",
         "archiveDocuments": "Aan deze fase zijn documentvereisten gekoppeld. Archiveer de fase in plaats daarvan, of verplaats eerst de vereisten.",
         "archiveAutomations": "Automatiseringen verwijzen naar deze fase. Werk ze eerst bij, of archiveer de fase in plaats daarvan.",
-        "archiveReferenced": "Deze fase wordt nog gebruikt. Archiveer hem in plaats daarvan."
+        "archiveReferenced": "Deze fase wordt nog gebruikt. Archiveer hem in plaats daarvan.",
+        "kindChangeHistory": "Sollicitaties zijn al door deze fase gegaan, en rapporten gebruiken die geschiedenis om aannames en afwijzingen te dateren. Het type wijzigen naar of van een eindresultaat zou die geschiedenis herschrijven. Maak een nieuwe fase aan van het gewenste type en archiveer deze in plaats daarvan.",
+        "shapeNoActiveStage": "De pipeline heeft minstens één actieve fase nodig die niet is aangenomen, afgewezen of teruggetrokken, zodat nieuwe sollicitanten ergens kunnen beginnen.",
+        "shapeEmptyName": "Fasenamen mogen niet leeg zijn."
       }
     },
     "mailbox": {
@@ -11723,6 +12358,14 @@
         "empty": "Deze bijlage is leeg of ongeldig.",
         "tooLarge": "Deze bijlage is groter dan de limiet van 25 MB.",
         "unsupportedType": "Dit bestandstype wordt niet ondersteund als bijlage."
+      },
+      "deliveryConflict": {
+        "unknown": "We konden niet bevestigen dat dit verzonden is. Controleer de map Verzonden voordat je opnieuw verstuurt.",
+        "inProgress": "Dit bericht wordt al verstuurd. Wacht even en controleer dan de conversatie."
+      },
+      "sendFailure": {
+        "sampleRecipient": "Dit is een voorbeeldadres en kan geen e-mail ontvangen.",
+        "generic": "Versturen mislukt. Probeer het opnieuw."
       }
     },
     "emailOutbox": {
@@ -11822,6 +12465,60 @@
       "session": {
         "sessionNotFound": "Sessie niet gevonden.",
         "memberNotFound": "Lid niet gevonden."
+      }
+    },
+    "onboarding": {
+      "actions": {
+        "invalid": "Ongeldige invoer.",
+        "failed": "Er ging iets mis. Probeer het opnieuw.",
+        "hexColorInvalid": "Gebruik een hexkleur, zoals #3f6212.",
+        "avatarInvalid": "De avatar moet een geldige URL zijn.",
+        "twoFactorRequired": "Deze werkruimte vereist tweestapsverificatie. Stel die in om verder te gaan."
+      },
+      "checklistActions": {
+        "notSkippable": "Deze stap kun je niet overslaan.",
+        "failed": "Er ging iets mis. Probeer het opnieuw."
+      }
+    },
+    "updates": {
+      "actions": {
+        "onlyOwners": "Alleen eigenaren van de werkruimte kunnen updates beheren.",
+        "somethingWrong": "Er ging iets mis.",
+        "checkFailed": "Updates controleren mislukt: {reason}",
+        "upToDate": "Harly is al up-to-date.",
+        "versionChanged": "Versie {version} is gepubliceerd terwijl deze pagina open stond. Bekijk hem en bevestig opnieuw.",
+        "updaterNotConnected": "De updater op de host is niet verbonden. Start hem met `harly updater run` en probeer het opnieuw.",
+        "alreadyInProgress": "Er loopt al een update.",
+        "alreadyPickedUp": "De updater heeft dit verzoek al opgepakt, dus het kan niet meer worden geannuleerd.",
+        "invalidSettings": "Deze instellingen zijn niet geldig.",
+        "window": {
+          "noDays": "Kies minstens één dag.",
+          "hours": "Uren moeten tussen 0 en 23 liggen.",
+          "sameHours": "Het venster heeft een starttijd nodig die anders is dan de eindtijd.",
+          "timezone": "Onbekende tijdzone."
+        }
+      }
+    },
+    "people": {
+      "username": {
+        "tooShort": "De gebruikersnaam moet minstens {min} tekens lang zijn.",
+        "tooLong": "De gebruikersnaam mag maximaal {max} tekens lang zijn.",
+        "invalidChars": "De gebruikersnaam mag alleen kleine letters, cijfers, koppeltekens en underscores bevatten.",
+        "reserved": "Deze gebruikersnaam is gereserveerd.",
+        "invalid": "Ongeldige gebruikersnaam.",
+        "taken": "Deze gebruikersnaam is al in gebruik."
+      }
+    },
+    "aiChat": {
+      "actions": {
+        "notSignedIn": "Je bent niet aangemeld."
+      }
+    },
+    "ai": {
+      "assistantBranding": {
+        "nameRequired": "Geef je assistent een naam.",
+        "nameTooLong": "Gebruik {max} tekens of minder.",
+        "avatarUrlInvalid": "De avatar moet een geldige URL zijn."
       }
     }
   }

@@ -36,7 +36,7 @@ export function facet(jobs: Job[], pick: (j: Job) => string | null): string[] {
 /** Group by department (null departments land in `other`), sorted by name. */
 export function groupByDepartment(
   jobs: Job[],
-  other = "Other",
+  other: string,
 ): Array<[string, Job[]]> {
   const map = new Map<string, Job[]>();
   jobs.forEach((j) => {

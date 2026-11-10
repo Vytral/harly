@@ -80,6 +80,15 @@ const STAGE_API_MESSAGE_KEYS = new Map<string, string>([
   ["Document requirements are attached to this stage. Archive it instead, or move the requirements first.", "archiveDocuments"],
   ["Automations reference this stage. Update those automations first, or archive the stage instead.", "archiveAutomations"],
   ["This stage is still referenced. Archive it instead.", "archiveReferenced"],
+  [
+    "Applications have already moved through this stage, and reports date hires and rejections from that history. Changing its kind to or from an outcome would rewrite it. Create a new stage of the kind you want and archive this one instead.",
+    "kindChangeHistory",
+  ],
+  [
+    "A pipeline needs at least one active stage that is not hired, rejected or withdrawn, so new applicants have somewhere to enter.",
+    "shapeNoActiveStage",
+  ],
+  ["Stage names cannot be empty.", "shapeEmptyName"],
 ]);
 
 async function translatedApiMessage(message: string): Promise<string> {

@@ -107,6 +107,7 @@ function RunRow({
   const [steps, setSteps] = useState<SerializedRunStep[] | null>(null);
   const [pending, startLoad] = useTransition();
   const t = useTranslations("features.automations.runsTimeline");
+  const tLifecycle = useTranslations("labels.automations.lifecycle");
   const statusNames = statusNameMap(t);
   const logicalStatus = run.logicalStatus ?? run.status;
 
@@ -161,7 +162,7 @@ function RunRow({
             className="rounded-full bg-muted/60 px-2 py-px text-[10px] font-medium text-muted-foreground"
             title={lifecycle.reason}
           >
-            {AUTOMATION_LIFECYCLE_STAGE_META[lifecycle.stage].label}
+            {tLifecycle(AUTOMATION_LIFECYCLE_STAGE_META[lifecycle.stage].label)}
           </span>
         </span>
         <div className="min-w-0 flex-1">

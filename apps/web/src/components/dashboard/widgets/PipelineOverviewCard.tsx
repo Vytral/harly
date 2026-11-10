@@ -6,6 +6,7 @@ import { GitBranch } from "lucide-react";
 import type { PipelineOverview } from "@/features/dashboard/widgets";
 import { Tile, TileHeader, TileLink, EmptyHint } from "./primitives";
 import { PipelineJobSelect } from "./PipelineJobSelect";
+import { stageLabel } from "@/features/pipeline/stage-label";
 
 /**
  * Funnel lanes, Applied to Hired. Token-based (dark-mode safe): quiet neutrals
@@ -29,6 +30,7 @@ export function PipelineOverviewCard({
   className?: string;
 }) {
   const t = useTranslations("shell.pipelineOverview");
+  const tStages = useTranslations("labels.pipeline.stages");
   // The pipeline page reads `?job=`; keep the job chosen here when leaving.
   const pipelineHref = (
     data.selected ? `/dashboard/pipeline?job=${data.selected.id}` : "/dashboard/pipeline"
@@ -77,7 +79,7 @@ export function PipelineOverviewCard({
                   <div className="flex items-center gap-1.5">
                     <span className={`size-1.5 shrink-0 rounded-full ${laneColor(i)}`} />
                     <span className="truncate text-xs text-soft-ink">
-                      {stage.name}
+                      {stageLabel(stage.name, tStages)}
                     </span>
                   </div>
                   <p className="font-display mt-1 text-[24px] leading-none tabular-nums text-near-ink">

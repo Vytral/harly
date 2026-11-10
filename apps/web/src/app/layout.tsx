@@ -4,7 +4,7 @@ import { GeistMono } from "geist/font/mono";
 
 import Script from "next/script";
 import { NextIntlClientProvider } from "next-intl";
-import { getLocale } from "next-intl/server";
+import { getLocale, getTranslations } from "next-intl/server";
 import { ThemeProvider } from "@/components/ThemeProvider";
 import { ConfirmProvider } from "@/components/ui/confirm-dialog";
 import { Toaster } from "@/components/ui/sonner";
@@ -41,10 +41,11 @@ export const viewport: Viewport = {
 };
 
 export async function generateMetadata(): Promise<Metadata> {
+  const t = await getTranslations("pages.root.layout");
   return {
     metadataBase: new URL(getHarlyPublicOrigin()),
     title: "Harly",
-    description: "Open-source applicant tracking system for modern teams.",
+    description: t("metaDescription"),
     icons: {
       icon: "/favicon.svg",
     },

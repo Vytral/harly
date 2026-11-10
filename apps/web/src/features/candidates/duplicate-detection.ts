@@ -11,6 +11,7 @@ import {
   ACCENT_TO,
   containsPattern,
   describeSignals,
+  type DuplicateSignal,
   foldName,
   normalizeLinkedinUrl,
   phoneKey,
@@ -21,6 +22,8 @@ export type DuplicateMatch = {
   candidateId: string;
   confidence: "high" | "medium";
   reason: string;
+  /** Deterministic signals behind a high-confidence match; the UI renders them in the viewer's language. */
+  signals?: DuplicateSignal[];
   fullName: string;
   email: string;
 };
@@ -153,6 +156,7 @@ export async function detectCandidateDuplicatesForWorkspace(input: {
         candidateId: suspect.id,
         confidence: "high" as const,
         reason: `Shared identity: ${describeSignals(signals)}.`,
+        signals,
         fullName: `${suspect.firstName} ${suspect.lastName}`,
         email: suspect.email,
       },

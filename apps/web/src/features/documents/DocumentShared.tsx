@@ -127,7 +127,7 @@ export async function uploadToStorage(
   return { key: presign.key, checksum };
 }
 
-export function formatDate(value: string, locale = "en") {
+export function formatDate(value: string, locale: string) {
   return new Intl.DateTimeFormat(locale, {
     month: "short",
     day: "numeric",

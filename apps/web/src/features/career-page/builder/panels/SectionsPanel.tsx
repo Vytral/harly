@@ -278,9 +278,9 @@ function SectionEditor({
       );
 
     case "process": {
-      const process = config.process ?? { enabled: false, title: "How we hire", steps: [] };
+      const process = config.process ?? { enabled: false, title: t("processDefaultTitle"), steps: [] };
       const ensure = (d: typeof config) => {
-        d.process ??= { enabled: false, title: "How we hire", steps: [] };
+        d.process ??= { enabled: false, title: t("processDefaultTitle"), steps: [] };
         return d.process;
       };
       return (

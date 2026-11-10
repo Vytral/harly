@@ -6,10 +6,24 @@ import type {
   JobApplicationQuestion,
 } from "@/features/jobs/config";
 import { isFieldEnabled, isFieldRequired } from "@/features/jobs/config";
+import { translatorFor } from "@/i18n/translator";
 import {
   allowedResumeContentTypes,
   maxResumeFileSize,
 } from "@/lib/storage-validation";
+
+/**
+ * Validation messages. Form actions pass the translator for the applicant's
+ * language; the public API keeps the English default.
+ */
+export type ValidationTranslate = (
+  key: string,
+  values?: Record<string, string | number | Date>,
+) => string;
+const englishMessages: ValidationTranslate = translatorFor(
+  "en",
+  "server.applications.validation",
+);
 
 const optionalText = z.preprocess(
   (value) => {
@@ -23,78 +37,99 @@ const optionalText = z.preprocess(
   z.string().optional(),
 );
 
-const optionalHttpsUrl = z.preprocess(
-  (value) => {
-    if (typeof value !== "string") {
-      return undefined;
-    }
+function createOptionalHttpsUrl(t: ValidationTranslate) {
+  return z.preprocess(
+    (value) => {
+      if (typeof value !== "string") {
+        return undefined;
+      }
 
-    const trimmed = value.trim();
-    return trimmed.length > 0 ? trimmed : undefined;
-  },
-  z
-    .string()
-    .url("Enter a valid URL.")
-    .refine(
-      (value) => value.startsWith("https://"),
-      "URL must start with https://",
-    )
-    .optional(),
-);
-
-const requiredResumeUrlSchema = z
-  .string()
-  .trim()
-  .min(1, "Resume is required.")
-  .refine(
-    (value) =>
-      value.startsWith("/uploads/") ||
-      value.startsWith("/api/storage/file?key=") ||
-      URL.canParse(value),
-    "Resume upload is invalid.",
+      const trimmed = value.trim();
+      return trimmed.length > 0 ? trimmed : undefined;
+    },
+    z
+      .string()
+      .url(t("urlInvalid"))
+      .refine(
+        (value) => value.startsWith("https://"),
+        t("urlNotHttps"),
+      )
+      .optional(),
   );
+}
 
-const optionalResumeUrlSchema = z.preprocess(
-  (value) => (typeof value === "string" && value.trim() ? value : undefined),
-  requiredResumeUrlSchema.optional(),
-);
+function createRequiredResumeUrlSchema(t: ValidationTranslate) {
+  return z
+    .string()
+    .trim()
+    .min(1, t("resumeRequired"))
+    .refine(
+      (value) =>
+        value.startsWith("/uploads/") ||
+        value.startsWith("/api/storage/file?key=") ||
+        URL.canParse(value),
+      t("resumeInvalid"),
+    );
+}
 
-const optionalDateString = z.preprocess(
-  (value) => {
-    if (typeof value !== "string") {
-      return undefined;
-    }
-    const trimmed = value.trim();
-    return trimmed.length > 0 ? trimmed : undefined;
-  },
-  z.string().regex(/^\d{4}(?:-\d{2}){0,2}$/, "Enter a valid date.").optional(),
-);
+function createOptionalResumeUrlSchema(t: ValidationTranslate) {
+  return z.preprocess(
+    (value) => (typeof value === "string" && value.trim() ? value : undefined),
+    createRequiredResumeUrlSchema(t).optional(),
+  );
+}
 
-export const candidateEducationEntrySchema = z.object({
-  id: z.string().trim().min(1),
-  school: z.string().trim().min(1, "School is required."),
-  degree: optionalText,
-  field: optionalText,
-  startDate: optionalDateString,
-  endDate: optionalDateString,
-  description: optionalText,
-});
+function createOptionalDateString(t: ValidationTranslate) {
+  return z.preprocess(
+    (value) => {
+      if (typeof value !== "string") {
+        return undefined;
+      }
+      const trimmed = value.trim();
+      return trimmed.length > 0 ? trimmed : undefined;
+    },
+    z.string().regex(/^\d{4}(?:-\d{2}){0,2}$/, t("dateInvalid")).optional(),
+  );
+}
 
-export const candidateExperienceEntrySchema = z
-  .object({
+export function createCandidateEducationEntrySchema(
+  t: ValidationTranslate = englishMessages,
+) {
+  return z.object({
     id: z.string().trim().min(1),
-    company: z.string().trim().min(1, "Company is required."),
-    title: z.string().trim().min(1, "Job title is required."),
-    startDate: optionalDateString,
-    endDate: optionalDateString,
-    current: z.boolean().optional(),
-    location: optionalText,
+    school: z.string().trim().min(1, t("schoolRequired")),
+    degree: optionalText,
+    field: optionalText,
+    startDate: createOptionalDateString(t),
+    endDate: createOptionalDateString(t),
     description: optionalText,
-  })
-  .transform((value) => ({
-    ...value,
-    endDate: value.current ? undefined : value.endDate,
-  }));
+  });
+}
+
+export function createCandidateExperienceEntrySchema(
+  t: ValidationTranslate = englishMessages,
+) {
+  return z
+    .object({
+      id: z.string().trim().min(1),
+      company: z.string().trim().min(1, t("companyRequired")),
+      title: z.string().trim().min(1, t("jobTitleRequired")),
+      startDate: createOptionalDateString(t),
+      endDate: createOptionalDateString(t),
+      current: z.boolean().optional(),
+      location: optionalText,
+      description: optionalText,
+    })
+    .transform((value) => ({
+      ...value,
+      endDate: value.current ? undefined : value.endDate,
+    }));
+}
+
+export const candidateEducationEntrySchema =
+  createCandidateEducationEntrySchema();
+export const candidateExperienceEntrySchema =
+  createCandidateExperienceEntrySchema();
 
 export type CandidateEducationEntryInput = z.infer<
   typeof candidateEducationEntrySchema
@@ -103,7 +138,11 @@ export type CandidateExperienceEntryInput = z.infer<
   typeof candidateExperienceEntrySchema
 >;
 
-function createResumeFieldsSchema(enabled: boolean, required: boolean) {
+function createResumeFieldsSchema(
+  enabled: boolean,
+  required: boolean,
+  t: ValidationTranslate,
+) {
   if (!enabled) {
     return {
       resumeUrl: z.any().optional().transform(() => undefined),
@@ -116,20 +155,20 @@ function createResumeFieldsSchema(enabled: boolean, required: boolean) {
 
   if (required) {
     return {
-      resumeUrl: requiredResumeUrlSchema,
-      resumeKey: z.string().trim().min(1, "Resume upload is invalid."),
-      resumeFileName: z.string().trim().min(1, "Resume filename is required."),
+      resumeUrl: createRequiredResumeUrlSchema(t),
+      resumeKey: z.string().trim().min(1, t("resumeInvalid")),
+      resumeFileName: z.string().trim().min(1, t("resumeFilenameRequired")),
       resumeFileType: z.enum(allowedResumeContentTypes),
       resumeFileSize: z.coerce
         .number()
         .int()
-        .positive("Resume is required.")
-        .max(maxResumeFileSize, "Resume must be 10MB or smaller."),
+        .positive(t("resumeRequired"))
+        .max(maxResumeFileSize, t("resumeTooLarge")),
     };
   }
 
   return {
-    resumeUrl: optionalResumeUrlSchema,
+    resumeUrl: createOptionalResumeUrlSchema(t),
     resumeKey: optionalText,
     resumeFileName: optionalText,
     resumeFileType: z.preprocess(
@@ -142,7 +181,7 @@ function createResumeFieldsSchema(enabled: boolean, required: boolean) {
         .number()
         .int()
         .positive()
-        .max(maxResumeFileSize, "Resume must be 10MB or smaller.")
+        .max(maxResumeFileSize, t("resumeTooLarge"))
         .optional(),
     ),
   };
@@ -154,15 +193,19 @@ function optionalOrRequiredText(required: boolean, message: string) {
     : optionalText;
 }
 
-function optionalOrRequiredHttpsUrl(required: boolean, message: string) {
+function optionalOrRequiredHttpsUrl(
+  required: boolean,
+  message: string,
+  t: ValidationTranslate,
+) {
   return required
     ? z
         .string()
         .trim()
         .min(1, message)
-        .url("Enter a valid URL.")
-        .refine((value) => value.startsWith("https://"), "URL must start with https://")
-    : optionalHttpsUrl;
+        .url(t("urlInvalid"))
+        .refine((value) => value.startsWith("https://"), t("urlNotHttps"))
+    : createOptionalHttpsUrl(t);
 }
 
 function textFieldForConfig(
@@ -179,9 +222,10 @@ function httpsUrlFieldForConfig(
   enabled: boolean,
   required: boolean,
   message: string,
+  t: ValidationTranslate,
 ) {
   return enabled
-    ? optionalOrRequiredHttpsUrl(required, message)
+    ? optionalOrRequiredHttpsUrl(required, message, t)
     : z.any().optional().transform(() => undefined);
 }
 
@@ -203,6 +247,7 @@ function collectionFieldForConfig<T extends z.ZodTypeAny>(
 
 export function createApplicationFormSchema(
   applicationConfig: JobApplicationConfig,
+  t: ValidationTranslate = englishMessages,
 ) {
   const personal = applicationConfig.sections.personal;
   const profile = applicationConfig.sections.profile;
@@ -211,73 +256,78 @@ export function createApplicationFormSchema(
   const experienceVisibility = profile.experience?.visibility ?? "optional";
 
   return z.object({
-    firstName: z.string().trim().min(1, "First name is required."),
-    lastName: z.string().trim().min(1, "Last name is required."),
+    firstName: z.string().trim().min(1, t("firstNameRequired")),
+    lastName: z.string().trim().min(1, t("lastNameRequired")),
     email: z
       .string()
       .trim()
-      .email("Enter a valid email address.")
+      .email(t("emailInvalid"))
       .transform((value) => value.toLowerCase()),
     phone: textFieldForConfig(
       isFieldEnabled(personal.phone),
       isFieldRequired(personal.phone),
-      "Phone is required.",
+      t("phoneRequired"),
     ),
     address: textFieldForConfig(
       isFieldEnabled(personal.address),
       isFieldRequired(personal.address),
-      "Address is required.",
+      t("addressRequired"),
     ),
     // Legacy client compatibility: older custom forms still submit `location`.
     // A disabled address field must not be accepted through the legacy alias.
     location: textFieldForConfig(
       isFieldEnabled(personal.address),
       false,
-      "Address is required.",
+      t("addressRequired"),
     ),
     headline: textFieldForConfig(
       isFieldEnabled(personal.headline),
       isFieldRequired(personal.headline),
-      "Headline is required.",
+      t("headlineRequired"),
     ),
     photoUrl: httpsUrlFieldForConfig(
       isFieldEnabled(personal.photo),
       isFieldRequired(personal.photo),
-      "Photo is required.",
+      t("photoRequired"),
+      t,
     ),
     linkedinUrl: httpsUrlFieldForConfig(
       isFieldEnabled(profile.linkedinUrl),
       isFieldRequired(profile.linkedinUrl),
-      "LinkedIn is required.",
+      t("linkedinRequired"),
+      t,
     ),
     githubUrl: httpsUrlFieldForConfig(
       isFieldEnabled(profile.githubUrl),
       isFieldRequired(profile.githubUrl),
-      "GitHub is required.",
+      t("githubRequired"),
+      t,
     ),
     websiteUrl: httpsUrlFieldForConfig(
       isFieldEnabled(profile.websiteUrl),
       isFieldRequired(profile.websiteUrl),
-      "Website is required.",
+      t("websiteRequired"),
+      t,
     ),
     coverLetter: textFieldForConfig(
       isFieldEnabled(details.coverLetter),
       isFieldRequired(details.coverLetter),
-      "Cover letter is required.",
+      t("coverLetterRequired"),
     ),
     educationEntries: collectionFieldForConfig(
       educationVisibility,
-      candidateEducationEntrySchema,
-      "Add at least one education entry.",
+      createCandidateEducationEntrySchema(t),
+      t("educationRequired"),
     ),
     experienceEntries: collectionFieldForConfig(
       experienceVisibility,
-      candidateExperienceEntrySchema,
-      "Add at least one experience entry.",
+      createCandidateExperienceEntrySchema(t),
+      t("experienceRequired"),
     ),
     ...createResumeFieldsSchema(
       isFieldEnabled(profile.resume),
       isFieldRequired(profile.resume),
+      t,
     ),
     questionAnswers: z.record(z.string(), z.string().max(10_000)).default({}),
     // Derived from the parsed resume; previously stripped by the schema.
@@ -360,6 +410,7 @@ export type ApplicationFormValues = {
 export function validateApplicationQuestionAnswers(
   answers: Record<string, string>,
   questions: readonly JobApplicationQuestion[],
+  t: ValidationTranslate = englishMessages,
 ) {
   const errors: Record<string, string[]> = {};
 
@@ -371,12 +422,12 @@ export function validateApplicationQuestionAnswers(
     const value = answers[question.id]?.trim() ?? "";
 
     if (question.required && value.length === 0) {
-      errors[question.id] = ["This question is required."];
+      errors[question.id] = [t("questionRequired")];
       continue;
     }
 
     if (question.type === "consent" && question.required && value !== "agree") {
-      errors[question.id] = ["You must agree to continue with your application."];
+      errors[question.id] = [t("consentRequired")];
       continue;
     }
 
@@ -385,9 +436,7 @@ export function validateApplicationQuestionAnswers(
       value.length > 0 &&
       value.length < question.minLength
     ) {
-      errors[question.id] = [
-        `Enter at least ${question.minLength} characters.`,
-      ];
+      errors[question.id] = [t("minLength", { min: question.minLength })];
       continue;
     }
 
@@ -397,7 +446,7 @@ export function validateApplicationQuestionAnswers(
       question.options &&
       !question.options.includes(value)
     ) {
-      errors[question.id] = ["Select a valid option."];
+      errors[question.id] = [t("optionInvalid")];
     }
 
     if (question.type === "url" && value.length > 0) {
@@ -405,10 +454,10 @@ export function validateApplicationQuestionAnswers(
         const url = new URL(value);
 
         if (url.protocol !== "https:") {
-          errors[question.id] = ["URL must start with https://"];
+          errors[question.id] = [t("urlNotHttps")];
         }
       } catch {
-        errors[question.id] = ["Enter a valid URL."];
+        errors[question.id] = [t("urlInvalid")];
       }
     }
   }

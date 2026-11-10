@@ -455,7 +455,7 @@ function TriggerFields({
   const [createdEndpoints, setCreatedEndpoints] = useState<typeof builderData.webhookEndpoints>([]);
   const [endpointEnabledOverrides, setEndpointEnabledOverrides] = useState<Record<string, boolean>>({});
   const [endpointSchemaOverrides, setEndpointSchemaOverrides] = useState<Record<string, Record<string, unknown>>>({});
-  const [endpointName, setEndpointName] = useState("Partner webhook");
+  const [endpointName, setEndpointName] = useState(() => t("defaultEndpointName"));
   const [newSecret, setNewSecret] = useState<{ endpointUrl: string; secret: string } | null>(null);
   const [creating, startCreating] = useTransition();
   const jobId = typeof node.filter?.jobId === "string" ? node.filter.jobId : "";

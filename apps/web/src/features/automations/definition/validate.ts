@@ -16,8 +16,10 @@ function issue(
   nodeId: string,
   fieldPath: string,
   message: string,
+  code: string,
+  values?: Record<string, string | number>,
 ): GraphValidationIssue {
-  return { nodeId, fieldPath, message };
+  return values ? { nodeId, fieldPath, message, code, values } : { nodeId, fieldPath, message, code };
 }
 
 function countConditionLeaves(tree: unknown, depth = 0): { leaves: number; maxDepth: number } {
@@ -149,80 +151,80 @@ export function validateGraph(input: unknown): GraphValidationIssue[] {
   const issues: GraphValidationIssue[] = [];
   let encoded: string;
   try { encoded = JSON.stringify(input ?? {}) ?? ""; }
-  catch { return [issue("graph", "graph", "Graph must be serializable JSON.")]; }
+  catch { return [issue("graph", "graph", "Graph must be serializable JSON.", "graphNotSerializable")]; }
   if (new TextEncoder().encode(encoded).byteLength > MAX_GRAPH_BYTES) {
-    issues.push(issue("graph", "graph", "Graph exceeds the 1 MiB payload limit."));
+    issues.push(issue("graph", "graph", "Graph exceeds the 1 MiB payload limit.", "graphTooLarge"));
     return issues;
   }
 
   const parsed = workflowGraphV2Schema.safeParse(input);
   if (!parsed.success) {
     for (const item of parsed.error.issues) {
-      issues.push(issue("graph", item.path.map(String).join(".") || "graph", item.message));
+      issues.push(issue("graph", item.path.map(String).join(".") || "graph", item.message, "graphInvalid", { detail: item.message }));
     }
     return issues;
   }
   const graph = parsed.data;
   if (graph.nodes.length > MAX_NODES) {
-    issues.push(issue("graph", "nodes", `A workflow can have at most ${MAX_NODES} steps.`));
+    issues.push(issue("graph", "nodes", `A workflow can have at most ${MAX_NODES} steps.`, "maxNodes", { max: MAX_NODES }));
   }
   if (graph.edges.length > MAX_EDGES) {
-    issues.push(issue("graph", "edges", `A workflow can have at most ${MAX_EDGES} connections.`));
+    issues.push(issue("graph", "edges", `A workflow can have at most ${MAX_EDGES} connections.`, "maxEdges", { max: MAX_EDGES }));
   }
 
   const byId = new Map<string, WorkflowNode>();
   for (const node of graph.nodes) {
     if (byId.has(node.id)) {
-      issues.push(issue(node.id, "id", "Duplicate step id."));
+      issues.push(issue(node.id, "id", "Duplicate step id.", "duplicateStepId"));
       continue;
     }
     byId.set(node.id, node);
     if (node.type === "condition") {
       const stats = countConditionLeaves(node.tree);
       if (stats.leaves > MAX_CONDITION_LEAVES) {
-        issues.push(issue(node.id, "tree", "This condition has too many clauses."));
+        issues.push(issue(node.id, "tree", "This condition has too many clauses.", "conditionTooManyClauses"));
       }
       if (stats.maxDepth > MAX_CONDITION_DEPTH) {
-        issues.push(issue(node.id, "tree", "This condition nests too deeply."));
+        issues.push(issue(node.id, "tree", "This condition nests too deeply.", "conditionTooDeep"));
       }
     }
   }
 
   const triggers = graph.nodes.filter((node) => node.type === "trigger");
   if (triggers.length !== 1) {
-    issues.push(issue("graph", "nodes", "A workflow must have exactly one trigger."));
+    issues.push(issue("graph", "nodes", "A workflow must have exactly one trigger.", "exactlyOneTrigger"));
   }
   if (!byId.has(graph.entryNodeId)) {
-    issues.push(issue("graph", "entryNodeId", "The entry step does not exist."));
+    issues.push(issue("graph", "entryNodeId", "The entry step does not exist.", "entryMissing"));
   } else if (byId.get(graph.entryNodeId)?.type !== "trigger") {
-    issues.push(issue(graph.entryNodeId, "type", "The entry step must be the trigger."));
+    issues.push(issue(graph.entryNodeId, "type", "The entry step must be the trigger.", "entryNotTrigger"));
   }
 
   const edgeKeys = new Set<string>();
   for (const edge of graph.edges) {
     if (edge.source === edge.target) {
-      issues.push(issue(edge.source, "edges", "A step cannot connect to itself."));
+      issues.push(issue(edge.source, "edges", "A step cannot connect to itself.", "selfConnection"));
     }
     const key = `${edge.source}:${edge.port}`;
     if (edgeKeys.has(key)) {
-      issues.push(issue(edge.source, `ports.${edge.port}`, "This output is already connected."));
+      issues.push(issue(edge.source, `ports.${edge.port}`, "This output is already connected.", "outputAlreadyConnected"));
     }
     edgeKeys.add(key);
     const source = byId.get(edge.source);
     const target = byId.get(edge.target);
     if (!source) {
-      issues.push(issue(edge.source, "edges", "Connection source is missing."));
+      issues.push(issue(edge.source, "edges", "Connection source is missing.", "connectionSourceMissing"));
       continue;
     }
     if (!target) {
-      issues.push(issue(edge.source, "edges", "Connection target is missing."));
+      issues.push(issue(edge.source, "edges", "Connection target is missing.", "connectionTargetMissing"));
       continue;
     }
     if (target.type === "trigger") {
-      issues.push(issue(edge.source, "edges", "Nothing can connect back to the trigger."));
+      issues.push(issue(edge.source, "edges", "Nothing can connect back to the trigger.", "connectBackToTrigger"));
     }
     if (!allowedPorts(source).includes(edge.port)) {
-      issues.push(issue(source.id, `ports.${edge.port}`, `Port “${edge.port}” is not valid on this step.`));
+      issues.push(issue(source.id, `ports.${edge.port}`, `Port “${edge.port}” is not valid on this step.`, "portInvalid", { port: edge.port }));
     }
   }
 
@@ -230,27 +232,27 @@ export function validateGraph(input: unknown): GraphValidationIssue[] {
     if (node.type === "end") continue;
     for (const port of requiredPorts(node)) {
       if (!edgeKeys.has(`${node.id}:${port}`)) {
-        issues.push(issue(node.id, `ports.${port}`, `Connect the “${port}” output.`));
+        issues.push(issue(node.id, `ports.${port}`, `Connect the “${port}” output.`, "portRequired", { port }));
       }
     }
   }
 
   for (const id of hasCycle(graph)) {
-    issues.push(issue(id, "edges", "Cycles are not allowed."));
+    issues.push(issue(id, "edges", "Cycles are not allowed.", "cycle"));
   }
 
   if (byId.has(graph.entryNodeId)) {
     const reachable = reachableFrom(graph, graph.entryNodeId);
     for (const node of graph.nodes) {
       if (!reachable.has(node.id)) {
-        issues.push(issue(node.id, "id", "This step is not reachable from the trigger."));
+        issues.push(issue(node.id, "id", "This step is not reachable from the trigger.", "unreachable"));
       }
     }
     for (const node of graph.nodes) {
       if (!reachable.has(node.id) || node.type === "end") continue;
       const outs = graph.edges.filter((edge) => edge.source === node.id);
       if (outs.length === 0) {
-        issues.push(issue(node.id, "edges", "Every path must end at an explicit End step."));
+        issues.push(issue(node.id, "edges", "Every path must end at an explicit End step.", "mustEndWithEnd"));
       }
     }
   }
@@ -262,41 +264,41 @@ export function validateGraph(input: unknown): GraphValidationIssue[] {
       : node.type === "wait" && node.resourceId ? [["resourceId", node.resourceId] as const] : [];
     if (node.type === "delay") {
       if (node.mode === "duration" && node.durationMs === undefined) {
-        issues.push(issue(node.id, "durationMs", "Set how long this step should wait."));
+        issues.push(issue(node.id, "durationMs", "Set how long this step should wait.", "durationRequired"));
       }
       if (node.mode === "next_local") {
         if (!node.localTime || !/^([01]\d|2[0-3]):[0-5]\d$/.test(node.localTime)) {
-          issues.push(issue(node.id, "localTime", "Set a valid local time in HH:MM format."));
+          issues.push(issue(node.id, "localTime", "Set a valid local time in HH:MM format.", "localTimeInvalid"));
         }
         if (!node.timeZone?.trim()) {
-          issues.push(issue(node.id, "timeZone", "Choose the time zone used by this delay."));
+          issues.push(issue(node.id, "timeZone", "Choose the time zone used by this delay.", "timeZoneRequired"));
         } else {
           try {
             new Intl.DateTimeFormat("en-US", { timeZone: node.timeZone }).format();
           } catch {
-            issues.push(issue(node.id, "timeZone", "Choose a valid IANA time zone, such as America/Santiago."));
+            issues.push(issue(node.id, "timeZone", "Choose a valid IANA time zone, such as America/Santiago.", "timeZoneInvalid"));
           }
         }
       }
     }
     if (node.type === "wait") {
       if (node.kind === "event" && !node.eventName?.trim()) {
-        issues.push(issue(node.id, "eventName", "Choose the event that should resume this step."));
+        issues.push(issue(node.id, "eventName", "Choose the event that should resume this step.", "eventRequired"));
       }
       if (node.kind === "event" && node.eventName?.trim() && !isWorkflowEvent(node.eventName)) {
-        issues.push(issue(node.id, "eventName", "Choose an event supported by the workflow dispatcher."));
+        issues.push(issue(node.id, "eventName", "Choose an event supported by the workflow dispatcher.", "eventUnsupported"));
       }
       if (node.kind === "document_package" && !node.resourceId) {
-        issues.push(issue(node.id, "resourceId", "Choose the application or document to monitor."));
+        issues.push(issue(node.id, "resourceId", "Choose the application or document to monitor.", "resourceRequired"));
       }
     }
     if (node.type === "approval" && node.eligibleActorIds.length === 0) {
-      issues.push(issue(node.id, "eligibleActorIds", "Choose at least one person who can approve."));
+      issues.push(issue(node.id, "eligibleActorIds", "Choose at least one person who can approve.", "approverRequired"));
     }
     for (const [field, binding] of bindings) {
       if (binding.kind !== "output") continue;
       if (!byId.has(binding.nodeId)) {
-        issues.push(issue(node.id, field, "This binding points at a missing step."));
+        issues.push(issue(node.id, field, "This binding points at a missing step.", "bindingMissingStep"));
         continue;
       }
       const dom = dominators.get(node.id) ?? new Set();
@@ -306,6 +308,7 @@ export function validateGraph(input: unknown): GraphValidationIssue[] {
             node.id,
             field,
             "This value comes from a branch that is not guaranteed to run.",
+            "bindingNotGuaranteed",
           ),
         );
       }

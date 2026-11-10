@@ -9,6 +9,7 @@ import { UserAvatar } from "@/components/ui/UserAvatar";
 import { cn } from "@/lib/utils";
 import type { ReviewCandidates } from "@/features/dashboard/widgets";
 import { REVIEW_QUEUE_HREF, reviewApplicationHref } from "@/features/review/rules";
+import { stageLabel } from "@/features/pipeline/stage-label";
 import { Tile, TileHeader, TileLink, EmptyHint } from "./primitives";
 
 /**
@@ -24,6 +25,7 @@ export function CandidatesNeedingReview({
   className?: string;
 }) {
   const t = useTranslations("shell.candidateReview");
+  const tStages = useTranslations("labels.pipeline.stages");
   return (
     <Tile className={className}>
       <TileHeader
@@ -57,7 +59,7 @@ export function CandidatesNeedingReview({
                       <p className="truncate text-xs text-soft-ink" title={c.job}>{c.job}</p>
                     </div>
                     <Badge variant="neutral" dot={false} className="hidden shrink-0 sm:inline-flex">
-                      {c.stage}
+                      {stageLabel(c.stage, tStages)}
                     </Badge>
                     <div className="hidden w-36 shrink-0 text-right md:block">
                       <p className="truncate text-sm font-medium">{t(c.action === "interviewFeedback" ? "interviewFeedback" : "resumeReview")}</p>

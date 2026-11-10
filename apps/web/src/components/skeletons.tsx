@@ -1,3 +1,5 @@
+import { useTranslations } from "next-intl";
+
 import { cn } from "@/lib/utils";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -19,12 +21,13 @@ type SkeletonContainerProps = {
 function SkeletonContainer({
   children,
   className,
-  ariaLabel = "Loading content",
+  ariaLabel,
 }: SkeletonContainerProps) {
+  const t = useTranslations("ui.skeletons");
   return (
     <div
       aria-busy="true"
-      aria-label={ariaLabel}
+      aria-label={ariaLabel ?? t("content")}
       className={className}
     >
       {children}
@@ -40,15 +43,16 @@ function SkeletonContainer({
 export function SkeletonRegion({
   children,
   className,
-  label = "Loading…",
+  label,
 }: {
   children: React.ReactNode;
   className?: string;
   label?: string;
 }) {
+  const t = useTranslations("ui.skeletons");
   return (
     <div aria-busy="true">
-      <span className="sr-only">{label}</span>
+      <span className="sr-only">{label ?? t("loading")}</span>
       <div className={className}>{children}</div>
     </div>
   );
@@ -174,8 +178,9 @@ export function StatsGridSkeleton({
   columns?: string;
   className?: string;
 }) {
+  const t = useTranslations("ui.skeletons");
   return (
-    <SkeletonContainer ariaLabel="Loading stats">
+    <SkeletonContainer ariaLabel={t("stats")}>
       <div className={cn(tileClass, "p-3")}>
         <div className={cn("grid grid-cols-2 gap-2", columns, className)}>
           {Array.from({ length: count }).map((_, i) => (
@@ -740,8 +745,9 @@ export function FormSkeleton({
 
 /** Month calendar grid (7 columns x 6 rows). */
 export function CalendarSkeleton({ className }: { className?: string }) {
+  const t = useTranslations("ui.skeletons");
   return (
-    <SkeletonContainer ariaLabel="Loading calendar" className={className}>
+    <SkeletonContainer ariaLabel={t("calendar")} className={className}>
       <div className="space-y-4">
         <div className="flex items-center justify-between gap-3">
           <div className="space-y-1.5">
@@ -855,8 +861,9 @@ export function DashboardSkeleton() {
 
 /** Pipeline kanban board skeleton. */
 export function PipelineBoardSkeleton({ columns = 5 }: { columns?: number }) {
+  const t = useTranslations("ui.skeletons");
   return (
-    <SkeletonContainer ariaLabel="Loading pipeline">
+    <SkeletonContainer ariaLabel={t("pipeline")}>
       <div className="space-y-4">
         <div className="flex items-center justify-between gap-3">
           <Skeleton className="h-10 w-full max-w-sm" />

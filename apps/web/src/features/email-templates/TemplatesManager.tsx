@@ -93,53 +93,22 @@ const VARIABLE_GROUPS = Array.from(
 );
 
 // Starter templates shown when the workspace has no templates yet
+// Starter bodies live in the catalog (`starters.<key>.body`), keyed by starter id.
 const STARTER_TEMPLATES: Array<{
   key: "interviewInvitation" | "applicationRejection" | "offerExtended" | "screeningCall" | "stageUpdate";
   type: TemplateType;
-  body: string;
 }> = [
-  {
-    key: "interviewInvitation",
-    type: "interview_invite",
-    body: "<p>Hi {{candidate_first_name}},</p><p>We'd love to invite you to an interview for the <strong>{{job_title}}</strong> role at {{company_name}}.</p><p><strong>Date:</strong> {{interview_date}}<br><strong>Time:</strong> {{interview_time}}<br><strong>Location:</strong> {{interview_location}}</p><p>Please let us know if this works for you.</p><p>Best,<br>{{sender_name}}</p>",
-  },
-  {
-    key: "applicationRejection",
-    type: "rejection",
-    body: "<p>Hi {{candidate_first_name}},</p><p>Thank you for your interest in the <strong>{{job_title}}</strong> position at {{company_name}} and for taking the time to apply.</p><p>After careful consideration, we've decided to move forward with other candidates whose experience more closely matches our current needs.</p><p>We'll keep your profile on file and encourage you to apply for future openings that may be a better fit.</p><p>Best of luck,<br>{{sender_name}}</p>",
-  },
-  {
-    key: "offerExtended",
-    type: "offer",
-    body: "<p>Hi {{candidate_first_name}},</p><p>We're thrilled to offer you the <strong>{{job_title}}</strong> position at {{company_name}}.</p><p><strong>Compensation:</strong> {{offer_salary}}<br><strong>Offer expires:</strong> {{offer_expiry}}</p><p>Please review the attached offer letter and let us know if you have any questions.</p><p>We're excited to have you on board,<br>{{sender_name}}</p>",
-  },
-  {
-    key: "screeningCall",
-    type: "screening",
-    body: "<p>Hi {{candidate_first_name}},</p><p>We reviewed your application for <strong>{{job_title}}</strong> at {{company_name}} and we're impressed with your background.</p><p>We'd love to schedule a quick 30-minute call to learn more about you and share details about the role.</p><p>Looking forward to connecting,<br>{{sender_name}}</p>",
-  },
-  {
-    key: "stageUpdate",
-    type: "stage_change",
-    body: "<p>Hi {{candidate_first_name}},</p><p>Good news. Your application for <strong>{{job_title}}</strong> at {{company_name}} has moved to the <strong>{{stage_name}}</strong> stage.</p><p>Someone from the team will reach out shortly with next steps.</p><p>Best,<br>{{sender_name}}</p>",
-  },
+  { key: "interviewInvitation", type: "interview_invite" },
+  { key: "applicationRejection", type: "rejection" },
+  { key: "offerExtended", type: "offer" },
+  { key: "screeningCall", type: "screening" },
+  { key: "stageUpdate", type: "stage_change" },
 ];
 
-const PREVIEW_VALUES = {
-  candidate_first_name: "Ava",
-  candidate_last_name: "Thompson",
-  candidate_full_name: "Ava Thompson",
-  job_title: "Senior Frontend Engineer",
-  stage_name: "Technical Interview",
-  interview_date: "Tuesday, July 8",
-  interview_time: "10:00 AM PST",
+const PREVIEW_URLS = {
   interview_location: "https://meet.google.com/abc-xyz",
-  offer_salary: "$140,000 / yr",
-  offer_expiry: "July 12, 2026",
   offer_url: "https://jobs.acme.com/portal/applications/offer-123",
-  company_name: "Acme Inc.",
   portal_link: "https://jobs.acme.com/portal",
-  sender_name: "You",
 };
 
 const EMPTY_DRAFT = {
@@ -163,7 +132,23 @@ export function TemplatesManager({
   const t = useTranslations("features.emailTemplates.templatesManager");
   const tLabels = useTranslations("labels.emailTemplates");
   const typeLabel = (type: TemplateType) => t(`typeLabels.${type}`);
-  const previewValues = { ...PREVIEW_VALUES, company_name: workspaceName };
+  const tSamples = useTranslations("labels.emailTemplates.samples");
+  const previewValues = {
+    candidate_first_name: "Ava",
+    candidate_last_name: "Thompson",
+    candidate_full_name: "Ava Thompson",
+    job_title: tSamples("jobTitle"),
+    stage_name: tSamples("stageName"),
+    interview_date: tSamples("interviewDate"),
+    interview_time: tSamples("interviewTime"),
+    interview_location: PREVIEW_URLS.interview_location,
+    offer_salary: tSamples("offerSalary"),
+    offer_expiry: tSamples("offerExpiry"),
+    offer_url: PREVIEW_URLS.offer_url,
+    company_name: workspaceName,
+    portal_link: PREVIEW_URLS.portal_link,
+    sender_name: tSamples("senderName"),
+  };
   const router = useRouter();
   const confirm = useConfirm();
   const [isPending, startTransition] = useTransition();

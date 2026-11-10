@@ -60,6 +60,7 @@ import type {
   PipelineStage,
 } from "@/features/pipeline/data";
 import { StageColumn } from "@/features/pipeline/StageColumn";
+import { stageLabel as localizeStageName } from "@/features/pipeline/stage-label";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -152,6 +153,7 @@ export function PipelineBoard({
   const t = useTranslations("features.pipeline.PipelineBoard");
   const boardMessages = useTranslations("labels.pipeline.board");
   const confirmMessages = useTranslations("labels.pipeline.confirmation");
+  const stageNames = useTranslations("labels.pipeline.stages");
   const [stages, setStages] = useState(initialStages);
   const baseColumns = useMemo(
     () => buildColumns(stages, applications),
@@ -244,7 +246,7 @@ export function PipelineBoard({
   }
 
   function stageLabel(stageId: string) {
-    return stages.find((stage) => stage.id === stageId)?.name ?? t("stageFallback");
+    return localizeStageName(stages.find((stage) => stage.id === stageId)?.name ?? t("stageFallback"), stageNames);
   }
 
   const dragAnnouncements: Announcements = {
@@ -584,7 +586,7 @@ export function PipelineBoard({
                 key={stage.id}
                 onClick={() => handleBulkMove(stage.id)}
               >
-                {stage.name}
+                {localizeStageName(stage.name, stageNames)}
               </DropdownMenuItem>
             ))}
           </DropdownMenuContent>
@@ -659,7 +661,7 @@ export function PipelineBoard({
                     className="size-2 shrink-0 rounded-full"
                     style={{ backgroundColor: stage.color ?? "var(--quiet-mist)" }}
                   />
-                  {stage.name}
+                  {localizeStageName(stage.name, stageNames)}
                   <span className="text-muted-foreground">
                     ({filteredColumns.get(stage.id)?.length ?? 0})
                   </span>

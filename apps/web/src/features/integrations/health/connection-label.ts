@@ -10,9 +10,12 @@ import { INTEGRATION_STATE_LABEL, type IntegrationHealthState, type IntegrationH
 export function providerStatusLabel(
   health: Pick<IntegrationHealthView, "state"> | null | undefined,
   configuredLabel: string,
+  t?: (key: string) => string,
 ): string {
   if (!health || health.state === "connected") return configuredLabel;
-  return INTEGRATION_STATE_LABEL[health.state as IntegrationHealthState];
+  const state = health.state as IntegrationHealthState;
+  if (t) return t(`features.integrations.integrationHealthNotice.states.${state}`);
+  return INTEGRATION_STATE_LABEL[state];
 }
 
 /** Pill tone for a provider panel: attention states use the warn tone. */

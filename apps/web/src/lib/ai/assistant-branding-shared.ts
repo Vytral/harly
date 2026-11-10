@@ -12,34 +12,44 @@ export const ASSISTANT_BRANDING_KEY = "assistantBranding";
 export const DEFAULT_ASSISTANT_NAME = "Harly AI";
 export const ASSISTANT_NAME_MAX = 24;
 
-// Same rule as the workspace logo: an absolute http(s) URL or a local /uploads/ path.
-const uploadUrl = z
-  .string()
-  .trim()
-  .min(1)
-  .max(2048)
-  .refine(
-    (value) => value.startsWith("/uploads/") || /^https?:\/\//.test(value),
-    "Avatar must be a valid URL.",
-  );
+/** Validation copy, resolved by the caller for the workspace's language. */
+export type AssistantBrandingTranslate = (
+  key: string,
+  values?: Record<string, string | number | Date>,
+) => string;
 
-export const assistantAvatarSchema = z.discriminatedUnion("kind", [
-  z.object({ kind: z.literal("harly") }),
-  z.object({ kind: z.literal("upload"), url: uploadUrl }),
-]);
-
-export const assistantBrandingSchema = z.object({
-  assistantName: z
+/** Same rule as the workspace logo: an absolute http(s) URL or a local /uploads/ path. */
+export function createAssistantAvatarSchema(t: AssistantBrandingTranslate) {
+  const uploadUrl = z
     .string()
     .trim()
-    .min(1, "Give your assistant a name.")
-    .max(ASSISTANT_NAME_MAX, `Use ${ASSISTANT_NAME_MAX} characters or fewer.`),
-  assistantAvatar: assistantAvatarSchema,
-  showPoweredBy: z.boolean(),
-});
+    .min(1)
+    .max(2048)
+    .refine(
+      (value) => value.startsWith("/uploads/") || /^https?:\/\//.test(value),
+      t("avatarUrlInvalid"),
+    );
 
-export type AssistantAvatar = z.infer<typeof assistantAvatarSchema>;
-export type AssistantBranding = z.infer<typeof assistantBrandingSchema>;
+  return z.discriminatedUnion("kind", [
+    z.object({ kind: z.literal("harly") }),
+    z.object({ kind: z.literal("upload"), url: uploadUrl }),
+  ]);
+}
+
+export function createAssistantBrandingSchema(t: AssistantBrandingTranslate) {
+  return z.object({
+    assistantName: z
+      .string()
+      .trim()
+      .min(1, t("nameRequired"))
+      .max(ASSISTANT_NAME_MAX, t("nameTooLong", { max: ASSISTANT_NAME_MAX })),
+    assistantAvatar: createAssistantAvatarSchema(t),
+    showPoweredBy: z.boolean(),
+  });
+}
+
+export type AssistantAvatar = z.infer<ReturnType<typeof createAssistantAvatarSchema>>;
+export type AssistantBranding = z.infer<ReturnType<typeof createAssistantBrandingSchema>>;
 
 export const DEFAULT_ASSISTANT_BRANDING: AssistantBranding = {
   assistantName: DEFAULT_ASSISTANT_NAME,
@@ -93,10 +103,15 @@ export function readAssistantBranding(
   if (!stored || typeof stored !== "object") return DEFAULT_ASSISTANT_BRANDING;
   const value = stored as Record<string, unknown>;
 
-  const name = assistantBrandingSchema.shape.assistantName.safeParse(
+  // Messages are irrelevant here (a failed field just falls back), so any
+  // translator will do.
+  const noMessage = ((key: string) => key) as AssistantBrandingTranslate;
+  const name = createAssistantBrandingSchema(noMessage).shape.assistantName.safeParse(
     value.assistantName,
   );
-  const avatar = assistantAvatarSchema.safeParse(value.assistantAvatar);
+  const avatar = createAssistantAvatarSchema(noMessage).safeParse(
+    value.assistantAvatar,
+  );
   const powered = z.boolean().safeParse(value.showPoweredBy);
 
   return {

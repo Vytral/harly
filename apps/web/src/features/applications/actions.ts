@@ -15,9 +15,9 @@ import {
 } from "@/lib/captcha";
 import { clientIp, enforceRateLimit } from "@/server/api/ratelimit";
 import {
-  candidateEducationEntrySchema,
-  candidateExperienceEntrySchema,
   createApplicationFormSchema,
+  createCandidateEducationEntrySchema,
+  createCandidateExperienceEntrySchema,
   type ApplicationFormValues,
   validateApplicationQuestionAnswers,
 } from "@/lib/validations/applications";
@@ -239,6 +239,7 @@ export async function submitApplicationAction(
   formData: FormData,
 ): Promise<ApplyJobActionState> {
   const t = await getTranslations("server.applications.actions");
+  const tValidation = await getTranslations("server.applications.validation");
   const jobContext = await getPublicJobApplicationContext(input);
 
   if (!jobContext) {
@@ -296,6 +297,7 @@ export async function submitApplicationAction(
 
   const applicationFormSchema = createApplicationFormSchema(
     jobContext.applicationConfig,
+    tValidation,
   );
   const values = {
     firstName: formData.get("firstName"),
@@ -312,11 +314,11 @@ export async function submitApplicationAction(
     coverLetter: formData.get("coverLetter"),
     educationEntries: parseEntryArray(
       formData.get("educationEntries"),
-      candidateEducationEntrySchema,
+      createCandidateEducationEntrySchema(tValidation),
     ),
     experienceEntries: parseEntryArray(
       formData.get("experienceEntries"),
-      candidateExperienceEntrySchema,
+      createCandidateExperienceEntrySchema(tValidation),
     ),
     resumeUrl: formData.get("resumeUrl"),
     resumeKey: formData.get("resumeKey"),
@@ -363,6 +365,7 @@ export async function submitApplicationAction(
   const questionErrors = validateApplicationQuestionAnswers(
     parsed.data.questionAnswers,
     jobContext.applicationConfig.questions,
+    tValidation,
   );
 
   if (Object.keys(questionErrors).length > 0) {

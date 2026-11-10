@@ -204,7 +204,9 @@ function RejectDialogBody({
         return;
       }
       if (result.emailWarning) {
-        toast.warning(`${copy.successMessage} ${result.emailWarning}`);
+        toast.warning(
+          t("successWithWarning", { message: copy.successMessage, warning: result.emailWarning }),
+        );
       } else {
         toast.success(
           sendEmail

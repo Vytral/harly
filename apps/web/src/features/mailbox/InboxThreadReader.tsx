@@ -147,7 +147,8 @@ function MessageCard({ message, senderName, collapsed, onToggle }: { message: In
   const { main, quoted } = useMemo(() => splitQuoted(message.body), [message.body]);
   const label = outbound ? (automated ? t("automated") : t("you")) : senderName;
   const bodyId = `thread-message-${message.id}`;
-  const stamp = useClientValue(() => new Date(message.receivedAt).toLocaleString(), message.receivedAt);
+  const locale = useLocale();
+  const stamp = useClientValue(() => new Date(message.receivedAt).toLocaleString(locale), message.receivedAt);
 
   return (
     <article className={cn("flex w-full", outbound ? "justify-end" : "justify-start")} aria-label={t("messageLabel", { label, time: stamp })}>

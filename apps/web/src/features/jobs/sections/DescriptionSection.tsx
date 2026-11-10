@@ -27,11 +27,16 @@ function escapeHtml(value: string) {
     .replace(/>/g, "&gt;");
 }
 
+// Role-title keywords per language, so the outline matches the title the user typed.
 function pickTemplateKey(title: string): "engineering" | "sales" | "generic" {
   const t = title.toLowerCase();
-  if (/(engineer|developer|programmer|software|backend|front[\s-]?end|full[\s-]?stack|data|devops|sre|qa)/.test(t))
+  if (
+    /(engineer|developer|programmer|software|backend|front[\s-]?end|full[\s-]?stack|data|devops|sre|qa|ingenier|desarrollad|programad|ingénieur|développeur|entwickler|ontwikkelaar|engenheir|desenvolvedor|programador)/.test(t)
+  )
     return "engineering";
-  if (/(sales|account executive|business development|bdr|sdr|revenue)/.test(t))
+  if (
+    /(sales|account executive|business development|bdr|sdr|revenue|ventas|vendedor|comercial|vente|vertrieb|verkoop|vendas)/.test(t)
+  )
     return "sales";
   return "generic";
 }
@@ -142,9 +147,10 @@ export function DescriptionSection({
 
     if (keywords.length > 0) {
       const list = `<ul>${keywords.map((kw) => `<li>${escapeHtml(kw)}</li>`).join("")}</ul>`;
-      const ri = base.findIndex((s) => /require/i.test(s.title));
+      const requirementsTitle = t("templateRequirements");
+      const ri = base.findIndex((s) => s.title === requirementsTitle);
       if (ri >= 0) base[ri] = { ...base[ri], body: list };
-      else base.push({ id: newSectionId(), title: "Requirements", body: list });
+      else base.push({ id: newSectionId(), title: requirementsTitle, body: list });
     }
 
     const roleName = title.trim() || t("thisRole");

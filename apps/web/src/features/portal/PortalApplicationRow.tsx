@@ -1,6 +1,6 @@
 import Link from "next/link";
 import type { Route } from "next";
-import { getTranslations } from "next-intl/server";
+import { getLocale, getTranslations } from "next-intl/server";
 
 import { StatusPill, type StatusPillTone } from "@/components/ui/status-pill";
 import { CaretRightIcon } from "@/components/ui/icons/phosphor";
@@ -38,7 +38,7 @@ export async function PortalApplicationRow({
   }, tProgress);
   const meta = [application.jobDepartment, application.jobLocation].filter(Boolean).join(" · ");
   const closed = application.status !== "active";
-  const appliedOn = formatShort(application.appliedAt);
+  const appliedOn = formatShort(application.appliedAt, await getLocale());
 
   return (
     <li>

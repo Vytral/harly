@@ -167,7 +167,12 @@ export function ImportCandidatesDrawer({
     const text = await selected.text();
     const prepared = prepareCandidateImport(text);
     if ("error" in prepared) {
-      toast.error(prepared.error);
+      const error = prepared.error;
+      toast.error(
+        error.code === "duplicateHeader"
+          ? t("fileErrors.duplicateHeader", { header: error.header })
+          : t(`fileErrors.${error.code}`),
+      );
       return;
     }
     setSummary(null);
@@ -198,8 +203,16 @@ export function ImportCandidatesDrawer({
     [file],
   );
 
-  const mappingError = file
+  const mappingIssue = file
     ? validateCandidateImportMapping(file.mapping)
+    : null;
+  const mappingError = mappingIssue
+    ? t(`mappingErrors.${mappingIssue}`, {
+        fullName: tField("fullName"),
+        firstName: tField("firstName"),
+        lastName: tField("lastName"),
+        email: tField("email"),
+      })
     : null;
 
   const validRowCount = rowsToImport.filter(

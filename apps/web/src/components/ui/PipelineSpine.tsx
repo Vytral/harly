@@ -1,5 +1,7 @@
 import type { StageKind } from "@harly/db/stage-kind";
+import { useTranslations } from "next-intl";
 
+import { stageLabel } from "@/features/pipeline/stage-label";
 import { buildSpine, stageDisplayName } from "@/lib/stage-visuals";
 import { cn } from "@/lib/utils";
 
@@ -63,11 +65,15 @@ export function PipelineSpine({
   showLabel = false,
   className,
 }: PipelineSpineProps) {
+  const t = useTranslations("ui.pipelineSpine");
+  const tStage = useTranslations("labels.pipeline.stages");
+  const translateStage = (key: string) => tStage(key);
   const model = buildSpine({
     current: { name: current, kind: currentKind },
     currentId,
     stages,
   });
+  const displayLabel = stageLabel(model.label, translateStage);
   const isTerminal = model.terminal !== null;
   const labelTone =
     model.terminal === "rejected"
@@ -77,10 +83,10 @@ export function PipelineSpine({
         : "text-muted-foreground";
 
   const ariaLabel = isTerminal
-    ? model.label
+    ? displayLabel
     : model.position > 0
-      ? `Stage: ${model.label} (${model.position} of ${model.total})`
-      : `Stage: ${stageDisplayName({ name: current, kind: currentKind })}`;
+      ? t("stageProgress", { label: displayLabel, position: model.position, total: model.total })
+      : t("stageOnly", { label: stageLabel(stageDisplayName({ name: current, kind: currentKind }), translateStage) });
 
   return (
     <div className={cn("flex items-center gap-2", className)}>
@@ -97,7 +103,7 @@ export function PipelineSpine({
       </div>
       {showLabel ? (
         <span className={cn("shrink-0 text-xs font-medium tabular-nums", labelTone)}>
-          {model.label}
+          {displayLabel}
         </span>
       ) : null}
     </div>

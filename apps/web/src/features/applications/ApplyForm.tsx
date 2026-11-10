@@ -696,6 +696,7 @@ export function ApplyForm({
   legalBasePath = "/legal",
 }: ApplyFormProps) {
   const t = useTranslations("features.applications.applyForm");
+  const tStorage = useTranslations("labels.storageValidation");
   const isAshby = variant === "ashby";
   const isJoin = variant === "join";
   const flatVariant = isAshby || isJoin;
@@ -1026,7 +1027,7 @@ export function ApplyForm({
       return;
     }
 
-    const validationError = getResumeFileValidationError(file);
+    const validationError = getResumeFileValidationError(file, tStorage);
 
     if (validationError) {
       setResumeFile(null);
@@ -1185,7 +1186,7 @@ export function ApplyForm({
       return;
     }
 
-    const validationError = getImageFileValidationError(file);
+    const validationError = getImageFileValidationError(file, tStorage);
     if (validationError) {
       setPhotoFile(null);
       updateField("photoUrl", "");
@@ -1228,7 +1229,7 @@ export function ApplyForm({
     }
 
     const validationError = resumeFile
-      ? getResumeFileValidationError(resumeFile)
+      ? getResumeFileValidationError(resumeFile, tStorage)
       : null;
 
     if (validationError) {

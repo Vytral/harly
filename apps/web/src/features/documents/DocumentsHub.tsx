@@ -1,6 +1,6 @@
 "use client";
 
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import { useConfirm } from "@/components/ui/confirm-dialog";
 import { useMemo, useRef, useState } from "react";
 import Link from "next/link";
@@ -141,6 +141,7 @@ function StateCell({ document }: { document: DocumentListItem }) {
 function ExpiresCell({ document }: { document: DocumentListItem }) {
   const t = useTranslations("features.documents.documentsHub");
   const tLabels = useTranslations("labels.documents");
+  const locale = useLocale();
   const hint = describeExpiry(document.expiresAt, tLabels);
   if (!document.expiresAt || !hint) return <span className="text-quiet-mist">{t("noDate")}</span>;
   return (
@@ -151,7 +152,7 @@ function ExpiresCell({ document }: { document: DocumentListItem }) {
       )}
       title={hint.days < 0 ? t("passedTitle", { label: hint.label }) : t("expiresTitle", { label: hint.label })}
     >
-      {formatDate(document.expiresAt)}
+      {formatDate(document.expiresAt, locale)}
     </span>
   );
 }
@@ -341,6 +342,7 @@ export function DocumentsHub({
   const confirm = useConfirm();
   const t = useTranslations("features.documents.documentsHub");
   const tLabels = useTranslations("labels.documents");
+  const locale = useLocale();
   const sortLabelMap = sortLabels(t);
   const [query, setQuery] = useState(initialFilters.q ?? "");
   const [category, setCategory] = useState(initialFilters.category ?? "all");
@@ -917,7 +919,7 @@ export function DocumentsHub({
                         <span className="block truncate text-sm font-medium text-near-ink">{document.name}</span>
                         <span className="mt-0.5 block truncate text-xs text-soft-ink">
                           {documentTypeLabel(document.mimeType, tLabels)} · {formatDocumentSize(document.sizeBytes)}
-                          <span className="md:hidden"> · {formatDate(document.updatedAt)}</span>
+                          <span className="md:hidden"> · {formatDate(document.updatedAt, locale)}</span>
                         </span>
                       </span>
                     </Link>
@@ -936,7 +938,7 @@ export function DocumentsHub({
                     <span className="hidden text-xs text-soft-ink md:block">
                       <ExpiresCell document={document} />
                     </span>
-                    <span className="hidden text-xs text-soft-ink md:block">{formatDate(document.updatedAt)}</span>
+                    <span className="hidden text-xs text-soft-ink md:block">{formatDate(document.updatedAt, locale)}</span>
                   </li>
                 );
               })}
@@ -991,7 +993,7 @@ export function DocumentsHub({
                   <span className="mt-auto flex flex-wrap items-center gap-x-2 gap-y-1 pt-3">
                     <StateCell document={document} />
                     <span className="text-xs text-soft-ink">
-                      {document.expiresAt ? t("expiresOn", { date: formatDate(document.expiresAt) }) : t("updatedOn", { date: formatDate(document.updatedAt) })}
+                      {document.expiresAt ? t("expiresOn", { date: formatDate(document.expiresAt, locale) }) : t("updatedOn", { date: formatDate(document.updatedAt, locale) })}
                     </span>
                   </span>
                 </Link>

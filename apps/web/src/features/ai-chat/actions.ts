@@ -1,6 +1,7 @@
 "use server";
 
 import { and, eq, isNull } from "drizzle-orm";
+import { getTranslations } from "next-intl/server";
 
 import { aiConversations, candidates, db } from "@harly/db";
 
@@ -99,7 +100,10 @@ export async function deleteConversationAction(
   conversationId: string,
 ): Promise<{ success: boolean; error?: string }> {
   const context = await getWorkspaceContextOrNull();
-  if (!context) return { success: false, error: "Not signed in." };
+  if (!context) {
+    const t = await getTranslations("server.aiChat.actions");
+    return { success: false, error: t("notSignedIn") };
+  }
 
   await db
     .delete(aiConversations)
@@ -120,10 +124,16 @@ export async function renameConversationAction(
   title: string,
 ): Promise<{ success: boolean; error?: string }> {
   const context = await getWorkspaceContextOrNull();
-  if (!context) return { success: false, error: "Not signed in." };
+  if (!context) {
+    const t = await getTranslations("server.aiChat.actions");
+    return { success: false, error: t("notSignedIn") };
+  }
 
   const trimmed = title.trim().slice(0, 120);
-  if (!trimmed) return { success: false, error: "Title is required." };
+  if (!trimmed) {
+    const t = await getTranslations("server.tasks.actions");
+    return { success: false, error: t("titleRequired") };
+  }
 
   await db
     .update(aiConversations)

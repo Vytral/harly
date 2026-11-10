@@ -48,7 +48,7 @@ export function summaryOf(
   kind: string,
   payload: Record<string, unknown>,
   t: OutboxTranslator,
-  locale = "en-US",
+  locale: string,
 ): string {
   const job = text(payload, "jobTitle");
   switch (kind) {

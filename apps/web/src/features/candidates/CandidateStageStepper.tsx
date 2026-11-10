@@ -4,6 +4,7 @@ import type { StageKind } from "@harly/db/stage-kind";
 
 import { buildSpine, type StageSource } from "@/lib/stage-visuals";
 import { cn } from "@/lib/utils";
+import { stageLabel } from "@/features/pipeline/stage-label";
 
 const STEPPER_STAGES: readonly (StageSource & { kind: StageKind })[] = [
   { name: "Applied", kind: "applied" },
@@ -26,6 +27,7 @@ export function CandidateStageStepper({
   className?: string;
 }) {
   const t = useTranslations("features.candidates.stageStepper");
+  const tStages = useTranslations("labels.pipeline.stages");
   if (!stageName) return null;
   const model = buildSpine({
     current: { name: stageName },
@@ -35,7 +37,7 @@ export function CandidateStageStepper({
 
   return (
     <ol
-      aria-label={t("progress", { label: model.label })}
+      aria-label={t("progress", { label: stageLabel(model.label, tStages) })}
       className={cn("flex min-w-0 items-center gap-1.5 text-xs", className)}
     >
       {model.segments.map((segment, index) => (
@@ -55,7 +57,7 @@ export function CandidateStageStepper({
             {segment.state === "done" ? (
               <Check className="size-3 text-success-olive" strokeWidth={2.4} />
             ) : null}
-            {segment.name}
+            {stageLabel(segment.name, tStages)}
           </span>
         </li>
       ))}

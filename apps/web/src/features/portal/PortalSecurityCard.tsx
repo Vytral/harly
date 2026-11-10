@@ -3,7 +3,7 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { startRegistration } from "@simplewebauthn/browser";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 
 import {
   changePortalPasswordAction,
@@ -37,6 +37,7 @@ export function PortalSecurityCard({
   highlightSetup: boolean;
 }) {
   const t = useTranslations("features.portal.portalSecurityCard");
+  const locale = useLocale();
   const router = useRouter();
   const [pwError, setPwError] = useState<string | null>(null);
   const [pwOk, setPwOk] = useState<string | null>(null);
@@ -90,7 +91,7 @@ export function PortalSecurityCard({
         const verify = await fetch("/api/portal/passkey/register", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ response: attestation, challengeId, name: defaultPasskeyName() }),
+          body: JSON.stringify({ response: attestation, challengeId, name: defaultPasskeyName(t) }),
         });
         if (!verify.ok) throw new Error("verify");
         router.refresh();
@@ -184,10 +185,10 @@ export function PortalSecurityCard({
                     <span className="block text-xs text-muted-foreground">
                       {k.lastUsedAt
                         ? t("addedAndLastUsed", {
-                            addedDate: new Date(k.createdAt).toLocaleDateString(),
-                            lastUsedDate: new Date(k.lastUsedAt).toLocaleDateString(),
+                            addedDate: new Date(k.createdAt).toLocaleDateString(locale),
+                            lastUsedDate: new Date(k.lastUsedAt).toLocaleDateString(locale),
                           })
-                        : t("addedOn", { date: new Date(k.createdAt).toLocaleDateString() })}
+                        : t("addedOn", { date: new Date(k.createdAt).toLocaleDateString(locale) })}
                     </span>
                   </span>
                   <button
@@ -216,8 +217,11 @@ export function PortalSecurityCard({
   );
 }
 
-function defaultPasskeyName(): string {
+type PortalSecurityT = ReturnType<typeof useTranslations>;
+
+/** Device names are brands and stay as they are; only "This device" is translated. */
+function defaultPasskeyName(t: PortalSecurityT): string {
   const ua = navigator.userAgent;
-  const device = /iPhone|iPad/.test(ua) ? "iPhone/iPad" : /Android/.test(ua) ? "Android" : /Mac/.test(ua) ? "Mac" : /Windows/.test(ua) ? "Windows" : "This device";
-  return `${device} passkey`;
+  const device = /iPhone|iPad/.test(ua) ? "iPhone/iPad" : /Android/.test(ua) ? "Android" : /Mac/.test(ua) ? "Mac" : /Windows/.test(ua) ? "Windows" : t("thisDevice");
+  return t("defaultPasskeyName", { device });
 }

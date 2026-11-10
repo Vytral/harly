@@ -15,6 +15,6 @@ describe("localized date formatting", () => {
     vi.setSystemTime(new Date("2026-05-05T12:00:00Z"));
     const value = new Date("2026-05-03T12:00:00Z");
     expect(formatShort(value, "fr")).toBe(new Intl.DateTimeFormat("fr", { month: "short", day: "numeric" }).format(value));
-    expect(formatShort(value)).toBe(formatShort(value, "en"));
+    expect(formatShort(value, "en")).toBe(new Intl.DateTimeFormat("en", { month: "short", day: "numeric" }).format(value));
   });
 });

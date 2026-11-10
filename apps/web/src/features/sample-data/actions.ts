@@ -17,11 +17,17 @@ export type SampleDataActionResult =
   | { ok: true; status: "loaded" | "already_loaded" | "removed" | "none" }
   | { ok: false; error: string };
 
+type SampleDataT = Awaited<ReturnType<typeof getTranslations>>;
+
 /** Only operator-facing messages reach the page; database text is logged, not shown. */
-function failureResult(error: unknown, fallback: string): SampleDataActionResult {
+function failureResult(
+  error: unknown,
+  t: SampleDataT,
+  fallbackKey: "loadFailed" | "removeFailed",
+): SampleDataActionResult {
   return {
     ok: false,
-    error: error instanceof SampleDataError ? error.message : fallback,
+    error: error instanceof SampleDataError ? t(error.code) : t(fallbackKey),
   };
 }
 
@@ -60,7 +66,7 @@ export async function loadSampleDataAction(): Promise<SampleDataActionResult> {
     return { ok: true, status: result.status };
   } catch (error) {
     log.error(error, "failed to load sample data");
-    return failureResult(error, t("loadFailed"));
+    return failureResult(error, t, "loadFailed");
   }
 }
 
@@ -96,6 +102,6 @@ export async function removeSampleDataAction(): Promise<SampleDataActionResult> 
     return { ok: true, status: "removed" };
   } catch (error) {
     log.error(error, "failed to remove sample data");
-    return failureResult(error, t("removeFailed"));
+    return failureResult(error, t, "removeFailed");
   }
 }

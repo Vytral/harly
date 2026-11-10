@@ -620,7 +620,8 @@ export function CandidatesTable({
 
         <TotalLine
           total={total}
-          noun="candidate"
+          noun={tx("nounSingular")}
+          pluralNoun={tx("nounPlural")}
           trailing={
             pageInfo && (pageInfo.page > 1 || pageInfo.hasNextPage) ? (
               <div className="flex items-center gap-2">

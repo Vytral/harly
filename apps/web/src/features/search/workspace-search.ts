@@ -24,7 +24,7 @@ import {
   user as authUsers,
 } from "@harly/db";
 
-import { TASK_STATUS_LABELS } from "@/features/tasks/shared";
+import { TASK_STATUS_LABELS, type TaskStatus } from "@/features/tasks/shared";
 import { getRolePolicy } from "@/features/workspaces/permissions-server";
 import { getWorkspaceContext } from "@/features/workspaces/context";
 
@@ -321,10 +321,17 @@ function buildGroup(
 export async function searchWorkspaceForActor(
   actor: WorkspaceSearchActor,
   rawQuery: string,
-  options: { limitPerGroup?: number } = {},
+  options: {
+    limitPerGroup?: number;
+    /** Translated task status for the palette. Defaults to the English label. */
+    taskStatusLabel?: (status: string) => string;
+  } = {},
 ): Promise<WorkspaceSearchResults> {
   const query = normalizeSearchQuery(rawQuery);
   if (!query) return emptyWorkspaceSearchResults("");
+  const taskStatusLabel =
+    options.taskStatusLabel ??
+    ((status: string) => TASK_STATUS_LABELS[status as TaskStatus] ?? status);
 
   const limit = clampSearchLimit(options.limitPerGroup);
   const fetchLimit = limit + 1;
@@ -396,7 +403,7 @@ export async function searchWorkspaceForActor(
       group: "tasks",
       id: task.id,
       primary: task.title,
-      secondary: TASK_STATUS_LABELS[task.status as keyof typeof TASK_STATUS_LABELS] ?? task.status,
+      secondary: taskStatusLabel(task.status),
       href: "/dashboard/tasks",
       avatarUrl: null,
       highlight: highlightRanges(task.title, query.tokens),

@@ -2,6 +2,7 @@
 
 import * as React from "react"
 import { CheckIcon, CopyIcon, EyeIcon, EyeOffIcon } from "lucide-react"
+import { useTranslations } from "next-intl"
 
 import { Button } from "@/components/ui/button"
 import { cn, copyText } from "@/lib/utils"
@@ -12,7 +13,7 @@ import { cn, copyText } from "@/lib/utils"
  */
 function SecretField({
   value,
-  label = "Secret",
+  label,
   maskedValue,
   defaultRevealed = false,
   revealable = true,
@@ -33,6 +34,8 @@ function SecretField({
   actions?: React.ReactNode
   className?: string
 }) {
+  const t = useTranslations("ui.secretField")
+  const fieldLabel = label ?? t("defaultLabel")
   const [revealed, setRevealed] = React.useState(defaultRevealed)
   const [copied, setCopied] = React.useState(false)
   const timer = React.useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -60,7 +63,7 @@ function SecretField({
       <div className="flex h-9 min-w-0 flex-1 items-center rounded-[var(--radius-btn)] border border-mist-border bg-card-inset px-3">
         <code
           className="min-w-0 flex-1 truncate font-mono text-[13px] text-near-ink select-all"
-          aria-label={revealed ? label : `${label} (hidden)`}
+          aria-label={revealed ? fieldLabel : t("hiddenLabel", { label: fieldLabel })}
         >
           {revealed || !revealable ? value : masked}
         </code>
@@ -70,16 +73,16 @@ function SecretField({
           type="button"
           variant="outline"
           size="icon"
-          aria-label={revealed ? `Hide ${label}` : `Show ${label}`}
+          aria-label={revealed ? t("hide", { label: fieldLabel }) : t("show", { label: fieldLabel })}
           aria-pressed={revealed}
           onClick={() => setRevealed((v) => !v)}
         >
           {revealed ? <EyeOffIcon /> : <EyeIcon />}
         </Button>
       ) : null}
-      <Button type="button" variant="outline" onClick={copy} aria-label={`Copy ${label}`}>
+      <Button type="button" variant="outline" onClick={copy} aria-label={t("copyLabel", { label: fieldLabel })}>
         {copied ? <CheckIcon className="text-success-olive" /> : <CopyIcon />}
-        <span aria-live="polite">{copied ? "Copied" : "Copy"}</span>
+        <span aria-live="polite">{copied ? t("copied") : t("copy")}</span>
       </Button>
       {actions}
     </div>

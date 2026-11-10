@@ -1,6 +1,7 @@
 import type { Route } from "next";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
+import { getTranslations } from "next-intl/server";
 import { and, eq } from "drizzle-orm";
 
 export const dynamic = "force-dynamic";
@@ -14,16 +15,20 @@ import { organizationExists } from "@/lib/self-host";
 import { OwnerOnboarding } from "@/features/onboarding/OwnerOnboarding";
 import { RecruiterOnboarding } from "@/features/onboarding/RecruiterOnboarding";
 
-const BUILTIN_ROLE_LABELS: Record<string, string> = {
-  owner: "Owner",
-  admin: "Admin",
-  recruiter: "Recruiter",
-  hiring_manager: "Hiring Manager",
-  coordinator: "Coordinator",
-  sourcer: "Sourcer",
-  interviewer: "Interviewer",
-  viewer: "Viewer",
-};
+const BUILTIN_ROLE_KEYS = [
+  "owner",
+  "admin",
+  "recruiter",
+  "hiring_manager",
+  "coordinator",
+  "sourcer",
+  "interviewer",
+  "viewer",
+] as const;
+
+function isBuiltinRoleKey(roleKey: string): roleKey is (typeof BUILTIN_ROLE_KEYS)[number] {
+  return (BUILTIN_ROLE_KEYS as readonly string[]).includes(roleKey);
+}
 
 /** Human label for the role assigned at invite time, used to pre-fill "Your
  *  role" in onboarding. Falls back to the custom role's display name. */
@@ -31,8 +36,10 @@ async function resolveRoleLabel(
   workspaceId: string,
   roleKey: string,
 ): Promise<string | null> {
-  const builtin = BUILTIN_ROLE_LABELS[roleKey];
-  if (builtin) return builtin;
+  if (isBuiltinRoleKey(roleKey)) {
+    const tRoles = await getTranslations("shell.userMenu.roles");
+    return tRoles(roleKey);
+  }
 
   const [customRole] = await db
     .select({ name: customRoles.name })
@@ -66,7 +73,8 @@ export default async function OnboardingPage() {
     fallbackToFirstOrganization: true,
   });
 
-  const firstName = session.user.name?.split(" ")[0] ?? "there";
+  const t = await getTranslations("pages.onboarding.page");
+  const firstName = session.user.name?.split(" ")[0] ?? t("fallbackName");
 
   // No membership yet.
   if (!context) {

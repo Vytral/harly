@@ -1444,7 +1444,7 @@ function optionalText(value: unknown): string | null {
   return typeof value === "string" && value.trim() ? value.trim() : null;
 }
 
-function formatDateTime(value: unknown): string | null {
+function formatDateTime(value: unknown, locale: string): string | null {
   const text = optionalText(value);
   if (!text) return null;
 
@@ -1455,7 +1455,7 @@ function formatDateTime(value: unknown): string | null {
   );
   if (Number.isNaN(date.getTime())) return text;
 
-  return date.toLocaleString(undefined, {
+  return date.toLocaleString(locale, {
     dateStyle: "medium",
     timeStyle: text.includes("T") ? "short" : undefined,
   });
@@ -1464,6 +1464,7 @@ function formatDateTime(value: unknown): string | null {
 function formatMoney(
   input: Record<string, unknown>,
   t: ReturnType<typeof useTranslations>,
+  locale: string,
 ): string | null {
   const amount = input.salaryAmount;
   if (typeof amount !== "number") return null;
@@ -1475,7 +1476,7 @@ function formatMoney(
       : input.salaryPeriod === "monthly"
         ? t("periodMonth")
         : "";
-  return `${currency ? `${currency} ` : ""}${amount.toLocaleString()}${period}`;
+  return `${currency ? `${currency} ` : ""}${amount.toLocaleString(locale)}${period}`;
 }
 
 function useWriteActionPreview(
@@ -1483,7 +1484,8 @@ function useWriteActionPreview(
   input: Record<string, unknown>,
 ): { title: string; details: WriteActionDetail[] } {
   const t = useTranslations("shell.harlyAI");
-  const detail = (label: string, value: string | null): WriteActionDetail[] =>
+  const locale = useLocale();
+  const detail =(label: string, value: string | null): WriteActionDetail[] =>
     value ? [{ label, value }] : [];
   const taskIds = Array.isArray(input.taskIds)
     ? input.taskIds.filter(
@@ -1511,7 +1513,7 @@ function useWriteActionPreview(
         details: [
           ...detail(t("detailTask"), optionalText(input.title)),
           ...detail(t("detailPriority"), optionalText(input.priority)),
-          ...detail(t("detailDue"), formatDateTime(input.dueDate)),
+          ...detail(t("detailDue"), formatDateTime(input.dueDate, locale)),
         ],
       };
     case "updateTask": {
@@ -1526,8 +1528,8 @@ function useWriteActionPreview(
         input.priority ? t("changePriority", { priority: String(input.priority) }) : null,
         input.clearDueDate === true
           ? t("changeDueRemove")
-          : formatDateTime(input.dueDate)
-          ? t("changeDueDate", { date: formatDateTime(input.dueDate) ?? "" })
+          : formatDateTime(input.dueDate, locale)
+          ? t("changeDueDate", { date: formatDateTime(input.dueDate, locale) ?? "" })
             : null,
         optionalText(input.ownerId) ? t("changeOwner") : null,
       ].filter((change): change is string => Boolean(change));
@@ -1573,9 +1575,9 @@ function useWriteActionPreview(
         title: t("writeActions.createOffer"),
         details: [
           ...detail(t("detailRole"), optionalText(input.title)),
-          ...detail(t("detailCompensation"), formatMoney(input, t)),
-          ...detail(t("detailStartDate"), formatDateTime(input.startDate)),
-          ...detail(t("detailExpires"), formatDateTime(input.expiresAt)),
+          ...detail(t("detailCompensation"), formatMoney(input, t, locale)),
+          ...detail(t("detailStartDate"), formatDateTime(input.startDate, locale)),
+          ...detail(t("detailExpires"), formatDateTime(input.expiresAt, locale)),
         ],
       };
     case "sendOffer":
@@ -1593,7 +1595,7 @@ function useWriteActionPreview(
             t("detailType"),
             optionalText(input.type)?.replace(/_/g, " ") ?? null,
           ),
-          ...detail(t("detailWhen"), formatDateTime(input.scheduledAt)),
+          ...detail(t("detailWhen"), formatDateTime(input.scheduledAt, locale)),
           ...detail(
             t("detailDuration"),
             typeof input.durationMins === "number"
@@ -2029,7 +2031,7 @@ function EmptyState({
   onStarter,
 }: {
   firstName: string;
-  surface?: { kind: "candidate" | "section"; label: string };
+  surface?: { kind: "candidate" | "section"; label: string; displayLabel?: string };
   onStarter: (starter: Starter) => void;
 }) {
   const t = useTranslations("shell.harlyAI");
@@ -2041,7 +2043,7 @@ function EmptyState({
     surface?.label === "Interview calendar" ? "interviews" :
     surface?.label === "Reports" ? "reports" : "home";
   const candidateName = surface?.kind === "candidate" && surface.label !== "Current candidate"
-    ? surface.label
+    ? (surface.displayLabel ?? surface.label)
     : t("thisCandidate");
   const starters = startersFor(surface).map((slot, index) => ({
     prefill: slot.prefill,
@@ -2050,7 +2052,7 @@ function EmptyState({
   }));
   const heading =
     surface?.kind === "candidate" && surface.label !== "Current candidate"
-      ? t("candidateHeading", { name: surface.label })
+      ? t("candidateHeading", { name: surface.displayLabel ?? surface.label })
       : t("greeting", { name: firstName });
   return (
     <div className="flex flex-col gap-3.5 px-1 pt-1 pb-1">
@@ -2137,6 +2139,7 @@ type HarlyChatProps = {
   surfaceContext?: {
     kind: "candidate" | "section";
     label: string;
+    displayLabel?: string;
     path: string;
   };
   automationContext?: AutomationContext;
@@ -2363,7 +2366,8 @@ function HarlyChat({
     if (!text || isBusy) return;
     const ordinal = messages.filter((m) => m.role === "user").length;
     if (surfaceContext?.label) {
-      setContextMarks((previous) => ({ ...previous, [ordinal]: surfaceContext.label }));
+      const mark = surfaceContext.displayLabel ?? surfaceContext.label;
+      setContextMarks((previous) => ({ ...previous, [ordinal]: mark }));
     }
     sendMessage(
       { text },
@@ -2996,7 +3000,7 @@ function HarlyChat({
               <PromptInputTextarea
                 placeholder={
                   surfaceContext?.kind === "candidate" && surfaceContext.label !== "Current candidate"
-                    ? t("askAbout", { name: surfaceContext.label })
+                    ? t("askAbout", { name: surfaceContext.displayLabel ?? surfaceContext.label })
                     : t("askAssistant", { name: assistant.name })
                 }
                 className="min-h-[36px] bg-transparent py-1 text-base md:text-[13.5px] dark:bg-transparent"
@@ -3182,6 +3186,7 @@ type HarlyAIPanelProps = {
   surfaceContext?: {
     kind: "candidate" | "section";
     label: string;
+    displayLabel?: string;
     path: string;
   };
   automationContext?: AutomationContext;
@@ -3407,12 +3412,12 @@ export function HarlyAIPanel({
                   ) : (
                     <LayoutGrid className="size-3.5 shrink-0" strokeWidth={2} />
                   )}
-                  <span className="truncate">{surfaceContext.label}</span>
+                  <span className="truncate">{surfaceContext.displayLabel ?? surfaceContext.label}</span>
                   <button
                     type="button"
                     onClick={() => setDetachedPath(surfaceContext.path)}
                     className="grid size-4 place-items-center rounded-full hover:bg-sage-ink/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-near-ink"
-                    aria-label={t("stopUsingContext", { name: surfaceContext.label })}
+                    aria-label={t("stopUsingContext", { name: surfaceContext.displayLabel ?? surfaceContext.label })}
                   >
                     <X className="size-3" strokeWidth={2.2} />
                   </button>
@@ -3424,7 +3429,7 @@ export function HarlyAIPanel({
                   className="inline-flex items-center gap-1.5 rounded-full border border-dashed border-mist-border px-2 py-0.5 text-[12px] text-soft-ink hover:text-near-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-near-ink"
                 >
                   <Plus className="size-3" strokeWidth={2.2} />
-                  {t("useContext", { name: surfaceContext.label })}
+                  {t("useContext", { name: surfaceContext.displayLabel ?? surfaceContext.label })}
                 </button>
               )}
             </div>

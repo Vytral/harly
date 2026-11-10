@@ -28,6 +28,7 @@ import {
 } from "@/server/events/emit";
 import { REALTIME_EVENTS } from "@/server/events/registry";
 import { emitWebhookEvent, webhookOptionsAfterPersist } from "@/server/webhooks/emit";
+import { withNotificationCopy } from "@/features/notifications/copy";
 
 const log = createLogger("tasks");
 
@@ -211,6 +212,10 @@ export async function createTask(input: CreateTaskInput): Promise<{
           title: `New task: ${data.title}`,
           body: `${user.name} assigned you a task.`,
           href: "/dashboard/tasks",
+          metadata: withNotificationCopy(undefined, {
+            key: "taskAssigned",
+            values: { title: data.title, actor: user.name },
+          }),
         });
       }
 
@@ -409,6 +414,10 @@ export async function updateTask(
           title: "Task reassigned to you",
           body: `${user.name} assigned you a task.`,
           href: "/dashboard/tasks",
+          metadata: withNotificationCopy(undefined, {
+            key: "taskReassigned",
+            values: { actor: user.name },
+          }),
         });
       }
 

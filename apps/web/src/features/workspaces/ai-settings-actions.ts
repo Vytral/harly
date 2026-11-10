@@ -14,7 +14,7 @@ import { getWorkspaceAiConfig, getWorkspaceAiStatus } from "@/lib/ai/config";
 import { fetchOpenRouterModels, getModel, resolveBaseUrl } from "@/lib/ai/registry";
 import { assertSafeAiBaseUrl } from "@/lib/ai/base-url";
 import {
-  assistantBrandingSchema,
+  createAssistantBrandingSchema,
   writeAssistantBranding,
   type AssistantBranding,
 } from "@/lib/ai/assistant-branding-shared";
@@ -308,8 +308,9 @@ export async function saveAssistantBrandingAction(
   assertNotDemo();
   const context = await requirePermission("settings:edit");
   const t = await getTranslations("server.workspaces.aiSettingsActions");
+  const tBranding = await getTranslations("server.ai.assistantBranding");
 
-  const parsed = assistantBrandingSchema.safeParse(input);
+  const parsed = createAssistantBrandingSchema(tBranding).safeParse(input);
   if (!parsed.success) {
     return {
       ok: false,

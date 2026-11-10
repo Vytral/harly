@@ -62,7 +62,7 @@ export function PdfFieldFiller({
   if (error)
     return (
       <p className="rounded-lg border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive">
-        {error}
+        {t("loadError")}
       </p>
     );
 

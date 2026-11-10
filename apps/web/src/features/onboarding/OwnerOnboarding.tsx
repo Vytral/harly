@@ -112,7 +112,7 @@ export function OwnerOnboarding({
   // Harly is single-tenant: the careers board lives at the root.
   async function ensureWorkspace(): Promise<boolean> {
     if (orgId) return true;
-    const trimmed = name.trim() || `${userName}'s workspace`;
+    const trimmed = name.trim() || t("defaultWorkspaceName", { name: userName });
     const slug = slugify(trimmed) || "workspace";
     const response = await fetch("/api/setup/complete", {
       method: "POST",

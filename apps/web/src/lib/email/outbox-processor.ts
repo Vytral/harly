@@ -102,33 +102,33 @@ const UNKNOWN_OUTCOME_NOTE =
 export const SAMPLE_RECIPIENT_NOTE =
   "Not sent: the recipient is sample data (sample.invalid). Sample data never receives email.";
 
-const dateFormatter = new Intl.DateTimeFormat("en", {
-  year: "numeric",
-  month: "long",
-  day: "numeric",
-});
-
-function formatOfferDate(value: Date | null): string | undefined {
-  return value ? dateFormatter.format(value) : undefined;
+function formatOfferDate(value: Date | null, locale: string): string | undefined {
+  return value
+    ? new Intl.DateTimeFormat(locale, { year: "numeric", month: "long", day: "numeric" }).format(value)
+    : undefined;
 }
 
 function formatOfferSalary(
   amount: number | null,
   currency: string | null,
   period: "annual" | "monthly" | null,
+  locale: string,
 ): string | undefined {
   if (!amount) return undefined;
   let money: string;
   try {
-    money = new Intl.NumberFormat("en-US", {
+    money = new Intl.NumberFormat(locale, {
       style: "currency",
       currency: currency || "USD",
       maximumFractionDigits: 0,
     }).format(amount);
   } catch {
-    money = `${amount.toLocaleString()} ${currency ?? ""}`.trim();
+    money = `${amount.toLocaleString(locale)} ${currency ?? ""}`.trim();
   }
-  return period === "monthly" ? `${money} / month` : `${money} / year`;
+  const periodLabel = translatorFor(locale, "labels.emailOutbox.salaryPeriod")(
+    period === "monthly" ? "monthly" : "annual",
+  );
+  return `${money} ${periodLabel}`;
 }
 
 type OutboxRow = typeof emailOutbox.$inferSelect;
@@ -1133,12 +1133,13 @@ async function deliverOffer(row: OutboxRow, database: typeof db = db): Promise<b
   let delivered: Awaited<ReturnType<typeof sendWorkspaceEmail>> = false;
   const recipientLocale = resolveEmailLocale(payload?.recipientLocale);
   let offerSubject = "";
-  const startDate = formatOfferDate(frozenTerms.startDate);
-  const expiresAt = formatOfferDate(frozenTerms.expiresAt);
+  const startDate = formatOfferDate(frozenTerms.startDate, recipientLocale);
+  const expiresAt = formatOfferDate(frozenTerms.expiresAt, recipientLocale);
   const salary = formatOfferSalary(
     frozenTerms.salaryAmount,
     frozenTerms.currency,
     frozenTerms.salaryPeriod,
+    recipientLocale,
   );
   const offerUrl = `${appBaseUrl().replace(/\/$/, "")}/portal/applications/${encodeURIComponent(offer.applicationId)}`;
   try {

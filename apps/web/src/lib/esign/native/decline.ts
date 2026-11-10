@@ -16,6 +16,7 @@ import {
 import { processEmailOutbox } from "@/lib/email/outbox-processor";
 import { documentAutomationContext } from "@/lib/esign/document-automation-context";
 import { createLogger } from "@/lib/logger";
+import { withNotificationCopy, type NotificationCopy } from "@/features/notifications/copy";
 import { persistDomainEvent, publishPersistedDomainEvents } from "@/server/events/emit";
 import { insertNativeNotice, loadEnvelopeSender, loadEnvelopeSigners } from "./notices";
 import type { NativeSigningTarget } from "./remote";
@@ -101,6 +102,9 @@ export async function declineNativeSignature(
     }
     const [doc] = await tx.select({ ownerId: documents.ownerId, createdById: documents.createdById }).from(documents).where(eq(documents.id, target.documentId)).limit(1);
     const notifyUserId = doc?.ownerId ?? doc?.createdById ?? sender?.id ?? null;
+    const copy: NotificationCopy = reason
+      ? { key: "signatureDeclinedWithReason", values: { name: target.name, documentName: target.documentName, reason } }
+      : { key: "signatureDeclined", values: { name: target.name, documentName: target.documentName } };
     if (notifyUserId) {
       await tx.insert(notifications).values({
         workspaceId: target.workspaceId,
@@ -112,7 +116,7 @@ export async function declineNativeSignature(
           ? t("notificationBodyWithReason", { name: target.name, documentName: target.documentName, reason })
           : t("notificationBody", { name: target.name, documentName: target.documentName }),
         href: `/dashboard/documents/${target.documentId}`,
-        metadata: { documentId: target.documentId },
+        metadata: withNotificationCopy({ documentId: target.documentId }, copy),
         dedupeKey: `sig-declined-${envelope.id}`,
       }).onConflictDoNothing({ target: [notifications.workspaceId, notifications.userId, notifications.dedupeKey] });
     }

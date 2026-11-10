@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { and, eq } from "drizzle-orm";
 import { z } from "zod";
+import { getTranslations } from "next-intl/server";
 import { db, updateRequests, workspaceUpdateSettings } from "@harly/db";
 
 import { logAuditEvent } from "@/lib/audit-log";
@@ -28,16 +29,18 @@ async function requireOwner() {
   assertNotDemo();
   const context = await getWorkspaceContext();
   if (context.roleKey !== "owner") {
-    throw new Error("Only workspace owners can manage updates.");
+    const t = await getTranslations("server.updates.actions");
+    throw new Error(t("onlyOwners"));
   }
   return context;
 }
 
-function failure(name: string, error: unknown): ActionResult {
+async function failure(name: string, error: unknown): Promise<ActionResult> {
   log.error(error, `${name} failed`);
+  const t = await getTranslations("server.updates.actions");
   return {
     ok: false,
-    error: error instanceof Error ? error.message : "Something went wrong.",
+    error: error instanceof Error ? error.message : t("somethingWrong"),
   };
 }
 
@@ -47,7 +50,8 @@ export async function checkForUpdatesAction(): Promise<ActionResult> {
     const state = await refreshLatestRelease({ force: true });
     revalidatePath("/settings/updates");
     if (state?.latestCheckError) {
-      return { ok: false, error: `Could not check for updates: ${state.latestCheckError}` };
+      const t = await getTranslations("server.updates.actions");
+      return { ok: false, error: t("checkFailed", { reason: state.latestCheckError }) };
     }
     return { ok: true };
   } catch (error) {
@@ -63,19 +67,20 @@ export async function checkForUpdatesAction(): Promise<ActionResult> {
 export async function requestUpdateAction(expectedVersion: string): Promise<ActionResult> {
   try {
     const { organization, user } = await requireOwner();
+    const t = await getTranslations("server.updates.actions");
     await reconcileUpdateRequests();
     const state = await refreshLatestRelease();
     const latest = state?.latestVersion;
     const running = currentVersion();
 
     if (!latest || classifyUpdate(running, latest) === null) {
-      throw new Error("Harly is already up to date.");
+      throw new Error(t("upToDate"));
     }
     if (latest !== expectedVersion) {
-      throw new Error(`Version ${latest} was published while this page was open. Review it and confirm again.`);
+      throw new Error(t("versionChanged", { version: latest }));
     }
     if (!isUpdaterOnline((await getUpdateState())?.updaterLastSeenAt ?? null, new Date())) {
-      throw new Error("The host updater is not connected. Start it with `harly updater run`, then try again.");
+      throw new Error(t("updaterNotConnected"));
     }
 
     let createdId: string;
@@ -94,7 +99,7 @@ export async function requestUpdateAction(expectedVersion: string): Promise<Acti
       createdId = created!.id;
     } catch {
       // The one-active-request index refused a second insert.
-      throw new Error("An update is already in progress.");
+      throw new Error(t("alreadyInProgress"));
     }
 
     await logAuditEvent({
@@ -118,6 +123,7 @@ export async function requestUpdateAction(expectedVersion: string): Promise<Acti
 export async function cancelUpdateRequestAction(requestId: string): Promise<ActionResult> {
   try {
     const { organization, user } = await requireOwner();
+    const t = await getTranslations("server.updates.actions");
     const [cancelled] = await db
       .update(updateRequests)
       .set({
@@ -135,7 +141,7 @@ export async function cancelUpdateRequestAction(requestId: string): Promise<Acti
       )
       .returning({ id: updateRequests.id });
     if (!cancelled) {
-      throw new Error("The updater already picked this request up, so it can no longer be cancelled.");
+      throw new Error(t("alreadyPickedUp"));
     }
     await logAuditEvent({
       workspaceId: organization.id,
@@ -167,8 +173,9 @@ export type AutoUpdateInput = z.input<typeof settingsSchema>;
 export async function saveAutoUpdateSettingsAction(input: AutoUpdateInput): Promise<ActionResult> {
   try {
     const { organization, user } = await requireOwner();
+    const t = await getTranslations("server.updates.actions");
     const parsed = settingsSchema.safeParse(input);
-    if (!parsed.success) throw new Error("Those settings are not valid.");
+    if (!parsed.success) throw new Error(t("invalidSettings"));
     const value = parsed.data;
     const days = [...new Set(value.days)].sort((a, b) => a - b);
     const problem = validateUpdateWindow({
@@ -179,7 +186,7 @@ export async function saveAutoUpdateSettingsAction(input: AutoUpdateInput): Prom
     });
     // Turning the policy on needs a usable window. Turning it off must always
     // work, so a half-edited window is simply not saved alongside the switch.
-    if (problem && value.enabled) throw new Error(problem);
+    if (problem && value.enabled) throw new Error(t(`window.${problem}`));
 
     const row = {
       autoUpdateEnabled: value.enabled,

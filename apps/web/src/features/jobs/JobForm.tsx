@@ -77,7 +77,10 @@ type JobFormProps = {
   previewConfig?: CareerPageConfig | null;
 };
 
-function initialSectionsFor(job?: Job): JobContentSection[] {
+function initialSectionsFor(
+  job: Job | undefined,
+  labels: { requirements: string; benefits: string },
+): JobContentSection[] {
   const existing = parseJobContentSections(job?.contentSections);
   if (existing.length > 0) return existing;
   if (job) {
@@ -85,13 +88,13 @@ function initialSectionsFor(job?: Job): JobContentSection[] {
     if (job.requirements)
       migrated.push({
         id: "migrated-req",
-        title: "Requirements",
+        title: labels.requirements,
         body: job.requirements,
       });
     if (job.benefits)
       migrated.push({
         id: "migrated-ben",
-        title: "Benefits",
+        title: labels.benefits,
         body: job.benefits,
       });
     return migrated;
@@ -227,7 +230,10 @@ export function JobForm({
   // is ever submitted as the description.
   const [description, setDescription] = useState(job?.description ?? "");
   const [sections, setSections] = useState<JobContentSection[]>(() =>
-    initialSectionsFor(job),
+    initialSectionsFor(job, {
+      requirements: t("sectionRequirements"),
+      benefits: t("sectionBenefits"),
+    }),
   );
   const [keywords, setKeywords] = useState<string[]>(() =>
     parseKeywords(job?.keywords),
@@ -642,7 +648,7 @@ export function JobForm({
         <div
           ref={scrollRef}
           {...{ [EDITOR_SCROLL_ROOT_ATTR]: "" }}
-          className="relative mx-auto flex w-full min-w-0 max-w-2xl flex-1 flex-col overflow-y-auto overscroll-contain xl:mx-0 xl:w-[34rem] xl:flex-none 2xl:w-[40rem]"
+          className="relative flex w-full min-w-0 flex-1 flex-col overflow-y-auto overscroll-contain xl:w-[34rem] xl:flex-none 2xl:w-[40rem]"
         >
           {/*
             No `min-h-full` here on purpose , percentage min-height on a flex

@@ -19,23 +19,16 @@ const WEEKDAYS = [
   "sunday",
 ] as const;
 
+// Messages are stable keys under `server.people.username`; the server action
+// translates them, so the schema stays locale-free.
 export const usernameSchema = z
   .string()
   .trim()
-  .min(
-    USERNAME_MIN_LENGTH,
-    `Username must be at least ${USERNAME_MIN_LENGTH} characters.`,
-  )
-  .max(
-    USERNAME_MAX_LENGTH,
-    `Username must be at most ${USERNAME_MAX_LENGTH} characters.`,
-  )
-  .regex(
-    /^[a-z0-9_-]+$/,
-    "Username can only contain lowercase letters, numbers, hyphens, and underscores.",
-  )
+  .min(USERNAME_MIN_LENGTH, { message: "tooShort" })
+  .max(USERNAME_MAX_LENGTH, { message: "tooLong" })
+  .regex(/^[a-z0-9_-]+$/, { message: "invalidChars" })
   .refine((value) => !RESERVED_USERNAMES.has(value), {
-    message: "This username is reserved.",
+    message: "reserved",
   });
 
 const timeOfDaySchema = z

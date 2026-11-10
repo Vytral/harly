@@ -29,7 +29,7 @@ export function formatCompensation(job: JobLike, locale: string, t: Translate): 
         maximumFractionDigits: 0,
       }).format(n);
     } catch {
-      return `${currency} ${n.toLocaleString()}`;
+      return `${currency} ${n.toLocaleString(locale)}`;
     }
   };
   const range =

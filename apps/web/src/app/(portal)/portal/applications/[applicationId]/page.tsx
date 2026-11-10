@@ -3,7 +3,7 @@ import { redirect, notFound } from "next/navigation";
 import Link from "next/link";
 import { eq, and, isNull } from "drizzle-orm";
 import type { Route } from "next";
-import { getTranslations } from "next-intl/server";
+import { getLocale, getTranslations } from "next-intl/server";
 
 import { applications, candidates, db, jobs, workspaceSettings } from "@harly/db";
 import { PORTAL_SESSION_COOKIE, resolvePortalSession } from "@/lib/portal-auth";
@@ -112,6 +112,7 @@ export default async function ApplicationDetailPage({
   searchParams,
 }: PageProps) {
   const t = await getTranslations("pages.portalApplicationDetail.page");
+  const locale = await getLocale();
   const { applicationId } = await params;
   const searchParamsMap = await searchParams;
   const cookieStore = await cookies();
@@ -330,11 +331,11 @@ export default async function ApplicationDetailPage({
               <dl className="mt-3 space-y-2.5 text-[13.5px]">
                 <div className="flex justify-between gap-4">
                   <dt className="text-soft-ink">{t("applied")}</dt>
-                  <dd className="text-right font-medium text-near-ink">{formatShort(appRow.appliedAt)}</dd>
+                  <dd className="text-right font-medium text-near-ink">{formatShort(appRow.appliedAt, locale)}</dd>
                 </div>
                 <div className="flex justify-between gap-4">
                   <dt className="text-soft-ink">{t("lastUpdate")}</dt>
-                  <dd className="text-right font-medium text-near-ink">{formatShort(appRow.updatedAt)}</dd>
+                  <dd className="text-right font-medium text-near-ink">{formatShort(appRow.updatedAt, locale)}</dd>
                 </div>
                 {details.map((detail) => (
                   <div key={detail.label} className="flex justify-between gap-4">

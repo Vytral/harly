@@ -29,6 +29,7 @@ const VARIABLE_GROUPS = Array.from(new Set(TEMPLATE_VARIABLES.map((item) => item
 export function DocumentTemplateEditorPage({ template }: { template: WorkflowDocumentTemplateItem | null }) {
   const router = useRouter();
   const t = useTranslations("features.documentTemplates.documentTemplateEditorPage");
+  const tLabels = useTranslations("labels.emailTemplates");
   const locale = useLocale();
   const confirm = useConfirm();
   const [pending, startTransition] = useTransition();
@@ -176,7 +177,7 @@ export function DocumentTemplateEditorPage({ template }: { template: WorkflowDoc
           <div className="mt-5 space-y-4">
             {VARIABLE_GROUPS.map((group) => (
               <div key={group}>
-                <p className="mb-2 text-xs font-medium text-soft-ink">{group}</p>
+                <p className="mb-2 text-xs font-medium text-soft-ink">{tLabels(`groups.${group}`)}</p>
                 <div className="flex flex-wrap gap-1.5">
                   {TEMPLATE_VARIABLES.filter((item) => item.group === group).map((item) => (
                     <button

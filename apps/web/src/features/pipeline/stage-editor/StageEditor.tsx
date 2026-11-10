@@ -20,7 +20,8 @@ import {
 } from "@dnd-kit/sortable";
 import { AlertTriangle, ChevronDown, RefreshCw } from "lucide-react";
 import type { StageKind } from "@harly/db/stage-kind";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
+import { stageLabel } from "@/features/pipeline/stage-label";
 
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -69,6 +70,8 @@ export function StageEditor({
   const t = useTranslations("features.pipeline.StageEditor");
   const labels = useTranslations("labels.pipeline.stageEditor");
   const kindNames = useTranslations("labels.pipeline.stageKinds");
+  const tStages = useTranslations("labels.pipeline.stages");
+  const locale = useLocale();
   const router = useRouter();
   const motionSafe = useMotionSafe();
   const editor = useStageEditor({ jobId, onMutated: () => router.refresh() });
@@ -261,11 +264,11 @@ export function StageEditor({
                     >
                       {archived.map((stage) => (
                         <li key={stage.id} className="flex flex-wrap items-center justify-between gap-2 px-3 py-2.5 text-sm">
-                          <span className="font-medium text-foreground">{stage.name}</span>
+                          <span className="font-medium text-foreground">{stageLabel(stage.name, tStages)}</span>
                           <span className="text-xs text-muted-foreground">
                             {t("archivedStageMeta", {
                               kind: kindNames(stage.kind),
-                              date: stage.archivedAt ? formatShort(stage.archivedAt) : "",
+                              date: stage.archivedAt ? formatShort(stage.archivedAt, locale) : "",
                             })}
                           </span>
                         </li>

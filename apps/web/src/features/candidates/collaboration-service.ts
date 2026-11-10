@@ -14,6 +14,8 @@ import {
   user,
 } from "@harly/db";
 
+import { withNotificationCopy } from "@/features/notifications/copy";
+
 /**
  * API-only candidate collaboration service.
  *
@@ -264,7 +266,16 @@ export async function createCandidateNoteForApi(input: {
           title: `${actor.name} mentioned you on ${candidate.firstName} ${candidate.lastName}`,
           body: body.slice(0, 200),
           href: `/dashboard/candidates/${input.candidateId}`,
-          metadata: { noteId: note.id },
+          metadata: withNotificationCopy(
+            { noteId: note.id },
+            {
+              key: "noteMentioned",
+              values: {
+                actor: actor.name,
+                candidate: `${candidate.firstName} ${candidate.lastName}`,
+              },
+            },
+          ),
         })),
       );
     }

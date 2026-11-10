@@ -264,6 +264,7 @@ export function CandidateFileUpload({
   initialFiles,
 }: CandidateFileUploadProps) {
   const t = useTranslations("features.candidates.CandidateFileUpload");
+  const tStorage = useTranslations("labels.storageValidation");
   const inputRef = useRef<HTMLInputElement>(null);
   const [files, setFiles] = useState(initialFiles);
   const [isPending, startTransition] = useTransition();
@@ -273,7 +274,7 @@ export function CandidateFileUpload({
   function handleFile(file: File | null) {
     if (!file) return;
 
-    const validationError = getResumeFileValidationError(file);
+    const validationError = getResumeFileValidationError(file, tStorage);
     if (validationError) {
       toast.error(validationError);
       return;

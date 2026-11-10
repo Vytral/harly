@@ -33,6 +33,24 @@ Before tagging, write the version section below. Use these headings when they
 apply: `Added`, `Changed`, `Fixed`, `Removed`, `Security`. Note migrations and
 anything an operator must do before upgrading.
 
+## [Unreleased]
+
+### Added
+
+- The web app is available in English, Spanish, French, German, Brazilian
+  Portuguese and Dutch. Harly picks the language from the browser, and each
+  person can change it in Settings → Account or on the sign-in and onboarding
+  screens. Interview emails go out in the candidate's language. Translations
+  are managed through Crowdin (`crowdin.yml`); see `CONTRIBUTING.md`.
+- Notifications, default pipeline stage names, duplicate-candidate prompts and
+  the built-in email, job and document templates show in the viewer's language.
+
+### Fixed
+
+- The job editor form now uses the full width on narrow windows, scrolls from
+  anywhere on the page, and no longer loads the live preview unless there is
+  room to show it.
+
 ## [0.4.0]
 
 A release that makes a fresh installation usable without a mail provider, an AI

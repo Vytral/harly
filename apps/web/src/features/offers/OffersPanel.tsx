@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import {
   BadgeCheck,
   BadgeDollarSign,
@@ -49,6 +49,7 @@ export function OffersPanel({
 }) {
   const router = useRouter();
   const t = useTranslations("features.offers.offersPanel");
+  const locale = useLocale();
   const canManage = access?.canManage !== false;
   const canDecide = access?.canDecide !== false;
   const [isPending, startTransition] = useTransition();
@@ -97,7 +98,7 @@ export function OffersPanel({
         <div className="space-y-4 duration-300 animate-in fade-in slide-in-from-bottom-1">
           {offers.map((offer) => {
             const meta = OFFER_STATUS_META[offer.status];
-            const comp = formatOfferComp(offer);
+            const comp = formatOfferComp(offer, locale);
             const startDate = offer.startDate;
             const expiresAt = offer.expiresAt;
             const decidedAt = offer.decidedAt;
@@ -116,7 +117,7 @@ export function OffersPanel({
                       <p className="text-sm text-muted-foreground">{offer.jobTitle}</p>
                       <div className="mt-0.5 flex flex-wrap items-center gap-2">
                         <p className="text-base font-semibold tracking-tight">{offer.title}</p>
-                        <Badge variant={meta.variant}>{meta.label}</Badge>
+                        <Badge variant={meta.variant}>{t(`statusLabel.${offer.status}`)}</Badge>
                       </div>
                     </div>
                     <div className="flex flex-wrap gap-2">

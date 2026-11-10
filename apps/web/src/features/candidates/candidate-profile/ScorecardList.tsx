@@ -4,6 +4,7 @@ import { Minus, ThumbsDown, ThumbsUp } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { RelativeTime } from "@/lib/date-hydration";
 import { cn } from "@/lib/utils";
+import { stageLabel } from "@/features/pipeline/stage-label";
 
 import type { Scorecard } from "./types";
 
@@ -27,6 +28,7 @@ const RATING_META = {
 
 export function ScorecardList({ scorecards }: { scorecards: Scorecard[] }) {
   const t = useTranslations("features.candidates.scorecardList");
+  const tStages = useTranslations("labels.pipeline.stages");
   return (
     <div className="space-y-3 duration-300 animate-in fade-in slide-in-from-bottom-1">
       {scorecards.map((scorecard) => {
@@ -52,7 +54,7 @@ export function ScorecardList({ scorecards }: { scorecards: Scorecard[] }) {
                   {t(`rating.${scorecard.rating}`)}
                 </span>
                 {scorecard.stageName ? (
-                  <Badge variant="neutral">{scorecard.stageName}</Badge>
+                  <Badge variant="neutral">{stageLabel(scorecard.stageName, tStages)}</Badge>
                 ) : null}
               </div>
               {scorecard.comment ? (

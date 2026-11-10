@@ -4,7 +4,7 @@ import { useConfirm } from "@/components/ui/confirm-dialog";
 import Link from "next/link";
 import type { Route } from "next";
 import { useRouter } from "next/navigation";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import { useState, useTransition } from "react";
 import {
   Archive,
@@ -55,6 +55,7 @@ export function DocumentTemplatesManager({
 }) {
   const router = useRouter();
   const t = useTranslations("features.documentTemplates.documentTemplatesManager");
+  const locale = useLocale();
   const confirm = useConfirm();
   const [pending, startTransition] = useTransition();
   const [generateFor, setGenerateFor] = useState<string | null>(null);
@@ -158,7 +159,7 @@ export function DocumentTemplatesManager({
                       )}
                     </span>
                   </span>
-                  <span className="pl-12 text-xs text-soft-ink md:pl-0">{formatDate(template.updatedAt.toISOString())}</span>
+                  <span className="pl-12 text-xs text-soft-ink md:pl-0">{formatDate(template.updatedAt.toISOString(), locale)}</span>
                   <span className="absolute top-3 right-3 z-10 md:static">
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
@@ -219,7 +220,7 @@ export function DocumentTemplatesManager({
                   <p className="truncate text-sm text-near-ink">{template.name}</p>
                   <p className="text-xs text-soft-ink">
                     {t("archivedOn", {
-                      date: template.archivedAt ? formatDate(template.archivedAt.toISOString()) : "",
+                      date: template.archivedAt ? formatDate(template.archivedAt.toISOString(), locale) : "",
                     })}
                   </p>
                 </div>

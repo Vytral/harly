@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import { useRouter } from "next/navigation";
 import {
   BellRing,
@@ -102,20 +102,20 @@ export function useSignerActions(document: DocumentListItem) {
   return { busyId, remind, copyLink };
 }
 
-function signerDetail(t: Translator, signer: DocumentSignerItem) {
+function signerDetail(t: Translator, signer: DocumentSignerItem, locale: string) {
   const parts: string[] = [];
-  if (signer.state === "signed" && signer.signedAt) parts.push(t("signedOn", { date: formatDate(signer.signedAt) }));
+  if (signer.state === "signed" && signer.signedAt) parts.push(t("signedOn", { date: formatDate(signer.signedAt, locale) }));
   else if (signer.state === "declined") {
-    parts.push(signer.declinedAt ? t("declinedOn", { date: formatDate(signer.declinedAt) }) : t("declined"));
+    parts.push(signer.declinedAt ? t("declinedOn", { date: formatDate(signer.declinedAt, locale) }) : t("declined"));
     if (signer.declinedReason) parts.push(signer.declinedReason);
   } else if (signer.state === "invited" || signer.state === "expired") {
-    if (signer.invitedAt) parts.push(t("invitedOn", { date: formatDate(signer.invitedAt) }));
-    if (signer.lastRemindedAt) parts.push(t("remindedOn", { date: formatDate(signer.lastRemindedAt) }));
+    if (signer.invitedAt) parts.push(t("invitedOn", { date: formatDate(signer.invitedAt, locale) }));
+    if (signer.lastRemindedAt) parts.push(t("remindedOn", { date: formatDate(signer.lastRemindedAt, locale) }));
     if (signer.linkExpiresAt)
       parts.push(
         signer.state === "expired"
-          ? t("expiredOn", { date: formatDate(signer.linkExpiresAt) })
-          : t("linkExpiresOn", { date: formatDate(signer.linkExpiresAt) }),
+          ? t("expiredOn", { date: formatDate(signer.linkExpiresAt, locale) })
+          : t("linkExpiresOn", { date: formatDate(signer.linkExpiresAt, locale) }),
       );
   }
   return parts.join(" · ");
@@ -138,8 +138,9 @@ function SignerRow({
 }) {
   const t = useTranslations("features.documents.signatureStatusCard");
   const tLabels = useTranslations("labels.documents");
+  const locale = useLocale();
   const meta = SIGNER_STATE_META[signer.state];
-  const detail = signerDetail(t, signer);
+  const detail = signerDetail(t, signer, locale);
   const done = signer.state === "signed";
   return (
     <li className="relative flex gap-3 pb-4 last:pb-0">
@@ -215,6 +216,7 @@ export function SignatureStatusCard({
   const t = useTranslations("features.documents.signatureStatusCard");
   const actions = useSignerActions(document);
   const tLabels = useTranslations("labels.documents");
+  const locale = useLocale();
   const statusKey = document.signatureStatus in SIGNATURE_STATUS_META ? document.signatureStatus : "unsigned";
   const status = document.signatureStatus;
   const provider = document.signatureProvider;
@@ -275,14 +277,14 @@ export function SignatureStatusCard({
         {signed ? (
           <div className="space-y-2">
             {signature?.completedAt ? (
-              <p className="text-[13px] text-soft-ink">{t("completedOn", { date: formatDate(signature.completedAt) })}</p>
+              <p className="text-[13px] text-soft-ink">{t("completedOn", { date: formatDate(signature.completedAt, locale) })}</p>
             ) : null}
             {document.manualSignatureNote ? (
               <Callout tone="warning" title={t("recordedOffline")}>
                 {document.manualSignatureNote}
                 <span className="mt-1 block text-[12px] text-soft-ink">
                   {document.manualSignedAt
-                    ? t("signedByAt", { name: document.manualSignedByName ?? t("manager"), date: formatDate(document.manualSignedAt) })
+                    ? t("signedByAt", { name: document.manualSignedByName ?? t("manager"), date: formatDate(document.manualSignedAt, locale) })
                     : (document.manualSignedByName ?? t("manager"))}
                 </span>
               </Callout>

@@ -4,6 +4,7 @@ import { Card } from "@/components/ui/card";
 import { useTranslations } from "next-intl";
 import { InfoRow, InfoRows } from "@/components/ui/info-row";
 import { ShortDate } from "@/lib/date-hydration";
+import { stageLabel } from "@/features/pipeline/stage-label";
 import {
   RejectionReasonTag,
   type ApplicationRejectionSummary,
@@ -47,6 +48,7 @@ export function CandidateSummaryCard({
   rejection?: ApplicationRejectionSummary | null;
 }) {
   const t = useTranslations("candidates.summaryCard");
+  const tStages = useTranslations("labels.pipeline.stages");
   return (
     <Card className="gap-0 py-0">
       <h2 className="px-5 py-4 text-[15px] font-semibold tracking-[-0.01em] text-near-ink">
@@ -55,7 +57,7 @@ export function CandidateSummaryCard({
       <div className="border-t border-hairline p-3">
         <InfoRows>
           <InfoRow label={t("job")} value={jobTitle} />
-          <InfoRow label={t("stage")} value={stageName} />
+          <InfoRow label={t("stage")} value={stageName ? stageLabel(stageName, tStages) : null} />
           {rejection?.reasonLabel ? (
             <InfoRow
               label={t("rejection")}

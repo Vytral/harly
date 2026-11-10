@@ -147,12 +147,11 @@ export function TotalLine({
 }: {
   total: number;
   noun: string;
-  pluralNoun?: string;
+  pluralNoun: string;
   trailing?: ReactNode;
 }) {
   const t = useTranslations("candidates.directoryChrome");
   const locale = useLocale();
-  const plural = pluralNoun ?? `${noun}s`;
   return (
     <div className="flex min-h-12 items-center justify-between gap-3 border-t border-hairline px-5 py-3 text-[13px] text-soft-ink">
       <p aria-live="polite">
@@ -160,7 +159,7 @@ export function TotalLine({
         <span className="font-medium tabular-nums text-near-ink">
           {new Intl.NumberFormat(locale).format(total)}
         </span>{" "}
-        {total === 1 ? noun : plural}
+        {total === 1 ? noun : pluralNoun}
       </p>
       {trailing}
     </div>

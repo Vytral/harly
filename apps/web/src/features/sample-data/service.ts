@@ -62,11 +62,12 @@ export type RemoveSampleDataResult =
   | { status: "none" };
 
 /**
- * A load that cannot be completed for a reason the operator can act on. Its
- * message is safe to show as is; any other failure is logged and generalised.
+ * A load that cannot be completed for a reason the operator can act on. The
+ * `code` selects the message the operator sees (`server.sampleData.actions`);
+ * any other failure is logged and generalised.
  */
 export class SampleDataError extends Error {
-  constructor(message: string) {
+  constructor(readonly code: "emailConflict", message: string) {
     super(message);
     this.name = "SampleDataError";
   }
@@ -116,6 +117,7 @@ function toSampleLoadError(error: unknown): unknown {
     const row = cause as { code?: unknown; constraint_name?: unknown; cause?: unknown };
     if (row.code === "23505" && row.constraint_name === CANDIDATE_EMAIL_INDEX) {
       return new SampleDataError(
+        "emailConflict",
         "Sample data was not loaded: a candidate already uses one of the sample email addresses, such as amara.okafor@sample.invalid. Rename or remove that candidate, then load again.",
       );
     }

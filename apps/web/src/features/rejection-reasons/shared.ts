@@ -85,7 +85,7 @@ export const rejectionReasonLabelSchema = z
 /** What the recruiter decides in RejectDialog. */
 export const rejectionDecisionSchema = z
   .object({
-    reasonCode: z.string().trim().min(1, "Choose a rejection reason.").max(64),
+    reasonCode: z.string().trim().min(1, "chooseRejectionReason").max(64),
     note: z
       .string()
       .trim()
@@ -110,7 +110,7 @@ export const rejectApplicationsSchema = rejectionDecisionSchema
   })
   .strict()
   .refine((value) => new Set(value.applicationIds).size === value.applicationIds.length, {
-    message: "Duplicate applications.",
+    message: "duplicateApplications",
     path: ["applicationIds"],
   });
 

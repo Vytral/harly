@@ -66,6 +66,7 @@ export function CandidateAvatarEdit({
   className,
 }: CandidateAvatarEditProps) {
   const t = useTranslations("features.candidates.CandidateAvatarEdit");
+  const tStorage = useTranslations("labels.storageValidation");
   const router = useRouter();
   const inputRef = useRef<HTMLInputElement>(null);
   const [saving, startTransition] = useTransition();
@@ -77,7 +78,7 @@ export function CandidateAvatarEdit({
 
   function handleFileSelect(file: File | null) {
     if (!file) return;
-    const error = getImageFileValidationError(file);
+    const error = getImageFileValidationError(file, tStorage);
     if (error) {
       toast.error(error);
       return;

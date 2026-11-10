@@ -14,6 +14,7 @@ import {
 } from "@harly/db";
 
 import { requirePermission } from "@/features/workspaces/permissions-server";
+import { withNotificationCopy } from "@/features/notifications/copy";
 import { createLogger } from "@/lib/logger";
 import { canReviewRequest } from "./requests-shared";
 import { associationTargetsInScope } from "./scope-access";
@@ -141,7 +142,10 @@ export async function requestDocuments(input: {
           ? `Please upload: ${parsed.data.items[0]!.title}.`
           : `You have ${count} documents to upload for your application.`,
       href: `/portal/applications/${application.id}`,
-      metadata: { applicationId: application.id, count },
+      metadata: withNotificationCopy(
+        { applicationId: application.id, count },
+        { key: "documentRequested", values: { count, title: parsed.data.items[0]!.title } },
+      ),
     });
   });
 
@@ -227,7 +231,13 @@ export async function reviewDocumentRequest(input: {
           ? `Your upload for "${request.title}" was accepted.`
           : `Your upload for "${request.title}" was declined. Please upload it again.`,
       href: `/portal/applications/${request.applicationId}`,
-      metadata: { requestId: request.id, applicationId: request.applicationId },
+      metadata: withNotificationCopy(
+        { requestId: request.id, applicationId: request.applicationId },
+        {
+          key: parsed.data.decision === "accepted" ? "documentAccepted" : "documentDeclined",
+          values: { title: request.title },
+        },
+      ),
     });
   });
 

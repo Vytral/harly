@@ -31,7 +31,7 @@ import {
 } from "../runtime/simulation-fixtures";
 import type { NodeOutcome } from "../runtime/advance";
 import { parseWebhookSimulationPayload } from "../webhook-simulation";
-import { triggerMeta } from "./catalog";
+import { actionMeta, triggerMeta, type BuilderT } from "./catalog";
 import { ScopedSearchSelect } from "./inspector/ScopedSearchSelect";
 
 /**
@@ -186,7 +186,7 @@ export function DryRunPanel({
       }
       webhookPayload = parsedPayload.payload;
     }
-    const parsed = parseFixtureDrafts(t, fixtureNodes, fixtures);
+    const parsed = parseFixtureDrafts(t, tl, fixtureNodes, fixtures);
     if (parsed.error) {
       setFixtureError(parsed.error);
       setResult(null);
@@ -533,7 +533,7 @@ export function DryRunPanel({
                 <div className="min-w-0">
                   <p className="font-semibold">
                     {result.triggerMatched
-                      ? t("finished", { terminal: result.terminal.replaceAll("_", " ") })
+                      ? t("finished", { terminal: terminalLabel(t, result.terminal) })
                       : t("triggerNotMatched")}
                   </p>
                   <p className="mt-0.5 text-[11px] opacity-90">
@@ -779,12 +779,32 @@ function toFixtureDraft(
   };
 }
 
+const KNOWN_TERMINALS = [
+  "succeeded",
+  "completedWithWarnings",
+  "stopped",
+  "failed",
+  "uncertain",
+  "cancelled",
+  "needsFixture",
+  "invalid",
+] as const;
+
+function terminalLabel(t: Translator, terminal: string): string {
+  const key = terminal.replace(/_([a-z])/g, (_, char: string) => char.toUpperCase());
+  return (KNOWN_TERMINALS as readonly string[]).includes(key)
+    ? t(`terminal.${key}`)
+    : terminal.replaceAll("_", " ");
+}
+
 function fixtureLabel(
   t: Translator,
+  tl: BuilderT,
   node: WorkflowGraphV2["nodes"][number],
 ): string {
   if (node.name?.trim()) return node.name.trim();
-  if (node.type === "action") return node.actionType.replaceAll("_", " ");
+  if (node.type === "action")
+    return actionMeta(node.actionType, tl)?.label ?? node.actionType.replaceAll("_", " ");
   if (node.type === "wait")
     return node.kind === "document_package"
       ? t("documentPackage")
@@ -795,6 +815,7 @@ function fixtureLabel(
 
 function parseFixtureDrafts(
   t: Translator,
+  tl: BuilderT,
   nodes: WorkflowGraphV2["nodes"],
   drafts: Record<string, FixtureDraft | null>,
 ): { fixtures?: Record<string, NodeOutcome>; error?: string } {
@@ -815,12 +836,12 @@ function parseFixtureDrafts(
         };
       } catch {
         return {
-          error: t("resultPayloadInvalid", { label: fixtureLabel(t, node) }),
+          error: t("resultPayloadInvalid", { label: fixtureLabel(t, tl, node) }),
         };
       }
     } else if (draft.status === "failed") {
       if (!draft.code.trim())
-        return { error: t("errorCodeMissing", { label: fixtureLabel(t, node) }) };
+        return { error: t("errorCodeMissing", { label: fixtureLabel(t, tl, node) }) };
       result[node.id] = {
         status: "failed",
         code: draft.code.trim(),
@@ -832,7 +853,7 @@ function parseFixtureDrafts(
     } else {
       if (!draft.code.trim())
         return {
-          error: t("uncertaintyCodeMissing", { label: fixtureLabel(t, node) }),
+          error: t("uncertaintyCodeMissing", { label: fixtureLabel(t, tl, node) }),
         };
       result[node.id] = { status: "uncertain", code: draft.code.trim() };
     }
@@ -852,6 +873,7 @@ function FixtureEditor({
   onChange: (value: FixtureDraft | null) => void;
 }) {
   const t = useTranslations("features.automations.dryRunPanel");
+  const tl = useTranslations("labels.automations");
   const ports = outputPorts(node);
   const update = (patch: Partial<FixtureDraft>) =>
     onChange(value ? { ...value, ...patch } : toFixtureDraft(node, "success"));
@@ -860,7 +882,7 @@ function FixtureEditor({
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="min-w-0">
           <p className="truncate text-xs font-semibold capitalize text-foreground">
-            {fixtureLabel(t, node)}
+            {fixtureLabel(t, tl, node)}
           </p>
           <p className="mt-0.5 text-[11px] text-soft-ink">
             {t("simulatedResponse")}
@@ -884,7 +906,7 @@ function FixtureEditor({
               compact: true,
               surface: "warm-paper",
             })}
-            aria-label={t("syntheticOutcome", { label: fixtureLabel(t, node) })}
+            aria-label={t("syntheticOutcome", { label: fixtureLabel(t, tl, node) })}
           >
             <option value="succeeded">{t("optionSucceeds")}</option>
             <option value="failed">{t("optionFails")}</option>

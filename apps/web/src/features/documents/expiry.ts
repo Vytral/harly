@@ -2,6 +2,7 @@ import "server-only";
 
 import { and, eq, sql } from "drizzle-orm";
 
+import { withNotificationCopy } from "@/features/notifications/copy";
 import { processEmailOutbox } from "@/lib/email/outbox-processor";
 import { insertNativeNotice, loadEnvelopeSender, loadEnvelopeSigners } from "@/lib/esign/native/notices";
 
@@ -151,7 +152,10 @@ export async function expireOverdueDocuments(database: typeof db = db): Promise<
             title: "Document expired",
             body: `"${doc.name}" passed its expiration date and needs review.`,
             href: `/dashboard/documents/${doc.id}`,
-            metadata: { documentId: doc.id },
+            metadata: withNotificationCopy(
+              { documentId: doc.id },
+              { key: "documentExpired", values: { documentName: doc.name } },
+            ),
             dedupeKey: `doc-expired-${doc.id}`,
           })
           .onConflictDoNothing({

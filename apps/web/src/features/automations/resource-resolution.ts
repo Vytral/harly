@@ -18,6 +18,7 @@ import {
 import { requireActorPermission } from "@/features/workspaces/permissions-server";
 import type { Permission } from "@/features/workspaces/permissions";
 import { getIntegrationStatuses } from "@/features/workspaces/integrations-registry";
+import { getTranslations } from "@/i18n/server";
 import { getWorkspaceCalConfig } from "@/lib/cal/config";
 import { listCalEventTypes, verifyCalConnection } from "@/lib/cal/client";
 
@@ -121,6 +122,7 @@ export async function resolveAutomationResources(
     );
   }
 
+  const t = await getTranslations("server.automations.resourceResolution");
   const query = input.query?.trim();
   const limit = Math.min(Math.max(input.limit ?? 20, 1), 50);
   const offset = decodeResourceCursor(input.cursor);
@@ -449,7 +451,7 @@ export async function resolveAutomationResources(
           readiness: {
             ready: false,
             missing: ["cal_api_key", "cal_connection"],
-            message: "Connect Cal.com before selecting an event type.",
+            message: t("calConnectRequired"),
           },
         };
       }
@@ -491,7 +493,7 @@ export async function resolveAutomationResources(
             readiness: {
               ready: false,
               missing: ["cal_api_key", "cal_connection"],
-              message: "The Cal.com connection is invalid. Reconnect Cal.com before selecting an event type.",
+              message: t("calConnectionInvalid"),
             },
           };
         }
@@ -503,8 +505,8 @@ export async function resolveAutomationResources(
             missing: ["cal_event_types"],
             message:
               error instanceof Error
-                ? `Cal.com event types are unavailable: ${error.message.slice(0, 240)}`
-                : "Cal.com event types are unavailable.",
+                ? t("calEventTypesUnavailableDetail", { detail: error.message.slice(0, 240) })
+                : t("calEventTypesUnavailable"),
           },
         };
       }
@@ -516,19 +518,19 @@ export async function resolveAutomationResources(
         {
           id: "slack",
           name: "Slack",
-          description: "Team notifications",
+          description: t("integrationDescriptions.slack"),
           metadata: { connected: statuses.slack.enabled },
         },
         {
           id: "telegram",
           name: "Telegram",
-          description: "Telegram bot notifications",
+          description: t("integrationDescriptions.telegram"),
           metadata: { connected: statuses.telegram.hasToken },
         },
         {
           id: "discord",
           name: "Discord",
-          description: "Discord webhook notifications",
+          description: t("integrationDescriptions.discord"),
           metadata: {
             connected:
               statuses.chat.provider === "discord" && statuses.chat.hasWebhook,
@@ -537,25 +539,25 @@ export async function resolveAutomationResources(
         {
           id: "cal",
           name: "Cal.com",
-          description: "Candidate booking links",
+          description: t("integrationDescriptions.cal"),
           metadata: { connected: statuses.cal.enabled },
         },
         {
           id: "gcal",
           name: "Google Calendar & Meet",
-          description: "Calendar & Video sync",
+          description: t("integrationDescriptions.gcal"),
           metadata: { connected: statuses.gcal.enabled },
         },
         {
           id: "outlook",
           name: "Microsoft Outlook & Teams",
-          description: "Calendar, Mail & Video sync",
+          description: t("integrationDescriptions.outlook"),
           metadata: { connected: statuses.outlook.enabled },
         },
         {
           id: "zoom",
           name: "Zoom",
-          description: "Video meetings",
+          description: t("integrationDescriptions.zoom"),
           metadata: {
             connected: statuses.zoom.installationState === "installed",
           },
@@ -563,7 +565,7 @@ export async function resolveAutomationResources(
         {
           id: "jitsi",
           name: "Jitsi Meet",
-          description: "Self-hosted video meetings",
+          description: t("integrationDescriptions.jitsi"),
           metadata: {
             connected:
               statuses.jitsi.enabled && Boolean(statuses.jitsi.baseUrl),
@@ -572,7 +574,7 @@ export async function resolveAutomationResources(
         {
           id: "docuseal",
           name: "DocuSeal",
-          description: "E-signature provider",
+          description: t("integrationDescriptions.docuseal"),
           metadata: {
             connected: statuses.health.docuseal.connected,
           },
@@ -580,13 +582,13 @@ export async function resolveAutomationResources(
         {
           id: "harly-sign",
           name: "Harly Sign",
-          description: "Native in-app e-signatures",
+          description: t("integrationDescriptions.harlySign"),
           metadata: { connected: true },
         },
         {
           id: "email",
-          name: "Email delivery",
-          description: "Durable candidate email outbox",
+          name: t("integrationNames.email"),
+          description: t("integrationDescriptions.email"),
           metadata: {
             connected:
               statuses.email.enabled || statuses.email.usingPlatformDefault,
@@ -595,9 +597,8 @@ export async function resolveAutomationResources(
         },
         {
           id: "meeting_provider",
-          name: "Meeting provider",
-          description:
-            "At least one connected interview scheduling/video provider",
+          name: t("integrationNames.meetingProvider"),
+          description: t("integrationDescriptions.meetingProvider"),
           metadata: {
             connected:
               statuses.cal.enabled ||

@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import Link from "next/link";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import { AlertTriangle, Users } from "lucide-react";
 import { toast } from "@/lib/notification-island/toast";
 
@@ -27,11 +27,21 @@ export function DuplicateDetectionCard({
   aiConfigured: boolean;
 }) {
   const t = useTranslations("features.candidates.DuplicateDetectionCard");
+  const locale = useLocale();
   const [matches, setMatches] = useState<DuplicateMatch[] | null>(null);
   const [checked, setChecked] = useState(false);
   const [isPending, startTransition] = useTransition();
 
   if (suspects.length === 0 && !checked) return null;
+
+  // Deterministic matches carry stable signal codes; AI matches keep their model-written reason.
+  function matchReason(match: DuplicateMatch) {
+    if (!match.signals || match.signals.length === 0) return match.reason;
+    const signals = new Intl.ListFormat(locale, { style: "long", type: "conjunction" }).format(
+      match.signals.map((signal) => t(`signals.${signal}`)),
+    );
+    return t("sharedIdentity", { signals });
+  }
 
   function runAiCheck() {
     startTransition(async () => {
@@ -69,7 +79,7 @@ export function DuplicateDetectionCard({
                   >
                     {m.fullName}
                   </Link>
-                  <p className="text-xs text-muted-foreground truncate">{m.reason}</p>
+                  <p className="text-xs text-muted-foreground truncate">{matchReason(m)}</p>
                 </div>
                 <span
                   className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-semibold ${

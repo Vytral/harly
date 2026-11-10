@@ -10,6 +10,7 @@ import {
   jobs,
   jobStages,
 } from "@harly/db";
+import { getTranslations } from "@/i18n/server";
 import {
   actorHasPermission,
   candidateScopeSql,
@@ -347,6 +348,8 @@ export async function getCandidatePageNavigation(
 ): Promise<CandidatePageNavigation> {
   const { origin, applicationId } = navigation;
   const current = { candidateId, applicationId };
+  const tOrigin = await getTranslations("labels.candidates.origin");
+  const translateOrigin = (key: string) => tOrigin(key as never);
   const located =
     origin.kind === "review"
       ? await getReviewNeighbours(actor, current)
@@ -372,13 +375,13 @@ export async function getCandidatePageNavigation(
   return {
     origin,
     applicationId,
-    label: originLabel(origin),
+    label: originLabel(origin, translateOrigin),
     position: located.position,
     total: located.total,
     prev: link(located.prev),
     next: link(located.next),
     backHref: originHref(origin),
-    backLabel: originBackLabel(origin),
+    backLabel: originBackLabel(origin, translateOrigin),
     doneHref: origin.kind === "review" ? "/dashboard/candidates?queue=review&done=1" : null,
   };
 }

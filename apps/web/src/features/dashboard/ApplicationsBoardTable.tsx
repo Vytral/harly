@@ -28,6 +28,7 @@ import {
 import { EmptyState } from "@/components/ui/empty-state";
 import { StatusPill, type StatusPillTone } from "@/components/ui/status-pill";
 import type { ApplicationsBoard } from "@/features/dashboard/applications-board";
+import { stageLabel } from "@/features/pipeline/stage-label";
 import { stageTone, type StageTone } from "@/lib/stage-visuals";
 
 /**
@@ -55,6 +56,7 @@ export function ApplicationsBoardTable({
   const [isPending, startTransition] = useTransition();
   const [selected, setSelected] = useState<Set<string>>(() => new Set());
 
+  const tStages = useTranslations("labels.pipeline.stages");
   const jobValue = filters.job ?? FILTER_ALL;
   const stageValue = filters.stage ?? FILTER_ALL;
 
@@ -66,9 +68,9 @@ export function ApplicationsBoardTable({
 
   const stageLabels = useMemo(() => {
     const map: Record<string, string> = {};
-    for (const option of board.stageOptions) map[option.value] = option.label;
+    for (const option of board.stageOptions) map[option.value] = stageLabel(option.label, tStages);
     return map;
-  }, [board.stageOptions]);
+  }, [board.stageOptions, tStages]);
 
   function setFilter(key: "job" | "stage", value: string) {
     const next = new URLSearchParams();
@@ -198,7 +200,7 @@ export function ApplicationsBoardTable({
                     </Td>
                     <Td>
                       <StatusPill tone={stagePillTone(row.stageKind)}>
-                        {row.stageName ?? t("noStage")}
+                        {row.stageName !== null ? stageLabel(row.stageName, tStages) : t("noStage")}
                       </StatusPill>
                     </Td>
                     <Td>

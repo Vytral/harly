@@ -1,5 +1,5 @@
 import { CheckCircle2, Clock, Mail, MailOpen, Send, ShieldCheck, XCircle, BellRing, Ban } from "lucide-react";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 
 import type { SignatureTimeline as Timeline, SignatureTimelineEntry } from "@/lib/esign/native/timeline";
 
@@ -24,8 +24,8 @@ const TONES: Record<SignatureTimelineEntry["tone"], string> = {
   danger: "bg-danger-rust/10 text-danger-rust",
 };
 
-function when(date: Date | string) {
-  return new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short" }).format(new Date(date));
+function when(date: Date | string, locale: string) {
+  return new Intl.DateTimeFormat(locale, { dateStyle: "medium", timeStyle: "short" }).format(new Date(date));
 }
 
 /**
@@ -34,6 +34,7 @@ function when(date: Date | string) {
  */
 export function SignatureTimeline({ timeline }: { timeline: Timeline }) {
   const t = useTranslations("features.documents.signatureTimeline");
+  const locale = useLocale();
   if (timeline.entries.length === 0) return <p className="text-sm text-soft-ink">{t("emptyState")}</p>;
   return (
     <ol className="space-y-3" aria-label={t("ariaLabel")}>
@@ -48,7 +49,7 @@ export function SignatureTimeline({ timeline }: { timeline: Timeline }) {
               <p className="text-sm font-medium text-near-ink">{entry.title}</p>
               {entry.detail ? <p className="text-xs leading-5 text-soft-ink">{entry.detail}</p> : null}
               <p className="text-xs text-soft-ink">
-                <time dateTime={new Date(entry.at).toISOString()}>{when(entry.at)}</time>
+                <time dateTime={new Date(entry.at).toISOString()}>{when(entry.at, locale)}</time>
               </p>
             </div>
           </li>

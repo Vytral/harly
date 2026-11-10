@@ -6,6 +6,7 @@ import type { Route } from "next";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useTranslations } from "next-intl";
+import { stageLabel } from "@/features/pipeline/stage-label";
 import {
   ArrowRightLeft,
   CheckCircle2,
@@ -72,6 +73,7 @@ export function PipelineList({
   const [rejectTargets, setRejectTargets] = useState<RejectTarget[]>([]);
   const t = useTranslations("features.pipeline.PipelineList");
   const confirmMessages = useTranslations("labels.pipeline.confirmation");
+  const tStages = useTranslations("labels.pipeline.stages");
   const selectAllId = useId();
   const [isPending, startTransition] = useTransition();
 
@@ -249,7 +251,7 @@ export function PipelineList({
             .map((stage) => (
               <StageTab
                 key={stage.id}
-                label={stage.name}
+                label={stageLabel(stage.name, tStages)}
                 count={counts.get(stage.id) ?? 0}
                 active={activeStage === stage.id}
                 onClick={() => setActiveStage(stage.id)}
@@ -287,7 +289,7 @@ export function PipelineList({
                   .sort((a, b) => a.order - b.order)
                   .map((stage) => (
                     <DropdownMenuItem key={stage.id} onClick={() => moveToStage(stage.id)}>
-                      {stage.name}
+                      {stageLabel(stage.name, tStages)}
                     </DropdownMenuItem>
                   ))}
               </DropdownMenuContent>
@@ -375,7 +377,7 @@ export function PipelineList({
                   </div>
                 </Link>
                 <div className="col-start-2 min-w-0 sm:col-auto">
-                  <p className="text-xs font-medium text-near-ink">{stageName}</p>
+                  <p className="text-xs font-medium text-near-ink">{stageLabel(stageName, tStages)}</p>
                   <PipelineSpine
                     current={stageName}
                     currentId={a.currentStageId}

@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useTranslations } from "next-intl";
+import { stageLabel } from "@/features/pipeline/stage-label";
 import { cn } from "@/lib/utils";
 import type { Trigger } from "../schema";
 import { patchTriggerFilter, WORKFLOW_EVENTS } from "../schema";
@@ -38,6 +39,7 @@ export function TriggerPanel({
 }) {
   const t = useTranslations("features.automations.triggerPanel");
   const tl = useTranslations("labels.automations");
+  const tStages = useTranslations("labels.pipeline.stages");
   const [pickerOpen, setPickerOpen] = useState(!chosen);
   const meta = triggerMeta(value.event, tl);
 
@@ -177,7 +179,7 @@ export function TriggerPanel({
                 <option value="">{t("anyStage")}</option>
                 {stageOptions.map((stage) => (
                   <option key={stage.id} value={stage.id}>
-                    {stage.name}
+                    {stageLabel(stage.name, tStages)}
                   </option>
                 ))}
               </BuilderSelect>

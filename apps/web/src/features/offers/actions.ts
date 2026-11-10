@@ -39,6 +39,7 @@ import {
 } from "@/lib/email/outbox-processor";
 import { offerSendOutcomeMessage } from "@/lib/email/delivery-warning";
 import { createCandidatePortalNotification } from "@/features/portal/notify";
+import { withNotificationCopy, type NotificationCopy } from "@/features/notifications/copy";
 import { getWorkspaceEmailSender } from "@/lib/email";
 import { offerEmailDedupeKey, offerExtendedEmailDedupeKey } from "@/lib/email/dedupe-keys";
 import {
@@ -191,6 +192,7 @@ async function notifyHiringTeam(input: {
   candidateName: string;
   type: string;
   title: string;
+  copy: NotificationCopy;
 }) {
   const team = await db
     .select({ userId: jobHiringTeam.userId })
@@ -215,6 +217,7 @@ async function notifyHiringTeam(input: {
       type: input.type,
       title: input.title,
       href: `/dashboard/candidates/${input.candidateId}`,
+      metadata: withNotificationCopy(undefined, input.copy),
     })),
   );
 }
@@ -1119,6 +1122,10 @@ export async function decideOffer(input: {
       decision: t(`decisions.${decision}`),
       title: offer.title,
     }),
+    copy: {
+      key: decision === "accepted" ? "offerAccepted" : "offerDeclined",
+      values: { offerTitle: offer.title },
+    },
   });
 
   revalidatePath(`/dashboard/candidates/${offer.candidateId}`);

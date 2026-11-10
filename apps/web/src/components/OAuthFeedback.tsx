@@ -2,6 +2,7 @@
 
 import { useEffect } from "react";
 import { useSearchParams } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { toast } from "@/lib/notification-island/toast";
 
 /**
@@ -10,6 +11,7 @@ import { toast } from "@/lib/notification-island/toast";
  */
 export function OAuthFeedback() {
   const searchParams = useSearchParams();
+  const t = useTranslations("ui.oauthFeedback");
 
   useEffect(() => {
     const feedbacks: Array<{ key: string; errorKey: string; label: string }> = [
@@ -22,12 +24,12 @@ export function OAuthFeedback() {
     let dirty = false;
     for (const fb of feedbacks) {
       if (searchParams.get(fb.key) === "connected") {
-        toast.success(`${fb.label} connected successfully!`);
+        toast.success(t("connected", { provider: fb.label }));
         dirty = true;
       }
       const err = searchParams.get(fb.errorKey);
       if (err) {
-        toast.error(`${fb.label} connection failed: ${err}`);
+        toast.error(t("failed", { provider: fb.label, error: err }));
         dirty = true;
       }
     }
@@ -40,7 +42,7 @@ export function OAuthFeedback() {
       }
       window.history.replaceState({}, "", url.toString());
     }
-  }, [searchParams]);
+  }, [searchParams, t]);
 
   return null;
 }

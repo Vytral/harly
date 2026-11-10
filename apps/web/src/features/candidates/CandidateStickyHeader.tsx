@@ -3,10 +3,12 @@
 import type { ReactNode } from "react";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Phone } from "lucide-react";
+import { useTranslations } from "next-intl";
 
 import { useStickyBar } from "@/components/dashboard/StickyBarContext";
 import { Badge } from "@/components/ui/badge";
 import { UserAvatar } from "@/components/ui/UserAvatar";
+import { stageLabel } from "@/features/pipeline/stage-label";
 
 type CandidateStickyHeaderProps = {
   name: string;
@@ -27,6 +29,7 @@ export function CandidateStickyHeader({
   actions,
   children,
 }: CandidateStickyHeaderProps) {
+  const tStages = useTranslations("labels.pipeline.stages");
   const wrapperRef = useRef<HTMLDivElement>(null);
   const sentinelRef = useRef<HTMLDivElement>(null);
   const [pinned, setPinned] = useState(false);
@@ -92,7 +95,7 @@ export function CandidateStickyHeader({
               <span className="truncate text-sm font-semibold text-near-ink">{name}</span>
               {stageName ? (
                 <Badge variant="info" className="hidden shrink-0 sm:inline-flex">
-                  {stageName}
+                  {stageLabel(stageName, tStages)}
                 </Badge>
               ) : null}
               {phone ? (

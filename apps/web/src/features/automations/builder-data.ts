@@ -1155,7 +1155,7 @@ export async function dryRunWorkflow(input: {
           error:
             schemaResult.kind === "schema"
               ? t("endpointSchemaInvalid")
-              : `Webhook payload does not match the endpoint schema: ${schemaResult.issues.join("; ")}`,
+              : t("webhookSchemaMismatch", { issues: schemaResult.issues.join("; ") }),
         };
       }
 
@@ -1201,7 +1201,7 @@ export async function dryRunWorkflow(input: {
     });
 
     const fixtures = input.fixtures
-      ? parseSimulationFixtures(graph, input.fixtures)
+      ? parseSimulationFixtures(t, graph, input.fixtures)
       : Object.fromEntries(
           graph.nodes
             .filter(
@@ -1228,7 +1228,10 @@ export async function dryRunWorkflow(input: {
           return [{
             nodeId: node.id,
             fieldPath: "actionType",
-            message: `${node.actionType} tool version ${node.toolVersion} is not available to run.`,
+            message: t("toolVersionUnavailable", {
+              action: node.actionType,
+              version: String(node.toolVersion),
+            }),
           }];
         }
         const parsed = tool.schema.safeParse(value);
@@ -1296,6 +1299,7 @@ export async function dryRunWorkflow(input: {
 }
 
 function parseSimulationFixtures(
+  t: Translator,
   graph: WorkflowGraphV2,
   input: Record<string, NodeOutcome>,
 ): Record<string, NodeOutcome> {
@@ -1314,16 +1318,14 @@ function parseSimulationFixtures(
   for (const [nodeId, outcome] of Object.entries(parsed)) {
     const node = runnable.get(nodeId);
     if (!node)
-      throw new Error(
-        `Fixture references a node that cannot receive a provider result: ${nodeId}.`,
-      );
+      throw new Error(t("fixtureNodeNotRunnable", { node: nodeId }));
     if (
       outcome.status === "succeeded" &&
       outcome.port &&
       !outputPorts(node).includes(outcome.port)
     ) {
       throw new Error(
-        `Fixture for ${nodeId} uses an invalid output port: ${outcome.port}.`,
+        t("fixturePortInvalid", { node: nodeId, port: outcome.port }),
       );
     }
   }

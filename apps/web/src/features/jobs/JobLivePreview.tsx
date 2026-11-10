@@ -55,11 +55,12 @@ export type PreviewFocus = {
 
 type Workspace = WorkspaceBoardBranding & { id: string };
 
-const TEMPLATE_LABEL: Record<string, string> = {
-  ashby: "Ashby",
-  playful: "Playful",
-  join: "Join",
-};
+const LAYOUT_LABEL_IDS = ["ashby", "playful", "join"] as const;
+type LayoutLabelId = (typeof LAYOUT_LABEL_IDS)[number];
+
+function isLayoutLabelId(value: string): value is LayoutLabelId {
+  return (LAYOUT_LABEL_IDS as readonly string[]).includes(value);
+}
 
 const FRAME_STYLE_ID = "harly-preview-focus-style";
 
@@ -186,6 +187,7 @@ export function JobLivePreview({
   aiConfigured: boolean;
 }) {
   const t = useTranslations("jobs.livePreview");
+  const tCareer = useTranslations("labels.careerPage.templates");
   // The real public page only exists once the job is live.
   const published = status === "open";
   const [pickedView, setPickedView] = useState<"steps" | "public">("steps");
@@ -266,9 +268,9 @@ export function JobLivePreview({
         <div className="flex items-center justify-between gap-3 border-b border-hairline bg-card px-4 py-2.5">
           <div className="flex min-w-0 items-center gap-2">
             <p className="text-[13px] font-medium text-soft-ink">{t("livePreview")}</p>
-            {view === "public" && TEMPLATE_LABEL[template] ? (
+            {view === "public" && isLayoutLabelId(template) ? (
               <span className="truncate rounded-full bg-soft-kraft px-2 py-0.5 text-[11.5px] font-medium text-soft-ink">
-                {t("templateLayout", { template: TEMPLATE_LABEL[template] })}
+                {t("templateLayout", { template: tCareer(`${template}.label`) })}
               </span>
             ) : null}
           </div>

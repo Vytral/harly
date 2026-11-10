@@ -12,7 +12,8 @@ describe("integration attention view", () => {
   });
 
   it("tells a revoked connection apart from a failing one", () => {
-    expect(attentionMessage({ state: "needs_reconnect" })).toMatch(/revoked|expired/);
-    expect(attentionMessage({ state: "degraded" })).toMatch(/failing/);
+    const t = (key: string) => key;
+    expect(attentionMessage({ state: "needs_reconnect" }, t)).toBe("shell.integrationAttention.accessRevoked");
+    expect(attentionMessage({ state: "degraded" }, t)).toBe("shell.integrationAttention.callsFailing");
   });
 });

@@ -32,7 +32,8 @@ export function usePdfPageRenderer(
   onRotationChange?: (rotated: boolean) => void,
 ) {
   const [pages, setPages] = useState<PdfPage[]>([]);
-  const [error, setError] = useState<string | null>(null);
+  /** True when the PDF could not be loaded; callers show their own translated message. */
+  const [error, setError] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -64,7 +65,7 @@ export function usePdfPageRenderer(
           onRotationChange?.(next.some((page) => page.rotation !== 0));
         }
       } catch {
-        if (!cancelled) setError("Could not load the PDF.");
+        if (!cancelled) setError(true);
       } finally {
         await disposeTask?.().catch(() => undefined);
       }
@@ -125,7 +126,7 @@ export function usePdfPageRenderer(
           canvas.dataset.pdfRendered = "true";
         }
       } catch {
-        if (!cancelled) setError("Could not load the PDF.");
+        if (!cancelled) setError(true);
       } finally {
         await disposeTask?.().catch(() => undefined);
       }

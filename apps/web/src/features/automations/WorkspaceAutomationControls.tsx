@@ -44,7 +44,7 @@ export function WorkspaceAutomationControls({
       throw new Error(result.error ?? "update failed");
     }
     setPolicy(result.policy);
-    setPausedBy(enabled ? "you" : null);
+    setPausedBy(enabled ? t("you") : null);
     setReason("");
     toast.success(enabled ? t("pausedToast") : t("resumedToast"));
   }

@@ -30,10 +30,10 @@ export function SaveStatus({
 
   const getButtonText = () => {
     if (state.kind === "saving") return tl("save.saving");
-    if (state.kind === "error") return "Retry saving";
+    if (state.kind === "error") return tl("save.retry");
     if (state.kind === "conflict") return tl("save.conflict");
-    if (isNeverSaved) return "Save draft";
-    if (isDirty(state)) return "Save draft";
+    if (isNeverSaved) return tl("save.saveDraft");
+    if (isDirty(state)) return tl("save.saveDraft");
     return formatSaveStatus(state, tl, locale);
   };
 

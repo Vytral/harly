@@ -11,6 +11,8 @@ import {
   documentRequests,
 } from "@harly/db";
 
+import { withNotificationCopy } from "@/features/notifications/copy";
+
 type DatabaseTransaction = Parameters<Parameters<typeof db.transaction>[0]>[0];
 
 export type WorkflowDocumentRequestItem = {
@@ -168,7 +170,10 @@ export async function createDocumentRequestsForWorkflow(input: {
           ? `Please upload: ${input.items[0]!.title.trim()}.`
           : `You have ${count} documents to upload for your application.`,
       href: `/portal/applications/${application.id}`,
-      metadata: { applicationId: application.id, count, source: "workflow" },
+      metadata: withNotificationCopy(
+        { applicationId: application.id, count, source: "workflow" },
+        { key: "documentRequested", values: { count, title: input.items[0]!.title.trim() } },
+      ),
     });
 
     return {
@@ -288,7 +293,10 @@ export async function expireOverdueDocumentRequestPackages(
         title: "Document request expired",
         body: "A document request passed its deadline. Contact the recruiting team if you need more time.",
         href: `/portal/applications/${original.applicationId}`,
-        metadata: { packageId: row.id, applicationId: original.applicationId, source: "system" },
+        metadata: withNotificationCopy(
+          { packageId: row.id, applicationId: original.applicationId, source: "system" },
+          { key: "documentRequestExpired" },
+        ),
       });
     }
     return expired.map((row) => ({ workspaceId: row.workspaceId, packageId: row.id }));

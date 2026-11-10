@@ -2,6 +2,7 @@
 
 import { useState, useTransition, type ReactNode } from "react";
 import { useTranslations } from "next-intl";
+import { stageLabel } from "@/features/pipeline/stage-label";
 import { Minus, ThumbsDown, ThumbsUp } from "lucide-react";
 import { toast } from "@/lib/notification-island/toast";
 
@@ -47,6 +48,7 @@ export function EvaluationDrawer({
   trigger: ReactNode;
 }) {
   const t = useTranslations("features.candidates.EvaluationDrawer");
+  const tStages = useTranslations("labels.pipeline.stages");
   const aiEnabled = useAiEnabled();
   const advance = useAdvanceAfterDecision();
   const [open, setOpen] = useState(false);
@@ -149,7 +151,7 @@ export function EvaluationDrawer({
       open={open}
       onOpenChange={setOpen}
       trigger={trigger}
-      title={stageName ? t("titleWithStage", { stage: stageName }) : t("title")}
+      title={stageName ? t("titleWithStage", { stage: stageLabel(stageName, tStages) }) : t("title")}
       description={t("description")}
       footer={
         <>

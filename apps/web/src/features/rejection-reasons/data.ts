@@ -11,7 +11,7 @@ import {
   organization,
   rejectionReasons,
 } from "@harly/db";
-import { candidateRejectedSubject } from "@harly/emails";
+import { candidateRejectedSubject, emailTranslator } from "@harly/emails";
 
 import { interpolateTemplate } from "@/features/email-templates/interpolate";
 import { templateHtmlToPlainText } from "@/features/email-templates/plain-text";
@@ -187,16 +187,22 @@ function splitName(fullName: string) {
   return { first, last: rest.join(" ") };
 }
 
-/** Text body of Harly's built-in rejection email (mirrors CandidateRejected). */
+/**
+ * Text body of Harly's built-in rejection email, in the candidate's language.
+ * Mirrors CandidateRejected and reads the same catalog keys, so the preview
+ * matches what is sent.
+ */
 export function builtInRejectionBody(input: {
   candidateName: string;
   jobTitle: string;
   companyName: string;
+  locale?: string | null;
 }): string {
+  const t = emailTranslator(input.locale);
   return [
-    `Hi ${input.candidateName},`,
-    `Thank you for applying to ${input.jobTitle} at ${input.companyName}. After careful consideration, we've decided to move forward with other candidates.`,
-    `Thanks,\n${input.companyName}`,
+    t("common.greeting", { name: input.candidateName }),
+    t("rejection.body", { job: input.jobTitle, company: input.companyName }),
+    `${t("rejection.signoff")}\n${input.companyName}`,
   ].join("\n\n");
 }
 
@@ -221,6 +227,7 @@ export async function buildRejectionEmailPreview(
       lastName: candidates.lastName,
       jobTitle: jobs.title,
       workspaceName: organization.name,
+      preferredEmailLocale: candidates.preferredEmailLocale,
     })
     .from(applications)
     .innerJoin(candidates, eq(candidates.id, applications.candidateId))
@@ -280,11 +287,13 @@ export async function buildRejectionEmailPreview(
     subject: candidateRejectedSubject({
       jobTitle: row.jobTitle,
       companyName: row.workspaceName,
+      locale: row.preferredEmailLocale,
     }),
     body: builtInRejectionBody({
       candidateName,
       jobTitle: row.jobTitle,
       companyName: row.workspaceName,
+      locale: row.preferredEmailLocale,
     }),
   };
 }

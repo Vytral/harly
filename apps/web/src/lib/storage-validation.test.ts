@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 
+import { translatorFor } from "@/i18n/translator";
+
 import {
   getResumeFileValidationError,
   sanitizeFilename,
@@ -8,27 +10,29 @@ import {
   allowedResumeContentTypes,
 } from "./storage-validation";
 
+const t = translatorFor("en", "labels.storageValidation");
+
 describe("getResumeFileValidationError", () => {
   it("returns null for valid PDF", () => {
     const file = new File(["test"], "resume.pdf", { type: "application/pdf" });
-    expect(getResumeFileValidationError(file)).toBeNull();
+    expect(getResumeFileValidationError(file, t)).toBeNull();
   });
 
   it("returns null for valid DOC", () => {
     const file = new File(["test"], "resume.doc", { type: "application/msword" });
-    expect(getResumeFileValidationError(file)).toBeNull();
+    expect(getResumeFileValidationError(file, t)).toBeNull();
   });
 
   it("returns null for valid DOCX", () => {
     const file = new File(["test"], "resume.docx", {
       type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
     });
-    expect(getResumeFileValidationError(file)).toBeNull();
+    expect(getResumeFileValidationError(file, t)).toBeNull();
   });
 
   it("rejects unsupported file type", () => {
     const file = new File(["test"], "resume.png", { type: "image/png" });
-    const error = getResumeFileValidationError(file);
+    const error = getResumeFileValidationError(file, t);
     expect(error).toContain("PDF, DOC, or DOCX");
   });
 
@@ -37,7 +41,7 @@ describe("getResumeFileValidationError", () => {
       type: "application/pdf",
     });
     Object.defineProperty(file, "size", { value: 0 });
-    const error = getResumeFileValidationError(file);
+    const error = getResumeFileValidationError(file, t);
     expect(error).toContain("required");
   });
 
@@ -46,7 +50,7 @@ describe("getResumeFileValidationError", () => {
     Object.defineProperty(file, "size", {
       value: maxResumeFileSize + 1,
     });
-    const error = getResumeFileValidationError(file);
+    const error = getResumeFileValidationError(file, t);
     expect(error).toContain("10MB");
   });
 });

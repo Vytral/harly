@@ -279,7 +279,7 @@ function splitPersonName(name: string) {
   };
 }
 
-async function uploadImage(file: File | Blob): Promise<string> {
+async function uploadImage(file: File | Blob, t: Translator): Promise<string> {
   const filename = file instanceof File ? file.name : "avatar.jpg";
   const presign = await fetch("/api/storage/presign", {
     method: "POST",
@@ -292,7 +292,7 @@ async function uploadImage(file: File | Blob): Promise<string> {
     }),
   });
 
-  if (!presign.ok) throw new Error("Could not prepare the upload.");
+  if (!presign.ok) throw new Error(t("uploadPrepareFailed"));
 
   const data = (await presign.json()) as {
     uploadUrl: string;
@@ -306,7 +306,7 @@ async function uploadImage(file: File | Blob): Promise<string> {
     body: file,
   });
 
-  if (!put.ok) throw new Error("Upload failed. Try again.");
+  if (!put.ok) throw new Error(t("uploadRetryFailed"));
   return data.fileUrl;
 }
 
@@ -324,6 +324,7 @@ export function AccountSettingsPanel({
   const router = useRouter();
   const avatarInputRef = useRef<HTMLInputElement>(null);
   const t = useTranslations("features.account.accountSettingsPanel");
+  const tStorage = useTranslations("labels.storageValidation");
   const locale = useLocale();
 
   const initialName = splitPersonName(user.name);
@@ -405,9 +406,7 @@ export function AccountSettingsPanel({
           setUsernameStatus("available");
           setUsernameError(null);
         } else {
-          setUsernameStatus(
-            result.error === "Username is already taken." ? "taken" : "invalid",
-          );
+          setUsernameStatus(result.code === "taken" ? "taken" : "invalid");
           setUsernameError(result.error ?? null);
         }
       });
@@ -495,7 +494,7 @@ export function AccountSettingsPanel({
 
   function handleAvatarFileSelect(file: File | null) {
     if (!file) return;
-    const error = getImageFileValidationError(file);
+    const error = getImageFileValidationError(file, tStorage);
     if (error) {
       toast.error(error);
       return;
@@ -509,7 +508,7 @@ export function AccountSettingsPanel({
     setCropOpen(false);
     startProfile(async () => {
       try {
-        const url = await uploadImage(blob);
+        const url = await uploadImage(blob, t);
         setImage(url);
         let payload: ReturnType<typeof buildProfilePayload>;
         try {

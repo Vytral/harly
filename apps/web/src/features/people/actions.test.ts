@@ -16,6 +16,8 @@ const mocks = vi.hoisted(() => {
   };
 });
 
+vi.mock("next-intl/server", async () => (await import("@/test-support/intl-server-mock")).intlServerMock);
+
 vi.mock("drizzle-orm", () => ({
   and: (...args: unknown[]) => ({ __and: args }),
   eq: (a: unknown, b: unknown) => ({ __eq: [a, b] }),

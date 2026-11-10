@@ -35,6 +35,7 @@ import {
 import { fetchAshbyCandidateImportRows, AshbyImportError } from "./ashby";
 import { fetchLeverCandidateImportRows, LeverImportError } from "./lever";
 import { fetchJoinCandidateImportRows, JoinImportError } from "./join";
+import { providerErrorMessage } from "./provider-messages";
 
 const log = createLogger("candidate-import");
 
@@ -244,7 +245,7 @@ export async function importGreenhouseCandidatesAction(input: {
     return { success: true, ...totals, skipped: exportRows.skipped };
   } catch (error) {
     if (error instanceof GreenhouseImportError)
-      return { success: false, error: error.message };
+      return { success: false, error: await providerErrorMessage(error.message) };
     log.error(error, "Greenhouse candidate import failed");
     return {
       success: false,
@@ -295,7 +296,7 @@ export async function importWorkableCandidatesAction(input: {
     return { success: true, ...totals, skipped: exportRows.skipped };
   } catch (error) {
     if (error instanceof WorkableImportError)
-      return { success: false, error: error.message };
+      return { success: false, error: await providerErrorMessage(error.message) };
     log.error(error, "Workable candidate import failed");
     return {
       success: false,
@@ -344,7 +345,7 @@ export async function importAshbyCandidatesAction(input: {
     return { success: true, ...totals, skipped: exportRows.skipped };
   } catch (error) {
     if (error instanceof AshbyImportError)
-      return { success: false, error: error.message };
+      return { success: false, error: await providerErrorMessage(error.message) };
     log.error(error, "Ashby candidate import failed");
     return { success: false, error: t("importFailedAshby") };
   }
@@ -390,7 +391,7 @@ export async function importLeverCandidatesAction(input: {
     return { success: true, ...totals, skipped: exportRows.skipped };
   } catch (error) {
     if (error instanceof LeverImportError)
-      return { success: false, error: error.message };
+      return { success: false, error: await providerErrorMessage(error.message) };
     log.error(error, "Lever candidate import failed");
     return { success: false, error: t("importFailedLever") };
   }
@@ -440,7 +441,7 @@ export async function importJoinCandidatesAction(input: {
     return { success: true, ...totals, skipped: exportRows.skipped };
   } catch (error) {
     if (error instanceof JoinImportError)
-      return { success: false, error: error.message };
+      return { success: false, error: await providerErrorMessage(error.message) };
     log.error(error, "JOIN candidate import failed");
     return { success: false, error: t("importFailedJoin") };
   }

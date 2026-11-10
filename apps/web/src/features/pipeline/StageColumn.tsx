@@ -21,6 +21,7 @@ import {
 import type { StageKind } from "@harly/db/stage-kind";
 
 import { isTerminalStage, kindOf, stageDisplayName } from "@/lib/stage-visuals";
+import { stageLabel } from "@/features/pipeline/stage-label";
 import { cn } from "@/lib/utils";
 
 type StageColumnProps = {
@@ -92,8 +93,9 @@ export function StageColumn({
   const emailOn = stage.emailConfig.candidateUpdatesEnabled;
   const kind = kindOf(stage);
   const terminal = isTerminalStage(stage);
-  const displayName = stageDisplayName(stage);
   const t = useTranslations("features.pipeline.StageColumn");
+  const tStages = useTranslations("labels.pipeline.stages");
+  const displayName = stageLabel(stageDisplayName(stage), tStages);
 
   return (
     <section

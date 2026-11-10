@@ -64,7 +64,10 @@ export async function searchWorkspaceAction(
 
   try {
     const actor = await resolveSearchActor();
-    const results = await searchWorkspaceForActor(actor, query.text);
+    const tStatus = await getTranslations("features.tasks.TaskBoard.statuses");
+    const results = await searchWorkspaceForActor(actor, query.text, {
+      taskStatusLabel: (status) => (tStatus.has(status) ? tStatus(status) : status),
+    });
     return { ok: true, results };
   } catch (error) {
     if (isRedirectSignal(error)) throw error;

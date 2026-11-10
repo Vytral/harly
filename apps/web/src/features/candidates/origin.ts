@@ -236,27 +236,30 @@ export function originHref(origin: CandidateOrigin): string {
   }
 }
 
+/** Translator for `labels.candidates.origin`. */
+export type OriginTranslator = (key: string) => string;
+
 /** Short name of the origin list, for "3 of 12 in …" and "Back to …". */
-export function originLabel(origin: CandidateOrigin): string {
+export function originLabel(origin: CandidateOrigin, t: OriginTranslator): string {
   switch (origin.kind) {
     case "review":
-      return "Review queue";
+      return t("review");
     case "pipeline":
-      return "Pipeline";
+      return t("pipeline");
     case "candidates":
       return Object.keys(cleanDirectoryFilters(origin.filters)).length > 0
-        ? "Filtered candidates"
-        : "Candidates";
+        ? t("filteredCandidates")
+        : t("candidates");
   }
 }
 
-export function originBackLabel(origin: CandidateOrigin): string {
+export function originBackLabel(origin: CandidateOrigin, t: OriginTranslator): string {
   switch (origin.kind) {
     case "review":
-      return "Back to review queue";
+      return t("backToReview");
     case "pipeline":
-      return "Back to pipeline";
+      return t("backToPipeline");
     case "candidates":
-      return "Back to candidates";
+      return t("backToCandidates");
   }
 }

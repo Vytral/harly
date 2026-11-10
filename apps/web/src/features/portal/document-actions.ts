@@ -25,6 +25,7 @@ import { createLogger } from "@/lib/logger";
 import { resumeWorkflowDocumentWaits } from "@/features/automations/runtime/worker";
 import { reconcileDocumentRequestPackage } from "@/features/documents/requests-service";
 import { rotateNativePortalSigningLink } from "@/lib/esign/native/remote";
+import { withNotificationCopy } from "@/features/notifications/copy";
 
 const log = createLogger("portal-document-submit");
 
@@ -260,7 +261,10 @@ export async function submitDocumentRequestAction(input: {
           title: "Document submitted",
           body: `${candidateName} uploaded "${request.title}" for review.`,
           href: `/dashboard/candidates/${session.candidateId}`,
-          metadata: { requestId: request.id, applicationId: request.applicationId },
+          metadata: withNotificationCopy(
+            { requestId: request.id, applicationId: request.applicationId },
+            { key: "documentSubmitted", values: { candidateName, documentTitle: request.title } },
+          ),
           dedupeKey: `doc-request-submit-${request.id}-${document.id}`,
         });
       }

@@ -61,6 +61,7 @@ export function PortalAvatarEdit({
 }: PortalAvatarEditProps) {
   const router = useRouter();
   const t = useTranslations("features.portal.PortalAvatarEdit");
+  const tStorage = useTranslations("labels.storageValidation");
   const inputRef = useRef<HTMLInputElement>(null);
   const [saving, startTransition] = useTransition();
   const [cropSrc, setCropSrc] = useState<string | null>(null);
@@ -71,7 +72,7 @@ export function PortalAvatarEdit({
 
   function handleFileSelect(file: File | null) {
     if (!file) return;
-    const error = getImageFileValidationError(file);
+    const error = getImageFileValidationError(file, tStorage);
     if (error) {
       toast.error(error);
       return;
