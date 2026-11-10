@@ -15,7 +15,7 @@ credentials, and restore capacity.
 
 Recommended practice:
 
-- Run `npx @harly/cli backup --encrypt` at least every 15 minutes from an
+- Run `harly backup --encrypt` at least every 15 minutes from an
   external scheduler and copy archives to an off-host bucket with versioning,
   encryption, and a retention lock. Keep at least 30 daily and 12 monthly
   versions.
@@ -24,14 +24,14 @@ Recommended practice:
 - On Railway, Fly.io, or DigitalOcean, use managed PostgreSQL backups or
   snapshots plus an encrypted, versioned bucket. On a VPS, copy archives to S3,
   R2, or Backblaze B2. This needs no extra host packages or private keys.
-- `npx @harly/cli update` automatically writes a private (`0600`) local
+- `harly update` automatically writes a private (`0600`) local
   rollback archive first. It is not an off-host backup.
 
 ## Create a backup
 
 ```bash
-npx @harly/cli backup
-npx @harly/cli backup --encrypt
+harly backup
+harly backup --encrypt
 ```
 
 The CLI stops application workers, creates a PostgreSQL custom-format dump,
@@ -40,8 +40,8 @@ writes a private rollback archive. Encrypted archives use the optional `age` for
 private identity stored outside the server:
 
 ```bash
-AGE_RECIPIENT=age1... npx @harly/cli backup --encrypt
-AGE_IDENTITY=/secure/backup.agekey npx @harly/cli restore backup.tar.gz.age --force
+AGE_RECIPIENT=age1... harly backup --encrypt
+AGE_IDENTITY=/secure/backup.agekey harly restore backup.tar.gz.age --force
 ```
 
 `AGE_RECIPIENT` is public and can live in the deployment configuration. Without
@@ -56,8 +56,8 @@ the private identity an encrypted archive cannot be recovered.
 ## Restore
 
 ```bash
-npx @harly/cli restore backups/harly-2026-...tar.gz --force
-npx @harly/cli doctor
+harly restore backups/harly-2026-...tar.gz --force
+harly doctor
 ```
 
 Restore verifies checksums, creates a safety backup, stops workers, restores

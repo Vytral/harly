@@ -157,7 +157,7 @@ Change this only when the instance is intentionally suspended for longer than fi
 After a deployment, a restart, or an alert, run these from the installation directory:
 
 ```bash
-npx @harly/cli doctor
+harly doctor
 docker compose ps
 docker compose logs --tail=100 scheduler
 docker compose exec -T scheduler node /app/runtime.mjs doctor --strict
@@ -179,13 +179,13 @@ The image exposes `serve`, `migrate`, `scheduler`, and `doctor`. Runtime migrati
 
 ```bash
 # Works everywhere: a private local rollback point (mode 0600).
-npx @harly/cli backup
-npx @harly/cli update
-npx @harly/cli restore backups/harly-2026-...tar.gz --force
+harly backup
+harly update
+harly restore backups/harly-2026-...tar.gz --force
 
 # Optional advanced encryption for a portable backup.
-AGE_RECIPIENT=age1... npx @harly/cli backup --encrypt
-AGE_IDENTITY=/secure/key.txt npx @harly/cli restore backup.tar.gz.age --force
+AGE_RECIPIENT=age1... harly backup --encrypt
+AGE_IDENTITY=/secure/key.txt harly restore backup.tar.gz.age --force
 ```
 
 Backup stops app and scheduler, keeps PostgreSQL running, creates a `pg_dump -Fc`, includes local uploads and config, and checksums every included file before it can succeed. By default it creates a local rollback archive readable only by the deployment owner — this is convenient for a failed update, not a replacement for off-host disaster recovery.
@@ -193,7 +193,7 @@ Backup stops app and scheduler, keeps PostgreSQL running, creates a `pg_dump -Fc
 Restore verifies every archived file checksum, creates a safety backup before changing data, stops the app, scheduler, and migration services to avoid a database race, restores PostgreSQL and local uploads, then requires readiness to succeed. A failed restore keeps the safety archive under `backups/`.
 
 <Note>
-  S3 objects are not embedded in the archive. Use bucket versioning and an off-provider backup policy alongside `npx @harly/cli backup`.
+  S3 objects are not embedded in the archive. Use bucket versioning and an off-provider backup policy alongside `harly backup`.
 </Note>
 
 Upgrades take a backup first, run the single migrator, wait for readiness, and finish with `doctor`. Migrations are forward-only — restore the full backup when a release does not declare schema-compatible image rollback.
@@ -331,7 +331,7 @@ extension is added later the trigram indexes are not created retroactively.
 
 ### Restore fails checksum verification
 
-**Symptom:** `npx @harly/cli restore` exits before touching data.
+**Symptom:** `harly restore` exits before touching data.
 **Cause:** the archive is corrupted or was modified after the backup ran.
 **Solution:** use a different backup archive. The safety backup created before the attempted restore is preserved under `backups/`.
 
