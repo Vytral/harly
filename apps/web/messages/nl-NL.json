@@ -4607,7 +4607,7 @@
         "noneImported": "Er zijn geen kandidaten geïmporteerd.",
         "importedSummary": "<strong>{count}</strong> {count, plural, one {kandidaat} other {kandidaten}} geïmporteerd.",
         "alreadyInPipeline": "{count} al in de pipeline van deze vacature.",
-        "skippedSummary": "{count} {count, plural, one {onvolledig {source}-profiel overgeslagen} other {onvolledige {source}-profielen overgeslagen}}.",
+        "skippedSummary": "{count} incomplete {source} {count, plural, one {profile was} other {profiles were}} skipped.",
         "skippedRows": "{count, plural, one {# rij} other {# rijen}} overgeslagen:",
         "rowError": "Rij {row}: {reason}",
         "rowErrorWithEmail": "Rij {row} ({email}): {reason}",
