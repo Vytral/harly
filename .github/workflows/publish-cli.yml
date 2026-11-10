@@ -109,7 +109,8 @@ jobs:
         if: steps.version.outputs.publish == 'true' && steps.embedded.outputs.skip != 'true'
         run: |
           notes="$RUNNER_TEMP/cli-notes.md"
-          node ../scripts/changelog-section.mjs CHANGELOG.md "${{ steps.version.outputs.version }}" > "$notes"
+          node ../scripts/changelog-section.mjs CHANGELOG.md "${{ steps.version.outputs.version }}" \
+            "--link-base=https://github.com/${{ github.repository }}/blob/main/tooling/harly/" > "$notes"
           echo "notes=$notes" >> "$GITHUB_OUTPUT"
 
       - name: Publish

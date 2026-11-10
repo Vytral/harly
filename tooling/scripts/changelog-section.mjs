@@ -11,6 +11,10 @@
 // A stable version without a section, or with an empty one, exits 1: a release
 // must not go out without notes. With --prerelease, a missing section falls
 // back to [Unreleased], and an empty result exits 0 with no output.
+//
+// With --link-base=<url>, relative Markdown links (docs/x.md) are made absolute
+// against that URL, because a GitHub Release body has no file to resolve them
+// from. The workflows pass https://github.com/<repo>/blob/<tag>/.
 
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
@@ -29,6 +33,14 @@ export function changelogSection(text, version) {
     body.push(line);
   }
   return body.join("\n").trim();
+}
+
+/** Prefixes relative Markdown link targets with `base`. */
+export function absolutizeLinks(markdown, base) {
+  return markdown.replace(
+    /\]\((?![a-z][a-z0-9+.-]*:|#|\/)([^)\s]+)\)/gi,
+    (_, target) => `](${base}${target})`,
+  );
 }
 
 function main(argv) {
@@ -51,6 +63,8 @@ function main(argv) {
     );
     return 1;
   }
+  const base = argv.find((arg) => arg.startsWith("--link-base="));
+  if (base) body = absolutizeLinks(body, base.slice("--link-base=".length));
   process.stdout.write(`${body}\n`);
   return 0;
 }

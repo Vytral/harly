@@ -377,7 +377,8 @@ jobs:
               echo "> This is a patch on an older release line, so it does not become the default. Install it deliberately with \`harly update --to ${VERSION}\`."
             fi
             echo
-            node tooling/scripts/changelog-section.mjs CHANGELOG.md "$VERSION" $flag
+            node tooling/scripts/changelog-section.mjs CHANGELOG.md "$VERSION" $flag \
+              "--link-base=https://github.com/${GH_REPO}/blob/${TAG}/"
             echo
             echo "---"
             echo

@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
 
-import { changelogSection } from "./changelog-section.mjs";
+import { absolutizeLinks, changelogSection } from "./changelog-section.mjs";
 
 const sample = `# Changelog
 
@@ -93,4 +93,15 @@ test("the root and web package versions name a released section", () => {
       `${path} is ${version}, which CHANGELOG.md does not describe`,
     );
   }
+});
+
+test("makes relative links absolute and leaves the rest alone", () => {
+  const base = "https://github.com/o/r/blob/v1.0.0/";
+  assert.equal(
+    absolutizeLinks(
+      "[a](docs/a.md) [b](https://x.dev) [c](#top) [d](mailto:x@y.z)",
+      base,
+    ),
+    `[a](${base}docs/a.md) [b](https://x.dev) [c](#top) [d](mailto:x@y.z)`,
+  );
 });
