@@ -3,6 +3,8 @@
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { format } from "date-fns";
+import { dateFnsLocale } from "@/lib/date-fns-locale";
+import { useLocale, useTranslations } from "next-intl";
 import { toast } from "@/lib/notification-island/toast";
 
 import {
@@ -37,19 +39,23 @@ import {
 import { EmbedSection } from "@/features/developers/EmbedSection";
 import type { EventOption } from "@/features/developers/webhook-ui";
 
-/** Human-readable labels for API scopes , raw scope strings surface in a tooltip. */
-const SCOPE_LABELS: Record<string, string> = {
-  "jobs:read": "Read jobs",
-  "jobs:write": "Manage jobs",
-  "candidates:read": "Read candidates",
-  "candidates:write": "Manage candidates",
-  "applications:read": "Read applications",
-  "applications:write": "Manage applications",
-  "webhooks:manage": "Manage webhooks",
-};
+/** Message keys for API scopes , raw scope strings surface in a tooltip. */
+const SCOPE_KEYS = {
+  "jobs:read": "readJobs",
+  "jobs:write": "manageJobs",
+  "candidates:read": "readCandidates",
+  "candidates:write": "manageCandidates",
+  "applications:read": "readApplications",
+  "applications:write": "manageApplications",
+  "webhooks:manage": "manageWebhooks",
+} as const;
 
-function scopeLabel(scope: string): string {
-  return SCOPE_LABELS[scope] ?? scope;
+type Translate = ReturnType<typeof useTranslations>;
+
+function scopeLabel(scope: string, t: Translate): string {
+  return scope in SCOPE_KEYS
+    ? t(`scopes.${SCOPE_KEYS[scope as keyof typeof SCOPE_KEYS]}`)
+    : scope;
 }
 
 /** Mask an API key identifier for display , never the full raw secret. */
@@ -113,6 +119,8 @@ function ApiKeysSection({
   scopes: string[];
   publishableScopes: string[];
 }) {
+  const t = useTranslations("features.developers.developersSettings");
+  const locale = useLocale();
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [showForm, setShowForm] = useState(false);
@@ -135,14 +143,14 @@ function ApiKeysSection({
 
   function submit() {
     if (!name.trim()) {
-      toast.error("Name the key.");
+      toast.error(t("toasts.nameRequired"));
       return;
     }
     const scopesForType = selectedScopes.filter((s) =>
       availableScopes.includes(s),
     );
     if (scopesForType.length === 0) {
-      toast.error("Pick at least one scope.");
+      toast.error(t("toasts.scopeRequired"));
       return;
     }
     startTransition(async () => {
@@ -152,7 +160,7 @@ function ApiKeysSection({
         scopes: scopesForType,
       });
       if (!result.ok || !result.raw) {
-        toast.error(result.error ?? "Could not create key.");
+        toast.error(result.error ?? t("toasts.createFailed"));
         return;
       }
       setCreated(result.raw);
@@ -168,11 +176,11 @@ function ApiKeysSection({
     startTransition(async () => {
       const result = await revokeApiKeyAction(id);
       if (!result.ok) {
-        toast.error(result.error ?? "Could not revoke.");
+        toast.error(result.error ?? t("toasts.revokeFailed"));
         setRevokingId(null);
         return;
       }
-      toast.success("Key revoked");
+      toast.success(t("toasts.revoked"));
       router.refresh();
     });
   }
@@ -181,15 +189,15 @@ function ApiKeysSection({
     <Card className="gap-5 p-6">
       <SectionHeader
         icon={KeyDuotoneIcon}
-        title="API keys"
-        description="Secret keys for server integrations, publishable keys for the embed widget."
+        title={t("apiKeysTitle")}
+        description={t("apiKeysDescription")}
         action={
           canManage ? (
             <Button
               onClick={() => setShowForm((v) => !v)}
               className="transition-transform active:scale-[0.97]"
             >
-              <PlusIcon className="size-4" /> New key
+              <PlusIcon className="size-4" /> {t("newKey")}
             </Button>
           ) : null
         }
@@ -197,7 +205,7 @@ function ApiKeysSection({
 
       {created && (
         <SecretBanner
-          label="Your new API key"
+          label={t("newKeyBanner")}
           value={created}
           onDismiss={() => setCreated(null)}
         />
@@ -207,39 +215,39 @@ function ApiKeysSection({
         <div className="animate-in fade-in slide-in-from-top-1 space-y-4 rounded-2xl border bg-muted/20 p-4 duration-200">
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-1.5">
-              <Label>Name</Label>
+              <Label>{t("nameLabel")}</Label>
               <Input
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                placeholder="Production server"
+                placeholder={t("namePlaceholder")}
               />
             </div>
              <div className="space-y-1.5">
-              <Label>Type</Label>
+              <Label>{t("typeLabel")}</Label>
               <div className="flex gap-2">
-                {(["secret", "publishable"] as const).map((t) => (
+                {(["secret", "publishable"] as const).map((kind) => (
                   <button
-                    key={t}
+                    key={kind}
                     type="button"
                     onClick={() => {
-                      setType(t);
+                      setType(kind);
                       setSelectedScopes([]);
                     }}
                     className={cn(
                       "flex-1 rounded-lg border px-3 py-2 text-sm font-medium transition-colors",
-                      type === t
+                      type === kind
                         ? "border-pine bg-sage text-sage-ink"
                         : "text-muted-foreground hover:border-foreground/15",
                     )}
                   >
-                    {t === "secret" ? "Secret (sk)" : "Publishable (pk)"}
+                    {kind === "secret" ? t("typeSecret") : t("typePublishable")}
                   </button>
                 ))}
               </div>
             </div>
           </div>
           <div className="space-y-1.5">
-            <Label>Scopes</Label>
+            <Label>{t("scopesLabel")}</Label>
             <div className="flex flex-wrap gap-1.5">
               {availableScopes.map((scope) => (
                 <Chip
@@ -252,7 +260,7 @@ function ApiKeysSection({
               ))}
             </div>
             <p className="text-xs text-muted-foreground">
-              API keys act across the whole workspace.
+              {t("scopesHelp")}
             </p>
           </div>
           <Button
@@ -261,7 +269,7 @@ function ApiKeysSection({
             disabled={pending}
             className="transition-transform active:scale-[0.97]"
           >
-            {pending && <SpinnerIcon className="size-4 animate-spin" />} Create key
+            {pending && <SpinnerIcon className="size-4 animate-spin" />} {t("createKey")}
           </Button>
         </div>
       )}
@@ -269,8 +277,8 @@ function ApiKeysSection({
       {apiKeys.length === 0 ? (
         <EmptyRow
           icon={KeyDuotoneIcon}
-          title="No API keys yet"
-          description="Create one to authenticate server-to-server requests or power the embed widget."
+          title={t("emptyTitle")}
+          description={t("emptyDescription")}
         />
       ) : (
         <div className="space-y-2">
@@ -285,21 +293,21 @@ function ApiKeysSection({
                   <div className="flex flex-wrap items-center gap-2">
                     <span className="truncate font-medium">{key.name}</span>
                     {key.revokedAt ? (
-                      <Badge variant="danger">Revoked</Badge>
+                      <Badge variant="danger">{t("revoked")}</Badge>
                     ) : (
                       <StatusPill tone={key.environment === "live" ? "on" : "warn"} dot={false}>
-                        {key.environment === "live" ? "Live" : "Test"}
+                        {key.environment === "live" ? t("live") : t("test")}
                       </StatusPill>
                     )}
                   </div>
 
                   <p className="mt-2.5 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-                    {key.type === "secret" ? "Secret key" : "Publishable key"}
+                    {key.type === "secret" ? t("secretKeyType") : t("publishableKeyType")}
                   </p>
                   <div className="mt-1.5">
                     <SecretField
                       value={maskKey(key.prefix, key.last4)}
-                      label={key.type === "secret" ? "secret key" : "publishable key"}
+                      label={key.type === "secret" ? t("secretKeyLabel") : t("publishableKeyLabel")}
                       revealable={false}
                     />
                   </div>
@@ -307,12 +315,12 @@ function ApiKeysSection({
                   {key.scopes.length > 0 && (
                     <div className="mt-2.5">
                       <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-                        Permissions
+                        {t("permissions")}
                       </p>
                       <p className="mt-1 text-xs text-muted-foreground">
                         {key.scopes.map((scope, si) => (
                           <span key={scope} title={scope}>
-                            {scopeLabel(scope)}
+                            {scopeLabel(scope, t)}
                             {si < key.scopes.length - 1 ? " · " : ""}
                           </span>
                         ))}
@@ -321,7 +329,7 @@ function ApiKeysSection({
                   )}
 
                   <p className="mt-2.5 text-xs text-muted-foreground">
-                    Created {format(new Date(key.createdAt), "PP")}
+                    {t("created", { date: format(new Date(key.createdAt), "PP", { locale: dateFnsLocale(locale) }) })}
                   </p>
                 </div>
 
@@ -332,7 +340,7 @@ function ApiKeysSection({
                         size="icon"
                         variant="ghost"
                         className="shrink-0 text-muted-foreground"
-                        aria-label="Key actions"
+                        aria-label={t("keyActions")}
                       >
                         <DotsThreeVerticalIcon className="size-4" />
                       </Button>
@@ -346,7 +354,7 @@ function ApiKeysSection({
                         {pending && revokingId === key.id && (
                           <SpinnerIcon className="size-3.5 animate-spin" />
                         )}
-                        Revoke key
+                        {t("revokeKey")}
                       </DropdownMenuItem>
                     </DropdownMenuContent>
                   </DropdownMenu>

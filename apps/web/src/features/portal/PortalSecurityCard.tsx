@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { startRegistration } from "@simplewebauthn/browser";
+import { useLocale, useTranslations } from "next-intl";
 
 import {
   changePortalPasswordAction,
@@ -35,6 +36,8 @@ export function PortalSecurityCard({
   recoveryRemaining: number;
   highlightSetup: boolean;
 }) {
+  const t = useTranslations("features.portal.portalSecurityCard");
+  const locale = useLocale();
   const router = useRouter();
   const [pwError, setPwError] = useState<string | null>(null);
   const [pwOk, setPwOk] = useState<string | null>(null);
@@ -47,7 +50,7 @@ export function PortalSecurityCard({
     const form = e.currentTarget;
     const data = new FormData(form);
     const next = String(data.get("newPassword") ?? "");
-    if (next !== String(data.get("confirm") ?? "")) return setPwError("The passwords don't match.");
+    if (next !== String(data.get("confirm") ?? "")) return setPwError(t("passwordsMismatch"));
     setPwError(null);
     setPwOk(null);
     start(async () => {
@@ -57,7 +60,7 @@ export function PortalSecurityCard({
       });
       if (!r.ok) return setPwError(r.error);
       form.reset();
-      setPwOk(r.message ?? "Password updated.");
+      setPwOk(r.message ?? t("passwordUpdated"));
       if (r.recoveryCodes?.length) setCodes(r.recoveryCodes);
       router.refresh();
     });
@@ -88,13 +91,13 @@ export function PortalSecurityCard({
         const verify = await fetch("/api/portal/passkey/register", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ response: attestation, challengeId, name: defaultPasskeyName() }),
+          body: JSON.stringify({ response: attestation, challengeId, name: defaultPasskeyName(t) }),
         });
         if (!verify.ok) throw new Error("verify");
         router.refresh();
       } catch (err) {
         const cancelled = err instanceof Error && err.name === "NotAllowedError";
-        setPkError(cancelled ? "Passkey setup was cancelled." : "We couldn't add that passkey. Try again.");
+        setPkError(cancelled ? t("passkeyCancelled") : t("passkeyAddFailed"));
       }
     });
   }
@@ -103,7 +106,7 @@ export function PortalSecurityCard({
     setPkError(null);
     start(async () => {
       const r = await deletePortalPasskeyAction(id);
-      if (!r.ok) return setPkError(r.error ?? "Could not remove the passkey.");
+      if (!r.ok) return setPkError(r.error ?? t("passkeyRemoveFailed"));
       router.refresh();
     });
   }
@@ -116,7 +119,7 @@ export function PortalSecurityCard({
       className="space-y-6 rounded-2xl border border-zinc-200 bg-white p-6 shadow-[0_1px_3px_rgba(0,0,0,0.04)] dark:border-zinc-800 dark:bg-zinc-900"
     >
       <h2 id="portal-security-heading" className="text-sm font-semibold text-foreground">
-        Sign-in and security
+        {t("title")}
       </h2>
 
       {codes ? (
@@ -127,43 +130,42 @@ export function PortalSecurityCard({
         <div className="space-y-5">
           {highlightSetup && !hasPassword ? (
             <p role="status" className="rounded-xl border bg-muted/40 px-3.5 py-2.5 text-sm">
-              Set a password so you can come back without an access code.
+              {t("setPasswordNudge")}
             </p>
           ) : null}
           <form onSubmit={onChangePassword} className="space-y-3" aria-busy={pending}>
-            <h3 className="text-sm font-medium">{hasPassword ? "Change password" : "Set a password"}</h3>
+            <h3 className="text-sm font-medium">{hasPassword ? t("changePassword") : t("setPassword")}</h3>
             <PortalFormError message={pwError} />
             {pwOk ? (
               <p role="status" className="text-sm text-muted-foreground">{pwOk}</p>
             ) : null}
             {hasPassword ? (
-              <PortalField label="Current password">
+              <PortalField label={t("currentPassword")}>
                 {(p) => <input {...p} name="currentPassword" type="password" required autoComplete="current-password" className={portalInputClass} />}
               </PortalField>
             ) : null}
-            <PortalField label="New password" hint="At least 10 characters. Other devices are signed out.">
+            <PortalField label={t("newPassword")} hint={t("newPasswordHint")}>
               {(p) => <input {...p} name="newPassword" type="password" required minLength={10} autoComplete="new-password" className={portalInputClass} />}
             </PortalField>
-            <PortalField label="Confirm new password">
+            <PortalField label={t("confirmNewPassword")}>
               {(p) => <input {...p} name="confirm" type="password" required minLength={10} autoComplete="new-password" className={portalInputClass} />}
             </PortalField>
             <button type="submit" disabled={pending} className={portalPrimaryButtonClass}>
-              {pending ? "Saving…" : hasPassword ? "Change password" : "Set password"}
+              {pending ? t("saving") : hasPassword ? t("changePassword") : t("setPasswordButton")}
             </button>
           </form>
 
           {hasPassword ? (
             <form onSubmit={onRegenerate} className="space-y-3" aria-busy={pending}>
-              <h3 className="text-sm font-medium">Recovery codes</h3>
+              <h3 className="text-sm font-medium">{t("recoveryCodes")}</h3>
               <p className="text-xs text-muted-foreground">
-                {recoveryRemaining} unused {recoveryRemaining === 1 ? "code" : "codes"}. Generating new
-                ones replaces the old set.
+                {t("unusedCodes", { count: recoveryRemaining })}
               </p>
-              <PortalField label="Confirm with your password">
+              <PortalField label={t("confirmWithPassword")}>
                 {(p) => <input {...p} name="password" type="password" required autoComplete="current-password" className={portalInputClass} />}
               </PortalField>
               <button type="submit" disabled={pending} className={portalSecondaryButtonClass}>
-                Generate new recovery codes
+                {t("generateCodes")}
               </button>
             </form>
           ) : null}
@@ -172,7 +174,7 @@ export function PortalSecurityCard({
 
       {passkeyEnabled ? (
         <div className="space-y-3">
-          <h3 className="text-sm font-medium">Passkeys</h3>
+          <h3 className="text-sm font-medium">{t("passkeys")}</h3>
           <PortalFormError message={pkError} />
           {passkeys.length > 0 ? (
             <ul className="divide-y rounded-xl border">
@@ -181,29 +183,33 @@ export function PortalSecurityCard({
                   <span className="min-w-0">
                     <span className="block truncate font-medium">{k.name}</span>
                     <span className="block text-xs text-muted-foreground">
-                      Added {new Date(k.createdAt).toLocaleDateString()}
-                      {k.lastUsedAt ? ` · last used ${new Date(k.lastUsedAt).toLocaleDateString()}` : ""}
+                      {k.lastUsedAt
+                        ? t("addedAndLastUsed", {
+                            addedDate: new Date(k.createdAt).toLocaleDateString(locale),
+                            lastUsedDate: new Date(k.lastUsedAt).toLocaleDateString(locale),
+                          })
+                        : t("addedOn", { date: new Date(k.createdAt).toLocaleDateString(locale) })}
                     </span>
                   </span>
                   <button
                     type="button"
                     disabled={pending}
                     onClick={() => removePasskey(k.id)}
-                    aria-label={`Remove passkey ${k.name}`}
+                    aria-label={t("removePasskey", { name: k.name })}
                     className="text-sm text-destructive underline-offset-2 hover:underline disabled:opacity-40"
                   >
-                    Remove
+                    {t("remove")}
                   </button>
                 </li>
               ))}
             </ul>
           ) : (
             <p className="text-sm text-muted-foreground">
-              Sign in with your fingerprint, face or device PIN instead of a password.
+              {t("passkeyEmpty")}
             </p>
           )}
           <button type="button" onClick={addPasskey} disabled={pending} className={portalSecondaryButtonClass}>
-            Add a passkey
+            {t("addPasskey")}
           </button>
         </div>
       ) : null}
@@ -211,8 +217,11 @@ export function PortalSecurityCard({
   );
 }
 
-function defaultPasskeyName(): string {
+type PortalSecurityT = ReturnType<typeof useTranslations>;
+
+/** Device names are brands and stay as they are; only "This device" is translated. */
+function defaultPasskeyName(t: PortalSecurityT): string {
   const ua = navigator.userAgent;
-  const device = /iPhone|iPad/.test(ua) ? "iPhone/iPad" : /Android/.test(ua) ? "Android" : /Mac/.test(ua) ? "Mac" : /Windows/.test(ua) ? "Windows" : "This device";
-  return `${device} passkey`;
+  const device = /iPhone|iPad/.test(ua) ? "iPhone/iPad" : /Android/.test(ua) ? "Android" : /Mac/.test(ua) ? "Mac" : /Windows/.test(ua) ? "Windows" : t("thisDevice");
+  return t("defaultPasskeyName", { device });
 }

@@ -2,10 +2,10 @@
 
 import { Briefcase, CalendarClock, FileText, User } from "lucide-react";
 import Link from "next/link";
+import { useTranslations } from "next-intl";
 
 import { cn } from "@/lib/utils";
 import type { TaskItem } from "./shared";
-import { TASK_PRIORITY_LABELS, TASK_STATUS_LABELS } from "./shared";
 import { TaskMenu } from "./TaskCard";
 import {
   OwnerAvatar,
@@ -20,6 +20,7 @@ const chipCls =
   "inline-flex items-center gap-1 rounded-full bg-card-inset px-2 py-0.5";
 
 export function TaskRow({ task, handlers }: { task: TaskItem; handlers: TaskHandlers }) {
+  const t = useTranslations("features.tasks.taskRow");
   const StatusIcon = STATUS_ICON[task.status];
   const prio = PRIORITY[task.priority];
   const done = task.status === "completed";
@@ -35,8 +36,8 @@ export function TaskRow({ task, handlers }: { task: TaskItem; handlers: TaskHand
       <button
         type="button"
         onClick={() => handlers.cycle(task)}
-        title={TASK_STATUS_LABELS[task.status]}
-        aria-label={`Status: ${TASK_STATUS_LABELS[task.status]}. Advance.`}
+        title={t(`statuses.${task.status}`)}
+        aria-label={t("statusAction", { status: t(`statuses.${task.status}`) })}
         className={cn(
           "shrink-0 rounded-full transition hover:scale-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-near-ink active:scale-95",
           STATUS_COLOR[task.status],
@@ -80,10 +81,10 @@ export function TaskRow({ task, handlers }: { task: TaskItem; handlers: TaskHand
                 <FileText className="size-3" />
                 {task.candidateId ? (
                   <Link href={`/dashboard/candidates/${task.candidateId}`} className="hover:underline">
-                    Application
+                    {t("application")}
                   </Link>
                 ) : (
-                  "Application"
+                  t("application")
                 )}
               </span>
             )}
@@ -92,10 +93,10 @@ export function TaskRow({ task, handlers }: { task: TaskItem; handlers: TaskHand
                 <CalendarClock className="size-3" />
                 {task.candidateId ? (
                   <Link href={`/dashboard/candidates/${task.candidateId}`} className="hover:underline">
-                    Interview
+                    {t("interview")}
                   </Link>
                 ) : (
-                  "Interview"
+                  t("interview")
                 )}
               </span>
             )}
@@ -106,7 +107,7 @@ export function TaskRow({ task, handlers }: { task: TaskItem; handlers: TaskHand
       <div className="flex shrink-0 items-center gap-3">
         <span className={cn("hidden items-center gap-1.5 text-xs font-medium sm:inline-flex", prio.text)}>
           <span aria-hidden className={cn("size-1.5 rounded-full", prio.dot)} />
-          {TASK_PRIORITY_LABELS[task.priority]}
+          {t(`priorities.${task.priority}`)}
         </span>
         <span className="hidden sm:inline-flex">
           <RelativeDate iso={task.dueDate} />

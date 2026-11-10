@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useTranslations } from "next-intl";
 import { usePathname, useRouter } from "next/navigation";
 
 import {
@@ -18,6 +19,7 @@ import { SuccessState } from "@/components/ui/success-state";
  * does not replay it.
  */
 export function JobPublishedDialog({ jobTitle }: { jobTitle: string }) {
+  const t = useTranslations("jobs.published");
   const router = useRouter();
   const pathname = usePathname();
   const [open, setOpen] = useState(true);
@@ -30,14 +32,14 @@ export function JobPublishedDialog({ jobTitle }: { jobTitle: string }) {
   return (
     <Dialog open={open} onOpenChange={(next) => (next ? setOpen(true) : close())}>
       <DialogContent size="sm">
-        <DialogTitle className="sr-only">Job published</DialogTitle>
+        <DialogTitle className="sr-only">{t("publishedTitle")}</DialogTitle>
         <DialogDescription className="sr-only">
-          {jobTitle} is now open for applications.
+          {t("publishedDescription", { jobTitle })}
         </DialogDescription>
         <SuccessState
-          title="Your job is live"
-          description={`${jobTitle || "The role"} is open for applications. New candidates will appear in your pipeline.`}
-          action={<Button onClick={close}>Done</Button>}
+          title={t("liveTitle")}
+          description={t("liveDescription", { role: jobTitle || t("theRole") })}
+          action={<Button onClick={close}>{t("done")}</Button>}
         />
       </DialogContent>
     </Dialog>

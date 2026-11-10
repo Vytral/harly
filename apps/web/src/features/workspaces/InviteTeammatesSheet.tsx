@@ -9,6 +9,7 @@ import {
   type ReactNode,
 } from "react";
 import { useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { Upload } from "lucide-react";
 import { toast } from "@/lib/notification-island/toast";
 
@@ -94,6 +95,7 @@ export function InviteTeammatesSheet({
     invitableRoles[0]?.key ??
     "recruiter";
   const shouldRefresh = refreshOnSuccess ?? true;
+  const t = useTranslations("features.workspaces.inviteTeammatesSheet");
   const router = useRouter();
 
   const [rows, setRows] = useState<InviteRow[]>([newRow(defaultRole)]);
@@ -111,14 +113,24 @@ export function InviteTeammatesSheet({
     if (state === lastState.current) return;
     lastState.current = state;
     if (state.success) {
-      const parts: string[] = [];
-      if (state.sent) parts.push(`${state.sent} invited`);
-      if (state.added) parts.push(`${state.added} added`);
+      const summary =
+        state.sent && state.added
+          ? t("invitedAndAdded", { sent: state.sent, added: state.added })
+          : state.sent
+            ? t("invited", { count: state.sent })
+            : state.added
+              ? t("added", { count: state.added })
+              : t("done");
       const skipped = state.skipped?.length ?? 0;
       toast.success(
-        parts.length ? parts.join(", ") : "Done",
+        summary,
         skipped
-          ? { description: `${skipped} skipped (${state.skipped?.[0]?.reason ?? ""})` }
+          ? {
+              description: t("skipped", {
+                count: skipped,
+                reason: state.skipped?.[0]?.reason ?? "",
+              }),
+            }
           : undefined,
       );
       queueMicrotask(() => {
@@ -128,7 +140,7 @@ export function InviteTeammatesSheet({
     } else if (state.error) {
       toast.error(state.error);
     }
-  }, [state, defaultRole, router, shouldRefresh]);
+  }, [state, defaultRole, router, shouldRefresh, t]);
 
   function updateRow(id: string, patch: Partial<InviteRow>) {
     setRows((prev) => prev.map((r) => (r.id === id ? { ...r, ...patch } : r)));
@@ -167,18 +179,18 @@ export function InviteTeammatesSheet({
   function handlePaste(text: string) {
     const emails = text.split(/[\s,;]+/).filter((t) => EMAIL_RE.test(t));
     if (!emails.length) {
-      toast.error("No valid emails found in pasted text.");
+      toast.error(t("noValidPasteEmails"));
       return;
     }
     addEmails(emails, pasteRole);
-    toast.success(`Added ${emails.length} email${emails.length === 1 ? "" : "s"}`);
+    toast.success(t("pastedEmailsAdded", { count: emails.length }));
   }
 
   async function handleCsv(file: File) {
     const text = await file.text();
     const grid = parseCsv(text);
     if (!grid.length) {
-      toast.error("CSV is empty.");
+      toast.error(t("csvEmpty"));
       return;
     }
     // Detect header: find email + optional role columns.
@@ -203,7 +215,7 @@ export function InviteTeammatesSheet({
       fresh.push({ email, role });
     }
     if (!fresh.length) {
-      toast.error("No valid emails found in CSV.");
+      toast.error(t("noValidCsvEmails"));
       return;
     }
     const existing = new Set(
@@ -214,7 +226,7 @@ export function InviteTeammatesSheet({
       const base = prev.length === 1 && !prev[0].email.trim() ? [] : prev;
       return [...base, ...toAdd.map((f) => ({ id: randomId(), ...f }))];
     });
-    toast.success(`Imported ${toAdd.length} from CSV`);
+    toast.success(t("csvImported", { count: toAdd.length }));
   }
 
   // Only submit rows with a valid email.
@@ -223,7 +235,7 @@ export function InviteTeammatesSheet({
 
   function submit() {
     if (!validRows.length) {
-      toast.error("Add at least one valid email.");
+      toast.error(t("addValidEmail"));
       return;
     }
     const fd = new FormData();
@@ -244,10 +256,10 @@ export function InviteTeammatesSheet({
       <SheetContent className="flex w-full flex-col gap-0 p-0 sm:max-w-lg">
         <SheetHeader className="border-b px-5 py-4 text-left">
           <SheetTitle className="font-display text-lg font-semibold tracking-tight">
-            Invite teammates
+            {t("title")}
           </SheetTitle>
           <SheetDescription className="text-sm text-muted-foreground">
-            Add people by email with a role each, or share a link.
+            {t("description")}
           </SheetDescription>
         </SheetHeader>
 
@@ -269,7 +281,7 @@ export function InviteTeammatesSheet({
                         handlePaste(text);
                       }
                     }}
-                    placeholder="teammate@company.com"
+                    placeholder={t("emailPlaceholder")}
                     aria-invalid={invalid}
                     className={cn("flex-1", invalid && "border-destructive")}
                     disabled={isPending}
@@ -295,7 +307,7 @@ export function InviteTeammatesSheet({
                     size="icon"
                     className="shrink-0 text-muted-foreground hover:text-destructive"
                     onClick={() => removeRow(row.id)}
-                    aria-label="Remove row"
+                    aria-label={t("removeRow")}
                   >
                     <TrashIcon className="size-4" />
                   </Button>
@@ -311,7 +323,7 @@ export function InviteTeammatesSheet({
                 className="text-muted-foreground"
               >
                 <PlusIcon className="size-4" />
-                Add another
+                {t("addAnother")}
               </Button>
               <input
                 ref={fileRef}
@@ -332,7 +344,7 @@ export function InviteTeammatesSheet({
                 className="text-muted-foreground"
               >
                 <Upload className="size-4" />
-                Import CSV
+                {t("importCsv")}
               </Button>
             </div>
           </div>
@@ -341,7 +353,7 @@ export function InviteTeammatesSheet({
           <div className="space-y-2 rounded-lg border bg-muted/20 p-3">
             <div className="flex items-center justify-between">
               <Label className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                Paste a list
+                {t("pasteList")}
               </Label>
               <Select value={pasteRole} onValueChange={setPasteRole}>
                 <SelectTrigger className="h-8 w-36">
@@ -357,7 +369,7 @@ export function InviteTeammatesSheet({
               </Select>
             </div>
             <Textarea
-              placeholder="ana@co.com, luis@co.com…"
+              placeholder={t("pasteListPlaceholder")}
               rows={2}
               className="resize-none bg-background text-sm"
               onChange={(e) => {
@@ -375,8 +387,7 @@ export function InviteTeammatesSheet({
               }}
             />
             <p className="text-[11px] text-muted-foreground">
-              Paste emails separated by commas, spaces, or new lines. They join
-              with the role above (editable per row after).
+              {t("pasteHelp")}
             </p>
           </div>
 
@@ -384,7 +395,7 @@ export function InviteTeammatesSheet({
           {pending.length > 0 ? (
             <div className="space-y-2">
               <Label className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                Pending ({pending.length})
+                {t("pending", { count: pending.length })}
               </Label>
               <ul className="divide-y rounded-lg border">
                 {pending.map((inv) => (
@@ -414,9 +425,7 @@ export function InviteTeammatesSheet({
             className="w-full"
           >
             <UserPlusIcon className="size-4" />
-            {isPending
-              ? "Sending…"
-              : `Send ${validRows.length || ""} invite${validRows.length === 1 ? "" : "s"}`}
+            {isPending ? t("sending") : t("sendInvites", { count: validRows.length })}
           </Button>
         </div>
       </SheetContent>
@@ -425,6 +434,7 @@ export function InviteTeammatesSheet({
 }
 
 function CancelInvite({ invitationId }: { invitationId: string }) {
+  const t = useTranslations("features.workspaces.inviteTeammatesSheet");
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   return (
@@ -438,15 +448,15 @@ function CancelInvite({ invitationId }: { invitationId: string }) {
         startTransition(async () => {
           const result = await cancelWorkspaceInvitationAction(invitationId);
           if (result.success) {
-            toast.success("Invitation canceled.");
+            toast.success(t("invitationCanceled"));
             router.refresh();
           } else {
-            toast.error(result.error ?? "Unable to cancel.");
+            toast.error(result.error ?? t("cancelFailed"));
           }
         });
       }}
     >
-      {isPending ? "Canceling…" : "Cancel"}
+      {isPending ? t("canceling") : t("cancel")}
     </Button>
   );
 }

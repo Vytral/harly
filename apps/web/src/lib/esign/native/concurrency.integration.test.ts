@@ -57,6 +57,8 @@ import { finalizeNativeSignature } from "./finalize";
 import { createNativeSigningLink } from "./remote";
 import { getNativeSignatureTimeline } from "./timeline";
 
+vi.mock("next-intl/server", async () => (await import("@/test-support/intl-server-mock")).intlServerMock);
+
 const signaturePngBytes = Buffer.from(
   "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR4nGNgYAAAAAMAASsJTYQAAAAASUVORK5CYII=",
   "base64",

@@ -43,6 +43,8 @@ import {
   updateJobStageAction,
 } from "./stage-actions";
 
+vi.mock("next-intl/server", async () => (await import("@/test-support/intl-server-mock")).intlServerMock);
+
 const WORKSPACE_ID = "workspace-1";
 const JOB_ID = "22222222-2222-4222-8222-222222222222";
 const STAGE_ID = "33333333-3333-4333-8333-333333333333";
@@ -180,7 +182,7 @@ describe("pipeline stage server actions: results", () => {
       name: "Renamed",
     });
 
-    expect(result).toEqual({ success: false, error: "Archived stages cannot be edited." });
+    expect(result).toEqual({ success: false, error: "Archived stages can't be edited." });
     expect(mocks.revalidatePath).not.toHaveBeenCalled();
   });
 
@@ -206,7 +208,7 @@ describe("pipeline stage server actions: results", () => {
 
     expect(result).toEqual({
       success: false,
-      error: "The pipeline could not be updated. Try again.",
+      error: "The pipeline couldn't be updated. Try again.",
     });
     expect(mocks.logError).toHaveBeenCalled();
   });

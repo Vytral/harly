@@ -3,6 +3,7 @@
 import { useConfirm } from "@/components/ui/confirm-dialog";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { KanbanSquare, List, Plus, Search } from "lucide-react";
 import { toast } from "@/lib/notification-island/toast";
 
@@ -27,7 +28,7 @@ import {
   withTaskFilter,
   type TaskFilters,
 } from "./url-filters";
-import { TASK_PRIORITIES, TASK_PRIORITY_LABELS, TASK_STATUSES, TASK_STATUS_LABELS } from "./shared";
+import { TASK_PRIORITIES, TASK_STATUSES } from "./shared";
 import type { TaskContextOptions } from "./TaskLinkFields";
 import { useOpenFromQuery } from "@/components/dashboard/use-open-from-query";
 
@@ -64,6 +65,7 @@ export function TasksView({
   counts: Record<string, number>;
   contextOptions: TaskContextOptions;
 }) {
+  const t = useTranslations("features.tasks.tasksView");
   // Optimistic edits are derived on top of the server's `initialTasks` , a
   // status-override map plus a removed-set , so there is no prop→state mirror
   // (no setState-in-effect). After revalidation the server truth flows in and
@@ -149,12 +151,12 @@ export function TasksView({
         return next;
       });
       if (!res.success) {
-        toast.error(res.error ?? "Couldn't update task.");
+        toast.error(res.error ?? t("updateFailed"));
       } else {
         router.refresh();
       }
     },
-    [router, settle],
+    [router, settle, t],
   );
 
   const runRemove = useCallback(
@@ -162,9 +164,9 @@ export function TasksView({
       if (
         !(await confirm({
           tone: "warning",
-          title: "Archive this task?",
-          description: "It will leave the active task list.",
-          confirmLabel: "Archive task",
+          title: t("archiveTitle"),
+          description: t("archiveDescription"),
+          confirmLabel: t("archiveConfirm"),
         }))
       )
         return;
@@ -178,12 +180,12 @@ export function TasksView({
           next.delete(id);
           return next;
         });
-        toast.error(res.error ?? "Couldn't delete task.");
+        toast.error(res.error ?? t("deleteFailed"));
       } else {
         router.refresh();
       }
     },
-    [confirm, router, settle],
+    [confirm, router, settle, t],
   );
 
   const handlers = useMemo<TaskHandlers>(
@@ -229,74 +231,81 @@ export function TasksView({
     return { open, overdue, done };
   }, [tasks]);
 
+  const priorityLabels = Object.fromEntries(
+    TASK_PRIORITIES.map((p) => [p, t(`priorities.${p}`)]),
+  );
+  const statusLabels = Object.fromEntries(
+    TASK_STATUSES.map((s) => [s, t(`statuses.${s}`)]),
+  );
+
   return (
     <div className="space-y-5">
-      <PageTitle title="Tasks" />
+      <PageTitle title={t("pageTitle")} />
 
       <div className="flex flex-wrap items-center gap-2">
         <div className="relative w-full sm:w-60">
           <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-quiet-mist" />
           <Input
             type="search"
-            aria-label="Search tasks"
+            aria-label={t("searchLabel")}
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search tasks…"
+            placeholder={t("searchPlaceholder")}
             className="w-full rounded-full pl-9"
           />
         </div>
 
         <FilterPill
-          label="Assignee"
+          label={t("assignee")}
           value={assignee}
           onChange={(v) => setFilter("assignee", v)}
           options={["all", ...members.map((m) => m.id)]}
-          labelMap={{ all: "All", ...Object.fromEntries(members.map((m) => [m.id, m.name])) }}
+          labelMap={{ all: t("all"), ...Object.fromEntries(members.map((m) => [m.id, m.name])) }}
           allValue="all"
         />
         <FilterPill
-          label="Priority"
+          label={t("priority")}
           value={priority}
           onChange={(v) => setFilter("priority", v)}
           options={["all", ...TASK_PRIORITIES]}
-          labelMap={{ all: "All", ...TASK_PRIORITY_LABELS }}
+          labelMap={{ all: t("all"), ...priorityLabels }}
           allValue="all"
         />
         <FilterPill
-          label="Status"
+          label={t("status")}
           value={status}
           onChange={(v) => setFilter("status", v)}
           options={["all", OPEN_STATUSES, ...TASK_STATUSES]}
-          labelMap={{ all: "All", [OPEN_STATUSES]: "Open", ...TASK_STATUS_LABELS }}
+          labelMap={{ all: t("all"), [OPEN_STATUSES]: t("open"), ...statusLabels }}
           allValue="all"
         />
         <FilterPill
-          label="Due"
+          label={t("due")}
           value={due}
           onChange={(v) => setFilter("due", v)}
           options={["all", "overdue,today", "overdue", "today", "due", "no_due"]}
           labelMap={{
-            all: "All",
-            "overdue,today": "Overdue or today",
-            overdue: "Overdue",
-            today: "Due today",
-            due: "With due date",
-            no_due: "No due date",
+            all: t("all"),
+            "overdue,today": t("dueOverdueOrToday"),
+            overdue: t("dueOverdue"),
+            today: t("dueToday"),
+            due: t("dueWithDate"),
+            no_due: t("dueNone"),
           }}
           allValue="all"
         />
 
         <div className="flex items-center gap-1.5 sm:ml-auto">
-          <SummaryChip count={summary.open} label="open" tone="bg-slate-info" />
-          <SummaryChip count={summary.overdue} label="overdue" tone="bg-rust" />
-          <SummaryChip count={summary.done} label="done" tone="bg-success-olive" />
+          <SummaryChip count={summary.open} label={t("summaryOpen")} tone="bg-slate-info" />
+          <SummaryChip count={summary.overdue} label={t("summaryOverdue")} tone="bg-rust" />
+          <SummaryChip count={summary.done} label={t("summaryDone")} tone="bg-success-olive" />
         </div>
 
         <div className="flex items-center gap-2">
           <div className="inline-flex rounded-full bg-soft-kraft p-0.5">
             {([
-              { key: "list", icon: List, label: "List view" },
-              { key: "board", icon: KanbanSquare, label: "Board view" },
+              { key: "list", icon: List, label: t("listView") },
+              { key: "board", icon: KanbanSquare, label: t("boardView") },
             ] as const).map(({ key, icon: Icon, label }) => (
               <button
                 key={key}
@@ -320,7 +329,7 @@ export function TasksView({
             }}
           >
             <Plus className="size-4" />
-            New task
+            {t("newTask")}
           </Button>
         </div>
       </div>

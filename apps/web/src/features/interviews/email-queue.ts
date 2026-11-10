@@ -6,7 +6,10 @@ import { and, desc, eq, gte, lt, sql } from "drizzle-orm";
 
 import { db, emailOutbox, user as authUsers } from "@harly/db";
 
+import { getTranslations } from "@/i18n/server";
+
 import { createLogger } from "@/lib/logger";
+import type { LabelTranslator } from "@/features/interviews/shared";
 import { emailDeliveryWarning } from "@/lib/email/delivery-warning";
 import { withDeliveryBudget } from "@/lib/email/delivery-budget";
 import {
@@ -20,10 +23,6 @@ import {
 
 const log = createLogger("interview-email");
 
-const INTERVIEW_EMAIL_LABEL = "interview email";
-const NOT_QUEUED_WARNING = `The ${INTERVIEW_EMAIL_LABEL} could not be queued and will not be sent automatically.`;
-const SLOW_WARNING = `The ${INTERVIEW_EMAIL_LABEL} is queued. Delivery is taking longer than usual and will continue in the background.`;
-const UNCONFIRMED_WARNING = `The ${INTERVIEW_EMAIL_LABEL} is queued, but its delivery could not be confirmed. It will be retried automatically; check the Delivery log if it does not arrive.`;
 
 export type InterviewEmailKind =
   | "interview.scheduled"
@@ -163,9 +162,11 @@ export async function queueInterviewEmail(
     /** The interview row's `updatedAt` in epoch ms. */
     revision?: number;
   },
-  actorId?: string,
+  actorId: string | undefined,
   /** The zone the caller already resolved for the in-app text, so it is not looked up twice. */
-  resolvedTimeZone?: string | null,
+  resolvedTimeZone: string | null | undefined,
+  /** Server-action translator; warnings are shown to the recruiter. */
+  t: LabelTranslator,
 ): Promise<InterviewEmailQueueResult> {
   let outboxId: string;
   try {
@@ -197,18 +198,18 @@ export async function queueInterviewEmail(
     );
   } catch (error) {
     log.error(error, "Interview email could not be queued");
-    return { status: "failed", warning: NOT_QUEUED_WARNING };
+    return { status: "failed", warning: t("emailNotQueued") };
   }
 
   try {
     const outcome = await withDeliveryBudget(
       processEmailOutbox({ ids: [outboxId], workspaceId }),
     );
-    if (outcome.timedOut) return { status: "failed", warning: SLOW_WARNING };
+    if (outcome.timedOut) return { status: "failed", warning: t("emailSlow") };
   } catch (error) {
     // The row exists, so the outbox owns it: it is queued, not lost.
     log.error(error, "Interview email processing failed after it was queued");
-    return { status: "failed", warning: UNCONFIRMED_WARNING };
+    return { status: "failed", warning: t("emailUnconfirmed") };
   }
 
   try {
@@ -217,14 +218,18 @@ export async function queueInterviewEmail(
       .from(emailOutbox)
       .where(eq(emailOutbox.id, outboxId))
       .limit(1);
-    if (!state) return { status: "failed", warning: UNCONFIRMED_WARNING };
+    if (!state) return { status: "failed", warning: t("emailUnconfirmed") };
     return {
       status: state.status === "sent" ? "sent" : "failed",
-      warning: emailDeliveryWarning(INTERVIEW_EMAIL_LABEL, [state]),
+      warning: emailDeliveryWarning(
+        await getTranslations("server.emailDelivery"),
+        (await getTranslations("labels.emailDelivery"))("interviewEmail"),
+        [state],
+      ),
     };
   } catch (error) {
     log.error(error, "Interview email state could not be read");
-    return { status: "failed", warning: UNCONFIRMED_WARNING };
+    return { status: "failed", warning: t("emailUnconfirmed") };
   }
 }
 

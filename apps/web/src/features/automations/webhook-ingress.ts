@@ -1,3 +1,4 @@
+import { getTranslations } from "@/i18n/server";
 import "server-only";
 
 import {
@@ -69,10 +70,11 @@ export async function createWorkflowWebhookEndpoint(input: {
   name: string;
   payloadSchema?: Record<string, unknown>;
 }): Promise<{ endpoint: WorkflowWebhookEndpointPublic; token: string; secret: string }> {
+  const t = await getTranslations("server.automations.webhookIngress");
   assertNotDemo();
   const name = input.name.trim();
   if (name.length < 1 || name.length > 120) {
-    throw new Error("Webhook endpoint name must be between 1 and 120 characters.");
+    throw new Error(t("endpointNameLength"));
   }
   const payloadSchema = assertWorkflowWebhookPayloadSchema(input.payloadSchema ?? {});
 
@@ -84,7 +86,7 @@ export async function createWorkflowWebhookEndpoint(input: {
       eq(workflowDefinitions.workspaceId, input.workspaceId),
     ))
     .limit(1);
-  if (!workflow) throw new Error("Workflow not found.");
+  if (!workflow) throw new Error(t("workflowNotFound"));
 
   const token = randomBytes(32).toString("base64url");
   const secret = randomBytes(32).toString("base64url");
@@ -111,7 +113,7 @@ export async function createWorkflowWebhookEndpoint(input: {
       lastReceivedAt: workflowWebhookEndpoints.lastReceivedAt,
       payloadSchema: workflowWebhookEndpoints.payloadSchema,
     });
-  if (!created) throw new Error("Webhook endpoint could not be created.");
+  if (!created) throw new Error(t("endpointCreateFailed"));
 
   return {
     endpoint: {

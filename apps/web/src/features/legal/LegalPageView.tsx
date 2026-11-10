@@ -1,11 +1,12 @@
 import type { Route } from "next";
+import { getTranslations } from "next-intl/server";
 
 import { CookiePreferencesButton } from "@/components/CookiePreferencesButton";
-import { LEGAL_PAGE_TITLES, type LegalPageData } from "@/features/legal/data";
+import { getLegalPageTitles, type LegalPageData } from "@/features/legal/data";
 import { isHtml, renderMarkdown } from "@/features/legal/render-markdown";
 import { sanitizeLegalHtml } from "@/features/legal/sanitize-html.server";
 
-export function LegalPageView({
+export async function LegalPageView({
   data,
   legalBasePath,
   careersHref,
@@ -14,6 +15,8 @@ export function LegalPageView({
   legalBasePath: string;
   careersHref: string;
 }) {
+  const t = await getTranslations("features.legal.legalPageView");
+  const titles = await getLegalPageTitles();
   // Templates historically linked to /legal/*. Rewrite those internal links
   // when rendering a workspace-scoped board so they cannot cross tenants.
   const rawHtml = isHtml(data.content)
@@ -57,7 +60,7 @@ export function LegalPageView({
             href={careersHref as Route}
             className="text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
           >
-            ← Careers
+            {t("backToCareers")}
           </a>
         </div>
       </header>
@@ -65,7 +68,7 @@ export function LegalPageView({
       <main className="mx-auto max-w-3xl px-6 py-12">
         <div className="mb-10">
           <span className="inline-block rounded-full bg-sage/40 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-pine">
-            Legal
+            {t("legal")}
           </span>
           <h1 className="mt-3 font-display text-3xl font-bold tracking-tight text-foreground sm:text-4xl">
             {data.pageTitle}
@@ -93,7 +96,7 @@ export function LegalPageView({
         {otherPages.length > 0 && (
           <div className="mt-10 border-t border-hairline pt-8">
             <p className="mb-3 text-xs font-medium uppercase tracking-wide text-muted-foreground">
-              Other legal pages
+              {t("otherPages")}
             </p>
             <div className="flex flex-wrap gap-2">
               {otherPages.map((slug) => (
@@ -102,7 +105,7 @@ export function LegalPageView({
                   href={`${legalBasePath}/${slug}` as Route}
                   className="rounded-full border border-hairline bg-paper-raised px-4 py-1.5 text-xs font-medium text-muted-foreground transition hover:border-foreground/20 hover:text-foreground"
                 >
-                  {LEGAL_PAGE_TITLES[slug] ?? slug}
+                  {titles[slug] ?? slug}
                 </a>
               ))}
             </div>
@@ -114,7 +117,10 @@ export function LegalPageView({
         <div className="mx-auto flex max-w-3xl flex-col items-center justify-between gap-3 px-6 py-6 text-xs text-muted-foreground sm:flex-row">
           <div className="flex items-center gap-2">
             <span>
-              © {new Date().getFullYear()} {data.workspaceName}
+              {t("copyright", {
+                year: String(new Date().getFullYear()),
+                workspaceName: data.workspaceName,
+              })}
             </span>
           </div>
           <div className="flex items-center gap-4">
@@ -122,7 +128,7 @@ export function LegalPageView({
               href={careersHref as Route}
               className="transition hover:text-foreground"
             >
-              Careers
+              {t("careers")}
             </a>
             <CookiePreferencesButton className="hover:text-foreground" />
             {data.websiteUrl && (
@@ -132,20 +138,23 @@ export function LegalPageView({
                 rel="noopener noreferrer"
                 className="transition hover:text-foreground"
               >
-                Website
+                {t("website")}
               </a>
             )}
             <span className="text-hairline">·</span>
             <span>
-              Powered by{" "}
-              <a
-                href="https://github.com/Vytral/harly"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="font-medium text-foreground transition hover:text-pine"
-              >
-                Harly
-              </a>
+              {t.rich("poweredBy", {
+                harly: (chunks) => (
+                  <a
+                    href="https://github.com/Vytral/harly"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="font-medium text-foreground transition hover:text-pine"
+                  >
+                    {chunks}
+                  </a>
+                ),
+              })}
             </span>
           </div>
         </div>

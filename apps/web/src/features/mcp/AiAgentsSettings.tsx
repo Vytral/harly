@@ -2,7 +2,9 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { useLocale, useTranslations } from "next-intl";
 import { formatDistanceToNow } from "date-fns";
+import { dateFnsLocale } from "@/lib/date-fns-locale";
 
 import { Button } from "@/components/ui/button";
 import { Callout } from "@/components/ui/callout";
@@ -17,6 +19,8 @@ import { SectionHeader, StatusPill } from "@/features/workspaces/settings-ui";
 import { revokeMcpConnectionAction, updateMcpSettingsAction } from "@/lib/mcp/settings-actions";
 import { toast } from "@/lib/notification-island/toast";
 import { copyText } from "@/lib/utils";
+
+const NS = "features.mcp.aiAgentsSettings";
 
 type Connection = {
   id: string;
@@ -37,6 +41,7 @@ type McpSettingsView = {
 };
 
 function useCopy() {
+  const t = useTranslations(NS);
   const [copied, setCopied] = useState<string | null>(null);
   return {
     copied,
@@ -46,28 +51,31 @@ function useCopy() {
           setCopied(key);
           window.setTimeout(() => setCopied((current) => (current === key ? null : current)), 1800);
         },
-        () => toast.error("Could not copy"),
+        () => toast.error(t("copyFailed")),
       );
     },
   };
 }
 
 function CopyButton({ label, value, id, copied, onCopy }: { label: string; value: string; id: string; copied: string | null; onCopy: (id: string, value: string) => void }) {
+  const t = useTranslations(NS);
   const done = copied === id;
   return (
     <Button type="button" variant="outline" size="sm" onClick={() => onCopy(id, value)} aria-label={label} className="shrink-0">
       {done ? <CheckIcon className="size-4" /> : <CopyIcon className="size-4" />}
-      <span aria-live="polite">{done ? "Copied" : "Copy"}</span>
+      <span aria-live="polite">{done ? t("copied") : t("copy")}</span>
     </Button>
   );
 }
 
 function Snippet({ id, code, hint, copied, onCopy }: { id: string; code: string; hint?: string; copied: string | null; onCopy: (id: string, value: string) => void }) {
+  const t = useTranslations(NS);
+  const label = hint ?? t("commandHint");
   return (
     <div className="overflow-hidden rounded-[var(--radius-inner)] border border-hairline bg-card-inset">
       <div className="flex items-center justify-between gap-3 border-b border-hairline px-3 py-1.5">
-        <span className="text-[11px] font-medium uppercase tracking-wide text-soft-ink">{hint ?? "Command"}</span>
-        <CopyButton label={`Copy ${hint ?? "command"}`} value={code} id={id} copied={copied} onCopy={onCopy} />
+        <span className="text-[11px] font-medium uppercase tracking-wide text-soft-ink">{label}</span>
+        <CopyButton label={t("copyNamed", { name: label })} value={code} id={id} copied={copied} onCopy={onCopy} />
       </div>
       <pre className="overflow-x-auto px-3 py-3 font-mono text-[12.5px] leading-relaxed text-near-ink">
         <code>{code}</code>
@@ -81,9 +89,13 @@ function Steps({ children }: { children: React.ReactNode }) {
 }
 
 function SetupInstructions({ url, copied, onCopy }: { url: string; copied: string | null; onCopy: (id: string, value: string) => void }) {
+  const t = useTranslations(NS);
   const cursorJson = JSON.stringify({ mcpServers: { harly: { url } } }, null, 2);
   const vscodeJson = JSON.stringify({ servers: { harly: { type: "http", url } } }, null, 2);
   const geminiJson = JSON.stringify({ mcpServers: { harly: { httpUrl: url } } }, null, 2);
+
+  const bold = (chunks: React.ReactNode) => <strong>{chunks}</strong>;
+  const code = (chunks: React.ReactNode) => <code className="rounded bg-card-inset px-1 py-0.5 font-mono text-[12px]">{chunks}</code>;
 
   return (
     <Tabs defaultValue="claude" className="gap-4">
@@ -93,42 +105,42 @@ function SetupInstructions({ url, copied, onCopy }: { url: string; copied: strin
         <TabsTrigger value="claude-code">Claude Code</TabsTrigger>
         <TabsTrigger value="cursor">Cursor</TabsTrigger>
         <TabsTrigger value="vscode">VS Code</TabsTrigger>
-        <TabsTrigger value="other">Gemini, Grok &amp; others</TabsTrigger>
+        <TabsTrigger value="other">{t("tabOthers")}</TabsTrigger>
       </TabsList>
 
       <TabsContent value="claude" className="space-y-3">
         <Steps>
-          <li>Open Claude, then <strong>Settings → Connectors → Add custom connector</strong>.</li>
-          <li>Name it Harly and paste the server URL above.</li>
-          <li>Choose <strong>Connect</strong> and sign in with your Harly account. On Team and Enterprise plans an Owner adds the connector once in Organization settings, then each person connects with their own account.</li>
+          <li>{t.rich("claudeStep1", { b: bold })}</li>
+          <li>{t("claudeStep2")}</li>
+          <li>{t.rich("claudeStep3", { b: bold })}</li>
         </Steps>
       </TabsContent>
 
       <TabsContent value="chatgpt" className="space-y-3">
         <Steps>
-          <li>Open ChatGPT, then <strong>Settings → Connectors</strong>. Turn on developer mode under Advanced if you do not see Create.</li>
-          <li>Choose <strong>Create</strong>, paste the server URL above and pick OAuth as the sign-in method.</li>
-          <li>Sign in with your Harly account when ChatGPT opens the consent page.</li>
+          <li>{t.rich("chatgptStep1", { b: bold })}</li>
+          <li>{t.rich("chatgptStep2", { b: bold })}</li>
+          <li>{t("chatgptStep3")}</li>
         </Steps>
       </TabsContent>
 
       <TabsContent value="claude-code" className="space-y-3">
-        <Snippet id="claude-code" hint="Terminal" code={`claude mcp add --transport http harly ${url}`} copied={copied} onCopy={onCopy} />
-        <p className="text-[13px] text-soft-ink">Then run <code className="rounded bg-card-inset px-1 py-0.5 font-mono text-[12px]">/mcp</code> inside Claude Code and choose Harly to sign in.</p>
+        <Snippet id="claude-code" hint={t("terminalHint")} code={`claude mcp add --transport http harly ${url}`} copied={copied} onCopy={onCopy} />
+        <p className="text-[13px] text-soft-ink">{t.rich("claudeCodeThen", { code })}</p>
       </TabsContent>
 
       <TabsContent value="cursor" className="space-y-3">
-        <p className="text-[13px] text-soft-ink">Add this to <code className="rounded bg-card-inset px-1 py-0.5 font-mono text-[12px]">~/.cursor/mcp.json</code> (or the project&apos;s <code className="rounded bg-card-inset px-1 py-0.5 font-mono text-[12px]">.cursor/mcp.json</code>), then open Cursor Settings → MCP and sign in to Harly.</p>
+        <p className="text-[13px] text-soft-ink">{t.rich("cursorIntro", { code })}</p>
         <Snippet id="cursor" hint="mcp.json" code={cursorJson} copied={copied} onCopy={onCopy} />
       </TabsContent>
 
       <TabsContent value="vscode" className="space-y-3">
-        <p className="text-[13px] text-soft-ink">Add this to <code className="rounded bg-card-inset px-1 py-0.5 font-mono text-[12px]">.vscode/mcp.json</code> (or run <strong>MCP: Add Server</strong> and choose HTTP), then start the server and sign in.</p>
+        <p className="text-[13px] text-soft-ink">{t.rich("vscodeIntro", { code, b: bold })}</p>
         <Snippet id="vscode" hint="mcp.json" code={vscodeJson} copied={copied} onCopy={onCopy} />
       </TabsContent>
 
       <TabsContent value="other" className="space-y-3">
-        <p className="text-[13px] text-soft-ink">Any client that supports remote MCP servers (streamable HTTP) with OAuth works: add a custom or remote MCP server, paste the URL above and sign in when prompted. No API key is needed.</p>
+        <p className="text-[13px] text-soft-ink">{t("otherIntro")}</p>
         <Snippet id="gemini-cli" hint="Gemini CLI" code={`gemini mcp add --transport http harly ${url}`} copied={copied} onCopy={onCopy} />
         <Snippet id="gemini-json" hint="Gemini CLI settings.json" code={geminiJson} copied={copied} onCopy={onCopy} />
       </TabsContent>
@@ -136,36 +148,52 @@ function SetupInstructions({ url, copied, onCopy }: { url: string; copied: strin
   );
 }
 
-function scopeSummary(scopes: string[]) {
+type Translator = ReturnType<typeof useTranslations>;
+
+function scopeSummary(scopes: string[], t: Translator) {
   const writes = scopes.filter((scope) => /:(write|send)$/.test(scope)).length;
   const reads = scopes.length - writes;
-  const parts = [] as string[];
-  if (reads) parts.push(`${reads} read`);
-  if (writes) parts.push(`${writes} write`);
-  return parts.join(" · ") || "No access";
+  if (reads && writes) return t("scopesReadWrite", { reads, writes });
+  if (reads) return t("scopesRead", { reads });
+  if (writes) return t("scopesWrite", { writes });
+  return t("scopesNone");
 }
 
 function ConnectionRow({ connection, showUser, isYours, busy, onRevoke }: { connection: Connection; showUser: boolean; isYours: boolean; busy: boolean; onRevoke: () => void }) {
+  const t = useTranslations(NS);
+  const locale = useLocale();
   const writes = connection.scopes.some((scope) => /:(write|send)$/.test(scope));
+  const scopes = scopeSummary(connection.scopes, t);
+  const connected = formatDistanceToNow(new Date(connection.createdAt), { addSuffix: true, locale: dateFnsLocale(locale) });
+  const owner = showUser ? t("owner", { name: connection.userName, email: connection.userEmail }) : "";
+
+  let meta: string;
+  if (connection.lastUsedAt) {
+    const lastUsed = formatDistanceToNow(new Date(connection.lastUsedAt), { addSuffix: true, locale: dateFnsLocale(locale) });
+    meta = showUser
+      ? t("metaOwnerUsed", { owner, scopes, connected, lastUsed })
+      : t("metaUsed", { scopes, connected, lastUsed });
+  } else {
+    meta = showUser
+      ? t("metaOwnerNeverUsed", { owner, scopes, connected })
+      : t("metaNeverUsed", { scopes, connected });
+  }
+
   return (
     <li className="flex flex-col gap-3 rounded-xl border bg-card px-4 py-3.5 sm:flex-row sm:items-center sm:justify-between">
       <div className="min-w-0 space-y-1">
         <div className="flex flex-wrap items-center gap-2">
           <p className="truncate text-sm font-medium text-near-ink">{connection.clientName}</p>
           <StatusPill tone={writes ? "warn" : "neutral"} dot={false}>
-            {writes ? "Can read and change data" : "Read only"}
+            {writes ? t("canChange") : t("readOnly")}
           </StatusPill>
-          {isYours && showUser ? <StatusPill tone="on" dot={false}>You</StatusPill> : null}
+          {isYours && showUser ? <StatusPill tone="on" dot={false}>{t("you")}</StatusPill> : null}
         </div>
-        <p className="text-[12.5px] text-soft-ink">
-          {showUser ? `${connection.userName} (${connection.userEmail}) · ` : ""}
-          {scopeSummary(connection.scopes)} · Connected {formatDistanceToNow(new Date(connection.createdAt), { addSuffix: true })} ·{" "}
-          {connection.lastUsedAt ? `Last used ${formatDistanceToNow(new Date(connection.lastUsedAt), { addSuffix: true })}` : "Not used yet"}
-        </p>
+        <p className="text-[12.5px] text-soft-ink">{meta}</p>
         {connection.clientHost ? <p className="truncate text-[12px] text-quiet-mist">{connection.clientHost}</p> : null}
       </div>
       <Button variant="outline" size="sm" onClick={onRevoke} disabled={busy} className="shrink-0 self-start sm:self-center">
-        {busy ? "Revoking…" : "Revoke"}
+        {busy ? t("revoking") : t("revoke")}
       </Button>
     </li>
   );
@@ -180,6 +208,7 @@ export function AiAgentsSettings(props: {
   currentUserId: string;
   connections: Connection[];
 }) {
+  const t = useTranslations(NS);
   const router = useRouter();
   const confirm = useConfirm();
   const { copied, copy } = useCopy();
@@ -194,7 +223,7 @@ export function AiAgentsSettings(props: {
       const result = await updateMcpSettingsAction(patch);
       if (!result.ok) {
         setSettings(previous);
-        toast.error(result.error ?? "Could not save.");
+        toast.error(result.error ?? t("saveFailed"));
         return;
       }
       toast.success(success);
@@ -206,9 +235,11 @@ export function AiAgentsSettings(props: {
     const own = connection.userId === props.currentUserId;
     const ok = await confirm({
       tone: "destructive",
-      title: own ? `Disconnect ${connection.clientName}?` : `Disconnect ${connection.clientName} for ${connection.userName}?`,
-      description: "The app loses access straight away and has to sign in again to reconnect.",
-      confirmLabel: "Revoke access",
+      title: own
+        ? t("disconnectSelf", { app: connection.clientName })
+        : t("disconnectOther", { app: connection.clientName, user: connection.userName }),
+      description: t("disconnectDescription"),
+      confirmLabel: t("revokeAccess"),
     });
     if (!ok) return;
     setRevokingId(connection.id);
@@ -216,10 +247,10 @@ export function AiAgentsSettings(props: {
       const result = await revokeMcpConnectionAction(connection.id);
       setRevokingId(null);
       if (!result.ok) {
-        toast.error(result.error ?? "Could not revoke.");
+        toast.error(result.error ?? t("revokeFailed"));
         return;
       }
-      toast.success("Access revoked");
+      toast.success(t("revoked"));
       router.refresh();
     });
   }
@@ -231,24 +262,20 @@ export function AiAgentsSettings(props: {
       <Card className="gap-5 p-6">
         <SectionHeader
           icon={RobotDuotoneIcon}
-          title="Connect an AI agent"
-          description={`Let Claude, ChatGPT, Cursor and other MCP apps work in ${props.workspaceName} with your own permissions. You sign in with your Harly account; there is no API key to copy.`}
-          badge={<StatusPill tone={enabled ? "on" : "off"}>{enabled ? "On" : "Off"}</StatusPill>}
+          title={t("title")}
+          description={t("description", { workspace: props.workspaceName })}
+          badge={<StatusPill tone={enabled ? "on" : "off"}>{enabled ? t("statusOn") : t("statusOff")}</StatusPill>}
         />
 
         {!enabled ? (
-          <Callout tone="warning" title="AI agent access is turned off">
-            {props.canManage
-              ? "Nobody can connect or use AI agents until you turn it back on below."
-              : "An administrator turned off AI agent access for this workspace."}
+          <Callout tone="warning" title={t("disabledTitle")}>
+            {props.canManage ? t("disabledAdmin") : t("disabledMember")}
           </Callout>
         ) : null}
 
         {enabled && !settings.allowDcr ? (
-          <Callout tone="warning" title="Claude and ChatGPT can't connect yet">
-            {props.canManage
-              ? "Automatic app registration is off, so claude.ai and ChatGPT cannot register with this workspace. Turn it on under Workspace controls."
-              : "Automatic app registration is off, so Claude and ChatGPT cannot connect. Ask a workspace admin to turn it on."}
+          <Callout tone="warning" title={t("dcrTitle")}>
+            {props.canManage ? t("dcrAdmin") : t("dcrMember")}
           </Callout>
         ) : null}
 
@@ -256,7 +283,7 @@ export function AiAgentsSettings(props: {
           <>
             <div>
               <label htmlFor="mcp-server-url" className="mb-1.5 block text-[12px] font-medium uppercase tracking-wide text-soft-ink">
-                MCP server URL
+                {t("serverUrlLabel")}
               </label>
               <div className="flex items-center gap-2">
                 <input
@@ -266,13 +293,11 @@ export function AiAgentsSettings(props: {
                   onFocus={(event) => event.currentTarget.select()}
                   className="h-11 min-w-0 flex-1 rounded-[var(--radius-btn)] border border-mist-border bg-pure-snow px-3 font-mono text-[13px] text-near-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-near-ink"
                 />
-                <CopyButton label="Copy MCP server URL" value={props.serverUrl} id="url" copied={copied} onCopy={copy} />
+                <CopyButton label={t("copyServerUrl")} value={props.serverUrl} id="url" copied={copied} onCopy={copy} />
               </div>
             </div>
             <SetupInstructions url={props.serverUrl} copied={copied} onCopy={copy} />
-            <p className="text-[12.5px] text-soft-ink">
-              Agents can only do what your role allows, and every change they make is recorded under your name. Data an agent reads is sent to that AI provider, so check it is approved for candidate data at your company.
-            </p>
+            <p className="text-[12.5px] text-soft-ink">{t("privacyNote")}</p>
           </>
         ) : null}
       </Card>
@@ -281,17 +306,13 @@ export function AiAgentsSettings(props: {
         <Card className="gap-4 p-6">
           <SectionHeader
             icon={PlugsConnectedIcon}
-            title={props.canManage ? "Connected apps" : "Your connected apps"}
-            description={
-              props.canManage
-                ? "Every active connection in this workspace. Revoking one signs that app out immediately."
-                : "Apps you have signed in to Harly. Revoke any you no longer use."
-            }
+            title={props.canManage ? t("connectedAppsTitle") : t("yourConnectedAppsTitle")}
+            description={props.canManage ? t("connectedAppsAdminDesc") : t("connectedAppsMemberDesc")}
           />
           {props.connections.length === 0 ? (
             <div className="rounded-2xl border border-dashed py-8 text-center">
-              <p className="text-sm font-medium text-near-ink">No apps connected yet</p>
-              <p className="mx-auto mt-1 max-w-sm text-[12.5px] text-soft-ink">Add the server URL above to an AI app and sign in. It will show up here.</p>
+              <p className="text-sm font-medium text-near-ink">{t("noAppsTitle")}</p>
+              <p className="mx-auto mt-1 max-w-sm text-[12.5px] text-soft-ink">{t("noAppsHelp")}</p>
             </div>
           ) : (
             <ul className="space-y-2">
@@ -315,50 +336,50 @@ export function AiAgentsSettings(props: {
           <div className="px-6 pt-6 pb-2">
             <SectionHeader
               icon={RobotDuotoneIcon}
-              title="Workspace controls"
-              description="Who can connect AI agents to this workspace."
+              title={t("controlsTitle")}
+              description={t("controlsDesc")}
             />
           </div>
           <SettingRows>
             <SettingRow
-              title="Allow AI agents to connect"
-              description="When off, no app can sign in and every existing connection stops working at once. Members still need the Connect AI agents permission."
+              title={t("allowConnectTitle")}
+              description={t("allowConnectDesc")}
               htmlFor="mcp-enabled"
               control={
                 <Switch
                   id="mcp-enabled"
                   checked={enabled}
                   disabled={pending}
-                  onCheckedChange={(checked) => save({ enabled: checked }, checked ? "AI agents can connect" : "AI agent access turned off")}
+                  onCheckedChange={(checked) => save({ enabled: checked }, checked ? t("allowConnectOn") : t("allowConnectOff"))}
                 />
               }
             />
             <SettingRow
-              title="Which apps may connect"
-              description="Known apps are Claude, ChatGPT, Gemini, Grok, Cursor, VS Code and similar well-known clients. Any app lets members connect other MCP clients after they review its consent screen."
+              title={t("appsTitle")}
+              description={t("appsDesc")}
               align="start"
             >
               <SegmentedControl
-                aria-label="Which apps may connect"
+                aria-label={t("appsTitle")}
                 value={settings.clientMode}
                 options={[
-                  { value: "any", label: "Any MCP app", disabled: pending },
-                  { value: "known_only", label: "Known apps only", disabled: pending },
+                  { value: "any", label: t("anyApp"), disabled: pending },
+                  { value: "known_only", label: t("knownOnly"), disabled: pending },
                 ]}
-                onValueChange={(value) => save({ clientMode: value }, value === "any" ? "Any MCP app may connect" : "Only known apps may connect")}
+                onValueChange={(value) => save({ clientMode: value }, value === "any" ? t("anyAppSaved") : t("knownOnlySaved"))}
                 className="max-w-md"
               />
             </SettingRow>
             <SettingRow
-              title="Allow automatic app registration"
-              description="Lets apps register themselves when they first connect. Claude (claude.ai) and ChatGPT need this: with it off they cannot connect, even if &ldquo;Any MCP app&rdquo; is selected above. Turn off only to accept apps that publish a client metadata document."
+              title={t("dcrSettingTitle")}
+              description={t("dcrSettingDesc")}
               htmlFor="mcp-dcr"
               control={
                 <Switch
                   id="mcp-dcr"
                   checked={settings.allowDcr}
                   disabled={pending}
-                  onCheckedChange={(checked) => save({ allowDcr: checked }, checked ? "Automatic registration on" : "Automatic registration off")}
+                  onCheckedChange={(checked) => save({ allowDcr: checked }, checked ? t("dcrOn") : t("dcrOff"))}
                 />
               }
             />

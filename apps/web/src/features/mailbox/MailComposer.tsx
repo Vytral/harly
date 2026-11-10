@@ -2,6 +2,7 @@
 
 import { useRef, useState } from "react";
 import { Paperclip, X } from "lucide-react";
+import { useTranslations } from "next-intl";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -63,10 +64,10 @@ function normalizeBody(value: string) {
   return value.includes("<") ? value : plainToHtml(value);
 }
 
-function formatSize(size: number) {
-  if (size < 1024) return `${size} B`;
-  if (size < 1024 * 1024) return `${Math.round(size / 1024)} KB`;
-  return `${(size / (1024 * 1024)).toFixed(1)} MB`;
+function formatSize(size: number, t: ReturnType<typeof useTranslations>) {
+  if (size < 1024) return t("sizeBytes", { size });
+  if (size < 1024 * 1024) return t("sizeKilobytes", { size: Math.round(size / 1024) });
+  return t("sizeMegabytes", { size: (size / (1024 * 1024)).toFixed(1) });
 }
 
 function readFileAsBase64(file: File) {
@@ -87,14 +88,14 @@ export function MailComposer({
   showSubject = true,
   lockSubject = false,
   defaultBody = "",
-  placeholder = "Write your message…",
+  placeholder,
   templates = [],
   aiConfigured = false,
-  aiDraftLabel = "Draft with AI",
+  aiDraftLabel,
   onDraftAI,
   onSend,
   onResolveUnknown,
-  sendLabel = "Send",
+  sendLabel,
   disabled = false,
   footerNote,
   onCancel,
@@ -143,6 +144,10 @@ export function MailComposer({
   // same key is never re-sent silently; the user chooses the next step.
   const [unknownKey, setUnknownKey] = useState<string | null>(null);
   const [confirmResend, setConfirmResend] = useState(false);
+  const t = useTranslations("features.mailbox.mailComposer");
+  const placeholderText = placeholder ?? t("defaultPlaceholder");
+  const sendText = sendLabel ?? t("defaultSendLabel");
+  const aiDraftText = aiDraftLabel ?? t("defaultAiDraftLabel");
 
   function loadBody(next: string) {
     setEditorInitial(next);
@@ -164,13 +169,13 @@ export function MailComposer({
     try {
       const result = await onDraftAI();
       if (!result) {
-        setError("AI could not draft this. Try again.");
+        setError(t("aiDraftFailed"));
         return;
       }
       if (result.subject) setSubject(result.subject);
       loadBody(result.body.includes("<") ? result.body : `<p>${result.body.replace(/\n/g, "<br>")}</p>`);
     } catch {
-      setError("AI could not draft this. Try again.");
+      setError(t("aiDraftFailed"));
     } finally {
       setDrafting(false);
     }
@@ -191,7 +196,7 @@ export function MailComposer({
           base64,
         });
       } catch {
-        setError(`Could not read ${file.name}.`);
+        setError(t("couldNotRead", { filename: file.name }));
       }
     }
     setAttachments((current) => {
@@ -199,7 +204,7 @@ export function MailComposer({
       for (const file of next) if (!merged.some((item) => item.id === file.id)) merged.push(file);
       const total = merged.reduce((sum, item) => sum + item.size, 0);
       if (total > MAX_TOTAL_BYTES) {
-        setError("Attachments exceed the 20 MB total limit.");
+        setError(t("attachmentsTooLarge"));
         return current;
       }
       return merged;
@@ -228,7 +233,7 @@ export function MailComposer({
         setUnknownKey(idempotencyKey);
         setConfirmResend(false);
       } else {
-        setError(result.error ?? "Could not send.");
+        setError(result.error ?? t("couldNotSend"));
       }
     } finally {
       setSending(false);
@@ -253,9 +258,9 @@ export function MailComposer({
         loadBody("");
         setAttachments([]);
         idempotencyKeyRef.current = randomId();
-        setNote("Marked as sent.");
+        setNote(t("markedAsSent"));
       } else {
-        setError(result.error ?? "Could not update this message.");
+        setError(result.error ?? t("couldNotUpdate"));
       }
     } finally {
       setSending(false);
@@ -283,11 +288,11 @@ export function MailComposer({
   return (
     <div className="flex flex-col gap-2.5" onKeyDown={handleKeyDown}>
       <div className="flex items-center gap-2 text-[13px]">
-        <span className="w-8 shrink-0 text-soft-ink">To</span>
+        <span className="w-8 shrink-0 text-soft-ink">{t("to")}</span>
         <span className="min-w-0 flex-1 truncate rounded-full bg-card-inset px-2.5 py-1 font-medium text-near-ink">{to}</span>
         {templates.length ? (
           <Select value="" onValueChange={applyTemplate}>
-            <SelectTrigger size="sm" className="w-32 shrink-0 sm:w-40" aria-label="Insert a template"><SelectValue placeholder="Templates" /></SelectTrigger>
+            <SelectTrigger size="sm" className="w-32 shrink-0 sm:w-40" aria-label={t("insertTemplate")}><SelectValue placeholder={t("templates")} /></SelectTrigger>
             <SelectContent>
               {templates.map((template) => <SelectItem key={template.id} value={template.id}>{template.name}</SelectItem>)}
             </SelectContent>
@@ -297,19 +302,19 @@ export function MailComposer({
 
       {showSubject ? (
         <div className="flex items-center gap-1.5">
-          <span className="w-14 shrink-0 text-[13px] text-muted-foreground">Subject</span>
+          <span className="w-14 shrink-0 text-[13px] text-muted-foreground">{t("subject")}</span>
           <Input
             value={subject}
             onChange={(event) => setSubject(event.target.value)}
             readOnly={lockSubject}
-            placeholder="Subject"
+            placeholder={t("subject")}
             className={cn("h-9 flex-1", lockSubject && "bg-muted/50")}
-            aria-label="Subject"
+            aria-label={t("subject")}
           />
         </div>
       ) : null}
 
-      <RichTextEditor key={editorKey} defaultValue={editorInitial} placeholder={placeholder} minHeight={editorMinHeight} onChange={setHtml} autoFocus={autoFocus} />
+      <RichTextEditor key={editorKey} defaultValue={editorInitial} placeholder={placeholderText} minHeight={editorMinHeight} onChange={setHtml} autoFocus={autoFocus} />
 
       {attachments.length ? (
         <ul className="flex flex-wrap gap-1.5">
@@ -317,12 +322,12 @@ export function MailComposer({
             <li key={file.id} className="flex items-center gap-1.5 rounded-full bg-card-inset py-1 pl-2.5 pr-1 text-xs">
               <Paperclip className="size-3.5 shrink-0 text-muted-foreground" />
               <span className="max-w-40 truncate font-medium" title={file.filename}>{file.filename}</span>
-              <span className="text-muted-foreground">{formatSize(file.size)}</span>
+              <span className="text-muted-foreground">{formatSize(file.size, t)}</span>
               <button
                 type="button"
                 onClick={() => setAttachments((current) => current.filter((item) => item.id !== file.id))}
                 className="flex size-5 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-                aria-label={`Remove ${file.filename}`}
+                aria-label={t("removeAttachment", { filename: file.filename })}
               >
                 <X className="size-3.5" />
               </button>
@@ -333,23 +338,23 @@ export function MailComposer({
 
       {unknownKey ? (
         <div role="alert" className="flex flex-col gap-2 rounded-lg border border-border bg-card p-3 text-sm">
-          <p className="font-medium">We couldn&apos;t confirm this was sent.</p>
+          <p className="font-medium">{t("unknownDeliveryTitle")}</p>
           {confirmResend ? (
             <p className="text-muted-foreground">
-              Sending again may deliver a second copy if the first one went through.
+              {t("unknownDeliveryWarning")}
             </p>
           ) : null}
           <div className="flex flex-wrap gap-2">
             <Button type="button" variant="outline" size="sm" onClick={markUnknownAsSent} disabled={sending}>
-              Check sent folder / mark as sent
+              {t("checkSentFolder")}
             </Button>
             {confirmResend ? (
               <Button type="button" size="sm" onClick={sendAnotherCopy} disabled={sending}>
-                Send another copy
+                {t("sendAnotherCopy")}
               </Button>
             ) : (
               <Button type="button" variant="ghost" size="sm" onClick={() => setConfirmResend(true)} disabled={sending}>
-                Send again
+                {t("sendAgain")}
               </Button>
             )}
           </div>
@@ -360,24 +365,24 @@ export function MailComposer({
 
       <div className="flex flex-wrap items-center gap-2">
         <input ref={fileRef} type="file" multiple hidden onChange={(event) => void addFiles(event.target.files)} />
-        <Button type="button" variant="ghost" size="icon-sm" onClick={() => fileRef.current?.click()} disabled={sending} aria-label="Attach files">
+        <Button type="button" variant="ghost" size="icon-sm" onClick={() => fileRef.current?.click()} disabled={sending} aria-label={t("attachFiles")}>
           <Paperclip className="size-4" />
         </Button>
         {aiConfigured && onDraftAI ? (
           <Button type="button" variant="outline" size="sm" onClick={draftWithAI} disabled={drafting || sending}>
             <SparkleFillIcon className="size-4 text-primary" />
-            {drafting ? "Drafting…" : aiDraftLabel}
+            {drafting ? t("drafting") : aiDraftText}
           </Button>
         ) : null}
         <div className="ml-auto flex items-center gap-2">
           {footerNote ? <span className="text-[11px] text-muted-foreground">{footerNote}</span> : null}
-          <span className="hidden text-[11px] text-quiet-mist sm:inline">⌘↵ to send</span>
+          <span className="hidden text-[11px] text-quiet-mist sm:inline">{t("sendShortcut")}</span>
           {onCancel ? (
-            <Button type="button" variant="ghost" size="sm" onClick={onCancel} disabled={sending}>Cancel</Button>
+            <Button type="button" variant="ghost" size="sm" onClick={onCancel} disabled={sending}>{t("cancel")}</Button>
           ) : null}
           <Button type="button" onClick={handleSend} disabled={!canSend} className="active:scale-[0.97] motion-reduce:active:scale-100">
             <PaperPlaneDuotoneIcon className="size-4" />
-            {sending ? "Sending…" : sendLabel}
+            {sending ? t("sending") : sendText}
           </Button>
         </div>
       </div>

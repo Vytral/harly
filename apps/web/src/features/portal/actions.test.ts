@@ -12,6 +12,7 @@ const mocks = vi.hoisted(() => ({
   publishPersistedDomainEvents: vi.fn(),
   emitWebhookEvent: vi.fn(),
   sendApplicationReceivedEmails: vi.fn(),
+  findActiveCandidateByEmail: vi.fn(),
   getApplicationConflictMessage: vi.fn(),
 }));
 
@@ -64,6 +65,9 @@ vi.mock("@/lib/portal-auth", () => ({
   PORTAL_SESSION_COOKIE: "portal-session",
   resolvePortalSession: mocks.resolvePortalSession,
 }));
+vi.mock("@/lib/portal-credentials", () => ({
+  findActiveCandidateByEmail: mocks.findActiveCandidateByEmail,
+}));
 vi.mock("@/features/jobs/config", () => ({
   normalizeJobApplicationConfig: () => ({
     sections: { profile: { resume: { visibility: "optional" } } },
@@ -107,6 +111,8 @@ vi.mock("@harly/emails", () => ({}));
 vi.mock("@/lib/email", () => ({ getWorkspaceEmailSender: vi.fn() }));
 
 import { applyToJobAction } from "./actions";
+
+vi.mock("next-intl/server", async () => (await import("@/test-support/intl-server-mock")).intlServerMock);
 
 function query(value: unknown) {
   const builder = new Proxy(
@@ -198,6 +204,7 @@ describe("applyToJobAction", () => {
       lastName: "Lovelace",
     });
     mocks.validatePortalApplication.mockReturnValue({ ok: true, answers: {} });
+    mocks.findActiveCandidateByEmail.mockResolvedValue(null);
     mocks.verifyResumeUpload.mockResolvedValue(null);
     mocks.getApplicationConflictMessage.mockReturnValue(null);
     mocks.persistDomainEvent.mockResolvedValue({

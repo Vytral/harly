@@ -4,13 +4,16 @@
   "private": true,
   "scripts": {
     "build": "tsc --noEmit",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "node --import tsx --test test/*.test.tsx"
   },
   "exports": {
     ".": "./src/index.ts"
   },
   "dependencies": {
+    "@harly/config": "workspace:*",
     "@react-email/components": "^1.0.12",
+    "next-intl": "4.14.9",
     "nodemailer": "^10.1.4",
     "react": "19.2.4",
     "react-dom": "19.2.4",

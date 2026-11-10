@@ -1,6 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { useTransition } from "react";
 import {
   ExternalLink,
@@ -13,6 +14,7 @@ import { toast } from "@/lib/notification-island/toast";
 import { copyText } from "@/lib/utils";
 
 import { restoreJobAction, trashJobAction } from "./actions";
+import { getJobActionErrorKey } from "./action-errors";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -36,6 +38,8 @@ export function JobActionsMenu({
   redirectAfterTrash = false,
   align = "end",
 }: JobActionsMenuProps) {
+  const t = useTranslations("jobs.actions");
+  const tErrors = useTranslations("jobs.errors");
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
 
@@ -47,19 +51,20 @@ export function JobActionsMenu({
 
   function copyLink() {
     void copyText(publicUrl());
-    toast.success("Public link copied.");
+    toast.success(t("publicLinkCopied"));
   }
 
   function moveToTrash() {
     startTransition(async () => {
       const result = await trashJobAction(jobId);
       if (!result.success) {
-        toast.error(result.error ?? "Could not move the job to trash.");
+        const errorKey = getJobActionErrorKey(result.code);
+        toast.error(errorKey ? tErrors(errorKey) : t("moveToTrashError"));
         return;
       }
-      toast.success("Job moved to trash.", {
+      toast.success(t("movedToTrash"), {
         action: {
-          label: "Undo",
+          label: t("undo"),
           onClick: () => {
             startTransition(async () => {
               await restoreJobAction(jobId);
@@ -82,7 +87,7 @@ export function JobActionsMenu({
           variant="ghost"
           size="icon"
           className="size-8 rounded-full text-soft-ink data-[state=open]:bg-row-wash"
-          aria-label="Job actions"
+          aria-label={t("jobActions")}
           disabled={isPending}
           onClick={(event) => event.stopPropagation()}
         >
@@ -94,22 +99,22 @@ export function JobActionsMenu({
           onClick={() => router.push(`/dashboard/jobs/${jobId}`)}
         >
           <Pencil />
-          Edit
+          {t("edit")}
         </DropdownMenuItem>
         <DropdownMenuItem asChild>
           <a href={`/jobs/${slug}`} target="_blank" rel="noreferrer">
             <ExternalLink />
-            View public page
+            {t("viewPublicPage")}
           </a>
         </DropdownMenuItem>
         <DropdownMenuItem onClick={copyLink}>
           <Link2 />
-          Copy link
+          {t("copyLink")}
         </DropdownMenuItem>
         <DropdownMenuSeparator />
         <DropdownMenuItem variant="destructive" onClick={moveToTrash}>
           <Trash2 />
-          Move to trash
+          {t("moveToTrash")}
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>

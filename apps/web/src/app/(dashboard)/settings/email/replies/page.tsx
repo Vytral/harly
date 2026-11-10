@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { getTranslations } from "next-intl/server";
 
 import { Button } from "@/components/ui/button";
 import { CaretLeftIcon } from "@/components/ui/icons/phosphor";
@@ -18,6 +19,7 @@ export default async function ConfigureReplyHandlingPage() {
     getMailboxStatus(organization.id),
     getWorkspaceInboundEmailStatus(organization.id),
   ]);
+  const t = await getTranslations("pages.settingsEmailReplies.page");
 
   const initialMode = mailboxStatus.enabled || (!inboundStatus.enabled && mailboxStatus.configured)
     ? "mailbox"
@@ -28,7 +30,7 @@ export default async function ConfigureReplyHandlingPage() {
       <Button asChild variant="ghost" size="sm" className="-ml-3 w-fit">
         <Link href="/settings/email">
           <CaretLeftIcon className="size-4" />
-          Email settings
+          {t("emailSettings")}
         </Link>
       </Button>
       <ReplyHandlingSettingsForm

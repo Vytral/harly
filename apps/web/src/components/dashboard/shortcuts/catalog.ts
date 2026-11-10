@@ -9,33 +9,32 @@ export type ShortcutGroup = "General" | "Go to" | "Candidate page" | "Inbox";
 export type ShortcutDef = {
   /** Space-separated sequence, matched on KeyboardEvent.key ("g h", "?"). */
   keys: string;
-  label: string;
   group: ShortcutGroup;
 };
 
 export const SHORTCUTS = {
-  "help.open": { keys: "?", label: "Show keyboard shortcuts", group: "General" },
-  "search.open": { keys: "/", label: "Search (opens the command menu)", group: "General" },
-  "create.open": { keys: "c", label: "Open the Create menu", group: "General" },
+  "help.open": { keys: "?", group: "General" },
+  "search.open": { keys: "/", group: "General" },
+  "create.open": { keys: "c", group: "General" },
 
-  "go.home": { keys: "g h", label: "Go to Home", group: "Go to" },
-  "go.candidates": { keys: "g c", label: "Go to Candidates", group: "Go to" },
-  "go.pipeline": { keys: "g p", label: "Go to Pipeline", group: "Go to" },
-  "go.jobs": { keys: "g j", label: "Go to Jobs", group: "Go to" },
-  "go.tasks": { keys: "g t", label: "Go to Tasks", group: "Go to" },
-  "go.review": { keys: "g r", label: "Go to your review queue", group: "Go to" },
+  "go.home": { keys: "g h", group: "Go to" },
+  "go.candidates": { keys: "g c", group: "Go to" },
+  "go.pipeline": { keys: "g p", group: "Go to" },
+  "go.jobs": { keys: "g j", group: "Go to" },
+  "go.tasks": { keys: "g t", group: "Go to" },
+  "go.review": { keys: "g r", group: "Go to" },
 
-  "candidate.next": { keys: "j", label: "Next candidate in the list", group: "Candidate page" },
-  "candidate.prev": { keys: "k", label: "Previous candidate in the list", group: "Candidate page" },
-  "candidate.move": { keys: "m", label: "Move to the next stage", group: "Candidate page" },
-  "candidate.reject": { keys: "r", label: "Reject candidate", group: "Candidate page" },
-  "candidate.evaluate": { keys: "e", label: "Evaluate", group: "Candidate page" },
-  "candidate.schedule": { keys: "s", label: "Schedule an interview", group: "Candidate page" },
+  "candidate.next": { keys: "j", group: "Candidate page" },
+  "candidate.prev": { keys: "k", group: "Candidate page" },
+  "candidate.move": { keys: "m", group: "Candidate page" },
+  "candidate.reject": { keys: "r", group: "Candidate page" },
+  "candidate.evaluate": { keys: "e", group: "Candidate page" },
+  "candidate.schedule": { keys: "s", group: "Candidate page" },
 
-  "inbox.next": { keys: "j", label: "Next conversation", group: "Inbox" },
-  "inbox.prev": { keys: "k", label: "Previous conversation", group: "Inbox" },
-  "inbox.reply": { keys: "r", label: "Reply to the open conversation", group: "Inbox" },
-  "inbox.archive": { keys: "e", label: "Archive the open conversation", group: "Inbox" },
+  "inbox.next": { keys: "j", group: "Inbox" },
+  "inbox.prev": { keys: "k", group: "Inbox" },
+  "inbox.reply": { keys: "r", group: "Inbox" },
+  "inbox.archive": { keys: "e", group: "Inbox" },
 } as const satisfies Record<string, ShortcutDef>;
 
 export type ShortcutId = keyof typeof SHORTCUTS;

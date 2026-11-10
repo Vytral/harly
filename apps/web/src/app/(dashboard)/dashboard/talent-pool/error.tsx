@@ -1,5 +1,7 @@
 "use client";
 
+import { useTranslations } from "next-intl";
+
 import { RouteError } from "@/components/ui/route-error";
 
 export default function TalentPoolError({
@@ -9,5 +11,7 @@ export default function TalentPoolError({
   error: Error & { digest?: string };
   reset: () => void;
 }) {
-  return <RouteError error={error} reset={reset} title="The talent pool could not load" />;
+  const t = useTranslations("pages.dashboardTalentPool.error");
+
+  return <RouteError error={error} reset={reset} title={t("title")} />;
 }

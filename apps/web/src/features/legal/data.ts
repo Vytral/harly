@@ -1,6 +1,7 @@
 import "server-only";
 
 import { eq } from "drizzle-orm";
+import { getTranslations } from "@/i18n/server";
 
 import { isDemoMode } from "@harly/config";
 import { db, workspaceSettings, organization } from "@harly/db";
@@ -15,15 +16,15 @@ const LEGAL_SLUG_MAP: Record<string, string> = {
   "ai-transparency-notice": "aiTransparencyNotice",
 };
 
-export const LEGAL_PAGE_TITLES: Record<string, string> = {
-  "privacy-policy": "Privacy Policy",
-  "terms-of-service": "Terms of Service",
-  "cookie-policy": "Cookie Policy",
-  "candidate-notice": "Candidate Privacy Notice",
-  "ai-transparency-notice": "AI Transparency Notice",
-};
-
 export const VALID_LEGAL_SLUGS = Object.keys(LEGAL_SLUG_MAP);
+
+/** Display title for every legal page slug, in the request locale. */
+export async function getLegalPageTitles(): Promise<Record<string, string>> {
+  const t = await getTranslations("labels.legal.pageTitles");
+  return Object.fromEntries(
+    VALID_LEGAL_SLUGS.map((slug) => [slug, t(LEGAL_SLUG_MAP[slug])]),
+  );
+}
 
 /** Demo only: fill pages the workspace has not authored with sample content. */
 function withDemoFallback(pages: Record<string, string> | null): Record<string, string> | null {
@@ -142,7 +143,7 @@ export async function getLegalPageData(
     logoUrl: ws.logo ?? null,
     primaryColor: (ws.primaryColor as string | null) ?? "#18181b",
     websiteUrl: (ws.websiteUrl as string | null) ?? null,
-    pageTitle: LEGAL_PAGE_TITLES[pageSlug] ?? pageSlug,
+    pageTitle: (await getLegalPageTitles())[pageSlug] ?? pageSlug,
     pageSlug,
     content,
     publishedSlugs,

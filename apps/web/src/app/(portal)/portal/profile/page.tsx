@@ -2,11 +2,13 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { and, desc, eq, isNull } from "drizzle-orm";
 import type { Route } from "next";
+import { getTranslations } from "next-intl/server";
 
 import { candidates, db, dsarRequests } from "@harly/db";
 import { PORTAL_SESSION_COOKIE, resolvePortalSession } from "@/lib/portal-auth";
 import { PortalShell } from "@/features/portal/PortalShellServer";
 import { PortalProfileForm } from "@/features/portal/PortalProfileForm";
+import { PortalEmailLanguagePreference } from "@/features/portal/PortalEmailLanguagePreference";
 import { PortalAvatarEdit } from "@/features/portal/PortalAvatarEdit";
 import { PortalSecurityCard } from "@/features/portal/PortalSecurityCard";
 import { getPortalAuthMethods } from "@/lib/portal-auth-methods";
@@ -22,6 +24,7 @@ export default async function PortalProfilePage({
   searchParams: Promise<{ setup?: string }>;
 }) {
   const { setup } = await searchParams;
+  const t = await getTranslations("pages.portalProfile.page");
   const cookieStore = await cookies();
   const token = cookieStore.get(PORTAL_SESSION_COOKIE)?.value;
   if (!token) redirect("/portal/login" as Route);
@@ -41,6 +44,7 @@ export default async function PortalProfilePage({
       websiteUrl: candidates.websiteUrl,
       headline: candidates.headline,
       avatarUrl: candidates.avatarUrl,
+      preferredEmailLocale: candidates.preferredEmailLocale,
     })
     .from(candidates)
     .where(and(eq(candidates.id, session.candidateId), eq(candidates.workspaceId, session.workspaceId), isNull(candidates.deletedAt)))
@@ -89,9 +93,12 @@ export default async function PortalProfilePage({
 
         {/* Edit form */}
         <div className="rounded-2xl border border-zinc-200 bg-white p-6 shadow-[0_1px_3px_rgba(0,0,0,0.04)] dark:border-zinc-800 dark:bg-zinc-900">
-          <h2 className="mb-5 text-sm font-semibold text-foreground">Edit profile</h2>
+          <h2 className="mb-5 text-sm font-semibold text-foreground">{t("editProfile")}</h2>
           <PortalProfileForm profile={candidate} />
         </div>
+        <PortalEmailLanguagePreference
+          initialValue={candidate.preferredEmailLocale ?? null}
+        />
         <PortalSecurityCard
           hasPassword={hasPassword}
           passwordEnabled={methods.password}

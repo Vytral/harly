@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useTranslations } from "next-intl";
 import { BarChart3, TrendingDown, TrendingUp } from "lucide-react";
 
 import {
@@ -17,12 +18,6 @@ import { PerformanceChart } from "./PerformanceChart";
 
 type ChartMetric = "applications" | "interviews" | "hires";
 
-const CHART_METRICS: { key: ChartMetric; label: string }[] = [
-  { key: "applications", label: "Applications" },
-  { key: "interviews", label: "Interviews" },
-  { key: "hires", label: "Hires" },
-];
-
 export function HiringPerformance({
   data,
   className,
@@ -30,13 +25,14 @@ export function HiringPerformance({
   data: PerfData;
   className?: string;
 }) {
+  const t = useTranslations("shell.hiringPerformance");
   const [metric, setMetric] = useState<ChartMetric>("applications");
 
   const kpis = [
-    { label: "Applications", ...data.metrics.applications },
-    { label: "Interviews", ...data.metrics.interviews },
-    { label: "Hires", ...data.metrics.hires },
-    { label: "Offer acceptance", ...data.metrics.offerAcceptance },
+    { key: "applications", ...data.metrics.applications },
+    { key: "interviews", ...data.metrics.interviews },
+    { key: "hires", ...data.metrics.hires },
+    { key: "offerAcceptance", ...data.metrics.offerAcceptance },
   ];
 
   // A brand-new workspace has nothing to chart. Show quiet dashes and one line
@@ -53,7 +49,7 @@ export function HiringPerformance({
           <span className="grid size-8 shrink-0 place-items-center rounded-[var(--radius-btn)] border border-hairline bg-pure-snow">
             <BarChart3 className="size-4" strokeWidth={1.8} />
           </span>
-          Hiring performance
+          {t("title")}
         </h2>
         <div className="flex items-center gap-2">
           {empty ? null : (
@@ -65,9 +61,9 @@ export function HiringPerformance({
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                {CHART_METRICS.map((m) => (
-                  <SelectItem key={m.key} value={m.key}>
-                    {m.label}
+                {(["applications", "interviews", "hires"] as const).map((key) => (
+                  <SelectItem key={key} value={key}>
+                    {t(key)}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -86,11 +82,11 @@ export function HiringPerformance({
             const up = delta != null && delta >= 0;
             return (
               <div
-                key={kpi.label}
+                key={kpi.key}
                 className="rounded-[var(--radius-inner)] bg-card-inset p-4"
               >
                 <p className="truncate text-[12.5px] font-medium text-soft-ink">
-                  {kpi.label}
+                  {t(kpi.key)}
                 </p>
                 <p className="font-display mt-1.5 text-[28px] leading-none tabular-nums text-near-ink">
                   {empty || kpi.value == null
@@ -127,7 +123,7 @@ export function HiringPerformance({
                   )}
                   {empty ? null : (
                     <span className="font-normal text-soft-ink">
-                      vs previous 14 days
+                      {t("vsPrevious")}
                     </span>
                   )}
                 </p>
@@ -141,15 +137,14 @@ export function HiringPerformance({
             <div className="flex min-h-[184px] w-full flex-col items-center justify-center gap-2 rounded-[var(--radius-inner)] bg-warm-paper px-6 py-8 text-center">
               <BarChart3 className="size-5 text-quiet-mist" strokeWidth={1.6} />
               <p className="text-[14px] font-medium text-near-ink">
-                Trends appear with your first applications
+                {t("emptyTitle")}
               </p>
               <p className="max-w-[34ch] text-pretty text-[13px] text-soft-ink">
-                Once candidates apply, you will see applications, interviews and
-                hires over the last 14 days.
+                {t("emptyText")}
               </p>
             </div>
           ) : (
-            <PerformanceChart points={data.series[metric]} />
+            <PerformanceChart points={data.series[metric]} ariaLabel={t("trend")} />
           )}
         </div>
       </div>

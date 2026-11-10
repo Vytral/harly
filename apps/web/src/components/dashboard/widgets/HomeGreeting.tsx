@@ -1,7 +1,9 @@
+import { useTranslations } from "next-intl";
+
 function greeting(hour: number) {
-  if (hour < 12) return "Good morning";
-  if (hour < 18) return "Good afternoon";
-  return "Good evening";
+  if (hour < 12) return "morning";
+  if (hour < 18) return "afternoon";
+  return "evening";
 }
 
 /**
@@ -17,10 +19,11 @@ export function HomeGreeting({
   hour: number;
   subline: string;
 }) {
+  const t = useTranslations("shell.homeGreeting");
   return (
     <header className="px-4 pb-2 pt-6 text-center sm:pt-8">
       <h1 className="font-display text-balance text-[32px] leading-[1.1] text-near-ink sm:text-[40px]">
-        {greeting(hour)}, {name}
+        {name ? t(greeting(hour), { name }) : t(`${greeting(hour)}Anonymous`)}
       </h1>
       <p className="mx-auto mt-2 max-w-xl text-pretty text-[14px] text-soft-ink">
         {subline}

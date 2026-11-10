@@ -2,6 +2,7 @@
 
 import { Plus } from "lucide-react";
 import { BaseEdge, EdgeLabelRenderer, getSmoothStepPath, type Edge, type EdgeProps } from "@xyflow/react";
+import { useTranslations } from "next-intl";
 
 import { useCanvasActions } from "./canvas-actions";
 import { StepSelector } from "./StepSelector";
@@ -17,6 +18,7 @@ export function WorkflowCanvasEdge({
   markerEnd,
   selected,
 }: EdgeProps<Edge<{ port?: string }>>) {
+  const t = useTranslations("features.automations.WorkflowEdge");
   const { insertOnEdge, selectEdge } = useCanvasActions();
 
   const [path, labelX, labelY] = getSmoothStepPath({
@@ -46,13 +48,13 @@ export function WorkflowCanvasEdge({
           style={{ transform: `translate(-50%, -50%) translate(${labelX}px, ${labelY}px)` }}
         >
           <StepSelector
-            title="Insert step"
+            title={t("insertStepTitle")}
             onSelect={(kind, actionType) => insertOnEdge(id, kind, actionType)}
             trigger={
               <button
                 type="button"
                 className="flex size-5 items-center justify-center rounded-full border border-border bg-pure-snow text-xs font-medium text-foreground shadow-xs transition-transform hover:scale-110 active:scale-95"
-                aria-label="Insert a step on this connection"
+                aria-label={t("insertStepLabel")}
                 onClick={(event) => {
                   event.stopPropagation();
                   selectEdge(id);

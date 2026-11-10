@@ -35,6 +35,8 @@ vi.mock("@/features/matching/constants", () => ({
 import { generateJobMatchesAction } from "./actions";
 import { indexCandidatesForMatchingAction } from "./actions";
 
+vi.mock("next-intl/server", async () => (await import("@/test-support/intl-server-mock")).intlServerMock);
+
 const JOB_ID = "11111111-1111-4111-8111-111111111111";
 const WORKSPACE_ID = "workspace-1";
 

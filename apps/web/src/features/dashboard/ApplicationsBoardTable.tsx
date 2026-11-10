@@ -4,6 +4,7 @@ import { useMemo, useState, useTransition } from "react";
 import type { Route } from "next";
 import { useRouter } from "next/navigation";
 import { ArrowRight, Filter, Mail, MoreHorizontal, Users, X } from "lucide-react";
+import { useTranslations } from "next-intl";
 
 import { cn } from "@/lib/utils";
 import { FILTER_ALL, FilterPill } from "@/components/ui/FilterPill";
@@ -27,6 +28,7 @@ import {
 import { EmptyState } from "@/components/ui/empty-state";
 import { StatusPill, type StatusPillTone } from "@/components/ui/status-pill";
 import type { ApplicationsBoard } from "@/features/dashboard/applications-board";
+import { stageLabel } from "@/features/pipeline/stage-label";
 import { stageTone, type StageTone } from "@/lib/stage-visuals";
 
 /**
@@ -49,10 +51,12 @@ export function ApplicationsBoardTable({
    */
   filters: { job?: string; stage?: string };
 }) {
+  const t = useTranslations("features.dashboard.applicationsBoardTable");
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [selected, setSelected] = useState<Set<string>>(() => new Set());
 
+  const tStages = useTranslations("labels.pipeline.stages");
   const jobValue = filters.job ?? FILTER_ALL;
   const stageValue = filters.stage ?? FILTER_ALL;
 
@@ -64,9 +68,9 @@ export function ApplicationsBoardTable({
 
   const stageLabels = useMemo(() => {
     const map: Record<string, string> = {};
-    for (const option of board.stageOptions) map[option.value] = option.label;
+    for (const option of board.stageOptions) map[option.value] = stageLabel(option.label, tStages);
     return map;
-  }, [board.stageOptions]);
+  }, [board.stageOptions, tStages]);
 
   function setFilter(key: "job" | "stage", value: string) {
     const next = new URLSearchParams();
@@ -105,14 +109,14 @@ export function ApplicationsBoardTable({
     <section className="mt-6">
       <div className="flex flex-wrap items-center gap-2">
         <FilterPill
-          label="Job"
+          label={t("job")}
           value={jobValue}
           onChange={(value) => setFilter("job", value)}
           options={board.jobOptions.map((option) => option.value)}
           labelMap={jobLabels}
         />
         <FilterPill
-          label="Stage"
+          label={t("stage")}
           value={stageValue}
           onChange={(value) => setFilter("stage", value)}
           options={board.stageOptions.map((option) => option.value)}
@@ -129,15 +133,15 @@ export function ApplicationsBoardTable({
           {board.totalActive === 0 ? (
             <EmptyState
               icon={Users}
-              title="No one is waiting on you"
-              description="When candidates apply, they land here for a decision."
-              action={{ href: "/dashboard/jobs/new", label: "Publish a job" }}
+              title={t("emptyTitle")}
+              description={t("emptyDescription")}
+              action={{ href: "/dashboard/jobs/new", label: t("publishJob") }}
             />
           ) : (
             <EmptyState
               icon={Filter}
-              title="Nothing matches these filters"
-              description="Clear the job or stage filter to see the rest of the pipeline."
+              title={t("noMatchTitle")}
+              description={t("noMatchDescription")}
             />
           )}
         </div>
@@ -149,16 +153,16 @@ export function ApplicationsBoardTable({
                 <RowCheckbox
                   checked={allSelected}
                   onChange={toggleAll}
-                  label="Select all applications"
+                  label={t("selectAll")}
                 />
               </Th>
-              <Th>Candidate</Th>
-              <Th>Role</Th>
-              <Th>Stage</Th>
-              <Th>Waiting</Th>
-              <Th>Team</Th>
+              <Th>{t("columns.candidate")}</Th>
+              <Th>{t("columns.role")}</Th>
+              <Th>{t("columns.stage")}</Th>
+              <Th>{t("columns.waiting")}</Th>
+              <Th>{t("columns.team")}</Th>
               <Th className="w-14" srOnly>
-                Actions
+                {t("columns.actions")}
               </Th>
             </HumanTableHead>
             <tbody>
@@ -172,7 +176,7 @@ export function ApplicationsBoardTable({
                         onChange={(checked) =>
                           toggleOne(row.applicationId, checked)
                         }
-                        label={`Select ${row.name}`}
+                        label={t("selectRow", { name: row.name })}
                       />
                     </Td>
                     <Td>
@@ -196,7 +200,7 @@ export function ApplicationsBoardTable({
                     </Td>
                     <Td>
                       <StatusPill tone={stagePillTone(row.stageKind)}>
-                        {row.stageName ?? "No stage"}
+                        {row.stageName !== null ? stageLabel(row.stageName, tStages) : t("noStage")}
                       </StatusPill>
                     </Td>
                     <Td>
@@ -241,8 +245,8 @@ function stagePillTone(kind: ApplicationsBoard["applications"][number]["stageKin
  * warning, not decoration.
  */
 function WaitingCell({ days }: { days: number }) {
-  const label =
-    days === 0 ? "Today" : days === 1 ? "1 day" : `${days} days`;
+  const t = useTranslations("features.dashboard.applicationsBoardTable");
+  const label = t("waitingDays", { days });
   return (
     <span
       className={cn(
@@ -266,10 +270,11 @@ function BulkBar({
   count: number;
   onClear: () => void;
 }) {
+  const t = useTranslations("features.dashboard.applicationsBoardTable");
   return (
     <div className="mt-3 flex flex-wrap items-center gap-2 rounded-[var(--radius-md)] bg-soft-kraft px-3 py-2">
       <span className="font-chrome text-[12px] text-soft-ink">
-        {count} selected
+        {t("selectedCount", { count })}
       </span>
       <div className="ml-auto flex items-center gap-1.5">
         <button
@@ -277,19 +282,19 @@ function BulkBar({
           className="flex items-center gap-1.5 rounded-full bg-near-ink px-3.5 py-1.5 text-[13px] font-medium text-pure-snow transition-colors hover:bg-[var(--pine-strong)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-near-ink focus-visible:ring-offset-2"
         >
           <ArrowRight className="size-3.5" strokeWidth={2} />
-          Advance
+          {t("advance")}
         </button>
         <button
           type="button"
           className="flex items-center gap-1.5 rounded-full border border-mist-border bg-pure-snow px-3.5 py-1.5 text-[13px] font-medium text-near-ink transition-colors hover:bg-row-wash focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-near-ink"
         >
           <Mail className="size-3.5" strokeWidth={2} />
-          Email
+          {t("email")}
         </button>
         <button
           type="button"
           onClick={onClear}
-          aria-label="Clear selection"
+          aria-label={t("clearSelection")}
           className="flex size-8 items-center justify-center rounded-full text-soft-ink transition-colors hover:bg-row-wash hover:text-near-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-near-ink"
         >
           <X className="size-4" strokeWidth={2} />
@@ -307,21 +312,22 @@ function RowMenu({
   candidateId: string;
   name: string;
 }) {
+  const t = useTranslations("features.dashboard.applicationsBoardTable");
   return (
     <DropdownMenu>
       <DropdownMenuTrigger
-        aria-label={`Actions for ${name}`}
+        aria-label={t("rowActions", { name })}
         className="ml-auto flex size-8 items-center justify-center rounded-full text-soft-ink max-md:opacity-100 opacity-0 transition-opacity hover:bg-pure-snow hover:text-near-ink focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-near-ink group-hover/row:opacity-100 data-[state=open]:opacity-100"
       >
         <MoreHorizontal className="size-4" strokeWidth={2} />
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="min-w-44">
         <DropdownMenuItem asChild>
-          <a href={`/dashboard/candidates/${candidateId}`}>Open candidate</a>
+          <a href={`/dashboard/candidates/${candidateId}`}>{t("openCandidate")}</a>
         </DropdownMenuItem>
         <DropdownMenuItem asChild>
           <a href={`/dashboard/candidates/${candidateId}#process`}>
-            Move stage
+            {t("moveStage")}
           </a>
         </DropdownMenuItem>
       </DropdownMenuContent>

@@ -1,3 +1,4 @@
+import { getTranslations } from "next-intl/server";
 import { redirect } from "next/navigation";
 import { asc } from "drizzle-orm";
 
@@ -9,6 +10,7 @@ import { SetupClaimForm } from "./SetupClaimForm";
 export const dynamic = "force-dynamic";
 
 export default async function SetupPage() {
+  const t = await getTranslations("accessSetup");
   const bootstrap = await getDeploymentBootstrapStatus();
   const [existing] = await db
     .select({ slug: organization.slug })
@@ -24,7 +26,7 @@ export default async function SetupPage() {
     <div className="flex min-h-[100dvh] flex-col md:min-h-0 md:h-full">
       <header className="flex items-center px-6 py-6 sm:px-8">
         {/* Wordmark , mobile only; the brand panel carries it on desktop. */}
-        <a href="https://harly.dev" aria-label="Harly , visit harly.dev">
+        <a href="https://harly.dev" aria-label={t("visit")}>
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             src="/harly-full-black.svg"
@@ -38,19 +40,14 @@ export default async function SetupPage() {
         <div className="auth-card-enter w-full max-w-sm">
           <span className="inline-flex items-center gap-2 rounded-full bg-sage/60 px-3 py-1 text-xs font-semibold text-sage-ink">
             <span className="size-1.5 rounded-full bg-pine" />
-            First-run setup
+            {t("firstRun")}
           </span>
 
           <h1 className="mt-5 font-display text-3xl tracking-tight text-foreground">
-            Set up your Harly
+            {t("heading")}
           </h1>
           <p className="mt-3 text-sm leading-6 text-muted-foreground">
-            When you ran{" "}
-            <code className="rounded bg-kraft px-1.5 py-0.5 font-mono text-[0.8em] text-foreground">
-              harly init
-            </code>
-            , it printed a one-time setup token. Paste it below to claim this
-            deployment. It stays valid for 15 minutes.
+            {t.rich("instructions", { code: (chunks) => <code className="rounded bg-kraft px-1.5 py-0.5 font-mono text-[0.8em] text-foreground">{chunks}</code> })}
           </p>
 
           <SetupClaimForm />

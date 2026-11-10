@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useTranslations } from "next-intl";
 import type { Route } from "next";
 import {
   Briefcase,
@@ -37,22 +38,22 @@ type CreateAction = {
 // on a list the recruiter then has to hunt through.
 const HIRING: CreateAction[] = [
   {
-    label: "Job",
-    hint: "Draft and publish a new opening",
+    label: "job",
+    hint: "jobHint",
     icon: Briefcase,
     href: "/dashboard/jobs/new" as Route,
     permission: "jobs:create",
   },
   {
-    label: "Candidate",
-    hint: "Add someone by hand, with their CV",
+    label: "candidate",
+    hint: "candidateHint",
     icon: UserPlus,
     href: "/dashboard/candidates?new=1" as Route,
     permission: "candidates:edit",
   },
   {
-    label: "Import candidates",
-    hint: "CSV, Greenhouse, Lever, Ashby…",
+    label: "importCandidates",
+    hint: "importHint",
     icon: FileUp,
     href: "/dashboard/candidates?import=csv" as Route,
     permission: "candidates:edit",
@@ -61,15 +62,15 @@ const HIRING: CreateAction[] = [
 
 const WORK: CreateAction[] = [
   {
-    label: "Task",
-    hint: "A to-do, optionally tied to a candidate",
+    label: "task",
+    hint: "taskHint",
     icon: ListTodo,
     href: "/dashboard/tasks?new=1" as Route,
     permission: "tasks:write",
   },
   {
-    label: "Interview",
-    hint: "Pick a slot on the calendar",
+    label: "interview",
+    hint: "interviewHint",
     icon: CalendarPlus,
     href: "/dashboard/calendars" as Route,
     permission: "interviews:manage",
@@ -77,6 +78,7 @@ const WORK: CreateAction[] = [
 ];
 
 function ActionItem({ action }: { action: CreateAction }) {
+  const t = useTranslations("shell.quickCreate");
   const Icon = action.icon;
   return (
     <DropdownMenuItem asChild className="gap-3 rounded-[var(--radius-btn)] px-2 py-2">
@@ -86,10 +88,10 @@ function ActionItem({ action }: { action: CreateAction }) {
         </span>
         <span className="min-w-0">
           <span className="block text-[13.5px] font-medium leading-tight text-near-ink">
-            {action.label}
+            {t(action.label)}
           </span>
           <span className="block truncate text-[12px] leading-tight text-soft-ink">
-            {action.hint}
+            {t(action.hint)}
           </span>
         </span>
       </Link>
@@ -121,6 +123,7 @@ export function QuickCreateButton({
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
 }) {
+  const t = useTranslations("shell.quickCreate");
   const can = (action: CreateAction) => userPermissions.includes(action.permission);
   const hiring = HIRING.filter(can);
   const work = WORK.filter(can);
@@ -131,7 +134,7 @@ export function QuickCreateButton({
       <Tooltip>
         <TooltipTrigger asChild>
           <DropdownMenuTrigger
-            aria-label="Create"
+            aria-label={t("create")}
             aria-keyshortcuts={ariaKeys("create.open")}
             className={cn(
               "inline-flex size-9 shrink-0 items-center justify-center rounded-full bg-near-ink text-pure-snow",
@@ -143,23 +146,23 @@ export function QuickCreateButton({
             <Plus className="size-[18px] transition-transform duration-200 ease-out" strokeWidth={2.25} />
           </DropdownMenuTrigger>
         </TooltipTrigger>
-        <TooltipContent>{withHint("Create", "create.open")}</TooltipContent>
+        <TooltipContent>{withHint(t("create"), "create.open")}</TooltipContent>
       </Tooltip>
       <DropdownMenuContent align="end" sideOffset={8} className="w-72 p-1.5">
         {hiring.length > 0 ? (
           <>
-            <DropdownMenuLabel className="type-col-head px-2 pb-1 pt-1.5">Hiring</DropdownMenuLabel>
+            <DropdownMenuLabel className="type-col-head px-2 pb-1 pt-1.5">{t("hiring")}</DropdownMenuLabel>
             {hiring.map((action) => (
-              <ActionItem key={action.label} action={action} />
+              <ActionItem key={t(action.label)} action={action} />
             ))}
           </>
         ) : null}
         {work.length > 0 ? (
           <>
             {hiring.length > 0 ? <DropdownMenuSeparator className="my-1.5" /> : null}
-            <DropdownMenuLabel className="type-col-head px-2 pb-1 pt-1.5">Work</DropdownMenuLabel>
+            <DropdownMenuLabel className="type-col-head px-2 pb-1 pt-1.5">{t("work")}</DropdownMenuLabel>
             {work.map((action) => (
-              <ActionItem key={action.label} action={action} />
+              <ActionItem key={t(action.label)} action={action} />
             ))}
           </>
         ) : null}
@@ -175,10 +178,10 @@ export function QuickCreateButton({
               </span>
               <span className="min-w-0">
                 <span className="block text-[13.5px] font-medium leading-tight text-near-ink">
-                  Invite teammate
+                  {t("invite")}
                 </span>
                 <span className="block truncate text-[12px] leading-tight text-soft-ink">
-                  Bring a recruiter or interviewer in
+                  {t("inviteHint")}
                 </span>
               </span>
             </DropdownMenuItem>

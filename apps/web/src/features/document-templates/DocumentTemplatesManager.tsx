@@ -4,6 +4,7 @@ import { useConfirm } from "@/components/ui/confirm-dialog";
 import Link from "next/link";
 import type { Route } from "next";
 import { useRouter } from "next/navigation";
+import { useLocale, useTranslations } from "next-intl";
 import { useState, useTransition } from "react";
 import {
   Archive,
@@ -53,6 +54,8 @@ export function DocumentTemplatesManager({
   canGenerate?: boolean;
 }) {
   const router = useRouter();
+  const t = useTranslations("features.documentTemplates.documentTemplatesManager");
+  const locale = useLocale();
   const confirm = useConfirm();
   const [pending, startTransition] = useTransition();
   const [generateFor, setGenerateFor] = useState<string | null>(null);
@@ -64,16 +67,13 @@ export function DocumentTemplatesManager({
     if (
       !(await confirm({
         tone: "warning",
-        title: `Archive the “${template.name}” template?`,
-        description:
-          used > 0
-            ? `${used} workflow${used === 1 ? " uses" : "s use"} this template. Published workflows keep their snapshot, but you can no longer pick it for new steps or manual documents. You can restore it later.`
-            : "Published workflows keep their snapshot. New workflows and manual documents can no longer use it. You can restore it later.",
-        confirmLabel: "Archive template",
+        title: t("archiveTitle", { name: template.name }),
+        description: used > 0 ? t("archiveInUse", { count: used }) : t("archiveUnused"),
+        confirmLabel: t("archiveConfirm"),
       }))
     )
       return;
-    run(() => archiveWorkflowDocumentTemplate({ templateId: template.id }), "Template archived");
+    run(() => archiveWorkflowDocumentTemplate({ templateId: template.id }), t("templateArchived"));
   }
 
   function run(
@@ -84,7 +84,7 @@ export function DocumentTemplatesManager({
     startTransition(async () => {
       const result = await action();
       if (!result.success) {
-        toast.error(result.error ?? "Something went wrong.");
+        toast.error(result.error ?? t("somethingWentWrong"));
         return;
       }
       toast.success(success);
@@ -97,12 +97,12 @@ export function DocumentTemplatesManager({
     <div className="mx-auto max-w-[1400px] space-y-6">
       <DocumentsWorkspaceTabs active="templates" canReadDocuments={canReadDocuments} canManageTemplates />
       <PageHeader
-        title="Document templates"
-        description="Reusable documents with candidate details filled in. Generate one by hand for a candidate, or let a workflow create it automatically. Generated PDFs land in your library."
+        title={t("title")}
+        description={t("description")}
         actions={
           <Button asChild>
             <Link href={"/dashboard/documents/templates/new" as Route}>
-              <Plus className="size-4" /> New template
+              <Plus className="size-4" /> {t("newTemplate")}
             </Link>
           </Button>
         }
@@ -113,23 +113,21 @@ export function DocumentTemplatesManager({
           <span className="grid size-12 place-items-center rounded-[var(--radius-btn)] bg-pure-snow text-near-ink">
             <FileText className="size-6" />
           </span>
-          <h2 className="mt-4 text-[15px] font-semibold tracking-[-0.01em] text-near-ink">Create your first reusable document</h2>
-          <p className="mt-1 max-w-md text-sm text-soft-ink">
-            Use it for offers, agreements, onboarding packets or any PDF you want Harly to generate and send for signature.
-          </p>
+          <h2 className="mt-4 text-[15px] font-semibold tracking-[-0.01em] text-near-ink">{t("emptyTitle")}</h2>
+          <p className="mt-1 max-w-md text-sm text-soft-ink">{t("emptyDescription")}</p>
           <Button asChild className="mt-5">
             <Link href={"/dashboard/documents/templates/new" as Route}>
-              <Plus className="size-4" /> Create template
+              <Plus className="size-4" /> {t("createTemplate")}
             </Link>
           </Button>
         </div>
       ) : (
         <Card className="gap-0 overflow-hidden py-0">
           <div className={`hidden gap-4 border-b border-hairline px-4 py-3 text-[11px] font-medium uppercase tracking-wide text-soft-ink md:grid ${TEMPLATE_LIST_GRID}`}>
-            <span>Name</span>
-            <span>PDF title</span>
-            <span>Used by</span>
-            <span>Updated</span>
+            <span>{t("columnName")}</span>
+            <span>{t("columnPdfTitle")}</span>
+            <span>{t("columnUsedBy")}</span>
+            <span>{t("columnUpdated")}</span>
             <span />
           </div>
           <ul className="divide-y divide-hairline">
@@ -154,18 +152,18 @@ export function DocumentTemplatesManager({
                     <span className="pl-12 md:pl-0">
                       {used > 0 ? (
                         <StatusPill size="sm" tone="info">
-                          {used} workflow{used === 1 ? "" : "s"}
+                          {t("usedByCount", { count: used })}
                         </StatusPill>
                       ) : (
-                        <span className="text-xs text-quiet-mist">Not used</span>
+                        <span className="text-xs text-quiet-mist">{t("notUsed")}</span>
                       )}
                     </span>
                   </span>
-                  <span className="pl-12 text-xs text-soft-ink md:pl-0">{formatDate(template.updatedAt.toISOString())}</span>
+                  <span className="pl-12 text-xs text-soft-ink md:pl-0">{formatDate(template.updatedAt.toISOString(), locale)}</span>
                   <span className="absolute top-3 right-3 z-10 md:static">
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
-                        <Button size="icon-sm" variant="ghost" disabled={pending} aria-label={`Actions for ${template.name}`}>
+                        <Button size="icon-sm" variant="ghost" disabled={pending} aria-label={t("actionsFor", { name: template.name })}>
                           <MoreHorizontal />
                         </Button>
                       </DropdownMenuTrigger>
@@ -173,31 +171,31 @@ export function DocumentTemplatesManager({
                         {canGenerate ? (
                           <DropdownMenuItem onSelect={() => setGenerateFor(template.id)}>
                             <FilePlus2 />
-                            Generate document
+                            {t("generateDocument")}
                           </DropdownMenuItem>
                         ) : null}
                         <DropdownMenuItem asChild>
                           <Link href={`/dashboard/documents/templates/${template.id}` as Route}>
                             <Pencil />
-                            Edit
+                            {t("edit")}
                           </Link>
                         </DropdownMenuItem>
                         <DropdownMenuItem
                           onSelect={() =>
                             run(
                               () => duplicateWorkflowDocumentTemplate({ templateId: template.id }),
-                              "Template duplicated",
+                              t("templateDuplicated"),
                               (id) => id && router.push(`/dashboard/documents/templates/${id}` as Route),
                             )
                           }
                         >
                           <Copy />
-                          Duplicate
+                          {t("duplicate")}
                         </DropdownMenuItem>
                         <DropdownMenuSeparator />
                         <DropdownMenuItem onSelect={() => void archive(template)}>
                           <Archive />
-                          Archive
+                          {t("archive")}
                         </DropdownMenuItem>
                       </DropdownMenuContent>
                     </DropdownMenu>
@@ -212,7 +210,7 @@ export function DocumentTemplatesManager({
       {archived.length > 0 ? (
         <details className="group rounded-[var(--radius-card)] bg-card shadow-[var(--shadow-card)]">
           <summary className="flex cursor-pointer list-none items-center justify-between px-5 py-4 text-sm font-medium text-near-ink [&::-webkit-details-marker]:hidden">
-            Archived templates ({archived.length})
+            {t("archivedTemplates", { count: archived.length })}
             <ChevronDown className="size-4 text-soft-ink transition-transform group-open:rotate-180" />
           </summary>
           <ul className="divide-y divide-hairline border-t border-hairline">
@@ -221,17 +219,19 @@ export function DocumentTemplatesManager({
                 <div className="min-w-0">
                   <p className="truncate text-sm text-near-ink">{template.name}</p>
                   <p className="text-xs text-soft-ink">
-                    Archived {template.archivedAt ? formatDate(template.archivedAt.toISOString()) : ""}
+                    {t("archivedOn", {
+                      date: template.archivedAt ? formatDate(template.archivedAt.toISOString(), locale) : "",
+                    })}
                   </p>
                 </div>
                 <Button
                   size="sm"
                   variant="outline"
                   disabled={pending}
-                  onClick={() => run(() => restoreWorkflowDocumentTemplate({ templateId: template.id }), "Template restored")}
+                  onClick={() => run(() => restoreWorkflowDocumentTemplate({ templateId: template.id }), t("templateRestored"))}
                 >
                   <ArchiveRestore />
-                  Restore
+                  {t("restore")}
                 </Button>
               </li>
             ))}

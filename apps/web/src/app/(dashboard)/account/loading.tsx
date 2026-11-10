@@ -1,13 +1,16 @@
+import { getTranslations } from "next-intl/server";
+
 import { Skeleton } from "@/components/ui/skeleton";
 
 const TABS = [0, 1, 2];
 const PERSONAL_FIELDS = [0, 1, 2, 3];
 const LINK_FIELDS = [0, 1];
 
-export default function AccountLoading() {
+export default async function AccountLoading() {
+  const t = await getTranslations("pages.account.loading");
   return (
     <div className="mx-auto max-w-3xl space-y-8" aria-busy="true">
-      <span className="sr-only">Loading…</span>
+      <span className="sr-only">{t("srLabel")}</span>
 
       {/* Profile header: avatar, name and email, membership line */}
       <div className="flex flex-col items-center gap-4 pt-2 sm:flex-row sm:items-center sm:gap-6">

@@ -1,6 +1,7 @@
 "use client";
 
 import type { ReactNode } from "react";
+import { useTranslations } from "next-intl";
 import { ArrowLeft, ChevronDown } from "lucide-react";
 
 import { FocusModeTopBar } from "@/components/focus-mode/FocusModeTopBar";
@@ -29,6 +30,7 @@ export function JobEditorTopBar({
   railActions?: ReactNode;
   actions: ReactNode;
 }) {
+  const t = useTranslations("jobs.form");
   return (
     <FocusModeTopBar
       className="h-14 border-hairline bg-pure-snow/80"
@@ -39,7 +41,7 @@ export function JobEditorTopBar({
           className="group inline-flex items-center gap-2 rounded-full bg-soft-kraft py-1.5 pl-2.5 pr-3.5 text-[13px] font-medium text-soft-ink transition-all duration-150 hover:bg-row-wash hover:text-near-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-near-ink active:scale-[0.97]"
         >
           <ArrowLeft className="size-4 transition-transform duration-150 group-hover:-translate-x-0.5" />
-          <span className="hidden sm:inline">Jobs</span>
+          <span className="hidden sm:inline">{t("jobs")}</span>
         </button>
       }
       center={
@@ -50,7 +52,7 @@ export function JobEditorTopBar({
             </span>
           ) : null}
           <span className="hidden truncate font-display text-[15px] text-near-ink md:inline">
-            {title || "New job"}
+            {title || t("newJob")}
           </span>
           {railActions ? (
             <Popover>
@@ -59,7 +61,7 @@ export function JobEditorTopBar({
                   type="button"
                   className="flex min-w-0 items-center gap-1 truncate text-sm font-semibold text-near-ink md:hidden"
                 >
-                  <span className="truncate">{title || "New job"}</span>
+                  <span className="truncate">{title || t("newJob")}</span>
                   <ChevronDown className="size-3.5 shrink-0 text-muted-foreground" />
                 </button>
               </PopoverTrigger>
@@ -69,7 +71,7 @@ export function JobEditorTopBar({
             </Popover>
           ) : (
             <span className="truncate text-sm font-semibold text-near-ink md:hidden">
-              {title || "New job"}
+              {title || t("newJob")}
             </span>
           )}
           {statusBadge}

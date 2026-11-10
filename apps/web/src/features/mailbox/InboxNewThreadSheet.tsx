@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useTranslations } from "next-intl";
 
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
@@ -31,6 +32,7 @@ export function InboxNewThreadSheet({
   onOpenChange: (open: boolean) => void;
   onSent: (threadId: string) => void;
 }) {
+  const t = useTranslations("features.mailbox.inboxNewThreadSheet");
   const [pickedId, setPickedId] = useState<string | null>(null);
   const picked = candidates.find((candidate) => candidate.id === pickedId);
   const recipient: InboxPerson | undefined = person?.email
@@ -43,15 +45,15 @@ export function InboxNewThreadSheet({
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent side="bottom" className="mx-auto max-h-[90dvh] w-full overflow-y-auto sm:max-w-2xl sm:rounded-t-xl">
         <SheetHeader>
-          <SheetTitle>{recipient ? `New email to ${recipient.name}` : "New email"}</SheetTitle>
-          <SheetDescription className="sr-only">Start a new conversation with a candidate.</SheetDescription>
+          <SheetTitle>{recipient ? t("titleTo", { name: recipient.name }) : t("title")}</SheetTitle>
+          <SheetDescription className="sr-only">{t("description")}</SheetDescription>
         </SheetHeader>
         <div className="space-y-3 px-4 pb-6">
           {!person?.email ? (
             <div className="space-y-1.5">
-              <label htmlFor="inbox-new-thread-candidate" className="text-[13px] font-medium">Candidate</label>
+              <label htmlFor="inbox-new-thread-candidate" className="text-[13px] font-medium">{t("candidateLabel")}</label>
               <Select value={pickedId ?? ""} onValueChange={setPickedId}>
-                <SelectTrigger id="inbox-new-thread-candidate" className="w-full" size="sm"><SelectValue placeholder="Choose who to write to" /></SelectTrigger>
+                <SelectTrigger id="inbox-new-thread-candidate" className="w-full" size="sm"><SelectValue placeholder={t("candidatePlaceholder")} /></SelectTrigger>
                 <SelectContent>
                   {candidates.map((candidate) => <SelectItem key={candidate.id} value={candidate.id}>{candidate.name}</SelectItem>)}
                 </SelectContent>
@@ -62,8 +64,8 @@ export function InboxNewThreadSheet({
             <MailComposer
               key={recipient.candidateId ?? recipient.email}
               to={recipient.email}
-              placeholder={`Write to ${recipient.name}…`}
-              sendLabel="Send email"
+              placeholder={t("writeTo", { name: recipient.name })}
+              sendLabel={t("sendEmail")}
               templates={templates}
               onCancel={() => onOpenChange(false)}
               onSend={async ({ subject, text, html, attachments, idempotencyKey }) => {

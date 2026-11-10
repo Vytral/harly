@@ -1,5 +1,6 @@
 import Link from "next/link";
 import type { Route } from "next";
+import { useTranslations } from "next-intl";
 
 import { formatEmploymentType, formatWorkplaceType } from "@/lib/format";
 import { readableInk } from "@/features/career-page/color";
@@ -59,6 +60,7 @@ export function PublicJobPageHeader({
   job: PublicJobMeta;
   activeTab: "overview" | "application";
 }) {
+  const t = useTranslations("features.publicJob.components");
   const accent = brand.accentColor;
   const overviewHref = `${brand.boardHref}/jobs/${job.slug}`;
   const applyHref = `${brand.boardHref}/apply/${job.slug}`;
@@ -88,7 +90,7 @@ export function PublicJobPageHeader({
           {job.title}
         </h1>
         <div className="mt-4 flex flex-wrap justify-center gap-2">
-          <MetaBadge>{job.location ?? "Remote"}</MetaBadge>
+          <MetaBadge>{job.location ?? t("remote")}</MetaBadge>
           {job.department ? <MetaBadge>{job.department}</MetaBadge> : null}
           <MetaBadge>{formatWorkplaceType(job.workplaceType)}</MetaBadge>
           <MetaBadge>{formatEmploymentType(job.employmentType)}</MetaBadge>
@@ -102,14 +104,14 @@ export function PublicJobPageHeader({
             className={`border-b-2 py-4 transition ${activeTab === "overview" ? "" : inactiveLinkClass}`}
             style={activeTab === "overview" ? activeLinkStyle : undefined}
           >
-            Overview
+            {t("overview")}
           </Link>
           <Link
             href={applyHref as Route}
             className={`border-b-2 py-4 transition ${activeTab === "application" ? "" : inactiveLinkClass}`}
             style={activeTab === "application" ? activeLinkStyle : undefined}
           >
-            Application
+            {t("application")}
           </Link>
         </div>
       </nav>
@@ -126,6 +128,7 @@ function MetaBadge({ children }: { children: React.ReactNode }) {
 }
 
 export function PublicJobFooter({ brand }: { brand: PublicJobBrand }) {
+  const t = useTranslations("features.publicJob.components");
   return (
     <footer className="border-t border-border bg-card">
       <div className="mx-auto flex max-w-3xl flex-col items-center gap-4 px-6 py-8 sm:flex-row sm:justify-center sm:gap-8">
@@ -136,23 +139,23 @@ export function PublicJobFooter({ brand }: { brand: PublicJobBrand }) {
             rel="noreferrer"
             className="text-xs text-muted-foreground transition hover:text-foreground"
           >
-            View website
+            {t("viewWebsite")}
           </a>
         ) : null}
         <Link
           href={brand.boardHref as Route}
           className="text-xs text-muted-foreground transition hover:text-foreground"
         >
-          View all jobs
+          {t("viewAllJobs")}
         </Link>
         <a
           href="mailto:help@harly.io"
           className="text-xs text-muted-foreground transition hover:text-foreground"
         >
-          Help
+          {t("help")}
         </a>
         <span className="text-xs text-muted-foreground">
-          Powered by{" "}
+          {t("poweredBy")}{" "}
           <Link
             href={"/" as Route}
             className="font-semibold text-foreground transition hover:text-foreground"

@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { notFound, redirect } from "next/navigation";
+import { getTranslations } from "@/i18n/server";
 import { eq } from "drizzle-orm";
 
 import { db, workspaceSettings } from "@harly/db";
@@ -30,6 +31,7 @@ import { generateJobDraftWithAI } from "@/lib/ai/surfaces/generate-job";
 import type { JobDraft } from "@/lib/ai/schemas";
 import { normalizeCareerPageConfig } from "@/features/career-page/config";
 import { getPendingJobApproval } from "./approval";
+import type { JobActionErrorKey } from "./action-errors";
 
 function parseJobFormData(formData: FormData) {
   return jobFormSchema.parse({
@@ -83,7 +85,20 @@ function parseJobFormData(formData: FormData) {
 export type JobActionState = {
   success: boolean;
   error?: string;
+  code?: JobActionErrorKey;
 };
+
+/** Failed result with the translated message and the stable code the UI branches on. */
+/** Translates a publish blocker code for the form; unknown text passes through. */
+async function publishBlockerMessage(code: string): Promise<string> {
+  const t = await getTranslations("jobs.errors");
+  return t.has(code as never) ? t(code as never) : code;
+}
+
+async function failure(code: JobActionErrorKey): Promise<JobActionState> {
+  const t = await getTranslations("jobs.errors");
+  return { success: false, error: t(code), code };
+}
 
 export async function createJobAction(formData: FormData) {
   const context = await requirePermission("jobs:create");
@@ -96,7 +111,7 @@ export async function createJobAction(formData: FormData) {
       description: values.description,
       contentSections: values.contentSections,
     });
-    if (blockers.length > 0) throw new Error(blockers[0]);
+    if (blockers.length > 0) throw new Error(await publishBlockerMessage(blockers[0]!));
   }
   const job = await createJob(values);
 
@@ -140,7 +155,7 @@ export async function updateJobAction(formData: FormData) {
     if (!current) notFound();
     if (current.job.status === "open") {
       const blockers = getPublishBlockers(values);
-      if (blockers.length) throw new Error(blockers[0]);
+      if (blockers.length) throw new Error(await publishBlockerMessage(blockers[0]!));
     }
   }
   const job = await updateJob(jobId, values);
@@ -173,7 +188,7 @@ export async function updateJobStatusAction(formData: FormData) {
     jobId,
   );
   if (status === "open" && await getPendingJobApproval(jobId)) {
-    throw new Error("Job has a pending approval request.");
+    throw new Error("pendingApproval");
   }
   if (status === "open") {
     const current = await getDashboardJob(jobId);
@@ -182,7 +197,7 @@ export async function updateJobStatusAction(formData: FormData) {
       description: current.job.description,
       contentSections: current.job.contentSections,
     });
-    if (blockers.length > 0) throw new Error(blockers[0]);
+    if (blockers.length > 0) throw new Error(await publishBlockerMessage(blockers[0]!));
   }
   const job = await updateJobStatus(jobId, status);
 
@@ -214,7 +229,7 @@ export async function trashJobAction(jobId: string): Promise<JobActionState> {
   const result = await trashJob(jobId);
 
   if (!result.ok) {
-    return { success: false, error: result.error };
+    return failure(result.code);
   }
 
   await logAuditEvent({
@@ -238,7 +253,7 @@ export async function restoreJobAction(jobId: string): Promise<JobActionState> {
   const result = await restoreJob(jobId);
 
   if (!result.ok) {
-    return { success: false, error: result.error };
+    return failure(result.code);
   }
 
   await logAuditEvent({
@@ -264,7 +279,7 @@ export async function permanentlyDeleteJobAction(
   const result = await permanentlyDeleteJob(jobId);
 
   if (!result.ok) {
-    return { success: false, error: result.error };
+    return failure(result.code);
   }
 
   await logAuditEvent({
@@ -283,7 +298,12 @@ export async function permanentlyDeleteJobAction(
 
 export type GenerateJobDraftResult =
   | { ok: true; draft: JobDraft }
-  | { ok: false; error: string };
+  | { ok: false; error: string; code: JobActionErrorKey };
+
+async function generateFailure(code: JobActionErrorKey) {
+  const t = await getTranslations("jobs.errors");
+  return { ok: false as const, error: t(code), code };
+}
 
 /** AI job-description generator. Uses the workspace's configured provider key. */
 export async function generateJobDraftAction(input: {
@@ -295,15 +315,12 @@ export async function generateJobDraftAction(input: {
   const context = await requirePermission("jobs:create");
 
   if (!input.title?.trim()) {
-    return { ok: false, error: "Add a job title first." };
+    return generateFailure("titleRequired");
   }
 
   const config = await getWorkspaceAiConfig(context.organization.id);
   if (!config) {
-    return {
-      ok: false,
-      error: "Enable AI in Settings to generate with AI.",
-    };
+    return generateFailure("aiDraftNotConfigured");
   }
 
   try {
@@ -334,10 +351,7 @@ export async function generateJobDraftAction(input: {
     });
     return { ok: true, draft };
   } catch {
-    return {
-      ok: false,
-      error: "Generation failed.",
-    };
+    return generateFailure("aiGenerationFailed");
   }
 }
 
@@ -350,7 +364,7 @@ export type GenerateQuestionsResult =
         placeholder: string;
       }>;
     }
-  | { ok: false; error: string; reason?: "not_configured" };
+  | { ok: false; error: string; code: JobActionErrorKey; reason?: "not_configured" };
 
 export async function generateScreeningQuestionsAction(input: {
   title: string;
@@ -361,14 +375,13 @@ export async function generateScreeningQuestionsAction(input: {
   const context = await requirePermission("jobs:create");
 
   if (!input.title?.trim()) {
-    return { ok: false, error: "Add a job title first." };
+    return generateFailure("titleRequired");
   }
 
   const config = await getWorkspaceAiConfig(context.organization.id);
   if (!config) {
     return {
-      ok: false,
-      error: "Enable AI in Settings to generate questions.",
+      ...(await generateFailure("aiQuestionsNotConfigured")),
       reason: "not_configured",
     };
   }
@@ -384,6 +397,6 @@ export async function generateScreeningQuestionsAction(input: {
     });
     return { ok: true, questions };
   } catch {
-    return { ok: false, error: "Generation failed." };
+    return generateFailure("aiGenerationFailed");
   }
 }

@@ -1,7 +1,7 @@
 import { Briefcase, MapPin } from "lucide-react";
+import { useFormatter, useTranslations } from "next-intl";
 
 import { cn } from "@/lib/utils";
-import { formatRelative } from "@/lib/date";
 
 export function JobIdentity({
   title,
@@ -16,6 +16,8 @@ export function JobIdentity({
   deletedAt?: Date | null;
   muted?: boolean;
 }) {
+  const t = useTranslations("jobs.identity");
+  const format = useFormatter();
   return (
     <span className="flex items-center gap-3">
       <span className="flex size-9 shrink-0 items-center justify-center rounded-[var(--radius-inner)] bg-card-inset text-soft-ink">
@@ -34,14 +36,14 @@ export function JobIdentity({
         </span>
         <span className="mt-0.5 flex items-center gap-1 truncate text-xs text-soft-ink">
           {deletedAt ? (
-            <>Deleted {formatRelative(deletedAt)}</>
+            <>{t("deleted", { time: format.relativeTime(deletedAt) })}</>
           ) : location ? (
             <>
               <MapPin className="size-3 shrink-0" />
               {[department, location].filter(Boolean).join(" · ")}
             </>
           ) : (
-            (department ?? "No location set")
+            (department ?? t("noLocation"))
           )}
         </span>
       </span>

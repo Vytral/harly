@@ -8,6 +8,7 @@ import {
   useSyncExternalStore,
 } from "react";
 import { Download, Loader2, Maximize2, Minus, Plus } from "lucide-react";
+import { useTranslations } from "next-intl";
 
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -40,6 +41,7 @@ export function PdfViewer({
   className,
   pageMaxWidth,
 }: PdfViewerProps) {
+  const t = useTranslations("features.candidates.pdfViewer");
   const rootRef = useRef<HTMLDivElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const pagesRef = useRef<HTMLDivElement>(null);
@@ -89,7 +91,7 @@ export function PdfViewer({
           setState({
             status: "error",
             message:
-              err instanceof Error ? err.message : "Unable to load this PDF",
+              err instanceof Error ? err.message : t("loadError"),
           });
         }
       }
@@ -100,7 +102,7 @@ export function PdfViewer({
       pdfRef.current?.destroy?.();
       pdfRef.current = null;
     };
-  }, [fileUrl]);
+  }, [fileUrl, t]);
 
   // ── Render every page at fit-width × zoom ──────────────────────────────────
   const render = useCallback(async () => {
@@ -191,7 +193,7 @@ export function PdfViewer({
         )}
       >
         <Loader2 className="size-4 animate-spin" />
-        Loading résumé…
+        {t("loading")}
       </div>
     );
   }
@@ -212,10 +214,10 @@ export function PdfViewer({
           className="size-8 p-0 text-muted-foreground hover:text-foreground"
           onClick={() => setZoom((z) => Math.max(0.5, +(z - 0.2).toFixed(2)))}
           disabled={!ready}
-          title="Zoom out"
+          title={t("zoomOut")}
         >
           <Minus className="size-4" />
-          <span className="sr-only">Zoom out</span>
+          <span className="sr-only">{t("zoomOut")}</span>
         </Button>
         <span className="w-11 text-center text-xs tabular-nums text-muted-foreground">
           {Math.round(zoom * 100)}%
@@ -226,10 +228,10 @@ export function PdfViewer({
           className="size-8 p-0 text-muted-foreground hover:text-foreground"
           onClick={() => setZoom((z) => Math.min(3, +(z + 0.2).toFixed(2)))}
           disabled={!ready}
-          title="Zoom in"
+          title={t("zoomIn")}
         >
           <Plus className="size-4" />
-          <span className="sr-only">Zoom in</span>
+          <span className="sr-only">{t("zoomIn")}</span>
         </Button>
         {zoom !== 1 ? (
           <Button
@@ -238,14 +240,14 @@ export function PdfViewer({
             className="h-8 px-2 text-xs text-muted-foreground hover:text-foreground"
             onClick={() => setZoom(1)}
           >
-            Fit
+            {t("fit")}
           </Button>
         ) : null}
 
         <div className="ml-auto flex items-center gap-1">
           {ready ? (
             <span className="mr-1 text-xs tabular-nums text-muted-foreground">
-              {state.numPages} page{state.numPages === 1 ? "" : "s"}
+              {t("pages", { count: state.numPages })}
             </span>
           ) : null}
           <Button
@@ -253,7 +255,7 @@ export function PdfViewer({
             size="sm"
             variant="ghost"
             className="size-8 p-0 text-muted-foreground hover:text-foreground"
-            title="Download"
+            title={t("download")}
           >
             <a
               href={fileUrl}
@@ -262,7 +264,7 @@ export function PdfViewer({
               download={fileName ?? undefined}
             >
               <Download className="size-4" />
-              <span className="sr-only">Download</span>
+              <span className="sr-only">{t("download")}</span>
             </a>
           </Button>
           <Button
@@ -270,10 +272,10 @@ export function PdfViewer({
             variant="ghost"
             className="size-8 p-0 text-muted-foreground hover:text-foreground"
             onClick={() => rootRef.current?.requestFullscreen?.()}
-            title="Fullscreen"
+            title={t("fullscreen")}
           >
             <Maximize2 className="size-4" />
-            <span className="sr-only">Fullscreen</span>
+            <span className="sr-only">{t("fullscreen")}</span>
           </Button>
         </div>
       </div>
@@ -286,7 +288,7 @@ export function PdfViewer({
         {state.status === "loading" ? (
           <div className="flex h-full items-center justify-center gap-2 text-sm text-muted-foreground">
             <Loader2 className="size-4 animate-spin" />
-            Loading résumé…
+            {t("loading")}
           </div>
         ) : state.status === "error" ? (
           <div className="flex h-full flex-col items-center justify-center gap-1 text-center">
@@ -297,7 +299,7 @@ export function PdfViewer({
               rel="noreferrer"
               className="text-xs text-primary underline-offset-2 hover:underline"
             >
-              Download the file instead
+              {t("downloadInstead")}
             </a>
           </div>
         ) : null}

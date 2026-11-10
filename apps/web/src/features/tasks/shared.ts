@@ -31,13 +31,6 @@ export const TASK_STATUS_LABELS: Record<TaskStatus, string> = {
   canceled: "Canceled",
 };
 
-export const TASK_PRIORITY_LABELS: Record<TaskPriority, string> = {
-  low: "Low",
-  medium: "Medium",
-  high: "High",
-  urgent: "Urgent",
-};
-
 export const TASK_STATUSES: TaskStatus[] = [
   "pending",
   "in_progress",

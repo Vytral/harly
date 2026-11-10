@@ -1,5 +1,7 @@
 "use client";
 
+import { useTranslations } from "next-intl";
+
 import { Button } from "@/components/ui/button";
 import { useConfirm } from "@/components/ui/confirm-dialog";
 import { cn } from "@/lib/utils";
@@ -39,17 +41,18 @@ export function TemplatePanel({
   /** Replaces the whole config (resets). */
   onReset: (next: CareerPageConfig) => void;
 }) {
+  const t = useTranslations("features.careerPage.templatePanel");
+  const tTemplates = useTranslations("labels.careerPage.templates");
   const confirm = useConfirm();
   const active = (config.template || "minimal") as CareerTemplate;
-  const activeLabel = TEMPLATE_CAPABILITIES[active].label;
+  const activeLabel = tTemplates(`${active}.label`);
 
   async function handleResetDesign() {
     const ok = await confirm({
       tone: "warning",
-      title: `Reset the design to ${activeLabel} defaults?`,
-      description:
-        "Colours, font, hero layout and job filters go back to the template's defaults. Your text, photos, sections, SEO, socials and legal links stay as they are.",
-      confirmLabel: "Reset design",
+      title: t("resetDesignTitle", { template: activeLabel }),
+      description: t("resetDesignDescription"),
+      confirmLabel: t("resetDesign"),
     });
     if (ok) onReset(resetDesign(config));
   }
@@ -57,32 +60,29 @@ export function TemplatePanel({
   async function handleResetEverything() {
     const ok = await confirm({
       tone: "destructive",
-      title: "Reset everything?",
-      description: `Every setting goes back to a fresh ${activeLabel} page: your intro, sections, testimonials, FAQ, SEO, indexing, social and legal links are cleared. Nothing changes on the live page until you publish.`,
-      confirmLabel: "Reset everything",
-      requireAck: "I understand my content will be cleared",
+      title: t("resetEverythingTitle"),
+      description: t("resetEverythingDescription", { template: activeLabel }),
+      confirmLabel: t("resetEverything"),
+      requireAck: t("acknowledgeReset"),
     });
     if (ok) onReset(resetEverything(config));
   }
 
   return (
     <div className="space-y-4">
-      <PanelHeader
-        title="Template"
-        subtitle="The base layout. Switching keeps your content; controls a template doesn't use are hidden."
-      />
+      <PanelHeader title={t("title")} subtitle={t("subtitle")} />
 
-      <div role="radiogroup" aria-label="Template" className="grid grid-cols-1 gap-2">
-        {careerTemplates.map((t) => {
-          const meta = TEMPLATE_CAPABILITIES[t];
-          const isActive = active === t;
+      <div role="radiogroup" aria-label={t("title")} className="grid grid-cols-1 gap-2">
+        {careerTemplates.map((template) => {
+          const meta = TEMPLATE_CAPABILITIES[template];
+          const isActive = active === template;
           return (
             <button
-              key={t}
+              key={template}
               type="button"
               role="radio"
               aria-checked={isActive}
-              onClick={() => onTemplateChange(t)}
+              onClick={() => onTemplateChange(template)}
               className={cn(
                 "flex items-center gap-4 rounded-[var(--radius-card)] border bg-pure-snow p-3 text-left transition-[border-color,box-shadow] duration-150",
                 "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
@@ -93,8 +93,8 @@ export function TemplatePanel({
             >
               <TemplateThumb swatch={meta.swatch} />
               <div className="min-w-0 flex-1">
-                <span className="block text-[14px] font-semibold text-near-ink">{meta.label}</span>
-                <p className="mt-0.5 text-[12px] leading-snug text-soft-ink">{meta.blurb}</p>
+                <span className="block text-[14px] font-semibold text-near-ink">{tTemplates(`${template}.label`)}</span>
+                <p className="mt-0.5 text-[12px] leading-snug text-soft-ink">{tTemplates(`${template}.blurb`)}</p>
               </div>
               <span
                 aria-hidden
@@ -110,16 +110,14 @@ export function TemplatePanel({
         })}
       </div>
 
-      <Group title="Start over" description="Reset to the template's defaults">
+      <Group title={t("startOverTitle")} description={t("startOverDescription")}>
         <div className="space-y-3">
           <div className="space-y-1.5">
             <Button variant="outline" size="sm" onClick={handleResetDesign}>
               <ResetIcon />
-              Reset design
+              {t("resetDesign")}
             </Button>
-            <p className="text-[12px] leading-snug text-soft-ink">
-              Look and layout only. Keeps everything you wrote, uploaded and configured.
-            </p>
+            <p className="text-[12px] leading-snug text-soft-ink">{t("resetDesignHelp")}</p>
           </div>
           <div className="space-y-1.5 border-t border-hairline pt-3">
             <Button
@@ -128,11 +126,9 @@ export function TemplatePanel({
               onClick={handleResetEverything}
               className="text-danger-rust hover:bg-danger-rust/10 hover:text-danger-rust"
             >
-              Reset everything
+              {t("resetEverything")}
             </Button>
-            <p className="text-[12px] leading-snug text-soft-ink">
-              Clears content, SEO and footer links too. Only goes live when you publish.
-            </p>
+            <p className="text-[12px] leading-snug text-soft-ink">{t("resetEverythingHelp")}</p>
           </div>
         </div>
       </Group>

@@ -11,6 +11,7 @@ import {
   Trash2,
   X,
 } from "lucide-react";
+import { useLocale, useTranslations } from "next-intl";
 import { toast } from "@/lib/notification-island/toast";
 
 import { removeFromPoolAction, bulkRemoveFromPoolAction } from "@/features/pool/actions";
@@ -46,19 +47,35 @@ import { UserAvatar } from "@/components/ui/UserAvatar";
 import { cn } from "@/lib/utils";
 import { scoreBand } from "@/lib/evaluation/score-band";
 
-const SOURCE_META: Record<string, { label: string; tone: StatusPillTone }> = {
-  applied: { label: "Applied", tone: "info" },
-  imported: { label: "Imported", tone: "neutral" },
-  sourced: { label: "Sourced", tone: "success" },
-  referred: { label: "Referred", tone: "warning" },
+const SOURCE_TONE: Record<string, StatusPillTone> = {
+  applied: "info",
+  imported: "neutral",
+  sourced: "success",
+  referred: "warning",
 };
 
-const RECOMMENDATION_META: Record<string, { label: string; className: string }> = {
-  strong_yes: { label: "Strong yes", className: "bg-primary/10 text-primary" },
-  yes: { label: "Yes", className: "bg-primary/10 text-primary" },
-  maybe: { label: "Maybe", className: "bg-warning/15 text-warning" },
-  no: { label: "No", className: "bg-destructive/10 text-destructive" },
+const RECOMMENDATION_CLASS: Record<string, string> = {
+  strong_yes: "bg-primary/10 text-primary",
+  yes: "bg-primary/10 text-primary",
+  maybe: "bg-warning/15 text-warning",
+  no: "bg-destructive/10 text-destructive",
 };
+
+type PoolT = ReturnType<typeof useTranslations>;
+
+function hasKey(map: object, key: string): boolean {
+  return Object.prototype.hasOwnProperty.call(map, key);
+}
+
+function sourceLabel(t: PoolT, source: string): string {
+  return hasKey(SOURCE_TONE, source) ? t(`sources.${source}`) : source;
+}
+
+function recommendationLabel(t: PoolT, recommendation: string): string | undefined {
+  return hasKey(RECOMMENDATION_CLASS, recommendation)
+    ? t(`recommendations.${recommendation}`)
+    : undefined;
+}
 
 function scoreTone(score: number) {
   switch (scoreBand(score)) {
@@ -79,6 +96,8 @@ type PoolViewProps = {
 };
 
 export function PoolView({ candidates, openJobs = [] }: PoolViewProps) {
+  const t = useTranslations("features.pool.PoolView");
+  const locale = useLocale();
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [search, setSearch] = useState("");
@@ -141,7 +160,7 @@ export function PoolView({ candidates, openJobs = [] }: PoolViewProps) {
     startTransition(async () => {
       const result = await removeFromPoolAction({ candidateId });
       if (!result.success) {
-        toast.error(result.error ?? "Could not remove from pool.");
+        toast.error(result.error ?? t("couldNotRemove"));
         return;
       }
       setSelectedIds((prev) => {
@@ -149,7 +168,7 @@ export function PoolView({ candidates, openJobs = [] }: PoolViewProps) {
         next.delete(candidateId);
         return next;
       });
-      toast.success("Removed from pool.");
+      toast.success(t("removed"));
       router.refresh();
     });
   }
@@ -161,11 +180,11 @@ export function PoolView({ candidates, openJobs = [] }: PoolViewProps) {
         candidateIds: Array.from(selectedIds),
       });
       if (!result.success) {
-        toast.error(result.error ?? "Could not remove candidates.");
+        toast.error(result.error ?? t("couldNotRemoveCandidates"));
         return;
       }
       setSelectedIds(new Set());
-      toast.success(`Removed ${selectedIds.size} candidate${selectedIds.size === 1 ? "" : "s"} from pool.`);
+      toast.success(t("bulkRemoved", { count: selectedIds.size }));
       router.refresh();
     });
   }
@@ -183,24 +202,23 @@ export function PoolView({ candidates, openJobs = [] }: PoolViewProps) {
     return (
       <EmptyState
         icon={Bookmark}
-        title="No candidates in pool"
-        description="Add candidates to the pool from their profile or the candidates list to keep them available for future roles."
+        title={t("emptyTitle")}
+        description={t("emptyDescription")}
       />
     );
   }
 
   function renderSource(candidate: PoolCandidate) {
-    const meta = SOURCE_META[candidate.source];
     return (
-      <StatusPill tone={meta?.tone ?? "neutral"} size="sm">
-        {meta?.label ?? candidate.source}
+      <StatusPill tone={SOURCE_TONE[candidate.source] ?? "neutral"} size="sm">
+        {sourceLabel(t, candidate.source)}
       </StatusPill>
     );
   }
 
   function renderScore(candidate: PoolCandidate) {
     if (candidate.bestScore == null) {
-      return <span className="text-[13px] text-quiet-mist">Not scored</span>;
+      return <span className="text-[13px] text-quiet-mist">{t("notScored")}</span>;
     }
     return (
       <div className="flex items-center gap-1.5">
@@ -211,10 +229,10 @@ export function PoolView({ candidates, openJobs = [] }: PoolViewProps) {
           <Badge
             className={cn(
               "text-xs",
-              RECOMMENDATION_META[candidate.bestRecommendation]?.className,
+              RECOMMENDATION_CLASS[candidate.bestRecommendation],
             )}
           >
-            {RECOMMENDATION_META[candidate.bestRecommendation]?.label}
+            {recommendationLabel(t, candidate.bestRecommendation)}
           </Badge>
         ) : null}
       </div>
@@ -246,7 +264,7 @@ export function PoolView({ candidates, openJobs = [] }: PoolViewProps) {
           <Button
             variant="ghost"
             size="icon-sm"
-            aria-label={`Actions for ${name}`}
+            aria-label={t("actionsFor", { name })}
             className="text-soft-ink hover:text-near-ink"
           >
             <MoreHorizontal className="h-4 w-4" aria-hidden="true" />
@@ -255,7 +273,7 @@ export function PoolView({ candidates, openJobs = [] }: PoolViewProps) {
         <DropdownMenuContent align="end">
           <DropdownMenuItem asChild>
             <Link href={`/dashboard/candidates/${candidate.candidateId}`}>
-              View profile
+              {t("viewProfile")}
             </Link>
           </DropdownMenuItem>
           {openJobs.length > 0 && (
@@ -263,7 +281,7 @@ export function PoolView({ candidates, openJobs = [] }: PoolViewProps) {
               <DropdownMenuSeparator />
               <DropdownMenuItem onClick={() => openAssignModal(candidate)}>
                 <Briefcase className="h-4 w-4 mr-2" aria-hidden="true" />
-                Assign to Job
+                {t("assignToJob")}
               </DropdownMenuItem>
             </>
           )}
@@ -274,7 +292,7 @@ export function PoolView({ candidates, openJobs = [] }: PoolViewProps) {
             disabled={isPending}
           >
             <Trash2 className="h-4 w-4 mr-2" aria-hidden="true" />
-            Remove from pool
+            {t("removeFromPool")}
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
@@ -295,39 +313,39 @@ export function PoolView({ candidates, openJobs = [] }: PoolViewProps) {
           <SearchPill
             value={search}
             onChange={setSearch}
-            placeholder="Search the pool"
-            label="Search the pool by name, email, or skill"
+            placeholder={t("searchPlaceholder")}
+            label={t("searchLabel")}
           />
           <FilterCountButton count={sourceFilter !== "all" ? 1 : 0} onClear={clearFilters} />
           <FilterChip
-            label="Source"
+            label={t("sourceFilter")}
             value={sourceFilter}
             onChange={setSourceFilter}
             options={allSources}
             labelMap={Object.fromEntries(
-              allSources.map((src) => [src, SOURCE_META[src]?.label ?? src]),
+              allSources.map((src) => [src, sourceLabel(t, src)]),
             )}
             allValue="all"
           />
           {filtersActive ? (
             <Button variant="ghost" size="sm" className="rounded-full text-soft-ink" onClick={clearFilters}>
               <X className="size-4" aria-hidden="true" />
-              Clear
+              {t("clear")}
             </Button>
           ) : null}
         </FilterBar>
 
-        <TotalLine total={filtered.length} noun="candidate" />
+        <TotalLine total={filtered.length} noun={t("nounSingular")} pluralNoun={t("nounPlural")} />
 
         {filtered.length === 0 ? (
           <EmptyState
             variant="filtered"
             icon={Search}
-            title="No candidates match these filters"
-            description="Try a different name, email, skill, or source."
+            title={t("noMatchTitle")}
+            description={t("noMatchDescription")}
             action={
               <Button variant="outline" size="sm" onClick={clearFilters}>
-                Clear filters
+                {t("clearFilters")}
               </Button>
             }
           />
@@ -341,18 +359,18 @@ export function PoolView({ candidates, openJobs = [] }: PoolViewProps) {
                   <tr>
                     <th scope="col" className={cn(dirTh, "w-12")}>
                       <Checkbox
-                        aria-label="Select all candidates"
+                        aria-label={t("selectAll")}
                         checked={allSelected}
                         onCheckedChange={toggleSelectAll}
                       />
                     </th>
-                    <th scope="col" className={dirTh}>Candidate</th>
-                    <th scope="col" className={dirTh}>Skills</th>
-                    <th scope="col" className={dirTh}>Score</th>
-                    <th scope="col" className={dirTh}>Source</th>
-                    <th scope="col" className={dirTh}>Added</th>
+                    <th scope="col" className={dirTh}>{t("headers.candidate")}</th>
+                    <th scope="col" className={dirTh}>{t("headers.skills")}</th>
+                    <th scope="col" className={dirTh}>{t("headers.score")}</th>
+                    <th scope="col" className={dirTh}>{t("headers.source")}</th>
+                    <th scope="col" className={dirTh}>{t("headers.added")}</th>
                     <th scope="col" className={cn(dirTh, "w-14")}>
-                      <span className="sr-only">Actions</span>
+                      <span className="sr-only">{t("headers.actions")}</span>
                     </th>
                   </tr>
                 </thead>
@@ -367,7 +385,7 @@ export function PoolView({ candidates, openJobs = [] }: PoolViewProps) {
                       >
                         <td className={dirTd}>
                           <Checkbox
-                            aria-label={`Select ${name}`}
+                            aria-label={t("selectCandidate", { name })}
                             checked={selectedIds.has(candidate.candidateId)}
                             onCheckedChange={() => toggleSelect(candidate.candidateId)}
                           />
@@ -397,7 +415,7 @@ export function PoolView({ candidates, openJobs = [] }: PoolViewProps) {
                         <td className={dirTd}>{renderScore(candidate)}</td>
                         <td className={dirTd}>{renderSource(candidate)}</td>
                         <td className={cn(dirTd, "whitespace-nowrap text-[13px] text-soft-ink")} suppressHydrationWarning>
-                          {new Date(candidate.addedAt).toLocaleDateString()}
+                          {new Date(candidate.addedAt).toLocaleDateString(locale)}
                         </td>
                         <td className={dirTd}>{renderRowActions(candidate)}</td>
                       </tr>
@@ -421,7 +439,7 @@ export function PoolView({ candidates, openJobs = [] }: PoolViewProps) {
                   >
                     <Checkbox
                       className="mt-1"
-                      aria-label={`Select ${name}`}
+                      aria-label={t("selectCandidate", { name })}
                       checked={selectedIds.has(candidate.candidateId)}
                       onCheckedChange={() => toggleSelect(candidate.candidateId)}
                     />
@@ -447,7 +465,7 @@ export function PoolView({ candidates, openJobs = [] }: PoolViewProps) {
                       </div>
                       {candidate.skills.length > 0 ? renderSkills(candidate) : null}
                       <p className="text-xs text-soft-ink" suppressHydrationWarning>
-                        Added {new Date(candidate.addedAt).toLocaleDateString()}
+                        {t("addedOn", { date: new Date(candidate.addedAt).toLocaleDateString(locale) })}
                       </p>
                     </div>
                     {renderRowActions(candidate)}
@@ -463,12 +481,12 @@ export function PoolView({ candidates, openJobs = [] }: PoolViewProps) {
         {openJobs.length > 0 && (
           <BulkAction disabled={isPending} onClick={() => setBulkAssignModal(true)}>
             <Briefcase aria-hidden="true" />
-            Assign to Job
+            {t("assignToJob")}
           </BulkAction>
         )}
         <BulkAction danger disabled={isPending} onClick={bulkRemove}>
           <Trash2 aria-hidden="true" />
-          Remove
+          {t("remove")}
         </BulkAction>
       </BulkActionBar>
 
@@ -490,7 +508,7 @@ export function PoolView({ candidates, openJobs = [] }: PoolViewProps) {
             if (!open) setSelectedIds(new Set());
           }}
           candidateId={Array.from(selectedIds)[0] ?? ""}
-          candidateName={`${selectedIds.size} candidates`}
+          candidateName={t("bulkCandidates", { count: selectedIds.size })}
           candidateEmail=""
           jobs={openJobs}
           isBulk

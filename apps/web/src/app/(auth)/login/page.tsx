@@ -1,3 +1,4 @@
+import { getTranslations } from "next-intl/server";
 import { getAvailableLoginMethods } from "@/features/auth/login-methods.server";
 import { getAuthBranding } from "@/features/auth/branding.server";
 import { safeRedirectPath } from "@/lib/safe-redirect";
@@ -11,17 +12,18 @@ type LoginPageProps = {
 export const dynamic = "force-dynamic";
 
 export default async function LoginPage({ searchParams }: LoginPageProps) {
-  const [{ redirect }, methods, branding] = await Promise.all([
+  const [{ redirect }, methods, branding, t] = await Promise.all([
     searchParams,
     getAvailableLoginMethods(),
     getAuthBranding(),
+    getTranslations("accessLogin"),
   ]);
 
   return (
     <AuthShell branding={branding}>
       <AuthCard
-        title="Sign in"
-        subtitle="Welcome back. Enter your credentials to continue."
+        title={t("title")}
+        subtitle={t("subtitle")}
       >
         <LoginForm redirect={safeRedirectPath(redirect)} methods={methods} />
       </AuthCard>

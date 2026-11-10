@@ -1,12 +1,15 @@
+import { getTranslations } from "next-intl/server";
+
 import { Skeleton } from "@/components/ui/skeleton";
 
 /**
  * Portal segment placeholder. Mirrors the portal shell (a page title and a
  * stack of cards) so the first paint is not a blank screen.
  */
-export default function PortalLoading() {
+export default async function PortalLoading() {
+  const t = await getTranslations("pages.portal.loading");
   return (
-    <div className="mx-auto w-full max-w-3xl space-y-6 px-4 py-8" aria-busy="true" aria-label="Loading your portal">
+    <div className="mx-auto w-full max-w-3xl space-y-6 px-4 py-8" aria-busy="true" aria-label={t("ariaLabel")}>
       <div className="space-y-2">
         <Skeleton className="h-7 w-48" />
         <Skeleton className="h-4 w-72 max-w-full" />

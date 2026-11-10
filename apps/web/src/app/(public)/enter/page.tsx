@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { getTranslations } from "next-intl/server";
 import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -11,10 +12,10 @@ import { DemoEnterForm } from "./_components/demo-enter-form";
 
 export const dynamic = "force-dynamic";
 
-export const metadata: Metadata = {
-  title: "Enter the demo",
-  robots: { index: false, follow: false },
-};
+export async function generateMetadata(): Promise<Metadata> {
+  const t = await getTranslations("accessDemo");
+  return { title: t("title"), robots: { index: false, follow: false } };
+}
 
 export default async function EnterPage({
   searchParams,
@@ -25,6 +26,7 @@ export default async function EnterPage({
     notFound();
   }
 
+  const t = await getTranslations("accessDemo");
   const siteKey = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY ?? "";
   const { error, style: rawStyle } = await searchParams;
   const captchaFailed = error === "captcha";
@@ -48,19 +50,17 @@ export default async function EnterPage({
           href="/"
           className="ml-auto text-sm font-medium text-muted-foreground transition hover:text-foreground"
         >
-          Back to careers
+          {t("back")}
         </Link>
       </header>
 
       <main className="flex flex-1 items-center justify-center px-6 pb-20">
         <div className="w-full max-w-sm text-center">
           <h1 className="font-display text-3xl tracking-tight text-foreground">
-            Enter the demo
+            {t("title")}
           </h1>
           <p className="mt-2 text-sm text-muted-foreground">
-            Explore a hiring workspace that&apos;s ready to click around in.
-            Change jobs, move candidates and try the tools. Nothing here is
-            permanent.
+            {t("intro")}
           </p>
 
           {captchaFailed ? (
@@ -68,7 +68,7 @@ export default async function EnterPage({
               role="alert"
               className="mt-6 rounded-lg border border-danger-rust/25 bg-danger-rust/[0.06] px-3.5 py-2.5 text-left text-sm text-danger-rust"
             >
-              That verification didn&apos;t go through. Please try again.
+              {t("verificationFailed")}
             </p>
           ) : null}
 
@@ -77,7 +77,7 @@ export default async function EnterPage({
               role="alert"
               className="mt-6 rounded-lg border border-danger-rust/25 bg-danger-rust/[0.06] px-3.5 py-2.5 text-left text-sm text-danger-rust"
             >
-              The demo is full right now. Please try again in a few minutes.
+              {t("capacity")}
             </p>
           ) : null}
 

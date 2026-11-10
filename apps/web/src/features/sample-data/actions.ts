@@ -4,6 +4,8 @@ import { revalidatePath } from "next/cache";
 
 import { assertNotDemo } from "@/features/demo/assert-not-demo";
 import { requireWorkspaceRole } from "@/features/workspaces/context";
+import { getTranslations } from "@/i18n/server";
+
 import { logAuditEvent } from "@/lib/audit-log";
 import { createLogger } from "@/lib/logger";
 
@@ -15,11 +17,17 @@ export type SampleDataActionResult =
   | { ok: true; status: "loaded" | "already_loaded" | "removed" | "none" }
   | { ok: false; error: string };
 
+type SampleDataT = Awaited<ReturnType<typeof getTranslations>>;
+
 /** Only operator-facing messages reach the page; database text is logged, not shown. */
-function failureResult(error: unknown, fallback: string): SampleDataActionResult {
+function failureResult(
+  error: unknown,
+  t: SampleDataT,
+  fallbackKey: "loadFailed" | "removeFailed",
+): SampleDataActionResult {
   return {
     ok: false,
-    error: error instanceof SampleDataError ? error.message : fallback,
+    error: error instanceof SampleDataError ? t(error.code) : t(fallbackKey),
   };
 }
 
@@ -32,6 +40,7 @@ function revalidateWorkspacePages() {
 
 /** Owner or admin: add the clearly synthetic sample job and candidates. */
 export async function loadSampleDataAction(): Promise<SampleDataActionResult> {
+  const t = await getTranslations("server.sampleData.actions");
   try {
     assertNotDemo();
     const { organization, user } = await requireWorkspaceRole(["owner", "admin"]);
@@ -57,12 +66,13 @@ export async function loadSampleDataAction(): Promise<SampleDataActionResult> {
     return { ok: true, status: result.status };
   } catch (error) {
     log.error(error, "failed to load sample data");
-    return failureResult(error, "Sample data could not be loaded. Try again.");
+    return failureResult(error, t, "loadFailed");
   }
 }
 
 /** Owner or admin: delete the tracked sample rows and nothing else. */
 export async function removeSampleDataAction(): Promise<SampleDataActionResult> {
+  const t = await getTranslations("server.sampleData.actions");
   try {
     assertNotDemo();
     const { organization, user } = await requireWorkspaceRole(["owner", "admin"]);
@@ -92,6 +102,6 @@ export async function removeSampleDataAction(): Promise<SampleDataActionResult> 
     return { ok: true, status: "removed" };
   } catch (error) {
     log.error(error, "failed to remove sample data");
-    return failureResult(error, "Sample data could not be removed. Try again.");
+    return failureResult(error, t, "removeFailed");
   }
 }

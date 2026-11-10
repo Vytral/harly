@@ -1,7 +1,8 @@
 import {
   pickableActions,
-  TRIGGER_CATALOG,
+  triggerCatalog,
   type ActionMeta,
+  type BuilderT,
   type SafeAutomationToolManifest,
   type TriggerMeta,
 } from "./catalog";
@@ -13,6 +14,7 @@ export type LibraryItem = {
   actionType?: ActionMeta["type"];
   toolVersion?: number;
   event?: TriggerMeta["event"];
+  /** Translated group heading. */
   group: string;
   label: string;
   blurb: string;
@@ -20,33 +22,38 @@ export type LibraryItem = {
 };
 
 export function libraryItems(
-  manifests?: readonly SafeAutomationToolManifest[],
+  manifests: readonly SafeAutomationToolManifest[] | undefined,
+  t: BuilderT,
 ): LibraryItem[] {
   const trigger: LibraryItem = {
     id: "trigger",
     kind: "trigger",
-    group: "Start",
-    label: "When",
-    blurb: "The event that starts this automation.",
-    keywords: TRIGGER_CATALOG.map((entry) => `${entry.label} ${entry.event}`).join(" "),
+    group: t("library.groups.start"),
+    label: t("library.trigger.label"),
+    blurb: t("library.trigger.blurb"),
+    keywords: triggerCatalog(t).map((entry) => `${entry.label} ${entry.event}`).join(" "),
   };
-  const control = CONTROL_BLOCKS.map((block) => ({
-    id: block.kind,
-    kind: block.kind,
-    group: "Control",
-    label: block.label,
-    blurb: block.blurb,
-    keywords: `${block.label} ${block.blurb} ${block.kind}`,
-  }));
-  const actions = pickableActions(manifests).map((action) => ({
+  const control = CONTROL_BLOCKS.map((block) => {
+    const label = t(`library.blocks.${block.kind}.label`);
+    const blurb = t(`library.blocks.${block.kind}.blurb`);
+    return {
+      id: block.kind,
+      kind: block.kind,
+      group: t("library.groups.control"),
+      label,
+      blurb,
+      keywords: `${label} ${blurb} ${block.kind}`,
+    };
+  });
+  const actions = pickableActions(manifests, t).map((action) => ({
     id: `action:${action.type}`,
     kind: "action" as const,
     actionType: action.type,
     toolVersion: action.toolVersion,
-    group: action.group,
+    group: action.groupLabel,
     label: action.label,
     blurb: action.blurb,
-    keywords: `${action.label} ${action.blurb} ${action.type} ${action.group}`,
+    keywords: `${action.label} ${action.blurb} ${action.type} ${action.groupLabel}`,
   }));
   return [trigger, ...control, ...actions];
 }

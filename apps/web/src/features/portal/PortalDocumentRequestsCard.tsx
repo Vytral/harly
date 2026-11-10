@@ -3,6 +3,7 @@
 import { useRef, useTransition } from "react";
 import { toast } from "@/lib/notification-island/toast";
 import { useRouter } from "next/navigation";
+import { useLocale, useTranslations } from "next-intl";
 
 import { cn } from "@/lib/utils";
 import {
@@ -59,6 +60,7 @@ export function PortalDocumentRequestsCard({
 }: {
   requests: DocumentRequestItem[];
 }) {
+  const t = useTranslations("features.portal.PortalDocumentRequestsCard");
   // Terminal accepted/waived requests aren't actionable; keep them visible as
   // a completed checklist so the candidate sees the full picture.
   if (requests.length === 0) return null;
@@ -68,10 +70,10 @@ export function PortalDocumentRequestsCard({
   return (
     <section>
       <div className="mb-4 flex items-center justify-between">
-        <h2 className="text-lg font-semibold text-foreground">Requested documents</h2>
+        <h2 className="text-lg font-semibold text-foreground">{t("requestedDocuments")}</h2>
         {outstanding > 0 ? (
           <span className="rounded-full bg-warning-clay/10 px-2.5 py-0.5 text-xs font-medium text-warning-clay">
-            {outstanding} to upload
+            {t("toUpload", { count: outstanding })}
           </span>
         ) : null}
       </div>
@@ -86,9 +88,12 @@ export function PortalDocumentRequestsCard({
 
 function RequestRow({ request }: { request: DocumentRequestItem }) {
   const router = useRouter();
+  const t = useTranslations("features.portal.PortalDocumentRequestsCard");
+  const locale = useLocale();
   const inputRef = useRef<HTMLInputElement>(null);
   const [isPending, start] = useTransition();
   const [isSigning, startSigning] = useTransition();
+  const tLabels = useTranslations("labels.documents");
   const meta = DOCUMENT_REQUEST_STATUS_META[request.status];
   const uploadable = canCandidateUpload(request.status);
   const resolved = isTerminalRequestStatus(request.status);
@@ -101,11 +106,11 @@ function RequestRow({ request }: { request: DocumentRequestItem }) {
   function onFile(file: File | null) {
     if (!file) return;
     if (!ALLOWED_TYPES.has(file.type)) {
-      toast.error("Upload a PDF, Word doc, or image.");
+      toast.error(t("invalidFileType"));
       return;
     }
     if (file.size <= 0 || file.size > MAX_BYTES) {
-      toast.error("File must be between 1 byte and 25 MB.");
+      toast.error(t("invalidFileSize"));
       return;
     }
     start(async () => {
@@ -122,14 +127,14 @@ function RequestRow({ request }: { request: DocumentRequestItem }) {
         });
         const payload: unknown = await presignRes.json();
         if (!presignRes.ok || !isPresign(payload)) {
-          throw new Error("Could not prepare the upload.");
+          throw new Error(t("couldNotPrepareUpload"));
         }
         const putRes = await fetch(payload.uploadUrl, {
           method: "PUT",
           headers: { "Content-Type": file.type },
           body: file,
         });
-        if (!putRes.ok) throw new Error("Upload failed. Try again.");
+        if (!putRes.ok) throw new Error(t("uploadRetry"));
 
         const result = await submitDocumentRequestAction({
           requestId: request.id,
@@ -143,10 +148,10 @@ function RequestRow({ request }: { request: DocumentRequestItem }) {
           toast.error(result.error);
           return;
         }
-        toast.success("Document submitted");
+        toast.success(t("documentSubmitted"));
         router.refresh();
       } catch (error) {
-        toast.error(error instanceof Error ? error.message : "Could not submit the document.");
+        toast.error(error instanceof Error ? error.message : t("couldNotSubmit"));
       } finally {
         if (inputRef.current) inputRef.current.value = "";
       }
@@ -183,7 +188,7 @@ function RequestRow({ request }: { request: DocumentRequestItem }) {
           {request.title}
         </span>
         <span className={cn("shrink-0 rounded-full px-2 py-0.5 text-[11px] font-medium", meta.className)}>
-          {meta.label}
+          {tLabels(`requestStatus.${request.status}`)}
         </span>
       </div>
     );
@@ -200,7 +205,7 @@ function RequestRow({ request }: { request: DocumentRequestItem }) {
             <div className="flex flex-wrap items-center gap-2">
               <h3 className="text-sm font-semibold text-foreground">{request.title}</h3>
               <span className={cn("rounded-full px-2 py-0.5 text-[11px] font-medium", meta.className)}>
-                {meta.label}
+                {tLabels(`requestStatus.${request.status}`)}
               </span>
             </div>
             {request.instructions ? (
@@ -215,7 +220,7 @@ function RequestRow({ request }: { request: DocumentRequestItem }) {
             ) : null}
             {request.dueAt ? (
               <p className="mt-1.5 text-xs text-muted-foreground">
-                Due {new Intl.DateTimeFormat("en-US", { dateStyle: "medium" }).format(new Date(request.dueAt))}
+                {t("due", { date: new Intl.DateTimeFormat(locale, { dateStyle: "medium" }).format(new Date(request.dueAt)) })}
               </p>
             ) : null}
           </div>
@@ -242,7 +247,7 @@ function RequestRow({ request }: { request: DocumentRequestItem }) {
               )}
             >
               {isPending ? <SpinnerIcon className="size-4 animate-spin" /> : <FileArrowUpIcon className="size-4" />}
-              {isPending ? "Uploading…" : request.status === "declined" ? "Re-upload" : "Upload"}
+              {isPending ? t("uploading") : request.status === "declined" ? t("reupload") : t("upload")}
             </button>
           </>
         ) : canSign ? (
@@ -256,12 +261,12 @@ function RequestRow({ request }: { request: DocumentRequestItem }) {
               "disabled:cursor-not-allowed disabled:opacity-50",
             )}
           >
-            {isSigning ? "Preparing…" : "Review & sign"}
+            {isSigning ? t("preparing") : t("reviewAndSign")}
           </button>
         ) : request.status === "submitted" ? (
           <span className="inline-flex shrink-0 items-center gap-1.5 text-sm text-muted-foreground">
             <SpinnerIcon className="size-3.5 animate-spin" />
-            In review
+            {t("inReview")}
           </span>
         ) : null}
       </div>

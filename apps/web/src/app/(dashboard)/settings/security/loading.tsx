@@ -1,3 +1,5 @@
+import { getTranslations } from "next-intl/server";
+
 import { Card } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 
@@ -54,10 +56,11 @@ function RowsSkeleton({ count }: { count: number }) {
  * access controls card (form grid and switch rows), the SSO provider card, the
  * login methods card, the SCIM provisioning card, and the audit log table.
  */
-export default function SecuritySettingsLoading() {
+export default async function SecuritySettingsLoading() {
+  const t = await getTranslations("pages.settingsSecurity.loading");
   return (
     <div aria-busy="true" className="space-y-6">
-      <span className="sr-only">Loading…</span>
+      <span className="sr-only">{t("label")}</span>
 
       <Card className="gap-5 p-6">
         <SecurityHeaderSkeleton titleWidth="w-64" descWidth="w-[32rem]" control={<SwitchSkeleton />} />

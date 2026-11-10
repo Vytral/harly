@@ -1,3 +1,5 @@
+import { getTranslations } from "next-intl/server";
+
 import { Card } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 
@@ -5,10 +7,12 @@ import { Skeleton } from "@/components/ui/skeleton";
  * Mirrors settings/updates/page.tsx: the UpdatesPanel card (version header,
  * status block, history list) followed by the AutoUpdateCard.
  */
-export default function UpdatesSettingsLoading() {
+export default async function UpdatesSettingsLoading() {
+  const t = await getTranslations("pages.settingsUpdates.loading");
+
   return (
     <div aria-busy="true" className="space-y-6">
-      <span className="sr-only">Loading…</span>
+      <span className="sr-only">{t("label")}</span>
 
       <Card className="gap-5 p-6">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">

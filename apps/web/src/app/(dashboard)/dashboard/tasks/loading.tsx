@@ -1,12 +1,16 @@
+import { getTranslations } from "next-intl/server";
+
 import { Skeleton } from "@/components/ui/skeleton";
 
 /** Rows per urgency group. The real list shows grouped sections inside one white card. */
 const GROUPS = [3, 2];
 
-export default function TasksLoading() {
+export default async function TasksLoading() {
+  const t = await getTranslations("pages.dashboardTasks.loading");
+
   return (
     <div className="space-y-5" aria-busy="true">
-      <span className="sr-only">Loading…</span>
+      <span className="sr-only">{t("label")}</span>
 
       <div className="flex flex-wrap items-center gap-2">
         <Skeleton className="h-9 w-full rounded-full sm:w-60" />

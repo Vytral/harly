@@ -2,6 +2,7 @@
 
 import { createContext, useCallback, useContext, type ReactNode } from "react";
 import type { Route } from "next";
+import { useTranslations } from "next-intl";
 import { useRouter } from "next/navigation";
 
 import { toast } from "@/lib/notification-island/toast";
@@ -49,6 +50,7 @@ export function useCandidateQueueNavigation() {
  * caller can skip its own success toast.
  */
 export function useAdvanceAfterDecision() {
+  const tQueue = useTranslations("labels.candidates.queue");
   const router = useRouter();
   const navigation = useCandidateQueueNavigation();
 
@@ -64,10 +66,10 @@ export function useAdvanceAfterDecision() {
         return false;
       }
       const first = navigation.candidateName.trim().split(/\s+/)[0] ?? navigation.candidateName;
-      toast.success(advanceMessage(action(first), navigation.nextHref ? navigation.nextName : null));
+      toast.success(advanceMessage((key, values) => tQueue(key, values), action(first), navigation.nextHref ? navigation.nextName : null));
       router.replace(target as Route);
       return true;
     },
-    [navigation, router],
+    [navigation, router, tQueue],
   );
 }

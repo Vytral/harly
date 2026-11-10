@@ -2,6 +2,7 @@
 
 import type { ComponentType } from "react";
 import { useMemo, useState, useTransition } from "react";
+import { useTranslations } from "next-intl";
 import { useRouter } from "next/navigation";
 import { Download, FileSpreadsheet, Upload } from "lucide-react";
 import { toast } from "@/lib/notification-island/toast";
@@ -67,49 +68,41 @@ export type ImportSource =
 
 type SourceOption = {
   value: ImportSource;
-  label: string;
+  /** Vendor name. CSV has none and uses the translated "CSV file" label. */
+  label?: string;
   /** Small mark shown in the source picker and next to the credentials heading. */
   logo: ComponentType<{ className?: string }>;
-  /** Hint shown under the label in the picker grid. */
-  hint: string;
 };
 
 const IMPORT_SOURCE_OPTIONS: SourceOption[] = [
   {
     value: "csv",
-    label: "CSV file",
     logo: FileSpreadsheet,
-    hint: "Upload a spreadsheet",
   },
   {
     value: "greenhouse",
     label: "Greenhouse",
     logo: GreenhouseLogo,
-    hint: "Harvest API key",
   },
   {
     value: "workable",
     label: "Workable",
     logo: WorkableLogo,
-    hint: "Subdomain + token",
   },
   {
     value: "ashby",
     label: "Ashby",
     logo: AshbyLogo,
-    hint: "Read-only API key",
   },
   {
     value: "lever",
     label: "Lever",
     logo: LeverLogo,
-    hint: "Opportunities key",
   },
   {
     value: "join",
     label: "JOIN.com",
     logo: JoinLogo,
-    hint: "API token",
   },
 ];
 
@@ -138,6 +131,8 @@ export function ImportCandidatesDrawer({
   jobs: ImportJobOption[];
   initialSource?: ImportSource;
 }) {
+  const t = useTranslations("features.candidates.importCandidatesDrawer");
+  const tField = useTranslations("labels.candidates.importFields");
   const router = useRouter();
   const [open, setOpen] = useState(Boolean(initialSource));
   const [jobId, setJobId] = useState<string>(jobs[0]?.id ?? "");
@@ -166,15 +161,18 @@ export function ImportCandidatesDrawer({
 
   async function handleFile(selected: File) {
     if (selected.size > MAX_IMPORT_FILE_BYTES) {
-      toast.error(
-        "This file is larger than 5 MB. Split it into smaller files and try again.",
-      );
+      toast.error(t("fileTooLarge"));
       return;
     }
     const text = await selected.text();
     const prepared = prepareCandidateImport(text);
     if ("error" in prepared) {
-      toast.error(prepared.error);
+      const error = prepared.error;
+      toast.error(
+        error.code === "duplicateHeader"
+          ? t("fileErrors.duplicateHeader", { header: error.header })
+          : t(`fileErrors.${error.code}`),
+      );
       return;
     }
     setSummary(null);
@@ -205,8 +203,16 @@ export function ImportCandidatesDrawer({
     [file],
   );
 
-  const mappingError = file
+  const mappingIssue = file
     ? validateCandidateImportMapping(file.mapping)
+    : null;
+  const mappingError = mappingIssue
+    ? t(`mappingErrors.${mappingIssue}`, {
+        fullName: tField("fullName"),
+        firstName: tField("firstName"),
+        lastName: tField("lastName"),
+        email: tField("email"),
+      })
     : null;
 
   const validRowCount = rowsToImport.filter(
@@ -223,7 +229,13 @@ export function ImportCandidatesDrawer({
   // ATS imports report `skipped` when a profile is too sparse to import; CSV
   // never sets it, so fall back to a generic "candidate" wording there.
   const skippedSourceLabel =
-    source === "csv" ? "candidate" : (activeSourceOption?.label ?? "source");
+    source === "csv"
+      ? t("sources.genericCandidate")
+      : (activeSourceOption?.label ?? t("sources.genericSource"));
+
+  function sourceLabel(option: SourceOption) {
+    return option.label ?? t("sources.csv");
+  }
 
   function importRows() {
     if (!file || !jobId) return;
@@ -238,12 +250,10 @@ export function ImportCandidatesDrawer({
       }
       setSummary(result);
       if (result.imported > 0) {
-        toast.success(
-          `Imported ${result.imported} candidate${result.imported === 1 ? "" : "s"}.`,
-        );
+        toast.success(t("importedCsv", { count: result.imported }));
         router.refresh();
       } else {
-        toast.error("No candidates were imported.");
+        toast.error(t("noneImported"));
       }
     });
   }
@@ -261,7 +271,7 @@ export function ImportCandidatesDrawer({
       }
       setSummary(result);
       toast.success(
-        `Imported ${result.imported} Greenhouse candidate${result.imported === 1 ? "" : "s"}.`,
+        t("importedFromSource", { count: result.imported, source: "Greenhouse" }),
       );
       router.refresh();
     });
@@ -281,7 +291,7 @@ export function ImportCandidatesDrawer({
       }
       setSummary(result);
       toast.success(
-        `Imported ${result.imported} Workable candidate${result.imported === 1 ? "" : "s"}.`,
+        t("importedFromSource", { count: result.imported, source: "Workable" }),
       );
       router.refresh();
     });
@@ -300,7 +310,7 @@ export function ImportCandidatesDrawer({
       }
       setSummary(result);
       toast.success(
-        `Imported ${result.imported} Ashby candidate${result.imported === 1 ? "" : "s"}.`,
+        t("importedFromSource", { count: result.imported, source: "Ashby" }),
       );
       router.refresh();
     });
@@ -319,7 +329,7 @@ export function ImportCandidatesDrawer({
       }
       setSummary(result);
       toast.success(
-        `Imported ${result.imported} Lever candidate${result.imported === 1 ? "" : "s"}.`,
+        t("importedFromSource", { count: result.imported, source: "Lever" }),
       );
       router.refresh();
     });
@@ -338,7 +348,7 @@ export function ImportCandidatesDrawer({
       }
       setSummary(result);
       toast.success(
-        `Imported ${result.imported} JOIN candidate${result.imported === 1 ? "" : "s"}.`,
+        t("importedFromSource", { count: result.imported, source: "JOIN" }),
       );
       router.refresh();
     });
@@ -348,7 +358,7 @@ export function ImportCandidatesDrawer({
     const csv =
       "First name,Last name,Email,Phone,Location,LinkedIn URL,GitHub URL,Website URL,Headline\r\nAda,Lovelace,ada@example.com,+56 9 1234 5678,Santiago,https://linkedin.com/in/ada,,,Mathematician";
     const url = URL.createObjectURL(
-      new Blob(["\ufeff" + csv], { type: "text/csv;charset=utf-8" }),
+      new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8" }),
     );
     const link = document.createElement("a");
     link.href = url;
@@ -369,7 +379,7 @@ export function ImportCandidatesDrawer({
       <SheetTrigger asChild>
         <Button variant="outline">
           <Upload className="size-4" />
-          Import candidates
+          {t("importCandidates")}
         </Button>
       </SheetTrigger>
       <DrawerLayout
@@ -378,16 +388,16 @@ export function ImportCandidatesDrawer({
             {ActiveSourceLogo ? (
               <ActiveSourceLogo className="size-5 shrink-0" />
             ) : null}
-            Import candidates
+            {t("importCandidates")}
           </span>
         }
-        description="Bring candidates into a job from a CSV file or another ATS."
+        description={t("description")}
         className="sm:max-w-2xl"
         footer={
           <>
             <SheetClose asChild>
               <Button variant="outline" disabled={isPending}>
-                {summary ? "Close" : "Cancel"}
+                {summary ? t("close") : t("cancel")}
               </Button>
             </SheetClose>
             {!summary && source === "csv" ? (
@@ -402,8 +412,8 @@ export function ImportCandidatesDrawer({
                 }
               >
                 {isPending
-                  ? "Importing…"
-                  : `Import ${validRowCount} candidate${validRowCount === 1 ? "" : "s"}`}
+                  ? t("importing")
+                  : t("importCount", { count: validRowCount })}
               </Button>
             ) : null}
           </>
@@ -411,16 +421,15 @@ export function ImportCandidatesDrawer({
       >
         {jobs.length === 0 ? (
           <p className="text-sm text-muted-foreground">
-            Create a job before importing candidates. Every imported row is
-            added to a job&apos;s pipeline.
+            {t("noJobs")}
           </p>
         ) : (
           <div className="space-y-5">
             <div className="space-y-2">
-              <Label htmlFor="import-job">Job</Label>
+              <Label htmlFor="import-job">{t("jobLabel")}</Label>
               <Select value={jobId} onValueChange={setJobId}>
                 <SelectTrigger id="import-job" className="w-full">
-                  <SelectValue placeholder="Select a job" />
+                  <SelectValue placeholder={t("selectJob")} />
                 </SelectTrigger>
                 <SelectContent>
                   {jobs.map((job) => (
@@ -433,10 +442,10 @@ export function ImportCandidatesDrawer({
             </div>
 
             <div className="space-y-2">
-              <Label>Source</Label>
+              <Label>{t("sourceLabel")}</Label>
               <div
                 role="radiogroup"
-                aria-label="Import source"
+                aria-label={t("importSourceAria")}
                 className="grid grid-cols-2 gap-2 sm:grid-cols-3"
               >
                 {IMPORT_SOURCE_OPTIONS.map((option) => {
@@ -465,10 +474,10 @@ export function ImportCandidatesDrawer({
                       </span>
                       <span className="space-y-0.5">
                         <span className="block text-sm font-medium leading-tight">
-                          {option.label}
+                          {sourceLabel(option)}
                         </span>
                         <span className="block text-xs text-muted-foreground">
-                          {option.hint}
+                          {t(`sourceHints.${option.value}`)}
                         </span>
                       </span>
                     </button>
@@ -479,7 +488,7 @@ export function ImportCandidatesDrawer({
 
             {source === "csv" ? (
               <div className="space-y-2">
-                <Label htmlFor="import-file">CSV file</Label>
+                <Label htmlFor="import-file">{t("sources.csv")}</Label>
                 <Input
                   id="import-file"
                   type="file"
@@ -491,9 +500,7 @@ export function ImportCandidatesDrawer({
                   }}
                 />
                 <p className="text-xs text-muted-foreground">
-                  The first row should contain column headers. Use Full name or
-                  First name + Last name, plus Email. CSV, semicolon-separated
-                  CSV and TSV are supported.
+                  {t("csvHelp")}
                 </p>
                 <Button
                   type="button"
@@ -503,11 +510,11 @@ export function ImportCandidatesDrawer({
                   onClick={downloadTemplate}
                 >
                   <Download className="size-3.5" />
-                  Download template
+                  {t("downloadTemplate")}
                 </Button>
                 {file?.truncated ? (
                   <p className="text-xs text-amber-600 dark:text-amber-400">
-                    Only the first 500 rows of {file.fileName} will be imported.
+                    {t("truncated", { fileName: file.fileName })}
                   </p>
                 ) : null}
               </div>
@@ -521,19 +528,17 @@ export function ImportCandidatesDrawer({
                     htmlFor="greenhouse-api-key"
                     className="text-sm font-medium"
                   >
-                    Greenhouse API key
+                    {t("greenhouseKeyLabel")}
                   </Label>
                 </div>
                 <SecretInput
                   id="greenhouse-api-key"
                   value={greenhouseApiKey}
                   onChange={(event) => setGreenhouseApiKey(event.target.value)}
-                  placeholder="Harvest API key"
+                  placeholder={t("greenhouseKeyPlaceholder")}
                 />
                 <p className="text-xs text-muted-foreground">
-                  Imports eligible candidates into the selected job. The key is
-                  used once, never saved, and needs the Harvest Candidates
-                  permission.
+                  {t("greenhouseHelp")}
                 </p>
                 <Button
                   type="button"
@@ -541,7 +546,7 @@ export function ImportCandidatesDrawer({
                   onClick={importGreenhouse}
                   disabled={!jobId || !greenhouseApiKey.trim() || isPending}
                 >
-                  {isPending ? "Importing…" : "Import Greenhouse candidates"}
+                  {isPending ? t("importing") : t("importGreenhouse")}
                 </Button>
               </div>
             ) : null}
@@ -551,7 +556,7 @@ export function ImportCandidatesDrawer({
                 <div className="flex items-center gap-2">
                   <WorkableLogo className="size-5" />
                   <span className="text-sm font-medium">
-                    Workable credentials
+                    {t("workableCredentials")}
                   </span>
                 </div>
                 <div className="space-y-1.5">
@@ -559,7 +564,7 @@ export function ImportCandidatesDrawer({
                     htmlFor="workable-subdomain"
                     className="text-xs text-muted-foreground"
                   >
-                    Subdomain
+                    {t("subdomain")}
                   </Label>
                   <Input
                     id="workable-subdomain"
@@ -568,7 +573,7 @@ export function ImportCandidatesDrawer({
                     onChange={(event) =>
                       setWorkableSubdomain(event.target.value)
                     }
-                    placeholder="e.g. acme"
+                    placeholder={t("subdomainPlaceholder")}
                   />
                 </div>
                 <div className="space-y-1.5">
@@ -576,7 +581,7 @@ export function ImportCandidatesDrawer({
                     htmlFor="workable-api-token"
                     className="text-xs text-muted-foreground"
                   >
-                    API access token
+                    {t("workableTokenLabel")}
                   </Label>
                   <SecretInput
                     id="workable-api-token"
@@ -584,13 +589,13 @@ export function ImportCandidatesDrawer({
                     onChange={(event) =>
                       setWorkableApiToken(event.target.value)
                     }
-                    placeholder="Admin-generated token"
+                    placeholder={t("workableTokenPlaceholder")}
                   />
                 </div>
                 <p className="text-xs text-muted-foreground">
-                  Use an Admin-generated token with only the{" "}
-                  <code>r_candidates</code> scope. Harly reads complete profiles
-                  and never saves the token.
+                  {t.rich("workableHelp", {
+                    code: (chunks) => <code>{chunks}</code>,
+                  })}
                 </p>
                 <Button
                   type="button"
@@ -603,7 +608,7 @@ export function ImportCandidatesDrawer({
                     isPending
                   }
                 >
-                  {isPending ? "Importing…" : "Import Workable candidates"}
+                  {isPending ? t("importing") : t("importWorkable")}
                 </Button>
               </div>
             ) : null}
@@ -616,19 +621,19 @@ export function ImportCandidatesDrawer({
                     htmlFor="ashby-api-key"
                     className="text-sm font-medium"
                   >
-                    Ashby API key
+                    {t("ashbyKeyLabel")}
                   </Label>
                 </div>
                 <SecretInput
                   id="ashby-api-key"
                   value={ashbyApiKey}
                   onChange={(event) => setAshbyApiKey(event.target.value)}
-                  placeholder="Ashby API key"
+                  placeholder={t("ashbyKeyPlaceholder")}
                 />
                 <p className="text-xs text-muted-foreground">
-                  Use an Admin-generated key with the{" "}
-                  <code>candidatesRead</code> scope. Harly reads complete
-                  profiles and never saves the key.
+                  {t.rich("ashbyHelp", {
+                    code: (chunks) => <code>{chunks}</code>,
+                  })}
                 </p>
                 <Button
                   type="button"
@@ -636,7 +641,7 @@ export function ImportCandidatesDrawer({
                   onClick={importAshby}
                   disabled={!jobId || !ashbyApiKey.trim() || isPending}
                 >
-                  {isPending ? "Importing…" : "Import Ashby candidates"}
+                  {isPending ? t("importing") : t("importAshby")}
                 </Button>
               </div>
             ) : null}
@@ -649,18 +654,17 @@ export function ImportCandidatesDrawer({
                     htmlFor="lever-api-key"
                     className="text-sm font-medium"
                   >
-                    Lever API key
+                    {t("leverKeyLabel")}
                   </Label>
                 </div>
                 <SecretInput
                   id="lever-api-key"
                   value={leverApiKey}
                   onChange={(event) => setLeverApiKey(event.target.value)}
-                  placeholder="Lever API key"
+                  placeholder={t("leverKeyPlaceholder")}
                 />
                 <p className="text-xs text-muted-foreground">
-                  Use a read-only key with access to Opportunities. Harly
-                  imports candidate details and never saves the key.
+                  {t("leverHelp")}
                 </p>
                 <Button
                   type="button"
@@ -668,7 +672,7 @@ export function ImportCandidatesDrawer({
                   onClick={importLever}
                   disabled={!jobId || !leverApiKey.trim() || isPending}
                 >
-                  {isPending ? "Importing…" : "Import Lever candidates"}
+                  {isPending ? t("importing") : t("importLever")}
                 </Button>
               </div>
             ) : null}
@@ -681,20 +685,17 @@ export function ImportCandidatesDrawer({
                     htmlFor="join-api-token"
                     className="text-sm font-medium"
                   >
-                    JOIN API token
+                    {t("joinTokenLabel")}
                   </Label>
                 </div>
                 <SecretInput
                   id="join-api-token"
                   value={joinApiToken}
                   onChange={(event) => setJoinApiToken(event.target.value)}
-                  placeholder="API token from JOIN"
+                  placeholder={t("joinTokenPlaceholder")}
                 />
                 <p className="text-xs text-muted-foreground">
-                  Create it in JOIN under User Settings → API Credentials. Use
-                  a dedicated token with application access; Harly uses it
-                  once and never saves it. Candidate profiles are imported,
-                  but CV attachments are not downloaded.
+                  {t("joinHelp")}
                 </p>
                 <Button
                   type="button"
@@ -702,7 +703,7 @@ export function ImportCandidatesDrawer({
                   onClick={importJoin}
                   disabled={!jobId || !joinApiToken.trim() || isPending}
                 >
-                  {isPending ? "Importing…" : "Import JOIN candidates"}
+                  {isPending ? t("importing") : t("importJoin")}
                 </Button>
               </div>
             ) : null}
@@ -710,7 +711,7 @@ export function ImportCandidatesDrawer({
             {file && !summary ? (
               <>
                 <div className="space-y-2">
-                  <Label>Map columns</Label>
+                  <Label>{t("mapColumns")}</Label>
                   <div className="grid grid-cols-2 gap-3">
                     {IMPORT_FIELDS.map((field) => (
                       <div key={field.key} className="space-y-1.5">
@@ -718,7 +719,7 @@ export function ImportCandidatesDrawer({
                           htmlFor={`map-${field.key}`}
                           className="font-normal text-muted-foreground"
                         >
-                          {field.label}
+                          {tField(field.key)}
                           {field.key === "email" ? " *" : ""}
                         </Label>
                         <Select
@@ -733,13 +734,13 @@ export function ImportCandidatesDrawer({
                             id={`map-${field.key}`}
                             className="w-full"
                           >
-                            <SelectValue placeholder="Not mapped" />
+                            <SelectValue placeholder={t("notMapped")} />
                           </SelectTrigger>
                           <SelectContent>
-                            <SelectItem value={UNMAPPED}>Not mapped</SelectItem>
+                            <SelectItem value={UNMAPPED}>{t("notMapped")}</SelectItem>
                             {file.headers.map((header, index) => (
                               <SelectItem key={index} value={index.toString()}>
-                                {header || `Column ${index + 1}`}
+                                {header || t("columnNumber", { number: index + 1 })}
                               </SelectItem>
                             ))}
                           </SelectContent>
@@ -753,7 +754,7 @@ export function ImportCandidatesDrawer({
                 ) : null}
 
                 <div className="space-y-2">
-                  <Label>Preview</Label>
+                  <Label>{t("preview")}</Label>
                   <div className="max-h-64 overflow-auto rounded-lg border">
                     <Table>
                       <TableHeader>
@@ -761,7 +762,7 @@ export function ImportCandidatesDrawer({
                           {IMPORT_FIELDS.filter(
                             (field) => field.key !== "fullName",
                           ).map((field) => (
-                            <TableHead key={field.key}>{field.label}</TableHead>
+                            <TableHead key={field.key}>{tField(field.key)}</TableHead>
                           ))}
                         </TableRow>
                       </TableHeader>
@@ -782,7 +783,7 @@ export function ImportCandidatesDrawer({
                                       ImportFieldKey,
                                       "fullName"
                                     >
-                                  ] || "Not provided"}
+                                  ] || t("notProvided")}
                                 </TableCell>
                               ))}
                             </TableRow>
@@ -791,13 +792,16 @@ export function ImportCandidatesDrawer({
                     </Table>
                   </div>
                   <p className="text-xs text-muted-foreground">
-                    {rowsToImport.length} row
-                    {rowsToImport.length === 1 ? "" : "s"} found,{" "}
-                    {validRowCount} ready to import
                     {rowsToImport.length > PREVIEW_ROWS
-                      ? `, showing the first ${PREVIEW_ROWS}`
-                      : ""}
-                    .
+                      ? t("previewSummaryTruncated", {
+                          total: rowsToImport.length,
+                          ready: validRowCount,
+                          shown: PREVIEW_ROWS,
+                        })
+                      : t("previewSummary", {
+                          total: rowsToImport.length,
+                          ready: validRowCount,
+                        })}
                   </p>
                 </div>
               </>
@@ -806,29 +810,39 @@ export function ImportCandidatesDrawer({
             {summary ? (
               <div className="space-y-3 rounded-lg border bg-muted/30 p-4 text-sm">
                 <p>
-                  <span className="font-semibold text-foreground">
-                    {summary.imported}
-                  </span>{" "}
-                  candidate{summary.imported === 1 ? "" : "s"} imported.
+                  {t.rich("importedSummary", {
+                    count: summary.imported,
+                    strong: (chunks) => (
+                      <span className="font-semibold text-foreground">
+                        {chunks}
+                      </span>
+                    ),
+                  })}
                   {summary.alreadyInPipeline > 0
-                    ? ` ${summary.alreadyInPipeline} already in this job's pipeline.`
+                    ? ` ${t("alreadyInPipeline", { count: summary.alreadyInPipeline })}`
                     : ""}
                   {summary.skipped
-                    ? ` ${summary.skipped} incomplete ${skippedSourceLabel} profile${summary.skipped === 1 ? " was" : "s were"} skipped.`
+                    ? ` ${t("skippedSummary", { count: summary.skipped, source: skippedSourceLabel })}`
                     : ""}
                 </p>
                 {summary.errors.length > 0 ? (
                   <div className="space-y-1.5">
                     <p className="font-medium text-foreground">
-                      {summary.errors.length} row
-                      {summary.errors.length === 1 ? "" : "s"} skipped:
+                      {t("skippedRows", { count: summary.errors.length })}
                     </p>
                     <ul className="max-h-40 space-y-1 overflow-auto text-xs text-muted-foreground">
                       {summary.errors.map((error) => (
                         <li key={error.row}>
-                          Row {error.row}
-                          {error.email ? ` (${error.email})` : ""}:{" "}
-                          {error.reason}
+                          {error.email
+                            ? t("rowErrorWithEmail", {
+                                row: error.row,
+                                email: error.email,
+                                reason: error.reason,
+                              })
+                            : t("rowError", {
+                                row: error.row,
+                                reason: error.reason,
+                              })}
                         </li>
                       ))}
                     </ul>

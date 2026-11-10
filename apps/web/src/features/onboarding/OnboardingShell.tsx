@@ -1,5 +1,6 @@
 "use client";
 
+import { useTranslations } from "next-intl";
 import {
   AnimatePresence,
   motion,
@@ -112,6 +113,7 @@ export function OnboardingShell({
   minHeight = "min-h-[32rem]",
   navHint,
 }: OnboardingShellProps) {
+  const t = useTranslations("accessOnboarding");
   const reduce = useReducedMotion();
 
   return (
@@ -176,7 +178,7 @@ export function OnboardingShell({
               <>
                 {current > 0 && (
                   <Button variant="ghost" size="sm" disabled={pending} onClick={onBack}>
-                    Back
+                    {t("back")}
                   </Button>
                 )}
                 {onSkip && (
@@ -187,7 +189,7 @@ export function OnboardingShell({
                     disabled={pending}
                     onClick={onSkip}
                   >
-                    Skip
+                    {t("skip")}
                   </Button>
                 )}
                 <Button

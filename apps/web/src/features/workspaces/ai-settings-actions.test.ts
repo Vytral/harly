@@ -8,7 +8,6 @@ const mocks = vi.hoisted(() => ({
   insertValues: vi.fn(),
   getProviderModels: vi.fn(),
 }));
-
 vi.mock("server-only", () => ({}));
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 vi.mock("@/features/demo/assert-not-demo", () => ({ assertNotDemo: vi.fn() }));
@@ -46,6 +45,8 @@ import {
   saveAiSettingsAction,
   testAiConnectionAction,
 } from "./ai-settings-actions";
+
+vi.mock("next-intl/server", async () => (await import("@/test-support/intl-server-mock")).intlServerMock);
 
 beforeEach(() => {
   vi.clearAllMocks();

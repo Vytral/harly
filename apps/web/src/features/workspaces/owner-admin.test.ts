@@ -46,6 +46,8 @@ import {
 } from "./permissions-server";
 import { updateMemberSenderIdentityAction } from "./sender-identity-actions";
 
+vi.mock("next-intl/server", async () => (await import("@/test-support/intl-server-mock")).intlServerMock);
+
 function contextFor(roleKey: string) {
   return {
     organization: { id: "workspace-1" },

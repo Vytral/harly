@@ -12,7 +12,10 @@ import { validateEraseCandidatePublishRules } from "./erase-policy";
 export type WorkflowValidationIssue = {
   nodeId: string;
   fieldPath: string;
+  /** English fallback. Stored and used by agents; the UI translates `code`. */
   message: string;
+  code?: string;
+  values?: Record<string, string | number>;
 };
 
 export type PublishActionHandler = {
@@ -106,6 +109,11 @@ function validateTriggerActionCompatibility(
         nodeId: node.id,
         fieldPath: "actionType",
         message: `This trigger does not guarantee the ${missing.join(" and ")} required by ${node.actionType.replaceAll("_", " ")}. Choose a compatible trigger or bind the missing record id.`,
+        code: "triggerActionMismatch",
+        values: {
+          requirements: missing.join(" and "),
+          action: node.actionType.replaceAll("_", " "),
+        },
       });
     }
   }
@@ -120,6 +128,7 @@ function nameIssue(name: string): WorkflowValidationIssue[] {
           nodeId: "name",
           fieldPath: "name",
           message: "Name this recipe before publishing.",
+          code: "nameRequired",
         },
       ];
 }
@@ -146,6 +155,7 @@ export function validateGraphForPublish(
       nodeId: "actions",
       fieldPath: "nodes",
       message: "Add at least one action before publishing.",
+      code: "actionRequired",
     });
   }
   issues.push(...validateGraphActionInputs(workflow.graph, getHandler));
@@ -172,6 +182,8 @@ export function validateGraphActionInputs(
         nodeId: node.id,
         fieldPath: "actionType",
         message: `${node.actionType} tool version ${node.toolVersion} is not available to run.`,
+        code: "toolUnavailable",
+        values: { action: node.actionType, version: node.toolVersion },
       });
       continue;
     }
@@ -212,6 +224,7 @@ export function validateWorkflowForPublish(
       nodeId: "actions",
       fieldPath: "actions",
       message: "Add at least one action before publishing.",
+      code: "actionRequired",
     });
   }
 
@@ -222,6 +235,8 @@ export function validateWorkflowForPublish(
         nodeId: `action:${index}`,
         fieldPath: "type",
         message: `${action.type} is not available to run.`,
+        code: "actionUnavailable",
+        values: { action: action.type },
       });
       return;
     }
@@ -233,6 +248,8 @@ export function validateWorkflowForPublish(
         nodeId: `action:${index}`,
         fieldPath: path ? `config.${path}` : "config",
         message: `Action ${index + 1}: ${issue.message}`,
+        code: "actionIssue",
+        values: { index: index + 1, message: issue.message },
       });
     }
   });

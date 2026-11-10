@@ -3,6 +3,7 @@
 import { cookies } from "next/headers";
 import { revalidatePath } from "next/cache";
 import { and, eq } from "drizzle-orm";
+import { getTranslations } from "@/i18n/server";
 import { z } from "zod";
 
 import {
@@ -24,6 +25,7 @@ import { createLogger } from "@/lib/logger";
 import { resumeWorkflowDocumentWaits } from "@/features/automations/runtime/worker";
 import { reconcileDocumentRequestPackage } from "@/features/documents/requests-service";
 import { rotateNativePortalSigningLink } from "@/lib/esign/native/remote";
+import { withNotificationCopy } from "@/features/notifications/copy";
 
 const log = createLogger("portal-document-submit");
 
@@ -37,13 +39,14 @@ const signingViewSchema = z.object({ requestId: z.uuid() });
  * repeated here instead of trusting a client-supplied document or envelope id.
  */
 export async function createDocumentSigningViewAction(input: unknown): Promise<{ ok: true; signingUrl: string; expiresAt: string } | { ok: false; error: string }> {
+  const t = await getTranslations("server.portal.documents");
   const cookieStore = await cookies();
   const token = cookieStore.get(PORTAL_SESSION_COOKIE)?.value;
-  if (!token) return { ok: false, error: "Your session has expired." };
+  if (!token) return { ok: false, error: t("sessionExpired") };
   const session = await resolvePortalSession(token);
-  if (!session) return { ok: false, error: "Your session has expired." };
+  if (!session) return { ok: false, error: t("sessionExpired") };
   const parsed = signingViewSchema.safeParse(input);
-  if (!parsed.success) return { ok: false, error: "Invalid signing request." };
+  if (!parsed.success) return { ok: false, error: t("invalidSigningRequest") };
 
   const [request] = await db
     .select({
@@ -66,10 +69,10 @@ export async function createDocumentSigningViewAction(input: unknown): Promise<{
     ))
     .limit(1);
   if (!request || !request.documentId || !request.envelopeId) {
-    return { ok: false, error: "This signing request was not found." };
+    return { ok: false, error: t("signingRequestNotFound") };
   }
   if (request.signatureProvider !== "native" || request.signatureStatus !== "pending") {
-    return { ok: false, error: "This document is not available for portal signing." };
+    return { ok: false, error: t("notAvailableForSigning") };
   }
 
   const [recipient] = await db
@@ -83,7 +86,7 @@ export async function createDocumentSigningViewAction(input: unknown): Promise<{
     ))
     .orderBy(signatureRecipients.routingOrder, signatureRecipients.createdAt)
     .limit(1);
-  if (!recipient) return { ok: false, error: "This signing request is not ready." };
+  if (!recipient) return { ok: false, error: t("signingNotReady") };
 
   const result = await rotateNativePortalSigningLink({
     workspaceId: session.workspaceId,
@@ -118,14 +121,15 @@ export async function submitDocumentRequestAction(input: {
   checksum: string;
   storageKey: string;
 }): Promise<PortalSubmitResult> {
+  const t = await getTranslations("server.portal.documents");
   const cookieStore = await cookies();
   const token = cookieStore.get(PORTAL_SESSION_COOKIE)?.value;
-  if (!token) return { ok: false, error: "Your session has expired." };
+  if (!token) return { ok: false, error: t("sessionExpired") };
   const session = await resolvePortalSession(token);
-  if (!session) return { ok: false, error: "Your session has expired." };
+  if (!session) return { ok: false, error: t("sessionExpired") };
 
   const parsed = submitSchema.safeParse(input);
-  if (!parsed.success) return { ok: false, error: "Invalid upload." };
+  if (!parsed.success) return { ok: false, error: t("invalidUpload") };
 
   const [request] = await db
     .select({
@@ -145,9 +149,9 @@ export async function submitDocumentRequestAction(input: {
       ),
     )
     .limit(1);
-  if (!request) return { ok: false, error: "This document request was not found." };
+  if (!request) return { ok: false, error: t("requestNotFound") };
   if (!canCandidateUpload(request.status)) {
-    return { ok: false, error: "This document can no longer be uploaded." };
+    return { ok: false, error: t("cannotUpload") };
   }
 
   const name = parsed.data.originalName.replace(/[\r\n]/g, "").slice(0, 255);
@@ -178,7 +182,7 @@ export async function submitDocumentRequestAction(input: {
           createdById: request.requestedById ?? null,
         })
         .returning({ id: documents.id });
-      if (!document) throw new Error("Document could not be saved.");
+      if (!document) throw new Error(t("documentNotSaved"));
 
       await tx.insert(documentVersions).values({
         workspaceId: session.workspaceId,
@@ -229,7 +233,7 @@ export async function submitDocumentRequestAction(input: {
           ),
         )
         .returning({ id: documentRequests.id });
-      if (!advanced) throw new Error("This document was already submitted.");
+      if (!advanced) throw new Error(t("alreadySubmitted"));
       if (request.packageId) await reconcileDocumentRequestPackage(tx, { workspaceId: session.workspaceId, packageId: request.packageId });
 
       await tx.insert(activityEvents).values({
@@ -257,7 +261,10 @@ export async function submitDocumentRequestAction(input: {
           title: "Document submitted",
           body: `${candidateName} uploaded "${request.title}" for review.`,
           href: `/dashboard/candidates/${session.candidateId}`,
-          metadata: { requestId: request.id, applicationId: request.applicationId },
+          metadata: withNotificationCopy(
+            { requestId: request.id, applicationId: request.applicationId },
+            { key: "documentSubmitted", values: { candidateName, documentTitle: request.title } },
+          ),
           dedupeKey: `doc-request-submit-${request.id}-${document.id}`,
         });
       }
@@ -266,7 +273,7 @@ export async function submitDocumentRequestAction(input: {
     log.error({ error, requestId: request.id }, "submitDocumentRequestAction failed");
     return {
       ok: false,
-      error: error instanceof Error ? error.message : "Could not submit the document.",
+      error: error instanceof Error ? error.message : t("submitFailed"),
     };
   }
 

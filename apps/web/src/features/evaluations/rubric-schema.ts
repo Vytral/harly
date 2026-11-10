@@ -56,11 +56,14 @@ export interface EffectiveRubricCriterion {
  * caller error. Returns an error message, or null when gates are valid.
  * Rejects explicitly rather than silently coercing so recruiters see why.
  */
-export function validateRubricGates(criteria: EvaluationCriterionInput[]): string | null {
+export function validateRubricGates(
+  criteria: EvaluationCriterionInput[],
+  t: (key: string, values: { key: string }) => string,
+): string | null {
   const invalid = criteria.find(
     (criterion) => !criterion.excluded && criterion.isKnockout && criterion.importance !== "required",
   );
-  return invalid ? `Knockout requires required importance ("${invalid.key}").` : null;
+  return invalid ? t("knockoutNeedsRequired", { key: invalid.key }) : null;
 }
 
 /**

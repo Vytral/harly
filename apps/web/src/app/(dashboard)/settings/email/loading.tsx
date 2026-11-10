@@ -1,3 +1,5 @@
+import { getTranslations } from "next-intl/server";
+
 import { Card } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 
@@ -40,10 +42,11 @@ function StatusCardSkeleton({ titleWidth, descWidth }: { titleWidth: string; des
  * Mirrors settings/email/page.tsx: the email delivery status card, the reply
  * handling status card, and the delivery log card below them.
  */
-export default function EmailSettingsLoading() {
+export default async function EmailSettingsLoading() {
+  const t = await getTranslations("pages.settingsEmail.loading");
   return (
     <div aria-busy="true" className="space-y-6">
-      <span className="sr-only">Loading…</span>
+      <span className="sr-only">{t("loading")}</span>
 
       <StatusCardSkeleton titleWidth="w-32" descWidth="w-[30rem]" />
       <StatusCardSkeleton titleWidth="w-36" descWidth="w-[28rem]" />

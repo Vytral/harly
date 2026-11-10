@@ -13,6 +13,16 @@ operators. How to cut a release is in [RELEASING.md](RELEASING.md). The
 
 ## [Unreleased]
 
+### Added
+
+- The web app is available in English, Spanish, French, German, Brazilian
+  Portuguese and Dutch. Harly picks the language from the browser, and each
+  person can change it in Settings → Account or on the sign-in and onboarding
+  screens. Interview emails go out in the candidate's language. Translations
+  are managed through Crowdin (`crowdin.yml`); see `CONTRIBUTING.md`.
+- Notifications, default pipeline stage names, duplicate-candidate prompts and
+  the built-in email, job and document templates show in the viewer's language.
+
 ### Changed
 
 - GitHub Releases now carry the full changelog section for their version,
@@ -21,6 +31,12 @@ operators. How to cut a release is in [RELEASING.md](RELEASING.md). The
 - The README and documentation use the globally installed CLI
   (`npm install -g @harly/cli`, then `harly <command>`); `npx @harly/cli`
   still works for one-off use.
+
+### Fixed
+
+- The job editor form now uses the full width on narrow windows, scrolls from
+  anywhere on the page, and no longer loads the live preview unless there is
+  room to show it.
 
 ## [0.4.0] - 2026-11-08
 

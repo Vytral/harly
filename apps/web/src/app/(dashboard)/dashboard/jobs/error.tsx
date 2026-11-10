@@ -1,6 +1,7 @@
 "use client";
 
 import { RouteError } from "@/components/ui/route-error";
+import { useTranslations } from "next-intl";
 
 export default function JobsError({
   error,
@@ -9,5 +10,6 @@ export default function JobsError({
   error: Error & { digest?: string };
   reset: () => void;
 }) {
-  return <RouteError error={error} reset={reset} title="Jobs could not load" />;
+  const t = useTranslations("jobs.list");
+  return <RouteError error={error} reset={reset} title={t("loadError")} />;
 }

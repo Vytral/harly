@@ -5,6 +5,7 @@ import { signWebhookPayload } from "@harly/api";
 
 import {
   VERIFY_SNIPPETS,
+  type WebhookTranslator,
   endpointHealth,
   formatDuration,
   groupWebhookEvents,
@@ -13,6 +14,9 @@ import {
   shortUrl,
   summarizeDeliveries,
 } from "./webhook-ui";
+
+// Stub translator: returns the catalog key, so assertions check the key path.
+const t = ((key: string) => key) as unknown as WebhookTranslator;
 
 const events = [
   { value: "application.created", label: "Application submitted" },
@@ -23,10 +27,10 @@ const events = [
 
 describe("groupWebhookEvents", () => {
   it("groups by prefix, keeps order, adds descriptions and an Other bucket", () => {
-    const groups = groupWebhookEvents(events);
+    const groups = groupWebhookEvents(events, t);
     expect(groups.map((g) => g.key)).toEqual(["application", "job", "other"]);
     expect(groups[0].events).toHaveLength(2);
-    expect(groups[0].events[0].description).toMatch(/applica/i);
+    expect(groups[0].events[0].description).toBe("eventDescriptions.applicationCreated");
     expect(groups[2].events[0].value).toBe("custom.thing");
   });
 });

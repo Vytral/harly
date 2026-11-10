@@ -1,14 +1,17 @@
 import { describe, expect, it, vi } from "vitest";
 
+import { makeT } from "@/test-support/translator";
 import { AI_PROVIDERS, AI_PROVIDER_IDS } from "./providers";
 import { getModel, resolveBaseUrl, splitAzureEndpoint } from "./registry";
+
+const tProviders = makeT("labels.ai.providers");
 
 describe("provider registry", () => {
   it("has one catalog entry per provider id, with stable fields", () => {
     expect(AI_PROVIDERS.map((p) => p.id).sort()).toEqual([...AI_PROVIDER_IDS].sort());
     for (const p of AI_PROVIDERS) {
       expect(p.label).toBeTruthy();
-      expect(p.tagline).toBeTruthy();
+      expect(tProviders(`${p.id}.tagline`), `${p.id} needs a tagline`).toBeTruthy();
       expect(p.modelExample).toBeTruthy();
       expect(p.allowedHosts.length).toBeGreaterThan(0);
     }

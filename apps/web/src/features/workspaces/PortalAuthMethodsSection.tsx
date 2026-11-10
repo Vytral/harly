@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 
 import { savePortalAuthMethodsAction } from "@/features/workspaces/portal-settings-actions";
 import { Card } from "@/components/ui/card";
@@ -17,38 +18,24 @@ import {
   type PortalMethodKey,
 } from "@/lib/portal-auth-methods-core";
 
-const COPY: Record<PortalMethodKey, { title: string; description: string }> = {
-  password: {
-    title: "Password",
-    description:
-      "Candidates create an account with email and password. Works without any email or external service; recovery codes let them reset it.",
-  },
-  accessCode: {
-    title: "Access code",
-    description:
-      "One-time links you create from a candidate's record to give them first access by phone, chat or in person.",
-  },
-  magicLink: {
-    title: "Magic link (email)",
-    description: "Candidates receive a one-time sign-in link by email.",
-  },
-  google: { title: "Google", description: "Sign in with a Google account." },
-  github: { title: "GitHub", description: "Sign in with a GitHub account." },
-  linkedin: { title: "LinkedIn", description: "Sign in with a LinkedIn account." },
-  passkey: {
-    title: "Passkeys",
-    description:
-      "Candidates can add a passkey (fingerprint, face or device PIN) from their profile after signing in another way.",
-  },
-};
+type UnmetKey = "magicLink" | "google" | "github" | "linkedin";
+const UNMET_KEYS: readonly UnmetKey[] = ["magicLink", "google", "github", "linkedin"];
 
-const DISABLE_WARNING: Partial<Record<PortalMethodKey, string>> = {
-  password:
-    "Candidates who only use a password will no longer be able to sign in with it. Their accounts are kept.",
-  accessCode: "Existing unused access links will stop working.",
-  magicLink: "Sign-in links already sent will stop working.",
-  passkey: "Registered passkeys are kept but can't be used while this is off.",
-};
+function isUnmetKey(key: PortalMethodKey): key is UnmetKey {
+  return (UNMET_KEYS as readonly string[]).includes(key);
+}
+
+type DisableWarningKey = "password" | "accessCode" | "magicLink" | "passkey";
+const DISABLE_WARNING_KEYS: readonly DisableWarningKey[] = [
+  "password",
+  "accessCode",
+  "magicLink",
+  "passkey",
+];
+
+function hasDisableWarning(key: PortalMethodKey): key is DisableWarningKey {
+  return (DISABLE_WARNING_KEYS as readonly string[]).includes(key);
+}
 
 export function PortalAuthMethodsSection({
   config,
@@ -59,6 +46,8 @@ export function PortalAuthMethodsSection({
   requirements: PortalAuthRequirements;
   canEdit: boolean;
 }) {
+  const t = useTranslations("features.workspaces.portalAuthMethodsSection");
+  const tAuth = useTranslations("labels.portal.authMethods");
   const router = useRouter();
   const [state, setState] = useState(config);
   const [pending, start] = useTransition();
@@ -67,12 +56,16 @@ export function PortalAuthMethodsSection({
     const next = { ...state, [key]: value };
     const verdict = validatePortalAuthConfig(next, requirements);
     if (!verdict.ok) {
-      toast.error(verdict.error);
+      toast.error(tAuth(verdict.code));
       return;
     }
-    if (!value && DISABLE_WARNING[key]) {
+    const methodTitle = t(`methods.${key}.title`);
+    if (!value && hasDisableWarning(key)) {
       const ok = window.confirm(
-        `Turn off ${COPY[key].title}?\n\n${DISABLE_WARNING[key]}`,
+        t("confirmDisable", {
+          method: methodTitle,
+          warning: t(`disableWarning.${key}`),
+        }),
       );
       if (!ok) return;
     }
@@ -82,10 +75,14 @@ export function PortalAuthMethodsSection({
       const result = await savePortalAuthMethodsAction(next);
       if (!result.ok) {
         setState(previous);
-        toast.error(result.error ?? "Could not update.");
+        toast.error(result.error ?? t("couldNotUpdate"));
         return;
       }
-      toast.success(`${COPY[key].title} ${value ? "enabled" : "disabled"}`);
+      toast.success(
+        value
+          ? t("methodEnabled", { method: methodTitle })
+          : t("methodDisabled", { method: methodTitle }),
+      );
       router.refresh();
     });
   }
@@ -93,11 +90,10 @@ export function PortalAuthMethodsSection({
   return (
     <div>
       <h2 className="mb-1 text-sm font-semibold tracking-tight text-near-ink">
-        Sign-in methods
+        {t("title")}
       </h2>
       <p className="mb-3 text-xs text-muted-foreground">
-        Choose how candidates get into the portal. At least one method must stay
-        on. Password and access codes need nothing external.
+        {t("description")}
       </p>
       <Card className="gap-0 p-0">
         <SettingRows>
@@ -106,20 +102,21 @@ export function PortalAuthMethodsSection({
             const wouldLeaveNone =
               state[key] &&
               !validatePortalAuthConfig({ ...state, [key]: false }, requirements).ok;
-            const reason = missing
-              ? `${missing}. Set it up first.`
-              : wouldLeaveNone
-                ? "Last usable method: enable another one before turning this off."
-                : null;
+            const reason =
+              missing && isUnmetKey(key)
+                ? t(`unmet.${key}`)
+                : wouldLeaveNone
+                  ? t("lastUsable")
+                  : null;
             return (
               <SettingRow
                 key={key}
                 htmlFor={`portal-method-${key}`}
                 descriptionId={`portal-method-${key}-desc`}
-                title={COPY[key].title}
+                title={t(`methods.${key}.title`)}
                 description={
                   <>
-                    {COPY[key].description}
+                    {t(`methods.${key}.description`)}
                     {reason ? (
                       <span className="mt-1 block text-clay-strong">{reason}</span>
                     ) : null}

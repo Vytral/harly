@@ -1,14 +1,15 @@
 import type { Route } from "next";
+import { getTranslations } from "next-intl/server";
 
 import { CookiePreferencesButton } from "@/components/CookiePreferencesButton";
-import { LEGAL_PAGE_TITLES, type LegalIndexData } from "@/features/legal/data";
+import { getLegalPageTitles, type LegalIndexData } from "@/features/legal/data";
 
-const PAGE_DESCRIPTIONS: Record<string, string> = {
-  "privacy-policy": "How personal data is collected, used, and protected.",
-  "terms-of-service": "The rules and terms for using this service.",
-  "cookie-policy": "How cookies and similar technologies are used.",
-  "candidate-notice": "Privacy information specific to job applicants.",
-  "ai-transparency-notice": "How AI is used and reviewed in hiring decisions.",
+const PAGE_DESCRIPTION_KEYS: Record<string, string> = {
+  "privacy-policy": "privacyPolicy",
+  "terms-of-service": "termsOfService",
+  "cookie-policy": "cookiePolicy",
+  "candidate-notice": "candidateNotice",
+  "ai-transparency-notice": "aiTransparencyNotice",
 };
 
 /**
@@ -16,7 +17,7 @@ const PAGE_DESCRIPTIONS: Record<string, string> = {
  * Shares the header/footer/type treatment with LegalPageView so the two read
  * as one surface. Animates in on load (auth-card-enter / auth-stagger).
  */
-export function LegalIndexView({
+export async function LegalIndexView({
   data,
   legalBasePath,
   careersHref,
@@ -25,6 +26,9 @@ export function LegalIndexView({
   legalBasePath: string;
   careersHref: string;
 }) {
+  const t = await getTranslations("features.legal.legalIndexView");
+  const titles = await getLegalPageTitles();
+  const descriptionKey = (slug: string) => PAGE_DESCRIPTION_KEYS[slug];
   return (
     <div className="min-h-screen bg-paper text-foreground">
       <header className="sticky top-0 z-30 border-b border-hairline bg-paper/80 backdrop-blur-md">
@@ -56,7 +60,7 @@ export function LegalIndexView({
             href={careersHref as Route}
             className="text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
           >
-            ← Careers
+            {t("backToCareers")}
           </a>
         </div>
       </header>
@@ -64,14 +68,13 @@ export function LegalIndexView({
       <main className="mx-auto max-w-3xl px-6 py-12">
         <div className="auth-card-enter mb-10">
           <span className="inline-block rounded-full bg-sage/40 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-pine">
-            Legal
+            {t("legal")}
           </span>
           <h1 className="mt-3 font-display text-3xl font-bold tracking-tight text-foreground sm:text-4xl">
-            Legal &amp; privacy
+            {t("title")}
           </h1>
           <p className="mt-2 max-w-prose text-sm leading-relaxed text-muted-foreground">
-            The policies and notices that govern how {data.workspaceName}{" "}
-            handles data and works with candidates.
+            {t("intro", { workspaceName: data.workspaceName })}
           </p>
         </div>
 
@@ -85,7 +88,7 @@ export function LegalIndexView({
               >
                 <div className="flex items-center justify-between gap-2">
                   <h2 className="text-sm font-semibold text-foreground">
-                    {LEGAL_PAGE_TITLES[slug] ?? slug}
+                    {titles[slug] ?? slug}
                   </h2>
                   <span
                     aria-hidden
@@ -95,7 +98,9 @@ export function LegalIndexView({
                   </span>
                 </div>
                 <p className="text-xs leading-relaxed text-muted-foreground">
-                  {PAGE_DESCRIPTIONS[slug] ?? "Read the full document."}
+                  {descriptionKey(slug)
+                    ? t(`pageDescriptions.${descriptionKey(slug)}`)
+                    : t("readFullDocument")}
                 </p>
               </a>
             ))}
@@ -106,11 +111,10 @@ export function LegalIndexView({
               <ScaleIcon />
             </span>
             <h2 className="text-sm font-semibold text-foreground">
-              No legal pages published yet
+              {t("noPagesTitle")}
             </h2>
             <p className="mt-1.5 max-w-sm text-sm leading-6 text-muted-foreground">
-              {data.workspaceName} hasn&apos;t published any legal documents.
-              Check back later.
+              {t("noPagesDescription", { workspaceName: data.workspaceName })}
             </p>
           </div>
         )}
@@ -119,11 +123,14 @@ export function LegalIndexView({
       <footer className="border-t border-hairline">
         <div className="mx-auto flex max-w-3xl flex-col items-center justify-between gap-3 px-6 py-6 text-xs text-muted-foreground sm:flex-row">
           <span>
-            © {new Date().getFullYear()} {data.workspaceName}
+            {t("copyright", {
+              year: String(new Date().getFullYear()),
+              workspaceName: data.workspaceName,
+            })}
           </span>
           <div className="flex items-center gap-4">
             <a href={careersHref as Route} className="transition hover:text-foreground">
-              Careers
+              {t("careers")}
             </a>
             <CookiePreferencesButton className="hover:text-foreground" />
             {data.websiteUrl && (
@@ -133,20 +140,23 @@ export function LegalIndexView({
                 rel="noopener noreferrer"
                 className="transition hover:text-foreground"
               >
-                Website
+                {t("website")}
               </a>
             )}
             <span className="text-hairline">·</span>
             <span>
-              Powered by{" "}
-              <a
-                href="https://github.com/Vytral/harly"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="font-medium text-foreground transition hover:text-pine"
-              >
-                Harly
-              </a>
+              {t.rich("poweredBy", {
+                harly: (chunks) => (
+                  <a
+                    href="https://github.com/Vytral/harly"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="font-medium text-foreground transition hover:text-pine"
+                  >
+                    {chunks}
+                  </a>
+                ),
+              })}
             </span>
           </div>
         </div>

@@ -2,6 +2,7 @@
 
 import { useRef, useTransition } from "react";
 import { useState } from "react";
+import { useTranslations } from "next-intl";
 import { useRouter } from "next/navigation";
 import { Pencil, X } from "lucide-react";
 import { toast } from "@/lib/notification-island/toast";
@@ -17,7 +18,7 @@ import {
 import { getImageFileValidationError } from "@/lib/storage-validation";
 import { updateCandidateAvatarAction } from "@/features/candidates/actions";
 
-async function uploadImage(file: Blob): Promise<string> {
+async function uploadImage(file: Blob, t: ReturnType<typeof useTranslations>): Promise<string> {
   const presign = await fetch("/api/storage/presign", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -29,7 +30,7 @@ async function uploadImage(file: Blob): Promise<string> {
     }),
   });
 
-  if (!presign.ok) throw new Error("Could not prepare the upload.");
+  if (!presign.ok) throw new Error(t("prepareFailed"));
 
   const data = (await presign.json()) as {
     uploadUrl: string;
@@ -43,7 +44,7 @@ async function uploadImage(file: Blob): Promise<string> {
     body: file,
   });
 
-  if (!put.ok) throw new Error("Upload failed.");
+  if (!put.ok) throw new Error(t("uploadFailed"));
   return data.fileUrl;
 }
 
@@ -64,6 +65,8 @@ export function CandidateAvatarEdit({
   fallbackSrcs = [],
   className,
 }: CandidateAvatarEditProps) {
+  const t = useTranslations("features.candidates.CandidateAvatarEdit");
+  const tStorage = useTranslations("labels.storageValidation");
   const router = useRouter();
   const inputRef = useRef<HTMLInputElement>(null);
   const [saving, startTransition] = useTransition();
@@ -75,7 +78,7 @@ export function CandidateAvatarEdit({
 
   function handleFileSelect(file: File | null) {
     if (!file) return;
-    const error = getImageFileValidationError(file);
+    const error = getImageFileValidationError(file, tStorage);
     if (error) {
       toast.error(error);
       return;
@@ -89,7 +92,7 @@ export function CandidateAvatarEdit({
     setCropOpen(false);
     startTransition(async () => {
       try {
-        const url = await uploadImage(blob);
+        const url = await uploadImage(blob, t);
         setLocalAvatar(url);
         const result = await updateCandidateAvatarAction({
           candidateId,
@@ -97,13 +100,13 @@ export function CandidateAvatarEdit({
           avatarUrl: url,
         });
         if (!result.success) {
-          toast.error(result.error ?? "Could not update avatar.");
+          toast.error(result.error ?? t("updateFailed"));
           return;
         }
-        toast.success("Avatar updated.");
+        toast.success(t("updated"));
         router.refresh();
       } catch {
-        toast.error("Upload failed.");
+        toast.error(t("uploadFailed"));
       } finally {
         if (cropSrc) URL.revokeObjectURL(cropSrc);
         setCropSrc(null);
@@ -120,10 +123,10 @@ export function CandidateAvatarEdit({
         avatarUrl: null,
       });
       if (!result.success) {
-        toast.error(result.error ?? "Could not remove avatar.");
+        toast.error(result.error ?? t("removeFailed"));
         return;
       }
-      toast.success("Avatar removed.");
+      toast.success(t("removed"));
       router.refresh();
     });
   }
@@ -137,7 +140,7 @@ export function CandidateAvatarEdit({
           type="button"
           onClick={() => displaySrc ? setViewOpen(true) : inputRef.current?.click()}
           className="cursor-pointer rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-          aria-label={displaySrc ? "View photo" : "Add photo"}
+          aria-label={displaySrc ? t("viewPhoto") : t("addPhoto")}
         >
           <UserAvatar
             name={name}
@@ -151,7 +154,7 @@ export function CandidateAvatarEdit({
           type="button"
           onClick={(e) => { e.stopPropagation(); inputRef.current?.click(); }}
           disabled={saving}
-          aria-label="Change avatar"
+          aria-label={t("changeAvatar")}
           className="absolute bottom-0 right-0 flex size-7 items-center justify-center rounded-full border bg-card text-muted-foreground shadow-sm opacity-0 transition-all duration-150 ease-out group-hover:opacity-100 hover:bg-accent hover:text-foreground focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring active:scale-[0.97]"
         >
           <Pencil className="size-3.5" strokeWidth={1.8} />
@@ -161,7 +164,7 @@ export function CandidateAvatarEdit({
             type="button"
             onClick={removeAvatar}
             disabled={saving}
-            aria-label="Remove avatar"
+            aria-label={t("removeAvatar")}
             className="absolute -right-1 -top-1 flex size-5 items-center justify-center rounded-full border bg-card text-muted-foreground shadow-sm opacity-0 transition-all duration-150 group-hover:opacity-100 hover:bg-destructive/10 hover:text-destructive"
           >
             <X className="size-3" />
@@ -184,7 +187,7 @@ export function CandidateAvatarEdit({
         <Dialog open={viewOpen} onOpenChange={setViewOpen}>
           <DialogContent className="max-w-[min(24rem,calc(100%-2rem))] p-2">
             <DialogTitle className="sr-only">{name}</DialogTitle>
-            <DialogDescription className="sr-only">Photo of {name}</DialogDescription>
+            <DialogDescription className="sr-only">{t("photoOf", { name })}</DialogDescription>
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src={displaySrc}

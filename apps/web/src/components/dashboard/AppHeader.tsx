@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { useTranslations } from "next-intl";
 import { usePathname } from "next/navigation";
 import {
   ChevronDown,
@@ -103,6 +104,8 @@ export function AppHeader({
   assignableRoles,
   demoMode = false,
 }: AppHeaderProps) {
+  const t = useTranslations("shell.nav");
+  const roleText = useTranslations("shell.userMenu");
   const pathname = usePathname();
   const { stickyBarVisible } = useStickyBar();
   const [commandOpen, setCommandOpen] = useState(false);
@@ -165,7 +168,7 @@ export function AppHeader({
             <WorkspaceSwitcher
               workspace={workspace}
               workspaceOptions={workspaceOptions}
-              subtitle={formatRole(role)}
+              subtitle={roleText.has(`roles.${role}`) ? roleText(`roles.${role}`) : formatRole(role)}
               markUrl={markUrl}
               wordmark={wordmark}
             />
@@ -174,13 +177,13 @@ export function AppHeader({
           {/* Mobile: its own scrollable row under the logo/actions row.
               Desktop: centred between the switcher and the actions. */}
           <nav
-            aria-label="Main"
+            aria-label={t("main")}
             className="scrollbar-hide col-span-3 row-start-2 -mx-3 overflow-x-auto px-3 pb-2 md:col-span-1 md:col-start-2 md:row-start-1 md:mx-0 md:px-1 md:py-1 md:pb-1"
           >
             <LayoutGroup id="header-pills">
               <ul className="flex w-max items-center gap-1 md:mx-auto">
                 {groups.map((group) => (
-                  <li key={group.item.label}>
+                  <li key={group.item.messageKey}>
                     <NavPill
                       group={group}
                       active={group === activeGroup}
@@ -214,7 +217,7 @@ export function AppHeader({
                 <TooltipTrigger asChild>
                   <Link
                     href={settingsNav.href}
-                    aria-label="Settings"
+                    aria-label={t("settings")}
                     aria-current={settingsActive ? "page" : undefined}
                     className={cn(
                       headerRoundButton,
@@ -225,7 +228,7 @@ export function AppHeader({
                     <Settings className="size-[18px]" strokeWidth={1.8} />
                   </Link>
                 </TooltipTrigger>
-                <TooltipContent>Settings</TooltipContent>
+                <TooltipContent>{t("settings")}</TooltipContent>
               </Tooltip>
             ) : null}
             <NotificationsBell
@@ -245,7 +248,7 @@ export function AppHeader({
 
         {subNavItems && activeGroup ? (
           <SubNav
-            label={activeGroup.item.label}
+            label={t(activeGroup.item.messageKey)}
             icon={activeGroup.item.icon}
             items={subNavItems}
             pathname={pathname}
@@ -303,11 +306,12 @@ function ActivePillBackdrop() {
 }
 
 function CountBadge({ count }: { count: number }) {
+  const t = useTranslations("shell.nav");
   if (count <= 0) return null;
   return (
     <span className="font-chrome relative min-w-[18px] rounded-full bg-chartreuse-signal px-1.5 text-center text-[11px] leading-[18px] text-chartreuse-ink">
       {count > 99 ? "99+" : count}
-      <span className="sr-only"> pending</span>
+      <span className="sr-only"> {t("pending")}</span>
     </span>
   );
 }
@@ -321,6 +325,7 @@ function NavPill({
   active: boolean;
   counts: { inbox: number; tasks: number };
 }) {
+  const t = useTranslations("shell.nav");
   const { item } = group;
   const Icon = item.icon;
   const sources = group.children.length > 0 ? group.children : [item];
@@ -340,7 +345,7 @@ function NavPill({
     >
       {active ? <ActivePillBackdrop /> : null}
       <Icon className="relative size-[18px] shrink-0" strokeWidth={1.8} />
-      <span className="relative">{item.label}</span>
+      <span className="relative">{t(item.messageKey)}</span>
       <CountBadge count={count} />
     </Link>
   );
@@ -356,6 +361,7 @@ function MorePill({
   pathname: string;
   active: boolean;
 }) {
+  const t = useTranslations("shell.nav");
   const [open, setOpen] = useState(false);
 
   return (
@@ -371,7 +377,7 @@ function MorePill({
       >
         {active ? <ActivePillBackdrop /> : null}
         <LayoutGrid className="relative size-[18px] shrink-0" strokeWidth={1.8} />
-        <span className="relative">More</span>
+        <span className="relative">{t("more")}</span>
         <ChevronDown
           className={cn(
             "relative size-3.5 shrink-0 transition-transform duration-150 ease-out",
@@ -398,7 +404,7 @@ function MorePill({
               <li key={item.href}>
                 <Link
                   href={item.href}
-                  title={item.hint}
+                  title={item.hintKey ? t(item.hintKey) : undefined}
                   onClick={() => setOpen(false)}
                   aria-current={itemActive ? "page" : undefined}
                   className={cn(
@@ -418,7 +424,7 @@ function MorePill({
                     <Icon className="size-[18px]" strokeWidth={1.8} />
                   </span>
                   <span className="text-[12.5px] font-medium leading-4 text-near-ink">
-                    {item.label}
+                    {t(item.messageKey)}
                   </span>
                 </Link>
               </li>
@@ -432,6 +438,7 @@ function MorePill({
 
 /** Round search button; from `xl` it widens to show the ⌘K hint pill. */
 function SearchButton({ onClick }: { onClick: () => void }) {
+  const t = useTranslations("shell.nav");
   return (
     <Tooltip>
       <TooltipTrigger asChild>
@@ -439,7 +446,7 @@ function SearchButton({ onClick }: { onClick: () => void }) {
           id={COMMAND_MENU_TRIGGER_ID}
           type="button"
           onClick={onClick}
-          aria-label="Search"
+          aria-label={t("search")}
           aria-keyshortcuts="Meta+K Control+K /"
           className={cn(
             headerRoundButton,
@@ -453,7 +460,7 @@ function SearchButton({ onClick }: { onClick: () => void }) {
         </button>
       </TooltipTrigger>
       <TooltipContent className="flex items-center gap-2 xl:hidden">
-        Search
+        {t("search")}
         <kbd className="font-chrome text-[11px] text-quiet-mist">⌘K</kbd>
         <kbd className="font-chrome text-[11px] text-quiet-mist">/</kbd>
       </TooltipContent>

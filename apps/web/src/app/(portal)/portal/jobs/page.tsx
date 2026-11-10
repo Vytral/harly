@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { desc, eq, and, inArray, isNull } from "drizzle-orm";
 import type { Route } from "next";
+import { getTranslations } from "next-intl/server";
 
 import { applications, db, jobs } from "@harly/db";
 import { PORTAL_SESSION_COOKIE, resolvePortalSession } from "@/lib/portal-auth";
@@ -18,30 +19,54 @@ import { PortalEmptyState } from "@/features/portal/PortalEmptyState";
 
 export const dynamic = "force-dynamic";
 
-const WORKPLACE_LABELS: Record<string, string> = {
-  remote: "Remote",
-  hybrid: "Hybrid",
-  onsite: "On-site",
+type PortalT = Awaited<ReturnType<typeof getTranslations>>;
+
+const OTHER_DEPARTMENT = "Other";
+
+const WORKPLACE_KEYS: Record<string, "remote" | "hybrid" | "onsite"> = {
+  remote: "remote",
+  hybrid: "hybrid",
+  onsite: "onsite",
 };
 
-const EMPLOYMENT_LABELS: Record<string, string> = {
-  full_time: "Full-time",
-  part_time: "Part-time",
-  contract: "Contract",
-  internship: "Internship",
+const EMPLOYMENT_KEYS: Record<string, "fullTime" | "partTime" | "contract" | "internship"> = {
+  full_time: "fullTime",
+  part_time: "partTime",
+  contract: "contract",
+  internship: "internship",
 };
 
-function formatSalary(min: number | null, max: number | null, currency: string | null, period: string | null): string | null {
+function workplaceLabel(t: PortalT, value: string): string {
+  const key = WORKPLACE_KEYS[value];
+  return key ? t(`workplaceOptions.${key}`) : value;
+}
+
+function employmentLabel(t: PortalT, value: string): string {
+  const key = EMPLOYMENT_KEYS[value];
+  return key ? t(`employmentOptions.${key}`) : value;
+}
+
+function formatSalary(
+  t: PortalT,
+  min: number | null,
+  max: number | null,
+  currency: string | null,
+  period: string | null,
+): string | null {
   if (!min && !max) return null;
   const cur = currency ?? "USD";
-  const fmt = (v: number) => v >= 1000 ? `${cur} ${Math.round(v / 1000)}k` : `${cur} ${v}`;
-  const suffix = period === "monthly" ? "/mo" : "/yr";
-  if (min && max) return `${fmt(min)} – ${fmt(max)}${suffix}`;
-  if (min) return `From ${fmt(min)}${suffix}`;
-  return `Up to ${fmt(max!)}${suffix}`;
+  const fmt = (v: number) =>
+    v >= 1000
+      ? t("salary.thousandAmount", { currency: cur, value: Math.round(v / 1000) })
+      : t("salary.amount", { currency: cur, value: v });
+  const suffix = t(period === "monthly" ? "salary.perMonth" : "salary.perYear");
+  if (min && max) return t("salary.range", { min: fmt(min), max: fmt(max), period: suffix });
+  if (min) return t("salary.from", { amount: fmt(min), period: suffix });
+  return t("salary.upTo", { amount: fmt(max!), period: suffix });
 }
 
 export default async function PortalJobsPage() {
+  const t = await getTranslations("pages.portalJobs.page");
   const cookieStore = await cookies();
   const token = cookieStore.get(PORTAL_SESSION_COOKIE)?.value;
   if (!token) redirect("/portal/login" as Route);
@@ -94,7 +119,7 @@ export default async function PortalJobsPage() {
   const appliedByJob = new Map(appliedRows.map((row) => [row.jobId, row.id]));
 
   const byDept = openJobs.reduce<Record<string, typeof openJobs>>((acc, job) => {
-    const key = job.department ?? "Other";
+    const key = job.department ?? OTHER_DEPARTMENT;
     if (!acc[key]) acc[key] = [];
     acc[key].push(job);
     return acc;
@@ -105,19 +130,19 @@ export default async function PortalJobsPage() {
     <PortalShell>
       <div className="stagger-in mx-auto max-w-3xl space-y-8">
         <header className="pt-2">
-          <h1 className="text-[28px] font-semibold tracking-tight text-near-ink">Open roles</h1>
+          <h1 className="text-[28px] font-semibold tracking-tight text-near-ink">{t("title")}</h1>
           <p className="mt-1 text-[15px] text-soft-ink">
             {openJobs.length > 0
-              ? `${openJobs.length} open role${openJobs.length === 1 ? "" : "s"} across ${depts.length} team${depts.length === 1 ? "" : "s"}. Apply with your saved profile.`
-              : "New roles show up here as soon as they open."}
+              ? t("subtitleOpen", { roles: openJobs.length, teams: depts.length })
+              : t("subtitleEmpty")}
           </p>
         </header>
 
         {openJobs.length === 0 ? (
           <PortalEmptyState
             icon={BriefcaseIcon}
-            title="No open roles right now"
-            description="Check back soon. Your profile stays on file, so applying later takes a minute."
+            title={t("emptyTitle")}
+            description={t("emptyDescription")}
           />
         ) : (
           <div className="space-y-8">
@@ -125,14 +150,14 @@ export default async function PortalJobsPage() {
               <section key={dept} aria-labelledby={`dept-${dept}`}>
                 <div className="mb-3 flex items-center gap-3">
                   <h2 id={`dept-${dept}`} className="text-[13px] font-semibold uppercase tracking-wider text-soft-ink">
-                    {dept}
+                    {dept === OTHER_DEPARTMENT ? t("otherDepartment") : dept}
                   </h2>
                   <div className="h-px flex-1 bg-hairline" />
                   <span className="text-[12px] tabular-nums text-soft-ink">{byDept[dept].length}</span>
                 </div>
                 <ul className="space-y-2.5">
                   {byDept[dept].map((job) => {
-                    const salary = formatSalary(job.salaryMin, job.salaryMax, job.currency, job.salaryPeriod);
+                    const salary = formatSalary(t, job.salaryMin, job.salaryMax, job.currency, job.salaryPeriod);
                     const applicationId = appliedByJob.get(job.id);
                     return (
                       <li key={job.id}>
@@ -145,7 +170,7 @@ export default async function PortalJobsPage() {
                               <h3 className="min-w-0 truncate text-[15px] font-semibold text-near-ink">{job.title}</h3>
                               {applicationId ? (
                                 <StatusPill size="sm" tone="success">
-                                  Applied
+                                  {t("applied")}
                                 </StatusPill>
                               ) : null}
                             </div>
@@ -156,10 +181,8 @@ export default async function PortalJobsPage() {
                                   {job.location}
                                 </span>
                               ) : null}
-                              {job.workplaceType ? <span>{WORKPLACE_LABELS[job.workplaceType] ?? job.workplaceType}</span> : null}
-                              {job.employmentType ? (
-                                <span>{EMPLOYMENT_LABELS[job.employmentType] ?? job.employmentType}</span>
-                              ) : null}
+                              {job.workplaceType ? <span>{workplaceLabel(t, job.workplaceType)}</span> : null}
+                              {job.employmentType ? <span>{employmentLabel(t, job.employmentType)}</span> : null}
                               {salary ? (
                                 <span className="inline-flex items-center gap-1">
                                   <CurrencyDollarIcon className="size-3.5" />

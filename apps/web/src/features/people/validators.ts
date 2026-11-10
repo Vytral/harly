@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { normalizeEmailLocale } from "@harly/config/email-locale";
 
 import {
   RESERVED_USERNAMES,
@@ -18,23 +19,16 @@ const WEEKDAYS = [
   "sunday",
 ] as const;
 
+// Messages are stable keys under `server.people.username`; the server action
+// translates them, so the schema stays locale-free.
 export const usernameSchema = z
   .string()
   .trim()
-  .min(
-    USERNAME_MIN_LENGTH,
-    `Username must be at least ${USERNAME_MIN_LENGTH} characters.`,
-  )
-  .max(
-    USERNAME_MAX_LENGTH,
-    `Username must be at most ${USERNAME_MAX_LENGTH} characters.`,
-  )
-  .regex(
-    /^[a-z0-9_-]+$/,
-    "Username can only contain lowercase letters, numbers, hyphens, and underscores.",
-  )
+  .min(USERNAME_MIN_LENGTH, { message: "tooShort" })
+  .max(USERNAME_MAX_LENGTH, { message: "tooLong" })
+  .regex(/^[a-z0-9_-]+$/, { message: "invalidChars" })
   .refine((value) => !RESERVED_USERNAMES.has(value), {
-    message: "This username is reserved.",
+    message: "reserved",
   });
 
 const timeOfDaySchema = z
@@ -98,6 +92,27 @@ export const capacityHoursPerWeekSchema = z
   .max(168)
   .optional()
   .nullable();
+
+export const preferredEmailLocaleSchema = z.union([
+  z.string().trim().transform((value, ctx) => {
+    const locale = normalizeEmailLocale(value);
+    if (!locale) {
+      ctx.addIssue({
+        code: "custom",
+        message: "Choose one of the supported email languages.",
+      });
+      return z.NEVER;
+    }
+    return locale;
+  }),
+  z.null(),
+]);
+
+export const updateEmailPreferenceSchema = z.object({
+  preferredEmailLocale: preferredEmailLocaleSchema,
+});
+
+export type UpdateEmailPreferenceInput = z.input<typeof updateEmailPreferenceSchema>;
 
 export const updateProfileSchema = z.object({
   name: z.string().trim().min(1).max(200),

@@ -32,6 +32,8 @@ vi.mock("@/features/demo/sandbox-access", () => ({
 import { CAREER_PRESETS } from "./config";
 import { saveCareerPageConfigAction } from "./actions";
 
+vi.mock("next-intl/server", async () => (await import("@/test-support/intl-server-mock")).intlServerMock);
+
 describe("saveCareerPageConfigAction in the public demo", () => {
   afterEach(() => {
     vi.unstubAllEnvs();

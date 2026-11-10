@@ -74,6 +74,14 @@ vi.mock("@/lib/logger", () => ({
 }));
 
 import { db } from "@harly/db";
+import {
+  applicationReceivedCandidateSubject,
+  applicationReceivedRecruiterSubject,
+  candidateStageUpdateSubject,
+  interviewScheduledSubject,
+  offerExtendedSubject,
+  offerWithdrawnSubject,
+} from "@harly/emails";
 
 import { processEmailOutbox } from "./outbox-processor";
 
@@ -145,13 +153,22 @@ describe("email_outbox worker", () => {
   beforeEach(reset);
 
   it("sends the email and flips the offer + outbox to sent on success", async () => {
-    mocks.selectQueue.push([PENDING], [LOCKED], [OFFER_DRAFT], [APPLICATION_ACTIVE], [RECIPIENT]);
+    const row = { ...PENDING, payload: { ...PENDING.payload, recipientLocale: "pt-BR" } };
+    mocks.selectQueue.push([row], [LOCKED], [OFFER_DRAFT], [APPLICATION_ACTIVE], [RECIPIENT]);
     mocks.sendWorkspaceEmail.mockResolvedValue(true);
 
     const result = await processEmailOutbox({ workerId: WORKER });
 
     expect(result).toEqual({ processed: 1, sent: 1, failed: 0, skipped: 0 });
     expect(mocks.sendWorkspaceEmail).toHaveBeenCalledTimes(1);
+    const sentOptions = mocks.sendWorkspaceEmail.mock.calls[0][1] as {
+      subject: string;
+      react: { props: Record<string, unknown> };
+    };
+    expect(sentOptions.subject).toBe(
+      offerExtendedSubject({ companyName: "Acme", jobTitle: "Engineer", locale: "pt-BR" }),
+    );
+    expect(sentOptions.react.props.locale).toBe("pt-BR");
     const sentUpdates = mocks.updateCalls.filter((c) => c.set.status === "sent");
     expect(sentUpdates.length).toBeGreaterThan(0);
   });
@@ -219,6 +236,187 @@ describe("email_outbox worker", () => {
     expect(result).toEqual({ processed: 1, sent: 1, failed: 0, skipped: 0 });
     expect(mocks.sendWorkspaceEmail).toHaveBeenCalledTimes(1);
     expect(mocks.insertCanonicalMessage).not.toHaveBeenCalled();
+  });
+});
+
+describe("candidate locale snapshots on outbox delivery", () => {
+  beforeEach(reset);
+
+  it("uses the queued locale for pipeline subject and template", async () => {
+    const row = {
+      ...PENDING,
+      kind: "pipeline.stage",
+      payload: {
+        candidateEmail: "c@example.com",
+        candidateName: "Casey Doe",
+        jobTitle: "Engineer",
+        stageName: "Interview",
+        workspaceName: "Acme",
+        type: "stage",
+        recipientLocale: "de",
+      },
+    };
+    mocks.selectQueue.push([row], [LOCKED], [{ id: "cand-1" }]);
+    mocks.sendWorkspaceEmail.mockResolvedValue(true);
+    const result = await processEmailOutbox({ workerId: WORKER });
+    const sentOptions = mocks.sendWorkspaceEmail.mock.calls[0][1] as {
+      subject: string;
+      react: { props: Record<string, unknown> };
+    };
+
+    expect(result.sent).toBe(1);
+    expect(sentOptions.subject).toBe(
+      candidateStageUpdateSubject({ jobTitle: "Engineer", stageName: "Interview", locale: "de" }),
+    );
+    expect(sentOptions.react.props.locale).toBe("de");
+  });
+
+  it("keeps legacy outbox rows in English when they have no locale snapshot", async () => {
+    const row = {
+      ...PENDING,
+      kind: "pipeline.stage",
+      payload: {
+        candidateEmail: "c@example.com",
+        candidateName: "Casey Doe",
+        jobTitle: "Engineer",
+        stageName: "Interview",
+        workspaceName: "Acme",
+        type: "stage",
+      },
+    };
+    mocks.selectQueue.push([row], [LOCKED], [{ id: "cand-1" }]);
+    mocks.sendWorkspaceEmail.mockResolvedValue(true);
+    await processEmailOutbox({ workerId: WORKER });
+    const sentOptions = mocks.sendWorkspaceEmail.mock.calls[0][1] as {
+      subject: string;
+      react: { props: Record<string, unknown> };
+    };
+
+    expect(sentOptions.subject).toBe(
+      candidateStageUpdateSubject({
+        jobTitle: "Engineer",
+        stageName: "Interview",
+        locale: "en",
+      }),
+    );
+    expect(sentOptions.react.props.locale).toBe("en");
+  });
+
+  it("uses the queued locale for interview subject and template", async () => {
+    const row = {
+      ...PENDING,
+      kind: "interview.scheduled",
+      payload: {
+        candidateEmail: "c@example.com",
+        candidateName: "Casey Doe",
+        companyName: "Acme",
+        jobTitle: "Engineer",
+        scheduledAt: "2099-03-10T10:00:00.000Z",
+        recipientLocale: "fr",
+      },
+    };
+    mocks.selectQueue.push([row], [LOCKED], [{ id: "cand-1" }]);
+    mocks.sendWorkspaceEmail.mockResolvedValue(true);
+    const result = await processEmailOutbox({ workerId: WORKER });
+    const sentOptions = mocks.sendWorkspaceEmail.mock.calls[0][1] as {
+      subject: string;
+      react: { props: Record<string, unknown> };
+    };
+
+    expect(result.sent).toBe(1);
+    expect(sentOptions.subject).toBe(
+      interviewScheduledSubject({ companyName: "Acme", jobTitle: "Engineer", locale: "fr" }),
+    );
+    expect(sentOptions.react.props.locale).toBe("fr");
+  });
+
+  it("uses the queued locale for offer withdrawal subject and template", async () => {
+    const row = {
+      ...PENDING,
+      kind: "offer.withdrawn",
+      payload: {
+        candidateEmail: "c@example.com",
+        candidateName: "Casey",
+        companyName: "Acme",
+        jobTitle: "Engineer",
+        recipientLocale: "nl-NL",
+      },
+    };
+    mocks.selectQueue.push([row], [LOCKED], [{ id: "cand-1" }]);
+    mocks.sendWorkspaceEmail.mockResolvedValue(true);
+    const result = await processEmailOutbox({ workerId: WORKER });
+    const sentOptions = mocks.sendWorkspaceEmail.mock.calls[0][1] as {
+      subject: string;
+      react: { props: Record<string, unknown> };
+    };
+
+    expect(result.sent).toBe(1);
+    expect(sentOptions.subject).toBe(
+      offerWithdrawnSubject({ companyName: "Acme", jobTitle: "Engineer", locale: "nl-NL" }),
+    );
+    expect(sentOptions.react.props.locale).toBe("nl-NL");
+  });
+
+  it("uses the queued candidate locale for application receipt", async () => {
+    const row = {
+      ...PENDING,
+      kind: "application.received.candidate",
+      payload: {
+        candidateEmail: "c@example.com",
+        candidateFirstName: "Casey",
+        jobTitle: "Engineer",
+        workspaceName: "Acme",
+        recipientLocale: "es",
+      },
+    };
+    mocks.selectQueue.push([row], [LOCKED], [{ id: "cand-1" }]);
+    mocks.sendWorkspaceEmail.mockResolvedValue(true);
+    const result = await processEmailOutbox({ workerId: WORKER });
+    const sentOptions = mocks.sendWorkspaceEmail.mock.calls[0][1] as {
+      subject: string;
+      react: { props: Record<string, unknown> };
+    };
+
+    expect(result.sent).toBe(1);
+    expect(sentOptions.subject).toBe(
+      applicationReceivedCandidateSubject({
+        jobTitle: "Engineer",
+        companyName: "Acme",
+        locale: "es",
+      }),
+    );
+    expect(sentOptions.react.props.locale).toBe("es");
+  });
+
+  it("uses the recruiter's saved locale for application notifications", async () => {
+    const row = {
+      ...PENDING,
+      kind: "application.received.recruiter",
+      payload: {
+        ownerEmail: "owner@example.com",
+        candidateName: "Casey Doe",
+        candidateEmail: "c@example.com",
+        jobTitle: "Engineer",
+        recipientLocale: "de",
+      },
+    };
+    mocks.selectQueue.push([row], [LOCKED], [{ id: "cand-1" }]);
+    mocks.sendWorkspaceEmail.mockResolvedValue(true);
+    const result = await processEmailOutbox({ workerId: WORKER });
+    const sentOptions = mocks.sendWorkspaceEmail.mock.calls[0][1] as {
+      subject: string;
+      react: { props: Record<string, unknown> };
+    };
+
+    expect(result.sent).toBe(1);
+    expect(sentOptions.subject).toBe(
+      applicationReceivedRecruiterSubject({
+        candidateName: "Casey Doe",
+        jobTitle: "Engineer",
+        locale: "de",
+      }),
+    );
+    expect(sentOptions.react.props.locale).toBe("de");
   });
 });
 

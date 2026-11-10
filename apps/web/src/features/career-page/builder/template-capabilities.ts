@@ -11,8 +11,6 @@ import type { CareerTemplate } from "@/features/career-page/config";
 export type JobFilter = "department" | "location" | "type";
 
 export type TemplateCapabilities = {
-  label: string;
-  blurb: string;
   /** Thumbnail palette for the template picker. */
   swatch: { bg: string; accent: string; ink: string };
 
@@ -69,8 +67,6 @@ export type TemplateCapabilities = {
 
 export const TEMPLATE_CAPABILITIES: Record<CareerTemplate, TemplateCapabilities> = {
   minimal: {
-    label: "Minimal",
-    blurb: "Clean type, just the essentials",
     swatch: { bg: "#ffffff", accent: "#1a1a1a", ink: "#e6e6e6" },
     headline: true,
     subhead: true,
@@ -101,8 +97,6 @@ export const TEMPLATE_CAPABILITIES: Record<CareerTemplate, TemplateCapabilities>
     onAccentText: "readable",
   },
   playful: {
-    label: "Playful",
-    blurb: "Colorful, friendly, high-energy",
     swatch: { bg: "#FFF9E6", accent: "#f4c100", ink: "#f0e4b8" },
     headline: true,
     subhead: false,
@@ -133,8 +127,6 @@ export const TEMPLATE_CAPABILITIES: Record<CareerTemplate, TemplateCapabilities>
     onAccentText: "white",
   },
   ashby: {
-    label: "Ashby",
-    blurb: "Structured, sidebar filters",
     swatch: { bg: "#eef2fb", accent: "#4f5bd5", ink: "#cfd7ee" },
     headline: true,
     subhead: true,
@@ -165,8 +157,6 @@ export const TEMPLATE_CAPABILITIES: Record<CareerTemplate, TemplateCapabilities>
     onAccentText: "readable",
   },
   join: {
-    label: "Join",
-    blurb: "Company profile tabs, job-board style",
     swatch: { bg: "#ecf8f4", accent: "#0f9b7a", ink: "#c3e6db" },
     headline: true,
     subhead: true,
@@ -198,8 +188,6 @@ export const TEMPLATE_CAPABILITIES: Record<CareerTemplate, TemplateCapabilities>
   },
   // Read from ShowcaseTemplate.tsx; the Showcase author owns this entry.
   showcase: {
-    label: "Showcase",
-    blurb: "Editorial hero, stats, benefits, filterable jobs",
     swatch: { bg: "#f6f9ea", accent: "#a6e22e", ink: "#dbe6bd" },
     headline: true,
     subhead: true,
@@ -230,6 +218,15 @@ export const TEMPLATE_CAPABILITIES: Record<CareerTemplate, TemplateCapabilities>
     onAccentText: "readable",
   },
 };
+
+/** Translated display name of a template ("" renders Minimal). `t` is the `labels.careerPage.templates` translator. */
+export function templateLabel(
+  template: CareerTemplate | "",
+  t: (key: string) => string,
+): string {
+  const id = template && template in TEMPLATE_CAPABILITIES ? template : "minimal";
+  return t(`${id}.label`);
+}
 
 /** Capabilities for a config's template ("" renders Minimal). */
 export function capabilitiesFor(template: CareerTemplate | ""): TemplateCapabilities {

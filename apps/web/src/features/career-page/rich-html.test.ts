@@ -1,13 +1,15 @@
 import { describe, expect, it } from "vitest";
 
-import { sanitizeRichHtml } from "./rich-html";
+import { embedPlaceholderHtml, sanitizeRichHtml } from "./rich-html";
 import { accentOnSurface, contrastRatio, normalizeHex, readableInk, withAlpha } from "./color";
+
+const placeholder = embedPlaceholderHtml((key) => key);
 
 describe("sanitizeRichHtml", () => {
   it("keeps formatting and drops scripts, handlers and unsafe URLs", () => {
     const out = sanitizeRichHtml(
       '<h2>Hi</h2><p onclick="x()">a <strong>b</strong> <a href="javascript:alert(1)">bad</a> <a href="https://e.com" target="_blank">ok</a></p><script>alert(1)</script><img src="x" onerror="y()">',
-      { allowEmbeds: true },
+      { allowEmbeds: true, placeholder },
     );
     expect(out).toContain("<h2>Hi</h2>");
     expect(out).toContain("<strong>b</strong>");
@@ -17,13 +19,13 @@ describe("sanitizeRichHtml", () => {
 
   it("replaces iframes with the opt-in placeholder until embeds are allowed", () => {
     const html = '<p>x</p><iframe src="https://player.example.com/v"></iframe>';
-    expect(sanitizeRichHtml(html, { allowEmbeds: false })).toContain("data-allow-embeds");
-    expect(sanitizeRichHtml(html, { allowEmbeds: false })).not.toContain("<iframe");
-    expect(sanitizeRichHtml(html, { allowEmbeds: true })).toContain("<iframe");
+    expect(sanitizeRichHtml(html, { allowEmbeds: false, placeholder })).toContain("data-allow-embeds");
+    expect(sanitizeRichHtml(html, { allowEmbeds: false, placeholder })).not.toContain("<iframe");
+    expect(sanitizeRichHtml(html, { allowEmbeds: true, placeholder })).toContain("<iframe");
   });
 
   it("drops non-http iframe sources", () => {
-    const out = sanitizeRichHtml('<iframe src="javascript:alert(1)"></iframe>', { allowEmbeds: true });
+    const out = sanitizeRichHtml('<iframe src="javascript:alert(1)"></iframe>', { allowEmbeds: true, placeholder });
     expect(out).not.toContain("javascript:");
   });
 });

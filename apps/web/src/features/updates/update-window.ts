@@ -42,23 +42,26 @@ export function isValidTimezone(timezone: string): boolean {
   }
 }
 
+/** Stable code for why a window cannot be used; translated by the caller. */
+export type UpdateWindowProblem = "noDays" | "hours" | "sameHours" | "timezone";
+
 /** Why a window cannot be used, or null when it is valid. */
-export function validateUpdateWindow(window: UpdateWindow): string | null {
+export function validateUpdateWindow(window: UpdateWindow): UpdateWindowProblem | null {
   if (
     window.days.length === 0 ||
     window.days.some((day) => !Number.isInteger(day) || day < 1 || day > 7)
   ) {
-    return "Pick at least one day.";
+    return "noDays";
   }
   const hourOk = (hour: number) =>
     Number.isInteger(hour) && hour >= 0 && hour <= 23;
   if (!hourOk(window.startHour) || !hourOk(window.endHour)) {
-    return "Hours must be between 0 and 23.";
+    return "hours";
   }
   if (window.startHour === window.endHour) {
-    return "The window needs a start hour that differs from its end hour.";
+    return "sameHours";
   }
-  if (!isValidTimezone(window.timezone)) return "Unknown time zone.";
+  if (!isValidTimezone(window.timezone)) return "timezone";
   return null;
 }
 

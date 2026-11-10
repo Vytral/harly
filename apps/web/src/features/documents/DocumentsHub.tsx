@@ -1,5 +1,6 @@
 "use client";
 
+import { useLocale, useTranslations } from "next-intl";
 import { useConfirm } from "@/components/ui/confirm-dialog";
 import { useMemo, useRef, useState } from "react";
 import Link from "next/link";
@@ -96,13 +97,17 @@ export type DocumentsHubFilters = {
 
 const DAY = 86_400_000;
 const FOCUSES: HubFocus[] = ["active", "pending", "expiring", "lapsed", "archived"];
-const SORT_LABELS: Record<string, string> = {
-  "updated:desc": "Recently updated",
-  "updated:asc": "Oldest update",
-  "name:asc": "Name A to Z",
-  "name:desc": "Name Z to A",
-  "expires:asc": "Expires soonest",
-};
+type Translator = ReturnType<typeof useTranslations>;
+
+function sortLabels(t: Translator): Record<string, string> {
+  return {
+    "updated:desc": t("sortOptions.recentlyUpdated"),
+    "updated:asc": t("sortOptions.oldestUpdate"),
+    "name:asc": t("sortOptions.nameAsc"),
+    "name:desc": t("sortOptions.nameDesc"),
+    "expires:asc": t("sortOptions.expiresSoonest"),
+  };
+}
 
 const TONE_TO_PILL = {
   neutral: "neutral",
@@ -124,7 +129,8 @@ function matchesFocus(document: DocumentListItem, focus: HubFocus, now: number) 
 }
 
 function StateCell({ document }: { document: DocumentListItem }) {
-  const state = documentStateMeta(document);
+  const tLabels = useTranslations("labels.documents");
+  const state = documentStateMeta(document, tLabels);
   return (
     <StatusPill size="sm" tone={TONE_TO_PILL[state.tone]}>
       {state.label}
@@ -133,26 +139,30 @@ function StateCell({ document }: { document: DocumentListItem }) {
 }
 
 function ExpiresCell({ document }: { document: DocumentListItem }) {
-  const hint = describeExpiry(document.expiresAt);
-  if (!document.expiresAt || !hint) return <span className="text-quiet-mist">No date</span>;
+  const t = useTranslations("features.documents.documentsHub");
+  const tLabels = useTranslations("labels.documents");
+  const locale = useLocale();
+  const hint = describeExpiry(document.expiresAt, tLabels);
+  if (!document.expiresAt || !hint) return <span className="text-quiet-mist">{t("noDate")}</span>;
   return (
     <span
       className={cn(
         hint.tone === "danger" && document.signatureStatus !== "signed" && "text-danger-rust",
         hint.tone === "warning" && "text-warning-clay",
       )}
-      title={hint.days < 0 ? `Passed ${hint.label}` : `Expires ${hint.label}`}
+      title={hint.days < 0 ? t("passedTitle", { label: hint.label }) : t("expiresTitle", { label: hint.label })}
     >
-      {formatDate(document.expiresAt)}
+      {formatDate(document.expiresAt, locale)}
     </span>
   );
 }
 
 function OwnerCell({ document }: { document: DocumentListItem }) {
+  const t = useTranslations("features.documents.documentsHub");
   return document.ownerId ? (
     <>
       <UserAvatar
-        name={document.ownerName ?? "Workspace"}
+        name={document.ownerName ?? t("workspace")}
         src={document.ownerImage}
         size="sm"
         className="size-5 text-[9px]"
@@ -160,7 +170,7 @@ function OwnerCell({ document }: { document: DocumentListItem }) {
       <span className="truncate">{document.ownerName}</span>
     </>
   ) : (
-    <span>Workspace</span>
+    <span>{t("workspace")}</span>
   );
 }
 
@@ -177,6 +187,7 @@ function EmptyState({
   onGenerate: () => void;
   onClear: () => void;
 }) {
+  const t = useTranslations("features.documents.documentsHub");
   const empty = data.documents.length === 0;
   return (
     <div className="flex min-h-64 flex-col items-center justify-center gap-1.5 px-6 py-14 text-center">
@@ -184,29 +195,29 @@ function EmptyState({
         <FolderCog className="size-5" />
       </span>
       <p className="text-[15px] font-semibold text-near-ink">
-        {empty ? "Your document library is empty" : "No documents match these filters"}
+        {empty ? t("emptyLibraryTitle") : t("noMatchesTitle")}
       </p>
       <p className="max-w-sm text-sm leading-6 text-soft-ink">
         {empty
-          ? "Drag files anywhere on this page, upload one, or generate an offer letter or agreement from a template."
-          : "Try a broader search or clear the filters."}
+          ? t("emptyLibraryHint")
+          : t("noMatchesHint")}
       </p>
       <div className="mt-4 flex flex-wrap justify-center gap-2">
         {empty && data.canManage ? (
           <>
             <Button size="sm" onClick={onUpload}>
               <Upload className="size-4" />
-              Upload first document
+              {t("uploadFirst")}
             </Button>
             <Button size="sm" variant="outline" onClick={onGenerate}>
               <FileText className="size-4" />
-              Generate from template
+              {t("generateFromTemplate")}
             </Button>
           </>
         ) : null}
         {!empty && filtered ? (
           <Button size="sm" variant="outline" onClick={onClear}>
-            Clear filters
+            {t("clearFilters")}
           </Button>
         ) : null}
       </div>
@@ -224,6 +235,7 @@ function LinkedPicker({
   value: Linked;
   onChange: (next: Linked) => void;
 }) {
+  const t = useTranslations("features.documents.documentsHub");
   const [open, setOpen] = useState(false);
   const current = value
     ? options.find((option) => option.type === value.type && option.id === value.id)
@@ -233,24 +245,24 @@ function LinkedPicker({
       <PopoverTrigger asChild>
         <button
           type="button"
-          aria-label="Filter by linked candidate or job"
+          aria-label={t("linkedPicker.label")}
           className={cn(
             "inline-flex h-9 items-center gap-1.5 rounded-full border border-transparent bg-soft-kraft px-3.5 text-[13px] outline-none hover:bg-row-wash focus-visible:ring-[3px] focus-visible:ring-near-ink/20",
             value && "bg-sage-wash",
           )}
         >
-          <span className="text-soft-ink">Linked to</span>
+          <span className="text-soft-ink">{t("filters.linkedTo")}</span>
           <span className="max-w-32 truncate font-medium text-near-ink">
-            {current?.label ?? (value ? "Selected" : "Anyone")}
+            {current?.label ?? (value ? t("linkedPicker.selected") : t("filters.anyone"))}
           </span>
           <ChevronsUpDown className="size-3.5 text-quiet-mist" />
         </button>
       </PopoverTrigger>
       <PopoverContent align="start" className="w-72 p-0">
         <Command>
-          <CommandInput placeholder="Search candidates and jobs" />
+          <CommandInput placeholder={t("linkedPicker.searchPlaceholder")} />
           <CommandList>
-            <CommandEmpty>Nothing found.</CommandEmpty>
+            <CommandEmpty>{t("linkedPicker.nothingFound")}</CommandEmpty>
             {value ? (
               <CommandGroup>
                 <CommandItem
@@ -260,12 +272,12 @@ function LinkedPicker({
                   }}
                 >
                   <X className="size-4" />
-                  Clear selection
+                  {t("linkedPicker.clearSelection")}
                 </CommandItem>
               </CommandGroup>
             ) : null}
             {(["candidate", "job"] as const).map((type) => (
-              <CommandGroup key={type} heading={type === "candidate" ? "Candidates" : "Jobs"}>
+              <CommandGroup key={type} heading={type === "candidate" ? t("linkedPicker.candidates") : t("linkedPicker.jobs")}>
                 {options
                   .filter((option) => option.type === type)
                   .map((option) => (
@@ -303,6 +315,7 @@ function SortHeader({
   dir: SortDir;
   onSort: (key: SortKey) => void;
 }) {
+  const t = useTranslations("features.documents.documentsHub");
   return (
     <button
       type="button"
@@ -311,7 +324,7 @@ function SortHeader({
     >
       {label}
       {active ? dir === "asc" ? <ArrowUp className="size-3" /> : <ArrowDown className="size-3" /> : null}
-      {active ? <span className="sr-only">{dir === "asc" ? ", sorted ascending" : ", sorted descending"}</span> : null}
+      {active ? <span className="sr-only">{dir === "asc" ? t("sortedAscending") : t("sortedDescending")}</span> : null}
     </button>
   );
 }
@@ -327,6 +340,10 @@ export function DocumentsHub({
 }) {
   const router = useRouter();
   const confirm = useConfirm();
+  const t = useTranslations("features.documents.documentsHub");
+  const tLabels = useTranslations("labels.documents");
+  const locale = useLocale();
+  const sortLabelMap = sortLabels(t);
   const [query, setQuery] = useState(initialFilters.q ?? "");
   const [category, setCategory] = useState(initialFilters.category ?? "all");
   const [focus, setFocus] = useState<HubFocus>(
@@ -486,7 +503,7 @@ export function DocumentsHub({
       else valid.push(file);
     }
     if (valid.length === 0) {
-      toast.error("No files could be uploaded. Use PDF, DOCX, or image files up to 25 MB.");
+      toast.error(t("toasts.noFilesUploaded"));
       return;
     }
     // Files dropped on a filtered view land where that view is looking.
@@ -518,9 +535,11 @@ export function DocumentsHub({
     setUploadProgress(null);
     if (uploaded > 0)
       toast.success(
-        `${uploaded} document${uploaded === 1 ? "" : "s"} uploaded${linkedName ? ` to ${linkedName}` : ""}`,
+        linkedName
+          ? t("toasts.uploadedToLinked", { count: uploaded, name: linkedName })
+          : t("toasts.uploadedCount", { count: uploaded }),
       );
-    if (rejected > 0) toast.error(`${rejected} file${rejected === 1 ? "" : "s"} could not be uploaded`);
+    if (rejected > 0) toast.error(t("toasts.rejectedCount", { count: rejected }));
     router.refresh();
   }
 
@@ -528,7 +547,7 @@ export function DocumentsHub({
     void (async () => {
       const result = await action();
       if (!result.ok) {
-        toast.error(result.error ?? "Bulk action failed.");
+        toast.error(result.error ?? t("toasts.bulkFailed"));
         return;
       }
       toast.success(result.error ?? success);
@@ -541,22 +560,22 @@ export function DocumentsHub({
     if (
       !(await confirm({
         tone: "destructive",
-        title: `Delete ${selectedInView.length} document${selectedInView.length === 1 ? "" : "s"} permanently?`,
-        description: "They are removed for everyone, along with their version history. This cannot be undone.",
-        confirmLabel: `Delete ${selectedInView.length} document${selectedInView.length === 1 ? "" : "s"}`,
+        title: t("deleteTitle", { count: selectedInView.length }),
+        description: t("deleteDescription"),
+        confirmLabel: t("deleteConfirm", { count: selectedInView.length }),
       }))
     )
       return;
-    runBulk(() => bulkDeleteDocuments({ documentIds: selectedInView }), "Documents deleted");
+    runBulk(() => bulkDeleteDocuments({ documentIds: selectedInView }), t("toasts.documentsDeleted"));
   }
 
   const inArchive = focus === "archived";
   const tiles: Array<{ key: HubFocus; label: string; tone?: string }> = [
-    { key: "active", label: "Active" },
-    { key: "pending", label: "Awaiting signature", tone: "text-warning-clay" },
-    { key: "expiring", label: "Expiring in 30 days", tone: "text-warning-clay" },
-    { key: "lapsed", label: "Date passed", tone: "text-danger-rust" },
-    { key: "archived", label: "Archived" },
+    { key: "active", label: t("tiles.active") },
+    { key: "pending", label: t("tiles.awaitingSignature"), tone: "text-warning-clay" },
+    { key: "expiring", label: t("tiles.expiring"), tone: "text-warning-clay" },
+    { key: "lapsed", label: t("tiles.datePassed"), tone: "text-danger-rust" },
+    { key: "archived", label: t("tiles.archived") },
   ];
 
   return (
@@ -588,28 +607,28 @@ export function DocumentsHub({
       }}
     >
       <DropOverlay active={pageDragging}>
-        Drop files to upload {linkedName ? `to ${linkedName}` : "to the workspace library"}
+        {linkedName ? t("dropToLinked", { name: linkedName }) : t("dropToWorkspace")}
       </DropOverlay>
       <DocumentsWorkspaceTabs active="files" canReadDocuments canManageTemplates={canManageTemplates} />
       <PageHeader
         className="duration-500 animate-in fade-in slide-in-from-bottom-1"
-        title="Documents"
-        description="A secure home for the files that move candidates, offers, and hiring decisions forward."
+        title={t("title")}
+        description={t("description")}
         actions={
           <>
             <Button variant="outline" onClick={() => setCategoriesOpen(true)}>
               <FolderCog className="size-4" />
-              Categories
+              {t("categories")}
             </Button>
             {data.canManage ? (
               <>
                 <Button variant="outline" onClick={() => setGenerateOpen(true)}>
                   <FileText className="size-4" />
-                  Generate document
+                  {t("generateDocument")}
                 </Button>
                 <Button onClick={() => setUploadOpen(true)} disabled={uploadProgress !== null}>
                   <Upload className="size-4" />
-                  {uploadProgress ? `Uploading ${uploadProgress.done}/${uploadProgress.total}…` : "Upload document"}
+                  {uploadProgress ? t("uploading", { done: uploadProgress.done, total: uploadProgress.total }) : t("uploadDocument")}
                 </Button>
               </>
             ) : null}
@@ -620,8 +639,10 @@ export function DocumentsHub({
         <Callout tone="info" className="py-2.5">
           <span className="flex items-center justify-between gap-3">
             <span>
-              Showing documents linked to <strong className="font-medium text-near-ink">{linkedName ?? "this " + linked.type}</strong>.
-              Files you drop here are linked to them too.
+              {t.rich("linkedNotice", {
+                name: linkedName ?? (linked.type === "candidate" ? t("thisCandidate") : t("thisJob")),
+                b: (chunks) => <strong className="font-medium text-near-ink">{chunks}</strong>,
+              })}
             </span>
             <button
               type="button"
@@ -629,7 +650,7 @@ export function DocumentsHub({
                 setLinked(null);
                 update("linked", null);
               }}
-              aria-label="Clear linked filter"
+              aria-label={t("clearLinkedFilter")}
               className="rounded-full p-1 text-soft-ink transition-colors hover:bg-soft-kraft hover:text-near-ink"
             >
               <X className="size-3.5" />
@@ -670,43 +691,43 @@ export function DocumentsHub({
                 setQuery(event.target.value);
                 update("q", event.target.value);
               }}
-              placeholder="Search documents, owners, or original names"
-              aria-label="Search documents"
+              placeholder={t("searchPlaceholder")}
+              aria-label={t("searchLabel")}
               className="h-9 rounded-full pl-10"
             />
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <FilterPill
-              label="Category"
+              label={t("filters.category")}
               value={category}
               onChange={(value) => {
                 setCategory(value);
                 update("category", value);
               }}
               options={["all", ...data.categories.filter((item) => item.active).map((item) => item.id)]}
-              labelMap={{ all: "All", ...Object.fromEntries(data.categories.map((item) => [item.id, item.name])) }}
+              labelMap={{ all: t("filters.all"), ...Object.fromEntries(data.categories.map((item) => [item.id, item.name])) }}
               allValue="all"
             />
             <FilterPill
-              label="Signature"
+              label={t("filters.signature")}
               value={signature}
               onChange={(value) => {
                 setSignature(value);
                 update("signature", value);
               }}
               options={["all", ...Object.keys(SIGNATURE_STATUS_META)]}
-              labelMap={{ all: "All", ...Object.fromEntries(Object.entries(SIGNATURE_STATUS_META).map(([key, item]) => [key, item.label])) }}
+              labelMap={{ all: t("filters.all"), ...Object.fromEntries(Object.keys(SIGNATURE_STATUS_META).map((key) => [key, tLabels(`signatureStatus.${key}`)])) }}
               allValue="all"
             />
             <FilterPill
-              label="Owner"
+              label={t("filters.owner")}
               value={mine ? "mine" : "all"}
               onChange={(value) => {
                 setMine(value === "mine");
                 update("mine", value === "mine");
               }}
               options={["all", "mine"]}
-              labelMap={{ all: "Anyone", mine: "Me" }}
+              labelMap={{ all: t("filters.anyone"), mine: t("filters.me") }}
               allValue="all"
             />
             <LinkedPicker
@@ -718,15 +739,15 @@ export function DocumentsHub({
               }}
             />
             <FilterPill
-              label="Sort"
+              label={t("filters.sort")}
               value={`${sort.key}:${sort.dir}`}
               onChange={(value) => {
                 const [key, dir] = value.split(":") as [SortKey, SortDir];
                 setSort({ key, dir });
                 update("sort", { key, dir });
               }}
-              options={Object.keys(SORT_LABELS)}
-              labelMap={SORT_LABELS}
+              options={Object.keys(sortLabelMap)}
+              labelMap={sortLabelMap}
               allValue="updated:desc"
             />
             <div className="flex shrink-0 items-center gap-0.5 rounded-full bg-soft-kraft p-1">
@@ -734,7 +755,7 @@ export function DocumentsHub({
                 <button
                   key={mode}
                   type="button"
-                  aria-label={mode === "list" ? "List view" : "Grid view"}
+                  aria-label={mode === "list" ? t("listView") : t("gridView")}
                   aria-pressed={view === mode}
                   onClick={() => setView(mode)}
                   className={`flex size-8 items-center justify-center rounded-full transition-colors ${view === mode ? "bg-pure-snow text-near-ink" : "text-soft-ink hover:text-near-ink"}`}
@@ -746,10 +767,10 @@ export function DocumentsHub({
           </div>
         </div>
         <p className="text-xs text-soft-ink" aria-live="polite">
-          {filtered.length} of {data.documents.length} document{data.documents.length === 1 ? "" : "s"}
+          {t("showingCount", { shown: filtered.length, total: data.documents.length })}
           {filtersActive ? (
             <button type="button" onClick={clearFilters} className="ml-2 font-medium text-near-ink underline underline-offset-2">
-              Clear filters
+              {t("clearFilters")}
             </button>
           ) : null}
         </p>
@@ -757,10 +778,10 @@ export function DocumentsHub({
       {data.canManage && selectedInView.length > 0 ? (
         <section className="flex flex-wrap items-center gap-2 rounded-[var(--radius-card)] bg-lime-wash px-4 py-2.5 animate-in fade-in slide-in-from-top-1">
           <span className="text-sm font-medium">
-            {selectedInView.length} selected
+            {t("selectedCount", { count: selectedInView.length })}
             {heldSelected.length > 0 ? (
               <span className="ml-2 font-normal text-soft-ink">
-                {heldSelected.length} under legal hold
+                {t("underLegalHold", { count: heldSelected.length })}
               </span>
             ) : null}
           </span>
@@ -773,13 +794,13 @@ export function DocumentsHub({
                 runBulk(
                   () => bulkSetDocumentStatus({ documentIds: archivableIds, status: "archived" }),
                   heldSelected.length > 0
-                    ? `${archivableIds.length} archived, ${heldSelected.length} skipped (legal hold)`
-                    : "Documents archived",
+                    ? t("toasts.archivedSkipped", { archived: archivableIds.length, skipped: heldSelected.length })
+                    : t("toasts.documentsArchived"),
                 )
               }
             >
               <Archive className="size-4" />
-              Archive{heldSelected.length > 0 && archivableIds.length > 0 ? ` ${archivableIds.length}` : ""}
+              {heldSelected.length > 0 && archivableIds.length > 0 ? t("archiveCount", { count: archivableIds.length }) : t("archive")}
             </Button>
             <Button
               size="sm"
@@ -788,12 +809,12 @@ export function DocumentsHub({
               onClick={() =>
                 runBulk(
                   () => bulkSetDocumentStatus({ documentIds: selectedInView, status: "active" }),
-                  "Documents restored",
+                  t("toasts.documentsRestored"),
                 )
               }
             >
               <ArchiveRestore className="size-4" />
-              Restore
+              {t("restore")}
             </Button>
             <Select
               value=""
@@ -805,15 +826,15 @@ export function DocumentsHub({
                       documentIds: selectedInView,
                       categoryId: value === "none" ? null : value,
                     }),
-                  "Category updated",
+                  t("toasts.categoryUpdated"),
                 )
               }
             >
-              <SelectTrigger size="sm" className="w-40 rounded-[var(--radius-btn)]" aria-label="Set category">
-                <SelectValue placeholder="Set category…" />
+              <SelectTrigger size="sm" className="w-40 rounded-[var(--radius-btn)]" aria-label={t("setCategory")}>
+                <SelectValue placeholder={t("setCategory")} />
               </SelectTrigger>
               <SelectContent position="popper" align="end">
-                <SelectItem value="none">No category</SelectItem>
+                <SelectItem value="none">{t("noCategory")}</SelectItem>
                 {data.categories
                   .filter((item) => item.active)
                   .map((item) => (
@@ -826,12 +847,12 @@ export function DocumentsHub({
             {data.canDelete ? (
               <Button size="sm" variant="destructive" onClick={bulkDelete}>
                 <Trash2 className="size-4" />
-                Delete
+                {t("delete")}
               </Button>
             ) : null}
             <Button size="sm" variant="ghost" onClick={clearSelection}>
               <X className="size-4" />
-              Clear
+              {t("clear")}
             </Button>
           </div>
         </section>
@@ -843,17 +864,17 @@ export function DocumentsHub({
           >
             {data.canManage ? (
               <span className="flex items-center">
-                <Checkbox checked={allInViewSelected} onCheckedChange={toggleSelectAll} aria-label="Select all" />
+                <Checkbox checked={allInViewSelected} onCheckedChange={toggleSelectAll} aria-label={t("selectAll")} />
               </span>
             ) : (
               <span />
             )}
-            <SortHeader label="Name" sortKey="name" active={sort.key === "name"} dir={sort.dir} onSort={onSort} />
-            <span className="uppercase">Status</span>
-            <span className="uppercase">Linked to</span>
-            <span className="uppercase">Owner</span>
-            <SortHeader label="Expires" sortKey="expires" active={sort.key === "expires"} dir={sort.dir} onSort={onSort} />
-            <SortHeader label="Updated" sortKey="updated" active={sort.key === "updated"} dir={sort.dir} onSort={onSort} />
+            <SortHeader label={t("columns.name")} sortKey="name" active={sort.key === "name"} dir={sort.dir} onSort={onSort} />
+            <span className="uppercase">{t("columns.status")}</span>
+            <span className="uppercase">{t("columns.linkedTo")}</span>
+            <span className="uppercase">{t("columns.owner")}</span>
+            <SortHeader label={t("columns.expires")} sortKey="expires" active={sort.key === "expires"} dir={sort.dir} onSort={onSort} />
+            <SortHeader label={t("columns.updated")} sortKey="updated" active={sort.key === "updated"} dir={sort.dir} onSort={onSort} />
           </div>
           {filtered.length === 0 ? (
             <EmptyState
@@ -880,7 +901,7 @@ export function DocumentsHub({
                           <Checkbox
                             checked={isSelected}
                             onCheckedChange={() => toggleSelected(document.id)}
-                            aria-label={`Select ${document.name}`}
+                            aria-label={t("selectItem", { name: document.name })}
                           />
                         </label>
                       </span>
@@ -897,8 +918,8 @@ export function DocumentsHub({
                       <span className="min-w-0">
                         <span className="block truncate text-sm font-medium text-near-ink">{document.name}</span>
                         <span className="mt-0.5 block truncate text-xs text-soft-ink">
-                          {documentTypeLabel(document.mimeType)} · {formatDocumentSize(document.sizeBytes)}
-                          <span className="md:hidden"> · {formatDate(document.updatedAt)}</span>
+                          {documentTypeLabel(document.mimeType, tLabels)} · {formatDocumentSize(document.sizeBytes)}
+                          <span className="md:hidden"> · {formatDate(document.updatedAt, locale)}</span>
                         </span>
                       </span>
                     </Link>
@@ -917,7 +938,7 @@ export function DocumentsHub({
                     <span className="hidden text-xs text-soft-ink md:block">
                       <ExpiresCell document={document} />
                     </span>
-                    <span className="hidden text-xs text-soft-ink md:block">{formatDate(document.updatedAt)}</span>
+                    <span className="hidden text-xs text-soft-ink md:block">{formatDate(document.updatedAt, locale)}</span>
                   </li>
                 );
               })}
@@ -950,7 +971,7 @@ export function DocumentsHub({
                       <Checkbox
                         checked={isSelected}
                         onCheckedChange={() => toggleSelected(document.id)}
-                        aria-label={`Select ${document.name}`}
+                        aria-label={t("selectItem", { name: document.name })}
                       />
                     </label>
                   </span>
@@ -964,15 +985,15 @@ export function DocumentsHub({
                   </span>
                   <span className="mt-3 line-clamp-2 text-sm font-medium text-near-ink">{document.name}</span>
                   <span className="mt-1 text-xs text-soft-ink">
-                    {documentTypeLabel(document.mimeType)} · {formatDocumentSize(document.sizeBytes)}
+                    {documentTypeLabel(document.mimeType, tLabels)} · {formatDocumentSize(document.sizeBytes)}
                   </span>
                   <span className="mt-1 truncate text-xs text-soft-ink">
-                    {document.associationLabels.join(" · ")} · {document.ownerName ?? "Workspace"}
+                    {document.associationLabels.join(" · ")} · {document.ownerName ?? t("workspace")}
                   </span>
                   <span className="mt-auto flex flex-wrap items-center gap-x-2 gap-y-1 pt-3">
                     <StateCell document={document} />
                     <span className="text-xs text-soft-ink">
-                      {document.expiresAt ? `Expires ${formatDate(document.expiresAt)}` : `Updated ${formatDate(document.updatedAt)}`}
+                      {document.expiresAt ? t("expiresOn", { date: formatDate(document.expiresAt, locale) }) : t("updatedOn", { date: formatDate(document.updatedAt, locale) })}
                     </span>
                   </span>
                 </Link>

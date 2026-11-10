@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { startRegistration } from "@simplewebauthn/browser";
 import { toast } from "@/lib/notification-island/toast";
 
@@ -19,6 +20,7 @@ import { Button } from "@/components/ui/button";
  */
 export function PasskeyQuickSetup() {
   const router = useRouter();
+  const t = useTranslations("features.security.passkeyQuickSetup");
   const [done, setDone] = useState(false);
   const [isPending, startTransition] = useTransition();
 
@@ -26,7 +28,7 @@ export function PasskeyQuickSetup() {
     startTransition(async () => {
       try {
         const optRes = await fetch("/api/passkey/register");
-        if (!optRes.ok) throw new Error("Failed to start passkey setup");
+        if (!optRes.ok) throw new Error(t("errors.startFailed"));
         const { challengeId, ...options } = await optRes.json();
 
         const attestation = await startRegistration({ optionsJSON: options });
@@ -38,16 +40,16 @@ export function PasskeyQuickSetup() {
         });
         if (!verRes.ok) {
           const err = await verRes.json();
-          throw new Error(err.error ?? "Passkey setup failed");
+          throw new Error(err.error ?? t("errors.setupFailed"));
         }
 
-        toast.success("Passkey registered");
+        toast.success(t("toasts.registered"));
         setDone(true);
         router.refresh();
       } catch (err: unknown) {
         // User dismissed the browser dialog , not an error.
         if (err instanceof Error && err.name === "NotAllowedError") return;
-        toast.error(err instanceof Error ? err.message : "Passkey setup failed");
+        toast.error(err instanceof Error ? err.message : t("errors.setupFailed"));
       }
     });
   }
@@ -56,7 +58,7 @@ export function PasskeyQuickSetup() {
     return (
       <div className="flex items-center gap-2.5 rounded-xl border border-pine/20 bg-sage/30 px-4 py-3">
         <CheckIcon className="size-4 text-pine" />
-        <p className="text-sm font-medium text-foreground">Passkey added.</p>
+        <p className="text-sm font-medium text-foreground">{t("added")}</p>
       </div>
     );
   }
@@ -67,11 +69,10 @@ export function PasskeyQuickSetup() {
         <FingerPrintDuotoneIcon className="mt-0.5 size-5 text-pine" />
         <span>
           <span className="block text-sm font-medium text-foreground">
-            Set up a passkey
+            {t("title")}
           </span>
           <span className="mt-0.5 block text-xs text-muted-foreground">
-            Sign in with your fingerprint, face, or security key , no password
-            needed.
+            {t("description")}
           </span>
         </span>
       </span>
@@ -87,7 +88,7 @@ export function PasskeyQuickSetup() {
         ) : (
           <FingerPrintDuotoneIcon className="mr-1.5 size-3.5" />
         )}
-        Add passkey
+        {t("addPasskey")}
       </Button>
     </div>
   );

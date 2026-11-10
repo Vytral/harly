@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useLocale, useTranslations } from "next-intl";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { Route } from "next";
@@ -24,26 +25,11 @@ const priorityVariant: Record<
   low: "neutral",
 };
 
-const priorityLabel: Record<MyDashboardTask["priority"], string> = {
-  urgent: "Urgent",
-  high: "High",
-  medium: "Medium",
-  low: "Low",
-};
-
 const dueStateClass: Record<string, string> = {
   overdue: "text-danger-rust",
   today: "text-warning-clay",
   soon: "text-soft-ink",
 };
-
-function formatDue(task: MyDashboardTask): string | null {
-  if (!task.dueDate) return null;
-  if (task.dueState === "overdue") return "Overdue";
-  if (task.dueState === "today") return "Due today";
-  const d = new Date(task.dueDate);
-  return `Due ${d.toLocaleDateString("en", { month: "short", day: "numeric" })}`;
-}
 
 const OPEN_TASKS_HREF = "/dashboard/tasks?owner=me&status=pending,in_progress" as Route;
 
@@ -59,6 +45,8 @@ export function MyTasksCard({
   tasks: { total: number; items: MyDashboardTask[] };
   className?: string;
 }) {
+  const t = useTranslations("shell.myTasks");
+  const locale = useLocale();
   const router = useRouter();
   const [completed, setCompleted] = useState<ReadonlySet<string>>(() => new Set());
 
@@ -71,7 +59,7 @@ export function MyTasksCard({
         next.delete(id);
         return next;
       });
-      toast.error(res.error ?? "Couldn't complete task.");
+      toast.error(res.error ?? t("completeError"));
       return;
     }
     router.refresh();
@@ -84,22 +72,22 @@ export function MyTasksCard({
     <Tile className={className}>
       <TileHeader
         icon={CheckSquare}
-        title="My tasks"
+        title={t("title")}
         count={total}
-        action={<TileLink href={OPEN_TASKS_HREF}>View all</TileLink>}
+        action={<TileLink href={OPEN_TASKS_HREF}>{t("viewAll")}</TileLink>}
       />
       <div className="flex flex-1 flex-col px-2 pb-3 pt-3">
         {items.length > 0 ? (
           <ul className="flex-1 flex flex-col gap-0.5">
             {items.map((task) => {
-              const due = formatDue(task);
+              const due = !task.dueDate ? null : task.dueState === "overdue" ? t("overdue") : task.dueState === "today" ? t("dueToday") : t("dueDate", { date: new Date(task.dueDate).toLocaleDateString(locale, { month: "short", day: "numeric" }) });
               return (
                 <li
                   key={task.id}
                   className="flex items-center gap-3 rounded-[var(--radius-md)] pl-3 pr-3 transition-colors hover:bg-row-wash"
                 >
                   <Checkbox
-                    aria-label={`Mark "${task.title}" as done`}
+                    aria-label={t("markDone", { title: task.title })}
                     checked={false}
                     onCheckedChange={() => void complete(task.id)}
                   />
@@ -121,7 +109,7 @@ export function MyTasksCard({
                       </div>
                     </div>
                     <Badge variant={priorityVariant[task.priority]} className="shrink-0">
-                      {priorityLabel[task.priority]}
+                      {t(task.priority)}
                     </Badge>
                   </Link>
                 </li>
@@ -129,20 +117,20 @@ export function MyTasksCard({
             })}
           </ul>
         ) : (
-          <EmptyHint icon={CheckSquare} text="No pending tasks. You're all caught up." />
+          <EmptyHint icon={CheckSquare} text={t("empty")} />
         )}
         {total > items.length ? (
           <Link
             href={OPEN_TASKS_HREF}
             className="mx-3 mt-1 rounded-[var(--radius-md)] px-3 py-2.5 text-center text-xs font-medium text-soft-ink transition hover:bg-row-wash"
           >
-            {total - items.length} more open tasks
+            {t("more", { count: total - items.length })}
           </Link>
         ) : null}
         <Button asChild variant="outline" size="sm" className="mt-2 w-full">
           <Link href={OPEN_TASKS_HREF}>
             <CheckSquare className="size-4" strokeWidth={1.8} />
-            Go to tasks
+            {t("goToTasks")}
           </Link>
         </Button>
       </div>

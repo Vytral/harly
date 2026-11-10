@@ -1,13 +1,10 @@
+import { getLocale } from "next-intl/server";
+
 import { listInterviewsForRange } from "@/features/interviews/data";
 import { CalendarBoard } from "@/features/interviews/CalendarBoard";
 import { listJobOptions } from "@/features/jobs/data";
 import { listWorkspaceMembers } from "@/features/jobs/hiring-team-data";
 import { requireAnyPagePermission } from "@/features/workspaces/permissions-server";
-
-const MONTH_LABEL_FORMAT = new Intl.DateTimeFormat("en", {
-  month: "long",
-  year: "numeric",
-});
 
 function parseMonthParam(raw: string | undefined): { year: number; month: number; param: string } {
   const now = new Date();
@@ -42,6 +39,7 @@ export default async function CalendarsPage({ searchParams }: CalendarsPageProps
     ? parseMonthParam(`${focus.year}-${String(focus.month).padStart(2, "0")}`)
     : parseMonthParam(monthRaw);
 
+  const locale = await getLocale();
   const monthStart = new Date(year, month - 1, 1);
   const gridStart = new Date(monthStart);
   gridStart.setDate(gridStart.getDate() - gridStart.getDay());
@@ -59,7 +57,7 @@ export default async function CalendarsPage({ searchParams }: CalendarsPageProps
       key={dateRaw ?? "month"}
       focusDate={focus ? `${param}-${String(focus.day).padStart(2, "0")}` : null}
       monthParam={param}
-      monthLabel={MONTH_LABEL_FORMAT.format(monthStart)}
+      monthLabel={new Intl.DateTimeFormat(locale, { month: "long", year: "numeric" }).format(monthStart)}
       interviews={interviews}
       jobOptions={jobs.map((j) => ({ value: j.id, label: j.title }))}
       interviewerOptions={members.map((m) => ({ value: m.userId, label: m.name }))}

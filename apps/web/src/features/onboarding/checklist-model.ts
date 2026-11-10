@@ -67,10 +67,13 @@ export type SetupChecklistModel = {
   showCard: boolean;
 };
 
+/** Translates a key under `labels.onboarding.checklist`. */
+export type ChecklistTranslate = (key: string) => string;
+
 type ItemDefinition = {
   key: ChecklistItemKey;
-  title: string;
-  value: string;
+  /** Stem of the `<stem>.title` and `<stem>.value` catalog keys. */
+  messageKey: string;
   href: string;
   /** Only optional steps can be skipped; required steps stay until done. */
   optional: boolean;
@@ -80,64 +83,56 @@ type ItemDefinition = {
 export const CHECKLIST_DEFINITIONS: readonly ItemDefinition[] = [
   {
     key: "create_job",
-    title: "Create your first job",
-    value: "Describe the role once, then share it from your careers page.",
+    messageKey: "createJob",
     href: "/dashboard/jobs/new",
     optional: false,
     done: (facts) => facts.jobCount > 0,
   },
   {
     key: "publish_job",
-    title: "Publish it",
-    value: "A published job appears on your careers page and takes applications.",
+    messageKey: "publishJob",
     href: "/dashboard/jobs",
     optional: false,
     done: (facts) => facts.publishedJobCount > 0,
   },
   {
     key: "pipeline_candidates",
-    title: "Get candidates into the pipeline",
-    value: "Load sample data to explore, share your job link, or import a CSV.",
+    messageKey: "pipelineCandidates",
     href: "/dashboard/candidates",
     optional: false,
     done: (facts) => facts.applicationCount > 0,
   },
   {
     key: "invite_teammate",
-    title: "Invite a teammate",
-    value: "Hiring goes faster with a second pair of eyes on every candidate.",
+    messageKey: "inviteTeammate",
     href: "/settings/members",
     optional: true,
     done: (facts) => facts.teammateInvited,
   },
   {
     key: "connect_email",
-    title: "Connect email",
-    value: "Send and track candidate emails from one inbox.",
+    messageKey: "connectEmail",
     href: "/settings/integrations",
     optional: false,
     done: (facts) => facts.emailConnected,
   },
   {
     key: "connect_calendar",
-    title: "Connect a calendar",
-    value: "Let candidates book interviews without the back-and-forth.",
+    messageKey: "connectCalendar",
     href: "/settings/integrations",
     optional: true,
     done: (facts) => facts.calendarConnected,
   },
   {
     key: "connect_ai",
-    title: "Connect AI (optional)",
-    value: "Bring your own provider to screen candidates and draft messages. Harly works fully without it.",
+    messageKey: "connectAi",
     href: "/settings/ai",
     optional: true,
     done: (facts) => facts.aiConfigured,
   },
   {
     key: "automate_workflow",
-    title: "Automate a workflow",
-    value: "Start from one of ten recipes for tagging, alerts and stage moves.",
+    messageKey: "automateWorkflow",
     href: "/dashboard/automations?recipes=1",
     optional: true,
     done: (facts) => facts.automationCount > 0,
@@ -180,9 +175,10 @@ export type ChecklistAction =
   | { type: "restore" }
   | { type: "skip"; key: string };
 
+/** `error` is a stable code the caller translates. */
 export type ChecklistTransition =
   | { ok: true; preferences: ChecklistPreferences }
-  | { ok: false; error: string };
+  | { ok: false; error: "not_skippable" };
 
 export function applyChecklistAction(
   current: ChecklistPreferences,
@@ -195,7 +191,7 @@ export function applyChecklistAction(
       return { ok: true, preferences: NO_CHECKLIST_PREFERENCES };
     case "skip": {
       if (!isSkippableChecklistKey(action.key)) {
-        return { ok: false, error: "That step cannot be skipped." };
+        return { ok: false, error: "not_skippable" };
       }
       const skipped = Array.from(new Set([...current.skipped, action.key]));
       return { ok: true, preferences: { ...current, skipped } };
@@ -224,6 +220,7 @@ export function buildSetupChecklist(input: {
   facts: ChecklistFacts;
   preferences: ChecklistPreferences;
   canManage: boolean;
+  t: ChecklistTranslate;
 }): SetupChecklistModel {
   const skipped = new Set<string>(
     normalizeSkippedKeys(input.preferences.skipped),
@@ -233,13 +230,13 @@ export function buildSetupChecklist(input: {
     const done = definition.done(input.facts);
     return {
       key: definition.key,
-      title: definition.title,
-      value: definition.value,
+      title: input.t(`${definition.messageKey}.title`),
+      value: input.t(`${definition.messageKey}.value`),
       href: definition.href,
       done,
       skipped: !done && skipped.has(definition.key),
       optional: definition.optional,
-      ctaLabel: done ? "Open" : "Start",
+      ctaLabel: done ? input.t("open") : input.t("start"),
     };
   });
 

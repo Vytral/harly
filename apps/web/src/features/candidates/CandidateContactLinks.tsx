@@ -1,6 +1,7 @@
 "use client";
 
 import type { ReactNode } from "react";
+import { useTranslations } from "next-intl";
 import { Globe, Mail, Phone } from "lucide-react";
 
 import { GithubIcon } from "@/components/ui/icons/GithubIcon";
@@ -62,16 +63,17 @@ export function CandidateContactLinks({
   githubUrl: string | null;
   websiteUrl: string | null;
 }) {
+  const t = useTranslations("features.candidates.contactLinks");
   return (
     <TooltipProvider delayDuration={150}>
       <div className="flex flex-wrap items-center gap-0.5">
         {email ? (
-          <ContactIconLink href={`mailto:${email}`} label="Email">
+          <ContactIconLink href={`mailto:${email}`} label={t("email")}>
             <Mail className="size-4" strokeWidth={1.6} />
           </ContactIconLink>
         ) : null}
         {phone ? (
-          <ContactIconLink href={`tel:${phone}`} label="Phone">
+          <ContactIconLink href={`tel:${phone}`} label={t("phone")}>
             <Phone className="size-4" strokeWidth={1.6} />
           </ContactIconLink>
         ) : null}
@@ -86,7 +88,7 @@ export function CandidateContactLinks({
           </ContactIconLink>
         ) : null}
         {websiteUrl ? (
-          <ContactIconLink href={websiteUrl} label="Website" external>
+          <ContactIconLink href={websiteUrl} label={t("website")} external>
             <Globe className="size-4" strokeWidth={1.6} />
           </ContactIconLink>
         ) : null}

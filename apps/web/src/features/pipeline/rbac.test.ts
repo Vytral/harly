@@ -66,13 +66,14 @@ vi.mock("@/lib/concurrent", () => ({
   isConcurrencyConflict: vi.fn(() => false),
   withConcurrencyRetry: async (operation: () => Promise<unknown>) => operation(),
 }));
-
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 
 import {
   bulkMoveApplications,
   updateApplicationStatus,
 } from "./actions";
+
+vi.mock("next-intl/server", async () => (await import("@/test-support/intl-server-mock")).intlServerMock);
 
 const WORKSPACE_ID = "workspace-1";
 

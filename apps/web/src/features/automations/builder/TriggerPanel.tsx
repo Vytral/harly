@@ -1,6 +1,8 @@
 "use client";
 
 import { useState } from "react";
+import { useTranslations } from "next-intl";
+import { stageLabel } from "@/features/pipeline/stage-label";
 import { cn } from "@/lib/utils";
 import type { Trigger } from "../schema";
 import { patchTriggerFilter, WORKFLOW_EVENTS } from "../schema";
@@ -35,8 +37,11 @@ export function TriggerPanel({
   stages?: { id: string; name: string; jobId: string }[];
   jobs?: { id: string; title: string }[];
 }) {
+  const t = useTranslations("features.automations.triggerPanel");
+  const tl = useTranslations("labels.automations");
+  const tStages = useTranslations("labels.pipeline.stages");
   const [pickerOpen, setPickerOpen] = useState(!chosen);
-  const meta = triggerMeta(value.event);
+  const meta = triggerMeta(value.event, tl);
 
   const filter = value.filter ?? {};
   const selectedJobId = typeof filter.jobId === "string" ? filter.jobId : "";
@@ -82,7 +87,7 @@ export function TriggerPanel({
             </span>
           </span>
           <span className="rounded-full bg-soft-kraft px-2.5 py-1 text-xs font-medium text-foreground">
-            {pickerOpen ? "Close" : "Change"}
+            {pickerOpen ? t("close") : t("change")}
           </span>
         </button>
       )}
@@ -90,7 +95,7 @@ export function TriggerPanel({
       {(!chosen || pickerOpen) && (
         <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
           {WORKFLOW_EVENTS.map((event) => {
-            const m = triggerMeta(event);
+            const m = triggerMeta(event, tl);
             const active = chosen && value.event === event;
             return (
               <button
@@ -123,7 +128,7 @@ export function TriggerPanel({
           {showJob && (
             <div>
               <label className="mb-1 block text-xs font-medium text-foreground">
-                Only this job <span className="font-normal text-soft-ink">(optional)</span>
+                {t("onlyThisJob")} <span className="font-normal text-soft-ink">{t("optional")}</span>
               </label>
               <BuilderSelect
                 value={selectedJobId}
@@ -137,10 +142,10 @@ export function TriggerPanel({
                     }),
                   });
                 }}
-                aria-label="Only this job"
+                aria-label={t("onlyThisJob")}
                 className={builderFieldClass()}
               >
-                <option value="">Any job</option>
+                <option value="">{t("anyJob")}</option>
                 {jobs.map((job) => (
                   <option key={job.id} value={job.id}>
                     {job.title}
@@ -153,7 +158,7 @@ export function TriggerPanel({
           {showStage && (
             <div>
               <label className="mb-1 block text-xs font-medium text-foreground">
-                When they reach
+                {t("whenTheyReach")}
               </label>
               <BuilderSelect
                 value={selectedStageValue}
@@ -168,13 +173,13 @@ export function TriggerPanel({
                     }),
                   });
                 }}
-                aria-label="When they reach"
+                aria-label={t("whenTheyReach")}
                 className={builderFieldClass()}
               >
-                <option value="">Any stage</option>
+                <option value="">{t("anyStage")}</option>
                 {stageOptions.map((stage) => (
                   <option key={stage.id} value={stage.id}>
-                    {stage.name}
+                    {stageLabel(stage.name, tStages)}
                   </option>
                 ))}
               </BuilderSelect>

@@ -1,25 +1,27 @@
 "use client";
 
 import { Card } from "@/components/ui/card";
+import { useTranslations } from "next-intl";
 import { InfoRow, InfoRows } from "@/components/ui/info-row";
 import { ShortDate } from "@/lib/date-hydration";
+import { stageLabel } from "@/features/pipeline/stage-label";
 import {
   RejectionReasonTag,
   type ApplicationRejectionSummary,
 } from "@/features/rejection-reasons/RejectionReasonTag";
 
-const SOURCE_LABEL: Record<string, string> = {
-  public_form: "Job board",
-  csv_import: "CSV import",
-  referral: "Referral",
-  linkedin: "LinkedIn",
-  career_page: "Career page",
-  agency: "Agency",
-  direct_apply: "Direct apply",
-  internal: "Internal",
-  email: "Email",
-  event: "Event",
-  manual: "Manual",
+const SOURCE_KEY: Record<string, string> = {
+  public_form: "jobBoard",
+  csv_import: "csvImport",
+  referral: "referral",
+  linkedin: "linkedin",
+  career_page: "careerPage",
+  agency: "agency",
+  direct_apply: "directApply",
+  internal: "internal",
+  email: "email",
+  event: "event",
+  manual: "manual",
 };
 
 /**
@@ -45,38 +47,40 @@ export function CandidateSummaryCard({
   applicationCount: number;
   rejection?: ApplicationRejectionSummary | null;
 }) {
+  const t = useTranslations("candidates.summaryCard");
+  const tStages = useTranslations("labels.pipeline.stages");
   return (
     <Card className="gap-0 py-0">
       <h2 className="px-5 py-4 text-[15px] font-semibold tracking-[-0.01em] text-near-ink">
-        Details
+        {t("details")}
       </h2>
       <div className="border-t border-hairline p-3">
         <InfoRows>
-          <InfoRow label="Job" value={jobTitle} />
-          <InfoRow label="Stage" value={stageName} />
+          <InfoRow label={t("job")} value={jobTitle} />
+          <InfoRow label={t("stage")} value={stageName ? stageLabel(stageName, tStages) : null} />
           {rejection?.reasonLabel ? (
             <InfoRow
-              label="Rejection"
+              label={t("rejection")}
               value={<RejectionReasonTag rejection={rejection} showStatus={false} />}
             />
           ) : null}
           <InfoRow
-            label="Source"
-            value={source ? (SOURCE_LABEL[source] ?? source) : null}
+            label={t("source")}
+            value={source ? (SOURCE_KEY[source] ? t(`sources.${SOURCE_KEY[source]}`) : source) : null}
           />
           <InfoRow
-            label="Applied"
+            label={t("applied")}
             value={appliedAt ? <ShortDate value={appliedAt} /> : null}
           />
           {applicationCount > 1 ? (
-            <InfoRow label="Applications" value={applicationCount} />
+            <InfoRow label={t("applications")} value={applicationCount} />
           ) : null}
           <InfoRow
-            label="Tags"
-            empty="No tags"
+            label={t("tags")}
+            empty={t("noTags")}
             value={tags.length > 0 ? tags.map((tag) => tag.label).join(", ") : null}
           />
-          <InfoRow label="Added" value={<ShortDate value={createdAt} />} />
+          <InfoRow label={t("added")} value={<ShortDate value={createdAt} />} />
         </InfoRows>
       </div>
     </Card>

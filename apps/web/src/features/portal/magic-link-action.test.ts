@@ -3,13 +3,16 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const m = vi.hoisted(() => ({
   magicLink: false,
   createMagicLinkToken: vi.fn(async () => "tok"),
+  findActiveCandidateByEmail: vi.fn(),
+  send: vi.fn(),
+  createElement: vi.fn(),
+  portalMagicLinkSubject: vi.fn(() => "localized-subject"),
 }));
-
 vi.mock("next/headers", () => ({
   cookies: async () => ({}),
   headers: async () => new Headers(),
 }));
-vi.mock("react", async (orig) => ({ ...(await orig<typeof import("react")>()), createElement: vi.fn() }));
+vi.mock("react", async (orig) => ({ ...(await orig<typeof import("react")>()), createElement: m.createElement }));
 vi.mock("drizzle-orm", () => ({
   and: vi.fn(), eq: vi.fn(), asc: vi.fn(), count: vi.fn(), desc: vi.fn(), gt: vi.fn(), inArray: vi.fn(), isNull: vi.fn(),
   sql: Object.assign(vi.fn(), { raw: vi.fn() }),
@@ -28,7 +31,7 @@ vi.mock("@harly/db", () => {
   );
   return { db: chain, ...tables };
 });
-vi.mock("@harly/emails", () => ({ PortalMagicLinkEmail: () => null, portalMagicLinkSubject: () => "s" }));
+vi.mock("@harly/emails", () => ({ PortalMagicLinkEmail: "PortalMagicLinkEmail", portalMagicLinkSubject: m.portalMagicLinkSubject }));
 vi.mock("@/lib/portal-auth", () => ({
   PORTAL_SESSION_COOKIE: "c",
   createMagicLinkToken: m.createMagicLinkToken,
@@ -39,7 +42,8 @@ vi.mock("@/lib/portal-auth", () => ({
 vi.mock("@/lib/portal-auth-methods", () => ({
   getPortalAuthMethods: async () => ({ magicLink: m.magicLink }),
 }));
-vi.mock("@/lib/email", () => ({ getWorkspaceEmailSender: async () => ({ send: vi.fn() }) }));
+vi.mock("@/lib/email", () => ({ getWorkspaceEmailSender: async () => ({ send: m.send }) }));
+vi.mock("@/lib/portal-credentials", () => ({ findActiveCandidateByEmail: m.findActiveCandidateByEmail }));
 vi.mock("@/server/api/ratelimit", () => ({ clientIp: () => "1.1.1.1", enforceRateLimit: vi.fn(async () => undefined) }));
 vi.mock("@/lib/logger", () => ({ createLogger: () => ({ error: vi.fn(), info: vi.fn(), warn: vi.fn() }) }));
 vi.mock("@/lib/public-origin", () => ({ getHarlyPublicOrigin: () => "http://localhost:3000" }));
@@ -58,8 +62,12 @@ vi.mock("@/features/offers/core", () => ({}));
 
 import { sendPortalMagicLinkAction } from "./actions";
 
+vi.mock("next-intl/server", async () => (await import("@/test-support/intl-server-mock")).intlServerMock);
+
 beforeEach(() => {
   vi.clearAllMocks();
+  m.findActiveCandidateByEmail.mockReset();
+  m.findActiveCandidateByEmail.mockResolvedValue(null);
 });
 
 describe("sendPortalMagicLinkAction server-side gating", () => {
@@ -72,8 +80,28 @@ describe("sendPortalMagicLinkAction server-side gating", () => {
 
   it("issues a token when magic link is available", async () => {
     m.magicLink = true;
+    m.findActiveCandidateByEmail.mockResolvedValue({ firstName: "Casey", preferredEmailLocale: "fr" });
     const r = await sendPortalMagicLinkAction("a@example.com");
     expect(r.ok).toBe(true);
     expect(m.createMagicLinkToken).toHaveBeenCalledWith("ws1", "a@example.com");
+    expect(m.portalMagicLinkSubject).toHaveBeenCalledWith("fr");
+    expect(m.send).toHaveBeenCalledWith(expect.objectContaining({
+      subject: "localized-subject",
+    }));
+    expect(m.createElement).toHaveBeenCalledWith("PortalMagicLinkEmail", expect.objectContaining({
+      candidateName: "Casey",
+      locale: "fr",
+    }));
+  });
+
+  it("uses English fallback when the recipient has no saved preference", async () => {
+    m.magicLink = true;
+    m.findActiveCandidateByEmail.mockResolvedValue(null);
+    const r = await sendPortalMagicLinkAction("unknown@example.com");
+    expect(r).toEqual({ ok: true });
+    expect(m.portalMagicLinkSubject).toHaveBeenCalledWith(undefined);
+    expect(m.createElement).toHaveBeenCalledWith("PortalMagicLinkEmail", expect.objectContaining({
+      locale: undefined,
+    }));
   });
 });

@@ -1,6 +1,7 @@
 "use client";
 
 import { useTransition } from "react";
+import { useTranslations } from "next-intl";
 import { useRouter } from "next/navigation";
 import { Plus, X } from "lucide-react";
 import { toast } from "@/lib/notification-island/toast";
@@ -10,6 +11,7 @@ import {
   removeHiringTeamMember,
   updateHiringTeamRole,
 } from "@/features/jobs/hiring-team-actions";
+import { getJobActionErrorKey, type JobActionErrorKey } from "@/features/jobs/action-errors";
 import type {
   HiringTeamMember,
   HiringTeamRole,
@@ -33,12 +35,6 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 
-const ROLES: { value: HiringTeamRole; label: string }[] = [
-  { value: "recruiter", label: "Recruiter" },
-  { value: "hiring_manager", label: "Hiring manager" },
-  { value: "interviewer", label: "Interviewer" },
-];
-
 export function JobHiringTeam({
   jobId,
   team,
@@ -48,24 +44,34 @@ export function JobHiringTeam({
   team: HiringTeamMember[];
   members: WorkspaceMemberOption[];
 }) {
+  const t = useTranslations("jobs.hiringTeam");
+  const tErrors = useTranslations("jobs.errors");
+  const roles: { value: HiringTeamRole; label: string }[] = [
+    { value: "recruiter", label: t("recruiter") },
+    { value: "hiring_manager", label: t("hiringManager") },
+    { value: "interviewer", label: t("interviewer") },
+  ];
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
 
   const onTeam = new Set(team.map((t) => t.userId));
   const available = members.filter((m) => !onTeam.has(m.userId));
 
-  function run(promise: Promise<{ success: boolean; error?: string }>) {
+  function run(promise: Promise<{ success: boolean; code?: JobActionErrorKey }>) {
     startTransition(async () => {
       const result = await promise;
-      if (!result.success) toast.error(result.error ?? "Something went wrong.");
+      if (!result.success) {
+        const errorKey = getJobActionErrorKey(result.code);
+        toast.error(errorKey ? tErrors(errorKey) : t("genericError"));
+      }
       else router.refresh();
     });
   }
 
   return (
     <FormSection
-      title="Hiring team"
-      description="Assigned teammates receive candidate updates for this role. Roles clarify who owns recruiting, the decision, and interviews."
+      title={t("title")}
+      description={t("description")}
       contentClassName="divide-y divide-border/60"
       action={
         available.length > 0 ? (
@@ -73,7 +79,7 @@ export function JobHiringTeam({
             <DropdownMenuTrigger asChild>
               <Button variant="outline" size="sm" disabled={isPending}>
                 <Plus className="size-4" />
-                Add member
+                {t("addMember")}
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="min-w-56">
@@ -101,7 +107,7 @@ export function JobHiringTeam({
     >
       {team.length === 0 ? (
         <p className="rounded-[var(--radius-inner)] bg-card-inset px-4 py-6 text-center text-sm text-soft-ink">
-          No one assigned yet. Add teammates to collaborate on this role.
+          {t("empty")}
         </p>
       ) : (
         team.map((member) => (
@@ -126,7 +132,7 @@ export function JobHiringTeam({
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                {ROLES.map((r) => (
+                {roles.map((r) => (
                   <SelectItem key={r.value} value={r.value}>
                     {r.label}
                   </SelectItem>
@@ -138,7 +144,7 @@ export function JobHiringTeam({
               size="icon-sm"
               className="text-muted-foreground hover:text-destructive"
               disabled={isPending}
-              aria-label={`Remove ${member.name}`}
+              aria-label={t("removeMember", { name: member.name })}
               onClick={() => run(removeHiringTeamMember({ id: member.id, jobId }))}
             >
               <X className="size-4" />

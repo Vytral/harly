@@ -21,6 +21,7 @@ import {
 } from "@/features/integrations/health/repository";
 import { sanitizeIntegrationError } from "@/features/integrations/health/model";
 import { isWebhookEvent } from "@/server/webhooks/events";
+import { getTranslations } from "@/i18n/server";
 
 const log = createLogger("workspace-outlook-settings");
 
@@ -28,19 +29,18 @@ export type OutlookActionResult = { ok: boolean; error?: string };
 
 const SETTINGS_PATH = "/settings/integrations";
 
-const RECONNECT_MESSAGE =
-  "Microsoft revoked this connection. Disconnect and reconnect Outlook.";
+type Translate = (key: string, values?: Record<string, string | number>) => string;
 
 /**
  * Message for a workspace whose Outlook config is unusable. A connection that
  * Microsoft revoked was cleared by the config read, so the stored health
  * decides between "reconnect" and "not connected".
  */
-async function unusableOutlookMessage(workspaceId: string): Promise<string> {
+async function unusableOutlookMessage(workspaceId: string, t: Translate): Promise<string> {
   const health = await getIntegrationHealth(workspaceId);
   return health.outlook?.state === "needs_reconnect"
-    ? RECONNECT_MESSAGE
-    : "Outlook not connected.";
+    ? t("revokedReconnect")
+    : t("notConnected");
 }
 
 export type OutlookCalendarItem = { id: string; name: string };
@@ -52,9 +52,10 @@ export async function saveOutlookCredentialsAction(input: {
 }): Promise<OutlookActionResult> {
   assertNotDemo();
   const context = await requirePermission("integrations:manage");
+  const t = await getTranslations("server.workspaces.outlookSettingsActions");
 
   if (!isEncryptionConfigured()) {
-    return { ok: false, error: "Server encryption key not configured." };
+    return { ok: false, error: t("encryptionKeyMissing") };
   }
 
   const clientId = input.clientId.trim();
@@ -63,7 +64,7 @@ export async function saveOutlookCredentialsAction(input: {
   if (!clientId || !clientSecret) {
     return {
       ok: false,
-      error: "Both Client ID and Client Secret are required.",
+      error: t("credentialsRequired"),
     };
   }
 
@@ -92,9 +93,10 @@ export async function listOutlookCalendarsAction(): Promise<
 > {
   assertNotDemo();
   const context = await requirePermission("integrations:manage");
+  const t = await getTranslations("server.workspaces.outlookSettingsActions");
   const config = await getWorkspaceOutlookConfig(context.organization.id);
   if (!config) {
-    return { ok: false, error: await unusableOutlookMessage(context.organization.id) };
+    return { ok: false, error: await unusableOutlookMessage(context.organization.id, t) };
   }
 
   try {
@@ -109,9 +111,9 @@ export async function listOutlookCalendarsAction(): Promise<
     log.error(error, "listOutlookCalendarsAction failed");
     if (await recordOutlookCallFailure(context.organization.id, error)) {
       revalidatePath(SETTINGS_PATH);
-      return { ok: false, error: RECONNECT_MESSAGE };
+      return { ok: false, error: t("revokedReconnect") };
     }
-    return { ok: false, error: "Failed to fetch calendars from Outlook." };
+    return { ok: false, error: t("fetchCalendarsFailed") };
   }
 }
 
@@ -171,23 +173,24 @@ export async function disconnectOutlookAction(): Promise<OutlookActionResult> {
 export async function testOutlookAction(): Promise<OutlookActionResult> {
   assertNotDemo();
   const context = await requirePermission("integrations:manage");
+  const t = await getTranslations("server.workspaces.outlookSettingsActions");
   const config = await getWorkspaceOutlookConfig(context.organization.id);
   if (!config) {
-    return { ok: false, error: await unusableOutlookMessage(context.organization.id) };
+    return { ok: false, error: await unusableOutlookMessage(context.organization.id, t) };
   }
 
   try {
     await sendMail(config.accessToken, {
       to: [context.user.email ?? ""],
-      subject: "Test from Harly",
-      body: "<p>Your Microsoft Outlook integration is working!</p>",
+      subject: t("testEmailSubject"),
+      body: t("testEmailBody"),
     });
     await recordIntegrationSuccess(context.organization.id, "outlook");
     return { ok: true };
   } catch (err) {
     log.error(err, "testOutlookAction failed");
     if (await recordOutlookCallFailure(context.organization.id, err)) {
-      return { ok: false, error: RECONNECT_MESSAGE };
+      return { ok: false, error: t("revokedReconnect") };
     }
     return { ok: false, error: sanitizeIntegrationError(err) };
   }

@@ -2,6 +2,7 @@ import "server-only";
 
 import { cache } from "react";
 import { and, asc, count, desc, eq, exists, gte, inArray, isNull, lt, or, sql } from "drizzle-orm";
+import { getTranslations } from "@/i18n/server";
 
 import {
   applications,
@@ -87,18 +88,19 @@ export const getDashboardWidgetAccess = cache(async (): Promise<DashboardWidgetA
   };
 });
 
-function interviewTypeLabel(type: string): string {
+/** Key under `shell.todayInterviews.interviewTypes` for an interview type. */
+function interviewTypeKey(type: string): "culture_fit" | "technical" | "onsite" | "final" | "screening" {
   switch (type) {
     case "culture_fit":
-      return "Culture fit interview";
+      return "culture_fit";
     case "technical":
-      return "Technical interview";
+      return "technical";
     case "onsite":
-      return "Onsite interview";
+      return "onsite";
     case "final":
-      return "Final interview";
+      return "final";
     default:
-      return "Screening call";
+      return "screening";
   }
 }
 
@@ -239,6 +241,7 @@ export const getTodayInterviews = cache(async () => {
   if (!hasAnyPermission(actor, ["interviews:manage", "interviews:feedback"])) {
     return { total: 0, items: [], date: null };
   }
+  const t = await getTranslations("shell.todayInterviews.interviewTypes");
   // "Today" is the workspace's local day, not the server's.
   const timeZone = await getWorkspaceTimeZone(workspace.id);
   const now = new Date();
@@ -295,7 +298,8 @@ export const getTodayInterviews = cache(async () => {
       id: r.id,
       scheduledAt: r.scheduledAt,
       type: r.type,
-      label: r.title ?? interviewTypeLabel(r.type),
+      label: r.title ?? t(interviewTypeKey(r.type)),
+      hasCustomTitle: r.title !== null,
       candidateId: r.candidateId,
       candidate: `${r.first} ${r.last}`,
       job: r.jobTitle,
@@ -330,6 +334,7 @@ export const getJobsAtRisk = cache(async () => {
   const { organization: workspace } = await getWorkspaceContext();
   const actor = await widgetActor();
   if (!actorHasPermission(actor, "reports:read")) return [];
+  const t = await getTranslations("shell.jobsAtRisk");
   const timeZone = await getWorkspaceTimeZone(workspace.id);
   const now = new Date();
   const recentWindow = resolveWindow(RISK_WINDOW_DAYS, timeZone, now);
@@ -392,27 +397,32 @@ export const getJobsAtRisk = cache(async () => {
         : Infinity;
 
       let reason: string | null = null;
+      let reasonCode: "noApplications" | "noApplicationsWeek" | "noHires" | "lowConversion" | null = null;
       let severity: "critical" | "danger" | "warning" = "danger";
       if (lastAppDays >= 7) {
         if (total === 0) {
-          reason = "No applications yet";
+          reason = t("noApplications");
+          reasonCode = "noApplications";
           severity = "critical";
         } else {
-          reason = "No applications in 7 days";
+          reason = t("noApplicationsWeek");
+          reasonCode = "noApplicationsWeek";
           severity = "danger";
         }
       } else if (ageDays >= RISK_WINDOW_DAYS && hiresLast30 === 0) {
-        reason = "No hires in 30+ days";
+        reason = t("noHires");
+        reasonCode = "noHires";
         severity = "danger";
       } else if (total >= 5 && hiresEver / total < 0.1) {
-        reason = "Low conversion rate";
+        reason = t("lowConversion");
+        reasonCode = "lowConversion";
         severity = "warning";
       }
 
-      return reason ? { id: r.id, title: r.title, reason, severity } : null;
+      return reason && reasonCode ? { id: r.id, title: r.title, reason, reasonCode, severity } : null;
     })
     .filter(
-      (r): r is { id: string; title: string; reason: string; severity: "critical" | "danger" | "warning" } =>
+      (r): r is { id: string; title: string; reason: string; reasonCode: "noApplications" | "noApplicationsWeek" | "noHires" | "lowConversion"; severity: "critical" | "danger" | "warning" } =>
         r !== null,
     )
     .slice(0, 4);
@@ -440,6 +450,7 @@ export const getHiringPerformance = cache(async () => {
     throw new Error("You do not have access to hiring performance.");
   }
   const timeZone = await getWorkspaceTimeZone(workspace.id);
+  const t = await getTranslations("features.reports.reportsDashboard.rangeLabels");
   const now = new Date();
   const current = resolveWindow(PERF_DAYS, timeZone, now);
   const prior = previousWindow(current, now);
@@ -466,7 +477,7 @@ export const getHiringPerformance = cache(async () => {
     points.map((p) => ({ label: dayLabel(p.key), value: p.count }));
 
   return {
-    rangeLabel: `Last ${PERF_DAYS} days`,
+    rangeLabel: t("lastDays", { count: PERF_DAYS }),
     metrics: {
       applications: {
         value: kpis.applications,
@@ -514,6 +525,7 @@ export const getInbox = cache(async () => {
   const { organization: workspace } = await getWorkspaceContext();
   const actor = await widgetActor();
   if (!actorHasPermission(actor, "jobs:approve")) return { total: 0, items: [] };
+  const t = await getTranslations("shell.inboxCard");
 
   const drafts = await db
     .select({ id: jobs.id, title: jobs.title, createdAt: jobs.createdAt })
@@ -533,7 +545,7 @@ export const getInbox = cache(async () => {
     items: drafts.slice(0, APPROVALS_SHOWN).map((job) => ({
       id: job.id,
       title: job.title,
-      subtitle: "Job description awaiting approval",
+      subtitle: t("awaitingApproval"),
       ageDays: daysSince(job.createdAt),
       href: `/dashboard/jobs/${job.id}`,
     })),

@@ -1,3 +1,4 @@
+import { useTranslations } from "next-intl";
 import { cn } from "@/lib/utils";
 import type { PortalApplicationStatus, PortalStage } from "./application-progress";
 
@@ -20,6 +21,7 @@ export function PortalStageProgress({
   variant?: "full" | "compact";
   className?: string;
 }) {
+  const t = useTranslations("portal.progress");
   if (stages.length === 0) return null;
 
   const hired = status === "hired";
@@ -42,8 +44,8 @@ export function PortalStageProgress({
         role="img"
         aria-label={
           currentIdx >= 0
-            ? `Step ${currentIdx + 1} of ${stages.length}: ${stages[currentIdx]!.name}`
-            : `${stages.length} steps`
+            ? t("current", { step: currentIdx + 1, total: stages.length, name: stages[currentIdx]!.name })
+            : t("steps", { count: stages.length })
         }
       >
         {stages.map((stage, idx) => {

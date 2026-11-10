@@ -76,6 +76,8 @@ vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 
 import { moveApplicationInPipeline } from "./actions";
 
+vi.mock("next-intl/server", async () => (await import("@/test-support/intl-server-mock")).intlServerMock);
+
 const WORKSPACE_ID = "ws-1";
 
 const APPLICATION_ROW = {

@@ -57,6 +57,8 @@ vi.mock("./service", () => ({
 
 import { deleteReferral, referCandidate, toggleReferralFeatured } from "./actions";
 
+vi.mock("next-intl/server", async () => (await import("@/test-support/intl-server-mock")).intlServerMock);
+
 const context = {
   organization: { id: "workspace-1" },
   user: { id: "actor-1", email: "actor@example.com" },

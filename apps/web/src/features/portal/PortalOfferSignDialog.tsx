@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { useTranslations } from "next-intl";
 import { useRouter } from "next/navigation";
 import { toast } from "@/lib/notification-island/toast";
 
@@ -32,6 +33,7 @@ export function PortalOfferSignDialog({
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }) {
+  const t = useTranslations("portal.signDialog");
   const router = useRouter();
   const [signature, setSignature] = useState("");
   const [vectorSignature, setVectorSignature] = useState<VectorSignatureData | null>(null);
@@ -75,7 +77,7 @@ export function PortalOfferSignDialog({
         toast.error(result.error);
         return;
       }
-      toast.success("Offer signed");
+      toast.success(t("success"));
       onOpenChange(false);
       router.refresh();
     });
@@ -85,9 +87,9 @@ export function PortalOfferSignDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="flex h-[90vh] max-h-[90vh] w-[min(1440px,calc(100%-2rem))] max-w-[min(1440px,calc(100%-2rem))] sm:max-w-[min(1440px,calc(100%-2rem))] flex-col overflow-hidden p-0">
         <DialogHeader className="border-b border-border px-6 py-4 text-left">
-          <DialogTitle>Sign your offer</DialogTitle>
+          <DialogTitle>{t("title")}</DialogTitle>
           <DialogDescription>
-            Review <strong>{offerTitle}</strong> and fill in the fields below.
+            {t.rich("description", { title: offerTitle, strong: (chunks) => <strong>{chunks}</strong> })}
           </DialogDescription>
         </DialogHeader>
         <div className="grid min-h-0 flex-1 grid-cols-1 lg:grid-cols-[minmax(0,1fr)_380px]">
@@ -106,23 +108,23 @@ export function PortalOfferSignDialog({
           </div>
           <aside className="flex min-h-0 flex-col gap-4 overflow-y-auto p-6">
             <div>
-              <p className="text-sm font-semibold text-foreground">Your signature</p>
+              <p className="text-sm font-semibold text-foreground">{t("signature")}</p>
               <p className="mt-1 text-xs leading-5 text-muted-foreground">
-                Draw or type your signature — it fills in every signature field above.
+                {t("instructions")}
               </p>
             </div>
             <SignaturePad onChange={setSignature} allowSaved={false} onVectorChange={setVectorSignature} />
             <label className="flex items-start gap-3 rounded-xl border border-border bg-muted/20 p-3 text-sm">
               <Checkbox checked={consent} onCheckedChange={(value) => setConsent(value === true)} />
               <span>
-                <span className="block font-medium text-foreground">Confirm signing intent</span>
+                <span className="block font-medium text-foreground">{t("consentTitle")}</span>
                 <span className="mt-1 block text-xs leading-5 text-muted-foreground">
-                  I confirm this is my signature and agree to sign this offer electronically.
+                  {t("consent")}
                 </span>
               </span>
             </label>
             <Button onClick={submit} disabled={!canSubmit || isPending}>
-              {isPending ? "Signing…" : "Sign offer"}
+              {isPending ? t("signing") : t("sign")}
             </Button>
           </aside>
         </div>

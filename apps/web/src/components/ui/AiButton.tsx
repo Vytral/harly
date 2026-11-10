@@ -1,5 +1,7 @@
 "use client";
 
+import { useTranslations } from "next-intl";
+
 import { HarlyAILogoMark } from "@/components/ui/icons/HarlyAILogoMark";
 import { cn } from "@/lib/utils";
 
@@ -22,6 +24,7 @@ export function AiButton({
   disabled,
   ...props
 }: AiButtonProps) {
+  const t = useTranslations("ui.aiButton");
   const isDisabled = disabled || loading;
 
   return (
@@ -54,7 +57,7 @@ export function AiButton({
       <HarlyAILogoMark className={cn("size-3.5 shrink-0", logoClassName)} />
       {loading ? (
         <span className="flex items-center gap-0.5">
-          {loadingText ?? "Generating"}
+          {loadingText ?? t("generating")}
           <span className="ml-0.5 inline-flex items-end gap-px pb-px">
             <span className="size-1 rounded-full bg-current motion-safe:animate-[bounce_1s_ease-in-out_infinite]" style={{ animationDelay: "0ms" }} />
             <span className="size-1 rounded-full bg-current motion-safe:animate-[bounce_1s_ease-in-out_infinite]" style={{ animationDelay: "150ms" }} />

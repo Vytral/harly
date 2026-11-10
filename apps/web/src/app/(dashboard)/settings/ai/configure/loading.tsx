@@ -1,3 +1,5 @@
+import { getTranslations } from "next-intl/server";
+
 import { Skeleton } from "@/components/ui/skeleton";
 
 /**
@@ -5,10 +7,11 @@ import { Skeleton } from "@/components/ui/skeleton";
  * DrawerLayout page section (bordered title header + provider/model/key fields,
  * the enabled switch row, and the Cancel/Save footer).
  */
-export default function ConfigureAiSettingsLoading() {
+export default async function ConfigureAiSettingsLoading() {
+  const t = await getTranslations("pages.settingsAiConfigure.loading");
   return (
     <div aria-busy="true" className="space-y-5">
-      <span className="sr-only">Loading…</span>
+      <span className="sr-only">{t("label")}</span>
 
       <div className="-ml-3 flex h-8 w-fit items-center px-3">
         <Skeleton className="h-4 w-28" />

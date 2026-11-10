@@ -2,6 +2,8 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { useTranslations } from "next-intl";
+import { authErrorKey } from "@/features/auth/i18n/error-keys";
 import { useRouter } from "next/navigation";
 import { toast } from "@/lib/notification-island/toast";
 
@@ -15,6 +17,8 @@ export function ResetPasswordForm({
   token: string | null;
   tokenError: string | null;
 }) {
+  const errorText = useTranslations("accessAuthErrors");
+  const t = useTranslations("accessReset");
   const router = useRouter();
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
@@ -28,11 +32,11 @@ export function ResetPasswordForm({
     setError(null);
 
     if (password.length < 8) {
-      setError("Password must be at least 8 characters.");
+      setError(t("minLength"));
       return;
     }
     if (password !== confirm) {
-      setError("Passwords don't match.");
+      setError(t("mismatch"));
       return;
     }
     if (!token) return;
@@ -46,13 +50,12 @@ export function ResetPasswordForm({
 
       if (result.error) {
         setError(
-          result.error.message ??
-            "This reset link is invalid or has expired. Request a new one.",
+          errorText(authErrorKey(result.error.code, "resetFailed")),
         );
         return;
       }
 
-      toast.success("Password updated. Sign in with your new password.");
+      toast.success(t("updated"));
       router.push("/login");
     } finally {
       setIsPending(false);
@@ -63,13 +66,13 @@ export function ResetPasswordForm({
     return (
       <div className="auth-stagger space-y-4">
         <p className="text-sm leading-6 text-foreground">
-          This password reset link is invalid or has expired.
+          {t("invalid")}
         </p>
         <Link
           href="/forgot-password"
           className="inline-block text-sm font-medium text-foreground underline-offset-4 hover:underline"
         >
-          Request a new reset link
+          {t("requestNew")}
         </Link>
       </div>
     );
@@ -82,7 +85,7 @@ export function ResetPasswordForm({
           htmlFor="new-password"
           className="block text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground"
         >
-          New password
+          {t("newPassword")}
         </label>
         <input
           id="new-password"
@@ -94,7 +97,7 @@ export function ResetPasswordForm({
             setPassword(e.target.value);
             setError(null);
           }}
-          placeholder="At least 8 characters"
+          placeholder={t("minLengthPlaceholder")}
           className="auth-field mt-2 w-full border-0 border-b border-input bg-transparent pb-2.5 text-base md:text-sm text-foreground outline-none transition placeholder:text-muted-foreground focus:border-ring"
         />
       </div>
@@ -104,7 +107,7 @@ export function ResetPasswordForm({
           htmlFor="confirm-password"
           className="block text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground"
         >
-          Confirm password
+          {t("confirmPassword")}
         </label>
         <input
           id="confirm-password"
@@ -116,7 +119,7 @@ export function ResetPasswordForm({
             setConfirm(e.target.value);
             setError(null);
           }}
-          placeholder="Repeat your new password"
+          placeholder={t("repeatPlaceholder")}
           className="auth-field mt-2 w-full border-0 border-b border-input bg-transparent pb-2.5 text-base md:text-sm text-foreground outline-none transition placeholder:text-muted-foreground focus:border-ring"
         />
       </div>
@@ -132,10 +135,10 @@ export function ResetPasswordForm({
         {isPending ? (
           <>
             <AuthSpinner />
-            <span>Updating…</span>
+            <span>{t("updating")}</span>
           </>
         ) : (
-          <span>Update password</span>
+          <span>{t("update")}</span>
         )}
       </button>
     </form>

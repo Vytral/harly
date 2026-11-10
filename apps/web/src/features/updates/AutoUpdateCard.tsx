@@ -2,6 +2,7 @@
 
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { useLocale, useTranslations } from "next-intl";
 import { toast } from "@/lib/notification-island/toast";
 
 import { Button } from "@/components/ui/button";
@@ -27,19 +28,21 @@ export type AutoUpdateView = {
 };
 
 const DAYS = [
-  { value: 1, label: "Mon" },
-  { value: 2, label: "Tue" },
-  { value: 3, label: "Wed" },
-  { value: 4, label: "Thu" },
-  { value: 5, label: "Fri" },
-  { value: 6, label: "Sat" },
-  { value: 7, label: "Sun" },
+  { value: 1, labelKey: "mon" },
+  { value: 2, labelKey: "tue" },
+  { value: 3, labelKey: "wed" },
+  { value: 4, labelKey: "thu" },
+  { value: 5, labelKey: "fri" },
+  { value: 6, labelKey: "sat" },
+  { value: 7, labelKey: "sun" },
 ];
 
 const HOURS = Array.from({ length: 24 }, (_, hour) => hour);
 const hourLabel = (hour: number) => `${String(hour).padStart(2, "0")}:00`;
 
 export function AutoUpdateCard({ initial }: { initial: AutoUpdateView }) {
+  const t = useTranslations("features.updates.autoUpdateCard");
+  const locale = useLocale();
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [enabled, setEnabled] = useState(initial.enabled);
@@ -65,9 +68,9 @@ export function AutoUpdateCard({ initial }: { initial: AutoUpdateView }) {
 
   const windowError =
     startHour === endHour
-      ? "Start and end hour must differ."
+      ? t("hoursMustDiffer")
       : days.length === 0
-        ? "Pick at least one day."
+        ? t("pickDay")
         : null;
 
   function toggleDay(day: number, checked: boolean) {
@@ -90,7 +93,7 @@ export function AutoUpdateCard({ initial }: { initial: AutoUpdateView }) {
         toast.error(result.error);
         return;
       }
-      toast.success("Automatic update settings saved.");
+      toast.success(t("saved"));
       router.refresh();
     });
   }
@@ -99,39 +102,36 @@ export function AutoUpdateCard({ initial }: { initial: AutoUpdateView }) {
     <Card className="gap-5 p-6">
       <SectionHeader
         icon={ClockCountdownDuotoneIcon}
-        title="Install updates automatically outside working hours"
-        description="When a release is published, the updater installs it during the window below. Harly is unavailable for a few minutes while it restarts, and a backup is taken first."
-        badge={<StatusPill tone={initial.enabled ? "on" : "off"}>{initial.enabled ? "On" : "Off"}</StatusPill>}
+        title={t("title")}
+        description={t("description")}
+        badge={<StatusPill tone={initial.enabled ? "on" : "off"}>{initial.enabled ? t("on") : t("off")}</StatusPill>}
         action={
           <Switch
             checked={enabled}
             onCheckedChange={setEnabled}
             disabled={pending}
-            aria-label="Install updates automatically"
+            aria-label={t("enableAriaLabel")}
           />
         }
       />
 
       <fieldset disabled={!enabled || pending} className="space-y-5 disabled:opacity-60">
         <div className="space-y-2">
-          <Label>Which releases</Label>
+          <Label>{t("whichReleases")}</Label>
           <Select value={level} onValueChange={(value) => setLevel(value === "minor" ? "minor" : "patch")}>
             <SelectTrigger className="w-full sm:max-w-sm">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="patch">Patch releases only (0.2.4 → 0.2.5)</SelectItem>
-              <SelectItem value="minor">Patch and minor releases (0.2.4 → 0.3.0)</SelectItem>
+              <SelectItem value="patch">{t("patchOnly")}</SelectItem>
+              <SelectItem value="minor">{t("patchAndMinor")}</SelectItem>
             </SelectContent>
           </Select>
-          <p className="text-xs text-muted-foreground">
-            Major releases are never installed automatically. A version that failed once is not retried
-            automatically either.
-          </p>
+          <p className="text-xs text-muted-foreground">{t("releasesNote")}</p>
         </div>
 
         <div className="space-y-2">
-          <Label>Days</Label>
+          <Label>{t("daysLabel")}</Label>
           <div className="flex flex-wrap gap-x-4 gap-y-2">
             {DAYS.map((day) => (
               <label key={day.value} className="flex items-center gap-2 text-sm text-near-ink">
@@ -139,7 +139,7 @@ export function AutoUpdateCard({ initial }: { initial: AutoUpdateView }) {
                   checked={days.includes(day.value)}
                   onCheckedChange={(checked) => toggleDay(day.value, checked === true)}
                 />
-                {day.label}
+                {t(`weekdays.${day.labelKey}`)}
               </label>
             ))}
           </div>
@@ -147,15 +147,15 @@ export function AutoUpdateCard({ initial }: { initial: AutoUpdateView }) {
 
         <div className="grid gap-4 sm:grid-cols-3">
           <div className="space-y-2">
-            <Label htmlFor="update-start">From</Label>
+            <Label htmlFor="update-start">{t("from")}</Label>
             <HourSelect id="update-start" value={startHour} onChange={setStartHour} />
           </div>
           <div className="space-y-2">
-            <Label htmlFor="update-end">Until</Label>
+            <Label htmlFor="update-end">{t("until")}</Label>
             <HourSelect id="update-end" value={endHour} onChange={setEndHour} />
           </div>
           <div className="space-y-2">
-            <Label htmlFor="update-timezone">Time zone</Label>
+            <Label htmlFor="update-timezone">{t("timeZone")}</Label>
             <Select value={timezone} onValueChange={setTimezone}>
               <SelectTrigger id="update-timezone" className="w-full">
                 <SelectValue />
@@ -171,9 +171,7 @@ export function AutoUpdateCard({ initial }: { initial: AutoUpdateView }) {
           </div>
         </div>
         {startHour > endHour ? (
-          <p className="text-xs text-muted-foreground">
-            This window runs overnight: it starts on a selected day and ends the next morning.
-          </p>
+          <p className="text-xs text-muted-foreground">{t("overnightNote")}</p>
         ) : null}
         {windowError ? <p className="text-xs text-danger-rust">{windowError}</p> : null}
       </fieldset>
@@ -181,11 +179,14 @@ export function AutoUpdateCard({ initial }: { initial: AutoUpdateView }) {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <p className="text-[12.5px] text-soft-ink">
           {initial.enabled && initial.nextWindowAt
-            ? `Next window opens ${formatWhen(initial.nextWindowAt, initial.timezone)} (${initial.timezone}).`
-            : "Nothing is installed automatically while this is off."}
+            ? t("nextWindow", {
+                when: formatWhen(initial.nextWindowAt, initial.timezone, locale),
+                timeZone: initial.timezone,
+              })
+            : t("nothingInstalled")}
         </p>
         <Button onClick={save} disabled={!dirty || pending || (enabled && windowError !== null)}>
-          Save
+          {t("save")}
         </Button>
       </div>
     </Card>

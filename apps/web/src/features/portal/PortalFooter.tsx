@@ -2,16 +2,19 @@
 
 import Link from "next/link";
 import type { Route } from "next";
+import { useTranslations } from "next-intl";
 import { CookiePreferencesButton } from "@/components/CookiePreferencesButton";
 import { SocialIcon, socialLabel } from "@/features/career-page/social-icons";
 import type { CareerSocialLink } from "@/features/career-page/config";
 
-const LEGAL_LINK_LABELS: Record<string, string> = {
-  "privacy-policy": "Privacy Policy",
-  "terms-of-service": "Terms of Service",
-  "cookie-policy": "Cookie Policy",
-  "candidate-notice": "Candidate Notice",
-  "ai-transparency-notice": "AI Transparency",
+type LegalLinkKey = "privacyPolicy" | "termsOfService" | "cookiePolicy" | "candidateNotice" | "aiTransparency";
+
+const LEGAL_LINK_KEYS: Record<string, LegalLinkKey> = {
+  "privacy-policy": "privacyPolicy",
+  "terms-of-service": "termsOfService",
+  "cookie-policy": "cookiePolicy",
+  "candidate-notice": "candidateNotice",
+  "ai-transparency-notice": "aiTransparency",
 };
 
 type PortalFooterProps = {
@@ -35,6 +38,7 @@ export function PortalFooter({
   legalLinks,
   year,
 }: PortalFooterProps) {
+  const t = useTranslations("features.portal.PortalFooter");
   const accentColor = orgColor ?? "#3f6212";
   const visibleSocials = socials.filter((s) => s.url.trim());
 
@@ -104,16 +108,14 @@ export function PortalFooter({
         {/* Bottom tier: copyright + legal + powered by */}
         <div className="mt-8 flex flex-col items-center justify-between gap-4 border-t border-border pt-6 text-xs text-muted-foreground sm:flex-row">
           <div className="flex flex-wrap items-center justify-center gap-x-5 gap-y-2">
-            <p>
-              © {year} {orgName}
-            </p>
+            <p>{t("copyright", { year, orgName })}</p>
             {legalLinks.map((slug) => (
               <a
                 key={slug}
                 href={`/legal/${slug}`}
                 className="transition-colors hover:text-foreground"
               >
-                {LEGAL_LINK_LABELS[slug] ?? slug}
+                {LEGAL_LINK_KEYS[slug] ? t(LEGAL_LINK_KEYS[slug]) : slug}
               </a>
             ))}
             <CookiePreferencesButton className="hover:text-foreground" />
@@ -126,7 +128,7 @@ export function PortalFooter({
             rel="noopener noreferrer"
             className="group inline-flex items-center gap-1.5 text-muted-foreground transition-colors hover:text-foreground"
           >
-            <span className="font-medium">Powered by</span>
+            <span className="font-medium">{t("poweredBy")}</span>
             <span className="font-display font-semibold text-foreground">Harly</span>
           </a>
         </div>

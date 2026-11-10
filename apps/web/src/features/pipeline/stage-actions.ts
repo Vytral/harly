@@ -3,6 +3,8 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
+import { getTranslations } from "@/i18n/server";
+
 import { ApiError } from "@harly/api";
 import {
   jobStageArchiveSchema,
@@ -53,6 +55,49 @@ const listInputSchema = z.object({
 
 type ActionFailure = { success: false; error: string };
 
+/**
+ * Translation keys for the lifecycle's static API messages. The lifecycle keeps
+ * its English text because the public REST route returns it unchanged; the
+ * action layer swaps in the recruiter's locale. Dynamic messages fall back to
+ * the English text from the lifecycle.
+ */
+const STAGE_API_MESSAGE_KEYS = new Map<string, string>([
+  ["This pipeline is busy with other changes. Retry in a moment.", "busy"],
+  ["Job not found.", "jobNotFound"],
+  ["Job stage not found.", "stageNotFound"],
+  ["Stage name is required.", "nameRequired"],
+  ["Provide at least one stage field to update.", "noFieldToUpdate"],
+  ["A stage with this name already exists on this job.", "duplicateName"],
+  ["Stage could not be created.", "createFailed"],
+  ["Archived stages cannot be edited.", "archivedEdit"],
+  ["orderedStageIds must list every active stage of the job exactly once.", "reorderIncomplete"],
+  ["This stage is already archived.", "alreadyArchived"],
+  ["A stage cannot be merged into itself.", "mergeIntoSelf"],
+  ["Merge target stage not found.", "mergeTargetNotFound"],
+  ["Merge target stage is archived.", "mergeTargetArchived"],
+  ["This stage appears in application history. Archive it instead so history is kept.", "archiveHistory"],
+  ["Scorecards were recorded at this stage. Archive it instead so they keep their stage.", "archiveScorecards"],
+  ["Document requirements are attached to this stage. Archive it instead, or move the requirements first.", "archiveDocuments"],
+  ["Automations reference this stage. Update those automations first, or archive the stage instead.", "archiveAutomations"],
+  ["This stage is still referenced. Archive it instead.", "archiveReferenced"],
+  [
+    "Applications have already moved through this stage, and reports date hires and rejections from that history. Changing its kind to or from an outcome would rewrite it. Create a new stage of the kind you want and archive this one instead.",
+    "kindChangeHistory",
+  ],
+  [
+    "A pipeline needs at least one active stage that is not hired, rejected or withdrawn, so new applicants have somewhere to enter.",
+    "shapeNoActiveStage",
+  ],
+  ["Stage names cannot be empty.", "shapeEmptyName"],
+]);
+
+async function translatedApiMessage(message: string): Promise<string> {
+  const key = STAGE_API_MESSAGE_KEYS.get(message);
+  if (!key) return message;
+  const t = await getTranslations("server.pipeline.stageActions");
+  return t(key as never);
+}
+
 function isNextControlFlowError(error: unknown): boolean {
   return (
     typeof error === "object" &&
@@ -63,10 +108,14 @@ function isNextControlFlowError(error: unknown): boolean {
   );
 }
 
-function invalidInput(error: z.ZodError): ActionFailure {
+async function invalidInput(error: z.ZodError): Promise<ActionFailure> {
   const issue = error.issues[0];
   const field = issue?.path.join(".") || "input";
-  return { success: false, error: `Invalid ${field}: ${issue?.message ?? "invalid value"}.` };
+  const t = await getTranslations("server.pipeline.stageActions");
+  return {
+    success: false,
+    error: t("invalidInput", { field, message: issue?.message ?? t("invalidValue") }),
+  };
 }
 
 /**
@@ -85,13 +134,11 @@ async function runStageAction<T extends object>(
     context = await requireJobPermission(permission, jobId);
   } catch (error) {
     if (isNextControlFlowError(error)) throw error;
-    return {
-      success: false,
-      error:
-        error instanceof Error
-          ? error.message
-          : "You do not have permission to change this job's pipeline.",
-    };
+    if (error instanceof Error) {
+      return { success: false, error: await translatedApiMessage(error.message) };
+    }
+    const t = await getTranslations("server.pipeline.stageActions");
+    return { success: false, error: t("permissionDenied") };
   }
 
   try {
@@ -107,11 +154,12 @@ async function runStageAction<T extends object>(
     return { success: true, ...payload };
   } catch (error) {
     if (error instanceof ApiError) {
-      return { success: false, error: error.message };
+      return { success: false, error: await translatedApiMessage(error.message) };
     }
     if (isNextControlFlowError(error)) throw error;
     log.error({ err: error, action, jobId }, "stage action failed");
-    return { success: false, error: "The pipeline could not be updated. Try again." };
+    const t = await getTranslations("server.pipeline.stageActions");
+    return { success: false, error: t("updateFailed") };
   }
 }
 

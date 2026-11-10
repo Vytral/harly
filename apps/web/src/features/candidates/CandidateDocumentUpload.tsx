@@ -2,6 +2,7 @@
 
 import { useRef, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { toast } from "@/lib/notification-island/toast";
 
 import { createDocument } from "@/features/documents/actions";
@@ -47,15 +48,16 @@ export function useCandidateDocumentUpload(candidateId: string) {
   const router = useRouter();
   const inputRef = useRef<HTMLInputElement>(null);
   const [isPending, start] = useTransition();
+  const t = useTranslations("features.candidates.documentUpload");
 
   function onFile(file: File | null) {
     if (!file) return;
     if (!ALLOWED_TYPES.has(file.type)) {
-      toast.error("Upload a PDF, Word doc, or image.");
+      toast.error(t("unsupportedType"));
       return;
     }
     if (file.size <= 0 || file.size > MAX_BYTES) {
-      toast.error("File must be between 1 byte and 25 MB.");
+      toast.error(t("sizeOutOfRange"));
       return;
     }
     start(async () => {
@@ -72,14 +74,14 @@ export function useCandidateDocumentUpload(candidateId: string) {
         });
         const payload: unknown = await presignRes.json();
         if (!presignRes.ok || !isPresign(payload)) {
-          throw new Error("Could not prepare the upload.");
+          throw new Error(t("prepareFailed"));
         }
         const putRes = await fetch(payload.uploadUrl, {
           method: "PUT",
           headers: { "Content-Type": file.type },
           body: file,
         });
-        if (!putRes.ok) throw new Error("Upload failed. Try again.");
+        if (!putRes.ok) throw new Error(t("uploadFailedRetry"));
 
         const result = await createDocument({
           name: file.name,
@@ -92,13 +94,13 @@ export function useCandidateDocumentUpload(candidateId: string) {
           association: { targetType: "candidate", targetId: candidateId },
         });
         if (!result.ok) {
-          toast.error(result.error ?? "Could not upload the document.");
+          toast.error(result.error ?? t("uploadFailed"));
           return;
         }
-        toast.success("Document uploaded");
+        toast.success(t("uploaded"));
         router.refresh();
       } catch (error) {
-        toast.error(error instanceof Error ? error.message : "Could not upload the document.");
+        toast.error(error instanceof Error ? error.message : t("uploadFailed"));
       } finally {
         if (inputRef.current) inputRef.current.value = "";
       }

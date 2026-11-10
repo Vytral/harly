@@ -9,6 +9,7 @@ import {
   Text,
 } from "@react-email/components";
 
+import { emailTranslator, resolveEmailLocale } from "../i18n";
 import { harlyTailwindConfig } from "./theme";
 import { HarlyFonts } from "./HarlyFonts";
 import { EmailLogo, poweredByHarlyInline } from "./EmailLogo";
@@ -33,6 +34,7 @@ type HarlyLayoutProps = {
   children: React.ReactNode;
   branding?: WorkspaceEmailBranding;
   bodyClassName?: string;
+  locale?: string | null;
 };
 
 /**
@@ -47,15 +49,17 @@ export function HarlyLayout({
   preview,
   children,
   branding,
+  locale,
   bodyClassName = "mobile:px-6! px-10 pt-8 pb-14",
 }: HarlyLayoutProps) {
+  const t = emailTranslator(locale);
   const workspaceName =
     branding?.name && branding.name !== "Harly" ? branding.name : "Harly";
   const hasBrandedLogo = Boolean(branding?.logoUrl);
 
   return (
     <Tailwind config={harlyTailwindConfig}>
-      <Html lang="en">
+      <Html lang={resolveEmailLocale(locale)}>
         <Head>
           <HarlyFonts />
         </Head>
@@ -69,6 +73,7 @@ export function HarlyLayout({
                   <EmailLogo
                     logoUrl={hasBrandedLogo ? branding?.logoUrl : undefined}
                     name={workspaceName}
+                    locale={locale}
                     variant={hasBrandedLogo ? "workspace" : "harly"}
                   />
                 </Section>
@@ -83,14 +88,14 @@ export function HarlyLayout({
                   <Text className="text-[13px] leading-[1.5] tracking-[-0.039px] font-inter text-fg-3 m-0">
                     {workspaceName !== "Harly" ? (
                       branding?.hideBranding ? (
-                        `Sent by ${workspaceName}`
+                        t("common.sentBy", { name: workspaceName })
                       ) : (
                         <>
-                          Sent by {workspaceName} · {poweredByHarlyInline()}
+                          {t("common.sentBy", { name: workspaceName })} · {poweredByHarlyInline(t("common.poweredBy"))}
                         </>
                       )
                     ) : (
-                      poweredByHarlyInline()
+                      poweredByHarlyInline(t("common.poweredBy"))
                     )}
                   </Text>
                 </Section>

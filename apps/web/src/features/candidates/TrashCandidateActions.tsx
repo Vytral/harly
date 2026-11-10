@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { RotateCcw, Trash2 } from "lucide-react";
+import { useTranslations } from "next-intl";
 import { toast } from "@/lib/notification-island/toast";
 
 import { permanentlyDeleteCandidateAction, restoreCandidateAction } from "./actions";
@@ -16,6 +17,7 @@ export function TrashCandidateActions({
   candidateId: string;
   candidateName: string;
 }) {
+  const t = useTranslations("features.candidates.trashCandidateActions");
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [confirmOpen, setConfirmOpen] = useState(false);
@@ -24,10 +26,10 @@ export function TrashCandidateActions({
     startTransition(async () => {
       const result = await restoreCandidateAction(candidateId);
       if (result.success) {
-        toast.success("Candidate restored.");
+        toast.success(t("restored"));
         router.refresh();
       } else {
-        toast.error(result.error ?? "Could not restore the candidate.");
+        toast.error(result.error ?? t("restoreError"));
       }
     });
   }
@@ -35,10 +37,10 @@ export function TrashCandidateActions({
   async function deleteForever() {
     const result = await permanentlyDeleteCandidateAction(candidateId);
     if (result.success) {
-      toast.success("Candidate deleted permanently.");
+      toast.success(t("deleted"));
       router.refresh();
     } else {
-      toast.error(result.error ?? "Could not delete the candidate.");
+      toast.error(result.error ?? t("deleteError"));
       // Keep the dialog open so the user can read the error and retry.
       throw new Error(result.error);
     }
@@ -53,7 +55,7 @@ export function TrashCandidateActions({
         disabled={isPending}
       >
         <RotateCcw className="size-4" />
-        Restore
+        {t("restore")}
       </Button>
       <Button
         variant="ghost"
@@ -61,7 +63,7 @@ export function TrashCandidateActions({
         className="size-8 text-muted-foreground hover:text-destructive"
         onClick={() => setConfirmOpen(true)}
         disabled={isPending}
-        aria-label="Delete permanently"
+        aria-label={t("deletePermanently")}
       >
         <Trash2 className="size-4" />
       </Button>
@@ -70,9 +72,9 @@ export function TrashCandidateActions({
         open={confirmOpen}
         onOpenChange={setConfirmOpen}
         tone="destructive"
-        title="Delete candidate permanently?"
-        description={`“${candidateName}” and all their applications, notes, files, and messages will be removed for good. Any pending erasure request will be marked fulfilled. This can't be undone.`}
-        confirmLabel="Delete permanently"
+        title={t("confirmTitle")}
+        description={t("confirmDescription", { name: candidateName })}
+        confirmLabel={t("deletePermanently")}
         onConfirm={deleteForever}
       />
     </div>

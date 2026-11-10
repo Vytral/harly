@@ -2,6 +2,8 @@ import "server-only";
 
 import { createHash } from "node:crypto";
 
+import { getTranslations } from "@/i18n/server";
+
 import {
   documentExtensionMatches,
   isWorkspaceStorageKey,
@@ -23,27 +25,28 @@ export async function verifyUploadedDocument(input: {
   sizeBytes: number;
   checksum: string;
 }): Promise<{ error: string } | { buffer: Buffer; checksum: string }> {
+  const t = await getTranslations("server.documents.verify");
   if (!isWorkspaceStorageKey(input.workspaceId, input.storageKey, "documents")) {
-    return { error: "The upload does not belong to this workspace." };
+    return { error: t("workspaceMismatch") };
   }
   if (input.sizeBytes <= 0 || input.sizeBytes > maxDocumentFileSize) {
-    return { error: "Document is empty or exceeds the 25 MB limit." };
+    return { error: t("sizeLimit") };
   }
   if (!documentExtensionMatches(input.name, input.mimeType)) {
-    return { error: "The file extension does not match its content type." };
+    return { error: t("extensionMismatch") };
   }
   let buffer: Buffer;
   try {
     buffer = await storage.read(input.storageKey);
   } catch {
-    return { error: "The uploaded file could not be read." };
+    return { error: t("unreadable") };
   }
   if (buffer.byteLength !== input.sizeBytes) {
-    return { error: "Uploaded file size could not be verified." };
+    return { error: t("sizeMismatch") };
   }
   const checksum = createHash("sha256").update(buffer).digest("hex");
   if (checksum !== input.checksum.toLowerCase()) {
-    return { error: "Uploaded file checksum could not be verified." };
+    return { error: t("checksumMismatch") };
   }
   return { buffer, checksum };
 }

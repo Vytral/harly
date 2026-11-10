@@ -6,6 +6,9 @@ import {
   type EvaluationCriterionInput,
 } from "./rubric-schema";
 
+const t = (_key: string, values: { key: string }) =>
+  `Knockout requires required importance ("${values.key}").`;
+
 function criterion(overrides: Partial<EvaluationCriterionInput> = {}): EvaluationCriterionInput {
   return {
     key: "python",
@@ -22,7 +25,7 @@ function criterion(overrides: Partial<EvaluationCriterionInput> = {}): Evaluatio
 
 describe("Phase 2 — rubric gate governance (§2.3, §3.4)", () => {
   it("accepts plain criteria with gates defaulting to off", () => {
-    expect(validateRubricGates([criterion()])).toBeNull();
+    expect(validateRubricGates([criterion()], t)).toBeNull();
     expect(toEffectiveCriterion(criterion())).toMatchObject({
       importance: "required",
       isKnockout: false,
@@ -32,12 +35,12 @@ describe("Phase 2 — rubric gate governance (§2.3, §3.4)", () => {
 
   it("accepts an explicit required knockout", () => {
     const input = criterion({ importance: "required", isKnockout: true });
-    expect(validateRubricGates([input])).toBeNull();
+    expect(validateRubricGates([input], t)).toBeNull();
     expect(toEffectiveCriterion(input).isKnockout).toBe(true);
   });
 
   it("rejects a knockout without required importance", () => {
-    const error = validateRubricGates([criterion({ importance: "preferred", isKnockout: true })]);
+    const error = validateRubricGates([criterion({ importance: "preferred", isKnockout: true })], t);
     expect(error).toContain("Knockout requires required importance");
     expect(error).toContain("python");
   });
@@ -52,7 +55,7 @@ describe("Phase 2 — rubric gate governance (§2.3, §3.4)", () => {
     // Excluded criteria skip the knockout/importance check — exclusion
     // already carries knockout semantics by definition.
     expect(
-      validateRubricGates([criterion({ importance: "preferred", excluded: true })]),
+      validateRubricGates([criterion({ importance: "preferred", excluded: true })], t),
     ).toBeNull();
   });
 });

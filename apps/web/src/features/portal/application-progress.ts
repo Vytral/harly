@@ -23,20 +23,32 @@ export type PortalApplicationProgress = {
   body: string;
 };
 
-export function portalApplicationProgress(input: {
-  stages: PortalStage[];
-  currentStageId: string | null;
-  status: PortalApplicationStatus;
-  /** Workspace setting: when false, stage names stay private. */
-  showStages: boolean;
-  orgName?: string;
-}): PortalApplicationProgress {
+/**
+ * `t` resolves keys under `labels.portal.applicationProgress`, so the same
+ * helper works from server and client callers.
+ */
+export type PortalProgressTranslator = (
+  key: string,
+  values?: Record<string, string | number>,
+) => string;
+
+export function portalApplicationProgress(
+  input: {
+    stages: PortalStage[];
+    currentStageId: string | null;
+    status: PortalApplicationStatus;
+    /** Workspace setting: when false, stage names stay private. */
+    showStages: boolean;
+    orgName?: string;
+  },
+  t: PortalProgressTranslator,
+): PortalApplicationProgress {
   const stages = input.showStages ? input.stages : [];
   const index = stages.findIndex((stage) => stage.id === input.currentStageId);
   const total = stages.length;
   const step = index >= 0 ? index + 1 : null;
   const currentStageName = index >= 0 ? stages[index]!.name : null;
-  const org = input.orgName?.trim() || "The team";
+  const org = input.orgName?.trim() || t("orgFallback");
 
   switch (input.status) {
     case "hired":
@@ -45,9 +57,9 @@ export function portalApplicationProgress(input: {
         total,
         currentStageName,
         tone: "success",
-        label: "Hired",
-        headline: "You're hired",
-        body: `Congratulations. ${org} will be in touch about your start date and onboarding.`,
+        label: t("hiredLabel"),
+        headline: t("hiredHeadline"),
+        body: t("hiredBody", { org }),
       };
     case "rejected":
       return {
@@ -55,9 +67,9 @@ export function portalApplicationProgress(input: {
         total,
         currentStageName,
         tone: "danger",
-        label: "Not selected",
-        headline: "Not moving forward",
-        body: `Thank you for your time. ${org} decided not to continue with this application. Your profile stays on file for future roles.`,
+        label: t("rejectedLabel"),
+        headline: t("rejectedHeadline"),
+        body: t("rejectedBody", { org }),
       };
     case "withdrawn":
       return {
@@ -65,9 +77,9 @@ export function portalApplicationProgress(input: {
         total,
         currentStageName,
         tone: "neutral",
-        label: "Withdrawn",
-        headline: "Application withdrawn",
-        body: "This application is closed. You can still apply to other open roles.",
+        label: t("withdrawnLabel"),
+        headline: t("withdrawnHeadline"),
+        body: t("withdrawnBody"),
       };
     default:
       break;
@@ -79,9 +91,9 @@ export function portalApplicationProgress(input: {
       total,
       currentStageName: null,
       tone: "info",
-      label: "In review",
-      headline: "In review",
-      body: `${org} has your application. You'll hear back here and by email when there's an update.`,
+      label: t("reviewLabel"),
+      headline: t("reviewLabel"),
+      body: t("reviewBody", { org }),
     };
   }
 
@@ -90,11 +102,11 @@ export function portalApplicationProgress(input: {
     total,
     currentStageName,
     tone: "info",
-    label: "In progress",
+    label: t("inProgressLabel"),
     headline: currentStageName,
     body:
       step === 1
-        ? `${org} has your application and is reviewing it. You'll hear back here and by email.`
-        : `You're at step ${step} of ${total}. ${org} will reach out with next steps.`,
+        ? t("firstStepBody", { org })
+        : t("laterStepBody", { step, total, org }),
   };
 }

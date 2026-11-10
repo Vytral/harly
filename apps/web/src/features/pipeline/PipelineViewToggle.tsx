@@ -1,20 +1,22 @@
 import Link from "next/link";
 import type { Route } from "next";
 import { LayoutGrid, List } from "lucide-react";
+import { getTranslations } from "next-intl/server";
 
 import { cn } from "@/lib/utils";
 
 /** Board ↔ List switch , board for small/medium, list for high volume. */
-export function PipelineViewToggle({
+export async function PipelineViewToggle({
   jobId,
   view,
 }: {
   jobId: string;
   view: "board" | "list";
 }) {
+  const t = await getTranslations("features.pipeline.PipelineViewToggle");
   const items = [
-    { key: "list" as const, label: "List", icon: List },
-    { key: "board" as const, label: "Board", icon: LayoutGrid },
+    { key: "list" as const, label: t("list"), icon: List },
+    { key: "board" as const, label: t("board"), icon: LayoutGrid },
   ];
   return (
     <div className="inline-flex items-center gap-1 rounded-full bg-soft-kraft p-1">

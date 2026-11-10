@@ -3,6 +3,7 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 
 import type { AuthBranding } from "@/features/auth/branding.server";
+import { LanguageSelector } from "@/i18n/LanguageSelector";
 
 /**
  * Shared chrome for the staff auth screens. A quiet top bar carries the
@@ -22,7 +23,9 @@ export function AuthShell({
   return (
     <div className="flex min-h-screen flex-col">
       <header className="grid grid-cols-[1fr_auto_1fr] items-center px-8 pb-6 pt-10">
-        <div />
+        <div className="flex justify-start">
+          <LanguageSelector variant="compact" />
+        </div>
         <div className="flex justify-center">
           <AuthBrandLockup branding={branding} />
         </div>

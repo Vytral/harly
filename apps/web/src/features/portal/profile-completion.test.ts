@@ -21,12 +21,12 @@ describe("getPortalProfileCompletion", () => {
       completed: 1,
       total: 7,
       missing: [
-        "Professional headline",
-        "Phone",
-        "Location",
-        "Profile photo",
-        "LinkedIn",
-        "GitHub or website",
+        "headline",
+        "phone",
+        "location",
+        "photo",
+        "linkedin",
+        "onlineProfile",
       ],
     });
   });
@@ -43,7 +43,7 @@ describe("getPortalProfileCompletion", () => {
     ).toMatchObject({
       percentage: 71,
       completed: 5,
-      missing: ["Profile photo", "LinkedIn"],
+      missing: ["photo", "linkedin"],
     });
   });
 });

@@ -1,6 +1,7 @@
 "use client";
 
 import { useTransition } from "react";
+import { useTranslations } from "next-intl";
 import { useRouter } from "next/navigation";
 import { FileText, RefreshCw } from "lucide-react";
 import { toast } from "@/lib/notification-island/toast";
@@ -21,10 +22,10 @@ import { scoreBand } from "@/lib/evaluation/score-band";
 
 
 const RECOMMENDATION_META = {
-  strong_yes: { label: "Strong yes", className: "bg-success-olive/12 text-success-olive" },
-  yes: { label: "Yes", className: "bg-success-olive/10 text-success-olive" },
-  maybe: { label: "Maybe", className: "bg-warning-clay/12 text-warning-clay" },
-  no: { label: "No", className: "bg-danger-rust/10 text-danger-rust" },
+  strong_yes: { labelKey: "recommendations.strongYes", className: "bg-success-olive/12 text-success-olive" },
+  yes: { labelKey: "recommendations.yes", className: "bg-success-olive/10 text-success-olive" },
+  maybe: { labelKey: "recommendations.maybe", className: "bg-warning-clay/12 text-warning-clay" },
+  no: { labelKey: "recommendations.no", className: "bg-danger-rust/10 text-danger-rust" },
 } as const;
 
 /** Colour per shared score band (lib/evaluation/score-band.ts). */
@@ -57,11 +58,11 @@ function formatCriterionScore(score: number | null | undefined): string {
 }
 
 const CRITERION_STATUS_META = {
-  met: { label: "Met", className: "bg-primary/10 text-primary" },
-  partially_met: { label: "Partially met", className: "bg-clay/15 text-clay" },
-  not_met: { label: "Not met", className: "bg-destructive/10 text-destructive" },
-  not_demonstrated: { label: "Not demonstrated", className: "bg-muted text-muted-foreground" },
-  unknown: { label: "Unknown", className: "bg-muted text-muted-foreground" },
+  met: { labelKey: "criterionStatuses.met", className: "bg-primary/10 text-primary" },
+  partially_met: { labelKey: "criterionStatuses.partiallyMet", className: "bg-clay/15 text-clay" },
+  not_met: { labelKey: "criterionStatuses.notMet", className: "bg-destructive/10 text-destructive" },
+  not_demonstrated: { labelKey: "criterionStatuses.notDemonstrated", className: "bg-muted text-muted-foreground" },
+  unknown: { labelKey: "criterionStatuses.unknown", className: "bg-muted text-muted-foreground" },
 } as const;
 
 function ScoreRing({ score, compact = false }: { score: number; compact?: boolean }) {
@@ -116,6 +117,7 @@ function GenerateButton({
   /** Footer placement: a small text button instead of the AI call-to-action. */
   quiet?: boolean;
 }) {
+  const t = useTranslations("features.candidates.AiScoreCard");
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
 
@@ -129,9 +131,9 @@ function GenerateButton({
         return;
       }
       if (result.aiFellBack) {
-        toast.warning("Scored with Harly's built-in rules: the AI provider didn't return a usable answer.");
+        toast.warning(t("scoredWithRules"));
       } else {
-        toast.success(aiConfigured ? "AI evaluation ready" : "Automatic evaluation ready");
+        toast.success(aiConfigured ? t("aiEvaluationReady") : t("automaticEvaluationReady"));
       }
       (router as { refresh?: () => void }).refresh?.();
     });
@@ -147,7 +149,7 @@ function GenerateButton({
         className="ml-auto h-7 gap-1.5 px-2 text-xs text-muted-foreground"
       >
         <RefreshCw className={cn("size-3.5", isPending && "animate-spin motion-reduce:animate-none")} />
-        {isPending ? "Scoring…" : "Regenerate"}
+        {isPending ? t("scoring") : t("regenerate")}
       </Button>
     );
   }
@@ -158,9 +160,9 @@ function GenerateButton({
       variant={hasEvaluation ? "ghost" : "default"}
       onClick={run}
       loading={isPending}
-      loadingText="Scoring"
+      loadingText={t("scoringLoading")}
     >
-      {hasEvaluation ? "Regenerate" : aiConfigured ? "Score with AI" : "Evaluate automatically"}
+      {hasEvaluation ? t("regenerate") : aiConfigured ? t("scoreWithAi") : t("evaluateAutomatically")}
     </AiButton>
   );
 }
@@ -189,6 +191,7 @@ export function AiScoreCard({
   /** Condensed only , jumps the caller to the full breakdown (Evaluation tab). */
   onViewDetailsAction?: () => void;
 }) {
+  const t = useTranslations("features.candidates.AiScoreCard");
   if (applications.length === 0) return null;
 
   const byApplication = new Map(evaluations.map((e) => [e.applicationId, e]));
@@ -208,7 +211,7 @@ export function AiScoreCard({
                       <HarlyAILogoMark className="size-4" />
                     </span>
                     <p className="truncate text-sm text-muted-foreground">
-                      No automatic evaluation yet for {application.jobTitle}.
+                      {t("noEvaluationForJob", { job: application.jobTitle })}
                     </p>
                   </div>
                   <GenerateButton applicationId={application.id} hasEvaluation={false} aiConfigured={aiConfigured} />
@@ -228,7 +231,7 @@ export function AiScoreCard({
                   <div className="flex flex-wrap items-center gap-2">
                     <p className="truncate text-sm font-semibold">{application.jobTitle}</p>
                     <span className={cn("rounded-full px-2 py-0.5 text-xs font-semibold", meta.className)}>
-                      {meta.label}
+                      {t(meta.labelKey)}
                     </span>
                   </div>
                   {highlights.length > 0 ? (
@@ -249,7 +252,7 @@ export function AiScoreCard({
                     className="shrink-0 text-muted-foreground"
                     onClick={onViewDetailsAction}
                   >
-                    View details
+                    {t("viewDetails")}
                   </Button>
                 ) : null}
               </CardContent>
@@ -276,7 +279,7 @@ export function AiScoreCard({
                   <div>
                     <p className="text-sm font-medium">{application.jobTitle}</p>
                     <p className="text-sm text-muted-foreground">
-                      No automatic evaluation yet for this application.
+                      {t("noEvaluation")}
                     </p>
                   </div>
                 </div>
@@ -307,7 +310,7 @@ export function AiScoreCard({
                           meta.className,
                         )}
                       >
-                        {meta.label}
+                        {t(meta.labelKey)}
                       </span>
                     </div>
                     <p className="mt-1 max-w-xl text-sm leading-6 text-muted-foreground">
@@ -326,12 +329,12 @@ export function AiScoreCard({
                         <span className="flex items-center gap-2">
                           {criterion.status ? (
                             <span className={cn("rounded-full px-2 py-0.5 text-[11px] font-semibold", CRITERION_STATUS_META[criterion.status].className)}>
-                              {CRITERION_STATUS_META[criterion.status].label}
+                              {t(CRITERION_STATUS_META[criterion.status].labelKey)}
                             </span>
                           ) : null}
                           {criterion.matchMethod === "semantic_assist" ? (
                             <span className="rounded-full bg-clay/15 px-2 py-0.5 text-[11px] font-semibold text-clay">
-                              Semantically related · Review recommended
+                              {t("semanticMatch")}
                             </span>
                           ) : null}
                           <span
@@ -367,7 +370,7 @@ export function AiScoreCard({
               {evaluation.impactHighlights.length > 0 ? (
                 <div>
                   <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                    Quantified evidence
+                    {t("quantifiedEvidence")}
                   </p>
                   <ul className="mt-2 space-y-1.5">
                     {evaluation.impactHighlights.map((item) => (
@@ -389,7 +392,7 @@ export function AiScoreCard({
                   {evaluation.strengths.length > 0 ? (
                     <div>
                       <p className="text-xs font-semibold uppercase tracking-wide text-primary">
-                        Strengths
+                        {t("strengths")}
                       </p>
                       <ul className="mt-2 space-y-1.5">
                         {evaluation.strengths.map((item) => (
@@ -404,7 +407,7 @@ export function AiScoreCard({
                   {evaluation.gaps.length > 0 ? (
                     <div>
                       <p className="text-xs font-semibold uppercase tracking-wide text-clay">
-                        Gaps
+                        {t("gaps")}
                       </p>
                       <ul className="mt-2 space-y-1.5">
                         {evaluation.gaps.map((item) => (
@@ -423,22 +426,24 @@ export function AiScoreCard({
                 <Badge variant="outline" className="gap-1.5 font-normal">
                   <ProviderLogo id={evaluation.provider} className="size-3.5" />
                   {evaluation.source === "rules"
-                    ? `Harly Algorithm · ${evaluation.modelId || "rules-v4"}`
+                    ? t("harlyAlgorithm", { model: evaluation.modelId || "rules-v4" })
                     : formatModelLabel(evaluation.modelId)}
                 </Badge>
                 <span className="inline-flex items-center gap-1">
                   <FileText className="size-3.5" />
                   {evaluation.usedResume
-                    ? "Based on resume + profile"
-                    : "Profile only. No readable resume"}
+                    ? t("basedOnResume")
+                    : t("profileOnly")}
                 </span>
                 <span>
-                  Updated <RelativeTime value={evaluation.updatedAt} />
+                  {t.rich("updated", { time: () => <RelativeTime value={evaluation.updatedAt} /> })}
                 </span>
                 {evaluation.criteria.length > 0 ? (
                   <span>
-                    {evaluation.criteria.filter((criterion) => criterion.evidence?.trim()).length} of{" "}
-                    {evaluation.criteria.length} criteria backed by evidence
+                    {t("criteriaWithEvidence", {
+                      backed: evaluation.criteria.filter((criterion) => criterion.evidence?.trim()).length,
+                      total: evaluation.criteria.length,
+                    })}
                   </span>
                 ) : null}
                 <GenerateButton applicationId={application.id} hasEvaluation aiConfigured={aiConfigured} quiet />

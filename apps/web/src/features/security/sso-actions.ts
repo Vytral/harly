@@ -1,6 +1,7 @@
 "use server";
 
 import { headers } from "next/headers";
+import { getTranslations } from "@/i18n/server";
 import { auth } from "@/lib/auth";
 import { getWorkspaceContext } from "@/features/workspaces/context";
 import { requirePermission } from "@/features/workspaces/permissions-server";
@@ -77,11 +78,12 @@ type DomainVerificationApi = {
 export async function registerSSOProviderAction(
   input: SSORegisterInput,
 ): Promise<SSOActionResult> {
+  const t = await getTranslations("server.security.sso");
   try {
     assertNotDemo();
     const { organization, user, roleKey } = await requirePermission("security:manage");
     if (roleKey !== "owner") {
-      return { ok: false, error: "Only the workspace owner can configure enterprise SSO." };
+      return { ok: false, error: t("ownerOnlyConfigure") };
     }
 
     const headerList = await headers();
@@ -181,7 +183,7 @@ export async function registerSSOProviderAction(
     log.error(error, "registerSSOProviderAction failed");
     return {
       ok: false,
-      error: error instanceof Error ? error.message : "Failed to register SSO provider.",
+      error: error instanceof Error ? error.message : t("registerFailed"),
     };
   }
 }
@@ -224,18 +226,19 @@ export async function listSSOProvidersAction(): Promise<SSOProviderConfig[]> {
 export async function updateSSOProviderAction(
   input: SSORegisterInput,
 ): Promise<SSOActionResult> {
+  const t = await getTranslations("server.security.sso");
   try {
     assertNotDemo();
     const { organization, user, roleKey } = await requirePermission("security:manage");
     if (roleKey !== "owner") {
-      return { ok: false, error: "Only the workspace owner can manage enterprise SSO." };
+      return { ok: false, error: t("ownerOnlyManage") };
     }
 
     const visibleProviders = await listSSOProvidersAction();
     const existing = visibleProviders.find(
       (provider) => provider.providerId === input.providerId && provider.organizationId === organization.id,
     );
-    if (!existing) return { ok: false, error: "SSO provider not found." };
+    if (!existing) return { ok: false, error: t("providerNotFound") };
 
     const headerList = await headers();
     const config = loadHarlyConfig();
@@ -310,7 +313,7 @@ export async function updateSSOProviderAction(
     return { ok: true, providerId: existing.providerId };
   } catch (error) {
     log.error(error, "updateSSOProviderAction failed");
-    return { ok: false, error: error instanceof Error ? error.message : "Failed to update SSO provider." };
+    return { ok: false, error: error instanceof Error ? error.message : t("updateFailed") };
   }
 }
 
@@ -318,18 +321,19 @@ export async function updateSSOProviderAction(
 export async function deleteSSOProviderAction(
   providerId: string,
 ): Promise<SSOActionResult> {
+  const t = await getTranslations("server.security.sso");
   try {
     assertNotDemo();
     const { organization, user, roleKey } = await requirePermission("security:manage");
     if (roleKey !== "owner") {
-      return { ok: false, error: "Only the workspace owner can manage enterprise SSO." };
+      return { ok: false, error: t("ownerOnlyManage") };
     }
 
     const visibleProviders = await listSSOProvidersAction();
     const provider = visibleProviders.find(
       (candidate) => candidate.providerId === providerId && candidate.organizationId === organization.id,
     );
-    if (!provider) return { ok: false, error: "SSO provider not found." };
+    if (!provider) return { ok: false, error: t("providerNotFound") };
 
     const headerList = await headers();
 
@@ -352,7 +356,7 @@ export async function deleteSSOProviderAction(
     log.error(error, "deleteSSOProviderAction failed");
     return {
       ok: false,
-      error: error instanceof Error ? error.message : "Failed to delete SSO provider.",
+      error: error instanceof Error ? error.message : t("deleteFailed"),
     };
   }
 }
@@ -361,16 +365,17 @@ export async function deleteSSOProviderAction(
 export async function requestSSODomainVerificationAction(
   providerId: string,
 ): Promise<SSOActionResult & { token?: string }> {
+  const t = await getTranslations("server.security.sso");
   try {
     assertNotDemo();
     const { organization, roleKey } = await requirePermission("security:manage");
     if (roleKey !== "owner") {
-      return { ok: false, error: "Only the workspace owner can verify enterprise SSO domains." };
+      return { ok: false, error: t("ownerOnlyVerify") };
     }
     const provider = (await listSSOProvidersAction()).find(
       (candidate) => candidate.providerId === providerId && candidate.organizationId === organization.id,
     );
-    if (!provider) return { ok: false, error: "SSO provider not found." };
+    if (!provider) return { ok: false, error: t("providerNotFound") };
 
     const result = await (auth.api as unknown as DomainVerificationApi).requestDomainVerification({
       body: { providerId },
@@ -379,22 +384,23 @@ export async function requestSSODomainVerificationAction(
     return { ok: true, providerId, token: result.domainVerificationToken };
   } catch (error) {
     log.error(error, "requestSSODomainVerificationAction failed");
-    return { ok: false, error: error instanceof Error ? error.message : "Failed to request domain verification." };
+    return { ok: false, error: error instanceof Error ? error.message : t("requestVerificationFailed") };
   }
 }
 
 /** Verify the DNS TXT challenge for an existing provider. */
 export async function verifySSODomainAction(providerId: string): Promise<SSOActionResult> {
+  const t = await getTranslations("server.security.sso");
   try {
     assertNotDemo();
     const { organization, user, roleKey } = await requirePermission("security:manage");
     if (roleKey !== "owner") {
-      return { ok: false, error: "Only the workspace owner can verify enterprise SSO domains." };
+      return { ok: false, error: t("ownerOnlyVerify") };
     }
     const provider = (await listSSOProvidersAction()).find(
       (candidate) => candidate.providerId === providerId && candidate.organizationId === organization.id,
     );
-    if (!provider) return { ok: false, error: "SSO provider not found." };
+    if (!provider) return { ok: false, error: t("providerNotFound") };
 
     await (auth.api as unknown as DomainVerificationApi).verifyDomain({
       body: { providerId },
@@ -411,6 +417,6 @@ export async function verifySSODomainAction(providerId: string): Promise<SSOActi
     return { ok: true, providerId };
   } catch (error) {
     log.error(error, "verifySSODomainAction failed");
-    return { ok: false, error: error instanceof Error ? error.message : "Failed to verify SSO domain." };
+    return { ok: false, error: error instanceof Error ? error.message : t("verifyFailed") };
   }
 }

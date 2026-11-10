@@ -1,5 +1,6 @@
 "use client";
 
+import { useTranslations } from "next-intl";
 import { motion, useReducedMotion, type Variants } from "motion/react";
 import { ServerIcon, WaypointsIcon, LockKeyholeIcon } from "lucide-react";
 
@@ -10,26 +11,15 @@ const EASE_OUT = [0.16, 1, 0.3, 1] as const;
 const LANDING_URL = "https://harly.dev";
 const REPO_URL = "https://github.com/Vytral/harly";
 
-const POINTS = [
-  {
-    icon: ServerIcon,
-    title: "Your ATS, your server",
-    body: "Self-hosted and open-source. Candidate data never leaves your infrastructure.",
-  },
-  {
-    icon: WaypointsIcon,
-    title: "Hiring, with less busywork",
-    body: "Screening, scheduling, and pipeline tracking in one calm place.",
-  },
-  {
-    icon: LockKeyholeIcon,
-    title: "Yours to own",
-    body: "No per-seat pricing, no lock-in. Invite your team and start hiring.",
-  },
-];
 
 export function SetupBrandPanel() {
+  const t = useTranslations("accessSetup");
   const reduce = useReducedMotion();
+  const points = [
+    {icon: ServerIcon, title: t("pointOneTitle"), body: t("pointOneBody")},
+    {icon: WaypointsIcon, title: t("pointTwoTitle"), body: t("pointTwoBody")},
+    {icon: LockKeyholeIcon, title: t("pointThreeTitle"), body: t("pointThreeBody")},
+  ];
 
   const container: Variants = {
     hidden: {},
@@ -78,7 +68,7 @@ export function SetupBrandPanel() {
         <a
           href={LANDING_URL}
           className="inline-flex rounded-sm outline-none ring-lime/60 transition focus-visible:ring-2"
-          aria-label="Harly , visit harly.dev"
+          aria-label={t("visit")}
         >
           <motion.img
             src="/harly-full-white.svg"
@@ -105,13 +95,11 @@ export function SetupBrandPanel() {
           variants={item}
           className="font-display text-3xl leading-tight tracking-tight lg:text-4xl"
         >
-          Let&apos;s get your
-          <br />
-          hiring home set up.
+          {t("brandHeading")}
         </motion.h2>
 
         <ul className="mt-10 space-y-6">
-          {POINTS.map(({ icon: Icon, title, body }) => (
+          {points.map(({ icon: Icon, title, body }) => (
             <motion.li key={title} variants={item} className="flex gap-4">
               <span className="mt-0.5 flex size-9 shrink-0 items-center justify-center rounded-xl bg-white/10 ring-1 ring-inset ring-white/15">
                 <Icon className="size-[1.125rem] text-lime" strokeWidth={1.75} />
@@ -135,14 +123,14 @@ export function SetupBrandPanel() {
         className="relative z-10 flex items-center justify-between gap-4"
       >
         <p className="text-xs text-white/45">
-          Open-source applicant tracking system
+          {t("tagline")}
         </p>
         <a
           href={REPO_URL}
           target="_blank"
           rel="noreferrer noopener"
           className="inline-flex size-9 items-center justify-center rounded-lg text-white/55 outline-none ring-inset ring-lime/60 transition hover:bg-white/10 hover:text-white focus-visible:ring-2"
-          aria-label="Harly on GitHub"
+          aria-label={t("github")}
         >
           <GithubIcon className="size-[1.125rem]" />
         </a>

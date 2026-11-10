@@ -1,6 +1,7 @@
 import { createElement } from "react";
 
 import type { SocialPlatform } from "./config";
+import type { Translate } from "./translate";
 
 /**
  * Real brand-mark SVGs for the footer social links , NOT lucide. Marks come
@@ -55,7 +56,9 @@ export const SOCIAL_ICONS: Record<SocialPlatform, SocialIconMeta> = {
 
 export const SOCIAL_PLATFORM_NAMES = Object.keys(SOCIAL_ICONS) as SocialPlatform[];
 
-export function socialLabel(platform: SocialPlatform): string {
+/** Brand names stay as written; only the generic "Website" label is translated. */
+export function socialLabel(platform: SocialPlatform, t?: Translate): string {
+  if (platform === "website" && t) return t("website");
   return SOCIAL_ICONS[platform]?.label ?? platform;
 }
 

@@ -18,6 +18,7 @@ import {
   UploadCloud,
   Upload,
 } from "lucide-react";
+import { useTranslations } from "next-intl";
 
 import {
   parseResumeAction,
@@ -150,6 +151,18 @@ function createExperienceEntry(): ExperienceEntry {
   };
 }
 
+/** Accent span used inside drop-zone prompts. */
+function dropAccent(
+  chunks: React.ReactNode,
+  weight: "font-medium" | "font-semibold",
+) {
+  return (
+    <span className={weight} style={{ color: "var(--board-primary)" }}>
+      {chunks}
+    </span>
+  );
+}
+
 function FieldError({ errors }: { errors: string[] | undefined }) {
   if (!errors?.length) {
     return null;
@@ -176,7 +189,10 @@ function mergeErrors(
   return clientErrors?.length ? clientErrors : serverErrors;
 }
 
-function validateUrl(value: string): string | null {
+function validateUrl(
+  value: string,
+  t: ReturnType<typeof useTranslations>,
+): string | null {
   const trimmed = value.trim();
 
   if (!trimmed) {
@@ -191,7 +207,7 @@ function validateUrl(value: string): string | null {
     new URL(normalUrl);
     return null;
   } catch {
-    return "Enter a valid URL.";
+    return t("errors.invalidUrl");
   }
 }
 
@@ -341,6 +357,7 @@ function YesNoToggle({
   value: string;
   onChange: (next: string) => void;
 }) {
+  const t = useTranslations("features.applications.applyForm");
   return (
     <div
       className={cn(
@@ -368,7 +385,7 @@ function YesNoToggle({
               active ? { backgroundColor: "var(--board-primary)" } : undefined
             }
           >
-            {option}
+            {option === "Yes" ? t("yesNo.yes") : t("yesNo.no")}
           </button>
         );
       })}
@@ -678,6 +695,8 @@ export function ApplyForm({
   legalPages = null,
   legalBasePath = "/legal",
 }: ApplyFormProps) {
+  const t = useTranslations("features.applications.applyForm");
+  const tStorage = useTranslations("labels.storageValidation");
   const isAshby = variant === "ashby";
   const isJoin = variant === "join";
   const flatVariant = isAshby || isJoin;
@@ -726,7 +745,7 @@ export function ApplyForm({
     : null;
   const consentText =
     consentCheckboxText ||
-    "I agree to the privacy policy and consent to the processing of my personal data.";
+    t("consent.defaultText");
   const showPhone = isFieldEnabled(applicationConfig.sections.personal.phone);
   const showAddress = isFieldEnabled(
     applicationConfig.sections.personal.address,
@@ -825,33 +844,33 @@ export function ApplyForm({
     const profileFields = applicationConfig.sections.profile;
 
     if (isFieldRequired(personalFields.phone) && !fields.phone.trim()) {
-      nextErrors.phone = ["This field is required."];
+      nextErrors.phone = [t("errors.required")];
     }
 
     if (isFieldRequired(personalFields.address) && !fields.address.trim()) {
-      nextErrors.address = ["This field is required."];
+      nextErrors.address = [t("errors.required")];
     }
 
     if (isFieldRequired(personalFields.headline) && !fields.headline.trim()) {
-      nextErrors.headline = ["This field is required."];
+      nextErrors.headline = [t("errors.required")];
     }
 
     if (isFieldRequired(personalFields.photo) && !fields.photoUrl.trim()) {
-      nextErrors.photoUrl = ["This field is required."];
+      nextErrors.photoUrl = [t("errors.required")];
     }
 
     if (
       isFieldRequired(profileFields.education) &&
       educationEntries.length === 0
     ) {
-      nextErrors.educationEntries = ["Add at least one education entry."];
+      nextErrors.educationEntries = [t("errors.addEducation")];
     }
 
     if (
       isFieldRequired(profileFields.experience) &&
       experienceEntries.length === 0
     ) {
-      nextErrors.experienceEntries = ["Add at least one experience entry."];
+      nextErrors.experienceEntries = [t("errors.addExperience")];
     }
 
     for (const entry of educationEntries) {
@@ -859,7 +878,7 @@ export function ApplyForm({
         Record<Extract<keyof EducationEntry, string>, string[]>
       > = {};
       if (!entry.school?.trim()) {
-        entryErrors.school = ["School is required."];
+        entryErrors.school = [t("errors.schoolRequired")];
       }
       if (Object.keys(entryErrors).length > 0) {
         nextEducationErrors[entry.id] = entryErrors;
@@ -871,10 +890,10 @@ export function ApplyForm({
         Record<Extract<keyof ExperienceEntry, string>, string[]>
       > = {};
       if (!entry.company?.trim()) {
-        entryErrors.company = ["Company is required."];
+        entryErrors.company = [t("errors.companyRequired")];
       }
       if (!entry.title?.trim()) {
-        entryErrors.title = ["Job title is required."];
+        entryErrors.title = [t("errors.jobTitleRequired")];
       }
       if (Object.keys(entryErrors).length > 0) {
         nextExperienceErrors[entry.id] = entryErrors;
@@ -891,10 +910,10 @@ export function ApplyForm({
       const setting = linkPlatforms[field];
       const value = fields[field].trim();
       if (setting.required && !value) {
-        nextErrors[field] = ["This field is required."];
+        nextErrors[field] = [t("errors.required")];
         continue;
       }
-      const error = validateUrl(fields[field]);
+      const error = validateUrl(fields[field], t);
       if (error) {
         nextErrors[field] = [error];
       }
@@ -907,19 +926,19 @@ export function ApplyForm({
 
       const value = answers[question.id]?.trim() ?? "";
       if (question.required && !value) {
-        nextQuestionErrors[question.id] = ["This question is required."];
+        nextQuestionErrors[question.id] = [t("errors.questionRequired")];
         continue;
       }
       if (question.type === "consent" && question.required && value !== "agree") {
         nextQuestionErrors[question.id] = [
-          "You must agree to continue with your application.",
+          t("errors.consentQuestion"),
         ];
         continue;
       }
       if (question.type !== "url") {
         continue;
       }
-      const error = validateUrl(value);
+      const error = validateUrl(value, t);
       if (error) {
         nextQuestionErrors[question.id] = [error];
       }
@@ -992,8 +1011,8 @@ export function ApplyForm({
 
     setAutofillMessage(
       filledCount > 0
-        ? `Resume attached. Autofilled ${filledCount} field${filledCount === 1 ? "" : "s"}.`
-        : "Resume attached.",
+        ? t("resume.autofilled", { count: filledCount })
+        : t("resume.attached"),
     );
   }
 
@@ -1008,7 +1027,7 @@ export function ApplyForm({
       return;
     }
 
-    const validationError = getResumeFileValidationError(file);
+    const validationError = getResumeFileValidationError(file, tStorage);
 
     if (validationError) {
       setResumeFile(null);
@@ -1036,7 +1055,7 @@ export function ApplyForm({
 
       if (!parseResult.ok) {
         setAutofillMessage(
-          "Resume attached. We couldn't autofill fields from this file.",
+          t("resume.notAutofilled"),
         );
         return;
       }
@@ -1048,7 +1067,7 @@ export function ApplyForm({
       setResumeError(
         error instanceof Error
           ? error.message
-          : "Unable to read this resume. Please try again.",
+          : t("errors.resumeRead"),
       );
     } finally {
       setIsUploadingResume(false);
@@ -1096,7 +1115,7 @@ export function ApplyForm({
     );
 
     if (!presignResponse.ok || !presignPayload) {
-      throw new Error("Unable to prepare resume upload.");
+      throw new Error(t("errors.resumePrepare"));
     }
 
     const uploadResponse = await fetch(presignPayload.uploadUrl, {
@@ -1106,7 +1125,7 @@ export function ApplyForm({
     });
 
     if (!uploadResponse.ok) {
-      throw new Error("Unable to upload resume.");
+      throw new Error(t("errors.resumeUpload"));
     }
 
     return {
@@ -1136,7 +1155,7 @@ export function ApplyForm({
     );
 
     if (!presignResponse.ok || !presignPayload) {
-      throw new Error("Unable to prepare photo upload.");
+      throw new Error(t("errors.photoPrepare"));
     }
 
     const uploadResponse = await fetch(presignPayload.uploadUrl, {
@@ -1146,7 +1165,7 @@ export function ApplyForm({
     });
 
     if (!uploadResponse.ok) {
-      throw new Error("Unable to upload photo.");
+      throw new Error(t("errors.photoUpload"));
     }
 
     return {
@@ -1167,7 +1186,7 @@ export function ApplyForm({
       return;
     }
 
-    const validationError = getImageFileValidationError(file);
+    const validationError = getImageFileValidationError(file, tStorage);
     if (validationError) {
       setPhotoFile(null);
       updateField("photoUrl", "");
@@ -1188,7 +1207,7 @@ export function ApplyForm({
       setPhotoError(
         error instanceof Error
           ? error.message
-          : "Unable to upload this photo. Please try again.",
+          : t("errors.photoRetry"),
       );
     } finally {
       setIsUploadingPhoto(false);
@@ -1205,12 +1224,12 @@ export function ApplyForm({
     }
 
     if (applicationConfig.resumeRequired && !resumeFile) {
-      setResumeError("Resume is required.");
+      setResumeError(t("errors.resumeRequired"));
       return;
     }
 
     const validationError = resumeFile
-      ? getResumeFileValidationError(resumeFile)
+      ? getResumeFileValidationError(resumeFile, tStorage)
       : null;
 
     if (validationError) {
@@ -1220,7 +1239,7 @@ export function ApplyForm({
 
     if (showConsentCheckbox && !consentGiven) {
       setConsentError(
-        "You must agree to the privacy policy to submit your application.",
+        t("errors.consentRequired"),
       );
       return;
     }
@@ -1247,7 +1266,7 @@ export function ApplyForm({
       const form = formRef.current;
 
       if (!form) {
-        throw new Error("Application form is not available.");
+        throw new Error(t("errors.formUnavailable"));
       }
 
       const formData = new FormData(form);
@@ -1277,7 +1296,7 @@ export function ApplyForm({
       setResumeError(
         error instanceof Error
           ? error.message
-          : "Unable to upload resume. Please try again.",
+          : t("errors.resumeRetry"),
       );
     }
   }
@@ -1328,10 +1347,10 @@ export function ApplyForm({
           <Check className="size-6" strokeWidth={2.5} />
         </span>
         <p className="mt-4 text-xs font-medium uppercase tracking-[0.08em] text-zinc-500 dark:text-zinc-400">
-          Application submitted
+          {t("success.eyebrow")}
         </p>
         <h2 className="mt-2 text-xl font-semibold text-zinc-900 dark:text-zinc-100">
-          Thank you for applying
+          {t("success.title")}
         </h2>
         <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-zinc-600 dark:text-zinc-400">
           {state.message}
@@ -1346,7 +1365,7 @@ export function ApplyForm({
     <>
       {isUploadingResume ? (
         <p className="mt-2 rounded-md bg-zinc-50 px-3 py-2 text-xs text-zinc-600 dark:bg-zinc-800/50 dark:text-zinc-400">
-          Reading your resume…
+          {t("resume.reading")}
         </p>
       ) : autofillMessage ? (
         <p className="mt-2 rounded-md bg-zinc-50 px-3 py-2 text-xs text-zinc-600 dark:bg-zinc-800/50 dark:text-zinc-400">
@@ -1360,7 +1379,7 @@ export function ApplyForm({
         <div className="mt-3 flex flex-wrap items-center gap-1.5">
           {detected.experienceYears !== undefined ? (
             <span className="rounded-full bg-zinc-100 px-2.5 py-1 text-xs font-medium text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300">
-              {detected.experienceYears}+ yrs experience
+              {t("resume.experienceYears", { years: detected.experienceYears })}
             </span>
           ) : null}
           {detected.education ? (
@@ -1389,7 +1408,7 @@ export function ApplyForm({
     <>
       {isUploadingPhoto ? (
         <p className="mt-2 rounded-md bg-zinc-50 px-3 py-2 text-xs text-zinc-600 dark:bg-zinc-800/50 dark:text-zinc-400">
-          Uploading your photo…
+          {t("photo.uploading")}
         </p>
       ) : photoFile ? (
         <p className="mt-2 rounded-md bg-zinc-50 px-3 py-2 text-xs text-zinc-600 dark:bg-zinc-800/50 dark:text-zinc-400">
@@ -1431,9 +1450,9 @@ export function ApplyForm({
       <div key={entry.id} className={entryCardClass}>
         <div className="flex items-center justify-between gap-3">
           <div>
-            <p className={subLabelClass}>Education {index + 1}</p>
+            <p className={subLabelClass}>{t("education.entryLabel", { number: index + 1 })}</p>
             <p className="mt-1 text-sm font-medium text-zinc-900 dark:text-zinc-100">
-              Add a school, degree, and dates if relevant.
+              {t("education.entryHint")}
             </p>
           </div>
           <button
@@ -1442,7 +1461,7 @@ export function ApplyForm({
             className={removeButtonClass}
           >
             <TrashIcon className="size-3.5" />
-            Remove
+            {t("actions.remove")}
           </button>
         </div>
         <FieldError
@@ -1451,7 +1470,7 @@ export function ApplyForm({
         <div className="grid gap-4 sm:grid-cols-2">
           <label className="block">
             <FieldLabel ashby={flatVariant} required>
-              School
+              {t("education.school")}
             </FieldLabel>
             <input
               id={`education-school-${entry.id}`}
@@ -1461,7 +1480,7 @@ export function ApplyForm({
               onChange={(event) =>
                 updateEducationEntry(entry.id, "school", event.target.value)
               }
-              placeholder="University of..."
+              placeholder={t("education.schoolPlaceholder")}
               className={`${input} mt-1.5`}
             />
             <FieldError
@@ -1472,7 +1491,7 @@ export function ApplyForm({
             />
           </label>
           <label className="block">
-            <FieldLabel ashby={flatVariant}>Degree</FieldLabel>
+            <FieldLabel ashby={flatVariant}>{t("education.degree")}</FieldLabel>
             <input
               id={`education-degree-${entry.id}`}
               name={`education-degree-${entry.id}`}
@@ -1481,7 +1500,7 @@ export function ApplyForm({
               onChange={(event) =>
                 updateEducationEntry(entry.id, "degree", event.target.value)
               }
-              placeholder="Bachelor's degree"
+              placeholder={t("education.degreePlaceholder")}
               className={`${input} mt-1.5`}
             />
             <FieldError
@@ -1492,7 +1511,7 @@ export function ApplyForm({
             />
           </label>
           <label className="block">
-            <FieldLabel ashby={flatVariant}>Field of study</FieldLabel>
+            <FieldLabel ashby={flatVariant}>{t("education.field")}</FieldLabel>
             <input
               id={`education-field-${entry.id}`}
               name={`education-field-${entry.id}`}
@@ -1501,7 +1520,7 @@ export function ApplyForm({
               onChange={(event) =>
                 updateEducationEntry(entry.id, "field", event.target.value)
               }
-              placeholder="Computer science"
+              placeholder={t("education.fieldPlaceholder")}
               className={`${input} mt-1.5`}
             />
             <FieldError
@@ -1513,7 +1532,7 @@ export function ApplyForm({
           </label>
           <div className="grid gap-4 sm:grid-cols-2">
             <label className="block">
-              <FieldLabel ashby={flatVariant}>Start date</FieldLabel>
+              <FieldLabel ashby={flatVariant}>{t("common.startDate")}</FieldLabel>
               <input
                 id={`education-startDate-${entry.id}`}
                 name={`education-startDate-${entry.id}`}
@@ -1540,7 +1559,7 @@ export function ApplyForm({
               />
             </label>
             <label className="block">
-              <FieldLabel ashby={flatVariant}>End date</FieldLabel>
+              <FieldLabel ashby={flatVariant}>{t("common.endDate")}</FieldLabel>
               <input
                 id={`education-endDate-${entry.id}`}
                 name={`education-endDate-${entry.id}`}
@@ -1565,7 +1584,7 @@ export function ApplyForm({
           </div>
         </div>
         <label className="block">
-          <FieldLabel ashby={flatVariant}>Description</FieldLabel>
+          <FieldLabel ashby={flatVariant}>{t("common.description")}</FieldLabel>
           <textarea
             id={`education-description-${entry.id}`}
             name={`education-description-${entry.id}`}
@@ -1574,7 +1593,7 @@ export function ApplyForm({
             onChange={(event) =>
               updateEducationEntry(entry.id, "description", event.target.value)
             }
-            placeholder="Achievements, honors, thesis, or relevant notes."
+            placeholder={t("education.descriptionPlaceholder")}
             className={`${textarea} mt-1.5`}
           />
           <FieldError
@@ -1600,9 +1619,9 @@ export function ApplyForm({
       <div key={entry.id} className={entryCardClass}>
         <div className="flex items-center justify-between gap-3">
           <div>
-            <p className={subLabelClass}>Experience {index + 1}</p>
+            <p className={subLabelClass}>{t("experience.entryLabel", { number: index + 1 })}</p>
             <p className="mt-1 text-sm font-medium text-zinc-900 dark:text-zinc-100">
-              Add your role, company, and scope of work.
+              {t("experience.entryHint")}
             </p>
           </div>
           <button
@@ -1611,7 +1630,7 @@ export function ApplyForm({
             className={removeButtonClass}
           >
             <TrashIcon className="size-3.5" />
-            Remove
+            {t("actions.remove")}
           </button>
         </div>
         <FieldError
@@ -1620,7 +1639,7 @@ export function ApplyForm({
         <div className="grid gap-4 sm:grid-cols-2">
           <label className="block">
             <FieldLabel ashby={flatVariant} required>
-              Company
+              {t("experience.company")}
             </FieldLabel>
             <input
               id={`experience-company-${entry.id}`}
@@ -1630,7 +1649,7 @@ export function ApplyForm({
               onChange={(event) =>
                 updateExperienceEntry(entry.id, "company", event.target.value)
               }
-              placeholder="Company name"
+              placeholder={t("experience.companyPlaceholder")}
               className={`${input} mt-1.5`}
             />
             <FieldError
@@ -1646,7 +1665,7 @@ export function ApplyForm({
           </label>
           <label className="block">
             <FieldLabel ashby={flatVariant} required>
-              Job title
+              {t("experience.jobTitle")}
             </FieldLabel>
             <input
               id={`experience-title-${entry.id}`}
@@ -1656,7 +1675,7 @@ export function ApplyForm({
               onChange={(event) =>
                 updateExperienceEntry(entry.id, "title", event.target.value)
               }
-              placeholder="Senior software engineer"
+              placeholder={t("experience.jobTitlePlaceholder")}
               className={`${input} mt-1.5`}
             />
             <FieldError
@@ -1667,7 +1686,7 @@ export function ApplyForm({
             />
           </label>
           <label className="block">
-            <FieldLabel ashby={flatVariant}>Location</FieldLabel>
+            <FieldLabel ashby={flatVariant}>{t("experience.location")}</FieldLabel>
             <input
               id={`experience-location-${entry.id}`}
               name={`experience-location-${entry.id}`}
@@ -1676,7 +1695,7 @@ export function ApplyForm({
               onChange={(event) =>
                 updateExperienceEntry(entry.id, "location", event.target.value)
               }
-              placeholder="Remote, Santiago, Chile"
+              placeholder={t("experience.locationPlaceholder")}
               className={`${input} mt-1.5`}
             />
             <FieldError
@@ -1692,7 +1711,7 @@ export function ApplyForm({
           </label>
           <div className="grid gap-4 sm:grid-cols-2">
             <label className="block">
-              <FieldLabel ashby={flatVariant}>Start date</FieldLabel>
+              <FieldLabel ashby={flatVariant}>{t("common.startDate")}</FieldLabel>
               <input
                 id={`experience-startDate-${entry.id}`}
                 name={`experience-startDate-${entry.id}`}
@@ -1719,7 +1738,7 @@ export function ApplyForm({
               />
             </label>
             <label className="block">
-              <FieldLabel ashby={flatVariant}>End date</FieldLabel>
+              <FieldLabel ashby={flatVariant}>{t("common.endDate")}</FieldLabel>
               <input
                 id={`experience-endDate-${entry.id}`}
                 name={`experience-endDate-${entry.id}`}
@@ -1755,10 +1774,10 @@ export function ApplyForm({
             }
             className="size-4 rounded border-zinc-300 text-[var(--board-primary)] focus:ring-[var(--board-primary)]"
           />
-          I currently work here
+          {t("experience.current")}
         </label>
         <label className="block">
-          <FieldLabel ashby={flatVariant}>Description</FieldLabel>
+          <FieldLabel ashby={flatVariant}>{t("common.description")}</FieldLabel>
           <textarea
             id={`experience-description-${entry.id}`}
             name={`experience-description-${entry.id}`}
@@ -1767,7 +1786,7 @@ export function ApplyForm({
             onChange={(event) =>
               updateExperienceEntry(entry.id, "description", event.target.value)
             }
-            placeholder="Scope, achievements, technologies, or impact."
+            placeholder={t("experience.descriptionPlaceholder")}
             className={`${textarea} mt-1.5`}
           />
           <FieldError
@@ -1838,7 +1857,7 @@ export function ApplyForm({
               <div className={cn("space-y-4", reveal)} style={{ animationDelay: "0ms" }}>
                 <div className="border-b border-zinc-200 pb-2.5 dark:border-zinc-800">
                   <h2 className="text-base font-semibold text-zinc-900 dark:text-zinc-100">
-                    Resume
+                    {t("resume.heading")}
                   </h2>
                 </div>
                 {resumeFile ? (
@@ -1858,7 +1877,7 @@ export function ApplyForm({
                       className="cursor-pointer text-sm font-medium underline underline-offset-2"
                       style={{ color: "var(--board-primary)" }}
                     >
-                      Replace
+                      {t("resume.replace")}
                     </label>
                   </div>
                 ) : (
@@ -1886,13 +1905,16 @@ export function ApplyForm({
                       <UploadCloud className="size-5" strokeWidth={1.6} />
                     </span>
                     <p className="text-sm text-zinc-700 dark:text-zinc-300">
-                      <span className="font-semibold" style={{ color: "var(--board-primary)" }}>
-                        {isDragging ? "Drop here" : "Upload your resume"}
-                      </span>{" "}
-                      {isDragging ? "" : "or drag and drop"}
+                      {isDragging
+                        ? t.rich("resume.dropJoinActive", {
+                            accent: (chunks) => dropAccent(chunks, "font-semibold"),
+                          })
+                        : t.rich("resume.dropJoin", {
+                            accent: (chunks) => dropAccent(chunks, "font-semibold"),
+                          })}
                     </p>
                     <p className="text-xs text-zinc-400 dark:text-zinc-500">
-                      PDF, DOC, or DOCX · up to 10MB
+                      {t("resume.formats")}
                     </p>
                   </label>
                 )}
@@ -1918,10 +1940,10 @@ export function ApplyForm({
                     </span>
                     <div>
                       <p className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
-                        Autofill from resume
+                        {t("resume.autofillTitle")}
                       </p>
                       <p className="mt-1 max-w-sm text-sm leading-relaxed text-zinc-600 dark:text-zinc-400">
-                        Upload your resume to autofill key application fields.
+                        {t("resume.autofillHint")}
                       </p>
                     </div>
                   </div>
@@ -1934,7 +1956,7 @@ export function ApplyForm({
                       color: "var(--board-primary)",
                     }}
                   >
-                    {resumeFile ? "Replace file" : "Upload file"}
+                    {resumeFile ? t("resume.replaceFile") : t("resume.uploadFile")}
                   </label>
                 </div>
 
@@ -1971,16 +1993,16 @@ export function ApplyForm({
                       }}
                     >
                       <Paperclip className="size-4" strokeWidth={2} />
-                      {isDragging ? "Drop here" : "Upload File"}
+                      {isDragging ? t("resume.dropHere") : t("resume.uploadFile")}
                     </span>
                     <span className="text-sm text-zinc-500 dark:text-zinc-400">
-                      {isDragging ? "Release to upload" : "or drag and drop here"}
+                      {isDragging ? t("resume.releaseToUpload") : t("resume.orDragDropHere")}
                     </span>
                   </label>
                 )}
                 {!resumeFile ? (
                   <p className="mt-2 text-center text-xs text-zinc-400 dark:text-zinc-500 sm:text-left">
-                    .pdf, .doc, .docx · up to 10MB
+                    {t("resume.formats")}
                   </p>
                 ) : null}
                 {resumeStatus}
@@ -1989,7 +2011,7 @@ export function ApplyForm({
           ) : null}
 
           <p className="text-xs text-zinc-500 dark:text-zinc-400">
-            <span className={requiredMarkClass}>*</span> Required fields
+            <span className={requiredMarkClass}>*</span> {t("common.requiredFields")}
           </p>
 
           {/* Personal Information */}
@@ -1999,7 +2021,7 @@ export function ApplyForm({
           >
             <div className="flex items-center justify-between border-b border-zinc-200 pb-2.5 dark:border-zinc-800">
               <h2 className="text-base font-semibold text-zinc-900 dark:text-zinc-100">
-                Personal Information
+                {t("sections.personalInfo")}
               </h2>
               <button
                 type="button"
@@ -2007,14 +2029,14 @@ export function ApplyForm({
                 className="inline-flex items-center gap-1.5 text-xs font-medium text-zinc-500 transition hover:text-zinc-900 dark:hover:text-zinc-100"
               >
                 <TrashIcon className="size-3.5" />
-                Clear
+                {t("actions.clear")}
               </button>
             </div>
 
             <div className="grid gap-4 sm:grid-cols-2">
               <label className="block">
                 <FieldLabel ashby required>
-                  First name
+                  {t("common.firstName")}
                 </FieldLabel>
                 <input
                   name="firstName"
@@ -2024,7 +2046,7 @@ export function ApplyForm({
                   onChange={(event) =>
                     updateField("firstName", event.target.value)
                   }
-                  placeholder="Type here..."
+                  placeholder={t("common.typeHere")}
                   className={`${input} mt-1.5`}
                 />
                 <FieldError errors={fieldErrorsFor(state, "firstName")} />
@@ -2032,7 +2054,7 @@ export function ApplyForm({
 
               <label className="block">
                 <FieldLabel ashby required>
-                  Last name
+                  {t("common.lastName")}
                 </FieldLabel>
                 <input
                   name="lastName"
@@ -2042,7 +2064,7 @@ export function ApplyForm({
                   onChange={(event) =>
                     updateField("lastName", event.target.value)
                   }
-                  placeholder="Type here..."
+                  placeholder={t("common.typeHere")}
                   className={`${input} mt-1.5`}
                 />
                 <FieldError errors={fieldErrorsFor(state, "lastName")} />
@@ -2051,7 +2073,7 @@ export function ApplyForm({
 
             <label className="block">
               <FieldLabel ashby required>
-                Email
+                {t("common.email")}
               </FieldLabel>
               <input
                 name="email"
@@ -2059,7 +2081,7 @@ export function ApplyForm({
                 autoComplete="email"
                 value={fields.email}
                 onChange={(event) => updateField("email", event.target.value)}
-                placeholder="hello@example.com..."
+                placeholder={t("common.emailPlaceholder")}
                 className={`${input} mt-1.5`}
               />
               <FieldError errors={fieldErrorsFor(state, "email")} />
@@ -2073,14 +2095,14 @@ export function ApplyForm({
                     applicationConfig.sections.personal.photo,
                   )}
                 >
-                  Photo
+                  {t("photo.label")}
                 </FieldLabel>
                 <label
                   htmlFor="photoFile"
                   className="mt-1.5 flex cursor-pointer items-center justify-between rounded-lg border border-dashed border-input px-4 py-3 text-sm text-foreground transition hover:border-ring hover:bg-muted"
                 >
                   <span>
-                    {photoFile ? photoFile.name : "Upload a profile photo"}
+                    {photoFile ? photoFile.name : t("photo.uploadPlaceholder")}
                   </span>
                   <span className="text-xs text-muted-foreground">PNG, JPG, WEBP</span>
                 </label>
@@ -2090,7 +2112,7 @@ export function ApplyForm({
 
             {showPhone ? (
               <label className="block">
-                <FieldLabel ashby>Phone</FieldLabel>
+                <FieldLabel ashby>{t("common.phone")}</FieldLabel>
                 <PhoneInput
                   name="phone"
                   autoComplete="tel"
@@ -2099,8 +2121,7 @@ export function ApplyForm({
                   className="mt-1.5"
                 />
                 <p className={hintClass}>
-                  The hiring team may use this number to contact you about this
-                  job.
+                  {t("common.phoneHint")}
                 </p>
                 <FieldError errors={fieldErrorsFor(state, "phone")} />
               </label>
@@ -2114,7 +2135,7 @@ export function ApplyForm({
                     applicationConfig.sections.personal.address,
                   )}
                 >
-                  Address
+                  {t("common.address")}
                 </FieldLabel>
                 <div className="relative mt-1.5">
                   <InputIcon>
@@ -2128,13 +2149,12 @@ export function ApplyForm({
                     onChange={(event) =>
                       updateField("address", event.target.value)
                     }
-                    placeholder="City, region, country"
+                    placeholder={t("common.addressPlaceholder")}
                     className={`${input} ${inputIconClass}`}
                   />
                 </div>
                 <p className={hintClass}>
-                  Include your city, region, and country so the hiring team can
-                  evaluate your application.
+                  {t("common.addressHint")}
                 </p>
                 <FieldError errors={fieldErrorsFor(state, "address")} />
               </label>
@@ -2148,7 +2168,7 @@ export function ApplyForm({
                     applicationConfig.sections.personal.headline,
                   )}
                 >
-                  Headline
+                  {t("common.headline")}
                 </FieldLabel>
                 <input
                   name="headline"
@@ -2157,7 +2177,7 @@ export function ApplyForm({
                   onChange={(event) =>
                     updateField("headline", event.target.value)
                   }
-                  placeholder="Senior backend engineer"
+                  placeholder={t("common.headlinePlaceholder")}
                   className={`${input} mt-1.5`}
                 />
                 <FieldError errors={fieldErrorsFor(state, "headline")} />
@@ -2173,7 +2193,7 @@ export function ApplyForm({
             >
               <div className="border-b border-zinc-200 pb-2.5 dark:border-zinc-800">
                 <h2 className="text-base font-semibold text-zinc-900 dark:text-zinc-100">
-                  Profile
+                  {t("sections.profile")}
                 </h2>
               </div>
               <div className="space-y-5">
@@ -2182,7 +2202,7 @@ export function ApplyForm({
                     <div className="flex items-center justify-between gap-3">
                       <div>
                         <p className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
-                          Education
+                          {t("profile.education")}
                           {isFieldRequired(
                             applicationConfig.sections.profile.education,
                           ) ? (
@@ -2190,7 +2210,7 @@ export function ApplyForm({
                           ) : null}
                         </p>
                         <p className={hintClass}>
-                          Add one or more education entries.
+                          {t("profile.educationHint")}
                         </p>
                       </div>
                       <button
@@ -2201,7 +2221,7 @@ export function ApplyForm({
                         className={secondaryButtonClass}
                       >
                         <Plus className="size-4" strokeWidth={2} />
-                        Add education
+                        {t("profile.addEducation")}
                       </button>
                     </div>
                     <FieldError errors={educationFieldErrors} />
@@ -2218,7 +2238,7 @@ export function ApplyForm({
                     <div className="flex items-center justify-between gap-3">
                       <div>
                         <p className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
-                          Experience
+                          {t("profile.experience")}
                           {isFieldRequired(
                             applicationConfig.sections.profile.experience,
                           ) ? (
@@ -2226,7 +2246,7 @@ export function ApplyForm({
                           ) : null}
                         </p>
                         <p className={hintClass}>
-                          Add one or more work experience entries.
+                          {t("profile.experienceHint")}
                         </p>
                       </div>
                       <button
@@ -2237,7 +2257,7 @@ export function ApplyForm({
                         className={secondaryButtonClass}
                       >
                         <Plus className="size-4" strokeWidth={2} />
-                        Add experience
+                        {t("profile.addExperience")}
                       </button>
                     </div>
                     <FieldError errors={experienceFieldErrors} />
@@ -2260,7 +2280,7 @@ export function ApplyForm({
             >
               <div className="border-b border-zinc-200 pb-2.5 dark:border-zinc-800">
                 <h2 className="text-base font-semibold text-zinc-900 dark:text-zinc-100">
-                  Links
+                  {t("sections.links")}
                 </h2>
               </div>
 
@@ -2272,7 +2292,7 @@ export function ApplyForm({
                   className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-200 px-3.5 py-2 text-sm font-medium text-zinc-700 transition hover:border-zinc-300 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:border-zinc-600 dark:hover:bg-zinc-800/50"
                 >
                   <Plus className="size-4" strokeWidth={2} />
-                  Add links
+                  {t("links.add")}
                 </button>
               ) : (
                 <div className="space-y-4">
@@ -2287,7 +2307,7 @@ export function ApplyForm({
                         LinkedIn
                       </FieldLabel>
                       <p className={hintClass}>
-                        e.g.: linkedin.com/in/yourname
+                        {t("links.linkedinExample")}
                       </p>
                       <div className="relative mt-1.5">
                         <InputIcon>
@@ -2301,7 +2321,7 @@ export function ApplyForm({
                           onChange={(event) =>
                             updateField("linkedinUrl", event.target.value)
                           }
-                          placeholder="Type here..."
+                          placeholder={t("common.typeHere")}
                           className={`${input} ${inputIconClass}`}
                         />
                       </div>
@@ -2323,7 +2343,7 @@ export function ApplyForm({
                       >
                         GitHub
                       </FieldLabel>
-                      <p className={hintClass}>e.g.: github.com/yourname</p>
+                      <p className={hintClass}>{t("links.githubExample")}</p>
                       <div className="relative mt-1.5">
                         <InputIcon>
                           <GitHubIcon className="size-4" />
@@ -2336,7 +2356,7 @@ export function ApplyForm({
                           onChange={(event) =>
                             updateField("githubUrl", event.target.value)
                           }
-                          placeholder="Type here..."
+                          placeholder={t("common.typeHere")}
                           className={`${input} ${inputIconClass}`}
                         />
                       </div>
@@ -2356,9 +2376,9 @@ export function ApplyForm({
                           applicationConfig.profileLinks.website.required
                         }
                       >
-                        Portfolio or personal website
+                        {t("links.portfolio")}
                       </FieldLabel>
-                      <p className={hintClass}>e.g.: yoursite.com</p>
+                      <p className={hintClass}>{t("links.websiteExample")}</p>
                       <div className="relative mt-1.5">
                         <InputIcon>
                           <Globe className="size-4" strokeWidth={1.8} />
@@ -2371,7 +2391,7 @@ export function ApplyForm({
                           onChange={(event) =>
                             updateField("websiteUrl", event.target.value)
                           }
-                          placeholder="Type here..."
+                          placeholder={t("common.typeHere")}
                           className={`${input} ${inputIconClass}`}
                         />
                       </div>
@@ -2396,7 +2416,7 @@ export function ApplyForm({
             >
               <div className="border-b border-zinc-200 pb-2.5 dark:border-zinc-800">
                 <h2 className="text-base font-semibold text-zinc-900 dark:text-zinc-100">
-                  Additional information
+                  {t("sections.additionalInfo")}
                 </h2>
               </div>
               <div className="space-y-5">
@@ -2408,7 +2428,7 @@ export function ApplyForm({
                         applicationConfig.sections.details.coverLetter,
                       )}
                     >
-                      Cover letter
+                      {t("coverLetter.label")}
                     </FieldLabel>
                     <textarea
                       name="coverLetter"
@@ -2417,7 +2437,7 @@ export function ApplyForm({
                       onChange={(event) =>
                         updateAnswer("coverLetter", event.target.value)
                       }
-                      placeholder="Tell the team why you're interested in this role."
+                      placeholder={t("coverLetter.placeholder")}
                       className={`${textarea} mt-1.5`}
                     />
                     <FieldError errors={fieldErrorsFor(state, "coverLetter")} />
@@ -2445,7 +2465,7 @@ export function ApplyForm({
                       ) : null}
                       {!yesNo && question.placeholder ? (
                         <p className={hintClass}>
-                          e.g.: {question.placeholder}
+                          {t("questions.example", { example: question.placeholder })}
                         </p>
                       ) : null}
                       {question.type === "textarea" ? (
@@ -2456,7 +2476,7 @@ export function ApplyForm({
                           onChange={(event) =>
                             updateAnswer(question.id, event.target.value)
                           }
-                          placeholder="Type here..."
+                          placeholder={t("common.typeHere")}
                           className={`${textarea} mt-1.5`}
                         />
                       ) : null}
@@ -2468,7 +2488,7 @@ export function ApplyForm({
                           onChange={(event) =>
                             updateAnswer(question.id, event.target.value)
                           }
-                          placeholder="Type here..."
+                          placeholder={t("common.typeHere")}
                           className={`${input} mt-1.5`}
                         />
                       ) : null}
@@ -2480,7 +2500,7 @@ export function ApplyForm({
                           onChange={(event) =>
                             updateAnswer(question.id, event.target.value)
                           }
-                          placeholder="Type here..."
+                          placeholder={t("common.typeHere")}
                           className={`${input} mt-1.5`}
                         />
                       ) : null}
@@ -2523,7 +2543,7 @@ export function ApplyForm({
                           className={`${input} mt-1.5`}
                         >
                           <option value="">
-                            {question.placeholder ?? "Select"}
+                            {question.placeholder ?? t("common.select")}
                           </option>
                           {question.options?.map((option) => (
                             <option key={option} value={option}>
@@ -2546,15 +2566,15 @@ export function ApplyForm({
                                 className="accent-[var(--board-primary)]"
                               />
                               {value === "agree"
-                                ? question.agreeLabel ?? "I agree"
-                                : question.disagreeLabel ?? "I do not agree"}
+                                ? question.agreeLabel ?? t("questions.agree")
+                                : question.disagreeLabel ?? t("questions.disagree")}
                             </label>
                           ))}
                         </fieldset>
                       ) : null}
                       {question.minLength ? (
                         <p className={hintClass}>
-                          Minimum {question.minLength} characters if answered.
+                          {t("questions.minLength", { count: question.minLength })}
                         </p>
                       ) : null}
                       <FieldError
@@ -2616,10 +2636,10 @@ export function ApplyForm({
               </svg>
             ) : null}
             {isSubmittingForm
-              ? "Uploading..."
+              ? t("submit.uploading")
               : isPending
-                ? "Submitting..."
-                : "Submit Application"}
+                ? t("submit.submitting")
+                : t("submit.submit")}
             {!isSubmittingForm && !isPending ? (
               <Send className="size-4" strokeWidth={2} />
             ) : null}
@@ -2633,11 +2653,10 @@ export function ApplyForm({
               <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                 <div>
                   <p className="text-xs font-semibold uppercase tracking-[0.08em] text-zinc-900 dark:text-zinc-100">
-                    Resume
+                    {t("resume.heading")}
                   </p>
                   <p className="mt-1.5 max-w-md text-sm leading-relaxed text-zinc-600 dark:text-zinc-400">
-                    Upload once. We&apos;ll attach it to your application and
-                    use it to pre-fill the form below.
+                    {t("resume.defaultHint")}
                   </p>
                 </div>
                 {resumeFile ? (
@@ -2645,7 +2664,7 @@ export function ApplyForm({
                     htmlFor="resumeFile"
                     className="inline-flex h-10 shrink-0 cursor-pointer items-center justify-center rounded-md border border-zinc-200 bg-white px-5 text-sm font-medium text-zinc-700 transition hover:border-zinc-400 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:border-zinc-500"
                   >
-                    Replace file
+                    {t("resume.replaceFile")}
                   </label>
                 ) : (
                   <label
@@ -2653,7 +2672,7 @@ export function ApplyForm({
                     className="inline-flex h-10 shrink-0 cursor-pointer items-center justify-center rounded-md px-5 text-sm font-medium text-[var(--board-primary-contrast)] transition hover:brightness-110"
                     style={{ backgroundColor: "var(--board-primary)" }}
                   >
-                    Upload resume
+                    {t("resume.uploadResume")}
                   </label>
                 )}
               </div>
@@ -2666,8 +2685,10 @@ export function ApplyForm({
                   >
                     <Check className="size-3" strokeWidth={3} />
                   </span>
-                  Uploaded: {resumeFile.name} ({formatFileSize(resumeFile.size)}
-                  )
+                  {t("resume.uploaded", {
+                    name: resumeFile.name,
+                    size: formatFileSize(resumeFile.size),
+                  })}
                 </p>
               ) : (
                 <label
@@ -2694,16 +2715,16 @@ export function ApplyForm({
                     <UploadCloud className="size-5" strokeWidth={1.8} />
                   </span>
                   <p className="text-sm text-zinc-700 dark:text-zinc-300">
-                    <span
-                      className="font-medium"
-                      style={{ color: "var(--board-primary)" }}
-                    >
-                      {isDragging ? "Drop here" : "Choose a file"}
-                    </span>{" "}
-                    {isDragging ? "Release to upload" : "or drag and drop here"}
+                    {isDragging
+                      ? t.rich("resume.dropDefaultActive", {
+                          accent: (chunks) => dropAccent(chunks, "font-medium"),
+                        })
+                      : t.rich("resume.dropDefault", {
+                          accent: (chunks) => dropAccent(chunks, "font-medium"),
+                        })}
                   </p>
                   <p className="mt-1 text-xs text-zinc-400 dark:text-zinc-500">
-                    .pdf, .doc, .docx · up to 10MB
+                    {t("resume.formats")}
                   </p>
                 </label>
               )}
@@ -2712,13 +2733,13 @@ export function ApplyForm({
           ) : null}
 
           <p className="text-xs text-zinc-500 dark:text-zinc-400">
-            <span className={requiredMarkClass}>*</span> Required fields
+            <span className={requiredMarkClass}>*</span> {t("common.requiredFields")}
           </p>
 
           <section className={cardClass}>
             <div className="flex items-center justify-between border-b border-zinc-100 pb-4 dark:border-zinc-800">
               <h2 className="text-base font-semibold text-zinc-900 dark:text-zinc-100">
-                Personal information
+                {t("sections.personalInfo")}
               </h2>
               <button
                 type="button"
@@ -2726,13 +2747,13 @@ export function ApplyForm({
                 className="inline-flex items-center gap-1.5 text-xs font-medium text-zinc-500 transition hover:text-zinc-900 dark:hover:text-zinc-100"
               >
                 <TrashIcon className="size-3.5" />
-                Clear
+                {t("actions.clear")}
               </button>
             </div>
 
             <div className="mt-5 grid gap-4 sm:grid-cols-2">
               <label className="block">
-                <FieldLabel required>First name</FieldLabel>
+                <FieldLabel required>{t("common.firstName")}</FieldLabel>
                 <input
                   name="firstName"
                   type="text"
@@ -2747,7 +2768,7 @@ export function ApplyForm({
               </label>
 
               <label className="block">
-                <FieldLabel required>Last name</FieldLabel>
+                <FieldLabel required>{t("common.lastName")}</FieldLabel>
                 <input
                   name="lastName"
                   type="text"
@@ -2763,7 +2784,7 @@ export function ApplyForm({
             </div>
 
             <label className="mt-4 block">
-              <FieldLabel required>Email</FieldLabel>
+              <FieldLabel required>{t("common.email")}</FieldLabel>
               <input
                 name="email"
                 type="email"
@@ -2782,14 +2803,14 @@ export function ApplyForm({
                     applicationConfig.sections.personal.photo,
                   )}
                 >
-                  Photo
+                  {t("photo.label")}
                 </FieldLabel>
                 <label
                   htmlFor="photoFile"
                   className="mt-1.5 flex cursor-pointer items-center justify-between rounded-lg border border-dashed border-input px-4 py-3 text-sm text-foreground transition hover:border-ring hover:bg-muted"
                 >
                   <span>
-                    {photoFile ? photoFile.name : "Upload a profile photo"}
+                    {photoFile ? photoFile.name : t("photo.uploadPlaceholder")}
                   </span>
                   <span className="text-xs text-muted-foreground">PNG, JPG, WEBP</span>
                 </label>
@@ -2799,7 +2820,7 @@ export function ApplyForm({
 
             {showPhone ? (
               <label className="mt-4 block">
-                <FieldLabel>Phone</FieldLabel>
+                <FieldLabel>{t("common.phone")}</FieldLabel>
                 <PhoneInput
                   name="phone"
                   autoComplete="tel"
@@ -2808,8 +2829,7 @@ export function ApplyForm({
                   className="mt-1.5"
                 />
                 <p className={hintClass}>
-                  The hiring team may use this number to contact you about this
-                  job.
+                  {t("common.phoneHint")}
                 </p>
                 <FieldError errors={fieldErrorsFor(state, "phone")} />
               </label>
@@ -2822,7 +2842,7 @@ export function ApplyForm({
                     applicationConfig.sections.personal.address,
                   )}
                 >
-                  Address
+                  {t("common.address")}
                 </FieldLabel>
                 <input
                   name="address"
@@ -2832,12 +2852,11 @@ export function ApplyForm({
                   onChange={(event) =>
                     updateField("address", event.target.value)
                   }
-                  placeholder="City, region, country"
+                  placeholder={t("common.addressPlaceholder")}
                   className={`${input} mt-1.5`}
                 />
                 <p className={hintClass}>
-                  Include your city, region, and country so the hiring team can
-                  evaluate your application.
+                  {t("common.addressHint")}
                 </p>
                 <FieldError errors={fieldErrorsFor(state, "address")} />
               </label>
@@ -2850,7 +2869,7 @@ export function ApplyForm({
                     applicationConfig.sections.personal.headline,
                   )}
                 >
-                  Headline
+                  {t("common.headline")}
                 </FieldLabel>
                 <input
                   name="headline"
@@ -2859,7 +2878,7 @@ export function ApplyForm({
                   onChange={(event) =>
                     updateField("headline", event.target.value)
                   }
-                  placeholder="Senior backend engineer"
+                  placeholder={t("common.headlinePlaceholder")}
                   className={`${input} mt-1.5`}
                 />
                 <FieldError errors={fieldErrorsFor(state, "headline")} />
@@ -2876,7 +2895,7 @@ export function ApplyForm({
                     className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-200 px-3.5 py-2 text-sm font-medium text-zinc-700 transition hover:border-zinc-300 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:border-zinc-600 dark:hover:bg-zinc-800/50"
                   >
                     <Plus className="size-4" strokeWidth={2} />
-                    Add links
+                    {t("links.add")}
                   </button>
                 ) : (
                   <div className="grid gap-4 sm:grid-cols-3">
@@ -2901,7 +2920,7 @@ export function ApplyForm({
                             onChange={(event) =>
                               updateField("linkedinUrl", event.target.value)
                             }
-                            placeholder="linkedin.com/in/..."
+                            placeholder={t("links.linkedinPlaceholder")}
                             className={`${input} ${inputIconClass}`}
                           />
                         </div>
@@ -2934,7 +2953,7 @@ export function ApplyForm({
                             onChange={(event) =>
                               updateField("githubUrl", event.target.value)
                             }
-                            placeholder="github.com/..."
+                            placeholder={t("links.githubPlaceholder")}
                             className={`${input} ${inputIconClass}`}
                           />
                         </div>
@@ -2953,7 +2972,7 @@ export function ApplyForm({
                             applicationConfig.profileLinks.website.required
                           }
                         >
-                          Website
+                          {t("links.website")}
                         </FieldLabel>
                         <div className="relative mt-1.5">
                           <InputIcon>
@@ -2967,7 +2986,7 @@ export function ApplyForm({
                             onChange={(event) =>
                               updateField("websiteUrl", event.target.value)
                             }
-                            placeholder="example.com"
+                            placeholder={t("links.websitePlaceholder")}
                             className={`${input} ${inputIconClass}`}
                           />
                         </div>
@@ -2989,7 +3008,7 @@ export function ApplyForm({
             <section className={cardClass}>
               <div className="border-b border-zinc-100 pb-4 dark:border-zinc-800">
                 <h2 className="text-base font-semibold text-zinc-900 dark:text-zinc-100">
-                  Profile
+                  {t("sections.profile")}
                 </h2>
               </div>
               <div className="mt-5 space-y-5">
@@ -2998,7 +3017,7 @@ export function ApplyForm({
                     <div className="flex items-center justify-between gap-3">
                       <div>
                         <p className="text-sm font-medium text-zinc-900 dark:text-zinc-100">
-                          Education
+                          {t("profile.education")}
                           {isFieldRequired(
                             applicationConfig.sections.profile.education,
                           ) ? (
@@ -3006,7 +3025,7 @@ export function ApplyForm({
                           ) : null}
                         </p>
                         <p className={hintClass}>
-                          Add one or more education entries.
+                          {t("profile.educationHint")}
                         </p>
                       </div>
                       <button
@@ -3017,7 +3036,7 @@ export function ApplyForm({
                         className={secondaryButtonClass}
                       >
                         <Plus className="size-4" strokeWidth={2} />
-                        Add education
+                        {t("profile.addEducation")}
                       </button>
                     </div>
                     <FieldError errors={educationFieldErrors} />
@@ -3034,7 +3053,7 @@ export function ApplyForm({
                     <div className="flex items-center justify-between gap-3">
                       <div>
                         <p className="text-sm font-medium text-zinc-900 dark:text-zinc-100">
-                          Experience
+                          {t("profile.experience")}
                           {isFieldRequired(
                             applicationConfig.sections.profile.experience,
                           ) ? (
@@ -3042,7 +3061,7 @@ export function ApplyForm({
                           ) : null}
                         </p>
                         <p className={hintClass}>
-                          Add one or more work experience entries.
+                          {t("profile.experienceHint")}
                         </p>
                       </div>
                       <button
@@ -3053,7 +3072,7 @@ export function ApplyForm({
                         className={secondaryButtonClass}
                       >
                         <Plus className="size-4" strokeWidth={2} />
-                        Add experience
+                        {t("profile.addExperience")}
                       </button>
                     </div>
                     <FieldError errors={experienceFieldErrors} />
@@ -3072,7 +3091,7 @@ export function ApplyForm({
             <section className={cardClass}>
               <div className="border-b border-zinc-100 pb-4 dark:border-zinc-800">
                 <h2 className="text-base font-semibold text-zinc-900 dark:text-zinc-100">
-                  Details
+                  {t("sections.details")}
                 </h2>
               </div>
               <div className="mt-5 space-y-5">
@@ -3083,7 +3102,7 @@ export function ApplyForm({
                         applicationConfig.sections.details.coverLetter,
                       )}
                     >
-                      Cover letter
+                      {t("coverLetter.label")}
                     </FieldLabel>
                     <textarea
                       name="coverLetter"
@@ -3092,7 +3111,7 @@ export function ApplyForm({
                       onChange={(event) =>
                         updateAnswer("coverLetter", event.target.value)
                       }
-                      placeholder="Tell the team why you're interested in this role."
+                      placeholder={t("coverLetter.placeholder")}
                       className={`${textarea} mt-1.5`}
                     />
                     <FieldError errors={fieldErrorsFor(state, "coverLetter")} />
@@ -3142,7 +3161,7 @@ export function ApplyForm({
                         onChange={(event) =>
                           updateAnswer(question.id, event.target.value)
                         }
-                        placeholder={question.placeholder ?? "example.com"}
+                        placeholder={question.placeholder ?? t("questions.urlPlaceholder")}
                         className={`${input} mt-1.5`}
                       />
                     ) : null}
@@ -3176,7 +3195,7 @@ export function ApplyForm({
                         className={`${input} mt-1.5`}
                       >
                         <option value="">
-                          {question.placeholder ?? "Select"}
+                          {question.placeholder ?? t("common.select")}
                         </option>
                         {question.options?.map((option) => (
                           <option key={option} value={option}>
@@ -3198,14 +3217,14 @@ export function ApplyForm({
                               onChange={() => updateAnswer(question.id, value)}
                               className="accent-[var(--board-primary)]"
                             />
-                            {value === "agree" ? question.agreeLabel ?? "I agree" : question.disagreeLabel ?? "I do not agree"}
+                            {value === "agree" ? question.agreeLabel ?? t("questions.agree") : question.disagreeLabel ?? t("questions.disagree")}
                           </label>
                         ))}
                       </fieldset>
                     ) : null}
                     {question.minLength ? (
                       <p className={hintClass}>
-                        Minimum {question.minLength} characters if answered.
+                        {t("questions.minLength", { count: question.minLength })}
                       </p>
                     ) : null}
                     <FieldError
@@ -3247,10 +3266,10 @@ export function ApplyForm({
             }}
           >
             {isSubmittingForm
-              ? "Uploading…"
+              ? t("submit.uploading")
               : isPending
-                ? "Submitting…"
-                : "Submit application"}
+                ? t("submit.submitting")
+                : t("submit.submit")}
           </Button>
         </>
       )}

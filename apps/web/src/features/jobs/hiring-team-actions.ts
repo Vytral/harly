@@ -6,9 +6,21 @@ import { and, eq } from "drizzle-orm";
 import { db, jobHiringTeam, member as workspaceMembers } from "@harly/db";
 import { requireJobPermission } from "@/features/workspaces/permissions-server";
 import { logAuditEvent } from "@/lib/audit-log";
-import type { HiringTeamRole } from "@/features/jobs/hiring-team-data";
+import { getTranslations } from "@/i18n/server";
 
-type Result = { success: boolean; error?: string };
+import type { HiringTeamRole } from "@/features/jobs/hiring-team-data";
+import type { JobActionErrorKey } from "@/features/jobs/action-errors";
+
+type Result = {
+  success: boolean;
+  error?: string;
+  code?: JobActionErrorKey;
+};
+
+async function failure(code: JobActionErrorKey): Promise<Result> {
+  const t = await getTranslations("jobs.errors");
+  return { success: false, error: t(code), code };
+}
 
 const HIRING_TEAM_ROLES = new Set<HiringTeamRole>([
   "recruiter",
@@ -27,7 +39,7 @@ export async function addHiringTeamMember(input: {
       input.jobId,
     );
     if (!HIRING_TEAM_ROLES.has(input.role)) {
-      return { success: false, error: "Invalid hiring-team role." };
+      return failure("invalidHiringTeamRole");
     }
     const member = await db
       .select({ userId: workspaceMembers.userId })
@@ -40,10 +52,7 @@ export async function addHiringTeamMember(input: {
       )
       .limit(1);
     if (!member[0]) {
-      return {
-        success: false,
-        error: "That person is not a member of this workspace.",
-      };
+      return failure("memberNotInWorkspace");
     }
     await db
       .insert(jobHiringTeam)
@@ -67,10 +76,7 @@ export async function addHiringTeamMember(input: {
     revalidatePath(`/dashboard/jobs/${input.jobId}`);
     return { success: true };
   } catch {
-    return {
-      success: false,
-      error: "Unable to add member.",
-    };
+    return failure("addMemberFailed");
   }
 }
 
@@ -85,7 +91,7 @@ export async function updateHiringTeamRole(input: {
       input.jobId,
     );
     if (!HIRING_TEAM_ROLES.has(input.role)) {
-      return { success: false, error: "Invalid hiring-team role." };
+      return failure("invalidHiringTeamRole");
     }
     await db
       .update(jobHiringTeam)
@@ -110,10 +116,7 @@ export async function updateHiringTeamRole(input: {
     revalidatePath(`/dashboard/jobs/${input.jobId}`);
     return { success: true };
   } catch {
-    return {
-      success: false,
-      error: "Unable to update role.",
-    };
+    return failure("updateRoleFailed");
   }
 }
 
@@ -148,9 +151,6 @@ export async function removeHiringTeamMember(input: {
     revalidatePath(`/dashboard/jobs/${input.jobId}`);
     return { success: true };
   } catch {
-    return {
-      success: false,
-      error: "Unable to remove member.",
-    };
+    return failure("removeMemberFailed");
   }
 }

@@ -1,3 +1,5 @@
+import { getTranslations } from "next-intl/server";
+
 import { cn } from "@/lib/utils";
 import { getPipelineSummary } from "@/features/pipeline/data";
 import { getWorkspaceContext } from "@/features/workspaces/context";
@@ -18,6 +20,7 @@ import { getWorkspaceContext } from "@/features/workspaces/context";
 export async function PipelineSummaryCard({ jobId }: { jobId: string }) {
   await getWorkspaceContext();
   const summary = await getPipelineSummary(jobId);
+  const t = await getTranslations("features.pipeline.PipelineSummaryCard");
 
   if (!summary || summary.totalActive === 0) return null;
 
@@ -26,14 +29,14 @@ export async function PipelineSummaryCard({ jobId }: { jobId: string }) {
 
   return (
     <div className="flex flex-wrap items-center gap-2">
-      <Stat label="active" value={summary.totalActive} />
-      {topFits > 0 ? <Stat label="rated a good fit" value={topFits} /> : null}
+      <Stat label={t("active")} value={summary.totalActive} />
+      {topFits > 0 ? <Stat label={t("ratedGoodFit")} value={topFits} /> : null}
       {summary.unscored > 0 ? (
-        <Stat label="not rated" value={summary.unscored} muted />
+        <Stat label={t("notRated")} value={summary.unscored} muted />
       ) : null}
       {summary.stalledCandidates > 0 ? (
         <Stat
-          label={`stuck ${summary.stalledDays}+ days`}
+          label={t("stuckDays", { days: summary.stalledDays })}
           value={summary.stalledCandidates}
           warning
         />

@@ -5,6 +5,9 @@ import { and, desc, eq, isNull, sql } from "drizzle-orm";
 import { db, notifications, user as authUsers } from "@harly/db";
 
 import { getWorkspaceContext } from "@/features/workspaces/context";
+import { getTranslations } from "@/i18n/server";
+
+import { localizeNotification } from "./copy";
 
 export type NotificationItem = {
   id: string;
@@ -28,6 +31,7 @@ export async function listNotifications(limit = 50): Promise<NotificationItem[]>
       type: notifications.type,
       title: notifications.title,
       body: notifications.body,
+      metadata: notifications.metadata,
       href: notifications.href,
       readAt: notifications.readAt,
       createdAt: notifications.createdAt,
@@ -45,11 +49,11 @@ export async function listNotifications(limit = 50): Promise<NotificationItem[]>
     .orderBy(desc(notifications.createdAt))
     .limit(limit);
 
+  const t = await getTranslations("labels.notifications");
   return rows.map((row) => ({
     id: row.id,
     type: row.type,
-    title: row.title,
-    body: row.body,
+    ...localizeNotification(row, t),
     href: row.href,
     actorName: row.actorName,
     actorAvatar: row.actorAvatar,

@@ -8,6 +8,7 @@ import {
   useRef,
   useState,
 } from "react";
+import { useTranslations } from "next-intl";
 import { Monitor, Smartphone, X } from "lucide-react";
 
 import { PreviewFrame } from "@/components/preview/PreviewFrame";
@@ -54,11 +55,12 @@ export type PreviewFocus = {
 
 type Workspace = WorkspaceBoardBranding & { id: string };
 
-const TEMPLATE_LABEL: Record<string, string> = {
-  ashby: "Ashby",
-  playful: "Playful",
-  join: "Join",
-};
+const LAYOUT_LABEL_IDS = ["ashby", "playful", "join"] as const;
+type LayoutLabelId = (typeof LAYOUT_LABEL_IDS)[number];
+
+function isLayoutLabelId(value: string): value is LayoutLabelId {
+  return (LAYOUT_LABEL_IDS as readonly string[]).includes(value);
+}
 
 const FRAME_STYLE_ID = "harly-preview-focus-style";
 
@@ -184,6 +186,8 @@ export function JobLivePreview({
   status: "draft" | "open" | "closed";
   aiConfigured: boolean;
 }) {
+  const t = useTranslations("jobs.livePreview");
+  const tCareer = useTranslations("labels.careerPage.templates");
   // The real public page only exists once the job is live.
   const published = status === "open";
   const [pickedView, setPickedView] = useState<"steps" | "public">("steps");
@@ -258,15 +262,15 @@ export function JobLivePreview({
       )}
       role={!docked && open ? "dialog" : undefined}
       aria-modal={!docked && open ? true : undefined}
-      aria-label="Live preview"
+      aria-label={t("livePreview")}
     >
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-[var(--radius-card)] bg-card-inset shadow-[var(--shadow-card)]">
         <div className="flex items-center justify-between gap-3 border-b border-hairline bg-card px-4 py-2.5">
           <div className="flex min-w-0 items-center gap-2">
-            <p className="text-[13px] font-medium text-soft-ink">Live preview</p>
-            {view === "public" && TEMPLATE_LABEL[template] ? (
+            <p className="text-[13px] font-medium text-soft-ink">{t("livePreview")}</p>
+            {view === "public" && isLayoutLabelId(template) ? (
               <span className="truncate rounded-full bg-soft-kraft px-2 py-0.5 text-[11.5px] font-medium text-soft-ink">
-                {TEMPLATE_LABEL[template]} layout
+                {t("templateLayout", { template: tCareer(`${template}.label`) })}
               </span>
             ) : null}
           </div>
@@ -286,7 +290,7 @@ export function JobLivePreview({
                         : "text-soft-ink hover:text-near-ink",
                     )}
                   >
-                    {v === "steps" ? "Step preview" : "Public page"}
+                    {v === "steps" ? t("stepPreview") : t("publicPage")}
                   </button>
                 ))}
               </div>
@@ -306,7 +310,7 @@ export function JobLivePreview({
                         ? "bg-pure-snow text-near-ink shadow-[var(--shadow-card)]"
                         : "text-soft-ink hover:text-near-ink",
                     )}
-                    aria-label={`${d} preview`}
+                    aria-label={t("devicePreview", { device: t(d) })}
                     aria-pressed={device === d}
                   >
                     <Icon className="size-4" />
@@ -322,7 +326,7 @@ export function JobLivePreview({
                 size="icon"
                 className="size-8"
                 onClick={onClose}
-                aria-label="Close preview"
+                aria-label={t("closePreview")}
               >
                 <X className="size-4" />
               </Button>
@@ -332,7 +336,7 @@ export function JobLivePreview({
 
         {!published ? (
           <p className="border-b border-hairline bg-card px-4 py-2 text-[12.5px] text-soft-ink">
-            Draft: publish to see the public page. This preview follows what you edit.
+            {t("draftNotice")}
           </p>
         ) : null}
 
@@ -361,7 +365,7 @@ export function JobLivePreview({
             />
           ) : (
             <div className="flex h-full items-center justify-center text-sm text-soft-ink">
-              Career page isn&apos;t configured yet, preview unavailable.
+              {t("careerPageUnavailable")}
             </div>
           )}
         </div>

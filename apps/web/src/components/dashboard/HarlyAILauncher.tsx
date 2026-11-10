@@ -1,6 +1,7 @@
 "use client";
 
 import { X } from "lucide-react";
+import { useTranslations } from "next-intl";
 
 import { AssistantAvatar, useHarlyAI } from "@/components/dashboard/HarlyAIContext";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
@@ -18,8 +19,9 @@ export function HarlyAILauncher({
   open: boolean;
   onToggle: () => void;
 }) {
+  const t = useTranslations("shell.aiLauncher");
   const { assistant } = useHarlyAI();
-  const label = open ? `Close ${assistant.name}` : `Ask ${assistant.name}`;
+  const label = t(open ? "close" : "ask", { name: assistant.name });
   return (
     <Tooltip>
       <TooltipTrigger asChild>

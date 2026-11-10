@@ -1,6 +1,7 @@
 import type { Route } from "next";
 import Link from "next/link";
 import { ChevronRight } from "lucide-react";
+import { getTranslations } from "next-intl/server";
 
 import { Card } from "@/components/ui/card";
 import { UserAvatar } from "@/components/ui/UserAvatar";
@@ -8,19 +9,22 @@ import { StatusPill } from "@/components/ui/status-pill";
 import { candidateHref, REVIEW_ORIGIN } from "@/features/candidates/origin";
 import type { ReviewQueueItem } from "@/features/review/queue";
 
-function waitingLabel(days: number) {
-  if (days <= 0) return "Today";
-  return days === 1 ? "1 day" : `${days} days`;
-}
-
 /**
  * The review queue as a list: oldest wait first, each row opening the
  * candidate in queue mode so previous / next and auto-advance follow it.
  */
-export function ReviewQueueList({ items }: { items: ReviewQueueItem[] }) {
+export async function ReviewQueueList({ items }: { items: ReviewQueueItem[] }) {
+  const t = await getTranslations("features.review.reviewQueueList");
+  const tAction = await getTranslations("labels.review.queueAction");
+
+  function waitingLabel(days: number) {
+    if (days <= 0) return t("waitingToday");
+    return t("waitingDays", { count: days });
+  }
+
   return (
     <Card className="gap-0 divide-y divide-hairline overflow-hidden py-0">
-      <ol aria-label="Review queue" className="divide-y divide-hairline">
+      <ol aria-label={t("queueLabel")} className="divide-y divide-hairline">
         {items.map((item, index) => (
           <li key={item.applicationId}>
             <Link
@@ -46,7 +50,7 @@ export function ReviewQueueList({ items }: { items: ReviewQueueItem[] }) {
               </span>
               <span className="hidden sm:block">
                 <StatusPill tone={item.stageKind === "interview" ? "info" : "neutral"} size="sm">
-                  {item.action}
+                  {tAction(item.action)}
                 </StatusPill>
               </span>
               <span
@@ -55,7 +59,7 @@ export function ReviewQueueList({ items }: { items: ReviewQueueItem[] }) {
                     ? "w-16 shrink-0 text-right text-[13px] font-medium text-destructive"
                     : "w-16 shrink-0 text-right text-[13px] text-soft-ink"
                 }
-                title="Waiting in this stage"
+                title={t("waitingInStage")}
               >
                 {waitingLabel(item.ageDays)}
               </span>

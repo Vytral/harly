@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { getTranslations } from "next-intl/server";
 
 import { getAuthBranding } from "@/features/auth/branding.server";
 import { isStaffEmailDeliveryConfigured } from "@/features/auth/login-methods.server";
@@ -8,9 +9,10 @@ import { ForgotPasswordForm } from "./_components/forgot-password-form";
 export const dynamic = "force-dynamic";
 
 export default async function ForgotPasswordPage() {
-  const [branding, emailConfigured] = await Promise.all([
+  const [branding, emailConfigured, t] = await Promise.all([
     getAuthBranding(),
     isStaffEmailDeliveryConfigured(),
+    getTranslations("forgotPassword"),
   ]);
 
   return (
@@ -21,33 +23,32 @@ export default async function ForgotPasswordPage() {
           href="/login"
           className="font-medium text-muted-foreground transition-colors hover:text-foreground"
         >
-          Back to sign in
+          {t("back")}
         </Link>
       }
     >
       <AuthCard
-        title="Forgot password"
+        title={t("title")}
         subtitle={
           emailConfigured
-            ? "Enter your email and we'll send you a link to reset it."
-            : "Password reset by email is not available on this instance."
+            ? t("subtitle")
+            : t("unavailable")
         }
         footer={
-          <>
-            Remembered it?{" "}
-            <Link href="/login" className="font-semibold text-foreground hover:underline">
-              Sign in
-            </Link>
-          </>
+          t.rich("remembered", {
+            link: (chunks) => (
+              <Link href="/login" className="font-semibold text-foreground hover:underline">
+                {chunks}
+              </Link>
+            ),
+          })
         }
       >
         {emailConfigured ? (
           <ForgotPasswordForm />
         ) : (
           <p role="status" className="text-sm leading-6 text-muted-foreground">
-            This workspace has no email delivery configured, so Harly cannot
-            send a reset link. Sign in with another method (single sign-on or a
-            passkey), or ask a workspace administrator to set a new password for you from the members settings.
+            {t("noEmail")}
           </p>
         )}
       </AuthCard>

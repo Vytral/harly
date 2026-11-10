@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { useLocale, useTranslations } from "next-intl";
 import { toast } from "@/lib/notification-island/toast";
 
 import { Button } from "@/components/ui/button";
@@ -17,7 +18,6 @@ import {
   requestUpdateAction,
 } from "./actions";
 import {
-  UPDATE_STATUS_LABEL,
   isActiveUpdateStatus,
   type UpdateStatus,
 } from "./update-request-state";
@@ -60,9 +60,8 @@ const STATUS_TONE: Record<UpdateStatus, PillTone> = {
   cancelled: "off",
 };
 
-export function formatWhen(iso: string | null, timeZone: string): string {
-  if (!iso) return "Never";
-  return new Intl.DateTimeFormat("en-US", {
+export function formatWhen(iso: string, timeZone: string, locale: string): string {
+  return new Intl.DateTimeFormat(locale, {
     dateStyle: "medium",
     timeStyle: "short",
     timeZone,
@@ -70,6 +69,9 @@ export function formatWhen(iso: string | null, timeZone: string): string {
 }
 
 export function UpdatesPanel({ view }: { view: UpdatesView }) {
+  const t = useTranslations("features.updates.updatesPanel");
+  const tStatus = useTranslations("labels.updates.status");
+  const locale = useLocale();
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [confirmOpen, setConfirmOpen] = useState(false);
@@ -88,7 +90,7 @@ export function UpdatesPanel({ view }: { view: UpdatesView }) {
     startTransition(async () => {
       const result = await checkForUpdatesAction();
       if (!result.ok) toast.error(result.error);
-      else toast.success("Checked the release channel.");
+      else toast.success(t("checkedToast"));
       router.refresh();
     });
   }
@@ -100,7 +102,7 @@ export function UpdatesPanel({ view }: { view: UpdatesView }) {
       toast.error(result.error);
       throw new Error(result.error);
     }
-    toast.success("Update queued. The updater will start it within a minute.");
+    toast.success(t("updateQueuedToast"));
     router.refresh();
   }
 
@@ -113,46 +115,45 @@ export function UpdatesPanel({ view }: { view: UpdatesView }) {
   }
 
   const headline = active
-    ? { tone: "warn" as const, text: UPDATE_STATUS_LABEL[active.status] }
-    : updateAvailable
-      ? { tone: "warn" as const, text: `${view.latestVersion} available` }
+    ? { tone: "warn" as const, text: tStatus(active.status) }
+    : updateAvailable && view.latestVersion
+      ? { tone: "warn" as const, text: t("updateAvailable", { version: view.latestVersion }) }
       : view.latestVersion
-        ? { tone: "on" as const, text: "Up to date" }
-        : { tone: "neutral" as const, text: "Not checked" };
+        ? { tone: "on" as const, text: t("upToDate") }
+        : { tone: "neutral" as const, text: t("notChecked") };
 
   return (
     <Card className="gap-5 p-6">
       <SectionHeader
         icon={DownloadDuotoneIcon}
-        title="Harly version"
-        description="Updates are installed by the updater running on your server. Harly takes a backup first, then pulls the new release, migrates the database and restarts."
+        title={t("title")}
+        description={t("description")}
         badge={<StatusPill tone={headline.tone}>{headline.text}</StatusPill>}
         action={
           <Button variant="outline" size="sm" onClick={check} disabled={pending || view.checkDisabled}>
             <ArrowsClockwiseIcon className="size-4" />
-            Check now
+            {t("checkNow")}
           </Button>
         }
       />
 
       <div className="grid divide-y divide-hairline overflow-hidden rounded-[var(--radius-inner)] border border-hairline bg-card-inset sm:grid-cols-3 sm:divide-x sm:divide-y-0">
-        <StatCell label="Running">{view.currentVersion}</StatCell>
-        <StatCell label="Latest stable">{view.latestVersion ?? "Unknown"}</StatCell>
-        <StatCell label="Last checked">
+        <StatCell label={t("running")}>{view.currentVersion}</StatCell>
+        <StatCell label={t("latestStable")}>{view.latestVersion ?? t("unknown")}</StatCell>
+        <StatCell label={t("lastChecked")}>
           <span className="text-[13px] font-normal text-soft-ink">
-            {formatWhen(view.lastCheckedAt, view.timezone)}
+            {view.lastCheckedAt ? formatWhen(view.lastCheckedAt, view.timezone, locale) : t("never")}
           </span>
         </StatCell>
       </div>
 
       {view.checkDisabled ? (
-        <Callout tone="info" title="Update checks are turned off">
-          This installation has HARLY_DISABLE_UPDATE_CHECK set, so it never contacts the release
-          channel. Run <code>harly update</code> on the server to update by hand.
+        <Callout tone="info" title={t("checksDisabledTitle")}>
+          {t.rich("checksDisabled", { code: (chunks) => <code>{chunks}</code> })}
         </Callout>
       ) : view.checkError ? (
-        <Callout tone="warning" title="Could not reach the release channel">
-          {view.checkError}. Harly will try again shortly.
+        <Callout tone="warning" title={t("checkErrorTitle")}>
+          {t("checkError", { error: view.checkError })}
         </Callout>
       ) : null}
 
@@ -161,8 +162,9 @@ export function UpdatesPanel({ view }: { view: UpdatesView }) {
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
               <p className="text-sm font-medium text-near-ink">
-                Harly {view.latestVersion} is available
-                {view.updateKind === "major" ? " (major release)" : ""}
+                {view.updateKind === "major"
+                  ? t("versionAvailableMajor", { version: view.latestVersion })
+                  : t("versionAvailable", { version: view.latestVersion })}
               </p>
               {view.notesUrl ? (
                 <a
@@ -171,7 +173,7 @@ export function UpdatesPanel({ view }: { view: UpdatesView }) {
                   rel="noreferrer noopener"
                   className="text-[12.5px] text-soft-ink underline underline-offset-2 hover:text-near-ink"
                 >
-                  Read the release notes
+                  {t("readReleaseNotes")}
                 </a>
               ) : null}
             </div>
@@ -179,7 +181,7 @@ export function UpdatesPanel({ view }: { view: UpdatesView }) {
               onClick={() => setConfirmOpen(true)}
               disabled={pending || active !== null || !view.updaterOnline}
             >
-              Update now
+              {t("updateNow")}
             </Button>
           </div>
           {view.notesSummary ? (
@@ -191,13 +193,12 @@ export function UpdatesPanel({ view }: { view: UpdatesView }) {
       ) : null}
 
       {!view.updaterOnline ? (
-        <Callout tone="warning" title="The server updater is not running">
-          {view.updaterLastSeenAt
-            ? `It last checked in ${formatWhen(view.updaterLastSeenAt, view.timezone)}. `
-            : "It has never checked in. "}
-          On the server, run <code>harly updater install-service</code> (or{" "}
-          <code>harly updater run</code> in a terminal) to enable one-click and automatic
-          updates. Until then, update with <code>harly update</code>.
+        <Callout tone="warning" title={t("updaterOfflineTitle")}>
+          {t.rich("updaterOffline", {
+            lastSeen: view.updaterLastSeenAt ? "yes" : "no",
+            when: view.updaterLastSeenAt ? formatWhen(view.updaterLastSeenAt, view.timezone, locale) : "",
+            code: (chunks) => <code>{chunks}</code>,
+          })}
         </Callout>
       ) : null}
 
@@ -206,7 +207,7 @@ export function UpdatesPanel({ view }: { view: UpdatesView }) {
       {view.history.length > 0 ? (
         <div className="space-y-2">
           <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-            Recent updates
+            {t("recentUpdates")}
           </p>
           <ul className="divide-y divide-hairline rounded-[var(--radius-inner)] border border-hairline">
             {view.history.map((request) => (
@@ -215,20 +216,20 @@ export function UpdatesPanel({ view }: { view: UpdatesView }) {
                   <p className="text-sm text-near-ink">
                     {request.fromVersion} → {request.targetVersion}
                     <span className="ml-2 text-[12.5px] text-soft-ink">
-                      {request.trigger === "auto" ? "automatic" : "manual"}
+                      {request.trigger === "auto" ? t("automatic") : t("manual")}
                     </span>
                   </p>
                   <StatusPill tone={STATUS_TONE[request.status]}>
-                    {UPDATE_STATUS_LABEL[request.status]}
+                    {tStatus(request.status)}
                   </StatusPill>
                 </div>
                 <p className="text-[12.5px] text-soft-ink">
-                  {formatWhen(request.finishedAt ?? request.createdAt, view.timezone)}
+                  {formatWhen(request.finishedAt ?? request.createdAt, view.timezone, locale)}
                   {request.message ? ` · ${request.message}` : ""}
                 </p>
                 {request.logTail && request.status !== "succeeded" ? (
                   <details className="text-[12.5px] text-soft-ink">
-                    <summary className="cursor-pointer">Updater log</summary>
+                    <summary className="cursor-pointer">{t("updaterLog")}</summary>
                     <pre className="mt-2 max-h-56 overflow-auto rounded-md bg-card-inset p-3 text-[11.5px] leading-4">
                       {request.logTail}
                     </pre>
@@ -244,22 +245,18 @@ export function UpdatesPanel({ view }: { view: UpdatesView }) {
         open={confirmOpen}
         onOpenChange={setConfirmOpen}
         tone="warning"
-        title={`Update Harly to ${view.latestVersion ?? "the latest version"}?`}
-        description="Harly will be unavailable for a few minutes while it restarts. Everyone using it, including candidates on application forms, will see an error until it is back."
-        confirmLabel="Update now"
-        requireAck="I understand Harly will be briefly unavailable"
+        title={t("updateDialogTitle", {
+          version: view.latestVersion ?? t("latestVersionFallback"),
+        })}
+        description={t("updateDialogDescription")}
+        confirmLabel={t("updateNow")}
+        requireAck={t("acknowledge")}
         onConfirm={install}
       >
         <ul className="list-disc space-y-1 pl-5 text-[13px] leading-5 text-soft-ink">
-          <li>
-            A backup of the database and uploads is taken first and kept in the server&apos;s{" "}
-            <code>backups</code> folder.
-          </li>
-          <li>The new release is downloaded and the database is migrated.</li>
-          <li>
-            If the update fails after that point, the updater restores the backup and starts
-            the previous version again.
-          </li>
+          <li>{t.rich("backupStep", { code: (chunks) => <code>{chunks}</code> })}</li>
+          <li>{t("downloadStep")}</li>
+          <li>{t("rollbackStep")}</li>
         </ul>
       </ConfirmDialog>
     </Card>
@@ -277,21 +274,29 @@ function ActiveRequest({
   onCancel: (id: string) => void;
   busy: boolean;
 }) {
+  const t = useTranslations("features.updates.updatesPanel");
+  const tStatus = useTranslations("labels.updates.status");
+  const locale = useLocale();
+  const message = request.message ?? t("waitingForUpdater");
+  const when = formatWhen(request.createdAt, timezone, locale);
+
   return (
     <Callout
       tone="info"
-      title={`${UPDATE_STATUS_LABEL[request.status]}: ${request.fromVersion} → ${request.targetVersion}`}
+      title={t("activeTitle", {
+        status: tStatus(request.status),
+        from: request.fromVersion,
+        to: request.targetVersion,
+      })}
     >
       <p>
-        {request.message ?? "Waiting for the updater."} Requested{" "}
-        {formatWhen(request.createdAt, timezone)}.
         {isActiveUpdateStatus(request.status) && request.status !== "pending"
-          ? " Harly will be unavailable for a few minutes; this page reconnects on its own."
-          : ""}
+          ? t("activeDowntime", { message, when })
+          : t("activeRequested", { message, when })}
       </p>
       {request.status === "pending" ? (
         <Button variant="outline" size="sm" className="mt-2" onClick={() => onCancel(request.id)} disabled={busy}>
-          Cancel request
+          {t("cancelRequest")}
         </Button>
       ) : null}
     </Callout>

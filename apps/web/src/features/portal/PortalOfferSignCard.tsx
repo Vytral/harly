@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { useLocale, useTranslations } from "next-intl";
 import { toast } from "@/lib/notification-island/toast";
 
 import { cn } from "@/lib/utils";
@@ -38,6 +39,8 @@ export function PortalOfferSignCard({
   isExpired,
   signedPending,
 }: Props) {
+  const t = useTranslations("portal.offer");
+  const locale = useLocale();
   const [isPending, start] = useTransition();
   const [nativeSignOpen, setNativeSignOpen] = useState(false);
   const isNative = offer.esignSubmissionId?.startsWith("native:") ?? false;
@@ -66,16 +69,15 @@ export function PortalOfferSignCard({
         <div className="flex items-start gap-3">
           <CheckCircleIcon className="size-6 shrink-0 text-pine" />
           <div>
-            <h2 className="text-lg font-semibold text-foreground">Offer accepted</h2>
+            <h2 className="text-lg font-semibold text-foreground">{t("accepted")}</h2>
             <p className="mt-1 text-sm text-muted-foreground">
-              Your signed offer for <strong>{offer.title}</strong> has been received.
-              We&apos;ll be in touch with next steps.
+              {t.rich("acceptedBody", { title: offer.title, strong: (chunks) => <strong>{chunks}</strong> })}
             </p>
             <a
               href={`/api/portal/offers/${offer.id}/evidence`}
               className="mt-3 inline-flex text-sm font-semibold text-pine underline-offset-4 hover:underline"
             >
-              Export signature evidence
+              {t("exportEvidence")}
             </a>
           </div>
         </div>
@@ -89,9 +91,9 @@ export function PortalOfferSignCard({
         <div className="flex items-start gap-3">
           <XCircleIcon className="size-6 shrink-0 text-destructive" />
           <div>
-            <h2 className="text-lg font-semibold text-foreground">Offer declined</h2>
+            <h2 className="text-lg font-semibold text-foreground">{t("declined")}</h2>
             <p className="mt-1 text-sm text-muted-foreground">
-              The offer for <strong>{offer.title}</strong> was declined.
+              {t.rich("declinedBody", { title: offer.title, strong: (chunks) => <strong>{chunks}</strong> })}
             </p>
           </div>
         </div>
@@ -105,9 +107,9 @@ export function PortalOfferSignCard({
         <div className="flex items-start gap-3">
           <XCircleIcon className="size-6 shrink-0 text-muted-foreground" />
           <div>
-            <h2 className="text-lg font-semibold text-foreground">Offer expired</h2>
+            <h2 className="text-lg font-semibold text-foreground">{t("expired")}</h2>
             <p className="mt-1 text-sm text-muted-foreground">
-              This offer is no longer actionable. Contact the hiring team if you need a new offer.
+              {t("expiredBody")}
             </p>
           </div>
         </div>
@@ -125,21 +127,11 @@ export function PortalOfferSignCard({
           </div>
           <div>
             <h2 className="text-lg font-semibold text-foreground">
-              You have an offer to sign
+              {t("title")}
             </h2>
             <p className="mt-1 text-sm text-muted-foreground">
-              Review and electronically sign your offer for{" "}
-              <strong>{offer.title}</strong>.
-              {offer.expiresAt && (
-                <>
-                  {" "}
-                  Respond by{" "}
-                  {new Intl.DateTimeFormat("en-US", { dateStyle: "long" }).format(
-                    new Date(offer.expiresAt),
-                  )}
-                  .
-                </>
-              )}
+              {t.rich("body", { title: offer.title, strong: (chunks) => <strong>{chunks}</strong> })}
+              {offer.expiresAt && <> {t("respondBy", { date: new Intl.DateTimeFormat(locale, { dateStyle: "long" }).format(new Date(offer.expiresAt)) })}</>}
             </p>
           </div>
         </div>
@@ -155,15 +147,14 @@ export function PortalOfferSignCard({
             "disabled:cursor-not-allowed disabled:opacity-50 disabled:active:scale-100",
           )}
         >
-          {isPending ? "Preparing…" : "Review & sign"}
+          {isPending ? t("preparing") : t("reviewSign")}
         </button>
       </div>
 
       {signedPending && !isNative && (
         <div className="mt-4 flex items-center gap-2 rounded-lg border border-pine/20 bg-pine/5 px-3.5 py-2.5 text-sm text-pine-strong">
           <span className="size-2 shrink-0 animate-pulse rounded-full bg-pine" />
-          Signature submitted — verifying with DocuSeal. This page will update
-          shortly.
+          {t("verifying")}
         </div>
       )}
 

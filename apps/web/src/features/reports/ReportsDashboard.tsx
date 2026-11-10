@@ -19,6 +19,7 @@ import {
   Users,
 } from "lucide-react";
 import { motion, useReducedMotion } from "motion/react";
+import { useLocale, useTranslations } from "next-intl";
 
 import { Tile } from "@/components/dashboard/widgets/primitives";
 import { FilterPill } from "@/components/ui/FilterPill";
@@ -37,33 +38,47 @@ import {
   type TrendSeries,
 } from "./charts";
 import type { ReportsData } from "./data";
-import { REPORT_RANGE_DAYS, reportRangeLabel } from "./ranges";
+import { REPORT_RANGE_DAYS } from "./ranges";
+import { monthLabel } from "./window";
 
 const EASE_OUT = [0.16, 1, 0.3, 1] as const;
 
-const RANGE_OPTIONS = REPORT_RANGE_DAYS.map((days) => ({
-  value: String(days),
-  label: reportRangeLabel(days),
-}));
+/** Stable bucket ids from metrics.ts, mapped to their label keys. */
+const TIME_TO_HIRE_BUCKET_KEYS: Record<string, string> = {
+  "0–14d": "upTo14Days",
+  "15–30d": "days15To30",
+  "31–60d": "days31To60",
+  "61–90d": "days61To90",
+  "90d+": "over90Days",
+};
 
-function formatSource(source: string) {
-  if (source === "unknown") return "Unknown";
+type Translator = ReturnType<typeof useTranslations>;
+
+/** Range label for the selected period, matching the server's `reportRangeLabel`. */
+function formatRangeLabel(t: Translator, days: number) {
+  return days === 365
+    ? t("rangeLabels.lastTwelveMonths")
+    : t("rangeLabels.lastDays", { count: days });
+}
+
+function formatSource(t: Translator, source: string) {
+  if (source === "unknown") return t("unknownSource");
   return source.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
-function formatDataAsOf(generatedAt: string, timeZone: string) {
+function formatDataAsOf(t: Translator, locale: string, generatedAt: string, timeZone: string) {
   const date = new Date(generatedAt);
-  if (Number.isNaN(date.getTime())) return "Data as of an unknown time";
-  const formatted = new Intl.DateTimeFormat("en", {
+  if (Number.isNaN(date.getTime())) return t("dataAsOfUnknown");
+  const formatted = new Intl.DateTimeFormat(locale, {
     dateStyle: "medium",
     timeStyle: "short",
     timeZone,
   }).format(date);
-  return `Data as of ${formatted} (${timeZone})`;
+  return t("dataAsOf", { date: formatted, timeZone });
 }
 
-function formatDays(value: number | null) {
-  return value == null ? "No data" : `${Math.round(value)}d`;
+function formatDays(t: Translator, value: number | null) {
+  return value == null ? t("noData") : t("daysValue", { days: Math.round(value) });
 }
 
 function formatPercent(value: number | null) {
@@ -158,6 +173,7 @@ function CardHead({
   title: string;
   subtitle: string;
 }) {
+  const t = useTranslations("features.reports.reportsDashboard");
   return (
     <div className="flex items-center gap-2.5">
       <span className="grid size-8 shrink-0 place-items-center rounded-[var(--radius-btn)] border border-hairline bg-pure-snow">
@@ -168,7 +184,7 @@ function CardHead({
         <TooltipTrigger asChild>
           <button
             type="button"
-            aria-label={`About ${title}`}
+            aria-label={t("aboutLabel", { title })}
             className="grid size-6 place-items-center rounded-full text-quiet-mist transition-colors hover:text-near-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-near-ink"
           >
             <Info className="size-3.5" strokeWidth={1.8} />
@@ -228,17 +244,25 @@ export function ReportsDashboard({ data, canViewCandidates = false, canViewJobs 
   canViewCandidates?: boolean;
   canViewJobs?: boolean;
 }) {
+  const t = useTranslations("features.reports.reportsDashboard");
+  const tStage = useTranslations("labels.reports.funnelStages");
+  const tBucket = useTranslations("labels.reports.timeToHireBuckets");
+  const locale = useLocale();
   const pipelineAction: EmptyPanelAction | undefined = canViewCandidates && canViewJobs
-    ? { href: "/dashboard/pipeline", label: "View pipeline" }
-    : canViewCandidates ? { href: "/dashboard/candidates", label: "View candidates" } : undefined;
+    ? { href: "/dashboard/pipeline", label: t("viewPipeline") }
+    : canViewCandidates ? { href: "/dashboard/candidates", label: t("viewCandidates") } : undefined;
   const jobsAction: EmptyPanelAction | undefined = canViewJobs
-    ? { href: "/dashboard/jobs", label: "View jobs" }
+    ? { href: "/dashboard/jobs", label: t("viewJobs") }
     : pipelineAction;
   const router = useRouter();
   const shouldReduceMotion = useReducedMotion();
   const { summary, comparison, range } = data;
-  const rangeLabel = range.label;
+  const rangeLabel = formatRangeLabel(t, range.days);
   const rangeLower = rangeLabel.toLowerCase();
+  const rangeOptions = REPORT_RANGE_DAYS.map((days) => ({
+    value: String(days),
+    label: formatRangeLabel(t, days),
+  }));
   const applicationsTotal = data.applicationsByMonth.reduce((s, p) => s + p.count, 0);
   const hiresLast12 = data.hiresByMonth.reduce((s, p) => s + p.count, 0);
   const offersDecided = summary.offers.accepted + summary.offers.declined;
@@ -249,77 +273,91 @@ export function ReportsDashboard({ data, canViewCandidates = false, canViewJobs 
     () => [
       {
         key: "applications",
-        label: "Applications",
+        label: t("stats.applications"),
         color: "var(--chart-1)",
-        points: data.applicationsByMonth.map((p) => ({ label: p.label, sub: p.month, value: p.count })),
+        points: data.applicationsByMonth.map((p) => ({ label: monthLabel(p.month, locale), sub: p.month, value: p.count })),
       },
       {
         key: "hires",
-        label: "Hires",
+        label: t("stats.hires"),
         color: "var(--chart-2)",
-        points: data.hiresByMonth.map((p) => ({ label: p.label, sub: p.month, value: p.count })),
+        points: data.hiresByMonth.map((p) => ({ label: monthLabel(p.month, locale), sub: p.month, value: p.count })),
       },
     ],
-    [data.applicationsByMonth, data.hiresByMonth],
+    [data.applicationsByMonth, data.hiresByMonth, t, locale],
+  );
+
+  const funnelStages = useMemo(
+    () => data.funnel.map((stage) => ({ ...stage, name: tStage(stage.kind) })),
+    [data.funnel, tStage],
+  );
+
+  const timeToHireBuckets = useMemo(
+    () =>
+      data.timeToHire.map((bucket) => {
+        const key = TIME_TO_HIRE_BUCKET_KEYS[bucket.bucket];
+        return { ...bucket, bucket: key ? tBucket(key) : bucket.bucket };
+      }),
+    [data.timeToHire, tBucket],
   );
 
   const sourceData: SourceDatum[] = useMemo(
     () =>
       data.sources.map((s) => ({
         source: s.source,
-        label: formatSource(s.source),
+        label: formatSource(t, s.source),
         candidates: s.applications,
         hires: s.hires,
         conversion: s.conversion,
       })),
-    [data.sources],
+    [data.sources, t],
   );
 
   function exportReportCsv() {
     const scope = `${rangeLabel} (${data.timeZone})`;
     const rows: string[][] = [
-      ["Harly hiring report"],
-      ["Range", rangeLabel],
-      ["Time zone", data.timeZone],
-      ["Generated at (UTC)", data.generatedAt],
+      [t("csv.title")],
+      [t("csv.range"), rangeLabel],
+      [t("csv.timeZone"), data.timeZone],
+      [t("csv.generatedAt"), data.generatedAt],
       [],
-      ["Metric", "Scope", "Value"],
-      ["Applications received", scope, String(comparison.applications.current)],
-      ["Applications received", "Previous period", String(comparison.applications.previous)],
-      ["Hires", scope, String(comparison.hires.current)],
-      ["Hires", "Previous period", String(comparison.hires.previous)],
-      ["Average time to hire (days)", scope, data.timeToHireStats.measured > 0 ? String(comparison.avgTimeToHireDays.current) : ""],
-      ["Median time to hire (days)", scope, data.timeToHireStats.medianDays == null ? "" : String(data.timeToHireStats.medianDays)],
-      ["Offer acceptance (%)", scope, summary.offerAcceptRate == null ? "" : String(summary.offerAcceptRate)],
-      ["Offers accepted", scope, String(summary.offers.accepted)],
-      ["Offers declined", scope, String(summary.offers.declined)],
-      ["Open roles", "Current", String(summary.openRoles)],
-      ["Candidates tracked", "All time", String(summary.totalCandidates)],
+      [t("csv.metric"), t("csv.scope"), t("csv.value")],
+      [t("csv.applicationsReceived"), scope, String(comparison.applications.current)],
+      [t("csv.applicationsReceived"), t("csv.previousPeriod"), String(comparison.applications.previous)],
+      [t("csv.hires"), scope, String(comparison.hires.current)],
+      [t("csv.hires"), t("csv.previousPeriod"), String(comparison.hires.previous)],
+      [t("csv.avgTimeToHireDays"), scope, data.timeToHireStats.measured > 0 ? String(comparison.avgTimeToHireDays.current) : ""],
+      [t("csv.medianTimeToHireDays"), scope, data.timeToHireStats.medianDays == null ? "" : String(data.timeToHireStats.medianDays)],
+      [t("csv.offerAcceptance"), scope, summary.offerAcceptRate == null ? "" : String(summary.offerAcceptRate)],
+      [t("csv.offersAccepted"), scope, String(summary.offers.accepted)],
+      [t("csv.offersDeclined"), scope, String(summary.offers.declined)],
+      [t("csv.openRoles"), t("csv.current"), String(summary.openRoles)],
+      [t("csv.candidatesTracked"), t("csv.allTime"), String(summary.totalCandidates)],
       [],
-      ["Funnel stage", `Reached, ${scope}`, "Share of applications received (%)", "Active now"],
-      ...data.funnel.map((stage) => [
+      [t("csv.funnelStage"), t("csv.reachedScope", { scope }), t("csv.shareOfApplications"), t("csv.activeNow")],
+      ...funnelStages.map((stage) => [
         stage.name,
         String(stage.count),
         stage.pct == null ? "" : String(stage.pct),
         String(stage.activeNow),
       ]),
       [],
-      ["Time to hire (days)", `Hires, ${scope}`],
-      ...data.timeToHire.map((bucket) => [bucket.bucket, String(bucket.count)]),
+      [t("csv.timeToHireDays"), t("csv.hiresScope", { scope })],
+      ...timeToHireBuckets.map((bucket) => [bucket.bucket, String(bucket.count)]),
       [],
-      ["Source", `Applications, ${scope}`, `Hires, ${scope}`, "Conversion (%)"],
+      [t("csv.source"), t("csv.applicationsScope", { scope }), t("csv.hiresScope", { scope }), t("csv.conversion")],
       ...data.sources.map((source) => [
-        formatSource(source.source),
+        formatSource(t, source.source),
         String(source.applications),
         String(source.hires),
         source.conversion == null ? "" : String(source.conversion),
       ]),
       [],
-      ["Applications by month", "Last 12 months, zone-local", "Count"],
-      ...data.applicationsByMonth.map((point) => ["Applications", point.month, String(point.count)]),
+      [t("csv.applicationsByMonth"), t("csv.lastTwelveMonthsZoneLocal"), t("csv.count")],
+      ...data.applicationsByMonth.map((point) => [t("csv.applications"), point.month, String(point.count)]),
       [],
-      ["Hires by month", "Last 12 months, zone-local", "Count"],
-      ...data.hiresByMonth.map((point) => ["Hires", point.month, String(point.count)]),
+      [t("csv.hiresByMonth"), t("csv.lastTwelveMonthsZoneLocal"), t("csv.count")],
+      ...data.hiresByMonth.map((point) => [t("csv.hires"), point.month, String(point.count)]),
     ];
     const blob = new Blob([String.fromCharCode(0xfeff) + toSafeCsv(rows)], { type: "text/csv;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
@@ -333,35 +371,39 @@ export function ReportsDashboard({ data, canViewCandidates = false, canViewJobs 
   const stats = [
     {
       icon: Users,
-      label: "Applications",
-      value: comparison.applications.current.toLocaleString(),
-      hint: `Received ${rangeLower}`,
+      label: t("stats.applications"),
+      value: comparison.applications.current.toLocaleString(locale),
+      hint: t("stats.receivedHint", { range: rangeLower }),
       delta: comparison.applications.deltaPct,
     },
     {
       icon: Briefcase,
-      label: "Hires",
-      value: comparison.hires.current.toLocaleString(),
-      hint: `Hired ${rangeLower}`,
+      label: t("stats.hires"),
+      value: comparison.hires.current.toLocaleString(locale),
+      hint: t("stats.hiredHint", { range: rangeLower }),
       delta: comparison.hires.deltaPct,
     },
     {
       icon: Clock,
-      label: "Avg time to hire",
-      value: formatDays(summary.avgTimeToHireDays),
+      label: t("stats.avgTimeToHire"),
+      value: formatDays(t, summary.avgTimeToHireDays),
       hint: summary.avgTimeToHireDays == null
-        ? `No hires ${rangeLower}`
-        : `Apply to hire, hires ${rangeLower}`,
+        ? t("stats.noHiresHint", { range: rangeLower })
+        : t("stats.applyToHireHint", { range: rangeLower }),
       delta: comparison.avgTimeToHireDays.deltaPct,
       invertDelta: true,
     },
     {
       icon: TrendingUp,
-      label: "Offer acceptance",
+      label: t("stats.offerAcceptance"),
       value: formatPercent(summary.offerAcceptRate),
       hint: offersDecided > 0
-        ? `${summary.offers.accepted} of ${offersDecided} decided offers, ${rangeLower}`
-        : `No offers decided ${rangeLower}`,
+        ? t("stats.offersDecidedHint", {
+          accepted: summary.offers.accepted,
+          decided: offersDecided,
+          range: rangeLower,
+        })
+        : t("stats.noOffersDecidedHint", { range: rangeLower }),
     },
   ];
 
@@ -369,23 +411,23 @@ export function ReportsDashboard({ data, canViewCandidates = false, canViewJobs 
     <div className="space-y-5">
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
-          <h1 className="font-display text-[28px] leading-tight text-near-ink">Reports</h1>
+          <h1 className="font-display text-[28px] leading-tight text-near-ink">{t("title")}</h1>
           <p className="mt-1 text-sm text-soft-ink">
-            {`Hiring performance and pipeline health, ${rangeLower}.`}
+            {t("subtitle", { range: rangeLower })}
           </p>
         </div>
-        <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Report filters">
+        <div className="flex flex-wrap items-center gap-2" role="group" aria-label={t("filtersLabel")}>
           <FilterPill
-            label="Period"
+            label={t("period")}
             value={String(comparison.rangeDays)}
             onChange={(v) => router.push(`/dashboard/reports?range=${v}`)}
-            options={RANGE_OPTIONS.map((o) => o.value)}
-            labelMap={Object.fromEntries(RANGE_OPTIONS.map((o) => [o.value, o.label]))}
+            options={rangeOptions.map((o) => o.value)}
+            labelMap={Object.fromEntries(rangeOptions.map((o) => [o.value, o.label]))}
             allValue={String(comparison.rangeDays)}
           />
           <Button variant="outline" onClick={exportReportCsv}>
             <Download className="size-4" />
-            Export CSV
+            {t("exportCsv")}
           </Button>
         </div>
       </div>
@@ -393,8 +435,8 @@ export function ReportsDashboard({ data, canViewCandidates = false, canViewJobs 
       <Card className="flex-row items-center gap-2.5 py-3.5 px-5">
         <Info className="size-4 shrink-0 text-quiet-mist" strokeWidth={1.8} />
         <p className="text-[13px] text-soft-ink">
-          <span className="font-medium text-near-ink">{`Displaying results from ${rangeLower}`}</span>
-          {` · ${formatDataAsOf(data.generatedAt, data.timeZone)}`}
+          <span className="font-medium text-near-ink">{t("displayingResults", { range: rangeLower })}</span>
+          {` · ${formatDataAsOf(t, locale, data.generatedAt, data.timeZone)}`}
         </p>
       </Card>
 
@@ -412,15 +454,15 @@ export function ReportsDashboard({ data, canViewCandidates = false, canViewJobs 
         <Tile className="gap-5 p-5">
           <CardHead
             icon={LineChart}
-            title="Hiring trend"
-            subtitle="Applications received vs. hires made, by month. Scope: last 12 months."
+            title={t("trend.title")}
+            subtitle={t("trend.subtitle")}
           />
           {applicationsTotal > 0 || hiresLast12 > 0 ? (
             <>
               <TrendChart series={trendSeries} />
               <ChartTable
-                caption="Applications and hires by month, last 12 months"
-                headers={["Month", "Applications", "Hires"]}
+                caption={t("trend.caption")}
+                headers={[t("table.month"), t("table.applications"), t("table.hires")]}
                 rows={data.applicationsByMonth.map((point, i) => [
                   point.month,
                   point.count,
@@ -429,7 +471,7 @@ export function ReportsDashboard({ data, canViewCandidates = false, canViewJobs 
               />
             </>
           ) : (
-            <EmptyPanel icon={LineChart} text="The trend appears once applications arrive." action={jobsAction} />
+            <EmptyPanel icon={LineChart} text={t("trend.empty")} action={jobsAction} />
           )}
         </Tile>
       </motion.div>
@@ -443,16 +485,21 @@ export function ReportsDashboard({ data, canViewCandidates = false, canViewJobs 
         <Tile className="gap-5 p-5">
           <CardHead
             icon={Funnel}
-            title="Funnel"
-            subtitle={`Applications received ${rangeLower} that reached each stage.`}
+            title={t("funnel.title")}
+            subtitle={t("funnel.subtitle", { range: rangeLower })}
           />
           {hasFunnel ? (
             <>
-              <FunnelChart stages={data.funnel} />
+              <FunnelChart stages={funnelStages} />
               <ChartTable
-                caption={`Funnel, applications received ${rangeLower}`}
-                headers={["Stage", "Reached", "Share of applications received", "Active now"]}
-                rows={data.funnel.map((stage) => [
+                caption={t("funnel.caption", { range: rangeLower })}
+                headers={[
+                  t("table.stage"),
+                  t("table.reached"),
+                  t("table.shareOfApplications"),
+                  t("table.activeNow"),
+                ]}
+                rows={funnelStages.map((stage) => [
                   stage.name,
                   stage.count,
                   formatPercent(stage.pct),
@@ -461,30 +508,34 @@ export function ReportsDashboard({ data, canViewCandidates = false, canViewJobs 
               />
             </>
           ) : (
-            <EmptyPanel icon={Funnel} text="The funnel fills in once candidates move through a pipeline." action={pipelineAction} />
+            <EmptyPanel icon={Funnel} text={t("funnel.empty")} action={pipelineAction} />
           )}
         </Tile>
 
         <Tile className="gap-5 p-5">
           <CardHead
             icon={Hourglass}
-            title="Time to hire"
-            subtitle={`Apply to hire for hires ${rangeLower}.`}
+            title={t("timeToHire.title")}
+            subtitle={t("timeToHire.subtitle", { range: rangeLower })}
           />
           {hasTimeToHire ? (
             <div className="space-y-4">
-              <Histogram data={data.timeToHire} />
+              <Histogram data={timeToHireBuckets} />
               <p className="text-xs text-soft-ink">
-                {`Median ${formatDays(data.timeToHireStats.medianDays)} · Average ${formatDays(summary.avgTimeToHireDays)} · ${data.timeToHireStats.measured} hires measured`}
+                {t("timeToHire.stats", {
+                  median: formatDays(t, data.timeToHireStats.medianDays),
+                  average: formatDays(t, summary.avgTimeToHireDays),
+                  measured: data.timeToHireStats.measured,
+                })}
               </p>
               <ChartTable
-                caption={`Time to hire distribution, hires ${rangeLower}`}
-                headers={["Days to hire", "Hires"]}
-                rows={data.timeToHire.map((bucket) => [bucket.bucket, bucket.count])}
+                caption={t("timeToHire.caption", { range: rangeLower })}
+                headers={[t("table.daysToHire"), t("table.hires")]}
+                rows={timeToHireBuckets.map((bucket) => [bucket.bucket, bucket.count])}
               />
             </div>
           ) : (
-            <EmptyPanel icon={Hourglass} text={`No hires ${rangeLower}. Time to hire appears after the first hire in range.`} action={pipelineAction} />
+            <EmptyPanel icon={Hourglass} text={t("timeToHire.empty", { range: rangeLower })} action={pipelineAction} />
           )}
         </Tile>
       </motion.section>
@@ -497,19 +548,24 @@ export function ReportsDashboard({ data, canViewCandidates = false, canViewJobs 
         <Tile className="gap-5 p-5">
           <CardHead
             icon={Target}
-            title="Source effectiveness"
-            subtitle={`Applications received and hires made ${rangeLower}, by source.`}
+            title={t("sources.title")}
+            subtitle={t("sources.subtitle", { range: rangeLower })}
           />
           {sourceData.length ? (
             <SourceBars sources={sourceData} />
           ) : (
-            <EmptyPanel icon={Users} text={`No applications ${rangeLower}. Sources appear once candidates apply.`} action={jobsAction} />
+            <EmptyPanel icon={Users} text={t("sources.empty", { range: rangeLower })} action={jobsAction} />
           )}
         </Tile>
       </motion.div>
 
       <p className="px-1 text-xs text-soft-ink">
-        {`${summary.openRoles.toLocaleString()} open roles (current) · ${summary.totalCandidates.toLocaleString()} candidates tracked (all time) · ${applicationsTotal.toLocaleString()} applications and ${hiresLast12.toLocaleString()} hires in the last 12 months.`}
+        {t("footer", {
+          openRoles: summary.openRoles.toLocaleString(locale),
+          candidates: summary.totalCandidates.toLocaleString(locale),
+          applications: applicationsTotal.toLocaleString(locale),
+          hires: hiresLast12.toLocaleString(locale),
+        })}
       </p>
     </div>
   );

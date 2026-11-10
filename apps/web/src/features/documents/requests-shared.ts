@@ -4,12 +4,13 @@
  * server-only imports.
  */
 
+/** Labels live in `labels.documents.requestStatus.<status>`. */
 export const DOCUMENT_REQUEST_STATUS_META = {
-  pending: { label: "Awaiting upload", className: "bg-status-quiet text-status-quiet-ink" },
-  submitted: { label: "In review", className: "bg-warning-clay/10 text-warning-clay" },
-  accepted: { label: "Accepted", className: "bg-sage-wash text-success-olive" },
-  declined: { label: "Declined", className: "bg-danger-rust/10 text-danger-rust" },
-  waived: { label: "Waived", className: "bg-status-quiet text-status-quiet-ink" },
+  pending: { className: "bg-status-quiet text-status-quiet-ink" },
+  submitted: { className: "bg-warning-clay/10 text-warning-clay" },
+  accepted: { className: "bg-sage-wash text-success-olive" },
+  declined: { className: "bg-danger-rust/10 text-danger-rust" },
+  waived: { className: "bg-status-quiet text-status-quiet-ink" },
 } as const;
 
 export type DocumentRequestStatus = keyof typeof DOCUMENT_REQUEST_STATUS_META;

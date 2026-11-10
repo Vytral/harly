@@ -1,5 +1,6 @@
 import "server-only";
 
+import { resolveEmailLocale } from "@harly/config/email-locale";
 import { applicationReceivedEmailDedupeKey } from "@/lib/email/dedupe-keys";
 import { enqueueEmailOutbox, processEmailOutbox } from "@/lib/email/outbox-processor";
 import { createLogger } from "@/lib/logger";
@@ -50,17 +51,24 @@ async function enqueueAndSend(
     }, applicationReceivedEmailDedupeKey({ applicationId: email.applicationId, recipient: "candidate" })),
   ];
 
-  for (const ownerEmail of email.ownerEmails) {
+  const ownerRecipients =
+    email.ownerRecipients ??
+    email.ownerEmails.map((ownerEmail) => ({
+      email: ownerEmail,
+      preferredEmailLocale: null,
+    }));
+  for (const recipient of ownerRecipients) {
     ids.push(
       await enqueueEmailOutbox(email.workspaceId, "application.received.recruiter", {
-        ownerEmail,
+        ownerEmail: recipient.email,
         candidateName: email.candidateName,
         candidateEmail: email.candidateEmail,
         jobTitle: email.jobTitle,
+        recipientLocale: resolveEmailLocale(recipient.preferredEmailLocale),
       }, applicationReceivedEmailDedupeKey({
         applicationId: email.applicationId,
         recipient: "recruiter",
-        recipientEmail: ownerEmail,
+        recipientEmail: recipient.email,
       })),
     );
   }

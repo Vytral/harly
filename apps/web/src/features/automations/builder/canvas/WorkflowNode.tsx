@@ -2,6 +2,7 @@
 
 import { Handle, Position, type Node, type NodeProps } from "@xyflow/react";
 import { motion, useReducedMotion } from "motion/react";
+import { useTranslations } from "next-intl";
 
 import { cn } from "@/lib/utils";
 import { getNodeVisualMeta, nodeCaption, nodeTitle } from "../node-visuals";
@@ -13,9 +14,12 @@ export function WorkflowCanvasNode({ data, selected }: NodeProps<Node<CanvasNode
   const ports = sourcePorts(node);
   const isDropTarget = data.isDropTarget === true;
   const isNew = data.isNew === true;
-  const { kindLabel, badgeClass, iconBgClass, Icon } = getNodeVisualMeta(node);
-  const caption = nodeCaption(node);
-  const title = nodeTitle(node);
+  const tl = useTranslations("labels.automations");
+  const tn = useTranslations("features.automations.WorkflowNode");
+  const { kindKey, badgeClass, iconBgClass, Icon } = getNodeVisualMeta(node);
+  const kindLabel = tl(kindKey);
+  const caption = nodeCaption(node, tl);
+  const title = nodeTitle(node, tl);
   const hasCustomTitle = Boolean(node.name?.trim() && node.name.trim() !== caption);
   const reduceMotion = useReducedMotion();
 
@@ -37,7 +41,7 @@ export function WorkflowCanvasNode({ data, selected }: NodeProps<Node<CanvasNode
           type="target"
           id="in"
           position={Position.Top}
-          aria-label={`Input for ${kindLabel}`}
+          aria-label={tn("inputFor", { kind: kindLabel })}
           className="!size-3 !-top-1.5 !border-2 !border-pure-snow !bg-foreground shadow-xs transition-transform hover:!scale-125"
         />
       ) : null}
@@ -92,7 +96,7 @@ export function WorkflowCanvasNode({ data, selected }: NodeProps<Node<CanvasNode
           type="source"
           id={port}
           position={Position.Bottom}
-          aria-label={`${kindLabel} ${port} output`}
+          aria-label={tn("outputFor", { kind: kindLabel, port })}
           style={{ left: `${((index + 1) / (ports.length + 1)) * 100}%` }}
           className="!size-3 !-bottom-1.5 !border-2 !border-pure-snow !bg-foreground shadow-xs transition-transform hover:!scale-125"
         />

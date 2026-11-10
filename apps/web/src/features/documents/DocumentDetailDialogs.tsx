@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { useTranslations } from "next-intl";
 import { Send } from "lucide-react";
 import { toast } from "@/lib/notification-island/toast";
 
@@ -40,10 +41,13 @@ export function SendForSignatureDialog({
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }) {
+  const t = useTranslations("features.documents.sendForSignatureDialog");
   const router = useRouter();
   const [email, setEmail] = useState("");
   const [recipientName, setRecipientName] = useState("");
-  const [subject, setSubject] = useState(`Please sign: ${document.name}`);
+  const [subject, setSubject] = useState(
+    t("defaultSubject", { name: document.name }),
+  );
   const [message, setMessage] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
@@ -51,7 +55,7 @@ export function SendForSignatureDialog({
   function reset() {
     setEmail("");
     setRecipientName("");
-    setSubject(`Please sign: ${document.name}`);
+    setSubject(t("defaultSubject", { name: document.name }));
     setMessage("");
     setError(null);
   }
@@ -67,10 +71,10 @@ export function SendForSignatureDialog({
         message: message.trim() || null,
       });
       if (!result.ok) {
-        setError(result.error ?? "Could not send for signature.");
+        setError(result.error ?? t("fallbackError"));
         return;
       }
-      toast.success("Sent for signature");
+      toast.success(t("sent"));
       reset();
       onOpenChange(false);
       router.refresh();
@@ -89,47 +93,40 @@ export function SendForSignatureDialog({
     >
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Send with DocuSeal</DialogTitle>
+          <DialogTitle>{t("title")}</DialogTitle>
           <DialogDescription>
-            DocuSeal emails the recipient, whether or not they&apos;re a
-            candidate on file. The signed PDF and audit log return to this
-            workspace automatically.
+            {t("description")}
           </DialogDescription>
         </DialogHeader>
         {!connected ? (
           <Callout tone="warning" className="my-2">
-            DocuSeal is{" "}
-            {data.esign.connected
-              ? "connected but missing its webhook secret"
-              : "not connected"}
-            . Finish setup in Settings → Integrations before sending for
-            signature.
+            {data.esign.connected ? t("missingWebhookSecret") : t("notConnected")}
           </Callout>
         ) : (
           <div className="space-y-4 py-2">
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <div className="space-y-2">
-                <Label htmlFor="signer-email">Recipient email</Label>
+                <Label htmlFor="signer-email">{t("recipientEmailLabel")}</Label>
                 <Input
                   id="signer-email"
                   type="email"
                   value={email}
                   onChange={(event) => setEmail(event.target.value)}
-                  placeholder="taylor@example.com"
+                  placeholder={t("recipientEmailPlaceholder")}
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="signer-name">Recipient name</Label>
+                <Label htmlFor="signer-name">{t("recipientNameLabel")}</Label>
                 <Input
                   id="signer-name"
                   value={recipientName}
                   onChange={(event) => setRecipientName(event.target.value)}
-                  placeholder="Taylor Okafor"
+                  placeholder={t("recipientNamePlaceholder")}
                 />
               </div>
             </div>
             <div className="space-y-2">
-              <Label htmlFor="signer-subject">Email subject</Label>
+              <Label htmlFor="signer-subject">{t("subjectLabel")}</Label>
               <Input
                 id="signer-subject"
                 value={subject}
@@ -137,13 +134,13 @@ export function SendForSignatureDialog({
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="signer-message">Message (optional)</Label>
+              <Label htmlFor="signer-message">{t("messageLabel")}</Label>
               <Textarea
                 id="signer-message"
                 value={message}
                 onChange={(event) => setMessage(event.target.value)}
                 rows={3}
-                placeholder="Add a short note for the signer…"
+                placeholder={t("messagePlaceholder")}
               />
             </div>
             {error ? <Callout tone="danger">{error}</Callout> : null}
@@ -155,7 +152,7 @@ export function SendForSignatureDialog({
             onClick={() => onOpenChange(false)}
             disabled={isPending}
           >
-            Cancel
+            {t("cancel")}
           </Button>
           <Button
             onClick={submit}
@@ -168,7 +165,7 @@ export function SendForSignatureDialog({
             }
           >
             <Send className="size-4" />
-            {isPending ? "Sending…" : "Send for signature"}
+            {isPending ? t("sending") : t("send")}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -188,6 +185,7 @@ export function VoidSignatureDialog({
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }) {
+  const t = useTranslations("features.documents.voidSignatureDialog");
   const router = useRouter();
   const [reason, setReason] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -200,10 +198,10 @@ export function VoidSignatureDialog({
         reason,
       });
       if (!result.ok) {
-        setError(result.error ?? "Could not void the request.");
+        setError(result.error ?? t("fallbackError"));
         return;
       }
-      toast.success("Signature request voided");
+      toast.success(t("voided"));
       setReason("");
       onOpenChange(false);
       router.refresh();
@@ -213,28 +211,25 @@ export function VoidSignatureDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Void signature request</DialogTitle>
+          <DialogTitle>{t("title")}</DialogTitle>
           <DialogDescription>
-            This cancels the signing request. Recipients can no longer sign it,
-            and the original document is left unsigned.
+            {t("description")}
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-4 py-2">
           {signedCount > 0 && document.signatureProvider === "native" ? (
             <Callout tone="warning">
-              {signedCount === 1 ? "One signer has" : `${signedCount} signers have`}{" "}
-              already signed. Voiding discards their signatures, and you will
-              need to start over.
+              {t("signedWarning", { count: signedCount })}
             </Callout>
           ) : null}
           <div className="space-y-2">
-            <Label htmlFor="void-reason">Reason</Label>
+            <Label htmlFor="void-reason">{t("reasonLabel")}</Label>
             <Textarea
               id="void-reason"
               value={reason}
               onChange={(event) => setReason(event.target.value)}
               rows={3}
-              placeholder="Recipient email was wrong…"
+              placeholder={t("reasonPlaceholder")}
             />
           </div>
           {error ? <Callout tone="danger">{error}</Callout> : null}
@@ -245,14 +240,14 @@ export function VoidSignatureDialog({
             onClick={() => onOpenChange(false)}
             disabled={isPending}
           >
-            Cancel
+            {t("cancel")}
           </Button>
           <Button
             variant="destructive"
             onClick={submit}
             disabled={isPending || reason.trim().length < 3}
           >
-            {isPending ? "Voiding…" : "Void request"}
+            {isPending ? t("voiding") : t("submit")}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -271,6 +266,7 @@ export function LegalHoldDialog({
   onOpenChange: (open: boolean) => void;
   activeHold: DocumentListItem["legalHolds"][number] | null;
 }) {
+  const t = useTranslations("features.documents.legalHoldDialog");
   const router = useRouter();
   const [reason, setReason] = useState("");
   const [reference, setReference] = useState("");
@@ -290,10 +286,10 @@ export function LegalHoldDialog({
             reference: reference || null,
           });
       if (!result.ok) {
-        toast.error(result.error ?? "Could not update legal hold.");
+        toast.error(result.error ?? t("fallbackError"));
         return;
       }
-      toast.success(releasing ? "Legal hold released" : "Legal hold placed");
+      toast.success(releasing ? t("released") : t("placed"));
       setReason("");
       setReference("");
       onOpenChange(false);
@@ -306,18 +302,16 @@ export function LegalHoldDialog({
       <DialogContent>
         <DialogHeader>
           <DialogTitle>
-            {releasing ? "Release legal hold" : "Place legal hold"}
+            {releasing ? t("releaseTitle") : t("placeTitle")}
           </DialogTitle>
           <DialogDescription>
-            {releasing
-              ? "Record why this hold is being released. Other active holds, if any, remain in force."
-              : "This protects the document from archival until every active hold is released."}
+            {releasing ? t("releaseDescription") : t("placeDescription")}
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-4 py-2">
           <div className="space-y-2">
             <Label htmlFor="legal-hold-reason">
-              {releasing ? "Release reason" : "Reason"}
+              {releasing ? t("releaseReasonLabel") : t("reasonLabel")}
             </Label>
             <Textarea
               id="legal-hold-reason"
@@ -326,32 +320,32 @@ export function LegalHoldDialog({
               rows={4}
               placeholder={
                 releasing
-                  ? "Investigation closed…"
-                  : "Active litigation, audit, or preservation notice…"
+                  ? t("releaseReasonPlaceholder")
+                  : t("reasonPlaceholder")
               }
             />
           </div>
           {!releasing ? (
             <div className="space-y-2">
-              <Label htmlFor="legal-hold-reference">Reference (optional)</Label>
+              <Label htmlFor="legal-hold-reference">{t("referenceLabel")}</Label>
               <Input
                 id="legal-hold-reference"
                 value={reference}
                 onChange={(event) => setReference(event.target.value)}
-                placeholder="Matter, ticket, or case reference"
+                placeholder={t("referencePlaceholder")}
               />
             </div>
           ) : null}
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>
-            Cancel
+            {t("cancel")}
           </Button>
           <Button
             onClick={submit}
             disabled={isPending || reason.trim().length < 3}
           >
-            {isPending ? "Saving…" : releasing ? "Release hold" : "Place hold"}
+            {isPending ? t("saving") : releasing ? t("release") : t("place")}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -368,6 +362,7 @@ export function RenameDialog({
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }) {
+  const t = useTranslations("features.documents.renameDialog");
   const router = useRouter();
   const [name, setName] = useState(document.name);
   const [isPending, startTransition] = useTransition();
@@ -375,10 +370,10 @@ export function RenameDialog({
     startTransition(async () => {
       const result = await renameDocument({ documentId: document.id, name });
       if (!result.ok) {
-        toast.error(result.error ?? "Could not rename the document.");
+        toast.error(result.error ?? t("fallbackError"));
         return;
       }
-      toast.success("Name updated");
+      toast.success(t("renamed"));
       onOpenChange(false);
       router.refresh();
     });
@@ -387,12 +382,12 @@ export function RenameDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Rename document</DialogTitle>
-          <DialogDescription>This changes metadata only.</DialogDescription>
+          <DialogTitle>{t("title")}</DialogTitle>
+          <DialogDescription>{t("description")}</DialogDescription>
         </DialogHeader>
         <Input
           value={name}
-          aria-label="Document name"
+          aria-label={t("nameAriaLabel")}
           onChange={(event) => setName(event.target.value)}
           onKeyDown={(event) => {
             if (event.key === "Enter" && name.trim() && !isPending) submit();
@@ -400,10 +395,10 @@ export function RenameDialog({
         />
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>
-            Cancel
+            {t("cancel")}
           </Button>
           <Button onClick={submit} disabled={!name.trim() || isPending}>
-            {isPending ? "Saving…" : "Save name"}
+            {isPending ? t("saving") : t("save")}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -421,6 +416,7 @@ export function RecordOfflineSignatureDialog({
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }) {
+  const t = useTranslations("features.documents.recordOfflineSignatureDialog");
   const router = useRouter();
   const [note, setNote] = useState("");
   const [isPending, startTransition] = useTransition();
@@ -436,10 +432,10 @@ export function RecordOfflineSignatureDialog({
         attestationNote: note,
       });
       if (!result.ok) {
-        toast.error(result.error ?? "Could not record the signature.");
+        toast.error(result.error ?? t("fallbackError"));
         return;
       }
-      toast.success("Signature recorded");
+      toast.success(t("recorded"));
       setNote("");
       onOpenChange(false);
       router.refresh();
@@ -449,29 +445,27 @@ export function RecordOfflineSignatureDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Record a signature collected offline</DialogTitle>
+          <DialogTitle>{t("title")}</DialogTitle>
           <DialogDescription>
-            Use this when the document was signed outside Harly, for example in
-            person. It is saved as your attestation, not verified evidence, and
-            cannot be undone.
+            {t("description")}
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-2">
-          <Label htmlFor="attest-note">How and when was it signed?</Label>
+          <Label htmlFor="attest-note">{t("noteLabel")}</Label>
           <Textarea
             id="attest-note"
             value={note}
             onChange={(event) => setNote(event.target.value)}
             rows={3}
-            placeholder="Signed in person on 4 March, scan saved in the candidate file."
+            placeholder={t("notePlaceholder")}
           />
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>
-            Cancel
+            {t("cancel")}
           </Button>
           <Button onClick={submit} disabled={note.trim().length < 3 || isPending}>
-            {isPending ? "Saving…" : "Mark as signed"}
+            {isPending ? t("saving") : t("submit")}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -481,16 +475,19 @@ export function RecordOfflineSignatureDialog({
 
 /** Settings pointer shown when remote signing links are switched off. */
 export function RemoteSigningDisabledNote() {
+  const t = useTranslations("features.documents.remoteSigningDisabledNote");
   return (
     <Callout tone="info">
-      Remote signing links are off.{" "}
-      <Link
-        href="/settings/signature"
-        className="font-medium text-near-ink underline underline-offset-2"
-      >
-        Enable them in Signature settings
-      </Link>
-      .
+      {t.rich("message", {
+        link: (chunks) => (
+          <Link
+            href="/settings/signature"
+            className="font-medium text-near-ink underline underline-offset-2"
+          >
+            {chunks}
+          </Link>
+        ),
+      })}
     </Callout>
   );
 }

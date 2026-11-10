@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { and, eq } from "drizzle-orm";
 import { z } from "zod";
+import { getTranslations } from "@/i18n/server";
 
 import {
   activityEvents,
@@ -13,6 +14,7 @@ import {
 } from "@harly/db";
 
 import { requirePermission } from "@/features/workspaces/permissions-server";
+import { withNotificationCopy } from "@/features/notifications/copy";
 import { createLogger } from "@/lib/logger";
 import { canReviewRequest } from "./requests-shared";
 import { associationTargetsInScope } from "./scope-access";
@@ -21,15 +23,17 @@ import { resumeWorkflowDocumentWaits } from "@/features/automations/runtime/work
 
 const log = createLogger("document-requests");
 
+type ServerTranslator = Awaited<ReturnType<typeof getTranslations>>;
+
 export type DocumentRequestActionResult = { ok: boolean; error?: string };
 
-async function manageContext(): Promise<
+async function manageContext(t: ServerTranslator): Promise<
   { ok: true; context: Awaited<ReturnType<typeof requirePermission>> } | { ok: false; error: string }
 > {
   try {
     return { ok: true, context: await requirePermission("documents:manage") };
   } catch {
-    return { ok: false, error: "You do not have permission to manage documents." };
+    return { ok: false, error: t("manageDenied") };
   }
 }
 
@@ -47,19 +51,21 @@ async function applicationInCallerScope(
   );
 }
 
-const requestSchema = z.object({
-  applicationId: z.uuid(),
-  dueAt: z.iso.datetime().nullable().optional(),
-  items: z
-    .array(
-      z.object({
-        title: z.string().trim().min(1, "Title is required.").max(160),
-        instructions: z.string().trim().max(2000).optional(),
-      }),
-    )
-    .min(1, "Add at least one document to request.")
-    .max(20),
-});
+function buildRequestSchema(t: ServerTranslator) {
+  return z.object({
+    applicationId: z.uuid(),
+    dueAt: z.iso.datetime().nullable().optional(),
+    items: z
+      .array(
+        z.object({
+          title: z.string().trim().min(1, t("titleRequired")).max(160),
+          instructions: z.string().trim().max(2000).optional(),
+        }),
+      )
+      .min(1, t("itemsRequired"))
+      .max(20),
+  });
+}
 
 /**
  * Create one or more document requests against an application and notify the
@@ -71,13 +77,14 @@ export async function requestDocuments(input: {
   items: Array<{ title: string; instructions?: string }>;
   dueAt?: string | null;
 }): Promise<DocumentRequestActionResult> {
-  const auth = await manageContext();
+  const t = await getTranslations("server.documents.requestsActions");
+  const auth = await manageContext(t);
   if (!auth.ok) return auth;
   const { context } = auth;
 
-  const parsed = requestSchema.safeParse(input);
+  const parsed = buildRequestSchema(t).safeParse(input);
   if (!parsed.success) {
-    return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid request." };
+    return { ok: false, error: parsed.error.issues[0]?.message ?? t("invalidRequest") };
   }
 
   const [application] = await db
@@ -90,8 +97,8 @@ export async function requestDocuments(input: {
       ),
     )
     .limit(1);
-  if (!application) return { ok: false, error: "Application not found." };
-  if (!(await applicationInCallerScope(context, application.id))) return { ok: false, error: "Application not found." };
+  if (!application) return { ok: false, error: t("applicationNotFound") };
+  if (!(await applicationInCallerScope(context, application.id))) return { ok: false, error: t("applicationNotFound") };
 
   const dueAt = parsed.data.dueAt ? new Date(parsed.data.dueAt) : null;
 
@@ -135,7 +142,10 @@ export async function requestDocuments(input: {
           ? `Please upload: ${parsed.data.items[0]!.title}.`
           : `You have ${count} documents to upload for your application.`,
       href: `/portal/applications/${application.id}`,
-      metadata: { applicationId: application.id, count },
+      metadata: withNotificationCopy(
+        { applicationId: application.id, count },
+        { key: "documentRequested", values: { count, title: parsed.data.items[0]!.title } },
+      ),
     });
   });
 
@@ -155,13 +165,14 @@ export async function reviewDocumentRequest(input: {
   decision: "accepted" | "declined";
   note?: string;
 }): Promise<DocumentRequestActionResult> {
-  const auth = await manageContext();
+  const t = await getTranslations("server.documents.requestsActions");
+  const auth = await manageContext(t);
   if (!auth.ok) return auth;
   const { context } = auth;
 
   const parsed = reviewSchema.safeParse(input);
   if (!parsed.success) {
-    return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid review." };
+    return { ok: false, error: parsed.error.issues[0]?.message ?? t("invalidReview") };
   }
 
   const [request] = await db
@@ -181,12 +192,12 @@ export async function reviewDocumentRequest(input: {
       ),
     )
     .limit(1);
-  if (!request) return { ok: false, error: "Document request not found." };
+  if (!request) return { ok: false, error: t("requestNotFound") };
   if (!(await applicationInCallerScope(context, request.applicationId))) {
-    return { ok: false, error: "Document request not found." };
+    return { ok: false, error: t("requestNotFound") };
   }
   if (!canReviewRequest(request.status)) {
-    return { ok: false, error: "Only a submitted document can be reviewed." };
+    return { ok: false, error: t("reviewOnlySubmitted") };
   }
 
   await db.transaction(async (tx) => {
@@ -220,7 +231,13 @@ export async function reviewDocumentRequest(input: {
           ? `Your upload for "${request.title}" was accepted.`
           : `Your upload for "${request.title}" was declined. Please upload it again.`,
       href: `/portal/applications/${request.applicationId}`,
-      metadata: { requestId: request.id, applicationId: request.applicationId },
+      metadata: withNotificationCopy(
+        { requestId: request.id, applicationId: request.applicationId },
+        {
+          key: parsed.data.decision === "accepted" ? "documentAccepted" : "documentDeclined",
+          values: { title: request.title },
+        },
+      ),
     });
   });
 
@@ -238,12 +255,13 @@ const waiveSchema = z.object({ requestId: z.uuid() });
 export async function waiveDocumentRequest(input: {
   requestId: string;
 }): Promise<DocumentRequestActionResult> {
-  const auth = await manageContext();
+  const t = await getTranslations("server.documents.requestsActions");
+  const auth = await manageContext(t);
   if (!auth.ok) return auth;
   const { context } = auth;
 
   const parsed = waiveSchema.safeParse(input);
-  if (!parsed.success) return { ok: false, error: "Invalid request." };
+  if (!parsed.success) return { ok: false, error: t("invalidRequest") };
   const [target] = await db
     .select({ applicationId: documentRequests.applicationId })
     .from(documentRequests)
@@ -255,7 +273,7 @@ export async function waiveDocumentRequest(input: {
     )
     .limit(1);
   if (!target || !(await applicationInCallerScope(context, target.applicationId))) {
-    return { ok: false, error: "Document request not found." };
+    return { ok: false, error: t("requestNotFound") };
   }
 
   const updated = await db.transaction(async (tx) => {
@@ -281,7 +299,7 @@ export async function waiveDocumentRequest(input: {
     if (row?.packageId) await reconcileDocumentRequestPackage(tx, { workspaceId: context.organization.id, packageId: row.packageId });
     return row;
   });
-  if (!updated) return { ok: false, error: "Document request not found." };
+  if (!updated) return { ok: false, error: t("requestNotFound") };
 
   await resumeWorkflowDocumentWaits({
     workspaceId: context.organization.id,
@@ -297,12 +315,13 @@ const cancelSchema = z.object({ requestId: z.uuid() });
 export async function cancelDocumentRequest(input: {
   requestId: string;
 }): Promise<DocumentRequestActionResult> {
-  const auth = await manageContext();
+  const t = await getTranslations("server.documents.requestsActions");
+  const auth = await manageContext(t);
   if (!auth.ok) return auth;
   const { context } = auth;
 
   const parsed = cancelSchema.safeParse(input);
-  if (!parsed.success) return { ok: false, error: "Invalid request." };
+  if (!parsed.success) return { ok: false, error: t("invalidRequest") };
 
   const [request] = await db
     .select({
@@ -319,12 +338,12 @@ export async function cancelDocumentRequest(input: {
       ),
     )
     .limit(1);
-  if (!request) return { ok: false, error: "Document request not found." };
+  if (!request) return { ok: false, error: t("requestNotFound") };
   if (!(await applicationInCallerScope(context, request.applicationId))) {
-    return { ok: false, error: "Document request not found." };
+    return { ok: false, error: t("requestNotFound") };
   }
   if (request.status === "submitted") {
-    return { ok: false, error: "This document was already submitted. Decline or accept it instead." };
+    return { ok: false, error: t("alreadySubmitted") };
   }
 
   await db.transaction(async (tx) => {

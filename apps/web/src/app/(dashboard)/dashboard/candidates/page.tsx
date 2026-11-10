@@ -1,5 +1,6 @@
 import type { Route } from "next";
 import Link from "next/link";
+import { getLocale, getTranslations } from "next-intl/server";
 import { ArrowRight, CheckCircle2, ClipboardCheck, Trash2, Users } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -41,9 +42,9 @@ import { formatRelative, formatShort } from "@/lib/date";
 
 export const dynamic = "force-dynamic";
 
-function appliedLabel(value: Date) {
+function appliedLabel(value: Date, locale: string) {
   const days = Math.abs(Date.now() - value.getTime()) / 86_400_000;
-  return days < 30 ? formatRelative(value) : formatShort(value);
+  return days < 30 ? formatRelative(value, locale) : formatShort(value, locale);
 }
 
 type CandidatesPageProps = {
@@ -67,6 +68,8 @@ type CandidatesPageProps = {
 };
 
 export default async function CandidatesPage({ searchParams }: CandidatesPageProps) {
+  const t = await getTranslations("candidates.directory");
+  const locale = await getLocale();
   await requirePagePermission("candidates:view");
   const { view, import: importSource, q, dept, role, stage, status, source, tag, sort, page: pageRaw, queue, done } = await searchParams;
   const isQueue = queue === "review";
@@ -162,7 +165,7 @@ const initialImportSource: ImportSource | undefined =
       source: candidate.latestApplication?.source ?? null,
       tags: candidate.tags,
       appliedAt: applied ? applied.getTime() : null,
-      appliedLabel: applied ? appliedLabel(applied) : null,
+      appliedLabel: applied ? appliedLabel(applied, locale) : null,
       applicationId: candidate.latestApplication?.applicationId ?? null,
       updatedAt: candidate.updatedAt.getTime(),
     };
@@ -177,17 +180,17 @@ const initialImportSource: ImportSource | undefined =
   return (
     <div className="space-y-6">
       <PageTitleRow
-        title={isQueue ? `Review queue · ${reviewQueue.total}` : "Candidates"}
+        title={isQueue ? t("reviewQueueTitle", { count: reviewQueue.total }) : t("title")}
         description={
           isQueue
-            ? "Applications waiting on your review, longest wait first."
+            ? t("reviewQueueDescription")
             : undefined
         }
       >
         {isQueue && firstQueueItem ? (
           <Button asChild>
             <Link href={candidateHref(firstQueueItem.candidateId, REVIEW_ORIGIN, firstQueueItem.applicationId) as Route}>
-              Start reviewing
+              {t("startReviewing")}
               <ArrowRight className="size-4" />
             </Link>
           </Button>
@@ -206,19 +209,19 @@ const initialImportSource: ImportSource | undefined =
       </PageTitleRow>
 
       <DirectoryTabs
-        label="Candidate views"
+        label={t("views")}
         items={[
-          { href: "/dashboard/candidates", label: "All", count: isQueue ? undefined : directory.total, active: !isTrash && !isQueue },
+          { href: "/dashboard/candidates", label: t("all"), count: isQueue ? undefined : directory.total, active: !isTrash && !isQueue },
           {
             href: "/dashboard/candidates?queue=review",
-            label: "Review queue",
+            label: t("reviewQueue"),
             count: reviewQueue.total,
             icon: <ClipboardCheck className="size-3.5" aria-hidden />,
             active: isQueue,
           },
           {
             href: "/dashboard/candidates?view=trash",
-            label: "Trash",
+            label: t("trash"),
             count: trashed.length,
             icon: <Trash2 className="size-3.5" aria-hidden />,
             active: isTrash,
@@ -230,12 +233,12 @@ const initialImportSource: ImportSource | undefined =
         reviewQueue.total === 0 ? (
           <EmptyState
             icon={CheckCircle2}
-            title="Queue cleared"
-            description="Nothing is waiting on your review. New screening and interview feedback shows up here."
-            action={{ href: "/dashboard", label: "Back to Home" }}
+            title={t("queueCleared")}
+            description={t("queueClearedDescription")}
+            action={{ href: "/dashboard", label: t("backHome") }}
             secondaryAction={
               <Button asChild variant="outline" size="sm">
-                <Link href="/dashboard/candidates">All candidates</Link>
+                <Link href="/dashboard/candidates">{t("allCandidates")}</Link>
               </Button>
             }
           />
@@ -247,18 +250,17 @@ const initialImportSource: ImportSource | undefined =
                 className="flex flex-wrap items-center justify-between gap-3 rounded-[var(--radius-inner)] bg-sage-wash px-4 py-3 text-[14px] text-near-ink"
               >
                 <span>
-                  You reached the end of the queue. {reviewQueue.total} still{" "}
-                  {reviewQueue.total === 1 ? "waits" : "wait"} on your review.
+                  {t("queueDone", { count: reviewQueue.total })}
                 </span>
                 <Link href="/dashboard" className="font-medium underline-offset-4 hover:underline">
-                  Back to Home
+                  {t("backHome")}
                 </Link>
               </div>
             ) : null}
             <ReviewQueueList items={queueItems} />
             {reviewQueue.items.length > queueItems.length ? (
               <p className="text-center text-[13px] text-soft-ink">
-                Showing the {queueItems.length} longest-waiting. Start reviewing to walk all {reviewQueue.total}.
+                {t("queueLimitHint", { shown: queueItems.length, total: reviewQueue.total })}
               </p>
             ) : null}
           </div>
@@ -283,7 +285,7 @@ const initialImportSource: ImportSource | undefined =
                       {candidate.fullName}
                     </span>
                     <span className="mt-0.5 block truncate text-[13px] text-soft-ink">
-                      Deleted {formatRelative(candidate.deletedAt)}
+                      {t("deletedAt", { date: formatRelative(candidate.deletedAt, locale) })}
                     </span>
                   </span>
                 </span>
@@ -297,15 +299,15 @@ const initialImportSource: ImportSource | undefined =
         ) : (
           <EmptyState
             icon={Trash2}
-            title="Trash is empty"
-            description="Candidates you delete show up here and can be restored."
+            title={t("trashEmpty")}
+            description={t("trashEmptyDescription")}
           />
         )
       ) : rows.length === 0 ? (
         <EmptyState
           icon={Users}
-          title="No candidates yet"
-          description="Share your public job board or import candidates from another ATS."
+          title={t("emptyTitle")}
+          description={t("emptyDescription")}
           action={
             canCreateCandidates ? (
               <AddCandidateDrawer

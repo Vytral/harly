@@ -1,10 +1,12 @@
 import Link from "next/link";
+import { useTranslations } from "next-intl";
 import type { Route } from "next";
 import { GitBranch } from "lucide-react";
 
 import type { PipelineOverview } from "@/features/dashboard/widgets";
 import { Tile, TileHeader, TileLink, EmptyHint } from "./primitives";
 import { PipelineJobSelect } from "./PipelineJobSelect";
+import { stageLabel } from "@/features/pipeline/stage-label";
 
 /**
  * Funnel lanes, Applied to Hired. Token-based (dark-mode safe): quiet neutrals
@@ -27,6 +29,8 @@ export function PipelineOverviewCard({
   data: PipelineOverview;
   className?: string;
 }) {
+  const t = useTranslations("shell.pipelineOverview");
+  const tStages = useTranslations("labels.pipeline.stages");
   // The pipeline page reads `?job=`; keep the job chosen here when leaving.
   const pipelineHref = (
     data.selected ? `/dashboard/pipeline?job=${data.selected.id}` : "/dashboard/pipeline"
@@ -39,8 +43,8 @@ export function PipelineOverviewCard({
     <Tile className={className}>
       <TileHeader
         icon={GitBranch}
-        title="Pipeline overview"
-        action={<TileLink href={pipelineHref}>View pipeline</TileLink>}
+        title={t("title")}
+        action={<TileLink href={pipelineHref}>{t("view")}</TileLink>}
       />
       <div className="flex flex-1 flex-col gap-4 px-5 pb-5 pt-4">
         {data.selected ? (
@@ -75,7 +79,7 @@ export function PipelineOverviewCard({
                   <div className="flex items-center gap-1.5">
                     <span className={`size-1.5 shrink-0 rounded-full ${laneColor(i)}`} />
                     <span className="truncate text-xs text-soft-ink">
-                      {stage.name}
+                      {stageLabel(stage.name, tStages)}
                     </span>
                   </div>
                   <p className="font-display mt-1 text-[24px] leading-none tabular-nums text-near-ink">
@@ -92,9 +96,9 @@ export function PipelineOverviewCard({
         ) : (
           <EmptyHint
             icon={GitBranch}
-            title="Your pipeline starts with a job"
-            text="Publish a role and every applicant lands here, stage by stage."
-            action={{ label: "Create a job", href: "/dashboard/jobs/new" as Route }}
+            title={t("emptyTitle")}
+            text={t("emptyText")}
+            action={{ label: t("create"), href: "/dashboard/jobs/new" as Route }}
           />
         )}
       </div>

@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { eq } from "drizzle-orm";
+import { getTranslations } from "@/i18n/server";
 import { z } from "zod";
 
 import { db, workspaceSettings } from "@harly/db";
@@ -42,10 +43,11 @@ export type LegalSettingsInput = z.infer<typeof saveSchema>;
 export async function saveLegalSettingsAction(
   input: LegalSettingsInput,
 ): Promise<LegalSettingsActionResult> {
+  const t = await getTranslations("server.workspaces.legalSettingsActions");
   // Legal pages are public and retention settings drive purge jobs; several of
   // these columns are not restored by the demo reseed.
   if (isDemoMode()) {
-    return { ok: false, error: "This action is disabled in the demo." };
+    return { ok: false, error: t("disabledInDemo") };
   }
   const context = await requirePermission("settings:edit");
 
@@ -53,7 +55,7 @@ export async function saveLegalSettingsAction(
   if (!parsed.success) {
     return {
       ok: false,
-      error: parsed.error.issues[0]?.message ?? "Invalid settings.",
+      error: parsed.error.issues[0]?.message ?? t("invalidSettings"),
     };
   }
 

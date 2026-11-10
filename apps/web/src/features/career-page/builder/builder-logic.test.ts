@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { CAREER_PRESETS, careerTemplates } from "@/features/career-page/config";
 import { contrastRatio } from "@/features/career-page/color";
+import type { Translate } from "@/features/career-page/translate";
 
 import {
   accentContrastWarnings,
@@ -53,16 +54,19 @@ describe("resetDesign", () => {
   });
 });
 
+// Keys plus their values, so assertions can still match the interpolated numbers.
+const tStub: Translate = (key, values) => `${key} ${JSON.stringify(values ?? {})}`;
+
 describe("validateConfig", () => {
   it("passes every preset", () => {
-    for (const t of careerTemplates) expect(validateConfig(CAREER_PRESETS[t]())).toEqual({});
+    for (const t of careerTemplates) expect(validateConfig(CAREER_PRESETS[t](), tStub)).toEqual({});
   });
 
   it("keys issues by field path and groups them by section", () => {
     const c = CAREER_PRESETS.minimal();
     c.footer.socials = [{ platform: "x", url: "x.com/acme" }];
     c.faq.items = [{ q: "q", a: "a".repeat(2001) }];
-    const errors = validateConfig(c);
+    const errors = validateConfig(c, tStub);
     expect(errors["footer.socials.0.url"]).toMatch(/http/);
     expect(errors["faq.items.0.a"]).toMatch(/2000/);
     expect(errorsBySection(errors)).toEqual({ footer: 1, sections: 1 });
@@ -71,7 +75,7 @@ describe("validateConfig", () => {
 
 describe("contrast guard", () => {
   it("trusts readable ink on the accent (every template now uses readableInk)", () => {
-    const ids = accentContrastWarnings(CAREER_PRESETS.minimal(), "#777777", { checkBackground: false });
+    const ids = accentContrastWarnings(CAREER_PRESETS.minimal(), "#777777", { checkBackground: false }, tStub);
     expect(ids).toEqual([]);
   });
 
@@ -81,12 +85,12 @@ describe("contrast guard", () => {
   });
 
   it("flags a light accent against a light background", () => {
-    const ids = accentContrastWarnings(CAREER_PRESETS.minimal(), "#B8F04A").map((w) => w.id);
+    const ids = accentContrastWarnings(CAREER_PRESETS.minimal(), "#B8F04A", undefined, tStub).map((w) => w.id);
     expect(ids).toContain("accent-on-background");
   });
 
   it("stays quiet for a dark accent on a light page", () => {
-    expect(accentContrastWarnings(CAREER_PRESETS.minimal(), "#1f2937")).toEqual([]);
+    expect(accentContrastWarnings(CAREER_PRESETS.minimal(), "#1f2937", undefined, tStub)).toEqual([]);
   });
 
   it("readableShade lightens against a dark background", () => {

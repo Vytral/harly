@@ -1,3 +1,4 @@
+export * from "./i18n";
 export * from "./sender";
 export * from "./inbound/types";
 export * from "./inbound/postmark";

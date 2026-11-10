@@ -33,6 +33,7 @@ function build(
     facts: { ...EMPTY_FACTS, ...facts },
     preferences: { ...NONE, ...preferences },
     canManage,
+    t: (key) => key,
   });
 }
 
@@ -80,7 +81,7 @@ describe("buildSetupChecklist: derivation matrix", () => {
   it("offers AI as an optional, skippable step", () => {
     const ai = build().items.find((item) => item.key === "connect_ai");
     expect(ai?.optional).toBe(true);
-    expect(ai?.title).toMatch(/optional/i);
+    expect(ai?.title).toBe("connectAi.title");
     const skipped = build({}, { skipped: ["connect_ai"] }).items.find(
       (item) => item.key === "connect_ai",
     );

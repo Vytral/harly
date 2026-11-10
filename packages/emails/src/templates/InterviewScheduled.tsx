@@ -1,5 +1,6 @@
 import { Button, Hr, Section, Text } from "@react-email/components";
 
+import { emailTranslator } from "../i18n";
 import { WorkspaceLayout } from "./WorkspaceLayout";
 import { DetailTable } from "./DetailTable";
 import { buildCalendarLinks } from "./calendarLinks";
@@ -7,6 +8,7 @@ import type { SocialLink } from "./HarlyLayout";
 
 export type InterviewScheduledProps = {
   candidateName: string;
+  locale?: string | null;
   companyName: string;
   companyLogoUrl?: string;
   accentColor?: string;
@@ -26,12 +28,14 @@ export type InterviewScheduledProps = {
 export function interviewScheduledSubject({
   companyName,
   jobTitle,
-}: Pick<InterviewScheduledProps, "companyName" | "jobTitle">) {
-  return `Interview confirmed — ${jobTitle} at ${companyName}`;
+  locale,
+}: Pick<InterviewScheduledProps, "companyName" | "jobTitle" | "locale">) {
+  return emailTranslator(locale)("interviewScheduled.subject", { company: companyName, job: jobTitle });
 }
 
 export function InterviewScheduled({
   candidateName,
+  locale,
   companyName,
   companyLogoUrl,
   accentColor,
@@ -47,11 +51,12 @@ export function InterviewScheduled({
   durationMins,
   notes,
 }: InterviewScheduledProps) {
+  const t = emailTranslator(locale);
   const rows = [
-    { label: "When", value: when },
-    { label: "Format", value: mode },
-    ...(location ? [{ label: "Where", value: location }] : []),
-    ...(duration ? [{ label: "Duration", value: duration }] : []),
+    { label: t("interviewScheduled.time"), value: when },
+    { label: t("interviewShared.format"), value: mode },
+    ...(location ? [{ label: t("interviewShared.where"), value: location }] : []),
+    ...(duration ? [{ label: t("interviewShared.duration"), value: duration }] : []),
   ];
 
   let calendarLinks: ReturnType<typeof buildCalendarLinks> | null = null;
@@ -67,7 +72,8 @@ export function InterviewScheduled({
 
   return (
     <WorkspaceLayout
-      preview={`Your ${interviewType.toLowerCase()} is confirmed for ${when}.`}
+      preview={t("interviewScheduled.preview", { type: interviewType.toLowerCase(), when })}
+      locale={locale}
       companyName={companyName}
       companyLogoUrl={companyLogoUrl}
       accentColor={accentColor}
@@ -75,19 +81,17 @@ export function InterviewScheduled({
       hideBranding={hideBranding}
     >
       <Text className="text-[40px] leading-[1.05] tracking-[-1px] font-inter text-fg m-0 mb-3.5 font-medium">
-        Interview confirmed
+        {t("interviewScheduled.heading")}
       </Text>
       <Text className="text-[14px] leading-[1.5] font-inter text-fg-2 m-0 mb-4">
-        Hi {candidateName}, your{" "}
-        <span className="text-fg font-semibold">{interviewType.toLowerCase()}</span> for{" "}
-        <span className="text-fg font-semibold">{jobTitle}</span> at {companyName} is on the calendar.
+        {t.rich("interviewScheduled.body", { name: candidateName, type: interviewType.toLowerCase(), job: jobTitle, company: companyName, strong: (chunks) => <span className="text-fg font-semibold">{chunks}</span> })}
       </Text>
       <DetailTable rows={rows} />
 
       {calendarLinks ? (
         <Section className="mb-5">
           <Text className="text-[13px] leading-[1.5] tracking-[-0.039px] font-inter text-fg-3 m-0 mb-2.5">
-            Add it to your calendar
+            {t("interviewScheduled.calendar")}
           </Text>
           <table>
             <tbody>
@@ -108,7 +112,7 @@ export function InterviewScheduled({
                     download={`${interviewType}-${jobTitle}.ics`}
                     className="border-stroke text-[14px] leading-[1.5] font-inter text-fg inline-block border bg-bg px-4 py-2.5 text-center box-border no-underline"
                   >
-                    Download .ics
+                    {t("interviewShared.download")}
                   </a>
                 </td>
               </tr>
@@ -125,7 +129,7 @@ export function InterviewScheduled({
       ) : null}
 
       <Text className="text-[14px] leading-[1.5] font-inter text-fg-2 m-0 mb-4">
-        Need to reschedule? Just reply to this email.
+        {t("interviewScheduled.outro")}
       </Text>
     </WorkspaceLayout>
   );

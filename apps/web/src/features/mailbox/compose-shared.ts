@@ -12,23 +12,38 @@ const MAX_TOTAL_BYTES = 20 * 1024 * 1024; // 20 MB per message
 // base64 encodes 3 bytes as 4 chars, so decoded bytes ≈ length * 3/4.
 const approxBytes = (base64: string) => Math.floor((base64.length * 3) / 4);
 
-export const composerAttachmentSchema = z.object({
-  filename: z.string().trim().min(1).max(255),
-  contentType: z.string().trim().min(1).max(255),
-  base64: z.string().min(1).refine((value) => approxBytes(value) <= MAX_FILE_BYTES, {
-    message: "One attachment exceeds the 10 MB limit.",
-  }),
-});
+/** Translator for the `server.mailbox` namespace, resolved per request by the caller. */
+export type ComposeTranslator = (key: string, values?: Record<string, string | number | Date>) => string;
 
-export type ComposerAttachmentInput = z.infer<typeof composerAttachmentSchema>;
+/** English messages for callers without a request translator (MCP tools). */
+const englishComposeMessages: Record<string, string> = {
+  "compose.attachmentTooLarge": "One attachment exceeds the 10 MB limit.",
+  "compose.tooManyFiles": "Attach at most 10 files.",
+  "compose.totalTooLarge": "Attachments exceed the 20 MB total limit.",
+};
+const englishCompose: ComposeTranslator = (key) => englishComposeMessages[key] ?? key;
 
-export const composerAttachmentsSchema = z
-  .array(composerAttachmentSchema)
-  .max(MAX_FILES, { message: "Attach at most 10 files." })
-  .refine((files) => files.reduce((sum, file) => sum + approxBytes(file.base64), 0) <= MAX_TOTAL_BYTES, {
-    message: "Attachments exceed the 20 MB total limit.",
-  })
-  .optional();
+export function composerAttachmentSchema(t: ComposeTranslator = englishCompose) {
+  return z.object({
+    filename: z.string().trim().min(1).max(255),
+    contentType: z.string().trim().min(1).max(255),
+    base64: z.string().min(1).refine((value) => approxBytes(value) <= MAX_FILE_BYTES, {
+      message: t("compose.attachmentTooLarge"),
+    }),
+  });
+}
+
+export type ComposerAttachmentInput = z.infer<ReturnType<typeof composerAttachmentSchema>>;
+
+export function composerAttachmentsSchema(t: ComposeTranslator = englishCompose) {
+  return z
+    .array(composerAttachmentSchema(t))
+    .max(MAX_FILES, { message: t("compose.tooManyFiles") })
+    .refine((files) => files.reduce((sum, file) => sum + approxBytes(file.base64), 0) <= MAX_TOTAL_BYTES, {
+      message: t("compose.totalTooLarge"),
+    })
+    .optional();
+}
 
 /** Convert validated composer attachments into the sender's Buffer-backed shape. */
 export function decodeComposerAttachments(

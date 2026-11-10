@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useTranslations } from "next-intl";
 import Link from "next/link";
 import type { Route } from "next";
 import {
@@ -60,21 +61,18 @@ type Application = {
   answers: Array<{ id: string; label: string; type: string; answer: string }>;
 };
 
-const APPLICATION_SOURCE_META: Record<
-  string,
-  { label: string; icon: typeof Briefcase }
-> = {
-  public_form: { label: "Job board", icon: Briefcase },
-  csv_import: { label: "CSV import", icon: FileSpreadsheet },
-  referral: { label: "Referral", icon: Users },
-  linkedin: { label: "LinkedIn", icon: Briefcase },
-  career_page: { label: "Career page", icon: Globe },
-  agency: { label: "Agency", icon: Building },
-  direct_apply: { label: "Direct apply", icon: MousePointerClick },
-  internal: { label: "Internal", icon: UserPlus },
-  email: { label: "Email", icon: Mail },
-  event: { label: "Event", icon: Megaphone },
-  manual: { label: "Manual", icon: Upload },
+const APPLICATION_SOURCE_ICON: Record<string, typeof Briefcase> = {
+  public_form: Briefcase,
+  csv_import: FileSpreadsheet,
+  referral: Users,
+  linkedin: Briefcase,
+  career_page: Globe,
+  agency: Building,
+  direct_apply: MousePointerClick,
+  internal: UserPlus,
+  email: Mail,
+  event: Megaphone,
+  manual: Upload,
 };
 
 function SectionLabel({
@@ -126,11 +124,12 @@ function SkillsList({ skills }: { skills: string[] }) {
 }
 
 function ExperienceHeadline({ years }: { years: number | null }) {
+  const t = useTranslations("candidates.detailsPanel");
   if (years === null) return null;
   return (
     <p className="inline-flex items-center gap-1.5 text-sm font-medium text-foreground/90">
       <Sparkles className="size-3.5 text-muted-foreground" strokeWidth={1.8} />
-      {years}+ years of experience
+      {t("yearsExperience", { count: years })}
     </p>
   );
 }
@@ -156,11 +155,10 @@ function ApplicationDisclosure({
 }: {
   application: Application;
 }) {
+  const t = useTranslations("candidates.detailsPanel");
   const [open, setOpen] = useState(false);
   const hasAnswers = application.answers.length > 0;
-  const sourceMeta = application.source
-    ? APPLICATION_SOURCE_META[application.source]
-    : null;
+  const SourceIcon = application.source ? APPLICATION_SOURCE_ICON[application.source] : null;
 
   return (
     <div className="group/app space-y-0 py-4 first:pt-0 last:pb-0">
@@ -187,7 +185,7 @@ function ApplicationDisclosure({
         >
           <Link href={`/dashboard/pipeline?job=${application.jobId}` as Route}>
             <ExternalLink className="size-3.5" strokeWidth={1.8} />
-            Pipeline
+            {t("pipeline")}
           </Link>
         </Button>
       </div>
@@ -201,9 +199,9 @@ function ApplicationDisclosure({
         <ApplicationMetaItem icon={Calendar}>
           <ShortDate value={application.appliedAt} />
         </ApplicationMetaItem>
-        {sourceMeta ? (
-          <ApplicationMetaItem icon={sourceMeta.icon}>
-            {sourceMeta.label}
+        {SourceIcon && application.source ? (
+          <ApplicationMetaItem icon={SourceIcon}>
+            {t(`sources.${application.source}`)}
           </ApplicationMetaItem>
         ) : null}
         {hasAnswers ? (
@@ -214,8 +212,7 @@ function ApplicationDisclosure({
             className="inline-flex items-center gap-1 rounded text-xs text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
           >
             <MessageSquareText className="size-3 shrink-0" strokeWidth={1.8} />
-            {application.answers.length} answer
-            {application.answers.length === 1 ? "" : "s"}
+            {t("answerCount", { count: application.answers.length })}
             {open ? (
               <ChevronUp className="size-3 shrink-0" strokeWidth={2} />
             ) : (
@@ -280,6 +277,7 @@ export function CandidateDetailsPanel({
   educationEntries,
   experienceEntries,
 }: CandidateDetailsPanelProps) {
+  const t = useTranslations("candidates.detailsPanel");
   const [open, setOpen] = useState(true);
   const latestFile = files[0] ?? null;
   const resumeSummary = latestFile?.parsedSummary ?? null;
@@ -307,7 +305,7 @@ export function CandidateDetailsPanel({
         className="flex w-full items-center justify-between gap-3 px-5 py-4 text-left transition-colors hover:bg-card-inset/60"
         aria-expanded={open}
       >
-        <span className="text-[15px] font-semibold tracking-[-0.01em]">Profile</span>
+        <span className="text-[15px] font-semibold tracking-[-0.01em]">{t("profile")}</span>
         {open ? (
           <ChevronUp className="size-4 text-muted-foreground" strokeWidth={1.8} />
         ) : (
@@ -319,9 +317,9 @@ export function CandidateDetailsPanel({
         <div className="divide-y divide-hairline border-t border-hairline">
           <Section>
             <div className="flex flex-wrap items-baseline justify-between gap-2">
-              <SectionLabel>Resume</SectionLabel>
+              <SectionLabel>{t("resume")}</SectionLabel>
               <p className="text-xs text-muted-foreground">
-                {files.length} {files.length === 1 ? "file" : "files"}
+                {t("fileCount", { count: files.length })}
               </p>
             </div>
             <div className="mt-4">
@@ -334,22 +332,22 @@ export function CandidateDetailsPanel({
           </Section>
 
           <Section hidden={!profileSummary}>
-            <SectionLabel>Profile summary</SectionLabel>
+            <SectionLabel>{t("profileSummary")}</SectionLabel>
             <p className="mt-3 max-w-4xl text-sm leading-6 text-foreground/85">
               {profileSummary}
             </p>
           </Section>
 
           <Section hidden={!summary || !resumeSummary || summary === resumeSummary}>
-            <SectionLabel>Resume summary</SectionLabel>
+            <SectionLabel>{t("resumeSummary")}</SectionLabel>
             <p className="mt-3 max-w-4xl text-sm leading-6 text-foreground/85">
               {resumeSummary}
             </p>
           </Section>
 
           <Section hidden={experience.length === 0}>
-            <SectionLabel meta={`${experience.length} entries`}>
-              Work experience
+            <SectionLabel meta={t("entryCount", { count: experience.length })}>
+              {t("workExperience")}
             </SectionLabel>
             <div className="mt-4">
               <ExperienceTimeline experience={experience} />
@@ -360,7 +358,7 @@ export function CandidateDetailsPanel({
             hidden={education.length === 0 && !educationFallback && experienceYears === null}
           >
             <div className="flex flex-wrap items-baseline justify-between gap-2">
-              <SectionLabel>Education</SectionLabel>
+              <SectionLabel>{t("education")}</SectionLabel>
               <ExperienceHeadline years={experienceYears} />
             </div>
             <div className="mt-4">
@@ -369,17 +367,17 @@ export function CandidateDetailsPanel({
           </Section>
 
           <Section hidden={skills.length === 0}>
-            <SectionLabel>Skills</SectionLabel>
+            <SectionLabel>{t("skills")}</SectionLabel>
             <div className="mt-4">
               <SkillsList skills={skills} />
             </div>
           </Section>
 
           <Section hidden={!hasContactDetails}>
-            <SectionLabel>Contact details</SectionLabel>
+            <SectionLabel>{t("contactDetails")}</SectionLabel>
             <InfoRows className="mt-4">
               <InfoRow
-                label="Email"
+                label={t("email")}
                 value={
                   <a
                     href={`mailto:${email}`}
@@ -392,7 +390,7 @@ export function CandidateDetailsPanel({
               />
               {phone ? (
                 <InfoRow
-                  label="Phone"
+                  label={t("phone")}
                   value={
                     <a
                       href={`tel:${phone}`}
@@ -406,7 +404,7 @@ export function CandidateDetailsPanel({
               ) : null}
               {address ? (
                 <InfoRow
-                  label="Address"
+                  label={t("address")}
                   value={
                     <a
                       href={`https://maps.google.com/?q=${encodeURIComponent(address)}`}
@@ -454,7 +452,7 @@ export function CandidateDetailsPanel({
               ) : null}
               {websiteUrl ? (
                 <InfoRow
-                  label="Website"
+                  label={t("website")}
                   value={
                     <a
                       href={websiteUrl}
@@ -473,8 +471,8 @@ export function CandidateDetailsPanel({
 
           {applications.length > 0 ? (
             <section className="px-5 py-5">
-              <SectionLabel meta={`${applications.length} total`}>
-                Applications
+              <SectionLabel meta={t("applicationCount", { count: applications.length })}>
+                {t("applications")}
               </SectionLabel>
               <div className="mt-4 divide-y divide-border/60">
                 {applications.map((application) => (
@@ -486,9 +484,9 @@ export function CandidateDetailsPanel({
 
           <Section hidden={applicationsWithAnswers.length === 0}>
             <SectionLabel
-              meta={`${applicationsWithAnswers.length} application${applicationsWithAnswers.length === 1 ? "" : "s"}`}
+              meta={t("applicationCount", { count: applicationsWithAnswers.length })}
             >
-              Application answers
+              {t("applicationAnswers")}
             </SectionLabel>
             <div className="mt-4 divide-y divide-border/60">
               {applicationsWithAnswers.map((application) => (

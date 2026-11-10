@@ -1,3 +1,4 @@
+import { getTranslations } from "@/i18n/server";
 import "server-only";
 
 import {
@@ -215,6 +216,7 @@ function serializeWorkspaceAutomationPolicy(
 export async function getWorkspaceAutomationPolicy(
   workspaceId: string,
 ): Promise<WorkspaceAutomationPolicySnapshot> {
+  const t = await getTranslations("server.automations.data");
   await db
     .insert(workspaceAutomationPolicies)
     .values({ workspaceId })
@@ -224,7 +226,7 @@ export async function getWorkspaceAutomationPolicy(
     .from(workspaceAutomationPolicies)
     .where(eq(workspaceAutomationPolicies.workspaceId, workspaceId))
     .limit(1);
-  if (!policy) throw ApiError.notFound("Workspace not found.");
+  if (!policy) throw ApiError.notFound(t("workspaceNotFound"));
   return serializeWorkspaceAutomationPolicy(policy);
 }
 
@@ -234,10 +236,11 @@ export async function setWorkspaceAutomationEnabled(input: {
   enabled: boolean;
   reason: string;
 }): Promise<WorkspaceAutomationPolicySnapshot> {
+  const t = await getTranslations("server.automations.data");
   const reason = input.reason.trim();
-  if (!reason) throw ApiError.badRequest("A reason is required.");
+  if (!reason) throw ApiError.badRequest(t("reasonRequired"));
   if (reason.length > 500)
-    throw ApiError.badRequest("Reason must be 500 characters or fewer.");
+    throw ApiError.badRequest(t("reasonTooLong"));
   await db
     .insert(workspaceAutomationPolicies)
     .values({ workspaceId: input.workspaceId })
@@ -255,7 +258,7 @@ export async function setWorkspaceAutomationEnabled(input: {
     })
     .where(eq(workspaceAutomationPolicies.workspaceId, input.workspaceId))
     .returning();
-  if (!policy) throw ApiError.notFound("Workspace not found.");
+  if (!policy) throw ApiError.notFound(t("workspaceNotFound"));
   return serializeWorkspaceAutomationPolicy(policy);
 }
 
@@ -419,6 +422,7 @@ export async function deleteWorkflow(input: {
   workspaceId: string;
   id: string;
 }): Promise<void> {
+  const t = await getTranslations("server.automations.data");
   assertNotDemo();
   const [row] = await db
     .update(workflowDefinitions)
@@ -431,7 +435,7 @@ export async function deleteWorkflow(input: {
       ),
     )
     .returning({ id: workflowDefinitions.id });
-  if (!row) throw ApiError.notFound("Workflow not found.");
+  if (!row) throw ApiError.notFound(t("workflowNotFound"));
   // Runs and steps remain available for audit, support, and retention policies.
 }
 
@@ -469,6 +473,7 @@ export async function pauseWorkflow(input: {
   workspaceId: string;
   id: string;
 }): Promise<WorkflowDefinition> {
+  const t = await getTranslations("server.automations.data");
   assertNotDemo();
   const [row] = await db
     .update(workflowDefinitions)
@@ -482,7 +487,7 @@ export async function pauseWorkflow(input: {
       ),
     )
     .returning();
-  if (!row) throw ApiError.conflict("Only a published workflow can be paused.");
+  if (!row) throw ApiError.conflict(t("onlyPublishedPausable"));
   return row;
 }
 
@@ -490,6 +495,7 @@ export async function resumeWorkflow(input: {
   workspaceId: string;
   id: string;
 }): Promise<WorkflowDefinition> {
+  const t = await getTranslations("server.automations.data");
   assertNotDemo();
   const [row] = await db
     .update(workflowDefinitions)
@@ -510,7 +516,7 @@ export async function resumeWorkflow(input: {
       ),
     )
     .returning();
-  if (!row) throw ApiError.conflict("Only a paused workflow can be resumed.");
+  if (!row) throw ApiError.conflict(t("onlyPausedResumable"));
   return row;
 }
 
@@ -658,6 +664,7 @@ export async function getRun(input: {
   workspaceId: string;
   id: string;
 }): Promise<WorkflowRun> {
+  const t = await getTranslations("server.automations.data");
   const [row] = await db
     .select()
     .from(workflowRuns)
@@ -668,7 +675,7 @@ export async function getRun(input: {
       ),
     )
     .limit(1);
-  if (!row) throw ApiError.notFound("Workflow run not found.");
+  if (!row) throw ApiError.notFound(t("runNotFound"));
   return row;
 }
 
@@ -786,6 +793,7 @@ export async function requestCancelRun(input: {
   id: string;
   workflowId?: string;
 }): Promise<WorkflowRun> {
+  const t = await getTranslations("server.automations.data");
   assertNotDemo();
   const [current] = await db
     .select()
@@ -801,7 +809,7 @@ export async function requestCancelRun(input: {
       ),
     )
     .limit(1);
-  if (!current) throw ApiError.conflict("This run is no longer running.");
+  if (!current) throw ApiError.conflict(t("runNoLongerRunning"));
   if (current.engineVersion === 2) {
     return db.transaction(async (tx) => {
       const now = new Date();
@@ -854,7 +862,7 @@ export async function requestCancelRun(input: {
         .returning();
       if (!row)
         throw ApiError.conflict(
-          "This run changed while it was being cancelled.",
+          t("runChangedDuringCancel"),
         );
       return row;
     });
@@ -873,7 +881,7 @@ export async function requestCancelRun(input: {
       ),
     )
     .returning();
-  if (!row) throw ApiError.conflict("This run is no longer running.");
+  if (!row) throw ApiError.conflict(t("runNoLongerRunning"));
   return row;
 }
 
@@ -882,6 +890,7 @@ export async function retryRun(input: {
   id: string;
   workflowId?: string;
 }): Promise<WorkflowRun> {
+  const t = await getTranslations("server.automations.data");
   assertNotDemo();
   const [current] = await db
     .select()
@@ -896,7 +905,7 @@ export async function retryRun(input: {
       ),
     )
     .limit(1);
-  if (!current) throw ApiError.notFound("Workflow run not found.");
+  if (!current) throw ApiError.notFound(t("runNotFound"));
   if (current.engineVersion === 2) {
     return db.transaction(async (tx) => {
       const [failed] = await tx
@@ -913,7 +922,7 @@ export async function retryRun(input: {
         .orderBy(desc(workflowNodeExecutions.finishedAt))
         .limit(1);
       if (!failed)
-        throw ApiError.conflict("This run has no retryable failed step.");
+        throw ApiError.conflict(t("noRetryableStep"));
       const [row] = await tx
         .update(workflowRuns)
         .set({
@@ -941,7 +950,7 @@ export async function retryRun(input: {
           ),
         )
         .returning();
-      if (!row) throw ApiError.conflict("Only failed v2 runs can be retried.");
+      if (!row) throw ApiError.conflict(t("onlyFailedV2Retryable"));
       return row;
     });
   }
@@ -974,7 +983,7 @@ export async function retryRun(input: {
       ),
     )
     .returning();
-  if (!row) throw ApiError.conflict("Only failed runs can be retried.");
+  if (!row) throw ApiError.conflict(t("onlyFailedRetryable"));
   return row;
 }
 
@@ -984,10 +993,11 @@ export async function replayRunFromStep(input: {
   stepIndex: number;
   database?: typeof db;
 }): Promise<WorkflowRun> {
+  const t = await getTranslations("server.automations.data");
   assertNotDemo();
   const database = input.database ?? db;
   if (!Number.isInteger(input.stepIndex) || input.stepIndex < 0) {
-    throw ApiError.badRequest("Invalid step index.");
+    throw ApiError.badRequest(t("invalidStepIndex"));
   }
   const [source] = await database
     .select()
@@ -999,12 +1009,12 @@ export async function replayRunFromStep(input: {
       ),
     )
     .limit(1);
-  if (!source) throw ApiError.notFound("Workflow run not found.");
+  if (!source) throw ApiError.notFound(t("runNotFound"));
 
   if (source.engineVersion === 2) {
     if (!source.versionId)
       throw ApiError.conflict(
-        "This v2 run has no immutable graph version to replay.",
+        t("noImmutableGraph"),
       );
     const [version] = await database
       .select({
@@ -1022,22 +1032,22 @@ export async function replayRunFromStep(input: {
       )
       .limit(1);
     if (!version || version.schemaVersion !== 2 || !version.publishedAt) {
-      throw ApiError.conflict("The immutable v2 graph version is unavailable.");
+      throw ApiError.conflict(t("graphVersionUnavailable"));
     }
     const graph = parseGraph(version.graph);
     const target = graph.nodes[input.stepIndex];
     if (!target || target.type === "trigger" || target.type === "end") {
-      throw ApiError.badRequest("Choose an executable graph node to replay.");
+      throw ApiError.badRequest(t("chooseExecutableNode"));
     }
     const compiled = compileGraph(graph);
     if (!compiled.ok)
-      throw ApiError.conflict("The published graph is no longer executable.");
+      throw ApiError.conflict(t("graphNotExecutable"));
     const context = jsonValueSchema.safeParse(
       source.contextSnapshot ?? source.triggerPayload,
     );
     if (!context.success || context.data === null) {
       throw ApiError.conflict(
-        "This run has no valid context snapshot to replay.",
+        t("noContextSnapshot"),
       );
     }
 
@@ -1065,7 +1075,7 @@ export async function replayRunFromStep(input: {
     );
     if (missingPrerequisites.length > 0) {
       throw ApiError.conflict(
-        "Replay cannot start here because a required earlier node did not complete.",
+        t("replayBlockedByEarlierNode"),
       );
     }
 
@@ -1092,7 +1102,7 @@ export async function replayRunFromStep(input: {
           nextAttemptAt: sql`clock_timestamp()`,
         })
         .returning();
-      if (!row) throw ApiError.internal("Replay could not be created.");
+      if (!row) throw ApiError.internal(t("replayCreateFailed"));
 
       for (const previous of prerequisiteExecutions) {
         const [execution] = await tx
@@ -1111,7 +1121,7 @@ export async function replayRunFromStep(input: {
           })
           .returning({ id: workflowNodeExecutions.id });
         if (!execution)
-          throw ApiError.internal("Replay evidence could not be copied.");
+          throw ApiError.internal(t("replayEvidenceFailed"));
         await tx.insert(workflowNodeAttempts).values({
           workspaceId: row.workspaceId,
           executionId: execution.id,
@@ -1128,7 +1138,7 @@ export async function replayRunFromStep(input: {
 
   const snapshot = source.definitionSnapshot as { actions?: unknown[] } | null;
   if (input.stepIndex >= (snapshot?.actions?.length ?? 0)) {
-    throw ApiError.badRequest("Step index is outside the workflow definition.");
+    throw ApiError.badRequest(t("stepIndexOutOfRange"));
   }
 
   const [row] = await database
@@ -1147,6 +1157,6 @@ export async function replayRunFromStep(input: {
       sourceEventId: null,
     })
     .returning();
-  if (!row) throw ApiError.internal("Replay could not be created.");
+  if (!row) throw ApiError.internal(t("replayCreateFailed"));
   return row;
 }

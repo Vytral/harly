@@ -1,4 +1,5 @@
 import * as React from "react";
+import { useTranslations } from "next-intl";
 
 import { cn } from "@/lib/utils";
 
@@ -11,13 +12,14 @@ export function InfoRow({
   label,
   value,
   className,
-  empty = "Not specified",
+  empty,
 }: {
   label: React.ReactNode;
   value?: React.ReactNode;
   className?: string;
   empty?: string;
 }) {
+  const t = useTranslations("ui.infoRow");
   const isEmpty = value === null || value === undefined || value === "";
   return (
     <div
@@ -34,7 +36,7 @@ export function InfoRow({
           isEmpty ? "font-normal text-quiet-mist" : "text-near-ink",
         )}
       >
-        {isEmpty ? empty : value}
+        {isEmpty ? (empty ?? t("notSpecified")) : value}
       </span>
     </div>
   );

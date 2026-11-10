@@ -3,10 +3,24 @@ import { describe, expect, it } from "vitest";
 import {
   capacityHoursPerWeekSchema,
   normalizeUsername,
+  preferredEmailLocaleSchema,
   timeRangeSchema,
   usernameSchema,
   weeklyAvailabilitySchema,
 } from "./validators";
+
+describe("preferredEmailLocaleSchema", () => {
+  it("normalizes supported tags to their canonical form", () => {
+    expect(preferredEmailLocaleSchema.parse(" PT-br ")).toBe("pt-BR");
+    expect(preferredEmailLocaleSchema.parse("NL-nl")).toBe("nl-NL");
+  });
+
+  it("accepts null and rejects unsupported values", () => {
+    expect(preferredEmailLocaleSchema.parse(null)).toBeNull();
+    expect(preferredEmailLocaleSchema.safeParse("pt-PT").success).toBe(false);
+    expect(preferredEmailLocaleSchema.safeParse(4).success).toBe(false);
+  });
+});
 
 describe("usernameSchema", () => {
   it("accepts a valid username", () => {

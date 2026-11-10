@@ -1,12 +1,12 @@
 import Link from "next/link";
 import type { Route } from "next";
 import { PlugZap } from "lucide-react";
+import { getTranslations } from "next-intl/server";
 
 import { isDemoMode } from "@harly/config";
 
 import { StatusPill } from "@/components/ui/status-pill";
 import {
-  attentionMessage,
   ATTENTION_TARGET,
   reconnectHref,
 } from "@/features/integrations/health/attention-view";
@@ -22,6 +22,7 @@ import { Tile, TileHeader, TileLink } from "./primitives";
  * integrations.
  */
 export async function IntegrationAttentionCard() {
+  const t = await getTranslations("shell.integrationAttention");
   if (isDemoMode()) return null;
   if (!(await can("integrations:manage"))) return null;
 
@@ -34,9 +35,9 @@ export async function IntegrationAttentionCard() {
       <Tile>
         <TileHeader
           icon={PlugZap}
-          title="Integrations need attention"
+          title={t("title")}
           count={items.length}
-          action={<TileLink href={"/settings/integrations" as Route}>Open integrations</TileLink>}
+          action={<TileLink href={"/settings/integrations" as Route}>{t("open")}</TileLink>}
         />
         <ul className="flex flex-col gap-0.5 px-2 pb-3 pt-3">
           {items.map((item) => {
@@ -50,16 +51,18 @@ export async function IntegrationAttentionCard() {
                   <p className="flex items-center gap-2 text-sm font-medium">
                     {target.name}
                     <StatusPill tone={item.reconnectRequired ? "danger" : "warning"} size="sm">
-                      {item.reconnectRequired ? "Reconnect required" : "Needs attention"}
+                      {item.reconnectRequired ? t("reconnectRequired") : t("needsAttention")}
                     </StatusPill>
                   </p>
-                  <p className="truncate text-xs text-soft-ink">{attentionMessage(item)}</p>
+                  <p className="truncate text-xs text-soft-ink">
+                    {item.state === "needs_reconnect" ? t("accessRevoked") : t("callsFailing")}
+                  </p>
                 </div>
                 <Link
                   href={reconnectHref(item.integration) as Route}
                   className="shrink-0 rounded-[var(--radius-btn)] border border-mist-border bg-card px-3 py-1.5 text-[13px] font-medium text-near-ink transition-colors hover:bg-card-inset"
                 >
-                  Reconnect
+                  {t("reconnect")}
                 </Link>
               </li>
             );

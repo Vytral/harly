@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { getLocale, getTranslations } from "next-intl/server";
 import { ArrowUpRight, ShieldCheck } from "lucide-react";
 
 import { EmptyState } from "@/components/ui/empty-state";
@@ -9,11 +10,18 @@ import {
   DsarStatusBadge,
 } from "@/features/workspaces/dsar-shared";
 
-export function DsarRequestsSection({
+export async function DsarRequestsSection({
   requests,
 }: {
   requests: DsarRequestListItem[];
 }) {
+  const t = await getTranslations("features.workspaces.dsarRequestsSection");
+  const tDsar = await getTranslations("labels.workspaces.dsar");
+  const locale = await getLocale();
+  const pendingCount = requests.filter(
+    (request) => request.status === "pending",
+  ).length;
+
   return (
     <section aria-labelledby="dsar-requests-heading">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -22,16 +30,14 @@ export function DsarRequestsSection({
             id="dsar-requests-heading"
             className="font-display text-lg font-semibold tracking-tight"
           >
-            Requests
+            {t("requestsHeading")}
           </h2>
           <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
-            Open a candidate to review their applications, activity, notes, and
-            request context before deciding.
+            {t("description")}
           </p>
         </div>
         <span className="shrink-0 rounded-full border bg-card px-2.5 py-1 text-xs font-medium text-muted-foreground">
-          {requests.filter((request) => request.status === "pending").length}{" "}
-          awaiting review
+          {t("awaitingReview", { count: pendingCount })}
         </span>
       </div>
 
@@ -39,8 +45,8 @@ export function DsarRequestsSection({
         <EmptyState
           className="mt-5"
           icon={ShieldCheck}
-          title="No privacy requests yet"
-          description="Candidate export and deletion requests will appear here for review."
+          title={t("emptyTitle")}
+          description={t("emptyDescription")}
         />
       ) : (
         <div className="mt-5 overflow-hidden rounded-xl border bg-card">
@@ -49,9 +55,9 @@ export function DsarRequestsSection({
               const candidate =
                 request.candidateName ??
                 request.requestedBy ??
-                "Deleted candidate";
+                t("deletedCandidate");
               const typeMeta = DSAR_TYPE_META[request.type];
-              const date = new Intl.DateTimeFormat(undefined, {
+              const date = new Intl.DateTimeFormat(locale, {
                 day: "numeric",
                 month: "short",
                 year: "numeric",
@@ -77,25 +83,34 @@ export function DsarRequestsSection({
                       <p className="font-medium text-foreground">{candidate}</p>
                       <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
                         <typeMeta.icon className="size-3.5" strokeWidth={1.8} />
-                        {typeMeta.label}
+                        {tDsar(`type.${request.type}`)}
                       </span>
-                      <DsarStatusBadge status={request.status} />
+                      <DsarStatusBadge
+                        status={request.status}
+                        label={tDsar(`status.${request.status}`)}
+                      />
                     </div>
                     <p className="truncate text-sm text-muted-foreground">
-                      {request.candidateEmail ??
-                        request.requestedBy ??
-                        "Candidate details are no longer available"}{" "}
-                      · Requested {date}
+                      {t("requestedOn", {
+                        contact:
+                          request.candidateEmail ??
+                          request.requestedBy ??
+                          t("detailsUnavailable"),
+                        date,
+                      })}
                     </p>
                     {request.notes ? (
                       <p className="line-clamp-1 text-xs text-muted-foreground">
-                        Review note: {request.notes}
+                        {t("reviewNote", { note: request.notes })}
                       </p>
                     ) : null}
                     {request.status === "blocked" && request.reviewDueAt ? (
                       <p className="text-xs text-muted-foreground">
-                        Legal hold review due{" "}
-                        {new Date(request.reviewDueAt).toLocaleDateString()}.
+                        {t("legalHoldReviewDue", {
+                          date: new Date(request.reviewDueAt).toLocaleDateString(
+                            locale,
+                          ),
+                        })}
                       </p>
                     ) : null}
                   </div>

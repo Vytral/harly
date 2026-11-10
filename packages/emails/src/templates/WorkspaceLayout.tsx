@@ -9,6 +9,7 @@ import {
   Text,
 } from "@react-email/components";
 
+import { emailTranslator, resolveEmailLocale } from "../i18n";
 import { harlyTailwindConfig } from "./theme";
 import { HarlyFonts } from "./HarlyFonts";
 import { EmailLogo, poweredByHarlyInline } from "./EmailLogo";
@@ -16,6 +17,7 @@ import type { SocialLink } from "./HarlyLayout";
 
 type WorkspaceLayoutProps = {
   preview: string;
+  locale?: string | null;
   companyName: string;
   companyLogoUrl?: string;
   accentColor?: string;
@@ -36,6 +38,7 @@ type WorkspaceLayoutProps = {
  */
 export function WorkspaceLayout({
   preview,
+  locale,
   companyName,
   companyLogoUrl,
   // accentColor and socialLinks are accepted for parity with the system
@@ -46,9 +49,10 @@ export function WorkspaceLayout({
   hideBranding,
   children,
 }: WorkspaceLayoutProps) {
+  const t = emailTranslator(locale);
   return (
     <Tailwind config={harlyTailwindConfig}>
-      <Html lang="en">
+      <Html lang={resolveEmailLocale(locale)}>
         <Head>
           <HarlyFonts />
         </Head>
@@ -62,6 +66,7 @@ export function WorkspaceLayout({
                   <EmailLogo
                     logoUrl={companyLogoUrl}
                     name={companyName}
+                    locale={locale}
                     variant="workspace"
                   />
                 </Section>
@@ -75,10 +80,10 @@ export function WorkspaceLayout({
                 <Section className="border-stroke border-t px-10 py-8">
                   <Text className="text-[13px] leading-[1.5] tracking-[-0.039px] font-inter text-fg-3 m-0">
                     {hideBranding ? (
-                      `Sent by ${companyName}`
+                      t("common.sentBy", { name: companyName })
                     ) : (
                       <>
-                        Sent by {companyName} · {poweredByHarlyInline()}
+                        {t("common.sentBy", { name: companyName })} · {poweredByHarlyInline(t("common.poweredBy"))}
                       </>
                     )}
                   </Text>

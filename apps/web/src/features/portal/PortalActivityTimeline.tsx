@@ -1,6 +1,7 @@
 "use client";
 
 import { useSyncExternalStore } from "react";
+import { useLocale, useTranslations } from "next-intl";
 
 import { cn } from "@/lib/utils";
 import {
@@ -42,14 +43,15 @@ const DOT_STYLES: Record<ActivityItem["type"], string> = {
   rejected: "bg-danger-rust/10 text-danger-rust",
 };
 
-function formatShortDate(date: Date): string {
-  return new Intl.DateTimeFormat(undefined, {
+function formatShortDate(date: Date, locale: string): string {
+  return new Intl.DateTimeFormat(locale, {
     month: "short",
     day: "numeric",
   }).format(date);
 }
 
-function formatRelativeOrAbsolute(date: Date): string {
+function formatRelativeOrAbsolute(date: Date, locale: string, justNow: string): string {
+  const relative = new Intl.RelativeTimeFormat(locale, { numeric: "auto", style: "short" });
   const now = new Date();
   const diffMs = now.getTime() - date.getTime();
   const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
@@ -58,20 +60,22 @@ function formatRelativeOrAbsolute(date: Date): string {
     const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
     if (diffHours === 0) {
       const diffMins = Math.floor(diffMs / (1000 * 60));
-      return diffMins <= 1 ? "Just now" : `${diffMins} min ago`;
+      return diffMins <= 1 ? justNow : relative.format(-diffMins, "minute");
     }
-    return `${diffHours}h ago`;
+    return relative.format(-diffHours, "hour");
   }
-  if (diffDays === 1) return "Yesterday";
-  if (diffDays < 7) return `${diffDays} days ago`;
-  return formatShortDate(date);
+  if (diffDays === 1) return relative.format(-1, "day");
+  if (diffDays < 7) return relative.format(-diffDays, "day");
+  return formatShortDate(date, locale);
 }
 
 const noopSubscribe = () => () => {};
 
 /** Relative time depends on the viewer's clock, so it renders after hydration. */
 function When({ date }: { date: Date }) {
-  return useSyncExternalStore(noopSubscribe, () => formatRelativeOrAbsolute(date), () => "");
+  const locale = useLocale();
+  const t = useTranslations("portal.activity");
+  return useSyncExternalStore(noopSubscribe, () => formatRelativeOrAbsolute(date, locale, t("justNow")), () => "");
 }
 
 export function PortalActivityTimeline({

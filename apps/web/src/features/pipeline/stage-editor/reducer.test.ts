@@ -2,11 +2,12 @@ import { describe, expect, it } from "vitest";
 
 import type { EditorStage } from "./model";
 import {
-  CONFLICT_MESSAGE,
   editorReducer,
   initialEditorState,
   type EditorState,
 } from "./reducer";
+
+const CONFLICT_MESSAGE = "This pipeline changed. Reloaded.";
 
 function stage(id: string, order: number, extra: Partial<EditorStage> = {}): EditorStage {
   return {
@@ -133,6 +134,7 @@ describe("conflicts", () => {
     const conflicted = editorReducer(previewed, {
       type: "conflict",
       stages: fresh,
+      message: CONFLICT_MESSAGE,
       detail: "Stage names must be unique.",
     });
     expect(conflicted.stages).toBe(fresh);
@@ -146,6 +148,7 @@ describe("conflicts", () => {
     const conflicted = editorReducer(loadedState([stage("a", 0)]), {
       type: "conflict",
       stages: [stage("a", 0)],
+      message: CONFLICT_MESSAGE,
     });
     expect(conflicted.notice).toBe(CONFLICT_MESSAGE);
   });

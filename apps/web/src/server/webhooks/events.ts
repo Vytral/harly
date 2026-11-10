@@ -64,6 +64,15 @@ export const WEBHOOK_EVENT_LABELS: Record<WebhookEvent, string> = {
   "webhook.received": "Inbound webhook received",
 };
 
+/**
+ * camelCase key under `labels.webhooks.events` for an event id, so UI can show
+ * a translated label. WEBHOOK_EVENT_LABELS stays English for stored data and
+ * outbound messages.
+ */
+export function webhookEventLabelKey(event: WebhookEvent): string {
+  return event.replace(/[._]([a-z])/g, (_match, letter: string) => letter.toUpperCase());
+}
+
 export function isWebhookEvent(value: string): value is WebhookEvent {
   return (WEBHOOK_EVENTS as readonly string[]).includes(value);
 }

@@ -6,10 +6,15 @@ import { db, notifications, member, jobHiringTeam } from "@harly/db";
 
 import {
   WEBHOOK_EVENT_LABELS,
+  webhookEventLabelKey,
   type WebhookEvent,
 } from "@/server/webhooks/events";
 import { emitRealtimeInvalidation } from "@/server/events/emit";
 import { REALTIME_EVENTS } from "@/server/events/registry";
+import {
+  withNotificationCopy,
+  type NotificationCopy,
+} from "@/features/notifications/copy";
 
 type NotifyParams = {
   database?: typeof db;
@@ -21,11 +26,16 @@ type NotifyParams = {
   body?: string;
   href?: string;
   metadata?: Record<string, unknown>;
+  /** Catalog key + values so the inbox renders this in the viewer's language. */
+  copy?: NotificationCopy;
   dedupeKey?: string;
 };
 
 export async function createNotification(params: NotifyParams): Promise<void> {
-  const { database = db, recipientIds, ...rest } = params;
+  const { database = db, recipientIds, copy, ...rest } = params;
+  const metadata = copy
+    ? withNotificationCopy(rest.metadata, copy)
+    : rest.metadata;
   if (recipientIds.length === 0) return;
 
   const unique = [...new Set(recipientIds)];
@@ -39,7 +49,7 @@ export async function createNotification(params: NotifyParams): Promise<void> {
         actorId: rest.actorId ?? null,
         body: rest.body ?? null,
         href: rest.href ?? null,
-        metadata: rest.metadata ?? null,
+        metadata: metadata ?? null,
         dedupeKey: rest.dedupeKey ?? null,
       })),
     )
@@ -136,6 +146,9 @@ export async function notifyInboundEmail(params: {
         jobId: params.jobId,
         threadId: params.threadId ?? null,
       },
+      copy: params.subject
+        ? { key: "candidateReplied", values: { candidateName: params.candidateName } }
+        : { key: "candidateRepliedNoSubject", values: { candidateName: params.candidateName } },
       dedupeKey: params.messageId ? `email:${params.messageId}` : undefined,
     });
   } catch (error) {
@@ -227,6 +240,54 @@ function buildTitle(
   return label;
 }
 
+/** Catalog key + values for the title, mirroring buildTitle. */
+function buildCopy(
+  event: WebhookEvent,
+  candidateName: string | null,
+  jobTitle: string | null,
+): NotificationCopy {
+  if (event === "application.created" && candidateName) {
+    return { key: "candidateApplied", values: { candidateName } };
+  }
+  if (event === "application.hired" && candidateName) {
+    return { key: "candidateHired", values: { candidateName } };
+  }
+  if (event === "application.rejected" && candidateName) {
+    return { key: "candidateRejected", values: { candidateName } };
+  }
+  if (event === "application.stage_changed" && candidateName && jobTitle) {
+    return { key: "candidateMovedStageForJob", values: { candidateName, jobTitle } };
+  }
+  if (event === "application.stage_changed" && candidateName) {
+    return { key: "candidateMovedStage", values: { candidateName } };
+  }
+  if (event === "candidate.created" && candidateName) {
+    return { key: "candidateAdded", values: { candidateName } };
+  }
+  if (event === "interview.scheduled" && candidateName) {
+    return { key: "interviewScheduledWith", values: { candidateName } };
+  }
+  if (event === "interview.canceled" && candidateName) {
+    return { key: "interviewCanceledWith", values: { candidateName } };
+  }
+  if (event === "interview.completed" && candidateName) {
+    return { key: "interviewCompletedWith", values: { candidateName } };
+  }
+  if (event === "interview.rescheduled" && candidateName) {
+    return { key: "interviewRescheduledWith", values: { candidateName } };
+  }
+  if (event === "job.published" && jobTitle) {
+    return { key: "jobPublishedNamed", values: { jobTitle } };
+  }
+  return { key: eventTitleKey(event) };
+}
+
+/** Per-event label key, e.g. `eventApplicationCreated`. */
+function eventTitleKey(event: WebhookEvent): string {
+  const camel = webhookEventLabelKey(event);
+  return `event${camel.charAt(0).toUpperCase()}${camel.slice(1)}`;
+}
+
 function buildDetail(
   candidateName: string | null,
   jobTitle: string | null,
@@ -309,6 +370,7 @@ export async function notifyInboxEvent(
       title,
       body: body ?? undefined,
       href: href ?? undefined,
+      copy: buildCopy(event, candidateName, jobTitle),
       metadata: { event },
       dedupeKey: eventId ? `event:${eventId}` : undefined,
     });

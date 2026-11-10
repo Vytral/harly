@@ -2,6 +2,7 @@
 
 import * as React from "react"
 import { UploadIcon } from "lucide-react"
+import { useTranslations } from "next-intl"
 
 import { cn } from "@/lib/utils"
 
@@ -15,8 +16,8 @@ function DropZone({
   accept,
   multiple = false,
   disabled,
-  title = "Drag a file here or click to browse",
-  dropTitle = "Drop to attach",
+  title,
+  dropTitle,
   hint,
   icon,
   className,
@@ -36,6 +37,7 @@ function DropZone({
   id?: string
   inputRef?: React.Ref<HTMLInputElement>
 }) {
+  const t = useTranslations("ui.dropZone")
   const localRef = React.useRef<HTMLInputElement>(null)
   const [dragging, setDragging] = React.useState(false)
   React.useImperativeHandle(inputRef, () => localRef.current as HTMLInputElement)
@@ -88,7 +90,7 @@ function DropZone({
         </span>
         <span className="min-w-0">
           <span className="block truncate text-sm font-medium text-near-ink">
-            {dragging ? dropTitle : title}
+            {dragging ? (dropTitle ?? t("dropTitle")) : (title ?? t("title"))}
           </span>
           {hint ? <span className="mt-0.5 block text-xs text-soft-ink">{hint}</span> : null}
         </span>

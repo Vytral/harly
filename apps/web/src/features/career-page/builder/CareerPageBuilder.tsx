@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 
 import { toast } from "@/lib/notification-island/toast";
 import { cn } from "@/lib/utils";
@@ -20,7 +21,7 @@ import { BuilderTopBar, type PublishState } from "./BuilderTopBar";
 import { BuilderSidebar } from "./BuilderSidebar";
 import { errorsBySection, sectionOfPath, validateConfig } from "./builder-logic";
 import { FieldErrorsContext } from "./primitives";
-import { capabilitiesFor } from "./template-capabilities";
+import { templateLabel } from "./template-capabilities";
 import {
   TemplatePanel,
   ContentPanel,
@@ -33,9 +34,9 @@ import {
 import { MonitorIcon, SmartphoneIcon, TabletIcon } from "./builder-icons";
 
 const DEVICES = [
-  { value: "desktop", label: "Desktop", icon: MonitorIcon },
-  { value: "tablet", label: "Tablet", icon: TabletIcon },
-  { value: "mobile", label: "Mobile", icon: SmartphoneIcon },
+  { value: "desktop", icon: MonitorIcon },
+  { value: "tablet", icon: TabletIcon },
+  { value: "mobile", icon: SmartphoneIcon },
 ] as const;
 
 export function CareerPageBuilder({
@@ -50,6 +51,7 @@ export function CareerPageBuilder({
   availableLegalPages?: string[];
 }) {
   const router = useRouter();
+  const t = useTranslations("features.careerPage.careerPageBuilder");
   // A never-configured workspace starts from the Minimal preset, and that
   // preset can be published as-is (what you see is what goes live).
   const [neverPublished, setNeverPublished] = useState(initialConfig.template === "");
@@ -74,7 +76,12 @@ export function CareerPageBuilder({
   );
   const { confirmDiscard, discardDialogProps } = useUnsavedChangesGuard(dirty);
 
-  const errors = useMemo(() => (showErrors ? validateConfig(config) : {}), [showErrors, config]);
+  const tLogic = useTranslations("labels.careerPage.builderLogic");
+  const tTemplates = useTranslations("labels.careerPage.templates");
+  const errors = useMemo(
+    () => (showErrors ? validateConfig(config, tLogic) : {}),
+    [showErrors, config, tLogic],
+  );
   const errorCounts = useMemo(() => errorsBySection(errors), [errors]);
 
   const update = useCallback((producer: (draft: CareerPageConfig) => void) => {
@@ -105,13 +112,13 @@ export function CareerPageBuilder({
 
   const handlePublish = useCallback(() => {
     if (!dirty || publishing) return;
-    const issues = validateConfig(config);
+    const issues = validateConfig(config, tLogic);
     const paths = Object.keys(issues);
     if (paths.length > 0) {
       setShowErrors(true);
       const first = paths[0];
       setActiveSection(sectionOfPath(first));
-      toast.error(paths.length === 1 ? "Fix 1 field to publish" : `Fix ${paths.length} fields to publish`);
+      toast.error(t("fixFields", { count: paths.length }));
       // Wait for the panel to render (and its card to open), then reveal the field.
       window.setTimeout(() => {
         const el = editorRef.current?.querySelector<HTMLElement>(`[data-field-path="${CSS.escape(first)}"]`);
@@ -128,12 +135,12 @@ export function CareerPageBuilder({
         setNeverPublished(false);
         setShowErrors(false);
         setJustPublished(true);
-        toast.success("Published. Your page is live.");
+        toast.success(t("published"));
       } else {
-        toast.error(result.error ?? "Could not publish. Try again.");
+        toast.error(result.error ?? t("publishFailed"));
       }
     });
-  }, [config, dirty, publishing]);
+  }, [config, dirty, publishing, t, tLogic]);
 
   // ⌘S / Ctrl+S publishes; always swallow the browser's "save page".
   useEffect(() => {
@@ -157,19 +164,18 @@ export function CareerPageBuilder({
     (href: string) => {
       const url = new URL(href);
       const isBoard = url.origin === window.location.origin && url.pathname.startsWith(`/board/${workspace.slug}`);
-      toast(isBoard ? "Links don't navigate in the preview" : "External links are disabled in the preview", {
-        description: isBoard ? "Job pages open as published, in a new tab." : url.host,
+      toast(isBoard ? t("linkInactive") : t("externalLinkDisabled"), {
+        description: isBoard ? t("jobPageNewTab") : url.host,
         action: {
-          label: "Open in new tab",
+          label: t("openInNewTab"),
           onClick: () => window.open(href, "_blank", "noopener,noreferrer"),
         },
       });
     },
-    [workspace.slug],
+    [workspace.slug, t],
   );
 
   const state: PublishState = publishing ? "publishing" : neverPublished ? "never" : dirty ? "dirty" : "live";
-  const caps = capabilitiesFor(config.template);
   const panelProps = { config, update, workspace };
   const boardPath = `/board/${workspace.slug}`;
 
@@ -180,7 +186,7 @@ export function CareerPageBuilder({
           <BuilderTopBar
             state={state}
             justPublished={justPublished}
-            templateLabel={caps.label}
+            templateLabel={templateLabel(config.template, tTemplates)}
             onExit={handleExit}
             onPublish={handlePublish}
             onTemplateClick={() => {
@@ -205,12 +211,12 @@ export function CareerPageBuilder({
           {/* Below lg the editor and preview share the screen through a toggle. */}
           <div className="flex items-center justify-center border-b border-hairline bg-warm-paper px-4 py-2 lg:hidden">
             <SegmentedControl
-              aria-label="View"
+              aria-label={t("viewLabel")}
               value={mobileView}
               onValueChange={setMobileView}
               options={[
-                { value: "edit", label: "Edit" },
-                { value: "preview", label: "Preview" },
+                { value: "edit", label: t("edit") },
+                { value: "preview", label: t("preview") },
               ]}
               className="w-56"
             />
@@ -254,20 +260,22 @@ export function CareerPageBuilder({
           >
             <div className="flex items-center justify-between gap-3 border-b border-hairline bg-pure-snow px-4 py-2">
               <p className="min-w-0 truncate text-[12px] text-soft-ink">
-                <span className="font-medium text-near-ink">Preview</span>
+                <span className="font-medium text-near-ink">{t("preview")}</span>
                 <span className="hidden xl:inline">
-                  {" "}· {PREVIEW_DEVICE_WIDTH[device]}px wide · links are inactive
+                  {" "}{t("previewMeta", { width: PREVIEW_DEVICE_WIDTH[device] })}
                 </span>
               </p>
-              <div role="radiogroup" aria-label="Preview size" className="flex items-center gap-0.5 rounded-full bg-card-inset p-0.5">
-                {DEVICES.map(({ value, label, icon: Icon }) => (
+              <div role="radiogroup" aria-label={t("previewSize")} className="flex items-center gap-0.5 rounded-full bg-card-inset p-0.5">
+                {DEVICES.map(({ value, icon: Icon }) => {
+                  const label = t(`devices.${value}`);
+                  return (
                   <button
                     key={value}
                     type="button"
                     role="radio"
                     aria-checked={device === value}
-                    aria-label={`${label} preview`}
-                    title={`${label} · ${PREVIEW_DEVICE_WIDTH[value]}px`}
+                    aria-label={t("devicePreview", { device: label })}
+                    title={t("deviceWidth", { device: label, width: PREVIEW_DEVICE_WIDTH[value] })}
                     onClick={() => setDevice(value)}
                     className={cn(
                       "rounded-full p-1.5 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
@@ -278,7 +286,8 @@ export function CareerPageBuilder({
                   >
                     <Icon className="size-4" />
                   </button>
-                ))}
+                  );
+                })}
               </div>
             </div>
 

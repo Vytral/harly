@@ -1,5 +1,7 @@
 "use client";
 
+import { useTranslations } from "next-intl";
+
 import { RouteError } from "@/components/ui/route-error";
 
 export default function SettingsError({
@@ -9,13 +11,14 @@ export default function SettingsError({
   error: Error & { digest?: string };
   reset: () => void;
 }) {
+  const t = useTranslations("pages.settings.error");
   return (
     <RouteError
       error={error}
       reset={reset}
-      title="Settings could not load"
+      title={t("title")}
       homeHref="/settings"
-      homeLabel="Back to settings"
+      homeLabel={t("backToSettings")}
     />
   );
 }

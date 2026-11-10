@@ -18,6 +18,7 @@ import {
 } from "@/lib/portal-auth-methods";
 
 import { assertNotDemo } from "@/features/demo/assert-not-demo";
+import { getTranslations } from "@/i18n/server";
 
 export type PortalSettingsResult = { ok: boolean; error?: string };
 
@@ -61,8 +62,9 @@ export async function savePortalAuthMethodsAction(
     getStoredPortalAuthConfig(workspaceId),
     getPortalAuthRequirements(workspaceId),
   ]);
+  const tAuth = await getTranslations("labels.portal.authMethods");
   const verdict = validatePortalAuthConfig(next, req);
-  if (!verdict.ok) return { ok: false, error: verdict.error };
+  if (!verdict.ok) return { ok: false, error: tAuth(verdict.code) };
 
   await db
     .insert(workspaceSettings)
@@ -105,16 +107,17 @@ export async function savePortalOAuthAction(input: {
 }): Promise<PortalSettingsResult> {
   assertNotDemo();
   const context = await requirePermission("settings:edit");
+  const t = await getTranslations("server.workspaces.portalSettingsActions");
 
   if (!isEncryptionConfigured()) {
-    return { ok: false, error: "Server encryption key not configured." };
+    return { ok: false, error: t("encryptionKeyMissing") };
   }
 
   const parsed = oauthSchema.safeParse(input);
   if (!parsed.success)
     return {
       ok: false,
-      error: parsed.error.issues[0]?.message ?? "Invalid input.",
+      error: parsed.error.issues[0]?.message ?? t("invalidInput"),
     };
 
   const { provider, clientId, clientSecret } = parsed.data;
@@ -147,7 +150,7 @@ export async function savePortalOAuthAction(input: {
   if (!clientSecret && !hasStored) {
     return {
       ok: false,
-      error: "Provide the Client Secret to configure this provider.",
+      error: t("clientSecretRequired"),
     };
   }
 
@@ -192,6 +195,8 @@ export async function disconnectPortalOAuthAction(
 ): Promise<PortalSettingsResult> {
   assertNotDemo();
   const context = await requirePermission("settings:edit");
+  const t = await getTranslations("server.workspaces.portalSettingsActions");
+  const tAuth = await getTranslations("labels.portal.authMethods");
 
   // Refuse to remove credentials if that would leave the portal with no usable
   // sign-in method (platform env credentials, if any, keep the provider alive).
@@ -213,7 +218,7 @@ export async function disconnectPortalOAuthAction(
   if (!verdict.ok) {
     return {
       ok: false,
-      error: `${verdict.error} Enable another method before disconnecting this provider.`,
+      error: t("enableAnotherMethod", { reason: tAuth(verdict.code) }),
     };
   }
 

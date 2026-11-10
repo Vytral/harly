@@ -1,6 +1,7 @@
 import Link from "next/link";
 import type { Route } from "next";
 import type { ComponentType } from "react";
+import { getTranslations } from "next-intl/server";
 
 import { AlertTriangle } from "lucide-react";
 
@@ -29,11 +30,11 @@ export type MarketplaceIntegration = {
   actionLabel?: string;
 };
 
-/** Short state text shown on a marketplace row, next to the name. */
-const ROW_STATE_LABEL: Partial<Record<MarketplaceIntegration["status"], string>> = {
-  connected: "Connected",
-  attention: "Needs attention",
-  reconnect: "Reconnect required",
+type MarketplaceLabels = {
+  comingSoon: string;
+  /** Short state text shown on a marketplace row, next to the name. */
+  rowState: Partial<Record<MarketplaceIntegration["status"], string>>;
+  openIntegration: (name: string) => string;
 };
 
 export type MarketplaceGroup = {
@@ -42,11 +43,17 @@ export type MarketplaceGroup = {
 };
 
 /** Trailing affordance for a row. Purely visual — the whole row is the link. */
-function RowIndicator({ integration }: { integration: MarketplaceIntegration }) {
+function RowIndicator({
+  integration,
+  comingSoonLabel,
+}: {
+  integration: MarketplaceIntegration;
+  comingSoonLabel: string;
+}) {
   if (integration.status === "coming-soon") {
     return (
       <span className="shrink-0 rounded-md border border-dashed px-2.5 py-1 text-[11px] font-medium text-muted-foreground">
-        Coming soon
+        {comingSoonLabel}
       </span>
     );
   }
@@ -78,13 +85,16 @@ function RowIndicator({ integration }: { integration: MarketplaceIntegration }) 
 
 function IntegrationRow({
   integration,
+  labels,
 }: {
   integration: MarketplaceIntegration;
+  labels: MarketplaceLabels;
 }) {
   const Logo = integration.logo;
   const connected = integration.status === "connected";
   const interactive =
     integration.status !== "coming-soon" && Boolean(integration.href);
+  const stateLabel = labels.rowState[integration.status];
 
   const inner = (
     <>
@@ -101,14 +111,14 @@ function IntegrationRow({
           <span className="truncate text-sm font-medium text-foreground">
             {integration.name}
           </span>
-          {ROW_STATE_LABEL[integration.status] ? (
+          {stateLabel ? (
             <span
               className={cn(
                 "shrink-0 text-[11px] font-medium",
                 connected ? "text-pine" : "text-clay",
               )}
             >
-              {ROW_STATE_LABEL[integration.status]}
+              {stateLabel}
             </span>
           ) : null}
         </span>
@@ -116,7 +126,10 @@ function IntegrationRow({
           {integration.description}
         </span>
       </span>
-      <RowIndicator integration={integration} />
+      <RowIndicator
+        integration={integration}
+        comingSoonLabel={labels.comingSoon}
+      />
     </>
   );
 
@@ -127,7 +140,7 @@ function IntegrationRow({
     return (
       <Link
         href={integration.href as Route}
-        aria-label={`Open ${integration.name}`}
+        aria-label={labels.openIntegration(integration.name)}
         className={cn(
           base,
           "rounded-lg hover:bg-muted/40 focus-visible:bg-muted/40 focus-visible:outline-none",
@@ -141,11 +154,22 @@ function IntegrationRow({
   return <div className={base}>{inner}</div>;
 }
 
-export function IntegrationMarketplace({
+export async function IntegrationMarketplace({
   groups,
 }: {
   groups: MarketplaceGroup[];
 }) {
+  const t = await getTranslations("features.workspaces.integrationMarketplace");
+  const labels: MarketplaceLabels = {
+    comingSoon: t("comingSoon"),
+    rowState: {
+      connected: t("connected"),
+      attention: t("attention"),
+      reconnect: t("reconnect"),
+    },
+    openIntegration: (name) => t("openIntegration", { name }),
+  };
+
   return (
     <div className="space-y-8">
       {groups.map((group) => (
@@ -158,7 +182,11 @@ export function IntegrationMarketplace({
           </h3>
           <div className="grid gap-x-10 sm:grid-cols-2">
             {group.integrations.map((integration) => (
-              <IntegrationRow key={integration.id} integration={integration} />
+              <IntegrationRow
+                key={integration.id}
+                integration={integration}
+                labels={labels}
+              />
             ))}
           </div>
         </section>

@@ -47,6 +47,8 @@ vi.mock("@/features/workspaces/context", () => ({
 
 import { createTask, deleteTask, updateTask } from "./actions";
 
+vi.mock("next-intl/server", async () => (await import("@/test-support/intl-server-mock")).intlServerMock);
+
 const TASK_PERMISSIONS = ["candidates:view", "jobs:view", "tasks:read", "tasks:write"] as const;
 
 describe.skipIf(!runPipelineIntegration)("task writes respect task and link scope (database)", () => {

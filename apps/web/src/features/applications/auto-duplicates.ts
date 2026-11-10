@@ -12,6 +12,7 @@ import {
 
 import { detectCandidateDuplicatesForWorkspace } from "@/features/candidates/duplicate-detection";
 import { getWorkspaceAiConfig } from "@/lib/ai/config";
+import { withNotificationCopy } from "@/features/notifications/copy";
 
 /**
  * Flag likely duplicate candidates after application intake when the workspace
@@ -92,7 +93,10 @@ export async function scheduleAutoDuplicateCheck(
             title: "Possible duplicate candidate",
             body: `Harly AI found a possible match with ${names}.`,
             href: `/dashboard/candidates/${candidateId}`,
-            metadata: { candidateId, matches },
+            metadata: withNotificationCopy(
+              { candidateId, matches },
+              { key: "possibleDuplicateCandidate", values: { names } },
+            ),
           })),
         );
       }

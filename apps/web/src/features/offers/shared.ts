@@ -9,13 +9,13 @@ export type OfferStatus =
 
 export const OFFER_STATUS_META: Record<
   OfferStatus,
-  { label: string; variant: "neutral" | "info" | "success" | "danger" }
+  { variant: "neutral" | "info" | "success" | "danger" }
 > = {
-  draft: { label: "Draft", variant: "neutral" },
-  sent: { label: "Sent", variant: "info" },
-  accepted: { label: "Accepted", variant: "success" },
-  declined: { label: "Declined", variant: "danger" },
-  withdrawn: { label: "Withdrawn", variant: "neutral" },
+  draft: { variant: "neutral" },
+  sent: { variant: "info" },
+  accepted: { variant: "success" },
+  declined: { variant: "danger" },
+  withdrawn: { variant: "neutral" },
 };
 
 export type CandidateOfferItem = {
@@ -36,13 +36,16 @@ export type CandidateOfferItem = {
   createdAt: string;
 };
 
-export function formatOfferComp(offer: {
-  salaryAmount: number | null;
-  currency: string | null;
-  salaryPeriod: "annual" | "monthly" | null;
-}): string | null {
+export function formatOfferComp(
+  offer: {
+    salaryAmount: number | null;
+    currency: string | null;
+    salaryPeriod: "annual" | "monthly" | null;
+  },
+  locale = "en-US",
+): string | null {
   if (offer.salaryAmount == null) return null;
-  const amount = new Intl.NumberFormat("en-US").format(offer.salaryAmount);
+  const amount = new Intl.NumberFormat(locale).format(offer.salaryAmount);
   const currency = offer.currency ?? "";
   const period =
     offer.salaryPeriod === "monthly"

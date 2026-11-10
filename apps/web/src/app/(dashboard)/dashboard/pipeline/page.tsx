@@ -1,4 +1,5 @@
 import { Suspense } from "react";
+import { getTranslations } from "next-intl/server";
 import { EmptyState } from "@/components/ui/empty-state";
 import { PipelineBoard } from "@/features/pipeline/PipelineBoard";
 import { JobCandidateRanking } from "@/features/pipeline/JobCandidateRanking";
@@ -26,6 +27,7 @@ type PipelinePageProps = {
 
 export default async function PipelinePage({ searchParams }: PipelinePageProps) {
   await requirePagePermission("candidates:view");
+  const t = await getTranslations("pages.dashboardPipeline.page");
   const { job, jobId, view: rawView } = await searchParams;
   const view = rawView === "board" ? "board" : "list";
   const { organization: workspace } = await getWorkspaceContext();
@@ -39,9 +41,9 @@ export default async function PipelinePage({ searchParams }: PipelinePageProps) 
     return (
       <div className="space-y-4">
         <EmptyState
-          title="No jobs yet"
-          description="Create a job to start building your pipeline."
-          action={{ href: "/dashboard/jobs/new", label: "Create job" }}
+          title={t("noJobsTitle")}
+          description={t("noJobsDescription")}
+          action={{ href: "/dashboard/jobs/new", label: t("createJob") }}
         />
       </div>
     );
@@ -72,8 +74,8 @@ export default async function PipelinePage({ searchParams }: PipelinePageProps) 
       <div className="space-y-4">
         {toolbar}
         <EmptyState
-          title="No stages configured"
-          description="Add pipeline stages to this job to start tracking candidates."
+          title={t("noStagesTitle")}
+          description={t("noStagesDescription")}
         />
       </div>
     );
@@ -84,8 +86,8 @@ export default async function PipelinePage({ searchParams }: PipelinePageProps) 
       <div className="space-y-4">
         {toolbar}
         <EmptyState
-          title="No candidates yet"
-          description="Candidates will appear here once they apply."
+          title={t("noCandidatesTitle")}
+          description={t("noCandidatesDescription")}
         />
       </div>
     );

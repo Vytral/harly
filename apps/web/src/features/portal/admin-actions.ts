@@ -1,5 +1,6 @@
 "use server";
 
+import { getTranslations } from "@/i18n/server";
 import { z } from "zod";
 
 import { assertNotDemo } from "@/features/demo/assert-not-demo";
@@ -22,11 +23,12 @@ export async function issueCandidatePortalCodeAction(input: {
   candidateId: string;
   kind: "access" | "reset";
 }): Promise<IssuePortalCodeResult> {
+  const t = await getTranslations("server.portal.admin");
   assertNotDemo();
   const parsed = z
     .object({ candidateId: z.string().uuid(), kind: z.enum(["access", "reset"]) })
     .safeParse(input);
-  if (!parsed.success) return { ok: false, error: "Invalid request." };
+  if (!parsed.success) return { ok: false, error: t("invalidRequest") };
   try {
     const context = await requireCandidatePermission(
       "candidates:edit",
@@ -35,10 +37,10 @@ export async function issueCandidatePortalCodeAction(input: {
     const workspaceId = context.organization.id;
     const methods = await getPortalAuthMethods(workspaceId);
     if (parsed.data.kind === "access" && !methods.accessCode) {
-      return { ok: false, error: "Access codes are turned off in Settings > Candidate portal." };
+      return { ok: false, error: t("accessCodesOff") };
     }
     if (parsed.data.kind === "reset" && !methods.password) {
-      return { ok: false, error: "Password sign-in is turned off in Settings > Candidate portal." };
+      return { ok: false, error: t("passwordSignInOff") };
     }
     const { code, expiresAt } = await issueOneTimeCode({
       candidateId: parsed.data.candidateId,
@@ -67,7 +69,7 @@ export async function issueCandidatePortalCodeAction(input: {
   } catch (err) {
     return {
       ok: false,
-      error: err instanceof Error ? err.message : "Could not issue the link.",
+      error: err instanceof Error ? err.message : t("issueFailed"),
     };
   }
 }

@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { AlertTriangle } from "lucide-react";
+import { useTranslations } from "next-intl";
 
 import { Button } from "@/components/ui/button";
 import { Callout } from "@/components/ui/callout";
@@ -39,7 +40,10 @@ export function ArchiveStageDialog({
   onCancel: () => void;
   onConfirm: (mergeIntoStageId: string | null) => void;
 }) {
-  const plan = stage ? planArchive(stage, stages) : null;
+  const t = useTranslations("features.pipeline.StageDialogs");
+  const labels = useTranslations("labels.pipeline.stageEditor");
+  const kindNames = useTranslations("labels.pipeline.stageKinds");
+  const plan = stage ? planArchive(stage, stages, labels, kindNames(stage.kind)) : null;
   const [chosen, setChosen] = useState<string | null>(null);
 
   const targetId =
@@ -55,24 +59,21 @@ export function ArchiveStageDialog({
     <Dialog open={stage !== null} onOpenChange={(open) => !open && onCancel()}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader align="start">
-          <DialogTitle>Archive {stage?.name ?? "stage"}?</DialogTitle>
-          <DialogDescription>
-            Archived stages leave the board and the stage pickers. Their history is kept. Archived
-            stages cannot be restored from the editor.
-          </DialogDescription>
+          <DialogTitle>{t("archiveTitle", { name: stage?.name ?? t("stageFallback") })}</DialogTitle>
+          <DialogDescription>{t("archiveDescription")}</DialogDescription>
         </DialogHeader>
 
         {plan?.mode === "merge" && stage ? (
           <div className="space-y-2">
             <p className="text-sm text-foreground">
-              {mergeMessage(stage.applicationCount, target?.name ?? "another stage")}
+              {mergeMessage(stage.applicationCount, target?.name ?? t("anotherStage"), labels)}
             </p>
             <Label htmlFor="archive-merge-target" className="text-xs text-muted-foreground">
-              Move candidates to
+              {t("moveCandidatesTo")}
             </Label>
             <Select value={targetId ?? undefined} onValueChange={setChosen} disabled={busy}>
               <SelectTrigger id="archive-merge-target" className="w-full">
-                <SelectValue placeholder="Choose a stage" />
+                <SelectValue placeholder={t("chooseStage")} />
               </SelectTrigger>
               <SelectContent>
                 {plan.targets.map((candidate) => (
@@ -100,7 +101,7 @@ export function ArchiveStageDialog({
 
         <DialogFooter>
           <Button type="button" variant="ghost" onClick={onCancel} disabled={busy}>
-            {plan?.mode === "blocked" ? "Close" : "Cancel"}
+            {plan?.mode === "blocked" ? t("close") : t("cancel")}
           </Button>
           {plan?.mode === "blocked" ? null : (
             <Button
@@ -108,7 +109,7 @@ export function ArchiveStageDialog({
               disabled={busy || (plan?.mode === "merge" && !targetId)}
               onClick={() => onConfirm(plan?.mode === "merge" ? targetId : null)}
             >
-              {busy ? "Archiving…" : "Archive stage"}
+              {busy ? t("archiving") : t("archiveStage")}
             </Button>
           )}
         </DialogFooter>
@@ -131,14 +132,15 @@ export function DeleteStageDialog({
   onCancel: () => void;
   onConfirm: () => void;
 }) {
+  const t = useTranslations("features.pipeline.StageDialogs");
   return (
     <ConfirmDialog
       open={stage !== null}
       onOpenChange={(open) => !open && onCancel()}
       tone="destructive"
-      title={`Delete ${stage?.name ?? "stage"}?`}
-      description="This removes the stage for good. It is only possible for a stage no candidate has ever been in. Otherwise, archive it instead."
-      confirmLabel="Delete stage"
+      title={t("deleteTitle", { name: stage?.name ?? t("stageFallback") })}
+      description={t("deleteDescription")}
+      confirmLabel={t("deleteStage")}
       busy={busy}
       // Stay open until the server answers; the editor closes it.
       closeOnConfirm={false}

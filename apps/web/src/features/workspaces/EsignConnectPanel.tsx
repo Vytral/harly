@@ -5,6 +5,7 @@ import type { IntegrationHealthView } from "@/features/integrations/health/model
 import { providerStatusLabel, providerStatusTone } from "@/features/integrations/health/connection-label";
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { toast } from "@/lib/notification-island/toast";
 
 import {
@@ -56,6 +57,7 @@ export function EsignConnectPanel({
   tileClassName: string;
   description: string;
 }) {
+  const t = useTranslations("features.workspaces.esignConnectPanel");
   const router = useRouter();
   const connected = status.enabled && status.hasToken;
   const [open, setOpen] = useState(false);
@@ -64,9 +66,9 @@ export function EsignConnectPanel({
   function testConnection() {
     startTest(async () => {
       const result = await testEsignAction();
-      if (result.ok) toast.success("DocuSeal connection is working!");
+      if (result.ok) toast.success(t("connectionWorking"));
       else {
-        toast.error(result.error ?? "DocuSeal connection test failed.");
+        toast.error(result.error ?? t("testFailed"));
         router.refresh();
       }
     });
@@ -79,7 +81,7 @@ export function EsignConnectPanel({
         tileClassName={tileClassName}
         name="DocuSeal"
         description={description}
-        statusLabel={providerStatusLabel(health, connected ? "Connected" : "Not connected")}
+        statusLabel={providerStatusLabel(health, connected ? t("connected") : t("notConnected"))}
         statusTone={providerStatusTone(health, connected ? "on" : "neutral")}
         action={
           canEdit ? (
@@ -90,7 +92,7 @@ export function EsignConnectPanel({
               aria-expanded={open}
             >
               {connected ? <GearSixIcon className="size-4" /> : <KeyDuotoneIcon className="size-4" />}
-              {connected ? (open ? "Hide settings" : "Manage") : "Connect"}
+              {connected ? (open ? t("hideSettings") : t("manage")) : t("connect")}
             </Button>
           ) : null
         }
@@ -100,21 +102,25 @@ export function EsignConnectPanel({
       {!status.encryptionReady && !connected ? (
         <div className="flex items-start gap-2 rounded-xl border border-clay/30 bg-clay/5 px-3 py-2 text-sm text-clay">
           <WarningCircleIcon className="mt-0.5 size-4 shrink-0" />
-          <p>Set <code className="font-mono text-xs">AI_ENCRYPTION_KEY</code> on the server to store the DocuSeal API token securely.</p>
+          <p>
+            {t.rich("encryptionWarning", {
+              code: (chunks) => <code className="font-mono text-xs">{chunks}</code>,
+            })}
+          </p>
         </div>
       ) : null}
 
       {connected ? (
         <Card className="overflow-hidden p-0">
           <div className="grid grid-cols-1 divide-y sm:grid-cols-2 sm:divide-x sm:divide-y-0">
-            <StatCell label="Instance">
+            <StatCell label={t("instance")}>
               <DocuSealLogo className="size-4" />
-              <span className="truncate">{status.url ?? "Connected"}</span>
+              <span className="truncate">{status.url ?? t("connected")}</span>
             </StatCell>
-            <StatCell label="Status">
+            <StatCell label={t("status")}>
               <button type="button" onClick={testConnection} disabled={testing} className="flex items-center gap-1.5 text-sm font-medium text-pine hover:underline disabled:opacity-50">
                 {testing ? <SpinnerIcon className="size-3.5" /> : null}
-                {testing ? "Testing…" : "Test connection"}
+                {testing ? t("testing") : t("testConnection")}
               </button>
             </StatCell>
           </div>
@@ -127,14 +133,22 @@ export function EsignConnectPanel({
             <Card className="space-y-4 p-5">
               {webhookUrl ? (
                 <div className="space-y-2 border-t pt-4">
-                  <h2 className="font-display text-base font-semibold tracking-tight">Webhook</h2>
-                  <p className="text-sm text-muted-foreground">In your DocuSeal instance → Settings → Webhooks, add this endpoint for the <code className="font-mono text-xs">form.completed</code>, <code className="font-mono text-xs">form.declined</code>, and <code className="font-mono text-xs">submission.*</code> events. The URL contains only the workspace selector.</p>
+                  <h2 className="font-display text-base font-semibold tracking-tight">{t("webhook")}</h2>
+                  <p className="text-sm text-muted-foreground">
+                    {t.rich("webhookInstructions", {
+                      code: (chunks) => <code className="font-mono text-xs">{chunks}</code>,
+                    })}
+                  </p>
                   <code className="block break-all rounded-md border bg-muted/30 px-3 py-2 font-mono text-xs">{webhookUrl}</code>
                   {webhookSecret ? (
                     <div className="space-y-1.5">
-                      <p className="text-xs font-medium text-foreground">Authentication header</p>
+                      <p className="text-xs font-medium text-foreground">{t("authHeader")}</p>
                       <code className="block break-all rounded-md border bg-muted/30 px-3 py-2 font-mono text-xs">X-DocuSeal-Secret: {webhookSecret}</code>
-                      <p className="text-xs text-muted-foreground">Configure this as an HTTP header in DocuSeal or in your reverse proxy. Never append the secret as <code className="font-mono text-xs">?secret=</code>.</p>
+                      <p className="text-xs text-muted-foreground">
+                        {t.rich("secretHeaderHelp", {
+                          code: (chunks) => <code className="font-mono text-xs">{chunks}</code>,
+                        })}
+                      </p>
                     </div>
                   ) : null}
                 </div>
@@ -148,16 +162,16 @@ export function EsignConnectPanel({
                   startTest(async () => {
                     const result = await disconnectEsignAction();
                     if (!result.ok) {
-                      toast.error(result.error ?? "Could not disconnect DocuSeal.");
+                      toast.error(result.error ?? t("disconnectFailed"));
                       return;
                     }
-                    toast.success("DocuSeal disconnected");
+                    toast.success(t("disconnected"));
                     router.refresh();
                   })
                 }
                 disabled={testing}
               >
-                Disconnect DocuSeal
+                {t("disconnect")}
               </Button>
             </Card>
           ) : (
@@ -176,6 +190,7 @@ function ConnectForm({
   status: WorkspaceEsignStatus;
   onSaved: () => void;
 }) {
+  const t = useTranslations("features.workspaces.esignConnectForm");
   const [url, setUrl] = useState(status.url ?? "");
   const [apiToken, setApiToken] = useState("");
   const [enabled, setEnabled] = useState(status.enabled || !status.hasToken);
@@ -189,10 +204,10 @@ function ConnectForm({
         enabled,
       });
       if (!result.ok) {
-        toast.error(result.error ?? "Could not save DocuSeal settings.");
+        toast.error(result.error ?? t("saveFailed"));
         return;
       }
-      toast.success("DocuSeal settings saved");
+      toast.success(t("saved"));
       onSaved();
     });
   }
@@ -202,11 +217,10 @@ function ConnectForm({
       <div className="mb-5 flex items-start justify-between gap-4">
         <div className="space-y-0.5">
           <h2 className="font-display text-base font-semibold tracking-tight">
-            {status.hasToken ? "Manage connection" : "Connect DocuSeal"}
+            {status.hasToken ? t("manageConnection") : t("connectDocuSeal")}
           </h2>
           <p className="text-sm text-muted-foreground">
-            Point Harly at your self-hosted DocuSeal instance. The API token is
-            encrypted at rest and never shown again.
+            {t("description")}
           </p>
         </div>
         <a
@@ -215,14 +229,14 @@ function ConnectForm({
           rel="noopener noreferrer"
           className="inline-flex shrink-0 items-center gap-1 text-xs font-medium text-pine transition-colors hover:text-pine-strong"
         >
-          DocuSeal docs
+          {t("docsLink")}
           <ArrowUpRightIcon className="size-3.5" />
         </a>
       </div>
 
       <div className="space-y-5">
         <div className="space-y-2">
-          <Label htmlFor="docuseal-url">Instance URL</Label>
+          <Label htmlFor="docuseal-url">{t("instanceUrl")}</Label>
           <Input
             id="docuseal-url"
             value={url}
@@ -231,32 +245,32 @@ function ConnectForm({
             autoComplete="off"
             className="font-mono text-xs"
           />
-          <p className="text-xs text-muted-foreground">Base URL of your DocuSeal instance (without /api).</p>
+          <p className="text-xs text-muted-foreground">{t("instanceUrlHelp")}</p>
         </div>
 
         <div className="space-y-2">
-          <Label htmlFor="docuseal-token">API token</Label>
+          <Label htmlFor="docuseal-token">{t("apiToken")}</Label>
           <SecretInput
             id="docuseal-token"
             value={apiToken}
             onChange={(event) => setApiToken(event.target.value)}
-            placeholder={status.hasToken ? "•••••••• (stored, leave blank to keep)" : "Paste your X-Auth-Token"}
+            placeholder={status.hasToken ? t("storedPlaceholder") : t("tokenPlaceholder")}
             className="font-mono text-xs"
           />
-          <p className="text-xs text-muted-foreground">DocuSeal → Settings → API. Encrypted at rest.</p>
+          <p className="text-xs text-muted-foreground">{t("apiTokenHelp")}</p>
         </div>
 
         <div className="flex items-center justify-between rounded-lg border px-3 py-2.5">
           <div>
-            <p className="text-sm font-medium">Enable DocuSeal</p>
-            <p className="text-xs text-muted-foreground">Allow sending documents and offers for signature.</p>
+            <p className="text-sm font-medium">{t("enable")}</p>
+            <p className="text-xs text-muted-foreground">{t("enableDescription")}</p>
           </div>
           <input
             type="checkbox"
             checked={enabled}
             onChange={(event) => setEnabled(event.target.checked)}
             className="size-4 accent-pine"
-            aria-label="Enable DocuSeal"
+            aria-label={t("enable")}
           />
         </div>
       </div>
@@ -264,7 +278,7 @@ function ConnectForm({
       <div className="mt-6 flex justify-end">
         <Button onClick={save} disabled={saving || !url.trim() || (!apiToken.trim() && !status.hasToken)}>
           {saving ? <SpinnerIcon className="size-4" /> : null}
-          Save
+          {t("save")}
         </Button>
       </div>
     </Card>

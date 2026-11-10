@@ -1,6 +1,8 @@
 "use client";
 
 import { useState, useTransition, type ReactNode } from "react";
+import { useTranslations } from "next-intl";
+import { stageLabel } from "@/features/pipeline/stage-label";
 import { Minus, ThumbsDown, ThumbsUp } from "lucide-react";
 import { toast } from "@/lib/notification-island/toast";
 
@@ -23,9 +25,9 @@ import { useAiEnabled } from "@/components/ai/AiAvailability";
 import { cn } from "@/lib/utils";
 
 const RATINGS = [
-  { key: "strong", label: "Strong", icon: ThumbsUp },
-  { key: "mixed", label: "Mixed", icon: Minus },
-  { key: "weak", label: "Weak", icon: ThumbsDown },
+  { key: "strong", icon: ThumbsUp },
+  { key: "mixed", icon: Minus },
+  { key: "weak", icon: ThumbsDown },
 ] as const;
 
 type RatingKey = (typeof RATINGS)[number]["key"];
@@ -45,6 +47,8 @@ export function EvaluationDrawer({
   stageName: string | null;
   trigger: ReactNode;
 }) {
+  const t = useTranslations("features.candidates.EvaluationDrawer");
+  const tStages = useTranslations("labels.pipeline.stages");
   const aiEnabled = useAiEnabled();
   const advance = useAdvanceAfterDecision();
   const [open, setOpen] = useState(false);
@@ -62,12 +66,12 @@ export function EvaluationDrawer({
     startSuggest(async () => {
       const result = await suggestScorecardAttributesAction({ candidateId });
       if (!result.ok) {
-        toast.error(result.error ?? "Could not suggest attributes.");
+        toast.error(result.error ?? t("suggestError"));
         return;
       }
       if (result.attributes.length === 0) {
-        toast.message("No attributes suggested", {
-          description: "Try again or add your own below.",
+        toast.message(t("noAttributes"), {
+          description: t("noAttributesHint"),
         });
         return;
       }
@@ -99,23 +103,23 @@ export function EvaluationDrawer({
 
   function refine() {
     if (!comment.trim()) {
-      toast.error("Write a comment to refine first.");
+      toast.error(t("writeCommentFirst"));
       return;
     }
     startRefine(async () => {
       const result = await refineScorecardTextAction({ comment, candidateId });
       if (!result.ok) {
-        toast.error(result.error ?? "Could not refine.");
+        toast.error(result.error ?? t("refineError"));
         return;
       }
       setComment(result.refined);
-      toast.success("Comment refined");
+      toast.success(t("refined"));
     });
   }
 
   function submit() {
     if (!rating) {
-      toast.error("Pick an overall rating first.");
+      toast.error(t("pickRating"));
       return;
     }
     startTransition(async () => {
@@ -128,7 +132,7 @@ export function EvaluationDrawer({
         comment: comment.trim() || undefined,
       });
       if (!result.success) {
-        toast.error(result.error ?? "Could not save the evaluation.");
+        toast.error(result.error ?? t("saveError"));
         return;
       }
       setOpen(false);
@@ -136,8 +140,8 @@ export function EvaluationDrawer({
       setComment("");
       setAttributes(null);
       // In the review queue an evaluation is the decision: go on to the next item.
-      if (!advance(applicationId, () => "Evaluation saved")) {
-        toast.success("Evaluation saved");
+      if (!advance(applicationId, () => t("saved"))) {
+        toast.success(t("saved"));
       }
     });
   }
@@ -147,8 +151,8 @@ export function EvaluationDrawer({
       open={open}
       onOpenChange={setOpen}
       trigger={trigger}
-      title={`Add evaluation${stageName ? ` · ${stageName}` : ""}`}
-      description="Rate this candidate and leave feedback for the team."
+      title={stageName ? t("titleWithStage", { stage: stageLabel(stageName, tStages) }) : t("title")}
+      description={t("description")}
       footer={
         <>
           <Button
@@ -156,10 +160,10 @@ export function EvaluationDrawer({
             disabled={isPending}
             onClick={() => setOpen(false)}
           >
-            Cancel
+            {t("cancel")}
           </Button>
           <Button onClick={submit} disabled={isPending}>
-            {isPending ? "Saving…" : "Save evaluation"}
+            {isPending ? t("saving") : t("save")}
           </Button>
         </>
       }
@@ -167,7 +171,7 @@ export function EvaluationDrawer({
       <div className="space-y-5">
         <div className="space-y-2">
           <p className="text-[13px] font-medium tracking-tight text-foreground/90">
-            Overall rating
+            {t("overallRating")}
           </p>
           <div className="grid grid-cols-3 gap-2">
             {RATINGS.map((r) => {
@@ -185,7 +189,7 @@ export function EvaluationDrawer({
                   )}
                 >
                   <r.icon className="size-5" strokeWidth={1.8} />
-                  {r.label}
+                  {t(`ratings.${r.key}`)}
                 </button>
               );
             })}
@@ -198,7 +202,7 @@ export function EvaluationDrawer({
               htmlFor="evaluation-comment"
               className="text-[13px] font-medium tracking-tight text-foreground/90"
             >
-              Comments
+              {t("comments")}
             </label>
 {aiEnabled ? (
             <button
@@ -217,7 +221,7 @@ export function EvaluationDrawer({
               ) : (
                 <SparkleFillIcon className="size-3.5" />
               )}
-              {suggesting ? "Thinking…" : "Suggest attributes"}
+              {suggesting ? t("thinking") : t("suggestAttributes")}
             </button>
 ) : null}
           </div>
@@ -250,7 +254,7 @@ export function EvaluationDrawer({
               id="evaluation-comment"
               value={comment}
               onChange={(e) => setComment(e.target.value)}
-              placeholder="Strengths, concerns, and your recommendation…"
+              placeholder={t("commentPlaceholder")}
               className={aiEnabled ? "min-h-32 pb-11" : "min-h-32"}
             />
 {aiEnabled ? (
@@ -270,13 +274,13 @@ export function EvaluationDrawer({
               ) : (
                 <MagicWandDuotoneIcon className="size-3.5" />
               )}
-              {refining ? "Refining…" : "Refine with AI"}
+              {refining ? t("refining") : t("refineWithAi")}
             </button>
 ) : null}
           </div>
 {aiEnabled ? (
           <p className="text-xs text-muted-foreground">
-            AI cleans up grammar and clarity without changing your judgement.
+            {t("refineHint")}
           </p>
 ) : null}
         </div>

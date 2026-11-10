@@ -1,0 +1,177 @@
+{
+  "common": {
+    "fallback": "Werkt de knop niet? Kopieer en plak deze link in je browser:",
+    "sentBy": "Verzonden door {name}",
+    "poweredBy": "Mogelijk gemaakt door",
+    "greeting": "Hallo {name},",
+    "ignore": "Heb je deze link niet aangevraagd? Dan kun je deze e-mail negeren.",
+    "signIn": "Inloggen",
+    "logo": "Logo van {name}"
+  },
+  "reset": {
+    "subject": "Je wachtwoord opnieuw instellen",
+    "preview": "Stel je Harly-wachtwoord opnieuw in. Deze link verloopt over 1 uur.",
+    "heading": "Je wachtwoord opnieuw instellen",
+    "body": "Iemand heeft gevraagd het wachtwoord van je Harly-account opnieuw in te stellen. Kies via de knop hieronder een nieuw wachtwoord.",
+    "button": "Wachtwoord wijzigen",
+    "notice": "Heb je dit niet aangevraagd? Dan kun je deze e-mail negeren. Je wachtwoord verandert pas als je de link opent en een nieuw wachtwoord aanmaakt."
+  },
+  "verify": {
+    "subject": "Bevestig je e-mailadres",
+    "preview": "Bevestig je e-mailadres voor Harly.",
+    "heading": "Bevestig je e-mailadres",
+    "greeting": "Hallo {name},",
+    "body": "Bevestig via de knop hieronder je adres en voltooi het instellen van je account. Deze link verloopt over 24 uur.",
+    "button": "E-mailadres bevestigen",
+    "notice": "Heb je je niet aangemeld bij Harly? Dan kun je deze e-mail negeren."
+  },
+  "portalMagic": {
+    "subject": "Je inloglink",
+    "preview": "Je inloglink staat klaar en verloopt over 15 minuten.",
+    "heading": "Log in op je portaal",
+    "body": "Log in via de link hieronder. Je kunt de link één keer gebruiken en hij verloopt over 15 minuten."
+  },
+  "staffMagic": {
+    "subject": "Log in bij Harly",
+    "preview": "Je inloglink staat klaar.",
+    "body": "Log in via de link hieronder. Heb je deze niet aangevraagd? Dan kun je deze e-mail negeren."
+  },
+  "portalReset": {
+    "subject": "Stel het wachtwoord van je portaal opnieuw in",
+    "preview": "Stel het wachtwoord van je portaal opnieuw in. De link verloopt over 1 uur.",
+    "heading": "Stel je wachtwoord opnieuw in",
+    "body": "Kies een nieuw wachtwoord via de link hieronder. Je kunt de link één keer gebruiken en hij verloopt over 1 uur.",
+    "button": "Wachtwoord opnieuw instellen",
+    "notice": "Heb je deze link niet aangevraagd? Dan kun je deze e-mail negeren. Je wachtwoord is niet gewijzigd."
+  },
+  "welcome": {
+    "subject": "Welkom bij Harly",
+    "preview": "Welkom bij {workspace}, {name}. Laten we beginnen.",
+    "heading": "Welkom, {name}",
+    "body": "Je werkruimte {workspace} is klaar. Plaats je eerste vacature op je vacaturepagina en volg kandidaten op één plek.",
+    "button": "Dashboard openen"
+  },
+  "invitation": {
+    "subject": "{inviter} heeft je uitgenodigd voor {workspace}",
+    "preview": "{inviter} heeft je toegevoegd aan {workspace} op Harly.",
+    "heading": "Je bent uitgenodigd voor {workspace}",
+    "body": "<strong>{inviter}</strong> heeft je als <strong>{role}</strong> toegevoegd aan <strong>{workspace}</strong>. Accepteer de uitnodiging om je account in te stellen.",
+    "button": "Uitnodiging accepteren",
+    "notice": "Deze uitnodiging verloopt over 7 dagen. Verwachtte je deze niet? Dan kun je deze e-mail negeren.",
+    "roles": {
+      "owner": "Eigenaar",
+      "admin": "Beheerder",
+      "hiring_manager": "Wervingsmanager",
+      "recruiter": "Recruiter",
+      "coordinator": "Coördinator",
+      "sourcer": "Sourcer",
+      "interviewer": "Interviewer",
+      "viewer": "Kijker",
+      "fallback": "teamlid"
+    }
+  },
+  "rejection": {
+    "subject": "Je sollicitatie naar {job} bij {company}",
+    "preview": "Een update over je sollicitatie naar {job} bij {company}.",
+    "heading": "Update over je sollicitatie",
+    "body": "Bedankt voor je sollicitatie naar {job} bij {company}. Na zorgvuldige overweging hebben we besloten met andere kandidaten verder te gaan.",
+    "signoff": "Bedankt,",
+    "button": "Status van sollicitatie bekijken"
+  },
+  "stageUpdate": {
+    "subject": "Je gaat door naar {stage}: {job}",
+    "preview": "Je sollicitatie naar {job} is doorgeschoven naar {stage}.",
+    "heading": "Je sollicitatie gaat verder",
+    "body": "Je sollicitatie naar <strong>{job}</strong> bij {company} is doorgeschoven naar de fase <strong>{stage}</strong>.",
+    "next": "Iemand van het team neemt binnenkort contact met je op over de volgende stappen.",
+    "button": "Status van sollicitatie bekijken"
+  },
+  "applicationCandidate": {
+    "subject": "We hebben je sollicitatie naar {job} bij {company} ontvangen",
+    "preview": "Je sollicitatie naar {job} is ontvangen. We nemen contact met je op.",
+    "heading": "Sollicitatie ontvangen",
+    "body": "We hebben je sollicitatie naar <strong>{job}</strong> ontvangen. Het team bekijkt je sollicitatie en neemt contact op als je profiel aansluit.",
+    "thanks": "Bedankt dat je de tijd hebt genomen om te solliciteren.",
+    "application": "Je sollicitatie bekijken",
+    "profile": "Je profiel aanvullen",
+    "jobs": "Andere vacatures bekijken"
+  },
+  "applicationRecruiter": {
+    "subject": "{candidate} heeft gesolliciteerd naar {job}",
+    "preview": "{candidate} heeft zojuist gesolliciteerd naar {job}.",
+    "heading": "Nieuwe sollicitatie",
+    "body": "<strong>{candidate}</strong> heeft gesolliciteerd naar <strong>{job}</strong>.",
+    "button": "Sollicitatie bekijken"
+  },
+  "offer": {
+    "subject": "Aanbod van {company}: {job}",
+    "preview": "{company} wil je graag in het team. Hier is je aanbod.",
+    "heading": "Je hebt een aanbod ontvangen",
+    "body": "We verwelkomen je graag bij {company} als <strong>{job}</strong>. Dit bieden we je aan:",
+    "role": "Functie",
+    "compensation": "Beloning",
+    "equity": "Aandelenparticipatie",
+    "start": "Startdatum",
+    "expires": "Reageren vóór",
+    "button": "Aanbod bekijken",
+    "outro": "Bekijk het aanbod via de link hierboven of beantwoord deze e-mail als je vragen hebt. We horen graag van je."
+  },
+  "offerWithdrawn": {
+    "subject": "Update over je aanbod: {job} bij {company}",
+    "preview": "Een update over je aanbod voor {job} bij {company}.",
+    "heading": "Update over je aanbod",
+    "body": "Het aanbod voor {job} bij {company} is ingetrokken.",
+    "questions": "Vragen? Beantwoord deze e-mail en we leggen uit wat er is gebeurd."
+  },
+  "interviewCanceled": {
+    "subject": "Gesprek geannuleerd: {job} bij {company}",
+    "preview": "Je gesprek ({type}) voor {job} is geannuleerd.",
+    "heading": "Gesprek geannuleerd",
+    "body": "Je gesprek (<strong>{type}</strong>) voor <strong>{job}</strong> is geannuleerd. Onze excuses voor het ongemak.",
+    "bodyWithTime": "Je gesprek (<strong>{type}</strong>) voor <strong>{job}</strong>, gepland op <strong>{when}</strong>, is geannuleerd. Onze excuses voor het ongemak.",
+    "reschedule": "Beantwoord deze e-mail, dan zoeken we samen een nieuw moment."
+  },
+  "interviewScheduled": {
+    "subject": "Gesprek bevestigd: {job} bij {company}",
+    "preview": "Je gesprek ({type}) is bevestigd voor {when}.",
+    "heading": "Gesprek bevestigd",
+    "body": "Hallo {name}, je gesprek (<strong>{type}</strong>) voor <strong>{job}</strong> bij {company} is bevestigd.",
+    "time": "Wanneer",
+    "calendar": "Toevoegen aan je agenda",
+    "outro": "Moet je het gesprek verzetten? Beantwoord deze e-mail."
+  },
+  "interviewRescheduled": {
+    "subject": "Gesprek verplaatst: {job} bij {company}",
+    "preview": "Je gesprek ({type}) is verplaatst naar {when}.",
+    "heading": "Gesprek verplaatst",
+    "body": "Hallo {name}, je gesprek (<strong>{type}</strong>) voor <strong>{job}</strong> bij {company} heeft een nieuw tijdstip:",
+    "time": "Nieuw tijdstip",
+    "calendar": "Je agenda bijwerken",
+    "outro": "Moet het tijdstip opnieuw worden aangepast? Beantwoord deze e-mail."
+  },
+  "interviewShared": {
+    "format": "Vorm",
+    "where": "Waar",
+    "duration": "Duur",
+    "download": ".ics downloaden"
+  },
+  "signatureInvitation": {
+    "subject": "{company} vraagt je {document} te ondertekenen",
+    "reminderSubject": "Herinnering: {company} vraagt je {document} te ondertekenen",
+    "preview": "{company} wacht op je handtekening voor {document}.",
+    "heading": "Bekijk en onderteken",
+    "reminderHeading": "We wachten nog op je handtekening",
+    "body": "{company} vraagt je een document te bekijken en te ondertekenen.",
+    "reminderBody": "Vriendelijke herinnering: {company} wacht nog op je handtekening.",
+    "document": "Document",
+    "requestedBy": "Aangevraagd door",
+    "yourTurn": "Jij bent aan de beurt",
+    "signerPosition": "Ondertekenaar {order} van {total}",
+    "expires": "Link geldig tot",
+    "button": "Bekijken en ondertekenen",
+    "notice": "Deze link is persoonlijk. Stuur hem niet door. Verwachtte je dit verzoek niet? Dan kun je deze e-mail negeren of de afzender antwoorden."
+  },
+  "customTemplate": {
+    "preview": "Een bericht van {company}."
+  }
+}

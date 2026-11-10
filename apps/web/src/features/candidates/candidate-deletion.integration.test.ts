@@ -476,14 +476,14 @@ integration("permanent candidate deletion", () => {
 
     await expect(permanentlyDeleteJob(jobId)).resolves.toMatchObject({
       ok: false,
-      error: "Job must be in the trash.",
+      code: "jobNotInTrash",
     });
     await expect(trashJob(jobId)).resolves.toMatchObject({ ok: true });
     // The application still exists at this point and protects the
     // requisition from destructive deletion.
     await expect(permanentlyDeleteJob(jobId)).resolves.toMatchObject({
       ok: false,
-      error: expect.stringMatching(/applications/i),
+      code: "hasApplications",
     });
 
     await expect(

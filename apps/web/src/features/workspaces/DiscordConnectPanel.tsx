@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { toast } from "@/lib/notification-island/toast";
 
 import {
@@ -52,6 +53,7 @@ export function DiscordConnectPanel({
   tileClassName: string;
   description: string;
 }) {
+  const t = useTranslations("features.workspaces.discordConnectPanel");
   const router = useRouter();
   // Only treat the shared chat config as "Discord connected" when the stored
   // provider actually is discord.
@@ -62,9 +64,9 @@ export function DiscordConnectPanel({
   const statusTone = isConnected ? (status.enabled ? "on" : "off") : "neutral";
   const statusLabel = isConnected
     ? status.enabled
-      ? "Connected"
-      : "Disabled"
-    : "Not connected";
+      ? t("connected")
+      : t("disabled")
+    : t("notConnected");
 
   function toggleEnabled(next: boolean) {
     if (!isConnected) return;
@@ -77,10 +79,10 @@ export function DiscordConnectPanel({
           })
         : await disableChatAction();
       if (!result.ok) {
-        toast.error(result.error ?? "Could not update.");
+        toast.error(result.error ?? t("updateFailed"));
         return;
       }
-      toast.success(next ? "Discord notifications on" : "Discord notifications off");
+      toast.success(next ? t("notificationsOn") : t("notificationsOff"));
       router.refresh();
     });
   }
@@ -108,7 +110,11 @@ export function DiscordConnectPanel({
                 ) : (
                   <KeyDuotoneIcon className="size-4" />
                 )}
-                {isConnected ? (open ? "Hide settings" : "Manage") : "Connect"}
+                {isConnected
+                  ? open
+                    ? t("hideSettings")
+                    : t("manage")
+                  : t("connect")}
               </Button>
               {isConnected ? (
                 <label className="flex h-9 items-center gap-2 rounded-[var(--radius-btn)] border border-mist-border bg-pure-snow px-3 text-sm">
@@ -116,10 +122,10 @@ export function DiscordConnectPanel({
                     checked={status.enabled}
                     disabled={togglePending}
                     onCheckedChange={toggleEnabled}
-                    aria-label="Enable Discord notifications"
+                    aria-label={t("enableAria")}
                   />
                   <span className="text-muted-foreground">
-                    {status.enabled ? "On" : "Off"}
+                    {status.enabled ? t("on") : t("off")}
                   </span>
                 </label>
               ) : null}
@@ -132,8 +138,11 @@ export function DiscordConnectPanel({
         <div className="flex items-start gap-2 rounded-xl border border-clay/30 bg-clay/5 px-3 py-2 text-sm text-clay">
           <WarningCircleIcon className="mt-0.5 size-4 shrink-0" />
           <p>
-            Set <code className="font-mono text-xs">AI_ENCRYPTION_KEY</code> on
-            the server to store the webhook URL.
+            {t.rich("encryptionKeyMissing", {
+              code: (chunks) => (
+                <code className="font-mono text-xs">{chunks}</code>
+              ),
+            })}
           </p>
         </div>
       ) : null}
@@ -141,15 +150,15 @@ export function DiscordConnectPanel({
       {isConnected ? (
         <Card className="overflow-hidden p-0">
           <div className="grid grid-cols-1 divide-y sm:grid-cols-2 sm:divide-x sm:divide-y-0">
-            <StatCell label="Destination">
+            <StatCell label={t("destination")}>
               <DiscordLogo className="size-4" />
-              Discord webhook
+              {t("destinationValue")}
             </StatCell>
-            <StatCell label="Events">
+            <StatCell label={t("events")}>
               <span className="text-muted-foreground">
                 {status.events.length === 0
-                  ? "None selected"
-                  : `${status.events.length} subscribed`}
+                  ? t("noneSelected")
+                  : t("subscribedCount", { count: status.events.length })}
               </span>
             </StatCell>
           </div>
@@ -192,6 +201,7 @@ function DiscordConnectForm({
   const [testing, startTest] = useTransition();
   const [saving, startSave] = useTransition();
   const [disconnecting, startDisconnect] = useTransition();
+  const t = useTranslations("features.workspaces.discordConnectPanel");
 
   function toggleEvent(value: string) {
     setSelected((prev) =>
@@ -208,10 +218,10 @@ function DiscordConnectForm({
         webhookUrl: webhookUrl || undefined,
       });
       if (!result.ok) {
-        toast.error(result.error ?? "Test failed.");
+        toast.error(result.error ?? t("testFailed"));
         return;
       }
-      toast.success("Test message sent to Discord");
+      toast.success(t("testSent"));
     });
   }
 
@@ -224,10 +234,10 @@ function DiscordConnectForm({
         events: selected,
       });
       if (!result.ok) {
-        toast.error(result.error ?? "Could not save.");
+        toast.error(result.error ?? t("couldNotSave"));
         return;
       }
-      toast.success("Discord settings saved");
+      toast.success(t("settingsSaved"));
       onSaved();
     });
   }
@@ -236,10 +246,10 @@ function DiscordConnectForm({
     startDisconnect(async () => {
       const result = await disableChatAction();
       if (!result.ok) {
-        toast.error(result.error ?? "Could not disconnect.");
+        toast.error(result.error ?? t("couldNotDisconnect"));
         return;
       }
-      toast.success("Discord notifications disabled");
+      toast.success(t("disconnectedToast"));
       router.refresh();
     });
   }
@@ -249,10 +259,10 @@ function DiscordConnectForm({
       <div className="mb-5 flex items-start justify-between gap-4">
         <div className="space-y-0.5">
           <h2 className="font-display text-base font-semibold tracking-tight">
-            {connected ? "Manage connection" : "Connect Discord"}
+            {connected ? t("manageConnection") : t("connectDiscord")}
           </h2>
           <p className="text-sm text-muted-foreground">
-            Your webhook URL is encrypted at rest and never shown again.
+            {t("webhookNote")}
           </p>
         </div>
         <a
@@ -261,33 +271,32 @@ function DiscordConnectForm({
           rel="noopener noreferrer"
           className="inline-flex shrink-0 items-center gap-1 text-xs font-medium text-pine transition-colors hover:text-pine-strong"
         >
-          Webhook docs
+          {t("webhookDocs")}
           <ArrowUpRightIcon className="size-3.5" />
         </a>
       </div>
 
       <div className="space-y-5">
         <div className="space-y-2">
-          <Label htmlFor="discord-webhook">Incoming webhook URL</Label>
+          <Label htmlFor="discord-webhook">{t("webhookUrlLabel")}</Label>
           <SecretInput
             id="discord-webhook"
             value={webhookUrl}
             onChange={(e) => setWebhookUrl(e.target.value)}
             placeholder={
               connected
-                ? "•••••••• (stored, leave blank to keep)"
+                ? t("webhookUrlStoredPlaceholder")
                 : "https://discord.com/api/webhooks/000/xxxx"
             }
             className="font-mono text-xs"
           />
           <p className="text-xs text-muted-foreground">
-            Discord → Server Settings → Integrations → Webhooks → New Webhook,
-            then Copy URL.
+            {t("webhookSetupHelp")}
           </p>
         </div>
 
         <div className="space-y-2">
-          <Label>Notify on</Label>
+          <Label>{t("notifyOn")}</Label>
           <div className="flex flex-wrap gap-1.5">
             {events.map((event) => (
               <button
@@ -310,8 +319,8 @@ function DiscordConnectForm({
         <SettingRow
           htmlFor="discordconnectpanel-switch-1"
           className="rounded-[var(--radius-inner)] border border-hairline px-4 py-3"
-          title={<>Enable</>}
-          description={<>When off, no messages are posted.</>}
+          title={t("enableTitle")}
+          description={t("enableDescription")}
           control={<Switch id="discordconnectpanel-switch-1" checked={enabled} onCheckedChange={setEnabled} />}
         />
       </div>
@@ -327,7 +336,7 @@ function DiscordConnectForm({
             disabled={disconnecting}
           >
             {disconnecting ? <SpinnerIcon className="size-3.5" /> : null}
-            Disconnect
+            {t("disconnect")}
           </Button>
         ) : (
           <span />
@@ -344,11 +353,11 @@ function DiscordConnectForm({
             ) : (
               <PaperPlaneDuotoneIcon className="size-4" />
             )}
-            Send test
+            {t("sendTest")}
           </Button>
           <Button onClick={save} disabled={saving}>
             {saving ? <SpinnerIcon className="size-4" /> : null}
-            Save
+            {t("save")}
           </Button>
         </div>
       </div>

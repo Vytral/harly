@@ -10,31 +10,33 @@ export type PortalProfileCompletionInput = {
   websiteUrl: string | null;
 };
 
+export type PortalProfileField = "fullName" | "headline" | "phone" | "location" | "photo" | "linkedin" | "onlineProfile";
+
 export type PortalProfileCompletion = {
   percentage: number;
   completed: number;
   total: number;
-  missing: string[];
+  missing: PortalProfileField[];
 };
 
 export function getPortalProfileCompletion(
   profile: PortalProfileCompletionInput,
 ): PortalProfileCompletion {
-  const checks = [
+  const checks: { label: PortalProfileField; complete: boolean }[] = [
     {
-      label: "Full name",
+      label: "fullName",
       complete: Boolean(profile.firstName?.trim() && profile.lastName?.trim()),
     },
     {
-      label: "Professional headline",
+      label: "headline",
       complete: Boolean(profile.headline?.trim()),
     },
-    { label: "Phone", complete: Boolean(profile.phone?.trim()) },
-    { label: "Location", complete: Boolean(profile.location?.trim()) },
-    { label: "Profile photo", complete: Boolean(profile.avatarUrl?.trim()) },
-    { label: "LinkedIn", complete: Boolean(profile.linkedinUrl?.trim()) },
+    { label: "phone", complete: Boolean(profile.phone?.trim()) },
+    { label: "location", complete: Boolean(profile.location?.trim()) },
+    { label: "photo", complete: Boolean(profile.avatarUrl?.trim()) },
+    { label: "linkedin", complete: Boolean(profile.linkedinUrl?.trim()) },
     {
-      label: "GitHub or website",
+      label: "onlineProfile",
       complete: Boolean(
         profile.githubUrl?.trim() || profile.websiteUrl?.trim(),
       ),

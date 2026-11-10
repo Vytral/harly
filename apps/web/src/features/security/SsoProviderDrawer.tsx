@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { toast } from "@/lib/notification-island/toast";
 import { Eye, EyeOff, Trash2, ExternalLink, Plus } from "lucide-react";
 
@@ -55,6 +56,7 @@ export function SsoProviderDrawer({
   const [samlPrivateKey, setSamlPrivateKey] = useState("");
   const [verificationToken, setVerificationToken] = useState("");
 
+  const t = useTranslations("features.security.ssoProviderDrawer");
   const isEditing = Boolean(existingProvider);
 
   function reset() {
@@ -82,27 +84,27 @@ export function SsoProviderDrawer({
     startSave(async () => {
       // Validate common fields
       if (!providerId.trim()) {
-        toast.error("Provider ID is required.");
+        toast.error(t("errors.providerIdRequired"));
         return;
       }
       if (providerType === "oidc" && !issuer.trim()) {
-        toast.error("Issuer URL is required.");
+        toast.error(t("errors.issuerRequired"));
         return;
       }
       if (!domain.trim()) {
-        toast.error("Domain is required.");
+        toast.error(t("errors.domainRequired"));
         return;
       }
 
       // Validate based on type
       if (providerType === "oidc") {
         if (!isEditing && (!oidcClientId.trim() || !oidcClientSecret.trim())) {
-          toast.error("Client ID and Client Secret are required for OIDC.");
+          toast.error(t("errors.oidcCredentialsRequired"));
           return;
         }
       } else {
         if (!isEditing && !samlMetadata.trim() && (!samlEntryPoint.trim() || !samlCert.trim())) {
-          toast.error("Provide IdP metadata XML, or both Entry Point and Certificate.");
+          toast.error(t("errors.samlConfigRequired"));
           return;
         }
       }
@@ -137,11 +139,11 @@ export function SsoProviderDrawer({
         : await registerSSOProviderAction(input);
 
       if (!result.ok) {
-        toast.error(result.error ?? "Failed to register SSO provider.");
+        toast.error(result.error ?? t("errors.registerFailed"));
         return;
       }
 
-      toast.success(isEditing ? "SSO provider updated successfully." : "SSO provider registered successfully.");
+      toast.success(isEditing ? t("toasts.updated") : t("toasts.registered"));
       handleOpenChange(false);
       router.refresh();
     });
@@ -152,11 +154,11 @@ export function SsoProviderDrawer({
     startRequestVerification(async () => {
       const result = await requestSSODomainVerificationAction(existingProvider.providerId);
       if (!result.ok) {
-        toast.error(result.error ?? "Failed to request domain verification.");
+        toast.error(result.error ?? t("errors.verificationRequestFailed"));
         return;
       }
       setVerificationToken(result.token ?? "");
-      toast.success("DNS verification record generated.");
+      toast.success(t("toasts.dnsRecordGenerated"));
     });
   }
 
@@ -165,10 +167,10 @@ export function SsoProviderDrawer({
     startVerify(async () => {
       const result = await verifySSODomainAction(existingProvider.providerId);
       if (!result.ok) {
-        toast.error(result.error ?? "Domain verification failed.");
+        toast.error(result.error ?? t("errors.verificationFailed"));
         return;
       }
-      toast.success("SSO domain verified.");
+      toast.success(t("toasts.domainVerified"));
       handleOpenChange(false);
       router.refresh();
     });
@@ -179,10 +181,10 @@ export function SsoProviderDrawer({
     startDelete(async () => {
       const result = await deleteSSOProviderAction(existingProvider.providerId);
       if (!result.ok) {
-        toast.error(result.error ?? "Failed to delete.");
+        toast.error(result.error ?? t("errors.deleteFailed"));
         return;
       }
-      toast.success("SSO provider removed.");
+      toast.success(t("toasts.removed"));
       handleOpenChange(false);
       router.refresh();
     });
@@ -193,18 +195,18 @@ export function SsoProviderDrawer({
       <SheetTrigger asChild>
         {isEditing ? (
           <Button variant="outline" size="sm">
-            Configure
+            {t("configure")}
           </Button>
         ) : (
           <Button variant="outline" size="sm">
             <Plus className="size-4 mr-1" />
-            Add Provider
+            {t("addProvider")}
           </Button>
         )}
       </SheetTrigger>
       <DrawerLayout
-        title={isEditing ? "Configure SSO Provider" : "Add Enterprise SSO Provider"}
-        description="Set up SAML 2.0 or OpenID Connect (OIDC) for enterprise single sign-on."
+        title={isEditing ? t("title") : t("addTitle")}
+        description={t("description")}
         className="sm:max-w-2xl"
         footer={
           isEditing ? (
@@ -216,20 +218,20 @@ export function SsoProviderDrawer({
                 onClick={remove}
               >
                 {deleting ? <SpinnerIcon className="size-4" /> : <Trash2 className="size-4" />}
-                Remove
+                {t("remove")}
               </Button>
               <Button variant="outline" disabled={saving} onClick={() => handleOpenChange(false)}>
-                Cancel
+                {t("cancel")}
               </Button>
               <Button onClick={save} disabled={saving || !providerId.trim() || !domain.trim()}>
                 {saving ? <SpinnerIcon className="size-4" /> : null}
-                Save
+                {t("save")}
               </Button>
             </>
           ) : (
             <>
               <Button variant="outline" disabled={saving} onClick={() => handleOpenChange(false)}>
-                Cancel
+                {t("cancel")}
               </Button>
               <Button
                 onClick={save}
@@ -243,7 +245,7 @@ export function SsoProviderDrawer({
                 }
               >
                 {saving ? <SpinnerIcon className="size-4" /> : null}
-                Register Provider
+                {t("registerProvider")}
               </Button>
             </>
           )
@@ -253,84 +255,84 @@ export function SsoProviderDrawer({
           {/* Provider Type Tabs */}
           <Tabs value={providerType} onValueChange={(v) => setProviderType(v as SSOProviderType)}>
             <TabsList className="grid w-full grid-cols-2">
-              <TabsTrigger value="oidc">OpenID Connect (OIDC)</TabsTrigger>
-              <TabsTrigger value="saml">SAML 2.0</TabsTrigger>
+              <TabsTrigger value="oidc">{t("tabs.oidc")}</TabsTrigger>
+              <TabsTrigger value="saml">{t("tabs.saml")}</TabsTrigger>
             </TabsList>
           </Tabs>
 
           {/* Provider ID */}
           <div className="space-y-2">
-            <Label htmlFor="sso-provider-id">Provider ID</Label>
+            <Label htmlFor="sso-provider-id">{t("providerId")}</Label>
             <Input
               id="sso-provider-id"
               value={providerId}
               onChange={(e) => setProviderId(e.target.value)}
-              placeholder="e.g. okta-prod, azure-ad"
+              placeholder={t("providerIdPlaceholder")}
               autoComplete="off"
             />
             <p className="text-xs text-muted-foreground">
-              Unique identifier for this provider (e.g., &quot;okta&quot;, &quot;azure-ad&quot;)
+              {t("providerIdHint")}
             </p>
           </div>
 
           {/* Issuer URL */}
           <div className="space-y-2">
-            <Label htmlFor="sso-issuer">Issuer URL</Label>
+            <Label htmlFor="sso-issuer">{t("issuer")}</Label>
             <Input
               id="sso-issuer"
               value={issuer}
               onChange={(e) => setIssuer(e.target.value)}
-              placeholder="e.g. https://your-org.okta.com"
+              placeholder={t("issuerPlaceholder")}
               autoComplete="off"
             />
             <p className="text-xs text-muted-foreground">
-              The issuer URL of your identity provider
+              {t("issuerHint")}
             </p>
           </div>
 
           {/* Domain */}
           <div className="space-y-2">
-            <Label htmlFor="sso-domain">Email Domain</Label>
+            <Label htmlFor="sso-domain">{t("domain")}</Label>
             <Input
               id="sso-domain"
               value={domain}
               onChange={(e) => setDomain(e.target.value)}
-              placeholder="e.g. yourcompany.com"
+              placeholder={t("domainPlaceholder")}
               autoComplete="off"
             />
             <p className="text-xs text-muted-foreground">
-              Users with this email domain will be redirected to this provider
+              {t("domainHint")}
             </p>
           </div>
 
           {/* OIDC Configuration */}
           {providerType === "oidc" && (
             <div className="space-y-4 rounded-lg border p-4">
-              <p className="text-sm font-medium">OIDC Configuration</p>
+              <p className="text-sm font-medium">{t("oidc.title")}</p>
               <p className="text-xs text-muted-foreground">
-                Most fields are auto-discovered from the issuer&apos;s discovery document.
+                {t("oidc.discoveryHint")}
               </p>
 
               <div className="space-y-2">
-                <Label htmlFor="oidc-client-id">Client ID</Label>
+                <Label htmlFor="oidc-client-id">{t("oidc.clientId")}</Label>
                 <Input
                   id="oidc-client-id"
                   value={oidcClientId}
                   onChange={(e) => setOidcClientId(e.target.value)}
-                  placeholder="OAuth client ID from your IdP"
+                  placeholder={t("oidc.clientIdPlaceholder")}
                   autoComplete="off"
                 />
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="oidc-client-secret">Client Secret</Label>
+                <Label htmlFor="oidc-client-secret">{t("oidc.clientSecret")}</Label>
                 <div className="relative">
                   <Input
                     id="oidc-client-secret"
                     type={showOidcSecret ? "text" : "password"}
                     value={oidcClientSecret}
                     onChange={(e) => setOidcClientSecret(e.target.value)}
-                    placeholder="OAuth client secret from your IdP"
+                    placeholder={t("oidc.clientSecretPlaceholder")}
                     autoComplete="off"
                   />
                   <button
@@ -348,39 +350,39 @@ export function SsoProviderDrawer({
           {/* SAML Configuration */}
           {providerType === "saml" && (
             <div className="space-y-4 rounded-lg border p-4">
-              <p className="text-sm font-medium">SAML 2.0 Configuration</p>
+              <p className="text-sm font-medium">{t("saml.title")}</p>
               <p className="text-xs text-muted-foreground">
-                Configure your Identity Provider (IdP) settings for SAML SSO.
+                {t("saml.intro")}
               </p>
 
               <div className="space-y-2">
-                <Label htmlFor="saml-metadata">IdP Metadata XML (Recommended)</Label>
+                <Label htmlFor="saml-metadata">{t("saml.metadata")}</Label>
                 <textarea
                   id="saml-metadata"
                   value={samlMetadata}
                   onChange={(e) => setSamlMetadata(e.target.value)}
-                  placeholder="Paste the EntityDescriptor XML from your identity provider"
+                  placeholder={t("saml.metadataPlaceholder")}
                   className="w-full rounded-md border bg-transparent px-3 py-2 text-sm font-mono placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring"
                   rows={7}
                 />
                 <p className="text-xs text-muted-foreground">
-                  Harly derives the issuer, SSO URL, and signing certificate from this document.
+                  {t("saml.metadataHint")}
                 </p>
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="saml-entry-point">Entry Point (SSO URL)</Label>
+                <Label htmlFor="saml-entry-point">{t("saml.entryPoint")}</Label>
                 <Input
                   id="saml-entry-point"
                   value={samlEntryPoint}
                   onChange={(e) => setSamlEntryPoint(e.target.value)}
-                  placeholder="https://idp.example.com/sso"
+                  placeholder={t("saml.entryPointPlaceholder")}
                   autoComplete="off"
                 />
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="saml-private-key">SP Private Key (Only if required by IdP)</Label>
+                <Label htmlFor="saml-private-key">{t("saml.privateKey")}</Label>
                 <textarea
                   id="saml-private-key"
                   value={samlPrivateKey}
@@ -391,12 +393,12 @@ export function SsoProviderDrawer({
                   spellCheck={false}
                 />
                 <p className="text-xs text-muted-foreground">
-                  Stored only in the SSO provider configuration. Required when metadata sets WantAuthnRequestsSigned.
+                  {t("saml.privateKeyHint")}
                 </p>
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="saml-cert">X.509 Certificate</Label>
+                <Label htmlFor="saml-cert">{t("saml.certificate")}</Label>
                 <div className="relative">
                   <textarea
                     id="saml-cert"
@@ -408,21 +410,21 @@ export function SsoProviderDrawer({
                   />
                 </div>
                 <p className="text-xs text-muted-foreground">
-                  The public certificate from your IdP to verify SAML responses
+                  {t("saml.certificateHint")}
                 </p>
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="saml-audience">Audience (Optional)</Label>
+                <Label htmlFor="saml-audience">{t("saml.audience")}</Label>
                 <Input
                   id="saml-audience"
                   value={samlAudience}
                   onChange={(e) => setSamlAudience(e.target.value)}
-                  placeholder="https://yourapp.com"
+                  placeholder={t("saml.audiencePlaceholder")}
                   autoComplete="off"
                 />
                 <p className="text-xs text-muted-foreground">
-                  The SP Entity ID / Audience URI (defaults to your app URL)
+                  {t("saml.audienceHint")}
                 </p>
               </div>
             </div>
@@ -431,7 +433,7 @@ export function SsoProviderDrawer({
           {/* Callback URL hint */}
           <div className="rounded-lg bg-muted/50 px-3 py-2.5">
             <p className="text-xs font-medium text-muted-foreground">
-              ACS Callback URL (set this in your Identity Provider):
+              {t("acsCallbackHint")}
             </p>
             <code className="mt-1 block break-all text-xs font-mono text-foreground">
               {typeof window !== "undefined" ? window.location.origin : ""}/api/auth/sso/saml2/sp/acs/{providerId || "<provider-id>"}
@@ -441,26 +443,26 @@ export function SsoProviderDrawer({
           {isEditing && (
             <div className="space-y-3 rounded-lg border p-4">
               <div>
-                <p className="text-sm font-medium">Domain verification</p>
+                <p className="text-sm font-medium">{t("domainVerification.title")}</p>
                 <p className="text-xs text-muted-foreground">
-                  Publish the generated TXT record before allowing sign-in for this email domain.
+                  {t("domainVerification.description")}
                 </p>
               </div>
               <div className="flex flex-wrap gap-2">
                 <Button variant="outline" size="sm" disabled={requestingVerification} onClick={requestDomainVerification}>
                   {requestingVerification ? <SpinnerIcon className="size-4" /> : null}
-                  Get DNS record
+                  {t("domainVerification.getDnsRecord")}
                 </Button>
                 <Button size="sm" disabled={verifying} onClick={verifyDomain}>
                   {verifying ? <SpinnerIcon className="size-4" /> : null}
-                  Verify DNS
+                  {t("domainVerification.verifyDns")}
                 </Button>
               </div>
               {verificationToken && (
                 <div className="rounded-md bg-muted/50 p-3 text-xs">
-                  <p className="font-medium">TXT host</p>
+                  <p className="font-medium">{t("domainVerification.txtHost")}</p>
                   <code className="break-all">_better-auth-token-{existingProvider?.providerId}</code>
-                  <p className="mt-2 font-medium">TXT value</p>
+                  <p className="mt-2 font-medium">{t("domainVerification.txtValue")}</p>
                   <code className="break-all">{verificationToken}</code>
                 </div>
               )}
@@ -475,7 +477,7 @@ export function SsoProviderDrawer({
             className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
           >
             <ExternalLink className="size-3" />
-            Read the SSO documentation
+            {t("docsLink")}
           </a>
         </div>
       </DrawerLayout>

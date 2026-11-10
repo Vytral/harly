@@ -1,12 +1,16 @@
+import { getTranslations } from "next-intl/server";
+
 import { Skeleton } from "@/components/ui/skeleton";
 
 /** Mirrors the email templates manager: toolbar, info callout, then the template list card. */
 const ROWS = [0, 1, 2, 3];
 
-export default function TemplatesLoading() {
+export default async function TemplatesLoading() {
+  const t = await getTranslations("pages.dashboardTemplates.loading");
+
   return (
     <div className="space-y-4" aria-busy="true">
-      <span className="sr-only">Loading…</span>
+      <span className="sr-only">{t("label")}</span>
 
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex flex-wrap items-center gap-2">

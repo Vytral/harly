@@ -5,6 +5,7 @@ import {
   Briefcase,
   UserRoundX,
 } from "lucide-react";
+import { getTranslations } from "next-intl/server";
 
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -17,13 +18,14 @@ import type {
 import { PersonAvailabilityCard } from "@/features/people/PersonAvailabilityCard";
 import { PersonJobsSection } from "@/features/people/PersonJobsSection";
 
-export function PersonProfile({
+export async function PersonProfile({
   profile,
   jobs,
 }: {
   profile: PersonProfileData;
   jobs: PersonJobRow[];
 }) {
+  const t = await getTranslations("features.people.PersonProfile");
   const hasAbout = Boolean(profile.bio);
   const hasJobs = jobs.length > 0;
   const hasSpecialties = Boolean(
@@ -57,7 +59,7 @@ export function PersonProfile({
         className="inline-flex w-fit items-center gap-1.5 rounded-sm text-sm text-soft-ink outline-offset-4 transition-colors hover:text-near-ink focus-visible:outline-2 focus-visible:outline-near-ink"
       >
         <ArrowLeft className="size-3.5" />
-        Back to People
+        {t("backToPeople")}
       </Link>
 
       <PersonHeader profile={profile} />
@@ -85,7 +87,7 @@ export function PersonProfile({
           {hasAbout && (
             <Card>
               <CardHeader>
-                <CardTitle>About</CardTitle>
+                <CardTitle>{t("about")}</CardTitle>
               </CardHeader>
               <CardContent>
                 <p className="text-[14px] leading-relaxed whitespace-pre-line text-near-ink">
@@ -103,16 +105,15 @@ export function PersonProfile({
                 <UserRoundX className="size-5" />
               </div>
               <h2 className="text-sm font-semibold text-near-ink">
-                Nothing here yet
+                {t("nothingHereYet")}
               </h2>
               <p className="max-w-sm text-sm leading-6 text-soft-ink">
-                {profile.name} hasn&apos;t added a bio and isn&apos;t on any
-                jobs or hiring teams yet.
+                {t("emptyProfile", { name: profile.name })}
               </p>
             </Card>
           ) : (
             <div className="rounded-[var(--radius-card)] bg-card-inset px-5 py-6 text-center text-sm text-soft-ink">
-              Not on any jobs or hiring teams yet.
+              {t("notOnAnyJobs")}
             </div>
           )}
         </div>
@@ -124,12 +125,13 @@ export function PersonProfile({
 }
 
 /** A quiet end-of-page marker so sparse profiles don't trail into blank space. */
-function NothingElseFooter() {
+async function NothingElseFooter() {
+  const t = await getTranslations("features.people.PersonProfile");
   return (
     <div className="flex flex-col items-center gap-1.5 pt-2 pb-6 text-center">
       <div className="h-px w-10 bg-hairline" />
       <p className="text-xs text-quiet-mist">
-        Nothing else to see here.
+        {t("nothingElse")}
       </p>
     </div>
   );
@@ -153,10 +155,11 @@ function PersonHeader({ profile }: { profile: PersonProfileData }) {
   );
 }
 
-function ContactCard({ profile }: { profile: PersonProfileData }) {
+async function ContactCard({ profile }: { profile: PersonProfileData }) {
+  const t = await getTranslations("features.people.PersonProfile");
   const rows: { label: string; value: React.ReactNode }[] = [
     {
-      label: "Email",
+      label: t("email"),
       value: (
         <a href={`mailto:${profile.email}`} className="hover:underline">
           {profile.email}
@@ -164,10 +167,10 @@ function ContactCard({ profile }: { profile: PersonProfileData }) {
       ),
     },
   ];
-  if (profile.location) rows.push({ label: "Location", value: profile.location });
+  if (profile.location) rows.push({ label: t("location"), value: profile.location });
   if (profile.phone) {
     rows.push({
-      label: "Phone",
+      label: t("phone"),
       value: (
         <a href={`tel:${profile.phone}`} className="hover:underline">
           {profile.phone}
@@ -178,7 +181,7 @@ function ContactCard({ profile }: { profile: PersonProfileData }) {
   const external: [string, string | null | undefined][] = [
     ["LinkedIn", profile.linkedinUrl],
     ["GitHub", profile.githubUrl],
-    ["Website", profile.websiteUrl],
+    [t("website"), profile.websiteUrl],
   ];
   for (const [label, href] of external) {
     if (!href) continue;
@@ -195,7 +198,7 @@ function ContactCard({ profile }: { profile: PersonProfileData }) {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Contact</CardTitle>
+        <CardTitle>{t("contact")}</CardTitle>
       </CardHeader>
       <CardContent>
         <InfoRows>
@@ -208,11 +211,12 @@ function ContactCard({ profile }: { profile: PersonProfileData }) {
   );
 }
 
-function SpecialtiesCard({ profile }: { profile: PersonProfileData }) {
+async function SpecialtiesCard({ profile }: { profile: PersonProfileData }) {
+  const t = await getTranslations("features.people.PersonProfile");
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Specialties & languages</CardTitle>
+        <CardTitle>{t("specialtiesAndLanguages")}</CardTitle>
       </CardHeader>
       <CardContent className="space-y-3">
         {profile.specialties && profile.specialties.length > 0 && (

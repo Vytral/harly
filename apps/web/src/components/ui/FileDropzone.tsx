@@ -2,6 +2,7 @@
 
 import { useRef, useState } from "react";
 import { ImageUp, Loader2, Pencil, RefreshCw, UploadCloud, X } from "lucide-react";
+import { useTranslations } from "next-intl";
 import { toast } from "@/lib/notification-island/toast";
 
 import { getImageFileValidationError } from "@/lib/storage-validation";
@@ -46,7 +47,7 @@ export function FileDropzone({
   aspect = "square",
   variant = "default",
   disabled,
-  hint = "PNG, JPG, SVG or WEBP · up to 5MB",
+  hint,
   className,
 }: {
   value: string | null;
@@ -58,6 +59,9 @@ export function FileDropzone({
   hint?: string;
   className?: string;
 }) {
+  const t = useTranslations("ui.fileDropzone");
+  const tStorage = useTranslations("labels.storageValidation");
+  const hintText = hint ?? t("defaultHint");
   const inputRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
   const [dragOver, setDragOver] = useState(false);
@@ -68,7 +72,7 @@ export function FileDropzone({
 
   async function handleFile(file: File | null) {
     if (!file) return;
-    const error = getImageFileValidationError(file);
+    const error = getImageFileValidationError(file, tStorage);
     if (error) {
       toast.error(error);
       return;
@@ -79,7 +83,7 @@ export function FileDropzone({
       setFailedUrl(null);
       onChange(url);
     } catch {
-      toast.error("Upload failed.");
+      toast.error(t("uploadFailed"));
     } finally {
       setUploading(false);
     }
@@ -108,7 +112,7 @@ export function FileDropzone({
             // eslint-disable-next-line @next/next/no-img-element
             <img
               src={value ?? undefined}
-              alt="Uploaded logo preview"
+              alt={t("logoPreviewAlt")}
               onError={() => value && setFailedUrl(value)}
               className="size-full object-contain p-2"
             />
@@ -124,7 +128,7 @@ export function FileDropzone({
               type="button"
               onClick={() => inputRef.current?.click()}
               disabled={uploading}
-              aria-label={value ? "Replace image" : "Upload image"}
+              aria-label={value ? t("replaceImage") : t("uploadImage")}
               className="absolute inset-0 flex items-center justify-center rounded-xl text-white opacity-0 transition-all duration-150 ease-out hover:bg-black/45 hover:opacity-100 focus-visible:opacity-100 focus-visible:bg-black/45 focus-visible:outline-none motion-reduce:transition-none"
             >
               {uploading ? (
@@ -140,7 +144,7 @@ export function FileDropzone({
                   setFailedUrl(null);
                   onChange(null);
                 }}
-                aria-label="Remove image"
+                aria-label={t("removeImage")}
                 className="absolute -right-1.5 -top-1.5 flex size-5 items-center justify-center rounded-full border bg-card text-muted-foreground shadow-sm transition-colors hover:bg-rust/10 hover:text-rust"
               >
                 <X className="size-3" />
@@ -167,7 +171,7 @@ export function FileDropzone({
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             src={value ?? undefined}
-            alt="Uploaded image preview"
+            alt={t("imagePreviewAlt")}
             onError={() => value && setFailedUrl(value)}
             className={cn(
               "size-full",
@@ -187,7 +191,7 @@ export function FileDropzone({
                 ) : (
                   <RefreshCw className="size-3.5" />
                 )}
-                Replace
+                {t("replace")}
               </button>
               <button
                 type="button"
@@ -195,7 +199,7 @@ export function FileDropzone({
                   setFailedUrl(null);
                   onChange(null);
                 }}
-                aria-label="Remove image"
+                aria-label={t("removeImage")}
                 className="inline-flex size-7 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-rust/10 hover:text-rust active:scale-[0.97] motion-reduce:transition-none"
               >
                 <X className="size-4" />
@@ -266,13 +270,13 @@ export function FileDropzone({
         <span className="space-y-0.5">
           <span className="block text-sm font-medium text-foreground">
             {uploading
-              ? "Uploading…"
+              ? t("uploading")
               : dragOver
-                ? "Drop to upload"
-                : "Drag & drop or browse"}
+                ? t("dropToUpload")
+                : t("dragAndDropOrBrowse")}
           </span>
-          {hint && !uploading && (
-            <span className="block text-xs text-muted-foreground">{hint}</span>
+          {hintText && !uploading && (
+            <span className="block text-xs text-muted-foreground">{hintText}</span>
           )}
         </span>
 

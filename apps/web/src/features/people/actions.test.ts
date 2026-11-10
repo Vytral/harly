@@ -1,17 +1,22 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { assertNotDemo } from "@/features/demo/assert-not-demo";
 
 const mocks = vi.hoisted(() => {
   const selectQueue: unknown[][] = [];
   const updates: Array<{ set: Record<string, unknown> }> = [];
+  const updateFilters: unknown[] = [];
   const inserts: Array<{ values: Record<string, unknown> }> = [];
   return {
     selectQueue,
     updates,
+    updateFilters,
     inserts,
     contextUser: { id: "user-1" } as { id: string },
     organization: { id: "org-1" },
   };
 });
+
+vi.mock("next-intl/server", async () => (await import("@/test-support/intl-server-mock")).intlServerMock);
 
 vi.mock("drizzle-orm", () => ({
   and: (...args: unknown[]) => ({ __and: args }),
@@ -54,7 +59,11 @@ vi.mock("@harly/db", () => {
       update: vi.fn(() => ({
         set: (set: Record<string, unknown>) => {
           mocks.updates.push({ set });
-          return { where: async () => {} };
+          return {
+            where: async (filter: unknown) => {
+              mocks.updateFilters.push(filter);
+            },
+          };
         },
       })),
       transaction: vi.fn(async (fn: (tx: unknown) => unknown) => {
@@ -82,6 +91,7 @@ vi.mock("@harly/db", () => {
         username: "user.username",
         name: "user.name",
         jobTitle: "user.jobTitle",
+        preferredEmailLocale: "user.preferredEmailLocale",
       },
       usernameHistory: {
         oldUsername: "usernameHistory.oldUsername",
@@ -111,19 +121,72 @@ vi.mock("@harly/db", () => {
 });
 
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
+vi.mock("@/features/demo/assert-not-demo", () => ({ assertNotDemo: vi.fn() }));
 
 import {
   changeUsernameAction,
   checkUsernameAvailableAction,
   getProfileByUsernameAction,
+  getOwnProfileAction,
+  updateOwnEmailPreferenceAction,
   updateOwnProfileAction,
 } from "./actions";
 
 beforeEach(() => {
+  vi.mocked(assertNotDemo).mockClear();
   mocks.selectQueue.length = 0;
   mocks.updates.length = 0;
+  mocks.updateFilters.length = 0;
   mocks.inserts.length = 0;
   mocks.contextUser = { id: "user-1" };
+});
+
+describe("updateOwnEmailPreferenceAction", () => {
+  it("stores a normalized preference for the signed-in user only", async () => {
+    const result = await updateOwnEmailPreferenceAction({
+      preferredEmailLocale: " PT-br ",
+      userId: "attacker-selected-user",
+    });
+
+    expect(result.success).toBe(true);
+    expect(mocks.updates).toEqual([{ set: { preferredEmailLocale: "pt-BR" } }]);
+    expect(mocks.updateFilters).toEqual([
+      { __eq: ["user.id", "user-1"] },
+    ]);
+    expect(assertNotDemo).toHaveBeenCalledOnce();
+  });
+
+  it("clears a preference when the user chooses no preference", async () => {
+    await updateOwnEmailPreferenceAction({ preferredEmailLocale: null });
+    expect(mocks.updates).toEqual([{ set: { preferredEmailLocale: null } }]);
+  });
+
+  it("rejects unsupported locales before updating the database", async () => {
+    await expect(
+      updateOwnEmailPreferenceAction({ preferredEmailLocale: "pt-PT" }),
+    ).rejects.toThrow();
+    expect(mocks.updates).toHaveLength(0);
+  });
+
+  it("keeps the demo guard ahead of any database update", async () => {
+    vi.mocked(assertNotDemo).mockImplementationOnce(() => {
+      throw new Error("disabled in demo");
+    });
+
+    await expect(
+      updateOwnEmailPreferenceAction({ preferredEmailLocale: "fr" }),
+    ).rejects.toThrow("disabled in demo");
+    expect(mocks.updates).toHaveLength(0);
+  });
+});
+
+describe("getOwnProfileAction", () => {
+  it("returns the saved email preference from the current user's profile", async () => {
+    mocks.selectQueue.push([{ id: "user-1", preferredEmailLocale: "fr" }]);
+    await expect(getOwnProfileAction()).resolves.toMatchObject({
+      preferredEmailLocale: "fr",
+    });
+  });
 });
 
 describe("updateOwnProfileAction", () => {

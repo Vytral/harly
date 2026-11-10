@@ -19,22 +19,33 @@ const allowedMailboxAttachmentTypes = new Set([
   "image/gif",
 ]);
 
+/** Translator bound to the `server.mailbox` namespace. */
+export type MailboxAttachmentTranslator = (key: string, values?: Record<string, string | number | Date>) => string;
+
+/** English copy for background sync, inbound email logs and tests. */
+const englishAttachmentMessages: Record<string, string> = {
+  "attachments.empty": "Attachment is empty or invalid.",
+  "attachments.tooLarge": "Attachment exceeds the 25MB limit.",
+  "attachments.unsupportedType": "Unsupported attachment type.",
+};
+const englishAttachment: MailboxAttachmentTranslator = (key) => englishAttachmentMessages[key] ?? key;
+
 export function validateMailboxAttachment(input: {
   filename?: string;
   contentType?: string;
   size: number;
-}):
+}, t: MailboxAttachmentTranslator = englishAttachment):
   | { ok: true; filename: string; contentType: string }
   | { ok: false; error: string } {
   if (!Number.isSafeInteger(input.size) || input.size <= 0) {
-    return { ok: false, error: "Attachment is empty or invalid." };
+    return { ok: false, error: t("attachments.empty") };
   }
   if (input.size > maxMailboxAttachmentSize) {
-    return { ok: false, error: "Attachment exceeds the 25MB limit." };
+    return { ok: false, error: t("attachments.tooLarge") };
   }
   const contentType = input.contentType?.toLowerCase().trim() ?? "";
   if (!allowedMailboxAttachmentTypes.has(contentType)) {
-    return { ok: false, error: "Unsupported attachment type." };
+    return { ok: false, error: t("attachments.unsupportedType") };
   }
   // `sanitizeFilename` neutralizes path separators; remove traversal-looking
   // remnants as well so names are harmless in logs and content-disposition.

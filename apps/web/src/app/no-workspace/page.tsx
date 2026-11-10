@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { getTranslations } from "next-intl/server";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 
@@ -11,6 +12,7 @@ import { OnboardingSignOut } from "@/app/(onboarding)/onboarding/_components/Onb
 export const dynamic = "force-dynamic";
 
 export default async function NoWorkspacePage() {
+  const t = await getTranslations("accessNoWorkspace");
   const session = await auth.api.getSession({ headers: await headers() });
   if (!session) redirect("/login");
 
@@ -44,22 +46,15 @@ export default async function NoWorkspacePage() {
           </div>
 
           <h1 className="font-display text-3xl tracking-tight text-foreground">
-            You need an invitation
+            {t("heading")}
           </h1>
           <p className="mt-3 text-sm leading-6 text-muted-foreground">
-            This Harly workspace is already set up. Ask an admin to invite{" "}
-            <span className="font-medium text-foreground">
-              {session.user.email}
-            </span>{" "}
-            , your invite link drops you straight into the right role.
+            {t.rich("inviteHelp", { email: session.user.email, strong: (chunks) => <span className="font-medium text-foreground">{chunks}</span> })}
           </p>
 
           <div className="mt-10 rounded-lg bg-muted px-4 py-3">
             <p className="text-xs text-muted-foreground">
-              Signed in as{" "}
-              <span className="font-medium text-foreground">
-                {session.user.email}
-              </span>
+              {t.rich("signedInAs", { email: session.user.email, strong: (chunks) => <span className="font-medium text-foreground">{chunks}</span> })}
             </p>
           </div>
         </div>

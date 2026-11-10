@@ -19,6 +19,7 @@ import {
 import { telegramText } from "@/server/notify/dispatch";
 import { isWebhookEvent } from "@/server/webhooks/events";
 import { assertNotDemo } from "@/features/demo/assert-not-demo";
+import { getTranslations } from "@/i18n/server";
 
 const log = createLogger("workspace-telegram-settings");
 
@@ -42,16 +43,17 @@ export async function saveTelegramSettingsAction(input: {
 }): Promise<TelegramActionResult> {
   assertNotDemo();
   const context = await requirePermission("integrations:manage");
+  const t = await getTranslations("server.workspaces.telegramSettingsActions");
 
   if (!isEncryptionConfigured()) {
-    return { ok: false, error: "Server encryption key not configured." };
+    return { ok: false, error: t("encryptionKeyMissing") };
   }
 
   const parsed = saveSchema.safeParse(input);
   if (!parsed.success) {
     return {
       ok: false,
-      error: parsed.error.issues[0]?.message ?? "Invalid input.",
+      error: parsed.error.issues[0]?.message ?? t("invalidInput"),
     };
   }
 
@@ -68,10 +70,10 @@ export async function saveTelegramSettingsAction(input: {
   const hasStored = Boolean(existing?.ciphertext);
 
   if (!botToken && !hasStored) {
-    return { ok: false, error: "Add a bot token first." };
+    return { ok: false, error: t("botTokenRequired") };
   }
   if (enabled && !chatId) {
-    return { ok: false, error: "Add a chat ID before enabling." };
+    return { ok: false, error: t("chatIdRequiredToEnable") };
   }
 
   const set: Partial<typeof workspaceSettings.$inferInsert> = {
@@ -92,8 +94,8 @@ export async function saveTelegramSettingsAction(input: {
         ok: false,
         error:
           err instanceof Error
-            ? `Telegram rejected that token: ${err.message}`
-            : "Telegram rejected that token.",
+            ? t("tokenRejectedWithReason", { reason: err.message })
+            : t("tokenRejected"),
       };
     }
     const enc = encryptSecret(botToken);
@@ -147,6 +149,7 @@ export async function sendTestTelegramAction(input: {
 }): Promise<TelegramActionResult> {
   assertNotDemo();
   const context = await requirePermission("integrations:manage");
+  const t = await getTranslations("server.workspaces.telegramSettingsActions");
 
   let botToken = input.botToken?.trim() || null;
   let chatId = input.chatId?.trim() || null;
@@ -156,8 +159,8 @@ export async function sendTestTelegramAction(input: {
     botToken = botToken ?? stored?.botToken ?? null;
     chatId = chatId ?? stored?.chatId ?? null;
   }
-  if (!botToken) return { ok: false, error: "Enter a bot token to test." };
-  if (!chatId) return { ok: false, error: "Enter a chat ID to test." };
+  if (!botToken) return { ok: false, error: t("enterBotTokenToTest") };
+  if (!chatId) return { ok: false, error: t("enterChatIdToTest") };
 
   // Only the saved configuration is health-tracked. An unsaved token that
   // fails must not mark the integration as needing reconnect.

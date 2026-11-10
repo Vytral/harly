@@ -45,6 +45,8 @@ vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 
 import { addToPoolAction } from "./actions";
 
+vi.mock("next-intl/server", async () => (await import("@/test-support/intl-server-mock")).intlServerMock);
+
 describe("addToPoolAction concurrency handling", () => {
   beforeEach(() => {
     mocks.selectQueue = [];

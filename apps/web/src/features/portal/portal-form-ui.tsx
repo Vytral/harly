@@ -1,6 +1,7 @@
 "use client";
 
 import { useId } from "react";
+import { useTranslations } from "next-intl";
 
 import { cn } from "@/lib/utils";
 
@@ -80,12 +81,13 @@ export function PortalFormError({ message }: { message: string | null }) {
 export function RecoveryCodesPanel({
   codes,
   onDone,
-  doneLabel = "I've saved these codes",
+  doneLabel,
 }: {
   codes: string[];
   onDone: () => void;
   doneLabel?: string;
 }) {
+  const t = useTranslations("features.portal.portalFormUi");
   const text = codes.join("\n");
   async function copy() {
     try {
@@ -105,15 +107,11 @@ export function RecoveryCodesPanel({
   return (
     <div className="space-y-4">
       <div>
-        <h3 className="text-base font-semibold text-foreground">Save your recovery codes</h3>
-        <p className="mt-1.5 text-sm text-muted-foreground">
-          If you forget your password and there is no email on file, each code
-          lets you reset it once. They won&apos;t be shown again. Keep them
-          somewhere safe.
-        </p>
+        <h3 className="text-base font-semibold text-foreground">{t("saveRecoveryCodes")}</h3>
+        <p className="mt-1.5 text-sm text-muted-foreground">{t("recoveryCodesBody")}</p>
       </div>
       <ul
-        aria-label="Recovery codes"
+        aria-label={t("recoveryCodesList")}
         className="grid grid-cols-1 gap-1.5 rounded-xl border bg-muted/40 p-3 font-mono text-sm sm:grid-cols-2"
       >
         {codes.map((c) => (
@@ -124,14 +122,14 @@ export function RecoveryCodesPanel({
       </ul>
       <div className="flex gap-2">
         <button type="button" onClick={copy} className={portalSecondaryButtonClass}>
-          Copy
+          {t("copy")}
         </button>
         <button type="button" onClick={download} className={portalSecondaryButtonClass}>
-          Download
+          {t("download")}
         </button>
       </div>
       <button type="button" onClick={onDone} className={portalPrimaryButtonClass}>
-        {doneLabel}
+        {doneLabel ?? t("savedCodes")}
       </button>
     </div>
   );

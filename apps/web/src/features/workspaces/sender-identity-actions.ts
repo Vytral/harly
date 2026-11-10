@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { and, eq, ne } from "drizzle-orm";
+import { getTranslations } from "@/i18n/server";
 import { z } from "zod";
 
 import { ApiError } from "@harly/api";
@@ -20,20 +21,24 @@ import { createLogger } from "@/lib/logger";
 
 const log = createLogger("workspaces.sender-identity");
 
-const localPartSchema = z
-  .string()
-  .trim()
-  .toLowerCase()
-  .min(1, "Enter a local-part.")
-  .max(64, "Keep it under 64 characters.")
-  .regex(/^[a-z0-9.]+$/, "Only lowercase letters, digits, and dots.");
+type Translate = (key: string, values?: Record<string, string | number>) => string;
+
+function buildLocalPartSchema(t: Translate) {
+  return z
+    .string()
+    .trim()
+    .toLowerCase()
+    .min(1, t("localPartRequired"))
+    .max(64, t("localPartTooLong"))
+    .regex(/^[a-z0-9.]+$/, t("localPartFormat"));
+}
 
 type Result = { success: boolean; error?: string };
 
 /** Owner-only gate: a denial becomes the action's error result. */
 async function requireOwnerResult(): Promise<Result | null> {
   try {
-    await requireOwner("Only the workspace owner can do this.");
+    await requireOwner();
     return null;
   } catch (error) {
     if (error instanceof ApiError) return { success: false, error: error.message };
@@ -47,16 +52,17 @@ export async function updateMemberSenderIdentityAction(input: {
   localPart: string;
   displayName?: string;
 }): Promise<Result> {
+  const t = await getTranslations("server.workspaces.senderIdentityActions");
   try {
     const context = await getWorkspaceContext();
     const denied = await requireOwnerResult();
     if (denied) return denied;
 
-    const parsedLocalPart = localPartSchema.safeParse(input.localPart);
+    const parsedLocalPart = buildLocalPartSchema(t).safeParse(input.localPart);
     if (!parsedLocalPart.success) {
       return {
         success: false,
-        error: parsedLocalPart.error.issues[0]?.message ?? "Invalid local-part.",
+        error: parsedLocalPart.error.issues[0]?.message ?? t("invalidLocalPart"),
       };
     }
 
@@ -71,7 +77,7 @@ export async function updateMemberSenderIdentityAction(input: {
       )
       .limit(1);
     if (!target) {
-      return { success: false, error: "Member not found." };
+      return { success: false, error: t("memberNotFound") };
     }
 
     const [conflict] = await db
@@ -86,7 +92,7 @@ export async function updateMemberSenderIdentityAction(input: {
       )
       .limit(1);
     if (conflict) {
-      return { success: false, error: "That local-part is already in use." };
+      return { success: false, error: t("localPartTaken") };
     }
 
     const displayName = input.displayName?.trim() || null;
@@ -124,7 +130,7 @@ export async function updateMemberSenderIdentityAction(input: {
     return { success: true };
   } catch (error) {
     log.error(error, "updateMemberSenderIdentityAction failed");
-    return { success: false, error: "Unable to update sender identity." };
+    return { success: false, error: t("updateFailed") };
   }
 }
 
@@ -132,6 +138,7 @@ export async function updateMemberSenderIdentityAction(input: {
 export async function generateMemberSenderIdentityAction(input: {
   memberId: string;
 }): Promise<Result> {
+  const t = await getTranslations("server.workspaces.senderIdentityActions");
   try {
     const context = await getWorkspaceContext();
     const denied = await requireOwnerResult();
@@ -153,7 +160,7 @@ export async function generateMemberSenderIdentityAction(input: {
       )
       .limit(1);
     if (!target) {
-      return { success: false, error: "Member not found." };
+      return { success: false, error: t("memberNotFound") };
     }
 
     await provisionMemberSenderIdentity(db, {
@@ -167,6 +174,6 @@ export async function generateMemberSenderIdentityAction(input: {
     return { success: true };
   } catch (error) {
     log.error(error, "generateMemberSenderIdentityAction failed");
-    return { success: false, error: "Unable to generate a sender identity." };
+    return { success: false, error: t("generateFailed") };
   }
 }

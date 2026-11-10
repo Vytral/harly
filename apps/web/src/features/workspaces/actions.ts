@@ -6,6 +6,7 @@ import { revalidatePath } from "next/cache";
 import { headers } from "next/headers";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { z } from "zod";
+import { getTranslations } from "@/i18n/server";
 
 import { auth } from "@/lib/auth";
 import { storage } from "@/lib/storage";
@@ -49,6 +50,8 @@ import {
   boardStyles,
   logoStyles,
 } from "@/features/workspaces/board";
+
+type ServerTranslator = Awaited<ReturnType<typeof getTranslations>>;
 
 type ActionResult = {
   success: boolean;
@@ -101,7 +104,8 @@ const removeMemberSchema = z.object({
 
 // Accept an absolute http(s) URL or a locally-uploaded /uploads/... path;
 // empty → null so clearing an upload persists.
-const optionalUploadUrl = z
+function optionalUploadUrl(t: ServerTranslator) {
+  return z
   .string()
   .trim()
   .optional()
@@ -111,12 +115,14 @@ const optionalUploadUrl = z
       value === null ||
       value.startsWith("/uploads/") ||
       /^https?:\/\//.test(value),
-    "Logo must be a valid URL.",
+    t("logoMustBeValidUrl"),
   );
+}
 
 
-const workspaceProfileSchema = z.object({
-  name: z.string().trim().min(1, "Workspace name is required.").max(120),
+function workspaceProfileSchema(t: ServerTranslator) {
+  return z.object({
+  name: z.string().trim().min(1, t("workspaceNameRequired")).max(120),
   // Accept an absolute http(s) URL or a locally-uploaded /uploads/... path.
   logoUrl: z
     .string()
@@ -128,12 +134,13 @@ const workspaceProfileSchema = z.object({
         value === "" ||
         value.startsWith("/uploads/") ||
         /^https?:\/\//.test(value),
-      "Logo must be a valid URL.",
+      t("logoMustBeValidUrl"),
     ),
     sidebarLogoStyle: z.enum(logoStyles).default("bordered"),
-    sidebarLogoUrl: optionalUploadUrl,
-    sidebarLogoDarkUrl: optionalUploadUrl,
-});
+    sidebarLogoUrl: optionalUploadUrl(t),
+    sidebarLogoDarkUrl: optionalUploadUrl(t),
+  });
+}
 
 function addDays(date: Date, days: number) {
   const nextDate = new Date(date);
@@ -172,8 +179,6 @@ function isOwnerRole(role: string) {
 // Sacred rule: invitations and shareable links never mint owners. The Owner
 // role is only reachable by promoting an existing member (updateMemberRoles),
 // which an owner does deliberately , guarding against a fat-finger invite.
-const INVITE_OWNER_BLOCKED =
-  "The Owner role can't be assigned by invite. Invite as another role, then promote from the members list.";
 
 const log = createLogger("workspaces");
 
@@ -181,6 +186,7 @@ export async function updateWorkspaceBoardBrandingAction(
   _previousState: ActionResult,
   formData: FormData,
 ): Promise<ActionResult> {
+  const t = await getTranslations("server.workspaces.actions");
   try {
     // Public board branding + hero URLs render on the demo's own domain.
     await assertNotDemoOutsideSandbox();
@@ -209,7 +215,7 @@ export async function updateWorkspaceBoardBrandingAction(
     if (!parsed.success) {
       return {
         success: false,
-        error: parsed.error.issues[0]?.message ?? "Invalid board branding.",
+        error: parsed.error.issues[0]?.message ?? t("invalidBoardBranding"),
       };
     }
 
@@ -248,7 +254,7 @@ export async function updateWorkspaceBoardBrandingAction(
       error:
         error instanceof Error
           ? error.message
-          : "Unable to update board branding.",
+          : t("unableToUpdateBoardBranding"),
     };
   }
 }
@@ -257,13 +263,14 @@ export async function updateWorkspaceProfileAction(
   _previousState: ActionResult,
   formData: FormData,
 ): Promise<ActionResult> {
+  const t = await getTranslations("server.workspaces.actions");
   try {
     // Workspace name/logo are shared by every demo visitor; logo URLs are
     // fetched server-side by convertAndStoreLogo.
     assertNotDemo();
     const context = await requirePermission("settings:edit");
     const rawSidebarLogoStyle = formData.get("sidebarLogoStyle");
-    const parsed = workspaceProfileSchema.safeParse({
+    const parsed = workspaceProfileSchema(t).safeParse({
       name: formData.get("name"),
       logoUrl: formData.get("logoUrl"),
       sidebarLogoStyle:
@@ -278,7 +285,7 @@ export async function updateWorkspaceProfileAction(
     if (!parsed.success) {
       return {
         success: false,
-        error: parsed.error.issues[0]?.message ?? "Invalid workspace profile.",
+        error: parsed.error.issues[0]?.message ?? t("invalidWorkspaceProfile"),
       };
     }
 
@@ -286,7 +293,7 @@ export async function updateWorkspaceProfileAction(
     const rawTimeZone = formData.get("timezone");
     const timeZone = typeof rawTimeZone === "string" ? rawTimeZone.trim() : null;
     if (timeZone && !isValidTimeZone(timeZone)) {
-      return { success: false, error: "Choose a valid time zone." };
+      return { success: false, error: t("invalidTimeZone") };
     }
 
     await db
@@ -358,7 +365,7 @@ export async function updateWorkspaceProfileAction(
     return {
       success: false,
       error:
-        "Unable to update workspace.",
+        t("unableToUpdateWorkspace"),
     };
   }
 }
@@ -382,6 +389,7 @@ async function inviteOneMember(
   context: InviteContext,
   email: string,
   role: string,
+  t: ServerTranslator,
 ): Promise<InviteOneResult> {
   const appUrl = getHarlyPublicOrigin();
   const authUser = await getAuthUserByEmail(email);
@@ -480,7 +488,7 @@ async function inviteOneMember(
     .limit(1);
 
   if (existingInvitation) {
-    return { ok: false, reason: "Already has a pending invitation." };
+    return { ok: false, reason: t("alreadyPendingInvitation") };
   }
 
   const invitationId = crypto.randomUUID();
@@ -528,6 +536,7 @@ export async function inviteWorkspaceMemberAction(
   _previousState: ActionResult,
   formData: FormData,
 ): Promise<ActionResult> {
+  const t = await getTranslations("server.workspaces.actions");
   try {
     assertNotDemo();
     const context = await requirePermission("members:invite");
@@ -539,16 +548,16 @@ export async function inviteWorkspaceMemberAction(
     if (!parsed.success) {
       return {
         success: false,
-        error: parsed.error.issues[0]?.message ?? "Invalid invitation.",
+        error: parsed.error.issues[0]?.message ?? t("invalidInvitation"),
       };
     }
 
     if (isOwnerRole(parsed.data.role)) {
-      return { success: false, error: INVITE_OWNER_BLOCKED };
+      return { success: false, error: t("inviteOwnerBlocked") };
     }
 
     if (!(await isAssignableRole(context.organization.id, parsed.data.role))) {
-      return { success: false, error: "Unknown role." };
+      return { success: false, error: t("unknownRole") };
     }
 
     const privilegeError = await assignRolePrivilegeError(
@@ -563,6 +572,7 @@ export async function inviteWorkspaceMemberAction(
       context,
       parsed.data.email,
       parsed.data.role,
+      t,
     );
     if (!result.ok) {
       return { success: false, error: result.reason };
@@ -573,12 +583,13 @@ export async function inviteWorkspaceMemberAction(
     log.error(error, "inviteWorkspaceMemberAction failed");
     return {
       success: false,
-      error: "Unable to invite member.",
+      error: t("unableToInviteMember"),
     };
   }
 }
 
-const bulkInviteSchema = z.object({
+function bulkInviteSchema(t: ServerTranslator) {
+  return z.object({
   invites: z
     .array(
       z.object({
@@ -589,9 +600,10 @@ const bulkInviteSchema = z.object({
         role: z.string().trim().min(1),
       }),
     )
-    .min(1, "Add at least one email.")
-    .max(100, "Up to 100 invites at a time."),
-});
+    .min(1, t("addAtLeastOneEmail"))
+    .max(100, t("upToHundredInvites")),
+  });
+}
 
 export type BulkInviteResult = {
   success: boolean;
@@ -605,6 +617,7 @@ export async function inviteWorkspaceMembersAction(
   _previousState: BulkInviteResult,
   formData: FormData,
 ): Promise<BulkInviteResult> {
+  const t = await getTranslations("server.workspaces.actions");
   try {
     assertNotDemo();
     const context = await requirePermission("members:invite");
@@ -614,14 +627,14 @@ export async function inviteWorkspaceMembersAction(
     try {
       payload = JSON.parse(typeof raw === "string" ? raw : "[]");
     } catch {
-      return { success: false, error: "Invalid invite data." };
+      return { success: false, error: t("invalidInviteData") };
     }
 
-    const parsed = bulkInviteSchema.safeParse({ invites: payload });
+    const parsed = bulkInviteSchema(t).safeParse({ invites: payload });
     if (!parsed.success) {
       return {
         success: false,
-        error: parsed.error.issues[0]?.message ?? "Invalid invites.",
+        error: parsed.error.issues[0]?.message ?? t("invalidInvites"),
       };
     }
 
@@ -637,11 +650,11 @@ export async function inviteWorkspaceMembersAction(
 
     for (const [email, role] of byEmail) {
       if (isOwnerRole(role)) {
-        skipped.push({ email, reason: INVITE_OWNER_BLOCKED });
+        skipped.push({ email, reason: t("inviteOwnerBlocked") });
         continue;
       }
       if (!(await isAssignableRole(context.organization.id, role))) {
-        skipped.push({ email, reason: "Unknown role." });
+        skipped.push({ email, reason: t("unknownRole") });
         continue;
       }
       const privilegeError = await assignRolePrivilegeError(context, role);
@@ -649,7 +662,7 @@ export async function inviteWorkspaceMembersAction(
         skipped.push({ email, reason: privilegeError });
         continue;
       }
-      const result = await inviteOneMember(context, email, role);
+      const result = await inviteOneMember(context, email, role, t);
       if (!result.ok) {
         skipped.push({ email, reason: result.reason });
       } else if (result.outcome === "added") {
@@ -663,7 +676,7 @@ export async function inviteWorkspaceMembersAction(
     return { success: true, sent, added, skipped };
   } catch (error) {
     log.error(error, "inviteWorkspaceMembersAction failed");
-    return { success: false, error: "Unable to send invites." };
+    return { success: false, error: t("unableToSendInvites") };
   }
 }
 
@@ -672,6 +685,7 @@ export async function updateWorkspaceMemberRoleAction(
   _previousState: ActionResult,
   formData: FormData,
 ): Promise<ActionResult> {
+  const t = await getTranslations("server.workspaces.actions");
   try {
     await assertNotDemoOutsideSandbox();
     const context = await requirePermission("members:edit");
@@ -683,12 +697,12 @@ export async function updateWorkspaceMemberRoleAction(
     if (!parsed.success) {
       return {
         success: false,
-        error: parsed.error.issues[0]?.message ?? "Invalid role update.",
+        error: parsed.error.issues[0]?.message ?? t("invalidRoleUpdate"),
       };
     }
 
     if (!(await isAssignableRole(context.organization.id, parsed.data.role))) {
-      return { success: false, error: "Unknown role." };
+      return { success: false, error: t("unknownRole") };
     }
 
     const privilegeError = await assignRolePrivilegeError(
@@ -715,7 +729,7 @@ export async function updateWorkspaceMemberRoleAction(
       .limit(1);
 
     if (!targetMember) {
-      return { success: false, error: "Member not found." };
+      return { success: false, error: t("memberNotFound") };
     }
 
     const targetPrivilegeError = await manageMemberRolePrivilegeError(
@@ -733,7 +747,7 @@ export async function updateWorkspaceMemberRoleAction(
       isOwnerRole(targetMember.role) &&
       parsed.data.role !== "owner"
     ) {
-      return { success: false, error: "You can't remove your own Owner role." };
+      return { success: false, error: t("cannotRemoveOwnOwnerRole") };
     }
 
     if (
@@ -741,7 +755,7 @@ export async function updateWorkspaceMemberRoleAction(
       parsed.data.role !== "owner" &&
       (await countOwners(context.organization.id)) <= 1
     ) {
-      return { success: false, error: "Workspace must keep at least one owner." };
+      return { success: false, error: t("workspaceMustKeepOwner") };
     }
 
     await db
@@ -765,7 +779,7 @@ export async function updateWorkspaceMemberRoleAction(
     log.error(error, "updateWorkspaceMemberRoleAction failed");
     return {
       success: false,
-      error: "Unable to update member.",
+      error: t("unableToUpdateMember"),
     };
   }
 }
@@ -790,17 +804,18 @@ const bulkRolesSchema = z.object({
 export async function updateMemberRolesAction(input: {
   changes: { memberId: string; role: string }[];
 }): Promise<ActionResult> {
+  const t = await getTranslations("server.workspaces.actions");
   try {
     await assertNotDemoOutsideSandbox();
     const context = await requirePermission("members:edit");
     const parsed = bulkRolesSchema.safeParse(input);
     if (!parsed.success) {
-      return { success: false, error: "Invalid changes." };
+      return { success: false, error: t("invalidChanges") };
     }
 
     for (const change of parsed.data.changes) {
       if (!(await isAssignableRole(context.organization.id, change.role))) {
-        return { success: false, error: "Unknown role." };
+        return { success: false, error: t("unknownRole") };
       }
       const privilegeError = await assignRolePrivilegeError(
         context,
@@ -821,13 +836,13 @@ export async function updateMemberRolesAction(input: {
           inArray(authMembers.id, ids),
         ),
       );
-    const byId = new Map(targets.map((t) => [t.id, t]));
+    const byId = new Map(targets.map((row) => [row.id, row]));
 
     let ownersAfter = await countOwners(context.organization.id);
     for (const change of parsed.data.changes) {
       const target = byId.get(change.memberId);
       if (!target) {
-        return { success: false, error: "Member not found." };
+        return { success: false, error: t("memberNotFound") };
       }
       const wasOwner = target.role === "owner";
       const willOwner = change.role === "owner";
@@ -842,13 +857,13 @@ export async function updateMemberRolesAction(input: {
         }
       }
       if (target.id === context.membership.id && wasOwner && !willOwner) {
-        return { success: false, error: "You can't remove your own Owner role." };
+        return { success: false, error: t("cannotRemoveOwnOwnerRole") };
       }
       if (wasOwner && !willOwner) ownersAfter -= 1;
       if (!wasOwner && willOwner) ownersAfter += 1;
     }
     if (ownersAfter < 1) {
-      return { success: false, error: "Workspace must keep at least one owner." };
+      return { success: false, error: t("workspaceMustKeepOwner") };
     }
 
     await db.transaction(async (tx) => {
@@ -868,7 +883,7 @@ export async function updateMemberRolesAction(input: {
     log.error(error, "updateMemberRolesAction failed");
     return {
       success: false,
-      error: "Unable to update roles.",
+      error: t("unableToUpdateRoles"),
     };
   }
 }
@@ -881,22 +896,23 @@ export async function updateMemberAccessAction(input: {
   managerMemberId?: string | null;
   status: "active" | "inactive" | "suspended";
 }): Promise<ActionResult> {
+  const t = await getTranslations("server.workspaces.actions");
   try {
     await assertNotDemoOutsideSandbox();
     const context = await requirePermission("members:edit");
     const parsed = updateMemberAccessSchema.safeParse(input);
-    if (!parsed.success) return { success: false, error: "Invalid member access profile." };
+    if (!parsed.success) return { success: false, error: t("invalidMemberAccessProfile") };
     const [target] = await db.select({ id: authMembers.id, userId: authMembers.userId, role: authMembers.role }).from(authMembers).where(and(eq(authMembers.id, parsed.data.memberId), eq(authMembers.organizationId, context.organization.id))).limit(1);
-    if (!target) return { success: false, error: "Member not found." };
+    if (!target) return { success: false, error: t("memberNotFound") };
     const targetPrivilegeError = await manageMemberRolePrivilegeError(context, target.role, target.userId);
     if (targetPrivilegeError) return { success: false, error: targetPrivilegeError };
-    if (target.userId === context.user.id && parsed.data.status !== "active") return { success: false, error: "You cannot deactivate your own membership." };
-    if (isOwnerRole(target.role) && parsed.data.status !== "active" && !isOwnerRole(context.roleKey)) return { success: false, error: "Only an owner can suspend an owner." };
+    if (target.userId === context.user.id && parsed.data.status !== "active") return { success: false, error: t("cannotDeactivateOwnMembership") };
+    if (isOwnerRole(target.role) && parsed.data.status !== "active" && !isOwnerRole(context.roleKey)) return { success: false, error: t("onlyOwnerCanSuspendOwner") };
     const managerMemberId = parsed.data.managerMemberId ?? null;
     if (managerMemberId) {
-      if (managerMemberId === target.id) return { success: false, error: "A member cannot manage themselves." };
+      if (managerMemberId === target.id) return { success: false, error: t("cannotManageSelf") };
       const [manager] = await db.select({ id: authMembers.id }).from(authMembers).where(and(eq(authMembers.id, managerMemberId), eq(authMembers.organizationId, context.organization.id), eq(authMembers.status, "active"))).limit(1);
-      if (!manager) return { success: false, error: "Manager must be an active member of this workspace." };
+      if (!manager) return { success: false, error: t("managerMustBeActive") };
     }
     await db.update(authMembers).set({ department: parsed.data.department?.trim() || null, region: parsed.data.region?.trim() || null, team: parsed.data.team?.trim() || null, managerMemberId, status: parsed.data.status, updatedAt: new Date() }).where(eq(authMembers.id, target.id));
     if (parsed.data.status !== "active") await db.delete(authSessions).where(eq(authSessions.userId, target.userId));
@@ -905,7 +921,7 @@ export async function updateMemberAccessAction(input: {
     return { success: true };
   } catch (error) {
     log.error(error, "updateMemberAccessAction failed");
-    return { success: false, error: "Unable to update member access." };
+    return { success: false, error: t("unableToUpdateMemberAccess") };
   }
 }
 
@@ -913,6 +929,7 @@ export async function removeWorkspaceMemberAction(
   _previousState: ActionResult,
   formData: FormData,
 ): Promise<ActionResult> {
+  const t = await getTranslations("server.workspaces.actions");
   try {
     assertNotDemo();
     const context = await requirePermission("members:remove");
@@ -921,7 +938,7 @@ export async function removeWorkspaceMemberAction(
     });
 
     if (!parsed.success) {
-      return { success: false, error: "Invalid member." };
+      return { success: false, error: t("invalidMember") };
     }
 
     const [targetMember] = await db
@@ -940,7 +957,7 @@ export async function removeWorkspaceMemberAction(
       .limit(1);
 
     if (!targetMember) {
-      return { success: false, error: "Member not found." };
+      return { success: false, error: t("memberNotFound") };
     }
 
     const targetPrivilegeError = await manageMemberRolePrivilegeError(
@@ -953,18 +970,18 @@ export async function removeWorkspaceMemberAction(
     }
 
     if (targetMember.userId === context.user.id) {
-      return { success: false, error: "You cannot remove yourself." };
+      return { success: false, error: t("cannotRemoveYourself") };
     }
 
     if (isOwnerRole(targetMember.role) && !isOwnerRole(context.roleKey)) {
-      return { success: false, error: "Only an owner can remove an owner." };
+      return { success: false, error: t("onlyOwnerCanRemoveOwner") };
     }
 
     if (
       isOwnerRole(targetMember.role) &&
       (await countOwners(context.organization.id)) <= 1
     ) {
-      return { success: false, error: "Workspace must keep at least one owner." };
+      return { success: false, error: t("workspaceMustKeepOwner") };
     }
 
     await db.delete(authMembers).where(eq(authMembers.id, targetMember.id));
@@ -985,7 +1002,7 @@ export async function removeWorkspaceMemberAction(
     log.error(error, "removeWorkspaceMemberAction failed");
     return {
       success: false,
-      error: "Unable to remove member.",
+      error: t("unableToRemoveMember"),
     };
   }
 }
@@ -994,6 +1011,7 @@ export async function removeWorkspaceMemberAction(
 export async function resendWorkspaceInvitationAction(
   invitationId: string,
 ): Promise<ActionResult> {
+  const t = await getTranslations("server.workspaces.actions");
   try {
     assertNotDemo();
     const context = await requirePermission("members:invite");
@@ -1016,7 +1034,7 @@ export async function resendWorkspaceInvitationAction(
       .limit(1);
 
     if (!invite) {
-      return { success: false, error: "Invitation not found." };
+      return { success: false, error: t("invitationNotFound") };
     }
 
     await db
@@ -1055,13 +1073,14 @@ export async function resendWorkspaceInvitationAction(
     return { success: true };
   } catch (error) {
     log.error(error, "resendWorkspaceInvitationAction failed");
-    return { success: false, error: "Unable to resend invitation." };
+    return { success: false, error: t("unableToResendInvitation") };
   }
 }
 
 export async function cancelWorkspaceInvitationAction(
   invitationId: string,
 ): Promise<ActionResult> {
+  const t = await getTranslations("server.workspaces.actions");
   try {
     assertNotDemo();
     const context = await requirePermission("members:invite");
@@ -1092,7 +1111,7 @@ export async function cancelWorkspaceInvitationAction(
     return {
       success: false,
       error:
-        "Unable to cancel invitation.",
+        t("unableToCancelInvitation"),
     };
   }
 }
@@ -1100,13 +1119,14 @@ export async function cancelWorkspaceInvitationAction(
 export async function acceptWorkspaceInvitationAction(
   invitationId: string,
 ): Promise<ActionResult> {
+  const t = await getTranslations("server.workspaces.actions");
   try {
     assertNotDemo();
     const requestHeaders = await headers();
     const session = await auth.api.getSession({ headers: requestHeaders });
 
     if (!session) {
-      return { success: false, error: "You must sign in first." };
+      return { success: false, error: t("mustSignInFirst") };
     }
 
     const normalizedEmail = session.user.email.trim().toLowerCase();
@@ -1126,28 +1146,28 @@ export async function acceptWorkspaceInvitationAction(
         .limit(1);
 
       if (!targetInvitation) {
-        return { success: false, error: "Invitation not found." };
+        return { success: false, error: t("invitationNotFound") };
       }
 
       if (targetInvitation.status !== "pending") {
-        return { success: false, error: "Invitation is no longer pending." };
+        return { success: false, error: t("invitationNoLongerPending") };
       }
 
       if (targetInvitation.expiresAt < new Date()) {
-        return { success: false, error: "Invitation has expired." };
+        return { success: false, error: t("invitationExpired") };
       }
 
       if (targetInvitation.email.trim().toLowerCase() !== normalizedEmail) {
         return {
           success: false,
-          error: "This invitation belongs to a different email.",
+          error: t("invitationDifferentEmail"),
         };
       }
 
       const role = targetInvitation.role ?? "recruiter";
 
       if (!(await isAssignableRole(targetInvitation.organizationId, role))) {
-        return { success: false, error: "This invitation points to a role that no longer exists." };
+        return { success: false, error: t("invitationRoleMissing") };
       }
 
       // Already a member: keep the current role. Role changes for existing
@@ -1221,12 +1241,13 @@ export async function acceptWorkspaceInvitationAction(
     return {
       success: false,
       error:
-        "Unable to accept invitation.",
+        t("unableToAcceptInvitation"),
     };
   }
 }
 
 export async function leaveWorkspaceAction(): Promise<ActionResult> {
+  const t = await getTranslations("server.workspaces.actions");
   try {
     assertNotDemo();
     const context = await getWorkspaceContext();
@@ -1235,7 +1256,7 @@ export async function leaveWorkspaceAction(): Promise<ActionResult> {
       context.role === "owner" &&
       (await countOwners(context.organization.id)) <= 1
     ) {
-      return { success: false, error: "Workspace must keep at least one owner." };
+      return { success: false, error: t("workspaceMustKeepOwner") };
     }
 
     await db.transaction(async (tx) => {
@@ -1263,7 +1284,7 @@ export async function leaveWorkspaceAction(): Promise<ActionResult> {
     log.error(error, "leaveWorkspaceAction failed");
     return {
       success: false,
-      error: "Unable to leave workspace.",
+      error: t("unableToLeaveWorkspace"),
     };
   }
 }
@@ -1301,19 +1322,20 @@ export async function enableInviteLinkAction(
   _previousState: InviteLinkResult,
   formData: FormData,
 ): Promise<InviteLinkResult> {
+  const t = await getTranslations("server.workspaces.actions");
   try {
     assertNotDemo();
     const context = await requirePermission("invite_links:manage");
 
     const parsed = inviteLinkRoleSchema.safeParse({ role: formData.get("role") });
     if (!parsed.success) {
-      return { success: false, error: "Invalid role." };
+      return { success: false, error: t("invalidRole") };
     }
     if (isOwnerRole(parsed.data.role)) {
-      return { success: false, error: INVITE_OWNER_BLOCKED };
+      return { success: false, error: t("inviteOwnerBlocked") };
     }
     if (!(await isAssignableRole(context.organization.id, parsed.data.role))) {
-      return { success: false, error: "Unknown role." };
+      return { success: false, error: t("unknownRole") };
     }
 
     const privilegeError = await assignRolePrivilegeError(
@@ -1357,12 +1379,13 @@ export async function enableInviteLinkAction(
     return { success: true, token, enabled: true, role: parsed.data.role };
   } catch (error) {
     log.error(error, "enableInviteLinkAction failed");
-    return { success: false, error: "Unable to update invite link." };
+    return { success: false, error: t("unableToUpdateInviteLink") };
   }
 }
 
 /** Disable the shareable link (keeps the token so re-enabling reuses it). */
 export async function disableInviteLinkAction(): Promise<InviteLinkResult> {
+  const t = await getTranslations("server.workspaces.actions");
   try {
     assertNotDemo();
     const context = await requirePermission("invite_links:manage");
@@ -1380,12 +1403,13 @@ export async function disableInviteLinkAction(): Promise<InviteLinkResult> {
     return { success: true, enabled: false };
   } catch (error) {
     log.error(error, "disableInviteLinkAction failed");
-    return { success: false, error: "Unable to disable invite link." };
+    return { success: false, error: t("unableToDisableInviteLink") };
   }
 }
 
 /** Mint a fresh token, invalidating all previously shared URLs. */
 export async function rotateInviteLinkAction(): Promise<InviteLinkResult> {
+  const t = await getTranslations("server.workspaces.actions");
   try {
     assertNotDemo();
     const context = await requirePermission("invite_links:manage");
@@ -1409,7 +1433,7 @@ export async function rotateInviteLinkAction(): Promise<InviteLinkResult> {
     return { success: true, token, enabled: true };
   } catch (error) {
     log.error(error, "rotateInviteLinkAction failed");
-    return { success: false, error: "Unable to rotate invite link." };
+    return { success: false, error: t("unableToRotateInviteLink") };
   }
 }
 
@@ -1417,17 +1441,18 @@ export async function rotateInviteLinkAction(): Promise<InviteLinkResult> {
 export async function joinViaInviteLinkAction(
   token: string,
 ): Promise<ActionResult> {
+  const t = await getTranslations("server.workspaces.actions");
   try {
     assertNotDemo();
     const requestHeaders = await headers();
     const session = await auth.api.getSession({ headers: requestHeaders });
     if (!session) {
-      return { success: false, error: "You must sign in first." };
+      return { success: false, error: t("mustSignInFirst") };
     }
 
     const cleaned = token.trim();
     if (!cleaned) {
-      return { success: false, error: "Invalid invite link." };
+      return { success: false, error: t("invalidInviteLink") };
     }
 
     const [ws] = await db
@@ -1441,12 +1466,12 @@ export async function joinViaInviteLinkAction(
       .limit(1);
 
     if (!ws || !ws.enabled) {
-      return { success: false, error: "This invite link is no longer active." };
+      return { success: false, error: t("inviteLinkInactive") };
     }
 
     const role = ws.role ?? "recruiter";
     if (!(await isAssignableRole(ws.organizationId, role))) {
-      return { success: false, error: "This invite link points to a role that no longer exists." };
+      return { success: false, error: t("inviteLinkRoleMissing") };
     }
 
     const joinedMemberId = crypto.randomUUID();
@@ -1491,7 +1516,7 @@ export async function joinViaInviteLinkAction(
     return { success: true, organizationId: ws.organizationId };
   } catch (error) {
     log.error(error, "joinViaInviteLinkAction failed");
-    return { success: false, error: "Unable to join workspace." };
+    return { success: false, error: t("unableToJoinWorkspace") };
   }
 }
 
@@ -1500,14 +1525,17 @@ export async function joinViaInviteLinkAction(
 // action, so it is gated strictly on the built-in owner role (never a grantable
 // permission) to avoid an admin or custom role escalating into account takeover.
 
-const setMemberPasswordSchema = z.object({
+function setMemberPasswordSchema(t: ServerTranslator) {
+  return z.object({
   memberId: z.string().trim().min(1),
-  password: z.string().min(8, "Password must be at least 8 characters."),
-});
+  password: z.string().min(8, t("passwordMinLength")),
+  });
+}
 
-const editMemberProfileSchema = z.object({
+function editMemberProfileSchema(t: ServerTranslator) {
+  return z.object({
   memberId: z.string().trim().min(1),
-  name: z.string().trim().min(1, "Name is required.").max(120),
+  name: z.string().trim().min(1, t("nameRequired")).max(120),
   jobTitle: z.string().trim().max(120).optional(),
   phone: z.string().trim().max(60).optional(),
   location: z.string().trim().max(120).optional(),
@@ -1515,20 +1543,22 @@ const editMemberProfileSchema = z.object({
   linkedinUrl: z.string().trim().max(2048).optional(),
   githubUrl: z.string().trim().max(2048).optional(),
   websiteUrl: z.string().trim().max(2048).optional(),
-  email: z.string().trim().email("Enter a valid email.").max(320),
-});
+  email: z.string().trim().email(t("enterValidEmail")).max(320),
+  });
+}
 
 /** Resolve the target member within the actor's workspace, enforcing that the
  *  actor is an owner. Returns the member's userId or an error result. */
 async function requireOwnerActingOnMember(
   memberId: string,
+  t: ServerTranslator,
 ): Promise<
   | { ok: true; workspaceId: string; actorId: string; targetUserId: string; targetRole: string }
   | { ok: false; error: string }
 > {
   const context = await getWorkspaceContext();
   if (!isOwnerRole(context.roleKey)) {
-    return { ok: false, error: "Only the workspace owner can do this." };
+    return { ok: false, error: t("onlyOwnerCanDoThis") };
   }
 
   const [target] = await db
@@ -1542,7 +1572,7 @@ async function requireOwnerActingOnMember(
     )
     .limit(1);
 
-  if (!target) return { ok: false, error: "Member not found." };
+  if (!target) return { ok: false, error: t("memberNotFound") };
 
   const targetPrivilegeError = await manageMemberRolePrivilegeError(
     context,
@@ -1564,23 +1594,24 @@ export async function setMemberPasswordAction(input: {
   memberId: string;
   password: string;
 }): Promise<ActionResult> {
+  const t = await getTranslations("server.workspaces.actions");
   try {
     assertNotDemo();
-    const parsed = setMemberPasswordSchema.safeParse(input);
+    const parsed = setMemberPasswordSchema(t).safeParse(input);
     if (!parsed.success) {
       return {
         success: false,
-        error: parsed.error.issues[0]?.message ?? "Invalid password.",
+        error: parsed.error.issues[0]?.message ?? t("invalidPassword"),
       };
     }
 
-    const resolved = await requireOwnerActingOnMember(parsed.data.memberId);
+    const resolved = await requireOwnerActingOnMember(parsed.data.memberId, t);
     if (!resolved.ok) return { success: false, error: resolved.error };
 
     if (resolved.targetUserId === resolved.actorId) {
       return {
         success: false,
-        error: "Use your account settings to change your own password.",
+        error: t("ownPasswordInSettings"),
       };
     }
 
@@ -1635,7 +1666,7 @@ export async function setMemberPasswordAction(input: {
     return { success: true };
   } catch (error) {
     log.error(error, "setMemberPasswordAction failed");
-    return { success: false, error: "Unable to reset password." };
+    return { success: false, error: t("unableToResetPassword") };
   }
 }
 
@@ -1651,17 +1682,18 @@ export async function editMemberProfileAction(input: {
   websiteUrl?: string;
   email: string;
 }): Promise<ActionResult> {
+  const t = await getTranslations("server.workspaces.actions");
   try {
     assertNotDemo();
-    const parsed = editMemberProfileSchema.safeParse(input);
+    const parsed = editMemberProfileSchema(t).safeParse(input);
     if (!parsed.success) {
       return {
         success: false,
-        error: parsed.error.issues[0]?.message ?? "Invalid profile.",
+        error: parsed.error.issues[0]?.message ?? t("invalidProfile"),
       };
     }
 
-    const resolved = await requireOwnerActingOnMember(parsed.data.memberId);
+    const resolved = await requireOwnerActingOnMember(parsed.data.memberId, t);
     if (!resolved.ok) return { success: false, error: resolved.error };
 
     const nextEmail = parsed.data.email.toLowerCase();
@@ -1684,7 +1716,7 @@ export async function editMemberProfileAction(input: {
         .where(eq(authUsers.email, nextEmail))
         .limit(1);
       if (clash && clash.id !== resolved.targetUserId) {
-        return { success: false, error: "That email is already in use." };
+        return { success: false, error: t("emailAlreadyInUse") };
       }
     }
 
@@ -1723,15 +1755,16 @@ export async function editMemberProfileAction(input: {
     return { success: true };
   } catch (error) {
     log.error(error, "editMemberProfileAction failed");
-    return { success: false, error: "Unable to update profile." };
+    return { success: false, error: t("unableToUpdateProfile") };
   }
 }
 
-const createMemberSchema = z.object({
-  name: z.string().trim().min(1, "Name is required.").max(120),
-  email: z.string().trim().email("Enter a valid email.").max(320),
+function createMemberSchema(t: ServerTranslator) {
+  return z.object({
+  name: z.string().trim().min(1, t("nameRequired")).max(120),
+  email: z.string().trim().email(t("enterValidEmail")).max(320),
   role: z.string().trim().min(1),
-  password: z.string().min(8, "Password must be at least 8 characters."),
+  password: z.string().min(8, t("passwordMinLength")),
   image: z
     .string()
     .trim()
@@ -1739,7 +1772,8 @@ const createMemberSchema = z.object({
     .optional()
     .transform((value) => (value && value.length > 0 ? value : null)),
   jobTitle: z.string().trim().max(120).optional(),
-});
+  });
+}
 
 /**
  * Owner-only: provision a member account directly (no invite email). The owner
@@ -1755,36 +1789,37 @@ export async function createMemberAction(input: {
   image?: string;
   jobTitle?: string;
 }): Promise<ActionResult> {
+  const t = await getTranslations("server.workspaces.actions");
   try {
     assertNotDemo();
     const context = await getWorkspaceContext();
     if (!isOwnerRole(context.roleKey)) {
-      return { success: false, error: "Only the workspace owner can do this." };
+      return { success: false, error: t("onlyOwnerCanDoThis") };
     }
 
-    const parsed = createMemberSchema.safeParse(input);
+    const parsed = createMemberSchema(t).safeParse(input);
     if (!parsed.success) {
       return {
         success: false,
-        error: parsed.error.issues[0]?.message ?? "Invalid member.",
+        error: parsed.error.issues[0]?.message ?? t("invalidMember"),
       };
     }
 
     const email = parsed.data.email.toLowerCase();
 
     if (!(await isAssignableRole(context.organization.id, parsed.data.role))) {
-      return { success: false, error: "That role no longer exists." };
+      return { success: false, error: t("roleNoLongerExists") };
     }
     // Provisioning an owner would let an owner mint co-owners silently; keep the
     // owner role invite/promote-only.
     if (isOwnerRole(parsed.data.role)) {
-      return { success: false, error: "Owners can't be created here." };
+      return { success: false, error: t("ownersCannotBeCreatedHere") };
     }
 
     if (await getAuthUserByEmail(email)) {
       return {
         success: false,
-        error: "A user with that email already exists. Invite them instead.",
+        error: t("userAlreadyExists"),
       };
     }
 
@@ -1849,6 +1884,6 @@ export async function createMemberAction(input: {
     return { success: true };
   } catch (error) {
     log.error(error, "createMemberAction failed");
-    return { success: false, error: "Unable to create member." };
+    return { success: false, error: t("unableToCreateMember") };
   }
 }

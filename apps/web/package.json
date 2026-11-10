@@ -8,6 +8,7 @@
     "start": "next start",
     "lint": "eslint . --max-warnings=0",
     "typecheck": "tsc --noEmit",
+    "check:i18n": "tsx scripts/i18n/check-catalogs.ts",
     "generate:openapi": "tsx scripts/generate-openapi.ts",
     "generate:automation-capabilities": "tsx scripts/check-automation-capabilities.ts",
     "check:automation-capabilities": "tsx scripts/check-automation-capabilities.ts --check",
@@ -19,7 +20,9 @@
     "ai:write-smoke": "LIVE_AI_WRITE_SMOKE=1 vitest run src/lib/ai/live-write-smoke.test.ts",
     "ai:maxi-smoke": "LIVE_MAXI_AGENT_SMOKE=1 vitest run src/lib/ai/live-maximiliano-agent-smoke.test.ts",
     "ai:gcal-smoke": "LIVE_GCAL_CONNECTION_SMOKE=1 vitest run src/lib/ai/live-gcal-connection-smoke.test.ts",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "check:i18n:references": "tsx scripts/i18n/check-references.ts",
+    "inventory:i18n": "tsx scripts/i18n/inventory-literals.ts"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^3.0.81",
@@ -73,6 +76,7 @@
     "marked": "^18.0.5",
     "motion": "^12.42.0",
     "next": "16.4.1",
+    "next-intl": "^4.14.9",
     "nodemailer": "^10.1.4",
     "pdf-lib": "^1.17.1",
     "pdfjs-dist": "^6.2.108",
@@ -101,6 +105,7 @@
   "devDependencies": {
     "@apidevtools/swagger-parser": "^12.1.0",
     "@better-auth/cli": "^1.4.21",
+    "@formatjs/icu-messageformat-parser": "3.5.23",
     "@playwright/test": "^1.51.1",
     "@tailwindcss/postcss": "^4",
     "@types/dompurify": "^3.2.0",

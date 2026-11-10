@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useTranslations } from "next-intl";
 import { useRouter } from "next/navigation";
 import { useTransition } from "react";
 import type { Route } from "next";
@@ -55,6 +56,7 @@ export function PortalNotificationsList({
 }: {
   notifications: CandidatePortalNotificationItem[];
 }) {
+  const t = useTranslations("portal.notifications");
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const confirm = useConfirm();
@@ -86,9 +88,9 @@ export function PortalNotificationsList({
   async function deleteAll() {
     const ok = await confirm({
       tone: "destructive",
-      title: "Clear all notifications?",
-      description: "This removes every update from this list. Your applications are not affected.",
-      confirmLabel: "Clear all",
+      title: t("clearTitle"),
+      description: t("clearDescription"),
+      confirmLabel: t("clearAll"),
     });
     if (!ok) return;
     startTransition(async () => {
@@ -103,9 +105,9 @@ export function PortalNotificationsList({
         <span className="mx-auto mb-4 grid size-12 place-items-center rounded-2xl bg-card-inset text-soft-ink">
           <CalendarIcon className="size-6" />
         </span>
-        <p className="text-[15px] font-semibold text-near-ink">You&apos;re all caught up</p>
+        <p className="text-[15px] font-semibold text-near-ink">{t("emptyTitle")}</p>
         <p className="mx-auto mt-1 max-w-sm text-[13.5px] leading-5 text-soft-ink">
-          You&apos;ll see updates here when there&apos;s activity on your applications.
+          {t("emptyDescription")}
         </p>
       </div>
     );
@@ -115,16 +117,16 @@ export function PortalNotificationsList({
     <div className="space-y-2">
       <div className="flex items-center justify-between gap-2">
         <p className="text-[13px] text-soft-ink">
-          {unreadCount > 0 ? `${unreadCount} unread` : "No unread updates"}
+          {unreadCount > 0 ? t("unreadCount", { count: unreadCount }) : t("noneUnread")}
         </p>
         <div className="flex gap-1">
         {unreadCount > 0 ? (
           <Button variant="ghost" size="sm" onClick={markAllRead} disabled={isPending}>
-            Mark all as read
+            {t("markAllRead")}
           </Button>
         ) : null}
         <Button variant="ghost" size="sm" onClick={() => void deleteAll()} disabled={isPending}>
-          Clear all
+          {t("clearAll")}
         </Button>
         </div>
       </div>
@@ -170,12 +172,12 @@ export function PortalNotificationsList({
               onClick={() => markRead(notification.id, !notification.read)}
               disabled={isPending}
             >
-              {notification.read ? "Mark unread" : "Mark read"}
+              {notification.read ? t("markUnread") : t("markRead")}
             </Button>
             <Button
               variant="ghost"
               size="icon-sm"
-              aria-label="Delete notification"
+              aria-label={t("delete")}
               className="text-muted-foreground hover:text-destructive"
               onClick={() => deleteOne(notification.id)}
               disabled={isPending}

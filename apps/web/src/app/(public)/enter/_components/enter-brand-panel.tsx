@@ -1,5 +1,6 @@
 "use client";
 
+import { useTranslations } from "next-intl";
 import { motion, useReducedMotion, type Variants } from "motion/react";
 import { LayoutGridIcon, WorkflowIcon, BriefcaseIcon } from "lucide-react";
 
@@ -10,26 +11,16 @@ const EASE_OUT = [0.16, 1, 0.3, 1] as const;
 const LANDING_URL = "https://harly.dev";
 const REPO_URL = "https://github.com/Vytral/harly";
 
-const POINTS = [
-  {
-    icon: LayoutGridIcon,
-    title: "There's plenty to play with",
-    body: "Candidates, jobs, interviews, offers, automations, forms, analytics and more are already set up.",
-  },
-  {
-    icon: WorkflowIcon,
-    title: "Try the automations",
-    body: "Build one from scratch or edit an existing workflow to see what happens.",
-  },
-  {
-    icon: BriefcaseIcon,
-    title: "Walk the careers page",
-    body: "Open the public job board as a candidate would, then apply to a role end to end.",
-  },
-];
 
 export function EnterBrandPanel() {
+  const t = useTranslations("accessDemo");
+  const shared = useTranslations("accessSetup");
   const reduce = useReducedMotion();
+  const points = [
+    {icon: LayoutGridIcon, title: t("pointOneTitle"), body: t("pointOneBody")},
+    {icon: WorkflowIcon, title: t("pointTwoTitle"), body: t("pointTwoBody")},
+    {icon: BriefcaseIcon, title: t("pointThreeTitle"), body: t("pointThreeBody")},
+  ];
 
   const container: Variants = {
     hidden: {},
@@ -78,7 +69,7 @@ export function EnterBrandPanel() {
         <a
           href={LANDING_URL}
           className="inline-flex rounded-sm outline-none ring-lime/60 transition focus-visible:ring-2"
-          aria-label="Harly, visit harly.dev"
+          aria-label={shared("visit")}
         >
           <motion.img
             src="/harly-full-white.svg"
@@ -105,18 +96,18 @@ export function EnterBrandPanel() {
           variants={item}
           className="inline-flex items-center gap-2 rounded-full bg-white/10 px-3 py-1 text-xs font-semibold tracking-wide text-lime ring-1 ring-inset ring-white/15"
         >
-          Live product demo
+          {t("badge")}
         </motion.span>
 
         <motion.h2
           variants={item}
           className="mt-5 font-display text-3xl leading-tight tracking-tight lg:text-4xl"
         >
-          Take Harly for a spin.
+          {t("brandHeading")}
         </motion.h2>
 
         <ul className="mt-10 space-y-6">
-          {POINTS.map(({ icon: Icon, title, body }) => (
+          {points.map(({ icon: Icon, title, body }) => (
             <motion.li key={title} variants={item} className="flex gap-4">
               <span className="mt-0.5 flex size-9 shrink-0 items-center justify-center rounded-xl bg-white/10 ring-1 ring-inset ring-white/15">
                 <Icon className="size-[1.125rem] text-lime" strokeWidth={1.75} />
@@ -140,14 +131,14 @@ export function EnterBrandPanel() {
         className="relative z-10 flex items-center justify-between gap-4"
       >
         <p className="text-xs text-white/45">
-          Open-source applicant tracking system
+          {shared("tagline")}
         </p>
         <a
           href={REPO_URL}
           target="_blank"
           rel="noreferrer noopener"
           className="inline-flex size-9 items-center justify-center rounded-lg text-white/55 outline-none ring-inset ring-lime/60 transition hover:bg-white/10 hover:text-white focus-visible:ring-2"
-          aria-label="Harly on GitHub"
+          aria-label={shared("github")}
         >
           <GithubIcon className="size-[1.125rem]" />
         </a>

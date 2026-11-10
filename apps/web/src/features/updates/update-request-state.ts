@@ -62,13 +62,3 @@ export const UPDATER_ONLINE_MS = 5 * 60 * 1000;
 export function isUpdaterOnline(lastSeenAt: Date | null, now: Date): boolean {
   return lastSeenAt !== null && now.getTime() - lastSeenAt.getTime() <= UPDATER_ONLINE_MS;
 }
-
-export const UPDATE_STATUS_LABEL: Record<UpdateStatus, string> = {
-  pending: "Waiting for the updater",
-  claimed: "Starting",
-  running: "Updating",
-  succeeded: "Updated",
-  failed: "Failed",
-  rolled_back: "Rolled back",
-  cancelled: "Cancelled",
-};

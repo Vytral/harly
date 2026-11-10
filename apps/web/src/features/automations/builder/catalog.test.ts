@@ -1,8 +1,11 @@
 import { describe, expect, it } from "vitest";
 
-import { ACTION_CATALOG, actionMeta, pickableActions, TRIGGER_CATALOG, triggerMeta } from "./catalog";
+import { makeT } from "@/test-support/translator";
+import { actionMeta, pickableActions, triggerCatalog, triggerMeta } from "./catalog";
 import { ACTION_TYPES, WORKFLOW_EVENTS, workflowInputSchema } from "../schema";
 import { WORKFLOW_TEMPLATES } from "./templates";
+
+const t = makeT("labels.automations");
 
 /**
  * Catalog integrity tests — guarantee the builder's presentation metadata
@@ -16,7 +19,7 @@ import { WORKFLOW_TEMPLATES } from "./templates";
 describe("catalog — action metadata covers every action type", () => {
   it("has a catalog entry for every ActionType", () => {
     for (const type of ACTION_TYPES) {
-      expect(actionMeta(type), `missing catalog entry for ${type}`).toBeDefined();
+      expect(actionMeta(type, t), `missing catalog entry for ${type}`).toBeDefined();
     }
   });
 
@@ -46,15 +49,18 @@ describe("catalog — action metadata covers every action type", () => {
       "ai_score",
       "erase_candidate_data",
     ];
-    const pickable = pickableActions().map((a) => a.type).sort();
+    const pickable = pickableActions(undefined, t).map((a) => a.type).sort();
     expect(pickable).toEqual([...registered].sort());
   });
 
   it("uses the server manifest as the source of available action versions", () => {
-    const actions = pickableActions([
-      { type: "send_email", version: 2 },
-      { type: "add_note", version: 1 },
-    ]);
+    const actions = pickableActions(
+      [
+        { type: "send_email", version: 2 },
+        { type: "add_note", version: 1 },
+      ],
+      t,
+    );
 
     expect(actions).toEqual([
       expect.objectContaining({ type: "add_note", toolVersion: 1 }),
@@ -63,7 +69,7 @@ describe("catalog — action metadata covers every action type", () => {
   });
 
   it("every available action has at least one config field or is config-free on purpose", () => {
-    for (const a of ACTION_CATALOG.filter((x) => x.available)) {
+    for (const a of pickableActions(undefined, t)) {
       // send_slack etc. always carry config; this just guards against an empty
       // `config: []` slipping in unnoticed on a type that needs fields.
       expect(a.config.length >= 0).toBe(true);
@@ -74,8 +80,8 @@ describe("catalog — action metadata covers every action type", () => {
 describe("catalog — trigger metadata covers every workflow event", () => {
   it("has a trigger entry for every WorkflowEvent", () => {
     for (const event of WORKFLOW_EVENTS) {
-      expect(triggerMeta(event), `missing trigger entry for ${event}`).toBeDefined();
-      expect(TRIGGER_CATALOG.find((t) => t.event === event)).toBeDefined();
+      expect(triggerMeta(event, t), `missing trigger entry for ${event}`).toBeDefined();
+      expect(triggerCatalog(t).find((entry) => entry.event === event)).toBeDefined();
     }
   });
 });

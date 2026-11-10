@@ -1,3 +1,5 @@
+import { getTranslations } from "next-intl/server";
+
 import { Skeleton } from "@/components/ui/skeleton";
 
 function IntegrationRowSkeleton() {
@@ -31,10 +33,11 @@ function GroupSkeleton({ rows, titleWidth }: { rows: number; titleWidth: string 
  * the marketplace groups (label + two-column rows), then the "Data migration"
  * importers block.
  */
-export default function IntegrationsSettingsLoading() {
+export default async function IntegrationsSettingsLoading() {
+  const t = await getTranslations("pages.settingsIntegrations.loading");
   return (
     <div aria-busy="true" className="space-y-10">
-      <span className="sr-only">Loading…</span>
+      <span className="sr-only">{t("label")}</span>
 
       <div className="border-b border-border/70 pb-5">
         <div className="flex items-start gap-4">

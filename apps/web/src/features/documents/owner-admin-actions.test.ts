@@ -32,6 +32,8 @@ vi.mock("@/lib/logger", () => ({ createLogger: () => ({ error: vi.fn(), info: vi
 
 import { bulkDeleteDocuments, deleteDocument } from "./actions";
 
+vi.mock("next-intl/server", async () => (await import("@/test-support/intl-server-mock")).intlServerMock);
+
 const DOCUMENT_ID = "00000000-0000-4000-8000-000000000001";
 
 function contextFor(roleKey: string) {

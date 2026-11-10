@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { eq, and, inArray, isNull } from "drizzle-orm";
 import type { Route } from "next";
+import { getTranslations } from "next-intl/server";
 
 import {
   applications,
@@ -26,30 +27,52 @@ type PageProps = {
   params: Promise<{ jobId: string }>;
 };
 
-function formatSalary(min: number | null, max: number | null, currency: string | null, period: string | null): string | null {
+type PortalT = Awaited<ReturnType<typeof getTranslations>>;
+
+function formatSalary(
+  t: PortalT,
+  min: number | null,
+  max: number | null,
+  currency: string | null,
+  period: string | null,
+): string | null {
   if (!min && !max) return null;
   const cur = currency ?? "USD";
-  const fmt = (v: number) => v >= 1000 ? `${cur} ${Math.round(v / 1000)}k` : `${cur} ${v}`;
-  const suffix = period === "monthly" ? "/mo" : "/yr";
-  if (min && max) return `${fmt(min)} – ${fmt(max)}${suffix}`;
-  if (min) return `From ${fmt(min)}${suffix}`;
-  return `Up to ${fmt(max!)}${suffix}`;
+  const fmt = (v: number) =>
+    v >= 1000
+      ? t("salary.thousandAmount", { currency: cur, value: Math.round(v / 1000) })
+      : t("salary.amount", { currency: cur, value: v });
+  const suffix = t(period === "monthly" ? "salary.perMonth" : "salary.perYear");
+  if (min && max) return t("salary.range", { min: fmt(min), max: fmt(max), period: suffix });
+  if (min) return t("salary.from", { amount: fmt(min), period: suffix });
+  return t("salary.upTo", { amount: fmt(max!), period: suffix });
 }
 
-const WORKPLACE_LABELS: Record<string, string> = {
-  remote: "Remote",
-  hybrid: "Hybrid",
-  onsite: "On-site",
+const WORKPLACE_KEYS: Record<string, "remote" | "hybrid" | "onsite"> = {
+  remote: "remote",
+  hybrid: "hybrid",
+  onsite: "onsite",
 };
 
-const EMPLOYMENT_LABELS: Record<string, string> = {
-  full_time: "Full-time",
-  part_time: "Part-time",
-  contract: "Contract",
-  internship: "Internship",
+const EMPLOYMENT_KEYS: Record<string, "fullTime" | "partTime" | "contract" | "internship"> = {
+  full_time: "fullTime",
+  part_time: "partTime",
+  contract: "contract",
+  internship: "internship",
 };
+
+function workplaceLabel(t: PortalT, value: string): string {
+  const key = WORKPLACE_KEYS[value];
+  return key ? t(`workplaceOptions.${key}`) : value;
+}
+
+function employmentLabel(t: PortalT, value: string): string {
+  const key = EMPLOYMENT_KEYS[value];
+  return key ? t(`employmentOptions.${key}`) : value;
+}
 
 export default async function JobDetailPage({ params }: PageProps) {
+  const t = await getTranslations("pages.portalJobDetail.page");
   const { jobId } = await params;
   const cookieStore = await cookies();
   const token = cookieStore.get(PORTAL_SESSION_COOKIE)?.value;
@@ -124,7 +147,7 @@ export default async function JobDetailPage({ params }: PageProps) {
     }),
   );
 
-  const salary = formatSalary(job.salaryMin, job.salaryMax, job.currency, job.salaryPeriod);
+  const salary = formatSalary(t, job.salaryMin, job.salaryMax, job.currency, job.salaryPeriod);
 
   return (
     <PortalShell>
@@ -136,7 +159,7 @@ export default async function JobDetailPage({ params }: PageProps) {
           <svg className="size-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M10.5 19.5 3 12m0 0 7.5-7.5M3 12h18" />
           </svg>
-          Back to jobs
+          {t("backToJobs")}
         </Link>
 
         <div>
@@ -152,10 +175,10 @@ export default async function JobDetailPage({ params }: PageProps) {
               </span>
             )}
             {job.workplaceType && (
-              <span>{WORKPLACE_LABELS[job.workplaceType] ?? job.workplaceType}</span>
+              <span>{workplaceLabel(t, job.workplaceType)}</span>
             )}
             {job.employmentType && (
-              <span>{EMPLOYMENT_LABELS[job.employmentType] ?? job.employmentType}</span>
+              <span>{employmentLabel(t, job.employmentType)}</span>
             )}
             {salary && (
               <span className="flex items-center gap-1">
@@ -168,7 +191,7 @@ export default async function JobDetailPage({ params }: PageProps) {
 
         {job.description && (
           <div className="rounded-xl border border-border bg-card p-5">
-            <h2 className="mb-2 text-sm font-semibold text-foreground">About the role</h2>
+            <h2 className="mb-2 text-sm font-semibold text-foreground">{t("aboutRole")}</h2>
             <RichBody html={job.description} className="prose prose-sm max-w-none text-muted-foreground" />
           </div>
         )}
@@ -176,13 +199,13 @@ export default async function JobDetailPage({ params }: PageProps) {
         {existingApp ? (
           <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-5 text-center dark:border-emerald-800 dark:bg-emerald-950/30">
             <p className="text-sm font-medium text-emerald-700 dark:text-emerald-400">
-              You&apos;ve already applied to this position
+              {t("alreadyApplied")}
             </p>
             <Link
               href={`/portal/applications/${existingApp.id}` as Route}
               className="mt-2 inline-flex items-center gap-1.5 text-sm font-medium text-emerald-700 underline-offset-2 hover:underline dark:text-emerald-400"
             >
-              View your application
+              {t("viewApplication")}
             </Link>
           </div>
         ) : (

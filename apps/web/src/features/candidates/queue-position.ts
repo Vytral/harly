@@ -48,9 +48,19 @@ export function locateInQueue<T extends QueueEntry>(
 }
 
 /** "Moved Charlotte to Interview · Next: Carlos" (first names keep it short). */
-export function advanceMessage(action: string, nextName: string | null): string {
+/** Translator for `labels.candidates.queue`: `next` and `cleared` messages. */
+export type AdvanceTranslator = (
+  key: "next" | "cleared",
+  values: Record<string, string>,
+) => string;
+
+export function advanceMessage(
+  t: AdvanceTranslator,
+  action: string,
+  nextName: string | null,
+): string {
   const next = nextName ? firstName(nextName) : null;
-  return next ? `${action} · Next: ${next}` : `${action} · Queue cleared`;
+  return next ? t("next", { action, name: next }) : t("cleared", { action });
 }
 
 export function firstName(fullName: string): string {

@@ -58,6 +58,8 @@ vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 
 import { moveApplicationInPipeline } from "./actions";
 
+vi.mock("next-intl/server", async () => (await import("@/test-support/intl-server-mock")).intlServerMock);
+
 const WORKSPACE_ID = "ws-1";
 
 describe("F1-01 pipeline stage isolation", () => {
@@ -86,7 +88,7 @@ describe("F1-01 pipeline stage isolation", () => {
     });
 
     expect(result.success).toBe(false);
-    expect(result.error ?? "").toMatch(/not found|unable to move/i);
+    expect(result.error ?? "").toMatch(/couldn't move the application/i);
   });
 
   it("allows moving to a stage of the same job", async () => {

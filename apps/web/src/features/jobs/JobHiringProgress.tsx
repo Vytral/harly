@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { useTranslations } from "next-intl";
 import type { Route } from "next";
 import { ArrowRight } from "lucide-react";
 
@@ -19,20 +20,21 @@ export function JobHiringProgress({
   active: number;
   newThisWeek: number;
 }) {
+  const t = useTranslations("jobs.progress");
   const percent = applicants > 0 ? Math.round((active / applicants) * 100) : 0;
 
   return (
     <Card className="gap-3 bg-card-inset py-4 shadow-none">
       <CardHeader className="px-4">
         <CardTitle className="flex items-center justify-between gap-2">
-          Hiring progress
+          {t("title")}
           <span className="tabular-nums text-[13px] font-medium text-soft-ink">{percent}%</span>
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-2.5 px-4">
         <div
           role="progressbar"
-          aria-label="Candidates still active"
+          aria-label={t("barLabel")}
           aria-valuemin={0}
           aria-valuemax={100}
           aria-valuenow={percent}
@@ -44,16 +46,14 @@ export function JobHiringProgress({
           />
         </div>
         <p className="text-[12.5px] text-soft-ink">
-          <span className="font-semibold tabular-nums text-near-ink">{active}</span> of{" "}
-          <span className="tabular-nums">{applicants}</span>{" "}
-          {applicants === 1 ? "candidate" : "candidates"} still active
-          {newThisWeek > 0 ? ` · ${newThisWeek} new this week` : ""}
+          {t("summary", { active, total: applicants })}
+          {newThisWeek > 0 ? ` · ${t("newThisWeek", { count: newThisWeek })}` : ""}
         </p>
         <Link
           href={`/dashboard/pipeline?jobId=${jobId}` as Route}
           className="inline-flex items-center gap-1 text-[13px] font-medium text-near-ink underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-near-ink"
         >
-          Open pipeline
+          {t("openPipeline")}
           <ArrowRight className="size-3.5" />
         </Link>
       </CardContent>

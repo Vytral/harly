@@ -2,6 +2,7 @@
 
 import { and, eq, max } from "drizzle-orm";
 import { z } from "zod";
+import { getTranslations } from "@/i18n/server";
 
 import {
   db,
@@ -28,10 +29,11 @@ export type RubricActionResult =
 export async function createEvaluationRubricAction(
   input: unknown,
 ): Promise<RubricActionResult> {
+  const t = await getTranslations("server.evaluations.rubric");
   const parsed = evaluationRubricInputSchema.safeParse(input);
-  if (!parsed.success) return { success: false, error: "Invalid evaluation rubric." };
+  if (!parsed.success) return { success: false, error: t("invalidRubric") };
   // Phase 2 governance (§2.3): reject invalid gates before touching auth/DB.
-  const gateError = validateRubricGates(parsed.data.criteria);
+  const gateError = validateRubricGates(parsed.data.criteria, await getTranslations("server.evaluations.rubric"));
   if (gateError) return { success: false, error: gateError };
   const context = await requireJobPermission("jobs:edit", parsed.data.jobId);
 
@@ -40,7 +42,7 @@ export async function createEvaluationRubricAction(
     .from(jobs)
     .where(and(eq(jobs.id, parsed.data.jobId), eq(jobs.workspaceId, context.organization.id)))
     .limit(1);
-  if (!job) return { success: false, error: "Job not found." };
+  if (!job) return { success: false, error: t("jobNotFound") };
 
   const configHash = hashEvaluationInput(parsed.data.criteria);
   const result = await db.transaction(async (tx) => {
@@ -65,7 +67,7 @@ export async function createEvaluationRubricAction(
         createdById: context.user.id,
       })
       .returning({ id: evaluationRubrics.id });
-    if (!rubric) throw new Error("Could not create evaluation rubric.");
+    if (!rubric) throw new Error(t("createRubricFailed"));
     await tx.insert(evaluationCriteria).values(
       parsed.data.criteria.map((criterion) => ({
         rubricId: rubric.id,
@@ -80,8 +82,9 @@ export async function createEvaluationRubricAction(
 
 /** Publish only a workspace-owned rubric and retire the previous published one. */
 export async function publishEvaluationRubricAction(input: unknown): Promise<RubricActionResult> {
+  const t = await getTranslations("server.evaluations.rubric");
   const parsed = z.object({ rubricId: z.uuid() }).safeParse(input);
-  if (!parsed.success) return { success: false, error: "Invalid rubric." };
+  if (!parsed.success) return { success: false, error: t("invalidRubricInput") };
   const context = await requirePermission("jobs:edit");
 
   const [targetRubric] = await db
@@ -94,7 +97,7 @@ export async function publishEvaluationRubricAction(input: unknown): Promise<Rub
       ),
     )
     .limit(1);
-  if (!targetRubric) return { success: false, error: "Rubric not found." };
+  if (!targetRubric) return { success: false, error: t("rubricNotFound") };
   await requireJobPermission("jobs:edit", targetRubric.jobId);
 
   const result = await db.transaction(async (tx) => {
@@ -129,5 +132,5 @@ export async function publishEvaluationRubricAction(input: unknown): Promise<Rub
 
   return result
     ? { success: true, rubricId: result.id, version: result.version }
-    : { success: false, error: "Rubric not found." };
+    : { success: false, error: t("rubricNotFound") };
 }

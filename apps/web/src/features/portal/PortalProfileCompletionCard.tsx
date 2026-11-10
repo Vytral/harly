@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useLocale, useTranslations } from "next-intl";
 import { useEffect, useState } from "react";
 
 import {
@@ -18,6 +19,9 @@ export function PortalProfileCompletionCard({
 }: {
   completion: PortalProfileCompletion;
 }) {
+  const t = useTranslations("portal.profileCompletion");
+  const locale = useLocale();
+  const percent = new Intl.NumberFormat(locale, { style: "percent" }).format(completion.percentage / 100);
   const [dismissed, setDismissed] = useState(true);
 
   useEffect(() => {
@@ -34,17 +38,17 @@ export function PortalProfileCompletionCard({
       <div className="flex items-center gap-3 rounded-2xl border border-hairline bg-sage-wash px-4 py-3">
         <CheckCircleIcon className="size-5 shrink-0 text-success-olive" />
         <p className="text-sm text-success-olive">
-          Your profile is complete.
+          {t("complete")}
         </p>
         <Link
           href="/portal/profile"
           className="ml-auto shrink-0 text-sm font-medium text-success-olive underline-offset-2 hover:underline"
         >
-          Review
+          {t("review")}
         </Link>
         <button
           type="button"
-          aria-label="Dismiss"
+          aria-label={t("dismiss")}
           onClick={() => {
             window.localStorage.setItem(DISMISS_KEY, "1");
             setDismissed(true);
@@ -66,19 +70,18 @@ export function PortalProfileCompletionCard({
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-baseline justify-between gap-2">
             <h2 className="text-sm font-semibold text-foreground">
-              Complete your profile
+              {t("title")}
             </h2>
             <span className="text-sm font-semibold tabular-nums text-foreground">
-              {completion.percentage}%
+              {percent}
             </span>
           </div>
           <p className="mt-1 text-sm text-muted-foreground">
-            Add more information to present your experience more clearly in
-            future applications.
+            {t("description")}
           </p>
           <div
             className="mt-3 h-1.5 overflow-hidden rounded-full bg-card-inset"
-            aria-label={`Profile ${completion.percentage}% complete`}
+            aria-label={t("progress", { percent })}
             role="progressbar"
             aria-valuemin={0}
             aria-valuemax={100}
@@ -90,13 +93,13 @@ export function PortalProfileCompletionCard({
             />
           </div>
           <p className="mt-2 text-xs text-muted-foreground">
-            Suggested next steps: {completion.missing.slice(0, 3).join(", ")}.
+            {t("suggested", { fields: new Intl.ListFormat(locale, { style: "long", type: "conjunction" }).format(completion.missing.slice(0, 3).map((field) => t(`fields.${field}`))) })}
           </p>
           <Link
             href="/portal/profile"
             className="mt-3 inline-flex items-center gap-1.5 text-sm font-medium text-foreground underline-offset-2 hover:underline"
           >
-            Complete profile
+            {t("action")}
             <CaretRightIcon className="size-4" />
           </Link>
         </div>

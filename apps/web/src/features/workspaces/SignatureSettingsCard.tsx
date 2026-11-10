@@ -4,6 +4,7 @@
 
 import { useEffect, useState, useTransition } from "react";
 import { Trash2 } from "lucide-react";
+import { useTranslations } from "next-intl";
 import { toast } from "@/lib/notification-island/toast";
 
 import { SectionHeader, StatusPill } from "@/features/workspaces/settings-ui";
@@ -39,32 +40,15 @@ type SavedSignature =
 
 const TOGGLES: Array<{
   key: "nativeSignEnabled" | "remoteSignEnabled" | "savedSignaturesEnabled" | "signatureTimelineEnabled";
-  title: string;
-  description: string;
 }> = [
-  {
-    key: "nativeSignEnabled",
-    title: "Self-sign",
-    description: "Let members draw or type a signature and sign PDFs directly in the dashboard.",
-  },
-  {
-    key: "remoteSignEnabled",
-    title: "Remote signing links",
-    description: "Send a secure link so an external recipient can sign without an account.",
-  },
-  {
-    key: "savedSignaturesEnabled",
-    title: "Saved signatures",
-    description: "Let members reuse a saved signature instead of drawing one each time.",
-  },
-  {
-    key: "signatureTimelineEnabled",
-    title: "Signing timeline",
-    description: "Show a readable timeline on each document: who was invited, opened the link, verified, consented, signed, declined or was reminded.",
-  },
+  { key: "nativeSignEnabled" },
+  { key: "remoteSignEnabled" },
+  { key: "savedSignaturesEnabled" },
+  { key: "signatureTimelineEnabled" },
 ];
 
 export function SignatureSettingsCard({ settings }: { settings: Settings }) {
+  const t = useTranslations("features.workspaces.signatureSettingsCard");
   const [value, setValue] = useState(settings);
   const [saved, setSaved] = useState(settings);
   const dirty = JSON.stringify(value) !== JSON.stringify(saved);
@@ -81,15 +65,15 @@ export function SignatureSettingsCard({ settings }: { settings: Settings }) {
 
   function save() {
     const { signatureExpirationDays: days, signatureReminderCadenceDays: cadence, signatureMaxReminders: max } = value;
-    if (!Number.isInteger(days) || days < 3 || days > 365) return void toast.error("Link lifetime must be between 3 and 365 days.");
-    if (!Number.isInteger(cadence) || cadence < 0 || cadence > 30) return void toast.error("Reminder interval must be between 0 and 30 days.");
-    if (!Number.isInteger(max) || max < 0 || max > 10) return void toast.error("Maximum reminders must be between 0 and 10.");
+    if (!Number.isInteger(days) || days < 3 || days > 365) return void toast.error(t("linkLifetimeRange", { min: 3, max: 365 }));
+    if (!Number.isInteger(cadence) || cadence < 0 || cadence > 30) return void toast.error(t("reminderIntervalRange", { min: 0, max: 30 }));
+    if (!Number.isInteger(max) || max < 0 || max > 10) return void toast.error(t("maxRemindersRange", { min: 0, max: 10 }));
     startTransition(async () => {
       const result = await saveSignatureSettings(value);
       if (!result.ok) toast.error(result.error);
       else {
         setSaved(value);
-        toast.success("Signature settings saved");
+        toast.success(t("saved"));
       }
     });
   }
@@ -100,10 +84,10 @@ export function SignatureSettingsCard({ settings }: { settings: Settings }) {
         <SectionHeader
           icon={PencilIcon}
           title="Harly Signature"
-          description="Control which native signing capabilities are available to this workspace. Native signing is compliance-ready and does not replace your legal policies."
+          description={t("description")}
           badge={
             <StatusPill tone={value.nativeSignEnabled ? "on" : "off"}>
-              {value.nativeSignEnabled ? "Active" : "Disabled"}
+              {value.nativeSignEnabled ? t("active") : t("disabled")}
             </StatusPill>
           }
         />
@@ -114,8 +98,8 @@ export function SignatureSettingsCard({ settings }: { settings: Settings }) {
               key={item.key}
               htmlFor={`signature-${item.key}`}
               descriptionId={`signature-${item.key}-desc`}
-              title={item.title}
-              description={item.description}
+              title={t(`toggles.${item.key}.title`)}
+              description={t(`toggles.${item.key}.description`)}
               control={
                 <Switch
                   id={`signature-${item.key}`}
@@ -129,8 +113,8 @@ export function SignatureSettingsCard({ settings }: { settings: Settings }) {
           <SettingRow
             htmlFor="signature-otp"
             descriptionId="signature-otp-desc"
-            title="Require email OTP for remote signing"
-            description="Recipients must verify a one-time code sent to their email before signing a remote link."
+            title={t("requireOtp")}
+            description={t("requireOtpDescription")}
             control={
               <Switch
                 id="signature-otp"
@@ -143,8 +127,8 @@ export function SignatureSettingsCard({ settings }: { settings: Settings }) {
           <SettingRow
             htmlFor="signature-expiration"
             descriptionId="signature-expiration-desc"
-            title="Link lifetime (days)"
-            description="Each signer's clock starts when they are invited, not when the document is sent. 3 to 365 days."
+            title={t("linkLifetime")}
+            description={t("linkLifetimeDescription")}
             control={
               <Input
                 id="signature-expiration"
@@ -161,8 +145,8 @@ export function SignatureSettingsCard({ settings }: { settings: Settings }) {
           <SettingRow
             htmlFor="signature-reminder-cadence"
             descriptionId="signature-reminder-cadence-desc"
-            title="Remind signers every (days)"
-            description="Counted from when the current signer was invited. 0 turns automatic reminders off. Earlier links keep working."
+            title={t("reminderCadence")}
+            description={t("reminderCadenceDescription")}
             control={
               <Input
                 id="signature-reminder-cadence"
@@ -179,8 +163,8 @@ export function SignatureSettingsCard({ settings }: { settings: Settings }) {
           <SettingRow
             htmlFor="signature-max-reminders"
             descriptionId="signature-max-reminders-desc"
-            title="Maximum automatic reminders"
-            description="Per signer. Manual reminders from the document do not count toward this."
+            title={t("maxReminders")}
+            description={t("maxRemindersDescription")}
             control={
               <Input
                 id="signature-max-reminders"
@@ -200,7 +184,7 @@ export function SignatureSettingsCard({ settings }: { settings: Settings }) {
           className="-mx-6 -mb-6 border-t"
           dirty={dirty}
           saving={pending}
-          saveLabel="Save settings"
+          saveLabel={t("saveSettings")}
           onDiscard={() => setValue(saved)}
           onSave={save}
         />
@@ -212,6 +196,7 @@ export function SignatureSettingsCard({ settings }: { settings: Settings }) {
 }
 
 function SavedSignaturesCard() {
+  const t = useTranslations("features.workspaces.savedSignaturesCard");
   const [signatures, setSignatures] = useState<SavedSignature[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -222,14 +207,14 @@ function SavedSignaturesCard() {
   }, []);
 
   function remove(id: string) {
-    if (!window.confirm("Remove this saved signature? You can save it again while signing.")) return;
+    if (!window.confirm(t("removeConfirm"))) return;
     void deleteSavedSignature({ id }).then((result) => {
       if (!result.ok) {
-        toast.error(result.error ?? "Could not delete the signature.");
+        toast.error(result.error ?? t("deleteError"));
         return;
       }
       setSignatures((current) => current.filter((item) => item.id !== id));
-      toast.success("Signature removed");
+      toast.success(t("removed"));
     });
   }
 
@@ -237,11 +222,10 @@ function SavedSignaturesCard() {
     <Card className="gap-4 p-6">
       <div>
         <h2 className="font-display text-lg font-semibold tracking-tight">
-          Your saved signatures
+          {t("title")}
         </h2>
         <p className="mt-1 max-w-prose text-sm text-muted-foreground">
-          Signatures you save while signing a document appear here. They are
-          private to your account and reusable across every document.
+          {t("description")}
         </p>
       </div>
       <CardContent className="px-0">
@@ -256,8 +240,7 @@ function SavedSignaturesCard() {
           </div>
         ) : signatures.length === 0 ? (
           <div className="rounded-xl border border-dashed px-6 py-10 text-center text-sm leading-6 text-muted-foreground">
-            No saved signatures yet. Save one from the signing screen the next
-            time you sign a document.
+            {t("empty")}
           </div>
         ) : (
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
@@ -269,14 +252,14 @@ function SavedSignaturesCard() {
                   ) : (
                     <img
                       src={signature.dataUrl}
-                      alt="Saved signature"
+                      alt={t("savedSignatureAlt")}
                       className="max-h-full max-w-full object-contain"
                     />
                   )}
                 </div>
                 <button
                   type="button"
-                  aria-label="Delete saved signature"
+                  aria-label={t("deleteSignature")}
                   onClick={() => remove(signature.id)}
                   className="absolute -right-1.5 -top-1.5 flex size-6 items-center justify-center rounded-full border bg-card text-muted-foreground shadow-xs transition-opacity hover:text-destructive sm:opacity-0 sm:group-hover:opacity-100 sm:focus-visible:opacity-100"
                 >

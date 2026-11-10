@@ -1,5 +1,6 @@
 import type { Job } from "@harly/db";
 import { useEffect, useRef } from "react";
+import { useTranslations } from "next-intl";
 import { Info, Plus, Trash2, FileText } from "lucide-react";
 import { toast } from "@/lib/notification-island/toast";
 
@@ -19,24 +20,6 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 
-const SECTION_TEMPLATES: Record<string, { title: string; body: string }[]> = {
-  Engineering: [
-    { title: "What you'll do", body: "<ul><li>Ship features end to end</li><li>Collaborate on architecture</li></ul>" },
-    { title: "Requirements", body: "<ul><li>3+ years building web apps</li><li>Strong in TypeScript</li></ul>" },
-    { title: "Benefits", body: "<ul><li>Remote-first</li><li>Equity</li></ul>" },
-  ],
-  Sales: [
-    { title: "About the role", body: "<p>Own a pipeline and close deals.</p>" },
-    { title: "Requirements", body: "<ul><li>2+ years in B2B sales</li><li>CRM fluency</li></ul>" },
-    { title: "Compensation", body: "<p>Base + uncapped commission.</p>" },
-  ],
-  Generic: [
-    { title: "Responsibilities", body: "" },
-    { title: "Requirements", body: "" },
-    { title: "Benefits", body: "" },
-  ],
-};
-
 function escapeHtml(value: string) {
   return value
     .replace(/&/g, "&amp;")
@@ -44,13 +27,18 @@ function escapeHtml(value: string) {
     .replace(/>/g, "&gt;");
 }
 
-function pickTemplateKey(title: string): keyof typeof SECTION_TEMPLATES {
+// Role-title keywords per language, so the outline matches the title the user typed.
+function pickTemplateKey(title: string): "engineering" | "sales" | "generic" {
   const t = title.toLowerCase();
-  if (/(engineer|developer|programmer|software|backend|front[\s-]?end|full[\s-]?stack|data|devops|sre|qa)/.test(t))
-    return "Engineering";
-  if (/(sales|account executive|business development|bdr|sdr|revenue)/.test(t))
-    return "Sales";
-  return "Generic";
+  if (
+    /(engineer|developer|programmer|software|backend|front[\s-]?end|full[\s-]?stack|data|devops|sre|qa|ingenier|desarrollad|programad|ingénieur|développeur|entwickler|ontwikkelaar|engenheir|desenvolvedor|programador)/.test(t)
+  )
+    return "engineering";
+  if (
+    /(sales|account executive|business development|bdr|sdr|revenue|ventas|vendedor|comercial|vente|vertrieb|verkoop|vendas)/.test(t)
+  )
+    return "sales";
+  return "generic";
 }
 
 // Unique across sessions: ids of sections loaded from the DB must never collide
@@ -92,6 +80,30 @@ export function DescriptionSection({
   /** Inline explanation of what publishing needs; null when satisfied. */
   publishHint: string | null;
 }) {
+  const t = useTranslations("jobs.description");
+  const bulletList = (items: string[]) => `<ul>${items.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ul>`;
+  const templates = {
+    engineering: [
+      { title: t("templateWhatYouDo"), body: bulletList([t("templateShipFeatures"), t("templateCollaborate")]) },
+      { title: t("templateRequirements"), body: bulletList([t("templateYearsWeb"), t("templateTypeScript")]) },
+      { title: t("templateBenefits"), body: bulletList([t("templateRemoteFirst"), t("templateEquity")]) },
+    ],
+    sales: [
+      { title: t("templateAboutRole"), body: `<p>${escapeHtml(t("templateSalesMission"))}</p>` },
+      { title: t("templateRequirements"), body: bulletList([t("templateYearsSales"), t("templateCrm")]) },
+      { title: t("templateCompensation"), body: `<p>${escapeHtml(t("templateCommission"))}</p>` },
+    ],
+    generic: [
+      { title: t("templateResponsibilities"), body: "" },
+      { title: t("templateRequirements"), body: "" },
+      { title: t("templateBenefits"), body: "" },
+    ],
+  };
+  const templateLabels = {
+    engineering: t("template.engineering"),
+    sales: t("template.sales"),
+    generic: t("template.generic"),
+  };
   const newSectionRef = useRef<string | null>(null);
   const listRef = useRef<HTMLDivElement>(null);
 
@@ -123,34 +135,35 @@ export function DescriptionSection({
     setSections((prev) => prev.filter((s) => s.id !== id));
   }
 
-  function applyTemplate(name: keyof typeof SECTION_TEMPLATES) {
-    setSections(SECTION_TEMPLATES[name].map((s) => ({ ...s, id: newSectionId() })));
+  function applyTemplate(name: keyof typeof templates) {
+    setSections(templates[name].map((s) => ({ ...s, id: newSectionId() })));
   }
 
   function scaffoldDraft() {
-    const base = SECTION_TEMPLATES[pickTemplateKey(title)].map((s) => ({
+    const base = templates[pickTemplateKey(title)].map((s) => ({
       ...s,
       id: newSectionId(),
     }));
 
     if (keywords.length > 0) {
       const list = `<ul>${keywords.map((kw) => `<li>${escapeHtml(kw)}</li>`).join("")}</ul>`;
-      const ri = base.findIndex((s) => /require/i.test(s.title));
+      const requirementsTitle = t("templateRequirements");
+      const ri = base.findIndex((s) => s.title === requirementsTitle);
       if (ri >= 0) base[ri] = { ...base[ri], body: list };
-      else base.push({ id: newSectionId(), title: "Requirements", body: list });
+      else base.push({ id: newSectionId(), title: requirementsTitle, body: list });
     }
 
-    const roleName = title.trim() || "this role";
+    const roleName = title.trim() || t("thisRole");
     setSections(base);
     setDescription(
-      `<p>We're hiring a <strong>${escapeHtml(roleName)}</strong> to join our team. Outline the mission, the team, and the impact of this role.</p>`,
+      `<p>${escapeHtml(t("outlineTemplate", { roleName }))}</p>`,
     );
     setDescriptionVersion((v) => v + 1);
   }
 
   function generateWithAI() {
     if (title.trim().length < 3) {
-      toast.error("Add a job title first.");
+      toast.error(t("titleRequired"));
       return;
     }
 
@@ -162,7 +175,13 @@ export function DescriptionSection({
       });
 
       if (!result.ok) {
-        toast.error(result.error);
+        toast.error(
+          result.code === "aiDraftNotConfigured"
+            ? t("aiNotConfigured")
+            : result.code === "aiGenerationFailed"
+              ? t("generationFailed")
+              : result.error,
+        );
         return;
       }
 
@@ -176,7 +195,7 @@ export function DescriptionSection({
       );
       setDescription(`<p>${escapeHtml(draft.summary)}</p>`);
       setDescriptionVersion((v) => v + 1);
-      toast.success("Draft generated with AI");
+      toast.success(t("draftGenerated"));
     });
   }
 
@@ -184,7 +203,7 @@ export function DescriptionSection({
     <section data-section="description">
       <div className="rounded-[var(--radius-card)] bg-card shadow-[var(--shadow-card)]">
         <div className="flex items-center justify-between border-b px-5 py-3">
-          <p className="text-sm font-semibold">Description</p>
+          <p className="text-sm font-semibold">{t("description")}</p>
           <div className="flex items-center gap-2">
             {aiConfigured ? (
               <AiButton
@@ -192,30 +211,30 @@ export function DescriptionSection({
                 size="sm"
                 onClick={generateWithAI}
                 loading={aiPending}
-                loadingText="Generating"
+                loadingText={t("generating")}
                 logoClassName="size-4"
               >
-                Generate with AI
+                {t("generateWithAi")}
               </AiButton>
             ) : null}
             <Button type="button" variant="outline" size="sm" onClick={scaffoldDraft}>
               <FileText className="size-4" />
-              Insert outline
+              {t("insertOutline")}
             </Button>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button type="button" variant="outline" size="sm">
-                  Templates
+                  {t("templates")}
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
-                <DropdownMenuLabel>Replace with template</DropdownMenuLabel>
-                {Object.keys(SECTION_TEMPLATES).map((name) => (
+                <DropdownMenuLabel>{t("replaceWithTemplate")}</DropdownMenuLabel>
+                {Object.keys(templates).map((name) => (
                   <DropdownMenuItem
                     key={name}
-                    onClick={() => applyTemplate(name as keyof typeof SECTION_TEMPLATES)}
+                    onClick={() => applyTemplate(name as keyof typeof templates)}
                   >
-                    {name}
+                    {templateLabels[name as keyof typeof templateLabels]}
                   </DropdownMenuItem>
                 ))}
               </DropdownMenuContent>
@@ -231,12 +250,12 @@ export function DescriptionSection({
             </p>
           ) : null}
           <div className="space-y-2" data-preview-target="description">
-            <Label>About the role</Label>
+            <Label>{t("aboutRole")}</Label>
             <input type="hidden" name="description" value={description} />
             <RichTextEditor
               key={`description-${descriptionVersion}`}
               defaultValue={descriptionVersion === 0 ? job?.description : description}
-              placeholder="Describe the role, team, and impact."
+              placeholder={t("descriptionPlaceholder")}
               minHeight="11rem"
               onChange={setDescription}
             />
@@ -252,7 +271,7 @@ export function DescriptionSection({
                 <Input
                   value={section.title}
                   onChange={(e) => updateSection(section.id, { title: e.target.value })}
-                  placeholder="Section title (e.g. Requirements)"
+                  placeholder={t("sectionTitlePlaceholder")}
                   className="h-9 bg-card font-medium"
                 />
                 <Button
@@ -261,14 +280,14 @@ export function DescriptionSection({
                   size="icon"
                   className="size-8 shrink-0 text-muted-foreground hover:text-destructive"
                   onClick={() => removeSection(section.id)}
-                  aria-label="Remove section"
+                  aria-label={t("removeSection")}
                 >
                   <Trash2 className="size-4" />
                 </Button>
               </div>
               <RichTextEditor
                 defaultValue={section.body}
-                placeholder="Write this section..."
+                placeholder={t("sectionBodyPlaceholder")}
                 minHeight="7rem"
                 onChange={(html) => updateSection(section.id, { body: html })}
               />
@@ -277,7 +296,7 @@ export function DescriptionSection({
 
           <Button type="button" variant="outline" onClick={addSection}>
             <Plus className="size-4" />
-            Add section
+            {t("addSection")}
           </Button>
         </div>
       </div>

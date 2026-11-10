@@ -1,15 +1,11 @@
 import Link from "next/link";
+import { useTranslations } from "next-intl";
 import type { Route } from "next";
 import { FileCheck } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import type { InboxItem } from "@/features/dashboard/widgets";
 import { Tile, TileHeader, TileLink } from "./primitives";
-
-function waitingLabel(days: number) {
-  if (days <= 0) return "New today";
-  return `Waiting ${days} day${days === 1 ? "" : "s"}`;
-}
 
 /**
  * Decisions waiting on the viewer that are not candidate reviews: job
@@ -23,13 +19,14 @@ export function InboxCard({
   inbox: { total: number; items: InboxItem[] };
   className?: string;
 }) {
+  const t = useTranslations("shell.inboxCard");
   return (
     <Tile className={className}>
       <TileHeader
         icon={FileCheck}
-        title="Decisions waiting"
+        title={t("title")}
         count={inbox.total}
-        action={<TileLink href="/dashboard/jobs">Jobs</TileLink>}
+        action={<TileLink href="/dashboard/jobs">{t("jobs")}</TileLink>}
       />
       <div className="flex flex-1 flex-col px-2 pb-3 pt-3">
         <ul className="flex flex-col gap-0.5">
@@ -44,10 +41,10 @@ export function InboxCard({
                 </span>
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-sm font-medium" title={item.title}>{item.title}</p>
-                  <p className="truncate text-xs text-soft-ink" title={item.subtitle}>{item.subtitle}</p>
+                  <p className="truncate text-xs text-soft-ink" title={t("awaitingApproval")}>{t("awaitingApproval")}</p>
                 </div>
                 <Badge variant={item.ageDays > 3 ? "warning" : "neutral"} className="shrink-0">
-                  {waitingLabel(item.ageDays)}
+                  {item.ageDays <= 0 ? t("newToday") : t("waiting", { count: item.ageDays })}
                 </Badge>
               </Link>
             </li>
@@ -58,7 +55,7 @@ export function InboxCard({
             href="/dashboard/jobs"
             className="mx-3 mt-1 rounded-[var(--radius-md)] px-3 py-2.5 text-center text-xs font-medium text-soft-ink transition hover:bg-row-wash"
           >
-            {inbox.total - inbox.items.length} more in Jobs
+            {t("more", { count: inbox.total - inbox.items.length })}
           </Link>
         ) : null}
       </div>

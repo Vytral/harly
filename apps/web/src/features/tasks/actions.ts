@@ -3,8 +3,8 @@
 import { revalidatePath } from "next/cache";
 import { and, eq, isNull, or, sql } from "drizzle-orm";
 import { z } from "zod";
+import { getTranslations } from "@/i18n/server";
 
-import { ApiError } from "@harly/api";
 import { db } from "@harly/db";
 import { activityEvents, notifications, tasks } from "@harly/db";
 import type { Permission } from "@/features/workspaces/permissions";
@@ -19,7 +19,7 @@ import {
 import { taskScopeSql, type WorkspaceSearchActor } from "@/features/search/scope";
 import { createLogger } from "@/lib/logger";
 import { logAuditEvent } from "@/lib/audit-log";
-import { assertTaskReferences, serializeTask } from "./service";
+import { assertTaskReferences, serializeTask, TaskMessageError } from "./service";
 import { emitRealtimeInvalidation } from "@/server/events/emit";
 import {
   persistDomainEvent,
@@ -28,6 +28,7 @@ import {
 } from "@/server/events/emit";
 import { REALTIME_EVENTS } from "@/server/events/registry";
 import { emitWebhookEvent, webhookOptionsAfterPersist } from "@/server/webhooks/emit";
+import { withNotificationCopy } from "@/features/notifications/copy";
 
 const log = createLogger("tasks");
 
@@ -38,7 +39,7 @@ const taskDateInput = z
     if (value === undefined) return undefined;
     if (value === null || value === "") return null;
     if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) {
-      ctx.addIssue({ code: "custom", message: "Enter a valid due date." });
+      ctx.addIssue({ code: "custom" });
       return z.NEVER;
     }
     const date = new Date(`${value}T00:00:00.000Z`);
@@ -46,13 +47,32 @@ const taskDateInput = z
       Number.isNaN(date.getTime()) ||
       date.toISOString().slice(0, 10) !== value
     ) {
-      ctx.addIssue({ code: "custom", message: "Enter a valid due date." });
+      ctx.addIssue({ code: "custom" });
       return z.NEVER;
     }
     return date;
   });
 
-const OUT_OF_SCOPE_MESSAGE = "The selected record is not available to you.";
+type ValidationKey =
+  | "invalidDueDate"
+  | "titleRequired"
+  | "titleTooLong"
+  | "assigneeRequired"
+  | "invalidTask";
+
+/** Pick the translated message for a schema issue by its field, not its text. */
+function validationKey(issue: { path: PropertyKey[]; code: string } | undefined): ValidationKey {
+  switch (issue?.path[0]) {
+    case "dueDate":
+      return "invalidDueDate";
+    case "ownerId":
+      return "assigneeRequired";
+    case "title":
+      return issue?.code === "too_small" ? "titleRequired" : "titleTooLong";
+    default:
+      return "invalidTask";
+  }
+}
 
 type TaskLinks = {
   candidateId?: string | null;
@@ -94,14 +114,14 @@ async function callerTaskActor(context: {
 }
 
 const createSchema = z.object({
-  title: z.string().trim().min(1, "Title is required.").max(200),
+  title: z.string().trim().min(1).max(200),
   description: z.string().trim().max(2000).optional(),
   priority: z.enum(["low", "medium", "high", "urgent"]).default("medium"),
   status: z
     .enum(["pending", "in_progress", "completed", "canceled"])
     .default("pending"),
   dueDate: taskDateInput,
-  ownerId: z.string().min(1, "Assignee is required."),
+  ownerId: z.string().min(1),
   candidateId: z.string().uuid().optional().nullable(),
   applicationId: z.string().uuid().optional().nullable(),
   jobId: z.string().uuid().optional().nullable(),
@@ -116,10 +136,11 @@ export async function createTask(input: CreateTaskInput): Promise<{
   taskId?: string;
   updatedAt?: string;
 }> {
+  const t = await getTranslations("server.tasks.actions");
   try {
     const parsed = createSchema.safeParse(input);
     if (!parsed.success) {
-      return { success: false, error: parsed.error.issues[0]?.message };
+      return { success: false, error: t(validationKey(parsed.error.issues[0])) };
     }
 
     const context = await requirePermission("tasks:write");
@@ -132,7 +153,7 @@ export async function createTask(input: CreateTaskInput): Promise<{
       jobId: data.jobId,
       interviewId: data.interviewId,
     });
-    if (!linkedInScope) return { success: false, error: OUT_OF_SCOPE_MESSAGE };
+    if (!linkedInScope) return { success: false, error: t("outOfScope") };
 
     await assertTaskReferences({
       workspaceId: workspace.id,
@@ -191,6 +212,10 @@ export async function createTask(input: CreateTaskInput): Promise<{
           title: `New task: ${data.title}`,
           body: `${user.name} assigned you a task.`,
           href: "/dashboard/tasks",
+          metadata: withNotificationCopy(undefined, {
+            key: "taskAssigned",
+            values: { title: data.title, actor: user.name },
+          }),
         });
       }
 
@@ -235,7 +260,7 @@ export async function createTask(input: CreateTaskInput): Promise<{
     return {
       success: false,
       error:
-        error instanceof ApiError ? error.message : "Unable to create task.",
+        error instanceof TaskMessageError ? t(error.key) : t("unableToCreate"),
     };
   }
 }
@@ -264,10 +289,11 @@ export type UpdateTaskInput = z.input<typeof updateSchema>;
 export async function updateTask(
   input: UpdateTaskInput,
 ): Promise<{ success: boolean; error?: string }> {
+  const t = await getTranslations("server.tasks.actions");
   try {
     const parsed = updateSchema.safeParse(input);
     if (!parsed.success) {
-      return { success: false, error: parsed.error.issues[0]?.message };
+      return { success: false, error: t(validationKey(parsed.error.issues[0])) };
     }
 
     const context = await requirePermission("tasks:write");
@@ -296,10 +322,10 @@ export async function updateTask(
       )
       .limit(1);
 
-    if (!existing) return { success: false, error: "Task not found." };
+    if (!existing) return { success: false, error: t("notFound") };
 
     if (!(await linksInCallerScope("tasks:write", fields))) {
-      return { success: false, error: OUT_OF_SCOPE_MESSAGE };
+      return { success: false, error: t("outOfScope") };
     }
 
     const ownerId = fields.ownerId ?? existing.ownerId;
@@ -365,7 +391,7 @@ export async function updateTask(
         )
         .returning();
 
-      if (!task) throw ApiError.notFound("Task not found.");
+      if (!task) throw new TaskMessageError("notFound", "Task not found.", "not_found");
 
       await tx.insert(activityEvents).values({
         workspaceId: workspace.id,
@@ -388,6 +414,10 @@ export async function updateTask(
           title: "Task reassigned to you",
           body: `${user.name} assigned you a task.`,
           href: "/dashboard/tasks",
+          metadata: withNotificationCopy(undefined, {
+            key: "taskReassigned",
+            values: { actor: user.name },
+          }),
         });
       }
 
@@ -436,7 +466,7 @@ export async function updateTask(
     return {
       success: false,
       error:
-        error instanceof ApiError ? error.message : "Unable to update task.",
+        error instanceof TaskMessageError ? t(error.key) : t("unableToUpdate"),
     };
   }
 }
@@ -453,6 +483,7 @@ export async function completeMyOpenTasks(): Promise<{
   error?: string;
   updatedCount?: number;
 }> {
+  const t = await getTranslations("server.tasks.actions");
   try {
     const { organization: workspace, user } =
       await requirePermission("tasks:write");
@@ -530,7 +561,7 @@ export async function completeMyOpenTasks(): Promise<{
     return { success: true, updatedCount: updated.length };
   } catch (error) {
     log.error(error, "completeMyOpenTasks failed");
-    return { success: false, error: "Unable to complete your tasks." };
+    return { success: false, error: t("unableToComplete") };
   }
 }
 
@@ -538,6 +569,7 @@ export async function deleteTask(
   taskId: string,
   expectedUpdatedAt?: string,
 ): Promise<{ success: boolean; error?: string }> {
+  const t = await getTranslations("server.tasks.actions");
   try {
     const context = await requirePermission("tasks:write");
     const { organization: workspace, user } = context;
@@ -588,8 +620,8 @@ export async function deleteTask(
       return {
         success: false,
         error: expectedUpdatedAt
-          ? "This task changed after the original action and was not undone."
-          : "Task not found.",
+          ? t("changedAfterAction")
+          : t("notFound"),
       };
     }
 
@@ -613,6 +645,6 @@ export async function deleteTask(
     return { success: true };
   } catch (error) {
     log.error(error, "deleteTask failed");
-    return { success: false, error: "Unable to delete task." };
+    return { success: false, error: t("unableToDelete") };
   }
 }

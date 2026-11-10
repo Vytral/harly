@@ -1,34 +1,20 @@
-const shortFormatter = new Intl.DateTimeFormat("en", {
-  month: "short",
-  day: "numeric",
-});
-
-const shortWithYearFormatter = new Intl.DateTimeFormat("en", {
-  month: "short",
-  day: "numeric",
-  year: "numeric",
-});
-
-const relativeFormatter = new Intl.RelativeTimeFormat("en", {
-  numeric: "auto",
-});
-
 function toDate(value: Date | string) {
   return value instanceof Date ? value : new Date(value);
 }
 
-export function formatShort(value: Date | string): string {
+export function formatShort(value: Date | string, locale: string): string {
   const date = toDate(value);
   const now = new Date();
 
   if (date.getFullYear() === now.getFullYear()) {
-    return shortFormatter.format(date);
+    return new Intl.DateTimeFormat(locale, { month: "short", day: "numeric" }).format(date);
   }
 
-  return shortWithYearFormatter.format(date);
+  return new Intl.DateTimeFormat(locale, { month: "short", day: "numeric", year: "numeric" }).format(date);
 }
 
-export function formatRelative(value: Date | string): string {
+export function formatRelative(value: Date | string, locale: string): string {
+  const relativeFormatter = new Intl.RelativeTimeFormat(locale, { numeric: "auto" });
   const date = toDate(value);
   const diffInSeconds = Math.round((date.getTime() - Date.now()) / 1000);
   const absSeconds = Math.abs(diffInSeconds);
@@ -75,11 +61,9 @@ export function daysSince(value: Date | string): number {
   return Math.max(0, Math.floor(diff / 86_400_000));
 }
 
-const timeFormatter = new Intl.DateTimeFormat("en", {
-  hour: "numeric",
-  minute: "2-digit",
-});
-
-export function formatTime(value: Date | string): string {
-  return timeFormatter.format(toDate(value));
+export function formatTime(value: Date | string, locale: string): string {
+  return new Intl.DateTimeFormat(locale, {
+    hour: "numeric",
+    minute: "2-digit",
+  }).format(toDate(value));
 }

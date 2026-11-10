@@ -103,31 +103,29 @@ export async function verifyAgainstDummy(password: string): Promise<false> {
   return false;
 }
 
-export type PasswordPolicyResult = { ok: true } | { ok: false; error: string };
+export type PasswordPolicyCode = "tooShort" | "tooLong" | "matchesEmail" | "repetitive";
+
+export type PasswordPolicyResult =
+  | { ok: true }
+  | { ok: false; code: PasswordPolicyCode };
 
 export function validatePasswordPolicy(
   password: string,
   context: { email?: string } = {},
 ): PasswordPolicyResult {
   if (password.length < PASSWORD_MIN_LENGTH) {
-    return {
-      ok: false,
-      error: `Use at least ${PASSWORD_MIN_LENGTH} characters.`,
-    };
+    return { ok: false, code: "tooShort" };
   }
   if (password.length > PASSWORD_MAX_LENGTH) {
-    return {
-      ok: false,
-      error: `Use at most ${PASSWORD_MAX_LENGTH} characters.`,
-    };
+    return { ok: false, code: "tooLong" };
   }
   const lower = password.toLowerCase();
   const email = context.email?.toLowerCase().trim();
   if (email && (lower === email || lower === email.split("@")[0])) {
-    return { ok: false, error: "Password must not be your email address." };
+    return { ok: false, code: "matchesEmail" };
   }
   if (/^(.)\1+$/.test(password)) {
-    return { ok: false, error: "Choose a less repetitive password." };
+    return { ok: false, code: "repetitive" };
   }
   return { ok: true };
 }

@@ -1,6 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { toast } from "@/lib/notification-island/toast";
 
 import { PrepareSigningDialog } from "@/features/documents/prepare/PrepareSigningDialog";
@@ -22,6 +23,8 @@ export function DocumentFieldPlacementDialog({
   onOpenChange: (open: boolean) => void;
 }) {
   const router = useRouter();
+  const t = useTranslations("features.documents.documentFieldPlacementDialog");
+  const tCommon = useTranslations();
   return (
     <PrepareSigningDialog
       open={open}
@@ -29,8 +32,8 @@ export function DocumentFieldPlacementDialog({
       fileUrl={`/api/documents/${document.id}`}
       subjectName={document.name}
       mode={{ kind: "multi", showMessage: true }}
-      submitLabel="Send signing link"
-      pendingLabel="Sending…"
+      submitLabel={t("submitLabel")}
+      pendingLabel={tCommon("pages.sign.nativeSigningPage.sending")}
       onSubmit={async (payload) => {
         const result = await saveDocumentSignatureFieldsAndSend({
           documentId: document.id,
@@ -39,8 +42,8 @@ export function DocumentFieldPlacementDialog({
           subject: payload.subject,
           message: payload.message,
         });
-        if (!result.ok) return { ok: false, error: result.error ?? "Could not send the document." };
-        toast.success("Native signing link sent");
+        if (!result.ok) return { ok: false, error: result.error ?? t("sendFallbackError") };
+        toast.success(t("sent"));
         router.refresh();
         return { ok: true };
       }}

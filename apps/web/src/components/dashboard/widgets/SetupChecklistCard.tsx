@@ -17,6 +17,7 @@ import {
   skipSetupChecklistItemAction,
 } from "@/features/onboarding/checklist-actions";
 import { loadSampleDataAction } from "@/features/sample-data/actions";
+import { useTranslations } from "next-intl";
 
 const COLLAPSE_KEY = "harly:setup-checklist-collapsed";
 
@@ -64,6 +65,7 @@ type ActionResult = { ok: boolean; error?: string };
  * public job link once a job is live.
  */
 export function SetupChecklistCard({ checklist }: { checklist: SetupChecklist }) {
+  const t = useTranslations("shell.setupChecklist");
   const router = useRouter();
   const collapsed = useSyncExternalStore(
     collapseStore.subscribe,
@@ -81,7 +83,7 @@ export function SetupChecklistCard({ checklist }: { checklist: SetupChecklist })
     startTransition(async () => {
       const result = await action();
       if (!result.ok) {
-        setError(result.error ?? "Something went wrong. Try again.");
+        setError(result.error ?? t("error"));
         return;
       }
       router.refresh();
@@ -110,13 +112,13 @@ export function SetupChecklistCard({ checklist }: { checklist: SetupChecklist })
           </span>
           <div>
             <h2 className="font-display text-[15px] font-semibold tracking-[-0.01em] text-near-ink">
-              Your first hour
+              {t("title")}
             </h2>
             <p className="text-xs text-soft-ink">
-              {checklist.completed} of {checklist.total} done
+              {t("progress", { completed: checklist.completed, total: checklist.total })}
               {checklist.nextStep ? (
                 <>
-                  {" · Next: "}
+                  {` · ${t("next")}: `}
                   <span className="font-medium text-near-ink">
                     {checklist.nextStep.title}
                   </span>
@@ -170,9 +172,9 @@ export function SetupChecklistCard({ checklist }: { checklist: SetupChecklist })
           {checklist.visible && !checklist.sampleDataActive ? (
             <div className="flex flex-col gap-3 border-t border-hairline bg-card-inset/60 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
               <div className="min-w-0">
-                <p className="text-sm font-medium text-near-ink">Just exploring?</p>
+                <p className="text-sm font-medium text-near-ink">{t("exploring")}</p>
                 <p className="text-xs text-soft-ink">
-                  Load sample jobs and candidates to see Harly with data. Remove them any time.
+                  {t("sampleHint")}
                 </p>
               </div>
               <Button
@@ -184,7 +186,7 @@ export function SetupChecklistCard({ checklist }: { checklist: SetupChecklist })
                 className="w-full shrink-0 sm:w-auto"
               >
                 <Sparkles className="size-3.5" />
-                Load sample data
+                {t("loadSample")}
               </Button>
             </div>
           ) : null}
@@ -196,7 +198,7 @@ export function SetupChecklistCard({ checklist }: { checklist: SetupChecklist })
               </p>
             ) : (
               <span className="text-xs text-soft-ink">
-                Hidden steps come back from your account menu.
+                {t("hiddenHint")}
               </span>
             )}
             <button
@@ -206,7 +208,7 @@ export function SetupChecklistCard({ checklist }: { checklist: SetupChecklist })
               className="-mr-2.5 inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium text-soft-ink transition-colors hover:bg-row-wash hover:text-near-ink disabled:opacity-50"
             >
               <EyeOff className="size-3.5" />
-              Hide checklist
+              {t("hide")}
             </button>
           </div>
         </>
@@ -228,6 +230,7 @@ function ChecklistRowView({
   busy: boolean;
   onRun: (action: () => Promise<ActionResult>) => void;
 }) {
+  const t = useTranslations("shell.setupChecklist");
   const isPipeline = item.key === "pipeline_candidates";
   const showSkip = item.optional && !item.done;
 
@@ -253,10 +256,10 @@ function ChecklistRowView({
               type="button"
               disabled={busy}
               onClick={() => onRun(() => skipSetupChecklistItemAction(item.key))}
-              aria-label={`Skip "${item.title}"`}
+              aria-label={t("skipLabel", { title: item.title })}
               className="mt-1.5 -ml-1 rounded px-1 text-xs font-medium text-soft-ink underline-offset-2 transition-colors hover:text-near-ink hover:underline disabled:opacity-50"
             >
-              Skip for now
+              {t("skip")}
             </button>
           ) : null}
         </div>
@@ -270,7 +273,7 @@ function ChecklistRowView({
         <Link
           href={(isPipeline ? "/dashboard/candidates?import=csv" : item.href) as Route}
         >
-          {isPipeline ? "Import CSV" : item.ctaLabel}
+          {isPipeline ? t("importCsv") : item.ctaLabel}
           <ArrowRight className="size-3.5" />
         </Link>
       </Button>
@@ -279,6 +282,7 @@ function ChecklistRowView({
 }
 
 function CopyJobLink({ title, url }: { title: string; url: string }) {
+  const t = useTranslations("shell.setupChecklist");
   const [copied, setCopied] = useState(false);
 
   async function copy() {
@@ -293,16 +297,16 @@ function CopyJobLink({ title, url }: { title: string; url: string }) {
 
   return (
     <div className="flex min-w-0 items-center gap-2 rounded-lg border border-border/60 bg-muted/40 px-2.5 py-1.5 text-xs">
-      <span className="shrink-0 text-muted-foreground">Live: {title}</span>
+      <span className="shrink-0 text-muted-foreground">{t("live", { title })}</span>
       <span className="min-w-0 flex-1 truncate font-mono text-foreground/80">{url}</span>
       <button
         type="button"
         onClick={copy}
-        aria-label={`Copy public link for ${title}`}
+        aria-label={t("copyPublicLabel", { title })}
         className="inline-flex shrink-0 items-center gap-1 rounded-md px-2 py-1 font-medium text-primary transition-colors hover:bg-background"
       >
         {copied ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}
-        {copied ? "Copied" : "Copy link"}
+        {copied ? t("copied") : t("copyLink")}
       </button>
     </div>
   );

@@ -1,12 +1,16 @@
 import { describe, expect, it } from "vitest";
 
+import { translatorFor } from "@/i18n/translator";
+
 import {
   DEFAULT_ASSISTANT_BRANDING,
-  assistantBrandingSchema,
+  createAssistantBrandingSchema,
   readAssistantBranding,
   toClientAssistantBranding,
   writeAssistantBranding,
 } from "./assistant-branding-shared";
+
+const assistantBrandingSchema = createAssistantBrandingSchema(translatorFor("en", "server.ai.assistantBranding"));
 
 describe("assistant branding", () => {
   it("defaults when metadata is empty, null or malformed", () => {

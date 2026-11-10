@@ -3,6 +3,7 @@ import "server-only";
 import { createHash } from "node:crypto";
 
 import { and, eq, inArray } from "drizzle-orm";
+import { getTranslations } from "@/i18n/server";
 import { PDFDocument, PDFString, degrees, rgb } from "pdf-lib";
 
 import {
@@ -429,6 +430,7 @@ export async function generateDocumentForWorkflow(input: {
   attachments?: WorkflowDocumentAttachment[];
   effectKey: string;
 }): Promise<WorkflowGeneratedDocumentResult> {
+  const t = await getTranslations("server.documents.workflowGeneration");
   const database = input.database ?? db;
   const [application] = await database
     .select({ id: applications.id, candidateId: applications.candidateId })
@@ -438,7 +440,7 @@ export async function generateDocumentForWorkflow(input: {
       eq(applications.id, input.applicationId),
     ))
     .limit(1);
-  if (!application) return { ok: false, error: "Application not found." };
+  if (!application) return { ok: false, error: t("applicationNotFound") };
 
   const [existing] = await database
     .select({ id: documents.id, versionId: documentVersions.id })
@@ -463,13 +465,13 @@ export async function generateDocumentForWorkflow(input: {
 
   const title = input.title.trim().replace(/[\r\n]/g, "").slice(0, 255);
   const body = input.body.trim();
-  if (!title || !body) return { ok: false, error: "Document title and body are required." };
+  if (!title || !body) return { ok: false, error: t("titleAndBodyRequired") };
 
   const attachmentRows = input.attachments ?? [];
-  if (attachmentRows.length > 10) return { ok: false, error: "A generated document can include at most ten PDF attachments." };
+  if (attachmentRows.length > 10) return { ok: false, error: t("tooManyAttachments", { count: 10 }) };
   const attachmentIds = attachmentRows.map((attachment) => attachment.documentId);
   if (new Set(attachmentIds).size !== attachmentIds.length) {
-    return { ok: false, error: "Each document attachment must be unique." };
+    return { ok: false, error: t("duplicateAttachment") };
   }
   const attachmentBytes: Array<{ name: string; bytes: Buffer }> = [];
   if (attachmentRows.length > 0) {
@@ -491,9 +493,9 @@ export async function generateDocumentForWorkflow(input: {
     const byId = new Map(rows.map((row) => [row.id, row]));
     for (const attachment of attachmentRows) {
       const row = byId.get(attachment.documentId);
-      if (!row) return { ok: false, error: `Document attachment not found: ${attachment.name}.` };
-      if (row.mimeType !== "application/pdf") return { ok: false, error: `Document attachment is not a PDF: ${row.name}.` };
-      if (row.checksum !== attachment.checksum) return { ok: false, error: `Document attachment changed since this workflow was published: ${row.name}.` };
+      if (!row) return { ok: false, error: t("attachmentNotFound", { name: attachment.name }) };
+      if (row.mimeType !== "application/pdf") return { ok: false, error: t("attachmentNotPdf", { name: row.name }) };
+      if (row.checksum !== attachment.checksum) return { ok: false, error: t("attachmentChanged", { name: row.name }) };
       attachmentBytes.push({ name: attachment.name || row.name, bytes: await storage.read(row.storageKey) });
     }
   }

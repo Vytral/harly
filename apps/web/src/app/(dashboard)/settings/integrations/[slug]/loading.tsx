@@ -1,3 +1,5 @@
+import { getTranslations } from "next-intl/server";
+
 import { Card } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 
@@ -6,10 +8,11 @@ import { Skeleton } from "@/components/ui/skeleton";
  * link, then the connect panel card (title + description, a field grid, a
  * switch row, and the footer actions).
  */
-export default function IntegrationDetailLoading() {
+export default async function IntegrationDetailLoading() {
+  const t = await getTranslations("pages.settingsIntegrationsSlug.loading");
   return (
     <div aria-busy="true" className="space-y-8">
-      <span className="sr-only">Loading…</span>
+      <span className="sr-only">{t("loading")}</span>
 
       <div className="flex h-5 items-center gap-1.5">
         <Skeleton className="size-4 rounded-sm" />

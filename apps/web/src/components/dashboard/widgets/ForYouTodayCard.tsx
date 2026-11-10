@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { useTranslations } from "next-intl";
 import type { Route } from "next";
 import { Sparkles, type LucideIcon } from "lucide-react";
 
@@ -24,10 +25,11 @@ export function ForYouTodayCard({
   items: ForYouItem[];
   className?: string;
 }) {
+  const t = useTranslations("shell.forYouToday");
   const pending = items.filter((item) => item.count > 0);
   return (
     <Tile className={className}>
-      <TileHeader icon={Sparkles} title="For you today" />
+      <TileHeader icon={Sparkles} title={t("title")} />
       {pending.length > 0 ? (
         <ul className="flex flex-col gap-1 px-2 pb-3 pt-3">
           {pending.map((item) => {
@@ -54,7 +56,7 @@ export function ForYouTodayCard({
           })}
         </ul>
       ) : (
-        <EmptyHint icon={Sparkles} text="Nothing needs you right now." />
+        <EmptyHint icon={Sparkles} text={t("empty")} />
       )}
     </Tile>
   );

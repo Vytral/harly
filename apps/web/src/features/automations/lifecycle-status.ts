@@ -31,38 +31,41 @@ export type AutomationLifecycleStage =
   | "delivered"
   | "uncertain";
 
+/**
+ * Catalog keys under `labels.automations.lifecycle`. Resolve them with a
+ * translator at render time; the English text lives in the catalog.
+ */
 export const AUTOMATION_LIFECYCLE_STAGE_META: Record<
   AutomationLifecycleStage,
   { label: string; description: string }
 > = {
   suggested: {
-    label: "Suggested",
-    description: "An AI suggestion exists but is not yet usable.",
+    label: "stages.suggested.label",
+    description: "stages.suggested.description",
   },
   validated: {
-    label: "Validated",
-    description: "The graph passes validation. No simulation evidence yet.",
+    label: "stages.validated.label",
+    description: "stages.validated.description",
   },
   simulated: {
-    label: "Simulated",
-    description:
-      "Fixture-only branch coverage passed for the current graph. Providers were not called.",
+    label: "stages.simulated.label",
+    description: "stages.simulated.description",
   },
   queued: {
-    label: "Queued",
-    description: "Accepted and pending — apply, publish, job, or run in flight.",
+    label: "stages.queued.label",
+    description: "stages.queued.description",
   },
   executed: {
-    label: "Executed",
-    description: "Ran to a terminal state. See the run status for the outcome.",
+    label: "stages.executed.label",
+    description: "stages.executed.description",
   },
   delivered: {
-    label: "Delivered",
-    description: "At least one external effect completed with provider evidence.",
+    label: "stages.delivered.label",
+    description: "stages.delivered.description",
   },
   uncertain: {
-    label: "Uncertain",
-    description: "Needs human review — unconfirmed effects or failed verification.",
+    label: "stages.uncertain.label",
+    description: "stages.uncertain.description",
   },
 };
 

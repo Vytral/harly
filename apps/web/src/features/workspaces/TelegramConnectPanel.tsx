@@ -5,6 +5,7 @@ import type { IntegrationHealthView } from "@/features/integrations/health/model
 import { providerStatusLabel, providerStatusTone } from "@/features/integrations/health/connection-label";
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { toast } from "@/lib/notification-island/toast";
 
 import {
@@ -57,6 +58,7 @@ export function TelegramConnectPanel({
   tileClassName: string;
   description: string;
 }) {
+  const t = useTranslations("features.workspaces.telegramConnectPanel");
   const router = useRouter();
   const isConnected = status.hasToken;
   const [open, setOpen] = useState(isConnected);
@@ -65,14 +67,14 @@ export function TelegramConnectPanel({
   const statusTone = providerStatusTone(health, isConnected ? (status.enabled ? "on" : "off") : "neutral");
   const statusLabel = providerStatusLabel(health, isConnected
     ? status.enabled
-      ? "Connected"
-      : "Disabled"
-    : "Not connected");
+      ? t("connected")
+      : t("disabled")
+    : t("notConnected"));
 
   function toggleEnabled(next: boolean) {
     if (!isConnected) return;
     if (next && !status.chatId) {
-      toast.error("Add a chat ID first.");
+      toast.error(t("addChatIdFirst"));
       return;
     }
     startToggle(async () => {
@@ -82,11 +84,11 @@ export function TelegramConnectPanel({
         events: status.events,
       });
       if (!result.ok) {
-        toast.error(result.error ?? "Could not update.");
+        toast.error(result.error ?? t("couldNotUpdate"));
         return;
       }
       toast.success(
-        next ? "Telegram notifications on" : "Telegram notifications off",
+        next ? t("notificationsOn") : t("notificationsOff"),
       );
       router.refresh();
     });
@@ -115,7 +117,7 @@ export function TelegramConnectPanel({
                 ) : (
                   <KeyDuotoneIcon className="size-4" />
                 )}
-                {isConnected ? (open ? "Hide settings" : "Manage") : "Connect"}
+                {isConnected ? (open ? t("hideSettings") : t("manage")) : t("connect")}
               </Button>
               {isConnected ? (
                 <label className="flex h-9 items-center gap-2 rounded-[var(--radius-btn)] border border-mist-border bg-pure-snow px-3 text-sm">
@@ -123,10 +125,10 @@ export function TelegramConnectPanel({
                     checked={status.enabled}
                     disabled={togglePending}
                     onCheckedChange={toggleEnabled}
-                    aria-label="Enable Telegram notifications"
+                    aria-label={t("enableNotificationsAria")}
                   />
                   <span className="text-muted-foreground">
-                    {status.enabled ? "On" : "Off"}
+                    {status.enabled ? t("on") : t("off")}
                   </span>
                 </label>
               ) : null}
@@ -140,8 +142,9 @@ export function TelegramConnectPanel({
         <div className="flex items-start gap-2 rounded-xl border border-clay/30 bg-clay/5 px-3 py-2 text-sm text-clay">
           <WarningCircleIcon className="mt-0.5 size-4 shrink-0" />
           <p>
-            Set <code className="font-mono text-xs">AI_ENCRYPTION_KEY</code> on
-            the server to store the bot token.
+            {t.rich("encryptionKeyMissing", {
+              code: (chunks) => <code className="font-mono text-xs">{chunks}</code>,
+            })}
           </p>
         </div>
       ) : null}
@@ -149,20 +152,20 @@ export function TelegramConnectPanel({
       {isConnected ? (
         <Card className="overflow-hidden p-0">
           <div className="grid grid-cols-1 divide-y sm:grid-cols-3 sm:divide-x sm:divide-y-0">
-            <StatCell label="Bot">
+            <StatCell label={t("bot")}>
               <TelegramLogo className="size-4" />
-              {status.botUsername ? `@${status.botUsername}` : providerStatusLabel(health, "Connected")}
+              {status.botUsername ? `@${status.botUsername}` : providerStatusLabel(health, t("connected"))}
             </StatCell>
-            <StatCell label="Chat">
+            <StatCell label={t("chat")}>
               <span className="font-mono text-[13px]">
-                {status.chatId ?? "Not set"}
+                {status.chatId ?? t("notSet")}
               </span>
             </StatCell>
-            <StatCell label="Events">
+            <StatCell label={t("events")}>
               <span className="text-muted-foreground">
                 {status.events.length === 0
-                  ? "None selected"
-                  : `${status.events.length} subscribed`}
+                  ? t("noneSelected")
+                  : t("eventsSubscribed", { count: status.events.length })}
               </span>
             </StatCell>
           </div>
@@ -191,6 +194,7 @@ function TelegramConnectForm({
   events: EventOption[];
   onSaved: () => void;
 }) {
+  const t = useTranslations("features.workspaces.telegramConnectPanel");
   const router = useRouter();
   const [botToken, setBotToken] = useState("");
   const [chatId, setChatId] = useState(status.chatId ?? "");
@@ -218,10 +222,10 @@ function TelegramConnectForm({
         chatId: chatId || undefined,
       });
       if (!result.ok) {
-        toast.error(result.error ?? "Test failed.");
+        toast.error(result.error ?? t("testFailed"));
         return;
       }
-      toast.success("Test message sent to Telegram");
+      toast.success(t("testSent"));
     });
   }
 
@@ -234,10 +238,10 @@ function TelegramConnectForm({
         events: selected,
       });
       if (!result.ok) {
-        toast.error(result.error ?? "Could not save.");
+        toast.error(result.error ?? t("couldNotSave"));
         return;
       }
-      toast.success("Telegram settings saved");
+      toast.success(t("settingsSaved"));
       onSaved();
     });
   }
@@ -246,10 +250,10 @@ function TelegramConnectForm({
     startDisconnect(async () => {
       const result = await disconnectTelegramAction();
       if (!result.ok) {
-        toast.error(result.error ?? "Could not disconnect.");
+        toast.error(result.error ?? t("couldNotDisconnect"));
         return;
       }
-      toast.success("Telegram disconnected");
+      toast.success(t("disconnected"));
       router.refresh();
     });
   }
@@ -259,10 +263,10 @@ function TelegramConnectForm({
       <div className="mb-5 flex items-start justify-between gap-4">
         <div className="space-y-0.5">
           <h2 className="font-display text-base font-semibold tracking-tight">
-            {status.hasToken ? "Manage connection" : "Connect Telegram"}
+            {status.hasToken ? t("manageConnection") : t("connectTelegram")}
           </h2>
           <p className="text-sm text-muted-foreground">
-            Your bot token is validated with Telegram and encrypted at rest.
+            {t("tokenDescription")}
           </p>
         </div>
         <a
@@ -271,37 +275,38 @@ function TelegramConnectForm({
           rel="noopener noreferrer"
           className="inline-flex shrink-0 items-center gap-1 text-xs font-medium text-pine transition-colors hover:text-pine-strong"
         >
-          BotFather docs
+          {t("botFatherDocs")}
           <ArrowUpRightIcon className="size-3.5" />
         </a>
       </div>
 
       <div className="space-y-5">
         <div className="rounded-lg border bg-muted/30 px-3 py-2.5 text-xs text-muted-foreground space-y-1.5">
-          <p className="font-medium text-foreground">How to set up:</p>
+          <p className="font-medium text-foreground">{t("howToSetUp")}</p>
           <ol className="list-decimal space-y-1 pl-4">
             <li>
-              Message <code>@BotFather</code> on Telegram → <code>/newbot</code>{" "}
-              → copy the token
+              {t.rich("stepBotFather", {
+                code: (chunks) => <code>{chunks}</code>,
+              })}
             </li>
-            <li>Add the bot to your group/channel (as admin for channels)</li>
+            <li>{t("stepAddBot")}</li>
             <li>
-              Get the chat ID: forward a message from the chat to{" "}
-              <code>@userinfobot</code>, or use{" "}
-              <code>getUpdates</code> on the Bot API
+              {t.rich("stepChatId", {
+                code: (chunks) => <code>{chunks}</code>,
+              })}
             </li>
           </ol>
         </div>
 
         <div className="space-y-2">
-          <Label htmlFor="tg-token">Bot token</Label>
+          <Label htmlFor="tg-token">{t("botToken")}</Label>
           <SecretInput
             id="tg-token"
             value={botToken}
             onChange={(e) => setBotToken(e.target.value)}
             placeholder={
               status.hasToken
-                ? "•••••••• (stored, leave blank to keep)"
+                ? t("tokenStoredPlaceholder")
                 : "123456789:AAF3xkcyTgh…"
             }
             className="font-mono text-xs"
@@ -309,22 +314,22 @@ function TelegramConnectForm({
         </div>
 
         <div className="space-y-2">
-          <Label htmlFor="tg-chat">Chat ID</Label>
+          <Label htmlFor="tg-chat">{t("chatIdLabel")}</Label>
           <Input
             id="tg-chat"
             value={chatId}
             onChange={(e) => setChatId(e.target.value)}
-            placeholder="e.g. -1001234567890"
+            placeholder={t("chatIdPlaceholder")}
             autoComplete="off"
             className="font-mono text-xs"
           />
           <p className="text-xs text-muted-foreground">
-            Group and channel IDs are negative numbers. The bot must be a member.
+            {t("chatIdHint")}
           </p>
         </div>
 
         <div className="space-y-2">
-          <Label>Notify on</Label>
+          <Label>{t("notifyOn")}</Label>
           <div className="flex flex-wrap gap-1.5">
             {events.map((event) => (
               <button
@@ -347,8 +352,8 @@ function TelegramConnectForm({
         <SettingRow
           htmlFor="telegramconnectpanel-switch-1"
           className="rounded-[var(--radius-inner)] border border-hairline px-4 py-3"
-          title={<>Enable</>}
-          description={<>When off, no messages are sent.</>}
+          title={t("enable")}
+          description={t("whenOffNoMessages")}
           control={<Switch id="telegramconnectpanel-switch-1" checked={enabled} onCheckedChange={setEnabled} />}
         />
       </div>
@@ -364,7 +369,7 @@ function TelegramConnectForm({
             disabled={disconnecting}
           >
             {disconnecting ? <SpinnerIcon className="size-3.5" /> : null}
-            Disconnect
+            {t("disconnect")}
           </Button>
         ) : (
           <span />
@@ -381,11 +386,11 @@ function TelegramConnectForm({
             ) : (
               <PaperPlaneDuotoneIcon className="size-4" />
             )}
-            Send test
+            {t("sendTest")}
           </Button>
           <Button onClick={save} disabled={saving || !chatId.trim()}>
             {saving ? <SpinnerIcon className="size-4" /> : null}
-            Save
+            {t("save")}
           </Button>
         </div>
       </div>

@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from "react";
 import Link from "next/link";
+import { useLocale, useTranslations } from "next-intl";
 import { AlertTriangle, Users } from "lucide-react";
 import { toast } from "@/lib/notification-island/toast";
 
@@ -25,11 +26,22 @@ export function DuplicateDetectionCard({
   suspects: SuspectCandidate[];
   aiConfigured: boolean;
 }) {
+  const t = useTranslations("features.candidates.DuplicateDetectionCard");
+  const locale = useLocale();
   const [matches, setMatches] = useState<DuplicateMatch[] | null>(null);
   const [checked, setChecked] = useState(false);
   const [isPending, startTransition] = useTransition();
 
   if (suspects.length === 0 && !checked) return null;
+
+  // Deterministic matches carry stable signal codes; AI matches keep their model-written reason.
+  function matchReason(match: DuplicateMatch) {
+    if (!match.signals || match.signals.length === 0) return match.reason;
+    const signals = new Intl.ListFormat(locale, { style: "long", type: "conjunction" }).format(
+      match.signals.map((signal) => t(`signals.${signal}`)),
+    );
+    return t("sharedIdentity", { signals });
+  }
 
   function runAiCheck() {
     startTransition(async () => {
@@ -55,7 +67,7 @@ export function DuplicateDetectionCard({
         <CardContent className="space-y-3">
           <div className="flex items-center gap-2 text-clay">
             <Users className="size-4 shrink-0" />
-            <p className="text-sm font-medium">Possible duplicate candidates</p>
+            <p className="text-sm font-medium">{t("possibleDuplicates")}</p>
           </div>
           <ul className="space-y-2">
             {matches.map((m) => (
@@ -67,7 +79,7 @@ export function DuplicateDetectionCard({
                   >
                     {m.fullName}
                   </Link>
-                  <p className="text-xs text-muted-foreground truncate">{m.reason}</p>
+                  <p className="text-xs text-muted-foreground truncate">{matchReason(m)}</p>
                 </div>
                 <span
                   className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-semibold ${
@@ -76,7 +88,7 @@ export function DuplicateDetectionCard({
                       : "bg-clay/15 text-clay"
                   }`}
                 >
-                  {m.confidence === "high" ? "Likely duplicate" : "Possible match"}
+                  {m.confidence === "high" ? t("likelyDuplicate") : t("possibleMatch")}
                 </span>
               </li>
             ))}
@@ -93,9 +105,7 @@ export function DuplicateDetectionCard({
         <div className="flex items-center gap-2.5 text-clay">
           <AlertTriangle className="size-4 shrink-0" />
           <p className="text-sm">
-            {suspects.length === 1
-              ? "1 candidate with a similar name exists in your workspace."
-              : `${suspects.length} candidates with similar names exist in your workspace.`}
+            {t("similarNames", { count: suspects.length })}
           </p>
         </div>
         {aiConfigured ? (
@@ -104,15 +114,15 @@ export function DuplicateDetectionCard({
             variant="outline"
             onClick={runAiCheck}
             loading={isPending}
-            loadingText="Checking"
+            loadingText={t("checking")}
           >
-            Verify with AI
+            {t("verifyWithAi")}
           </AiButton>
         ) : (
           <div className="flex flex-wrap gap-2">
             {suspects.map((s) => (
               <Button key={s.candidateId} asChild size="sm" variant="outline">
-                <Link href={`/dashboard/candidates/${s.candidateId}`}>View {s.fullName}</Link>
+                <Link href={`/dashboard/candidates/${s.candidateId}`}>{t("viewCandidate", { name: s.fullName })}</Link>
               </Button>
             ))}
           </div>

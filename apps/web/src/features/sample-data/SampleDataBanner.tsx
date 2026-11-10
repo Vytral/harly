@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 
 import { removeSampleDataAction } from "./actions";
 
@@ -14,6 +15,7 @@ export function SampleDataBanner({ canManage }: { canManage: boolean }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
+  const t = useTranslations("features.sampleData.sampleDataBanner");
 
   function remove() {
     setError(null);
@@ -33,8 +35,8 @@ export function SampleDataBanner({ canManage }: { canManage: boolean }) {
       className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border/70 bg-muted/40 px-4 py-2.5"
     >
       <p className="text-sm text-muted-foreground">
-        <span className="font-medium text-foreground">You&apos;re viewing sample data.</span>{" "}
-        Sample records are labelled &ldquo;Sample&rdquo; and stay off your careers page unless you publish them.
+        <span className="font-medium text-foreground">{t("viewingTitle")}</span>{" "}
+        {t("viewingDescription")}
       </p>
       <div className="flex items-center gap-3">
         {error ? (
@@ -49,7 +51,7 @@ export function SampleDataBanner({ canManage }: { canManage: boolean }) {
             disabled={pending}
             className="shrink-0 rounded-lg px-2.5 py-1.5 text-sm font-medium text-primary transition-colors hover:bg-background disabled:opacity-50"
           >
-            {pending ? "Removing…" : "Remove sample data"}
+            {pending ? t("removing") : t("remove")}
           </button>
         ) : null}
       </div>

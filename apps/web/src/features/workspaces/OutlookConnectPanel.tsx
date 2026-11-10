@@ -5,6 +5,7 @@ import type { IntegrationHealthView } from "@/features/integrations/health/model
 import { providerStatusLabel, providerStatusTone } from "@/features/integrations/health/connection-label";
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { toast } from "@/lib/notification-island/toast";
 
 import {
@@ -59,6 +60,7 @@ export function OutlookConnectPanel({
   tileClassName: string;
   description: string;
 }) {
+  const t = useTranslations("features.workspaces.outlookConnectPanel");
   const router = useRouter();
   const isConnected = status.hasToken;
   const [open, setOpen] = useState(isConnected || !status.hasCredentials);
@@ -68,16 +70,16 @@ export function OutlookConnectPanel({
   const statusTone = providerStatusTone(health, isConnected ? (status.enabled ? "on" : "off") : "neutral");
   const statusLabel = providerStatusLabel(health, isConnected
     ? status.enabled
-      ? "Connected"
-      : "Disabled"
-    : "Not connected");
+      ? t("statusConnected")
+      : t("statusDisabled")
+    : t("statusNotConnected"));
 
   const installUrl = `/api/integrations/outlook/install?ws=${workspaceId}`;
 
   function toggleEnabled(next: boolean) {
     if (!isConnected) return;
     if (next && !status.calendarId) {
-      toast.error("Select a calendar first.");
+      toast.error(t("selectCalendarFirst"));
       return;
     }
     startToggle(async () => {
@@ -87,11 +89,11 @@ export function OutlookConnectPanel({
         events: status.events,
       });
       if (!result.ok) {
-        toast.error(result.error ?? "Could not update.");
+        toast.error(result.error ?? t("couldNotUpdate"));
         return;
       }
       toast.success(
-        next ? "Outlook notifications on" : "Outlook notifications off",
+        next ? t("notificationsOn") : t("notificationsOff"),
       );
       router.refresh();
     });
@@ -101,10 +103,10 @@ export function OutlookConnectPanel({
     startDisconnect(async () => {
       const result = await disconnectOutlookAction();
       if (!result.ok) {
-        toast.error(result.error ?? "Could not disconnect.");
+        toast.error(result.error ?? t("couldNotDisconnect"));
         return;
       }
-      toast.success("Outlook disconnected");
+      toast.success(t("disconnected"));
       router.refresh();
     });
   }
@@ -128,17 +130,17 @@ export function OutlookConnectPanel({
                   aria-expanded={open}
                 >
                   <GearSixIcon className="size-4" />
-                  {open ? "Hide settings" : "Manage"}
+                  {open ? t("hideSettings") : t("manage")}
                 </Button>
                 <label className="flex h-9 items-center gap-2 rounded-[var(--radius-btn)] border border-mist-border bg-pure-snow px-3 text-sm">
                   <Switch
                     checked={status.enabled}
                     disabled={togglePending}
                     onCheckedChange={toggleEnabled}
-                    aria-label="Enable Outlook notifications"
+                    aria-label={t("enableNotifications")}
                   />
                   <span className="text-muted-foreground">
-                    {status.enabled ? "On" : "Off"}
+                    {status.enabled ? t("on") : t("off")}
                   </span>
                 </label>
               </>
@@ -146,7 +148,7 @@ export function OutlookConnectPanel({
               <Button asChild>
                 <a href={installUrl}>
                   <MicrosoftOutlookLogo className="size-4" />
-                  Connect Microsoft
+                  {t("connectMicrosoft")}
                 </a>
               </Button>
             ) : (
@@ -156,7 +158,7 @@ export function OutlookConnectPanel({
                 aria-expanded={open}
               >
                 <MicrosoftOutlookLogo className="size-4" />
-                Set up Outlook
+                {t("setUp")}
               </Button>
             )
           ) : null
@@ -168,8 +170,9 @@ export function OutlookConnectPanel({
         <div className="flex items-start gap-2 rounded-xl border border-clay/30 bg-clay/5 px-3 py-2 text-sm text-clay">
           <WarningCircleIcon className="mt-0.5 size-4 shrink-0" />
           <p>
-            Set <code className="font-mono text-xs">AI_ENCRYPTION_KEY</code> on
-            the server to enable encrypted credential storage.
+            {t.rich("encryptionKeyNotice", {
+              code: (chunks) => <code className="font-mono text-xs">{chunks}</code>,
+            })}
           </p>
         </div>
       ) : null}
@@ -177,18 +180,16 @@ export function OutlookConnectPanel({
       {isConnected ? (
         <Card className="overflow-hidden p-0">
           <div className="grid grid-cols-1 divide-y sm:grid-cols-3 sm:divide-x sm:divide-y-0">
-            <StatCell label="Account">
+            <StatCell label={t("account")}>
               <MicrosoftOutlookLogo className="size-4" />
-              {status.accountEmail ?? "Not connected"}
+              {status.accountEmail ?? t("statusNotConnected")}
             </StatCell>
-            <StatCell label="Calendar">
-              {status.calendarId ? "Selected" : "Not selected"}
+            <StatCell label={t("calendar")}>
+              {status.calendarId ? t("calendarSelected") : t("calendarNotSelected")}
             </StatCell>
-            <StatCell label="Events">
+            <StatCell label={t("events")}>
               <span className="text-muted-foreground">
-                {status.events.length === 0
-                  ? "None selected"
-                  : `${status.events.length} subscribed`}
+                {t("eventsSummary", { count: status.events.length })}
               </span>
             </StatCell>
           </div>
@@ -215,6 +216,7 @@ export function OutlookConnectPanel({
 }
 
 function OutlookCredentialsForm({ onSaved }: { onSaved: () => void }) {
+  const t = useTranslations("features.workspaces.outlookConnectPanel");
   const [clientId, setClientId] = useState("");
   const [clientSecret, setClientSecret] = useState("");
   const [saving, startSave] = useTransition();
@@ -226,10 +228,10 @@ function OutlookCredentialsForm({ onSaved }: { onSaved: () => void }) {
         clientSecret,
       });
       if (!result.ok) {
-        toast.error(result.error ?? "Could not save.");
+        toast.error(result.error ?? t("couldNotSave"));
         return;
       }
-      toast.success("Outlook credentials saved. You can now connect.");
+      toast.success(t("credentials.credentialsSaved"));
       onSaved();
     });
   }
@@ -244,11 +246,10 @@ function OutlookCredentialsForm({ onSaved }: { onSaved: () => void }) {
       <div className="mb-5 flex items-start justify-between gap-4">
         <div className="space-y-0.5">
           <h2 className="font-display text-base font-semibold tracking-tight">
-            Set up Microsoft Outlook
+            {t("credentials.title")}
           </h2>
           <p className="text-sm text-muted-foreground">
-            Register an app in Azure, then paste the credentials. Your Client
-            Secret is encrypted at rest.
+            {t("credentials.description")}
           </p>
         </div>
         <a
@@ -257,61 +258,63 @@ function OutlookCredentialsForm({ onSaved }: { onSaved: () => void }) {
           rel="noopener noreferrer"
           className="inline-flex shrink-0 items-center gap-1 text-xs font-medium text-pine transition-colors hover:text-pine-strong"
         >
-          Azure portal
+          {t("credentials.azurePortal")}
           <ArrowUpRightIcon className="size-3.5" />
         </a>
       </div>
 
       <div className="space-y-4">
         <div className="rounded-lg border bg-muted/30 px-3 py-2.5 text-xs text-muted-foreground space-y-1.5">
-          <p className="font-medium text-foreground">How to get credentials:</p>
+          <p className="font-medium text-foreground">{t("credentials.howTo")}</p>
           <ol className="list-decimal space-y-1 pl-4">
             <li>
-              Go to{" "}
-              <a
-                href="https://portal.azure.com/#blade/Microsoft_AAD_RegisteredApps/ApplicationsListBlade"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="underline"
-              >
-                Azure App Registrations
-              </a>{" "}
-              and register a new app
+              {t.rich("credentials.step1", {
+                link: (chunks) => (
+                  <a
+                    href="https://portal.azure.com/#blade/Microsoft_AAD_RegisteredApps/ApplicationsListBlade"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="underline"
+                  >
+                    {chunks}
+                  </a>
+                ),
+              })}
             </li>
             <li>
-              Under Authentication, add a redirect URI: <code>{redirectUrl}</code>
+              {t.rich("credentials.step2", {
+                code: (chunks) => <code>{chunks}</code>,
+                redirectUrl,
+              })}
             </li>
-            <li>
-              Under API permissions, add: Cal.ReadWrite, Mail.Send,
-              offline_access, User.Read
-            </li>
-            <li>Copy the Application (client) ID and create a Client Secret</li>
+            <li>{t("credentials.step3")}</li>
+            <li>{t("credentials.step4")}</li>
           </ol>
         </div>
 
         <div className="space-y-2">
-          <Label htmlFor="outlook-client-id">Application (client) ID</Label>
+          <Label htmlFor="outlook-client-id">{t("credentials.clientIdLabel")}</Label>
           <Input
             id="outlook-client-id"
             value={clientId}
             onChange={(e) => setClientId(e.target.value)}
-            placeholder="e.g. 12345678-1234-1234-1234-123456789012"
+            placeholder={t("credentials.clientIdPlaceholder")}
             autoComplete="off"
             className="font-mono text-xs"
           />
         </div>
 
         <div className="space-y-2">
-          <Label htmlFor="outlook-client-secret">Client Secret</Label>
+          <Label htmlFor="outlook-client-secret">{t("credentials.clientSecretLabel")}</Label>
           <SecretInput
             id="outlook-client-secret"
             value={clientSecret}
             onChange={(e) => setClientSecret(e.target.value)}
-            placeholder="e.g. ~abc..."
+            placeholder={t("credentials.clientSecretPlaceholder")}
             className="font-mono text-xs"
           />
           <p className="text-xs text-muted-foreground">
-            Encrypted at rest. Never visible again after saving.
+            {t("credentials.secretHelp")}
           </p>
         </div>
       </div>
@@ -322,7 +325,7 @@ function OutlookCredentialsForm({ onSaved }: { onSaved: () => void }) {
           disabled={saving || !clientId.trim() || !clientSecret.trim()}
         >
           {saving ? <SpinnerIcon className="size-4" /> : null}
-          Save credentials
+          {t("credentials.saveCredentials")}
         </Button>
       </div>
     </Card>
@@ -342,6 +345,7 @@ function OutlookConfigForm({
   onDisconnect: () => void;
   disconnecting: boolean;
 }) {
+  const t = useTranslations("features.workspaces.outlookConnectPanel");
   const [calendars, setCalendars] = useState<OutlookCalendarItem[]>([]);
   const [loadingCalendars, startLoadCalendars] = useTransition();
   const [calendarId, setCalendarId] = useState(status.calendarId ?? "");
@@ -375,16 +379,16 @@ function OutlookConfigForm({
     startTest(async () => {
       const result = await testOutlookAction();
       if (!result.ok) {
-        toast.error(result.error ?? "Test failed.");
+        toast.error(result.error ?? t("testFailed"));
         return;
       }
-      toast.success("Test email sent via Outlook!");
+      toast.success(t("testEmailSent"));
     });
   }
 
   function save() {
     if (!calendarId) {
-      toast.error("Select a calendar first.");
+      toast.error(t("selectCalendarFirst"));
       return;
     }
     startSave(async () => {
@@ -394,10 +398,10 @@ function OutlookConfigForm({
         events: selected,
       });
       if (!result.ok) {
-        toast.error(result.error ?? "Could not save.");
+        toast.error(result.error ?? t("couldNotSave"));
         return;
       }
-      toast.success("Outlook settings saved");
+      toast.success(t("settingsSaved"));
       onSaved();
     });
   }
@@ -406,17 +410,16 @@ function OutlookConfigForm({
     <Card className="p-6">
       <div className="mb-5 space-y-0.5">
         <h2 className="font-display text-base font-semibold tracking-tight">
-          Configure Outlook
+          {t("config.title")}
         </h2>
         <p className="text-sm text-muted-foreground">
-          Connected to {status.accountEmail ?? "Outlook"}. Choose a calendar and
-          events.
+          {t("connectedTo", { account: status.accountEmail ?? "Outlook" })}
         </p>
       </div>
 
       <div className="space-y-5">
         <div className="space-y-2">
-          <Label>Calendar</Label>
+          <Label>{t("calendar")}</Label>
           {!loaded ? (
             <Button
               variant="outline"
@@ -425,13 +428,13 @@ function OutlookConfigForm({
               disabled={loadingCalendars}
             >
               {loadingCalendars ? <SpinnerIcon className="size-4" /> : null}
-              Load calendars from Outlook
+              {t("config.loadCalendars")}
             </Button>
           ) : (
             <div className="max-h-48 space-y-1 overflow-y-auto rounded-lg border p-2">
               {calendars.length === 0 ? (
                 <p className="py-2 text-center text-sm text-muted-foreground">
-                  No calendars found.
+                  {t("config.noCalendars")}
                 </p>
               ) : (
                 calendars.map((cal) => (
@@ -455,7 +458,7 @@ function OutlookConfigForm({
         </div>
 
         <div className="space-y-2">
-          <Label>Notify on</Label>
+          <Label>{t("config.notifyOn")}</Label>
           <div className="flex flex-wrap gap-1.5">
             {events.map((event) => (
               <button
@@ -478,8 +481,8 @@ function OutlookConfigForm({
         <SettingRow
           htmlFor="outlookconnectpanel-switch-1"
           className="rounded-[var(--radius-inner)] border border-hairline px-4 py-3"
-          title={<>Enable</>}
-          description={<>When off, no notifications are sent.</>}
+          title={t("config.enableTitle")}
+          description={t("config.enableDescription")}
           control={<Switch id="outlookconnectpanel-switch-1" checked={enabled} onCheckedChange={setEnabled} />}
         />
       </div>
@@ -494,7 +497,7 @@ function OutlookConfigForm({
           disabled={disconnecting}
         >
           {disconnecting ? <SpinnerIcon className="size-3.5" /> : null}
-          Disconnect
+          {t("config.disconnect")}
         </Button>
         <div className="flex items-center gap-2">
           <Button
@@ -508,11 +511,11 @@ function OutlookConfigForm({
             ) : (
               <PaperPlaneDuotoneIcon className="size-4" />
             )}
-            Send test
+            {t("config.sendTest")}
           </Button>
           <Button onClick={save} disabled={saving || !calendarId}>
             {saving ? <SpinnerIcon className="size-4" /> : null}
-            Save
+            {t("save")}
           </Button>
         </div>
       </div>

@@ -1,10 +1,12 @@
 import { Text } from "@react-email/components";
 
+import { emailTranslator } from "../i18n";
 import { WorkspaceLayout } from "./WorkspaceLayout";
 import type { SocialLink } from "./HarlyLayout";
 
 export type OfferWithdrawnProps = {
   candidateName: string;
+  locale?: string | null;
   companyName: string;
   companyLogoUrl?: string;
   accentColor?: string;
@@ -17,12 +19,14 @@ export type OfferWithdrawnProps = {
 export function offerWithdrawnSubject({
   companyName,
   jobTitle,
-}: Pick<OfferWithdrawnProps, "companyName" | "jobTitle">) {
-  return `Update on your offer — ${jobTitle} at ${companyName}`;
+  locale,
+}: Pick<OfferWithdrawnProps, "companyName" | "jobTitle" | "locale">) {
+  return emailTranslator(locale)("offerWithdrawn.subject", { company: companyName, job: jobTitle });
 }
 
 export function OfferWithdrawn({
   candidateName,
+  locale,
   companyName,
   companyLogoUrl,
   accentColor,
@@ -31,9 +35,11 @@ export function OfferWithdrawn({
   jobTitle,
   reason,
 }: OfferWithdrawnProps) {
+  const t = emailTranslator(locale);
   return (
     <WorkspaceLayout
-      preview={`An update on your offer for ${jobTitle} at ${companyName}.`}
+      preview={t("offerWithdrawn.preview", { job: jobTitle, company: companyName })}
+      locale={locale}
       companyName={companyName}
       companyLogoUrl={companyLogoUrl}
       accentColor={accentColor}
@@ -41,15 +47,14 @@ export function OfferWithdrawn({
       hideBranding={hideBranding}
     >
       <Text className="text-[40px] leading-[1.05] tracking-[-1px] font-inter text-fg m-0 mb-3.5 font-medium">
-        Offer update
+        {t("offerWithdrawn.heading")}
       </Text>
-      <Text className="text-[14px] leading-[1.5] font-inter text-fg-2 m-0 mb-4">Hi {candidateName},</Text>
+      <Text className="text-[14px] leading-[1.5] font-inter text-fg-2 m-0 mb-4">{t("common.greeting", { name: candidateName })}</Text>
       <Text className="text-[14px] leading-[1.5] font-inter text-fg-2 m-0 mb-4">
-        {reason ??
-          `The offer for ${jobTitle} at ${companyName} has been withdrawn.`}
+        {reason ?? t("offerWithdrawn.body", { job: jobTitle, company: companyName })}
       </Text>
       <Text className="text-[14px] leading-[1.5] font-inter text-fg-2 m-0 mb-4">
-        Questions? Reply to this email and we&apos;ll walk you through what happened.
+        {t("offerWithdrawn.questions")}
       </Text>
     </WorkspaceLayout>
   );

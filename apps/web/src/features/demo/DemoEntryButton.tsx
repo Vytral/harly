@@ -1,4 +1,5 @@
 import { isDemoMode } from "@harly/config";
+import { getTranslations } from "next-intl/server";
 
 /**
  * Floating "try the demo" call-to-action, fixed to the bottom-right of the
@@ -6,8 +7,9 @@ import { isDemoMode } from "@harly/config";
  * installs show nothing new on their board. Links to the dedicated /enter
  * page (shared credentials + Turnstile).
  */
-export function DemoEntryButton() {
+export async function DemoEntryButton() {
   if (!isDemoMode()) return null;
+  const t = await getTranslations("features.demo.demoEntryButton");
 
   return (
     <a
@@ -23,7 +25,7 @@ export function DemoEntryButton() {
           strokeLinejoin="round"
         />
       </svg>
-      Explore the ATS
+      {t("cta")}
     </a>
   );
 }

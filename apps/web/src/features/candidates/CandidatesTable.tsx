@@ -4,6 +4,7 @@ import { useConfirm } from "@/components/ui/confirm-dialog";
 import { useMemo, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 import type { Route } from "next";
 import {
   CheckCircle2,
@@ -110,20 +111,6 @@ function uniqueSorted(values: (string | null)[]) {
   ).sort((a, b) => a.localeCompare(b));
 }
 
-const CSV_HEADERS = [
-  "Full name",
-  "Email",
-  "Phone",
-  "Location",
-  "Role",
-  "Department",
-  "Stage",
-  "Status",
-  "Source",
-  "Tags",
-  "Applied at",
-];
-
 function candidateToCsvRow(row: CandidateRow): string[] {
   return [
     row.fullName,
@@ -193,6 +180,9 @@ export function CandidatesTable({
     currentUserId: string;
   };
 }) {
+  const t = useTranslations("candidates.table");
+  const tConfirm = useTranslations("labels.pipeline.confirmation");
+  const tx = useTranslations("features.candidates.candidatesTable");
   const router = useRouter();
   const canReject = access?.canReject !== false;
   const canDelete = access?.canDelete !== false;
@@ -330,7 +320,7 @@ export function CandidatesTable({
     const applicationIds = selectedRows.map((r) => r.applicationId as string);
 
     if (applicationIds.length === 0) {
-      toast.error("Selected candidates have no application to update.");
+      toast.error(tx("noApplicationSelected"));
       return;
     }
     // Every reject, one candidate or many, asks for a reason and an email
@@ -350,7 +340,7 @@ export function CandidatesTable({
     if (
       applicationIds.length > 1 &&
       next === "hired" &&
-      !(await confirm(bulkDecisionConfirmCopy(next, applicationIds.length)))
+      !(await confirm(bulkDecisionConfirmCopy(tConfirm, next, applicationIds.length)))
     ) {
       return;
     }
@@ -360,16 +350,16 @@ export function CandidatesTable({
         status: next,
       });
       if (result.success) {
-        const count = `Updated ${applicationIds.length} candidate${applicationIds.length === 1 ? "" : "s"}.`;
+        const message = tx("bulkUpdated", { count: applicationIds.length });
         if (result.emailWarning) {
-          toast.warning(`${count} ${result.emailWarning}`);
+          toast.warning(tx("withWarning", { message, warning: result.emailWarning }));
         } else {
-          toast.success(count);
+          toast.success(message);
         }
         setSelected(new Set());
         router.refresh();
       } else {
-        toast.error(result.error ?? "Could not update candidates.");
+        toast.error(result.error ?? tx("couldNotUpdateCandidates"));
       }
     });
   }
@@ -379,7 +369,7 @@ export function CandidatesTable({
     next: "hired" | "rejected" | "active",
   ) {
     if (!row.applicationId) {
-      toast.error("This candidate has no application to update.");
+      toast.error(tx("noApplicationForCandidate"));
       return;
     }
     if (next === "rejected") {
@@ -401,13 +391,13 @@ export function CandidatesTable({
       });
       if (result.success) {
         if (result.emailWarning) {
-          toast.warning(`${row.fullName} updated. ${result.emailWarning}`);
+          toast.warning(tx("updatedWithWarning", { name: row.fullName, warning: result.emailWarning }));
         } else {
-          toast.success(`${row.fullName} updated.`);
+          toast.success(tx("updated", { name: row.fullName }));
         }
         router.refresh();
       } else {
-        toast.error(result.error ?? "Could not update candidate.");
+        toast.error(result.error ?? tx("couldNotUpdateCandidate"));
       }
     });
   }
@@ -416,9 +406,9 @@ export function CandidatesTable({
     if (
       !(await confirm({
         tone: "destructive",
-        title: `Move ${row.fullName} to trash?`,
-        description: "They leave the active list. You can restore them later from the Trash tab.",
-        confirmLabel: "Move to trash",
+        title: tx("moveToTrashTitle", { name: row.fullName }),
+        description: tx("trashDescription"),
+        confirmLabel: tx("moveToTrash"),
       }))
     ) {
       return;
@@ -426,7 +416,7 @@ export function CandidatesTable({
     startTransition(async () => {
       const result = await trashCandidateAction(row.id);
       if (result.success) {
-        toast.success(`${row.fullName} moved to trash.`);
+        toast.success(tx("movedToTrash", { name: row.fullName }));
         setSelected((prev) => {
           const next = new Set(prev);
           next.delete(row.id);
@@ -434,7 +424,7 @@ export function CandidatesTable({
         });
         router.refresh();
       } else {
-        toast.error(result.error ?? "Could not delete candidate.");
+        toast.error(result.error ?? tx("couldNotDeleteCandidate"));
       }
     });
   }
@@ -447,16 +437,16 @@ export function CandidatesTable({
       if (result.success) {
         toast.success(
           row.inPool
-            ? `${row.fullName} removed from pool.`
-            : `${row.fullName} added to pool.`,
+            ? tx("removedFromPool", { name: row.fullName })
+            : tx("addedToPool", { name: row.fullName }),
         );
         router.refresh();
       } else {
         toast.error(
           result.error ??
             (row.inPool
-              ? "Could not remove from pool."
-              : "Could not add to pool."),
+              ? tx("couldNotRemoveFromPool")
+              : tx("couldNotAddToPool")),
         );
         router.refresh();
       }
@@ -469,9 +459,9 @@ export function CandidatesTable({
     if (
       !(await confirm({
         tone: "destructive",
-        title: `Move ${ids.length} candidate${ids.length === 1 ? "" : "s"} to trash?`,
-        description: "They leave the active list. You can restore them later from the Trash tab.",
-        confirmLabel: `Move ${ids.length} to trash`,
+        title: tx("bulkTrashTitle", { count: ids.length }),
+        description: tx("trashDescription"),
+        confirmLabel: tx("bulkMoveToTrash", { count: ids.length }),
       }))
     ) {
       return;
@@ -480,13 +470,11 @@ export function CandidatesTable({
       const result = await bulkTrashCandidatesAction(ids);
       if (result.success) {
         const count = result.count ?? ids.length;
-        toast.success(
-          `Moved ${count} candidate${count === 1 ? "" : "s"} to trash.`,
-        );
+        toast.success(tx("bulkMovedToTrash", { count }));
         setSelected(new Set());
         router.refresh();
       } else {
-        toast.error(result.error ?? "Could not delete candidates.");
+        toast.error(result.error ?? tx("couldNotDeleteCandidates"));
       }
     });
   }
@@ -496,12 +484,12 @@ export function CandidatesTable({
   function exportCsv() {
     const exportRows = filtered.filter((r) => selected.has(r.id));
     if (selectedCount > 0 && exportRows.length === 0) {
-      toast.error("No candidates to export.");
+      toast.error(tx("noCandidatesToExport"));
       return;
     }
     if (selectedCount > 0) {
       downloadCsv(`candidates-${new Date().toISOString().slice(0, 10)}.csv`, [
-        CSV_HEADERS,
+        [t("fullName"), t("email"), t("phone"), t("location"), t("role"), t("department"), t("stage"), t("status"), t("source"), t("tags"), t("appliedAt")],
         ...exportRows.map(candidateToCsvRow),
       ]);
       return;
@@ -526,7 +514,7 @@ export function CandidatesTable({
         sort: sortKey,
       });
       if (!result.success) {
-        toast.error(result.error ?? "Could not export candidates.");
+        toast.error(result.error ?? tx("couldNotExportCandidates"));
         return;
       }
       const blob = new Blob([UTF8_BOM + result.csv], { type: "text/csv;charset=utf-8;" });
@@ -536,7 +524,7 @@ export function CandidatesTable({
       link.download = `candidates-${new Date().toISOString().slice(0, 10)}.csv`;
       link.click();
       URL.revokeObjectURL(url);
-      toast.success(`Exported ${result.count.toLocaleString()} candidates.`);
+      toast.success(tx("exported", { count: result.count }));
     });
   }
 
@@ -553,43 +541,43 @@ export function CandidatesTable({
             value={query}
             onChange={setQuery}
             onSubmit={() => navigateWithFilter("q", query.trim())}
-            placeholder="Search candidates"
-            label="Search candidates by name, email, role or location"
+            placeholder={t("searchPlaceholder")}
+            label={t("searchLabel")}
           />
           <FilterCountButton count={activeFilterCount} onClear={clearFilters} />
           <FilterChip
-            label="Department"
+            label={t("department")}
             value={dept}
             onChange={(value) => { setDept(value); navigateWithFilter("dept", value); }}
             options={departments}
           />
           <FilterChip
-            label="Job"
+            label={t("job")}
             value={role}
             onChange={(value) => { setRole(value); navigateWithFilter("role", value); }}
             options={roles}
           />
           <FilterChip
-            label="Stage"
+            label={t("stage")}
             value={stage}
             onChange={(value) => { setStage(value); navigateWithFilter("stage", value); }}
             options={stages}
           />
           <FilterChip
-            label="Status"
+            label={t("status")}
             value={status}
             onChange={(value) => { setStatus(value); navigateWithFilter("status", value); }}
             options={["active", "hired", "rejected", "withdrawn"]}
             labelMap={{
-              active: "Active",
-              hired: "Hired",
-              rejected: "Rejected",
-              withdrawn: "Withdrawn",
+              active: t("active"),
+              hired: t("hired"),
+              rejected: t("rejected"),
+              withdrawn: t("withdrawn"),
             }}
           />
           {sources.length > 0 ? (
             <FilterChip
-              label="Source"
+              label={t("source")}
               value={source}
               onChange={(value) => { setSource(value); navigateWithFilter("source", value); }}
               options={sources}
@@ -597,23 +585,23 @@ export function CandidatesTable({
           ) : null}
           {tagOptions.length > 0 ? (
             <FilterChip
-              label="Tag"
+              label={t("tag")}
               value={tag}
               onChange={(value) => { setTag(value); navigateWithFilter("tag", value); }}
               options={tagOptions}
             />
           ) : null}
           <FilterChip
-            label="Sort"
+            label={t("sort")}
             showValue
             value={sortKey}
             onChange={(v) => { setSortKey(v as SortKey); navigateWithFilter("sort", v); }}
             options={["recent", "oldest", "modified", "name"]}
             labelMap={{
-              recent: "Most recent",
-              oldest: "Oldest",
-              modified: "Last modified",
-              name: "Name A–Z",
+              recent: t("mostRecent"),
+              oldest: t("oldest"),
+              modified: t("lastModified"),
+              name: t("nameAZ"),
             }}
             allValue="recent"
           />
@@ -625,32 +613,33 @@ export function CandidatesTable({
               disabled={isPending}
             >
               <Download className="size-4" />
-              {selectedCount > 0 ? `Export selected (${selectedCount})` : "Export CSV"}
+              {selectedCount > 0 ? t("exportSelected", { count: selectedCount }) : t("exportCsv")}
             </Button>
           ) : null}
         </FilterBar>
 
         <TotalLine
           total={total}
-          noun="candidate"
+          noun={tx("nounSingular")}
+          pluralNoun={tx("nounPlural")}
           trailing={
             pageInfo && (pageInfo.page > 1 || pageInfo.hasNextPage) ? (
               <div className="flex items-center gap-2">
-                <span className="hidden tabular-nums sm:inline">Page {pageInfo.page}</span>
+                  <span className="hidden tabular-nums sm:inline">{t("page", { page: pageInfo.page })}</span>
                 <Button
                   variant="outline"
                   size="sm"
                   className="rounded-full"
                   disabled={pageInfo.page <= 1 || isPending}
                   onClick={() => navigateWithFilter("page", String(pageInfo.page - 1))}
-                >Previous</Button>
+                >{t("previous")}</Button>
                 <Button
                   variant="outline"
                   size="sm"
                   className="rounded-full"
                   disabled={!pageInfo.hasNextPage || isPending}
                   onClick={() => navigateWithFilter("page", String(pageInfo.page + 1))}
-                >Next</Button>
+                >{t("next")}</Button>
               </div>
             ) : null
           }
@@ -665,16 +654,16 @@ export function CandidatesTable({
                     <Checkbox
                       checked={allVisibleSelected}
                       onCheckedChange={toggleAll}
-                      aria-label="Select all"
+                      aria-label={t("selectAll")}
                     />
                   </th>
-                  <th scope="col" className={dirTh}>Candidate</th>
-                  <th scope="col" className={cn(dirTh, "hidden md:table-cell")}>Department</th>
-                  <th scope="col" className={cn(dirTh, "hidden md:table-cell")}>Stage</th>
-                  <th scope="col" className={cn(dirTh, "hidden lg:table-cell")}>Applied</th>
-                  <th scope="col" className={dirTh}>Status</th>
+                  <th scope="col" className={dirTh}>{t("candidate")}</th>
+                  <th scope="col" className={cn(dirTh, "hidden md:table-cell")}>{t("department")}</th>
+                  <th scope="col" className={cn(dirTh, "hidden md:table-cell")}>{t("stage")}</th>
+                  <th scope="col" className={cn(dirTh, "hidden lg:table-cell")}>{t("applied")}</th>
+                  <th scope="col" className={dirTh}>{t("status")}</th>
                   <th scope="col" className={cn(dirTh, "w-14")}>
-                    <span className="sr-only">Actions</span>
+                    <span className="sr-only">{t("actions")}</span>
                   </th>
                 </tr>
               </thead>
@@ -713,16 +702,16 @@ export function CandidatesTable({
                               </p>
                               {row.inPool ? (
                                 <StatusPill tone="warning" size="sm" icon={BookmarkSimpleIcon}>
-                                  In Pool
+                                  {t("inPool")}
                                 </StatusPill>
                               ) : null}
                               {row.isReferred ? (
                                 <ReferralBadge featured={row.isFeaturedReferral} />
                               ) : null}
                               {row.hasOpenPrivacyRequest ? (
-                                <span title="Has a pending privacy request awaiting review">
+                                <span title={t("pendingPrivacyRequest") }>
                                   <StatusPill tone="warning" size="sm" icon={ShieldAlert}>
-                                    Privacy request
+                                    {t("privacyRequest")}
                                   </StatusPill>
                                 </span>
                               ) : null}
@@ -753,7 +742,7 @@ export function CandidatesTable({
                       </td>
 
                       <td className={cn(dirTd, "hidden text-near-ink md:table-cell")}>
-                        {row.department ?? <span className="text-quiet-mist">None</span>}
+                        {row.department ?? <span className="text-quiet-mist">{t("none")}</span>}
                       </td>
 
                       <td className={cn(dirTd, "hidden md:table-cell")}>
@@ -769,20 +758,20 @@ export function CandidatesTable({
                           </>
                         ) : (
                           <span className="text-[13px] text-quiet-mist">
-                            No application
+                            {t("noApplication")}
                           </span>
                         )}
                       </td>
 
                       <td className={cn(dirTd, "hidden whitespace-nowrap text-[13px] text-soft-ink lg:table-cell")}>
-                        {row.appliedLabel ?? <span className="text-quiet-mist">None</span>}
+                        {row.appliedLabel ?? <span className="text-quiet-mist">{t("none")}</span>}
                       </td>
 
                       <td className={dirTd}>
                         {row.status ? (
                           <ApplicationStatusBadge status={row.status} />
                         ) : (
-                          <span className="text-quiet-mist">None</span>
+                          <span className="text-quiet-mist">{t("none")}</span>
                         )}
                       </td>
 
@@ -810,19 +799,19 @@ export function CandidatesTable({
           <EmptyState
             variant="filtered"
             icon={Search}
-            title="Nobody matches these filters"
-            description="Widen the search, or clear the filters to see everyone again."
+            title={t("noMatches")}
+            description={t("noMatchesDescription")}
             action={
               <Button variant="outline" size="sm" onClick={clearFilters}>
-                Clear filters
+                {t("clearFilters")}
               </Button>
             }
           />
         ) : (
           <EmptyState
             icon={Users}
-            title="No candidates yet"
-            description="They arrive when someone applies through your career page, or you add one by hand."
+            title={t("emptyTitle")}
+            description={t("emptyDescription")}
             className="rounded-none border-0 bg-transparent"
           />
         )}
@@ -831,26 +820,26 @@ export function CandidatesTable({
       <BulkActionBar count={selectedCount} onClear={() => setSelected(new Set())}>
         <BulkAction disabled={isPending} onClick={() => setBulkEmailOpen(true)}>
           <Mail />
-          Email
+          {t("email")}
         </BulkAction>
         <BulkAction disabled={isPending} onClick={() => runBulk("hired")}>
           <CheckCircle2 />
-          Mark hired
+          {t("markHired")}
         </BulkAction>
         {canReject ? (
           <BulkAction disabled={isPending} onClick={() => runBulk("rejected")}>
             <XCircle />
-            Reject
+            {t("reject")}
           </BulkAction>
         ) : null}
         <BulkAction disabled={isPending} onClick={() => runBulk("active")}>
           <RotateCcw />
-          Reactivate
+          {t("reactivate")}
         </BulkAction>
         {canDelete ? (
           <BulkAction danger disabled={isPending} onClick={runBulkDelete}>
             <Trash2 />
-            Delete
+            {t("delete")}
           </BulkAction>
         ) : null}
       </BulkActionBar>
@@ -896,6 +885,7 @@ function RowActions({
   onDelete: () => void;
   onTogglePool: () => void;
 }) {
+  const t = useTranslations("candidates.table");
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
@@ -903,7 +893,7 @@ function RowActions({
           variant="ghost"
           size="icon"
           className="size-8 text-soft-ink"
-          aria-label={`Actions for ${row.fullName}`}
+          aria-label={t("actionsFor", { name: row.fullName })}
           disabled={disabled}
         >
           <MoreHorizontal className="size-4" />
@@ -912,12 +902,12 @@ function RowActions({
       <DropdownMenuContent align="end">
         <DropdownMenuItem onSelect={onView}>
           <User className="size-4" />
-          View profile
+          {t("viewProfile")}
         </DropdownMenuItem>
         <DropdownMenuSeparator />
         <DropdownMenuItem onSelect={() => onStatus("hired")}>
           <CheckCircle2 className="size-4 text-primary" />
-          Mark hired
+          {t("markHired")}
         </DropdownMenuItem>
         {canReject ? (
           <DropdownMenuItem
@@ -925,26 +915,26 @@ function RowActions({
             onSelect={() => onStatus("rejected")}
           >
             <XCircle className="size-4" />
-            Reject
+          {t("reject")}
           </DropdownMenuItem>
         ) : null}
         <DropdownMenuItem onSelect={() => onStatus("active")}>
           <RotateCcw className="size-4" />
-          Reactivate
+          {t("reactivate")}
         </DropdownMenuItem>
         <DropdownMenuSeparator />
         <DropdownMenuItem onSelect={onTogglePool}>
           <BookmarkSimpleIcon
             className={cn("size-4", row.inPool && "fill-current")}
           />
-          {row.inPool ? "Remove from Pool" : "Add to Pool"}
+          {row.inPool ? t("removeFromPool") : t("addToPool")}
         </DropdownMenuItem>
         {canDelete ? (
           <>
             <DropdownMenuSeparator />
             <DropdownMenuItem variant="destructive" onSelect={onDelete}>
               <Trash2 className="size-4" />
-              Delete
+              {t("delete")}
             </DropdownMenuItem>
           </>
         ) : null}

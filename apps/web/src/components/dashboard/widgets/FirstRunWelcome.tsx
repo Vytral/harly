@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { useTranslations } from "next-intl";
 import type { Route } from "next";
 import {
   ArrowRight,
@@ -26,9 +27,9 @@ type NextCard = {
 };
 
 const PATH = [
-  "Describe the role",
-  "Publish it to your careers page",
-  "Review applicants here",
+  "describe",
+  "publish",
+  "review",
 ];
 
 /**
@@ -44,6 +45,7 @@ export function FirstRunWelcome({
   checklist: SetupChecklist;
   aiConfigured: boolean;
 }) {
+  const t = useTranslations("shell.firstRun");
   const doneKeys = new Set(
     checklist.items.filter((item) => item.done).map((item) => item.key),
   );
@@ -52,24 +54,24 @@ export function FirstRunWelcome({
     {
       key: "invite",
       icon: UserPlus,
-      title: "Invite your team",
-      text: "Optional. Hiring is easier with a second pair of eyes.",
+      title: t("inviteTitle"),
+      text: t("inviteText"),
       href: "/settings/members" as Route,
       done: doneKeys.has("invite_teammate"),
     },
     {
       key: "career",
       icon: Globe,
-      title: "Shape your careers page",
-      text: "Logo, colors and a tagline candidates see first.",
+      title: t("careerTitle"),
+      text: t("careerText"),
       href: "/dashboard/career-page" as Route,
       done: false,
     },
     {
       key: "import",
       icon: Upload,
-      title: "Bring in candidates",
-      text: "Import a CSV, or load sample data to explore.",
+      title: t("importTitle"),
+      text: t("importText"),
       href: "/dashboard/candidates?import=csv" as Route,
       done: doneKeys.has("pipeline_candidates"),
     },
@@ -78,8 +80,8 @@ export function FirstRunWelcome({
     cards.push({
       key: "ai",
       icon: Bot,
-      title: "Connect AI (optional)",
-      text: "Screen and draft with your own provider. Harly works without it.",
+      title: t("aiTitle"),
+      text: t("aiText"),
       href: "/settings/ai" as Route,
       done: false,
     });
@@ -94,27 +96,26 @@ export function FirstRunWelcome({
         <div className="grid gap-8 p-6 sm:p-8 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)] lg:items-center">
           <div className="min-w-0">
             <p className="font-chrome text-[11px] uppercase tracking-[0.14em] text-soft-ink">
-              Your workspace is ready
+              {t("ready")}
             </p>
             <h2
               id="first-run-title"
               className="font-display mt-2 text-balance text-[26px] leading-[1.15] text-near-ink sm:text-[30px]"
             >
-              Start with your first job
+              {t("start")}
             </h2>
             <p className="mt-2 max-w-[46ch] text-pretty text-[14px] text-soft-ink">
-              Candidates, interviews and trends fill this page as soon as a role is live.
-              It takes a few minutes.
+              {t("description")}
             </p>
             <div className="mt-5 flex flex-wrap gap-2.5">
               <Button asChild>
                 <Link href={"/dashboard/jobs/new" as Route}>
                   <Briefcase className="size-4" />
-                  Create your first job
+                  {t("createJob")}
                 </Link>
               </Button>
               <Button asChild variant="outline">
-                <Link href={"/dashboard/career-page" as Route}>Preview careers page</Link>
+                <Link href={"/dashboard/career-page" as Route}>{t("preview")}</Link>
               </Button>
             </div>
           </div>
@@ -138,7 +139,7 @@ export function FirstRunWelcome({
                     i === 0 ? "font-medium text-near-ink" : "text-soft-ink",
                   )}
                 >
-                  {label}
+                  {t(label)}
                 </span>
               </li>
             ))}
@@ -150,7 +151,7 @@ export function FirstRunWelcome({
                 />
               </div>
               <span className="text-xs tabular-nums text-soft-ink">
-                {checklist.completed} of {checklist.total} set up
+                {t("progress", { completed: checklist.completed, total: checklist.total })}
               </span>
             </div>
           </ol>

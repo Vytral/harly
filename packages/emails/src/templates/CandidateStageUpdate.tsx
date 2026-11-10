@@ -1,11 +1,13 @@
 import { Button, Section, Text } from "@react-email/components";
 
+import { emailTranslator } from "../i18n";
 import { WorkspaceLayout } from "./WorkspaceLayout";
 import type { SocialLink } from "./HarlyLayout";
 import { EmailFallbackLink } from "./EmailFallbackLink";
 
 export type CandidateStageUpdateProps = {
   candidateName: string;
+  locale?: string | null;
   jobTitle: string;
   stageName: string;
   companyName: string;
@@ -20,12 +22,14 @@ export type CandidateStageUpdateProps = {
 export function candidateStageUpdateSubject({
   jobTitle,
   stageName,
-}: Pick<CandidateStageUpdateProps, "jobTitle" | "stageName">) {
-  return `You're moving to ${stageName} — ${jobTitle}`;
+  locale,
+}: Pick<CandidateStageUpdateProps, "jobTitle" | "stageName" | "locale">) {
+  return emailTranslator(locale)("stageUpdate.subject", { job: jobTitle, stage: stageName });
 }
 
 export function CandidateStageUpdate({
   candidateName,
+  locale,
   jobTitle,
   stageName,
   companyName,
@@ -36,9 +40,11 @@ export function CandidateStageUpdate({
   nextStepMessage,
   portalUrl,
 }: CandidateStageUpdateProps) {
+  const t = emailTranslator(locale);
   return (
     <WorkspaceLayout
-      preview={`Good news — your ${jobTitle} application has moved to ${stageName}.`}
+      preview={t("stageUpdate.preview", { job: jobTitle, stage: stageName })}
+      locale={locale}
       companyName={companyName}
       companyLogoUrl={companyLogoUrl}
       accentColor={accentColor}
@@ -46,16 +52,13 @@ export function CandidateStageUpdate({
       hideBranding={hideBranding}
     >
       <Text className="text-[40px] leading-[1.05] tracking-[-1px] font-inter text-fg m-0 mb-3.5 font-medium">
-        You&apos;re moving forward
+        {t("stageUpdate.heading")}
       </Text>
       <Text className="text-[14px] leading-[1.5] font-inter text-fg-2 m-0 mb-4">
-        Hi {candidateName},
+        {t("common.greeting", { name: candidateName })}
       </Text>
       <Text className="text-[14px] leading-[1.5] font-inter text-fg-2 m-0 mb-4">
-        Your application for{" "}
-        <span className="text-fg font-semibold">{jobTitle}</span> at{" "}
-        {companyName} has moved to the{" "}
-        <span className="text-fg font-semibold">{stageName}</span> stage.
+        {t.rich("stageUpdate.body", { job: jobTitle, company: companyName, stage: stageName, strong: (chunks) => <span className="text-fg font-semibold">{chunks}</span> })}
       </Text>
       {nextStepMessage ? (
         <Text className="text-[14px] leading-[1.5] font-inter text-fg-2 m-0 mb-4">
@@ -63,7 +66,7 @@ export function CandidateStageUpdate({
         </Text>
       ) : (
         <Text className="text-[14px] leading-[1.5] font-inter text-fg-2 m-0 mb-4">
-          Someone from the team will reach out shortly with next steps.
+          {t("stageUpdate.next")}
         </Text>
       )}
       {portalUrl ? (
@@ -72,9 +75,9 @@ export function CandidateStageUpdate({
             href={portalUrl}
             className="bg-brand text-[14px] leading-[1.5] font-inter text-fg-inverted inline-block border-none px-4 py-2.5 text-center box-border no-underline"
           >
-            View application status
+            {t("stageUpdate.button")}
           </Button>
-          <EmailFallbackLink url={portalUrl} />
+          <EmailFallbackLink url={portalUrl} locale={locale} />
         </Section>
       ) : null}
     </WorkspaceLayout>

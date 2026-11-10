@@ -17,7 +17,6 @@ const dbState: {
   runs: Record<string, unknown>[];
   steps: Record<string, unknown>[];
 } = { inserted: [], updated: [], deleted: [], workflows: [], runs: [], steps: [] };
-
 vi.mock("@harly/db", () => ({
   db: {
     // The data layer uses several chain shapes:
@@ -99,6 +98,8 @@ import {
   updateWorkflow,
 } from "./data";
 import type { WorkflowDefinitionInput } from "./schema";
+
+vi.mock("next-intl/server", async () => (await import("@/test-support/intl-server-mock")).intlServerMock);
 
 const validInput: WorkflowDefinitionInput = {
   name: "Auto-reject juniors",

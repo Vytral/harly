@@ -36,7 +36,7 @@ vi.mock("@/lib/ai/surfaces/parse-resume", () => ({
   parseResumeStructured: vi.fn(),
 }));
 vi.mock("@/features/mailbox/compose-shared", () => ({
-  composerAttachmentsSchema: z.array(z.unknown()).optional(),
+  composerAttachmentsSchema: () => z.array(z.unknown()).optional(),
   decodeComposerAttachments: vi.fn(),
   richBodyReact: vi.fn(),
 }));
@@ -99,6 +99,8 @@ import {
   refineScorecardTextAction,
   suggestScorecardAttributesAction,
 } from "./actions";
+
+vi.mock("next-intl/server", async () => (await import("@/test-support/intl-server-mock")).intlServerMock);
 
 describe("candidate AI authorization", () => {
   beforeEach(() => {

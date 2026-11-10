@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Briefcase, Search } from "lucide-react";
+import { useTranslations } from "next-intl";
 import { toast } from "@/lib/notification-island/toast";
 
 import {
@@ -49,6 +50,7 @@ export function AssignToJobModal({
   isBulk = false,
   bulkCandidateIds = [],
 }: AssignToJobModalProps) {
+  const t = useTranslations("features.pool.AssignToJobModal");
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [search, setSearch] = useState("");
@@ -72,12 +74,15 @@ export function AssignToJobModal({
           jobId: selectedJobId,
         });
         if (!result.success) {
-          toast.error(result.error ?? "Could not assign candidates.");
+          toast.error(result.error ?? t("couldNotAssignCandidates"));
           return;
         }
+        const assigned = result.assigned ?? 0;
+        const failed = result.failed ?? 0;
         toast.success(
-          `Assigned ${result.assigned ?? 0} candidate${(result.assigned ?? 0) === 1 ? "" : "s"} to job.` +
-            ((result.failed ?? 0) > 0 ? ` ${result.failed} failed.` : ""),
+          failed > 0
+            ? t("bulkAssignedWithFailures", { count: assigned, failed })
+            : t("bulkAssigned", { count: assigned }),
         );
       } else {
         const result = await assignFromPoolToJobAction({
@@ -85,10 +90,10 @@ export function AssignToJobModal({
           jobId: selectedJobId,
         });
         if (!result.success) {
-          toast.error(result.error ?? "Could not assign to job.");
+          toast.error(result.error ?? t("couldNotAssign"));
           return;
         }
-        toast.success(`${candidateName} assigned to job.`);
+        toast.success(t("assigned", { name: candidateName }));
       }
       onOpenChange(false);
       setSelectedJobId(null);
@@ -101,11 +106,11 @@ export function AssignToJobModal({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>Assign to Job</DialogTitle>
+          <DialogTitle>{t("assignToJob")}</DialogTitle>
           <DialogDescription>
             {isBulk
-              ? `Create applications for ${bulkCandidateIds.length} candidate${bulkCandidateIds.length === 1 ? "" : "s"} in the selected job pipeline.`
-              : `Create an application for ${candidateName} in the selected job pipeline.`}
+              ? t("bulkDescription", { count: bulkCandidateIds.length })
+              : t("singleDescription", { name: candidateName })}
           </DialogDescription>
         </DialogHeader>
 
@@ -123,7 +128,7 @@ export function AssignToJobModal({
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
-              placeholder="Search jobs..."
+              placeholder={t("searchPlaceholder")}
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               className="pl-9"
@@ -133,7 +138,7 @@ export function AssignToJobModal({
           <div className="max-h-[300px] overflow-y-auto space-y-1">
             {filtered.length === 0 ? (
               <p className="text-sm text-muted-foreground text-center py-4">
-                No open jobs found.
+                {t("noOpenJobs")}
               </p>
             ) : (
               filtered.map((job) => (
@@ -163,10 +168,10 @@ export function AssignToJobModal({
 
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={isPending}>
-            Cancel
+            {t("cancel")}
           </Button>
           <Button onClick={assign} disabled={!selectedJobId || isPending}>
-            {isPending ? "Assigning..." : "Assign to Job"}
+            {isPending ? t("assigning") : t("assignToJob")}
           </Button>
         </DialogFooter>
       </DialogContent>

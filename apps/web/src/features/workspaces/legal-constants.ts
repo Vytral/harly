@@ -1,9 +1,10 @@
 import type { LegalPageKey } from "@/features/workspaces/legal-settings-actions";
 
-export const LEGAL_PAGE_LABELS: Record<LegalPageKey, string> = {
-  privacyPolicy: "Privacy Policy",
-  termsOfService: "Terms of Service",
-  cookiePolicy: "Cookie Policy",
-  candidateNotice: "Candidate Privacy Notice",
-  aiTransparencyNotice: "AI Transparency Notice",
+/** Keys under `labels.workspaces.legal.pages`, resolved with `t` at render. */
+export const LEGAL_PAGE_LABEL_KEYS: Record<LegalPageKey, string> = {
+  privacyPolicy: "privacyPolicy",
+  termsOfService: "termsOfService",
+  cookiePolicy: "cookiePolicy",
+  candidateNotice: "candidateNotice",
+  aiTransparencyNotice: "aiTransparencyNotice",
 };

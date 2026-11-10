@@ -2,6 +2,7 @@ import "server-only";
 
 import { cache } from "react";
 import { and, asc, count, desc, eq, isNotNull, isNull, lte, or, sql } from "drizzle-orm";
+import { getTranslations } from "@/i18n/server";
 
 import { db } from "@harly/db";
 import {
@@ -40,7 +41,7 @@ function toItem(row: {
   createdById: string;
   createdAt: Date;
   updatedAt: Date;
-}): TaskItem {
+}, unknownOwnerName: string): TaskItem {
   return {
     id: row.id,
     title: row.title,
@@ -50,7 +51,7 @@ function toItem(row: {
     dueDate: row.dueDate?.toISOString() ?? null,
     completedAt: row.completedAt?.toISOString() ?? null,
     ownerId: row.ownerId,
-    ownerName: row.ownerName ?? "Unknown",
+    ownerName: row.ownerName ?? unknownOwnerName,
     ownerImage: row.ownerImage ?? null,
     ownerUsername: row.ownerUsername ?? null,
     candidateId: row.candidateId,
@@ -159,7 +160,8 @@ export const listTasks = cache(
         desc(tasks.createdAt),
       );
 
-    return rows.map(toItem);
+    const t = await getTranslations("server.tasks.data");
+    return rows.map((row) => toItem(row, t("unknownOwner")));
   },
 );
 
@@ -179,7 +181,8 @@ export const getTask = cache(async (taskId: string): Promise<TaskItem | null> =>
     )
     .limit(1);
 
-  return row ? toItem(row) : null;
+  const t = await getTranslations("server.tasks.data");
+  return row ? toItem(row, t("unknownOwner")) : null;
 });
 
 export const getTaskCounts = cache(async () => {

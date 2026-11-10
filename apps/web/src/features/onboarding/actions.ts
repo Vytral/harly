@@ -8,6 +8,7 @@ import { z } from "zod";
 import { db, organization, passkeys, user as userTable, workspaceSettings } from "@harly/db";
 
 import { auth } from "@/lib/auth";
+import { getTranslations } from "@/i18n/server";
 import { assertNotDemo } from "@/features/demo/assert-not-demo";
 import { requirePermission } from "@/features/workspaces/permissions-server";
 import { getWorkspaceContext } from "@/features/workspaces/context";
@@ -20,6 +21,8 @@ import { convertAndStoreLogo } from "@/lib/logo-convert";
 const log = createLogger("onboarding");
 
 export type OnboardingResult = { ok: boolean; error?: string };
+
+type Translate = Awaited<ReturnType<typeof getTranslations>>;
 
 async function requireSession() {
   const session = await auth.api.getSession({ headers: await headers() });
@@ -41,20 +44,22 @@ async function patchWorkspaceSettings(
     });
 }
 
-const brandingSchema = z.object({
-  logoUrl: z
-    .string()
-    .trim()
-    .max(2048)
-    .optional()
-    .transform((value) => (value && value.length > 0 ? value : null)),
-  tagline: z.string().trim().max(120).optional(),
-  primaryColor: z
-    .string()
-    .trim()
-    .regex(/^#([0-9a-fA-F]{6})$/, "Use a hex color like #3f6212")
-    .optional(),
-});
+function brandingSchema(t: Translate) {
+  return z.object({
+    logoUrl: z
+      .string()
+      .trim()
+      .max(2048)
+      .optional()
+      .transform((value) => (value && value.length > 0 ? value : null)),
+    tagline: z.string().trim().max(120).optional(),
+    primaryColor: z
+      .string()
+      .trim()
+      .regex(/^#([0-9a-fA-F]{6})$/, t("hexColorInvalid"))
+      .optional(),
+  });
+}
 
 /** Owner step: careers-page branding, logo, accent color and tagline. The logo
  *  is saved onto the Better Auth `organization` (same field the Settings →
@@ -64,12 +69,13 @@ export async function saveOnboardingBrandingAction(input: {
   tagline?: string;
   primaryColor?: string;
 }): Promise<OnboardingResult> {
+  const t = await getTranslations("server.onboarding.actions");
   try {
     assertNotDemo();
     const { organization: org } = await requirePermission("settings:edit");
-    const parsed = brandingSchema.safeParse(input);
+    const parsed = brandingSchema(t).safeParse(input);
     if (!parsed.success) {
-      return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid." };
+      return { ok: false, error: parsed.error.issues[0]?.message ?? t("invalid") };
     }
     await patchWorkspaceSettings(org.id, {
       tagline: parsed.data.tagline ?? null,
@@ -96,7 +102,7 @@ export async function saveOnboardingBrandingAction(input: {
     return { ok: true };
   } catch (error) {
     log.error(error, "onboarding action failed");
-    return { ok: false, error: error instanceof Error ? error.message : "Failed." };
+    return { ok: false, error: error instanceof Error ? error.message : t("failed") };
   }
 }
 
@@ -105,11 +111,12 @@ export async function saveOnboardingBrandingAction(input: {
 export async function saveUserRoleAction(
   jobTitle: string,
 ): Promise<OnboardingResult> {
+  const t = await getTranslations("server.onboarding.actions");
   try {
     assertNotDemo();
     const parsed = z.string().trim().min(1).max(80).safeParse(jobTitle);
     if (!parsed.success) {
-      return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid." };
+      return { ok: false, error: parsed.error.issues[0]?.message ?? t("invalid") };
     }
     const session = await requireSession();
     await db
@@ -119,33 +126,36 @@ export async function saveUserRoleAction(
     return { ok: true };
   } catch (error) {
     log.error(error, "onboarding action failed");
-    return { ok: false, error: error instanceof Error ? error.message : "Failed." };
+    return { ok: false, error: error instanceof Error ? error.message : t("failed") };
   }
 }
 
-const avatarSchema = z
-  .string()
-  .trim()
-  .max(2048)
-  .optional()
-  .transform((value) => (value && value.length > 0 ? value : null))
-  .refine(
-    (value) =>
-      value === null ||
-      value.startsWith("/uploads/") ||
-      /^https?:\/\//.test(value),
-    "Avatar must be a valid URL.",
-  );
+function avatarSchema(t: Translate) {
+  return z
+    .string()
+    .trim()
+    .max(2048)
+    .optional()
+    .transform((value) => (value && value.length > 0 ? value : null))
+    .refine(
+      (value) =>
+        value === null ||
+        value.startsWith("/uploads/") ||
+        /^https?:\/\//.test(value),
+      t("avatarInvalid"),
+    );
+}
 
 /** Persist the signed-in user's profile photo during onboarding. */
 export async function saveOnboardingAvatarAction(
   imageUrl: string | null,
 ): Promise<OnboardingResult> {
+  const t = await getTranslations("server.onboarding.actions");
   try {
     assertNotDemo();
-    const parsed = avatarSchema.safeParse(imageUrl ?? undefined);
+    const parsed = avatarSchema(t).safeParse(imageUrl ?? undefined);
     if (!parsed.success) {
-      return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid." };
+      return { ok: false, error: parsed.error.issues[0]?.message ?? t("invalid") };
     }
     const session = await requireSession();
     await db
@@ -155,7 +165,7 @@ export async function saveOnboardingAvatarAction(
     return { ok: true };
   } catch (error) {
     log.error(error, "onboarding action failed");
-    return { ok: false, error: error instanceof Error ? error.message : "Failed." };
+    return { ok: false, error: error instanceof Error ? error.message : t("failed") };
   }
 }
 
@@ -179,11 +189,12 @@ export async function saveOnboardingAboutAction(input: {
   jobTitle?: string;
   source?: string;
 }): Promise<OnboardingResult> {
+  const t = await getTranslations("server.onboarding.actions");
   try {
     assertNotDemo();
     const parsed = aboutSchema.safeParse(input);
     if (!parsed.success) {
-      return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid." };
+      return { ok: false, error: parsed.error.issues[0]?.message ?? t("invalid") };
     }
     const { role, jobTitle, source } = parsed.data;
     const { organization: org, user } = await requirePermission("settings:edit");
@@ -203,7 +214,7 @@ export async function saveOnboardingAboutAction(input: {
     return { ok: true };
   } catch (error) {
     log.error(error, "onboarding action failed");
-    return { ok: false, error: error instanceof Error ? error.message : "Failed." };
+    return { ok: false, error: error instanceof Error ? error.message : t("failed") };
   }
 }
 
@@ -211,6 +222,7 @@ export async function saveOnboardingAboutAction(input: {
 export async function setRequire2faAction(
   require2fa: boolean,
 ): Promise<OnboardingResult> {
+  const t = await getTranslations("server.onboarding.actions");
   try {
     assertNotDemo();
     const { organization, user } = await requirePermission("security:manage");
@@ -226,7 +238,7 @@ export async function setRequire2faAction(
     return { ok: true };
   } catch (error) {
     log.error(error, "onboarding action failed");
-    return { ok: false, error: error instanceof Error ? error.message : "Failed." };
+    return { ok: false, error: error instanceof Error ? error.message : t("failed") };
   }
 }
 
@@ -236,6 +248,7 @@ export async function setRequire2faAction(
  * it enabled before onboarding can complete.
  */
 export async function completeRecruiterOnboardingAction(): Promise<OnboardingResult> {
+  const t = await getTranslations("server.onboarding.actions");
   try {
     const { organization, user, roleKey } = await getWorkspaceContext();
 
@@ -268,10 +281,7 @@ export async function completeRecruiterOnboardingAction(): Promise<OnboardingRes
           roleKey,
         })
       ) {
-        return {
-          ok: false,
-          error: "This workspace requires two-factor authentication. Set it up to continue.",
-        };
+        return { ok: false, error: t("twoFactorRequired") };
       }
     }
 
@@ -283,12 +293,13 @@ export async function completeRecruiterOnboardingAction(): Promise<OnboardingRes
     return { ok: true };
   } catch (error) {
     log.error(error, "onboarding action failed");
-    return { ok: false, error: error instanceof Error ? error.message : "Failed." };
+    return { ok: false, error: error instanceof Error ? error.message : t("failed") };
   }
 }
 
 /** Mark the current user's onboarding finished, the per-user gate. */
 export async function completeOnboardingAction(): Promise<OnboardingResult> {
+  const t = await getTranslations("server.onboarding.actions");
   try {
     const session = await requireSession();
     await db
@@ -299,6 +310,6 @@ export async function completeOnboardingAction(): Promise<OnboardingResult> {
     return { ok: true };
   } catch (error) {
     log.error(error, "onboarding action failed");
-    return { ok: false, error: error instanceof Error ? error.message : "Failed." };
+    return { ok: false, error: error instanceof Error ? error.message : t("failed") };
   }
 }

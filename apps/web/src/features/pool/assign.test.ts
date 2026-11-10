@@ -72,6 +72,8 @@ vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 
 import { assignFromPoolToJobAction } from "./actions";
 
+vi.mock("next-intl/server", async () => (await import("@/test-support/intl-server-mock")).intlServerMock);
+
 describe("F1-09 talent pool assignment", () => {
   beforeEach(() => {
     mocks.selectQueue.length = 0;

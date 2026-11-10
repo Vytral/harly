@@ -1,3 +1,5 @@
+import { getTranslations } from "next-intl/server";
+
 import { Skeleton } from "@/components/ui/skeleton";
 
 /**
@@ -5,10 +7,11 @@ import { Skeleton } from "@/components/ui/skeleton";
  * link, then the page section with provider, from-address, SMTP host/port and
  * credential fields, the two switch rows, and the Save footer.
  */
-export default function ConfigureEmailSettingsLoading() {
+export default async function ConfigureEmailSettingsLoading() {
+  const t = await getTranslations("pages.settingsEmailConfigure.loading");
   return (
     <div aria-busy="true" className="space-y-5">
-      <span className="sr-only">Loading…</span>
+      <span className="sr-only">{t("loading")}</span>
 
       <div className="-ml-3 flex h-8 w-fit items-center px-3">
         <Skeleton className="h-4 w-32" />

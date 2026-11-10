@@ -424,6 +424,7 @@ describe("custom role migration 0166", () => {
     };
     const entry = journal.entries.find((item) => item.tag === "0166_role_permission_split");
     expect(entry?.idx).toBe(166);
-    expect(journal.entries.at(-1)?.tag).toBe("0166_role_permission_split");
+    const previous = journal.entries.find((item) => item.idx === 165);
+    expect(previous?.tag).toBe("0165_fancy_maelstrom");
   });
 });

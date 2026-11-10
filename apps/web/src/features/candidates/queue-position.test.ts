@@ -1,6 +1,12 @@
 import { describe, expect, it } from "vitest";
 
-import { advanceMessage, firstName, locateInQueue, type QueueEntry } from "./queue-position";
+import {
+  advanceMessage,
+  firstName,
+  locateInQueue,
+  type AdvanceTranslator,
+  type QueueEntry,
+} from "./queue-position";
 
 const entry = (candidateId: string, applicationId: string, name = candidateId): QueueEntry => ({
   candidateId,
@@ -61,14 +67,17 @@ describe("locateInQueue", () => {
 });
 
 describe("advanceMessage", () => {
+  const t: AdvanceTranslator = (key, values) =>
+    key === "next" ? `${values.action} · Next: ${values.name}` : `${values.action} · Queue cleared`;
+
   it("names the next candidate by first name", () => {
-    expect(advanceMessage("Moved Charlotte to Interview", "Carlos Ruiz")).toBe(
+    expect(advanceMessage(t, "Moved Charlotte to Interview", "Carlos Ruiz")).toBe(
       "Moved Charlotte to Interview · Next: Carlos",
     );
   });
 
   it("says the queue is cleared at the end", () => {
-    expect(advanceMessage("Evaluation saved", null)).toBe("Evaluation saved · Queue cleared");
+    expect(advanceMessage(t, "Evaluation saved", null)).toBe("Evaluation saved · Queue cleared");
   });
 
   it("takes the first word of a name", () => {

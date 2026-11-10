@@ -3,6 +3,7 @@ import "server-only";
 import { and, asc, desc, eq } from "drizzle-orm";
 
 import { db, documents, signatureEnvelopes, signatureEvents, signatureRecipients } from "@harly/db";
+import { getTranslations } from "@/i18n/server";
 
 export type SignerState = "waiting" | "invited" | "opened" | "signed" | "declined" | "expired" | "voided";
 
@@ -51,6 +52,7 @@ export type SignatureTimeline = {
  * The caller is responsible for the permission check.
  */
 export async function getNativeSignatureTimeline(input: { workspaceId: string; documentId: string }): Promise<SignatureTimeline | null> {
+  const t = await getTranslations("server.esign.timeline");
   const [live] = await db
     .select({ id: documents.signatureEnvelopeRefId })
     .from(documents)
@@ -92,28 +94,28 @@ export async function getNativeSignatureTimeline(input: { workspaceId: string; d
     };
   });
 
-  const nameOf = (id: unknown) => recipients.find((row) => row.id === id)?.name ?? "A signer";
+  const nameOf = (id: unknown) => recipients.find((row) => row.id === id)?.name ?? t("aSigner");
   const entries: SignatureTimelineEntry[] = [];
-  if (envelope.sentAt) entries.push({ id: "sent", at: envelope.sentAt, kind: "sent", tone: "neutral", title: `Sent for signature to ${recipients.length} ${recipients.length === 1 ? "signer" : "signers"}` });
+  if (envelope.sentAt) entries.push({ id: "sent", at: envelope.sentAt, kind: "sent", tone: "neutral", title: t("sent", { count: recipients.length }) });
   for (const row of recipients) {
     if (row.invitedAt && !(row.routingOrder === 1 && envelope.sentAt && row.invitedAt.getTime() === envelope.sentAt.getTime())) {
-      entries.push({ id: `invited-${row.id}`, at: row.invitedAt, kind: "invited", tone: "neutral", title: `${row.name} was invited`, detail: row.email, signer: row.name });
+      entries.push({ id: `invited-${row.id}`, at: row.invitedAt, kind: "invited", tone: "neutral", title: t("invited", { name: row.name }), detail: row.email, signer: row.name });
     }
-    if (row.viewedAt) entries.push({ id: `opened-${row.id}`, at: row.viewedAt, kind: "opened", tone: "neutral", title: `${row.name} opened the link`, signer: row.name });
-    if (row.consentAt && row.consentVersion && row.status === "signed") entries.push({ id: `consent-${row.id}`, at: row.consentAt, kind: "consented", tone: "neutral", title: `${row.name} accepted the e-sign disclosure`, detail: undefined, signer: row.name });
-    if (row.signedAt) entries.push({ id: `signed-${row.id}`, at: row.signedAt, kind: "signed", tone: "success", title: `${row.name} signed`, signer: row.name });
-    if (row.declinedAt) entries.push({ id: `declined-${row.id}`, at: row.declinedAt, kind: "declined", tone: "danger", title: `${row.name} declined to sign`, detail: row.declinedReason ?? "No reason given", signer: row.name });
+    if (row.viewedAt) entries.push({ id: `opened-${row.id}`, at: row.viewedAt, kind: "opened", tone: "neutral", title: t("opened", { name: row.name }), signer: row.name });
+    if (row.consentAt && row.consentVersion && row.status === "signed") entries.push({ id: `consent-${row.id}`, at: row.consentAt, kind: "consented", tone: "neutral", title: t("consented", { name: row.name }), detail: undefined, signer: row.name });
+    if (row.signedAt) entries.push({ id: `signed-${row.id}`, at: row.signedAt, kind: "signed", tone: "success", title: t("signed", { name: row.name }), signer: row.name });
+    if (row.declinedAt) entries.push({ id: `declined-${row.id}`, at: row.declinedAt, kind: "declined", tone: "danger", title: t("declined", { name: row.name }), detail: row.declinedReason ?? t("noReasonGiven"), signer: row.name });
     if (row.status === "expired" || (row.status === "sent" && row.linkExpiresAt && row.linkExpiresAt <= now)) {
-      entries.push({ id: `expired-${row.id}`, at: row.linkExpiresAt ?? now, kind: "expired", tone: "warning", title: `${row.name}'s link expired`, signer: row.name });
+      entries.push({ id: `expired-${row.id}`, at: row.linkExpiresAt ?? now, kind: "expired", tone: "warning", title: t("linkExpired", { name: row.name }), signer: row.name });
     }
   }
   for (const event of events) {
     const payload = (event.payload ?? {}) as Record<string, unknown>;
     const at = event.generatedAt ?? event.createdAt;
     if (event.eventType === "reminder_sent") {
-      entries.push({ id: `reminder-${event.id}`, at, kind: "reminder", tone: "neutral", title: `Reminder sent to ${nameOf(payload.recipientId)}`, detail: payload.manual ? "Sent manually" : "Automatic reminder" });
+      entries.push({ id: `reminder-${event.id}`, at, kind: "reminder", tone: "neutral", title: t("reminderSent", { name: nameOf(payload.recipientId) }), detail: payload.manual ? t("reminderManual") : t("reminderAutomatic") });
     } else if (event.eventType === "otp_verified") {
-      entries.push({ id: `otp-${event.id}`, at, kind: "verified", tone: "neutral", title: `${nameOf(payload.recipientId)} verified their email code` });
+      entries.push({ id: `otp-${event.id}`, at, kind: "verified", tone: "neutral", title: t("otpVerified", { name: nameOf(payload.recipientId) }) });
     }
   }
   if (envelope.voidedAt && envelope.status === "voided") {
@@ -123,11 +125,11 @@ export async function getNativeSignatureTimeline(input: { workspaceId: string; d
       at: envelope.voidedAt,
       kind: "voided",
       tone: "warning",
-      title: "Request cancelled by the sender",
-      detail: [envelope.voidReason, signed.length ? `Signatures from ${signed.map((s) => s.name).join(", ")} are kept in this record but do not carry over.` : null].filter(Boolean).join(" "),
+      title: t("voided"),
+      detail: [envelope.voidReason, signed.length ? t("voidedSignaturesKept", { names: signed.map((s) => s.name).join(", ") }) : null].filter(Boolean).join(" "),
     });
   }
-  if (envelope.completedAt) entries.push({ id: "completed", at: envelope.completedAt, kind: "completed", tone: "success", title: "Everyone signed. Certificate issued." });
+  if (envelope.completedAt) entries.push({ id: "completed", at: envelope.completedAt, kind: "completed", tone: "success", title: t("completed") });
 
   entries.sort((a, b) => a.at.getTime() - b.at.getTime());
   return { envelopeId: envelope.id, status: envelope.status, voidReason: envelope.voidReason ?? null, signers, entries };

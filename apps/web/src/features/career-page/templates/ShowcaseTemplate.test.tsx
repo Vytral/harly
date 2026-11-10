@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
+import { NextIntlClientProvider } from "next-intl";
 
+import en from "../../../../messages/en.json";
 import { CAREER_PRESETS, type CareerPageConfig } from "@/features/career-page/config";
 import { CareerPageRender } from "@/features/career-page/CareerPageRender";
 import { CareerProcess } from "@/features/career-page/CareerProcess";
@@ -35,16 +37,20 @@ const jobs: Job[] = [
   { id: "4", slug: "ops", title: "Office Manager", department: null, location: "Berlin", employmentType: "part_time", workplaceType: "on_site" },
 ];
 
+function withIntl(element: React.ReactElement) {
+  return <NextIntlClientProvider locale="en" messages={en}>{element}</NextIntlClientProvider>;
+}
+
 function render(config: CareerPageConfig, list: Job[] = jobs, portalEnabled = false) {
   return renderToStaticMarkup(
-    createElement(ShowcaseTemplate, { config, workspace, jobs: list, boardRoot: "/board/acme", portalEnabled }),
+    withIntl(createElement(ShowcaseTemplate, { config, workspace, jobs: list, boardRoot: "/board/acme", portalEnabled })),
   );
 }
 
 describe("ShowcaseTemplate", () => {
   it("is what CareerPageRender picks for template showcase", () => {
     const markup = renderToStaticMarkup(
-      createElement(CareerPageRender, { config: CAREER_PRESETS.showcase(), workspace, jobs, boardRoot: "/board/acme" }),
+      withIntl(createElement(CareerPageRender, { config: CAREER_PRESETS.showcase(), workspace, jobs, boardRoot: "/board/acme" })),
     );
     expect(markup).toContain("Build what&#x27;s next with us");
     expect(markup).toContain('id="positions"');
@@ -127,22 +133,22 @@ describe("ShowcaseTemplate", () => {
 describe("CareerProcess", () => {
   it("renders nothing when disabled or without titled steps", () => {
     const off = renderToStaticMarkup(
-      createElement(CareerProcess, { process: { enabled: false, title: "x", steps: [{ title: "a" }] }, accent: "#000000" }),
+      withIntl(createElement(CareerProcess, { process: { enabled: false, title: "x", steps: [{ title: "a" }] }, accent: "#000000" })),
     );
     const blank = renderToStaticMarkup(
-      createElement(CareerProcess, { process: { enabled: true, title: "x", steps: [{ title: "  " }] }, accent: "#000000" }),
+      withIntl(createElement(CareerProcess, { process: { enabled: true, title: "x", steps: [{ title: "  " }] }, accent: "#000000" })),
     );
-    const missing = renderToStaticMarkup(createElement(CareerProcess, { process: undefined, accent: "#000000" }));
+    const missing = renderToStaticMarkup(withIntl(createElement(CareerProcess, { process: undefined, accent: "#000000" })));
     expect(off + blank + missing).toBe("");
   });
 
   it("renders an ordered list with numbered steps", () => {
     const markup = renderToStaticMarkup(
-      createElement(CareerProcess, {
+      withIntl(createElement(CareerProcess, {
         process: { enabled: true, title: "Hiring", steps: [{ title: "Apply" }, { title: "Chat", body: "Meet us" }] },
         accent: "#4f46e5",
         title: "Hiring",
-      }),
+      })),
     );
     expect(markup).toContain("<ol");
     expect(markup).toContain("<h2");

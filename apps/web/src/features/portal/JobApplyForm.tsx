@@ -2,6 +2,7 @@
 
 import { useState, useTransition, useRef } from "react";
 import { useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { toast } from "@/lib/notification-island/toast";
 
 import { cn } from "@/lib/utils";
@@ -30,6 +31,7 @@ export function JobApplyForm({
   questions: Question[];
 }) {
   const router = useRouter();
+  const t = useTranslations("features.portal.JobApplyForm");
   const [isPending, start] = useTransition();
   const [answers, setAnswers] = useState<Record<string, string>>({});
   const [resumeFile, setResumeFile] = useState<File | null>(null);
@@ -85,7 +87,7 @@ export function JobApplyForm({
       return { url: `/uploads/${key}`, key };
     } catch (err) {
       console.error("Resume upload error:", err);
-      toast.error("Failed to upload resume. Please try again.");
+      toast.error(t("uploadFailed"));
       return null;
     } finally {
       setUploading(false);
@@ -99,10 +101,10 @@ export function JobApplyForm({
       "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
     ];
     if (!allowedTypes.includes(file.type)) {
-      return "Upload a PDF, DOC, or DOCX resume.";
+      return t("invalidResumeType");
     }
     if (file.size > 10 * 1024 * 1024) {
-      return "Resume must be 10MB or smaller.";
+      return t("resumeTooLarge");
     }
     return null;
   }
@@ -134,7 +136,7 @@ export function JobApplyForm({
         toast.error(result.error);
         return;
       }
-      toast.success("Application submitted!");
+      toast.success(t("applicationSubmitted"));
       router.push(`/portal/applications/${result.applicationId}`);
     });
   }
@@ -143,9 +145,9 @@ export function JobApplyForm({
     <form onSubmit={submit} className="space-y-6">
       {/* Resume upload */}
       <div className="rounded-xl border border-border bg-card p-5">
-        <h2 className="mb-2 text-sm font-semibold text-foreground">Resume</h2>
+        <h2 className="mb-2 text-sm font-semibold text-foreground">{t("resumeHeading")}</h2>
         <p className="mb-4 text-xs text-muted-foreground">
-          Upload your resume (PDF, DOC, or DOCX, max 10MB)
+          {t("resumeHint")}
         </p>
 
         <input
@@ -164,7 +166,7 @@ export function JobApplyForm({
             <div className="min-w-0 flex-1">
               <p className="truncate text-sm font-medium text-foreground">{resumeFile.name}</p>
               <p className="text-xs text-muted-foreground">
-                {(resumeFile.size / 1024 / 1024).toFixed(1)} MB
+                {t("fileSize", { size: (resumeFile.size / 1024 / 1024).toFixed(1) })}
               </p>
             </div>
             {uploading && (
@@ -185,7 +187,7 @@ export function JobApplyForm({
               }}
               className="text-xs text-muted-foreground hover:text-foreground"
             >
-              Remove
+              {t("remove")}
             </button>
           </div>
         ) : (
@@ -201,7 +203,7 @@ export function JobApplyForm({
             <svg className="size-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5m-13.5-9L12 3m0 0 4.5 4.5M12 3v13.5" />
             </svg>
-            Click to upload resume
+            {t("clickToUpload")}
           </button>
         )}
       </div>
@@ -209,7 +211,7 @@ export function JobApplyForm({
       {/* Questions */}
       {questions.length > 0 && (
         <div className="rounded-xl border border-border bg-card p-5">
-          <h2 className="mb-4 text-sm font-semibold text-foreground">Application questions</h2>
+          <h2 className="mb-4 text-sm font-semibold text-foreground">{t("questionsHeading")}</h2>
           <div className="space-y-4">
             {questions.map((q) => q.type === "info" ? (
               <aside key={q.id} className="rounded-lg border border-border bg-muted/30 p-4">
@@ -261,8 +263,8 @@ export function JobApplyForm({
                           className="accent-primary"
                         />
                         {value === "agree"
-                          ? q.agreeLabel ?? "I agree"
-                          : q.disagreeLabel ?? "I do not agree"}
+                          ? q.agreeLabel ?? t("agreeDefault")
+                          : q.disagreeLabel ?? t("disagreeDefault")}
                       </label>
                     ))}
                   </fieldset>
@@ -297,7 +299,7 @@ export function JobApplyForm({
                     required={q.required}
                     className={cn("h-10 w-full rounded-lg border border-border bg-card px-3.5 text-base sm:text-sm text-foreground", "outline-none focus:ring-2 focus:ring-ring focus:border-transparent")}
                   >
-                    <option value="">Select an option</option>
+                    <option value="">{t("selectOption")}</option>
                     {(Array.isArray(q.options) ? q.options : []).filter((option): option is string => typeof option === "string").map((option) => (
                       <option key={option} value={option}>{option}</option>
                     ))}
@@ -332,7 +334,7 @@ export function JobApplyForm({
           onChange={(event) => setConsentGiven(event.target.checked)}
           className="mt-0.5"
         />
-        <span>I agree to the processing of my personal data for this application.</span>
+        <span>{t("consent")}</span>
       </label>
 
       <div className="flex justify-end">
@@ -346,7 +348,7 @@ export function JobApplyForm({
             "disabled:opacity-40 disabled:cursor-not-allowed disabled:active:scale-100",
           )}
         >
-          {isPending ? "Submitting…" : "Submit application"}
+          {isPending ? t("submitting") : t("submit")}
         </button>
       </div>
     </form>

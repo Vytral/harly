@@ -1,5 +1,7 @@
 "use client";
 
+import { useTranslations } from "next-intl";
+
 import { PlusIcon, TrashIcon } from "@/components/ui/icons/phosphor";
 import { builderFieldClass } from "./field-styles";
 
@@ -23,6 +25,7 @@ export function DocumentItemsEditor({
   value: unknown;
   onChange: (value: DocumentItemDraft[]) => void;
 }) {
+  const t = useTranslations("features.automations.documentItemsEditor");
   const items = normalize(value);
   const update = (index: number, patch: Partial<DocumentItemDraft>) => {
     onChange(items.map((item, itemIndex) => itemIndex === index ? { ...item, ...patch } : item));
@@ -31,13 +34,13 @@ export function DocumentItemsEditor({
   return (
     <div className="space-y-2 rounded-lg border border-border bg-pure-snow p-2.5">
       <div className="flex items-center justify-between gap-2">
-        <p className="text-[11px] text-soft-ink">Each item becomes a portal request.</p>
+        <p className="text-[11px] text-soft-ink">{t("hint")}</p>
         <button
           type="button"
           onClick={() => onChange([...items, { title: "", instructions: "" }])}
           className="inline-flex items-center gap-1 rounded-md border border-border bg-warm-paper px-2 py-1 text-[11px] font-medium text-foreground hover:bg-soft-kraft"
         >
-          <PlusIcon className="size-3" /> Add document
+          <PlusIcon className="size-3" /> {t("addDocument")}
         </button>
       </div>
       {items.map((item, index) => (
@@ -45,18 +48,18 @@ export function DocumentItemsEditor({
           <div className="flex items-start gap-2">
             <div className="min-w-0 flex-1 space-y-1.5">
               <input
-                aria-label={`Document ${index + 1} title`}
+                aria-label={t("documentTitle", { index: index + 1 })}
                 value={item.title}
                 onChange={(event) => update(index, { title: event.target.value })}
-                placeholder="e.g. Work authorization"
+                placeholder={t("titlePlaceholder")}
                 maxLength={160}
                 className={builderFieldClass({ compact: true })}
               />
               <textarea
-                aria-label={`Document ${index + 1} instructions`}
+                aria-label={t("documentInstructions", { index: index + 1 })}
                 value={item.instructions ?? ""}
                 onChange={(event) => update(index, { instructions: event.target.value })}
-                placeholder="Optional instructions for the candidate"
+                placeholder={t("instructionsPlaceholder")}
                 maxLength={2000}
                 rows={2}
                 className="w-full resize-y rounded-lg border border-border bg-pure-snow px-2 py-1.5 text-xs text-foreground outline-none transition-colors duration-150 ease-out focus:border-foreground/40"
@@ -66,7 +69,7 @@ export function DocumentItemsEditor({
               type="button"
               onClick={() => onChange(items.filter((_, itemIndex) => itemIndex !== index))}
               disabled={items.length === 1}
-              aria-label={`Remove document ${index + 1}`}
+              aria-label={t("removeDocument", { index: index + 1 })}
               className="rounded-md p-1.5 text-soft-ink hover:bg-danger-rust/10 hover:text-danger-rust disabled:cursor-not-allowed disabled:opacity-30"
             >
               <TrashIcon className="size-3.5" />

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useTranslations } from "next-intl";
 import { Monitor, RefreshCw, Smartphone } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -12,6 +13,7 @@ type PublicJobPreviewProps = {
 
 /** Live preview of the real public job page (no mockup). */
 export function PublicJobPreview({ slug }: PublicJobPreviewProps) {
+  const t = useTranslations("jobs.publicPreview");
   const [device, setDevice] = useState<"desktop" | "mobile">("desktop");
   const [nonce, setNonce] = useState(0);
   const src = `/jobs/${slug}?preview=1`;
@@ -20,7 +22,7 @@ export function PublicJobPreview({ slug }: PublicJobPreviewProps) {
     <section className="overflow-hidden rounded-xl border bg-card shadow-sm">
       <div className="flex items-center justify-between gap-2 border-b border-hairline bg-card-inset px-4 py-2.5">
         <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-          Live public preview
+          {t("livePublicPreview")}
         </p>
         <div className="flex items-center gap-1">
           <Button
@@ -28,7 +30,7 @@ export function PublicJobPreview({ slug }: PublicJobPreviewProps) {
             variant={device === "desktop" ? "secondary" : "ghost"}
             size="icon"
             className="size-7"
-            aria-label="Desktop preview"
+            aria-label={t("desktopPreview")}
             onClick={() => setDevice("desktop")}
           >
             <Monitor className="size-4" />
@@ -38,7 +40,7 @@ export function PublicJobPreview({ slug }: PublicJobPreviewProps) {
             variant={device === "mobile" ? "secondary" : "ghost"}
             size="icon"
             className="size-7"
-            aria-label="Mobile preview"
+            aria-label={t("mobilePreview")}
             onClick={() => setDevice("mobile")}
           >
             <Smartphone className="size-4" />
@@ -48,7 +50,7 @@ export function PublicJobPreview({ slug }: PublicJobPreviewProps) {
             variant="ghost"
             size="icon"
             className="size-7"
-            aria-label="Refresh preview"
+            aria-label={t("refreshPreview")}
             onClick={() => setNonce((n) => n + 1)}
           >
             <RefreshCw className="size-4" />
@@ -59,7 +61,7 @@ export function PublicJobPreview({ slug }: PublicJobPreviewProps) {
         <iframe
           key={nonce}
           src={src}
-          title="Public job preview"
+          title={t("publicJobPreview")}
           className={cn(
             "h-[640px] rounded-lg border bg-card shadow-sm transition-all",
             device === "mobile" ? "w-[390px] max-w-full" : "w-full",

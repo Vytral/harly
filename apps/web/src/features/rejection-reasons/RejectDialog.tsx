@@ -3,6 +3,7 @@
 import { useEffect, useId, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { ChevronDown, Loader2 } from "lucide-react";
+import { useTranslations } from "next-intl";
 
 import { toast } from "@/lib/notification-island/toast";
 import { Button } from "@/components/ui/button";
@@ -110,9 +111,11 @@ function RejectDialogBody({
   onConfirm?: (decision: RejectionDecision) => void;
   onDone: () => void;
 }) {
+  const t = useTranslations("features.rejectionReasons.rejectDialog");
+  const tCopy = useTranslations("labels.rejectionReasons.dialogCopy");
   const router = useRouter();
   const ids = useId();
-  const copy = rejectDialogCopy(targets);
+  const copy = rejectDialogCopy(tCopy, targets);
   const bulk = targets.length > 1;
   const first = targets[0];
 
@@ -127,6 +130,7 @@ function RejectDialogBody({
     Record<string, RejectionEmailPreview | { error: string }>
   >({});
   const [submitError, setSubmitError] = useState<string | null>(null);
+  const [reasonMissing, setReasonMissing] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -166,9 +170,11 @@ function RejectDialogBody({
 
   function submit() {
     if (!reasonCode) {
-      setSubmitError("Choose a rejection reason.");
+      setReasonMissing(true);
+      setSubmitError(t("chooseReason"));
       return;
     }
+    setReasonMissing(false);
     setSubmitError(null);
     const decision: RejectionDecision = {
       reasonCode,
@@ -194,14 +200,19 @@ function RejectDialogBody({
         ...decision,
       });
       if (!result.success) {
-        setSubmitError(result.error ?? "Could not reject.");
+        setSubmitError(result.error ?? t("rejectFallback"));
         return;
       }
-      const suffix = sendEmail ? "" : " No email sent.";
       if (result.emailWarning) {
-        toast.warning(`${copy.successMessage} ${result.emailWarning}`);
+        toast.warning(
+          t("successWithWarning", { message: copy.successMessage, warning: result.emailWarning }),
+        );
       } else {
-        toast.success(`${copy.successMessage}${suffix}`);
+        toast.success(
+          sendEmail
+            ? copy.successMessage
+            : t("successWithoutEmail", { message: copy.successMessage }),
+        );
       }
       (router as { refresh?: () => void }).refresh?.();
       onDone();
@@ -217,7 +228,7 @@ function RejectDialogBody({
         <DialogTitle>{copy.title}</DialogTitle>
         <DialogDescription>
           {copy.jobLine ? `${copy.jobLine} ` : ""}
-          They leave the active pipeline. You can reactivate them later.
+          {t("description")}
         </DialogDescription>
       </DialogHeader>
 
@@ -226,12 +237,15 @@ function RejectDialogBody({
       <div className="space-y-4">
         <div className="space-y-1.5">
           <Label htmlFor={`${ids}-reason`}>
-            Reason <span className="sr-only">(required)</span>
+            {t.rich("reasonLabel", {
+              srOnly: (chunks) => <span className="sr-only">{chunks}</span>,
+            })}
           </Label>
           <Select
             value={reasonCode}
             onValueChange={(value) => {
               setReasonCode(value);
+              setReasonMissing(false);
               setSubmitError(null);
             }}
             disabled={loading || isPending}
@@ -240,9 +254,9 @@ function RejectDialogBody({
               id={`${ids}-reason`}
               className="w-full"
               aria-required="true"
-              aria-invalid={submitError === "Choose a rejection reason." || undefined}
+              aria-invalid={reasonMissing || undefined}
             >
-              <SelectValue placeholder={loading ? "Loading reasons…" : "Choose a reason"} />
+              <SelectValue placeholder={loading ? t("loadingReasons") : t("chooseReasonPlaceholder")} />
             </SelectTrigger>
             <SelectContent position="popper">
               {(data?.reasons ?? []).map((reason) => (
@@ -256,7 +270,9 @@ function RejectDialogBody({
 
         <div className="space-y-1.5">
           <Label htmlFor={`${ids}-note`}>
-            Internal note <span className="font-normal text-soft-ink">(optional)</span>
+            {t.rich("noteLabel", {
+              muted: (chunks) => <span className="font-normal text-soft-ink">{chunks}</span>,
+            })}
           </Label>
           <Textarea
             id={`${ids}-note`}
@@ -266,10 +282,10 @@ function RejectDialogBody({
             rows={3}
             disabled={isPending}
             aria-describedby={`${ids}-note-help`}
-            placeholder="Context for the hiring team"
+            placeholder={t("notePlaceholder")}
           />
           <p id={`${ids}-note-help`} className="text-[12.5px] text-soft-ink">
-            Only your team sees this.
+            {t("noteHelp")}
           </p>
         </div>
 
@@ -277,13 +293,13 @@ function RejectDialogBody({
           <SettingRow
             htmlFor={`${ids}-send`}
             descriptionId={`${ids}-send-desc`}
-            title="Send rejection email"
+            title={t("sendEmailTitle")}
             description={
               sendEmail
                 ? bulk
-                  ? "Sent individually to each candidate."
-                  : `Sent to ${first.candidateName}.`
-                : "The candidate is not emailed about this decision."
+                  ? t("sentIndividually")
+                  : t("sentTo", { name: first.candidateName })
+                : t("notEmailed")
             }
             control={
               <Switch
@@ -298,7 +314,7 @@ function RejectDialogBody({
             {sendEmail ? (
               <div className="space-y-3">
                 <div className="space-y-1.5">
-                  <Label htmlFor={`${ids}-template`}>Template</Label>
+                  <Label htmlFor={`${ids}-template`}>{t("template")}</Label>
                   <Select
                     value={selectedTemplate}
                     onValueChange={setTemplateId}
@@ -310,13 +326,15 @@ function RejectDialogBody({
                     <SelectContent position="popper">
                       {templates.map((template) => (
                         <SelectItem key={template.id} value={template.id}>
-                          {template.name}
-                          {template.isActive ? " · Default" : ""}
+                          {template.isActive
+                            ? t("templateDefault", { name: template.name })
+                            : template.name}
                         </SelectItem>
                       ))}
                       <SelectItem value={BUILT_IN_REJECTION_TEMPLATE}>
-                        Harly standard rejection
-                        {templates.some((template) => template.isActive) ? "" : " · Default"}
+                        {templates.some((template) => template.isActive)
+                          ? t("builtInTemplate")
+                          : t("builtInTemplateDefault")}
                       </SelectItem>
                     </SelectContent>
                   </Select>
@@ -337,7 +355,7 @@ function RejectDialogBody({
                     )}
                     aria-hidden
                   />
-                  {previewOpen ? "Hide preview" : "Preview email"}
+                  {previewOpen ? t("hidePreview") : t("previewEmail")}
                 </button>
 
                 {previewOpen ? (
@@ -349,7 +367,7 @@ function RejectDialogBody({
                     {!preview ? (
                       <p className="flex items-center gap-2 text-soft-ink">
                         <Loader2 className="size-4 animate-spin motion-reduce:animate-none" aria-hidden />
-                        Loading preview…
+                        {t("loadingPreview")}
                       </p>
                     ) : "error" in preview ? (
                       <p className="text-soft-ink">{preview.error}</p>
@@ -357,11 +375,14 @@ function RejectDialogBody({
                       <>
                         {bulk ? (
                           <p className="text-[12.5px] text-soft-ink">
-                            Preview for {preview.candidateName}. Each candidate gets their own copy.
+                            {t("previewBulk", { name: preview.candidateName })}
                           </p>
                         ) : null}
                         <p className="text-[12.5px] text-soft-ink">
-                          To <span className="text-near-ink">{preview.to}</span>
+                          {t.rich("previewRecipient", {
+                            address: preview.to,
+                            recipient: (chunks) => <span className="text-near-ink">{chunks}</span>,
+                          })}
                         </p>
                         <p className="font-medium text-near-ink">{preview.subject}</p>
                         <p className="max-h-56 overflow-y-auto whitespace-pre-line leading-6 text-soft-ink">
@@ -381,7 +402,7 @@ function RejectDialogBody({
 
       <DialogFooter>
         <Button variant="outline" onClick={onCancel} disabled={isPending}>
-          Cancel
+          {t("cancel")}
         </Button>
         <Button
           variant="destructive"
@@ -391,7 +412,7 @@ function RejectDialogBody({
           {isPending ? (
             <>
               <Loader2 className="size-4 animate-spin motion-reduce:animate-none" aria-hidden />
-              Rejecting…
+              {t("rejecting")}
             </>
           ) : (
             copy.confirmLabel

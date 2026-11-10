@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { Check, ChevronsUpDown, User } from "lucide-react";
+import { useTranslations } from "next-intl";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -31,7 +32,7 @@ export function InterviewerSelect({
   onChange,
   members,
   currentUserId,
-  label = "Interviewer",
+  label,
 }: {
   value: string;
   onChange: (userId: string) => void;
@@ -39,6 +40,7 @@ export function InterviewerSelect({
   currentUserId?: string;
   label?: string;
 }) {
+  const t = useTranslations("features.candidates.interviewerSelect");
   const [open, setOpen] = useState(false);
 
   const selected = members.find((m) => m.userId === value);
@@ -52,7 +54,7 @@ export function InterviewerSelect({
   return (
     <div className="space-y-2">
       <label className="text-[13px] font-medium tracking-tight text-foreground/90">
-        {label}
+        {label ?? t("label")}
       </label>
       <Popover open={open} onOpenChange={setOpen}>
         <PopoverTrigger asChild>
@@ -74,21 +76,21 @@ export function InterviewerSelect({
                 <span className="truncate">
                   {selected.name}
                   {currentUserId && selected.userId === currentUserId ? (
-                    <span className="ml-1 text-muted-foreground">(You)</span>
+                    <span className="ml-1 text-muted-foreground">{t("you")}</span>
                   ) : null}
                 </span>
               </span>
             ) : (
-              <span className="text-muted-foreground">Unassigned</span>
+              <span className="text-muted-foreground">{t("unassigned")}</span>
             )}
             <ChevronsUpDown className="ml-2 size-4 shrink-0 opacity-50" />
           </Button>
         </PopoverTrigger>
         <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
           <Command>
-            <CommandInput placeholder="Search people..." />
+            <CommandInput placeholder={t("searchPlaceholder")} />
             <CommandList>
-              <CommandEmpty>No results.</CommandEmpty>
+              <CommandEmpty>{t("noResults")}</CommandEmpty>
               <CommandGroup>
                 <CommandItem
                   value="unassigned"
@@ -99,7 +101,7 @@ export function InterviewerSelect({
                   className="flex items-center gap-2"
                 >
                   <User className="size-5 text-muted-foreground" />
-                  <span className="flex-1">Unassigned</span>
+                  <span className="flex-1">{t("unassigned")}</span>
                   <Check
                     className={cn(
                       "size-4",
@@ -126,7 +128,7 @@ export function InterviewerSelect({
                     <span className="flex-1 truncate">
                       {m.name}
                       {currentUserId && m.userId === currentUserId ? (
-                        <span className="ml-1 text-muted-foreground">(You)</span>
+                        <span className="ml-1 text-muted-foreground">{t("you")}</span>
                       ) : null}
                     </span>
                     <Check

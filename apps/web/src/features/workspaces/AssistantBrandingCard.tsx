@@ -2,6 +2,7 @@
 
 import { useId, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 
 import { toast } from "@/lib/notification-island/toast";
 import { saveAssistantBrandingAction } from "@/features/workspaces/ai-settings-actions";
@@ -40,12 +41,13 @@ function AssistantPreview({
   avatarUrl: string | null;
   showPoweredBy: boolean;
 }) {
+  const t = useTranslations("features.workspaces.assistantBrandingCard");
   const label = name.trim() || DEFAULT_ASSISTANT_NAME;
   const poweredBy = showPoweredBy && label !== DEFAULT_ASSISTANT_NAME;
   return (
     <div
       role="group"
-      aria-label={`Preview of ${label}`}
+      aria-label={t("previewGroup", { name: label })}
       className="flex flex-wrap items-center gap-4 rounded-[var(--radius-inner)] bg-card-inset p-4"
     >
       <span className="grid size-12 shrink-0 place-items-center rounded-full bg-pure-snow text-near-ink shadow-[var(--shadow-float)] ring-1 ring-hairline">
@@ -67,7 +69,7 @@ function AssistantPreview({
           </span>
         </div>
         {poweredBy ? (
-          <p className="mt-1 text-[11px] leading-none text-quiet-mist">Powered by Harly</p>
+          <p className="mt-1 text-[11px] leading-none text-quiet-mist">{t("poweredBy")}</p>
         ) : null}
       </div>
     </div>
@@ -81,6 +83,7 @@ export function AssistantBrandingCard({
   branding: AssistantBranding;
   canEdit: boolean;
 }) {
+  const t = useTranslations("features.workspaces.assistantBrandingCard");
   const router = useRouter();
   const nameId = useId();
   const nameHintId = useId();
@@ -121,10 +124,10 @@ export function AssistantBrandingCard({
         showPoweredBy,
       });
       if (!result.ok) {
-        toast.error(result.error ?? "Could not save the assistant.");
+        toast.error(result.error ?? t("saveFailed"));
         return;
       }
-      toast.success("Assistant saved");
+      toast.success(t("saved"));
       router.refresh();
     });
   }
@@ -134,13 +137,13 @@ export function AssistantBrandingCard({
   return (
     <Card className="gap-0 overflow-hidden p-0">
       <SettingSection
-        title="Assistant"
-        description="Name and look of the AI assistant your team chats with. Only this workspace sees the change."
+        title={t("title")}
+        description={t("description")}
       />
       <SettingRows>
         <SettingRow
-          title="Name"
-          description={`Up to ${ASSISTANT_NAME_MAX} characters. Shown on the launcher, the panel and the command menu.`}
+          title={t("name")}
+          description={t("nameDescription", { max: ASSISTANT_NAME_MAX })}
           htmlFor={nameId}
           descriptionId={nameHintId}
           control={
@@ -158,19 +161,19 @@ export function AssistantBrandingCard({
           }
         />
         <SettingRow
-          title="Avatar"
-          description="Use the Harly mark or upload your own square image (PNG, JPG, SVG or WEBP, up to 5MB)."
+          title={t("avatar")}
+          description={t("avatarDescription")}
           align="start"
           control={
             <div
               role="radiogroup"
-              aria-label="Avatar"
+              aria-label={t("avatar")}
               className="inline-flex rounded-[var(--radius-btn)] bg-card-inset p-1"
             >
               {(
                 [
-                  { value: "harly", label: "Harly mark" },
-                  { value: "upload", label: "Upload" },
+                  { value: "harly", label: t("harlyMark") },
+                  { value: "upload", label: t("upload") },
                 ] as const
               ).map((option) => (
                 <button
@@ -200,7 +203,7 @@ export function AssistantBrandingCard({
                 onChange={(url) => setUploadUrl(url ?? "")}
                 variant="avatar"
                 disabled={disabled}
-                hint="Square image · PNG, JPG, SVG or WEBP"
+                hint={t("dropzoneHint")}
               />
               <div className="flex items-center gap-3">
                 <Avatar url={uploadUrl || null} size={40} />
@@ -211,7 +214,7 @@ export function AssistantBrandingCard({
                     disabled={disabled}
                     className="text-[13px] font-medium text-soft-ink underline-offset-2 hover:text-near-ink hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-near-ink disabled:opacity-60"
                   >
-                    Remove image
+                    {t("removeImage")}
                   </button>
                 ) : null}
               </div>
@@ -219,19 +222,19 @@ export function AssistantBrandingCard({
           ) : null}
         </SettingRow>
         <SettingRow
-          title="Show “Powered by Harly”"
-          description="Adds a small attribution under the message box when the assistant has a custom name."
+          title={t("poweredByTitle")}
+          description={t("poweredByDescription")}
           control={
             <Switch
               checked={showPoweredBy}
               onCheckedChange={setShowPoweredBy}
               disabled={disabled}
-              aria-label="Show Powered by Harly"
+              aria-label={t("poweredByAriaLabel")}
             />
           }
         />
         <div className="px-5 py-4">
-          <p className="mb-2 text-[12.5px] font-medium text-soft-ink">Preview</p>
+          <p className="mb-2 text-[12.5px] font-medium text-soft-ink">{t("preview")}</p>
           <AssistantPreview
             name={name}
             avatarUrl={avatarUrl}
@@ -248,7 +251,7 @@ export function AssistantBrandingCard({
           onSave={save}
           hint={
             missingUpload
-              ? "Upload an image or switch back to the Harly mark."
+              ? t("missingUpload")
               : undefined
           }
         />

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { useTranslations } from "next-intl";
 import { useRouter } from "next/navigation";
 import { Plus, X } from "lucide-react";
 import { toast } from "@/lib/notification-island/toast";
@@ -17,6 +18,7 @@ export function CandidateTags({
   workspaceId: string;
   tags: Array<{ id: string; label: string }>;
 }) {
+  const t = useTranslations("features.candidates.CandidateTags");
   const router = useRouter();
   const [adding, setAdding] = useState(false);
   const [draft, setDraft] = useState("");
@@ -31,7 +33,7 @@ export function CandidateTags({
     startTransition(async () => {
       const result = await addCandidateTag({ candidateId, workspaceId, label });
       if (!result.success) {
-        toast.error(result.error ?? "Could not add tag.");
+        toast.error(result.error ?? t("addFailed"));
         return;
       }
       setDraft("");
@@ -44,7 +46,7 @@ export function CandidateTags({
     startTransition(async () => {
       const result = await removeCandidateTag({ tagId, candidateId, workspaceId });
       if (!result.success) {
-        toast.error(result.error ?? "Could not remove tag.");
+        toast.error(result.error ?? t("removeFailed"));
         return;
       }
       router.refresh();
@@ -64,7 +66,7 @@ export function CandidateTags({
             onClick={() => remove(tag.id)}
             disabled={isPending}
             className="rounded-full text-sage-ink/60 outline-none transition-colors duration-150 hover:text-sage-ink focus-visible:ring-2 focus-visible:ring-ring"
-            aria-label={`Remove ${tag.label}`}
+            aria-label={t("removeTag", { label: tag.label })}
           >
             <X className="size-3" />
           </button>
@@ -85,7 +87,7 @@ export function CandidateTags({
             }
           }}
           onBlur={add}
-          placeholder="Tag name…"
+          placeholder={t("tagName")}
           className="h-7 w-32 rounded-full px-3 text-base sm:text-xs"
         />
       ) : (
@@ -95,7 +97,7 @@ export function CandidateTags({
           className="inline-flex h-6 items-center gap-1 rounded-full border border-dashed px-2.5 text-xs font-medium text-muted-foreground outline-none transition-colors duration-150 hover:border-ring/40 hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50"
         >
           <Plus className="size-3" />
-          Tag
+          {t("addTag")}
         </button>
       )}
     </div>

@@ -3,6 +3,8 @@ import localFont from "next/font/local";
 import { GeistMono } from "geist/font/mono";
 
 import Script from "next/script";
+import { NextIntlClientProvider } from "next-intl";
+import { getLocale, getTranslations } from "next-intl/server";
 import { ThemeProvider } from "@/components/ThemeProvider";
 import { ConfirmProvider } from "@/components/ui/confirm-dialog";
 import { Toaster } from "@/components/ui/sonner";
@@ -39,10 +41,11 @@ export const viewport: Viewport = {
 };
 
 export async function generateMetadata(): Promise<Metadata> {
+  const t = await getTranslations("pages.root.layout");
   return {
     metadataBase: new URL(getHarlyPublicOrigin()),
     title: "Harly",
-    description: "Open-source applicant tracking system for modern teams.",
+    description: t("metaDescription"),
     icons: {
       icon: "/favicon.svg",
     },
@@ -52,14 +55,15 @@ export async function generateMetadata(): Promise<Metadata> {
   };
 }
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const locale = await getLocale();
   return (
     <html
-      lang="en"
+      lang={locale}
       suppressHydrationWarning
       className={`${instrumentSans.variable} ${GeistMono.variable} h-full antialiased`}
       data-scroll-behavior="smooth"
@@ -75,18 +79,20 @@ export default function RootLayout({
         <link rel="dns-prefetch" href="https://lh3.googleusercontent.com" />
       </head>
       <body className="min-h-full">
-        <ThemeProvider
-          attribute="class"
-          defaultTheme="system"
-          enableSystem
-          disableTransitionOnChange
-        >
-          <TooltipProvider delayDuration={200}>
-            <ConfirmProvider>{children}</ConfirmProvider>
-          </TooltipProvider>
-          <Toaster position="bottom-center" closeButton />
-          <CookiePanel />
-        </ThemeProvider>
+        <NextIntlClientProvider>
+          <ThemeProvider
+            attribute="class"
+            defaultTheme="system"
+            enableSystem
+            disableTransitionOnChange
+          >
+            <TooltipProvider delayDuration={200}>
+              <ConfirmProvider>{children}</ConfirmProvider>
+            </TooltipProvider>
+            <Toaster position="bottom-center" closeButton />
+            <CookiePanel />
+          </ThemeProvider>
+        </NextIntlClientProvider>
       </body>
     </html>
   );

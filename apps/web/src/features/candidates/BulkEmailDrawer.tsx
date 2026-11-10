@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { useTranslations } from "next-intl";
 import { useRouter } from "next/navigation";
 import { toast } from "@/lib/notification-island/toast";
 
@@ -37,6 +38,8 @@ export function BulkEmailDrawer({
   templates: EmailTemplateOption[];
   onSent: () => void;
 }) {
+  const t = useTranslations("features.candidates.BulkEmailDrawer");
+  const tVariables = useTranslations("labels.emailTemplates.variables");
   const router = useRouter();
   const [subject, setSubject] = useState("");
   const [body, setBody] = useState("");
@@ -59,13 +62,13 @@ export function BulkEmailDrawer({
         body,
       });
       if (!result.success) {
-        toast.error(result.error ?? "Could not send the emails.");
+        toast.error(result.error ?? t("sendFailed"));
         return;
       }
       toast.success(
         result.failed > 0
-          ? `${result.sent} sent, ${result.failed} failed.`
-          : `Email queued for ${result.sent} candidate${result.sent === 1 ? "" : "s"}.`,
+          ? t("partialSend", { sent: result.sent, failed: result.failed })
+          : t("queued", { count: result.sent }),
       );
       onOpenChange(false);
       setSubject("");
@@ -80,18 +83,18 @@ export function BulkEmailDrawer({
     <SidePanel
         open={open}
         onOpenChange={onOpenChange}
-        title={`Email ${candidateIds.length} candidate${candidateIds.length === 1 ? "" : "s"}`}
-        description="Variables like {{candidate_first_name}} are filled in per candidate when sending."
+        title={t("title", { count: candidateIds.length })}
+        description={t("variablesHint", { example: "{{candidate_first_name}}" })}
         footer={
           <>
             <Button variant="outline" disabled={isPending} onClick={() => onOpenChange(false)}>
-              Cancel
+              {t("cancel")}
             </Button>
             <Button
               onClick={send}
               disabled={isPending || !subject.trim() || !body.trim()}
             >
-              {isPending ? "Sending…" : "Send to all"}
+              {isPending ? t("sending") : t("sendToAll")}
             </Button>
           </>
         }
@@ -101,15 +104,15 @@ export function BulkEmailDrawer({
             <div className="space-y-2">
               <div className="flex items-baseline justify-between gap-3">
                 <p className="text-[13px] font-medium tracking-tight text-foreground/90">
-                  Start from a template
+                  {t("startFromTemplate")}
                 </p>
                 {selectedTemplateId ? (
-                  <span className="text-xs text-muted-foreground">Loaded into this email</span>
+                  <span className="text-xs text-muted-foreground">{t("templateLoaded")}</span>
                 ) : null}
               </div>
               <Select value={selectedTemplateId || undefined} onValueChange={applyTemplate}>
                 <SelectTrigger className="w-full">
-                  <SelectValue placeholder="Choose a template (optional)" />
+                  <SelectValue placeholder={t("chooseTemplate")} />
                 </SelectTrigger>
                 <SelectContent>
                   {templates.map((template) => (
@@ -127,13 +130,13 @@ export function BulkEmailDrawer({
               htmlFor="bulk-subject"
               className="text-[13px] font-medium tracking-tight text-foreground/90"
             >
-              Subject
+              {t("subject")}
             </label>
             <Input
               id="bulk-subject"
               value={subject}
               onChange={(e) => setSubject(e.target.value)}
-              placeholder="An update on {{job_title}}"
+              placeholder={t("subjectPlaceholder", { variable: "{{job_title}}" })}
             />
           </div>
 
@@ -142,13 +145,13 @@ export function BulkEmailDrawer({
               htmlFor="bulk-body"
               className="text-[13px] font-medium tracking-tight text-foreground/90"
             >
-              Message
+              {t("message")}
             </label>
             <Textarea
               id="bulk-body"
               value={body}
               onChange={(e) => setBody(e.target.value)}
-              placeholder={"Hi {{candidate_first_name}},\n\n…"}
+              placeholder={t("messagePlaceholder", { variable: "{{candidate_first_name}}" })}
               className="min-h-44"
             />
             <div className="flex flex-wrap gap-1.5 pt-1">
@@ -162,7 +165,7 @@ export function BulkEmailDrawer({
                     )
                   }
                   className="cursor-pointer rounded-[6px] bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground transition hover:bg-accent hover:text-accent-foreground"
-                  title={variable.label}
+                  title={tVariables(variable.labelKey)}
                 >
                   {`{{${variable.key}}}`}
                 </button>

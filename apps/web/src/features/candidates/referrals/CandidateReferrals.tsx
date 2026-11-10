@@ -1,6 +1,7 @@
 "use client";
 
 import { useTransition } from "react";
+import { useTranslations } from "next-intl";
 import { useRouter } from "next/navigation";
 import { Star, X } from "lucide-react";
 import { toast } from "@/lib/notification-island/toast";
@@ -33,6 +34,7 @@ export function CandidateReferrals({
   currentUserId: string;
   canEditCandidates: boolean;
 }) {
+  const t = useTranslations("features.candidates.candidateReferrals");
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
 
@@ -42,7 +44,7 @@ export function CandidateReferrals({
     startTransition(async () => {
       const result = await toggleReferralFeatured({ referralId, featured: next });
       if (!result.success) {
-        toast.error(result.error ?? "Unable to update referral.");
+        toast.error(result.error ?? t("updateError"));
         return;
       }
       router.refresh();
@@ -53,10 +55,10 @@ export function CandidateReferrals({
     startTransition(async () => {
       const result = await deleteReferral({ referralId });
       if (!result.success) {
-        toast.error(result.error ?? "Unable to delete referral.");
+        toast.error(result.error ?? t("deleteError"));
         return;
       }
-      toast.success("Referral removed");
+      toast.success(t("removed"));
       router.refresh();
     });
   }
@@ -78,7 +80,7 @@ export function CandidateReferrals({
           >
             <div className="min-w-0">
               <p className="font-medium">
-                Referred by {referral.referredByName}
+                {t("referredBy", { name: referral.referredByName })}
                 {referral.jobTitle ? ` · ${referral.jobTitle}` : ""}
               </p>
               {referral.note ? (
@@ -88,7 +90,7 @@ export function CandidateReferrals({
               ) : null}
               {referral.createdById !== referral.referredById ? (
                 <p className="mt-0.5 text-[11px] text-muted-foreground">
-                  Logged by {referral.createdByName}
+                  {t("loggedBy", { name: referral.createdByName })}
                 </p>
               ) : null}
             </div>
@@ -98,7 +100,7 @@ export function CandidateReferrals({
                 type="button"
                 disabled={isPending}
                 onClick={() => toggleFeatured(referral.id, !referral.featured)}
-                title={referral.featured ? "Unfeature" : "Feature this referral"}
+                title={referral.featured ? t("unfeature") : t("featureReferral")}
                 className="text-current opacity-70 hover:opacity-100"
               >
                 <Star className={cn("size-3", referral.featured && "fill-current")} />
@@ -109,7 +111,7 @@ export function CandidateReferrals({
                 type="button"
                 disabled={isPending}
                 onClick={() => remove(referral.id)}
-                title="Remove referral"
+                title={t("removeReferral")}
                 className="text-current opacity-70 hover:opacity-100"
               >
                 <X className="size-3" />

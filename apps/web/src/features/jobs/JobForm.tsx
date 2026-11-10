@@ -11,6 +11,7 @@ import {
 } from "react";
 import { toast } from "@/lib/notification-island/toast";
 import { useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 import type { Job } from "@harly/db";
 
 import {
@@ -76,7 +77,10 @@ type JobFormProps = {
   previewConfig?: CareerPageConfig | null;
 };
 
-function initialSectionsFor(job?: Job): JobContentSection[] {
+function initialSectionsFor(
+  job: Job | undefined,
+  labels: { requirements: string; benefits: string },
+): JobContentSection[] {
   const existing = parseJobContentSections(job?.contentSections);
   if (existing.length > 0) return existing;
   if (job) {
@@ -84,13 +88,13 @@ function initialSectionsFor(job?: Job): JobContentSection[] {
     if (job.requirements)
       migrated.push({
         id: "migrated-req",
-        title: "Requirements",
+        title: labels.requirements,
         body: job.requirements,
       });
     if (job.benefits)
       migrated.push({
         id: "migrated-ben",
-        title: "Benefits",
+        title: labels.benefits,
         body: job.benefits,
       });
     return migrated;
@@ -105,38 +109,23 @@ function initialSectionsFor(job?: Job): JobContentSection[] {
 const SECTIONS = [
   {
     key: "essentials",
-    label: "Details",
-    blurb: "Use a common, searchable job title. One role per posting.",
   },
   {
     key: "description",
-    label: "Description",
-    blurb: "Lead with impact and team. Keep must-haves short and scannable.",
   },
   {
     key: "compensation",
-    label: "Compensation",
-    blurb: "Listing a salary range measurably increases applications.",
   },
   {
     key: "application",
-    label: "Application form",
-    blurb:
-      "Ask only what you'll actually use to decide , fewer required fields, more completions.",
   },
   {
     key: "advanced",
-    label: "Advanced",
-    blurb:
-      "Keywords improve search on your careers page. A custom slug keeps URLs clean.",
   },
   {
     key: "review",
-    label: "Team & publish",
-    blurb:
-      "Assign a hiring team, then preview the listing exactly as candidates will see it.",
   },
-] as const satisfies readonly { key: string; label: string; blurb: string }[];
+] as const;
 
 type SectionKey = (typeof SECTIONS)[number]["key"];
 
@@ -200,12 +189,6 @@ const FIELD_PREVIEW_TARGET: Record<string, string> = {
   officeAddress: "office",
 };
 
-const RAIL_SECTIONS: EditorRailSection[] = SECTIONS.map((s) => ({
-  key: s.key,
-  label: s.label,
-}));
-
-
 export function JobForm({
   action,
   job,
@@ -222,6 +205,14 @@ export function JobForm({
   previewWorkspace,
   previewConfig,
 }: JobFormProps) {
+  const t = useTranslations("jobs.form");
+  const tValidation = useTranslations("jobs.validation");
+  const localizedSections = SECTIONS.map((section) => ({
+    key: section.key,
+    label: t(`section.${section.key}`),
+    blurb: t(`sectionBlurb.${section.key}`),
+  }));
+  const railSections: EditorRailSection[] = localizedSections.map(({ key, label }) => ({ key, label }));
   const router = useRouter();
   const formRef = useRef<HTMLFormElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -239,7 +230,10 @@ export function JobForm({
   // is ever submitted as the description.
   const [description, setDescription] = useState(job?.description ?? "");
   const [sections, setSections] = useState<JobContentSection[]>(() =>
-    initialSectionsFor(job),
+    initialSectionsFor(job, {
+      requirements: t("sectionRequirements"),
+      benefits: t("sectionBenefits"),
+    }),
   );
   const [keywords, setKeywords] = useState<string[]>(() =>
     parseKeywords(job?.keywords),
@@ -428,7 +422,7 @@ export function JobForm({
   );
   const publishHint =
     (!job || job.status === "open") && publishBlockers.length > 0
-      ? publishBlockers[0]
+      ? tValidation("descriptionRequired")
       : null;
   const aiOn = Boolean(aiConfigured);
 
@@ -511,16 +505,27 @@ export function JobForm({
       : result.error.issues[0];
     if (!issue) return;
 
-    toast.error(issue.message);
-
     const fieldName = String(issue.path[0] ?? "");
+    const validationMessage =
+      fieldName === "title"
+        ? tValidation("titleRequired")
+        : fieldName === "salaryMax"
+          ? tValidation("salaryOrder")
+          : fieldName === "currency"
+            ? tValidation("currencyRequired")
+            : fieldName === "salaryPeriod"
+              ? tValidation("periodRequired")
+              : fieldName === "description"
+                ? tValidation("descriptionRequired")
+                : issue.message;
+    toast.error(validationMessage);
     const sectionKey = FIELD_TO_SECTION[fieldName] ?? "essentials";
     jumpToSection(sectionKey);
 
     if (fieldName === "title") {
       setTitleError(true);
     }
-  }, [job]);
+  }, [job, tValidation]);
 
   const handleActiveChange = useCallback(
     (key: string) => {
@@ -536,11 +541,11 @@ export function JobForm({
     [pointPreviewAt, setActiveSection],
   );
 
-  const activeIndex = SECTIONS.findIndex((s) => s.key === activeSection);
-  const previousSection = activeIndex > 0 ? SECTIONS[activeIndex - 1].key : null;
+  const activeIndex = localizedSections.findIndex((s) => s.key === activeSection);
+  const previousSection = activeIndex > 0 ? localizedSections[activeIndex - 1].key : null;
   const nextSection =
-    activeIndex >= 0 && activeIndex < SECTIONS.length - 1
-      ? SECTIONS[activeIndex + 1].key
+    activeIndex >= 0 && activeIndex < localizedSections.length - 1
+      ? localizedSections[activeIndex + 1].key
       : null;
 
   const primaryActions = (
@@ -553,7 +558,7 @@ export function JobForm({
         size="sm"
         onClick={validateBeforeSubmit}
       >
-        Save as draft
+        {t("saveAsDraft")}
       </Button>
       <Button
         type="submit"
@@ -580,7 +585,7 @@ export function JobForm({
         className="max-md:hidden"
         onClick={validateBeforeSubmit}
       >
-        Save as draft
+        {t("saveAsDraft")}
       </Button>
       <Button
         type="submit"
@@ -632,7 +637,7 @@ export function JobForm({
         }
       >
         <JobEditorRail
-          sections={RAIL_SECTIONS}
+          sections={railSections}
           scrollRootRef={scrollRef}
           active={activeSection}
           onActiveChange={handleActiveChange}
@@ -643,7 +648,7 @@ export function JobForm({
         <div
           ref={scrollRef}
           {...{ [EDITOR_SCROLL_ROOT_ATTR]: "" }}
-          className="relative mx-auto flex w-full min-w-0 max-w-2xl flex-1 flex-col overflow-y-auto overscroll-contain xl:mx-0 xl:w-[34rem] xl:flex-none 2xl:w-[40rem]"
+          className="relative flex w-full min-w-0 flex-1 flex-col overflow-y-auto overscroll-contain xl:w-[34rem] xl:flex-none 2xl:w-[40rem]"
         >
           {/*
             No `min-h-full` here on purpose , percentage min-height on a flex
@@ -657,13 +662,13 @@ export function JobForm({
             before it rather than a forced full-viewport stretch.
           */}
           <JobEditorMobileNav
-            sections={RAIL_SECTIONS}
+            sections={railSections}
             active={activeSection}
             onSelect={(key) => jumpToSection(key as SectionKey)}
           />
           <div className="flex flex-col px-4 pb-8 pt-6 sm:px-6">
             <div className="space-y-10">
-              {SECTIONS.map((s) => (
+              {localizedSections.map((s) => (
                 <section
                   key={s.key}
                   id={s.key}
@@ -777,7 +782,7 @@ export function JobForm({
                 disabled={!previousSection}
               >
                 <ArrowLeft className="size-4" />
-                Back
+                {t("back")}
               </Button>
               {!previewDocked ? (
                 <Button
@@ -786,13 +791,13 @@ export function JobForm({
                   onClick={() => setPreviewOpen(true)}
                 >
                   <Eye className="size-4" />
-                  Preview
+                  {t("preview")}
                 </Button>
               ) : null}
             </div>
             {nextSection ? (
               <Button type="button" onClick={() => jumpToSection(nextSection)}>
-                Continue
+                {t("continue")}
                 <ArrowRight className="size-4" />
               </Button>
             ) : (

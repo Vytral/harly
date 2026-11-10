@@ -14,17 +14,27 @@ export const DOCUMENT_MIME_LABELS: Record<string, string> = {
   "image/webp": "WEBP",
 };
 
+/**
+ * Translator for the `labels.documents` namespace. Helpers in this file accept
+ * one instead of calling hooks, so they stay usable from client and server code.
+ */
+export type DocumentLabelTranslator = (
+  key: string,
+  values?: Record<string, string | number | Date>,
+) => string;
+
 export const DOCUMENT_STATUS_META = {
-  active: { label: "Active", className: "bg-lime-wash text-sage-ink" },
-  archived: { label: "Archived", className: "bg-soft-kraft text-soft-ink" },
+  active: { className: "bg-lime-wash text-sage-ink" },
+  archived: { className: "bg-soft-kraft text-soft-ink" },
 } as const;
 
+/** Labels live in `labels.documents.signatureStatus.<key>`. */
 export const SIGNATURE_STATUS_META = {
-  unsigned: { label: "Not signed", className: "bg-soft-kraft text-soft-ink" },
-  pending: { label: "Pending signature", className: "bg-warning-clay/10 text-warning-clay" },
-  signed: { label: "Signed", className: "bg-lime-wash text-sage-ink" },
-  declined: { label: "Declined", className: "bg-danger-rust/10 text-danger-rust" },
-  expired: { label: "Expired", className: "bg-danger-rust/10 text-danger-rust" },
+  unsigned: { className: "bg-soft-kraft text-soft-ink" },
+  pending: { className: "bg-warning-clay/10 text-warning-clay" },
+  signed: { className: "bg-lime-wash text-sage-ink" },
+  declined: { className: "bg-danger-rust/10 text-danger-rust" },
+  expired: { className: "bg-danger-rust/10 text-danger-rust" },
 } as const;
 
 /** Why an expiry/state chip reads the way it does, shared by hub rows and the detail header. */
@@ -35,39 +45,52 @@ export type DocumentStateTone = "neutral" | "success" | "warning" | "danger";
  * signature lifecycle; a lapsed business date only shows on a document that is
  * not already signed (a completed contract is not "expired" in the list).
  */
-export function documentStateMeta(document: {
+export function documentStateMeta(
+  document: {
+    status: string;
+    signatureStatus: string;
+    expiresAt: string | null;
+  },
+  t: DocumentLabelTranslator,
+): { key: string; label: string; tone: DocumentStateTone } {
+  const stateKey = documentStateKey(document);
+  return { key: stateKey.key, label: t(`state.${stateKey.key}`), tone: stateKey.tone };
+}
+
+function documentStateKey(document: {
   status: string;
   signatureStatus: string;
   expiresAt: string | null;
-}): { key: string; label: string; tone: DocumentStateTone } {
-  if (document.status === "archived") return { key: "archived", label: "Archived", tone: "neutral" };
+}): { key: string; tone: DocumentStateTone } {
+  if (document.status === "archived") return { key: "archived", tone: "neutral" };
   switch (document.signatureStatus) {
     case "pending":
-      return { key: "pending", label: "Awaiting signature", tone: "warning" };
+      return { key: "pending", tone: "warning" };
     case "signed":
-      return { key: "signed", label: "Signed", tone: "success" };
+      return { key: "signed", tone: "success" };
     case "declined":
-      return { key: "declined", label: "Declined", tone: "danger" };
+      return { key: "declined", tone: "danger" };
     case "expired":
-      return { key: "expired", label: "Signature expired", tone: "danger" };
+      return { key: "expired", tone: "danger" };
     default:
       return document.expiresAt && new Date(document.expiresAt).getTime() < Date.now()
-        ? { key: "lapsed", label: "Date passed", tone: "danger" }
-        : { key: "active", label: "Not signed", tone: "neutral" };
+        ? { key: "lapsed", tone: "danger" }
+        : { key: "active", tone: "neutral" };
   }
 }
 
 /** Relative hint for a business date: "in 12 days", "3 days ago", "today". */
 export function describeExpiry(
   expiresAt: string | null,
+  t: DocumentLabelTranslator,
   now: number = Date.now(),
 ): { label: string; tone: DocumentStateTone; days: number } | null {
   if (!expiresAt) return null;
   const days = Math.round((new Date(expiresAt).getTime() - now) / 86_400_000);
-  if (days < 0) return { label: `${-days} day${days === -1 ? "" : "s"} ago`, tone: "danger", days };
-  if (days === 0) return { label: "today", tone: "warning", days };
+  if (days < 0) return { label: t("expiry.passed", { count: -days }), tone: "danger", days };
+  if (days === 0) return { label: t("expiry.today"), tone: "warning", days };
   return {
-    label: `in ${days} day${days === 1 ? "" : "s"}`,
+    label: t("expiry.upcoming", { count: days }),
     tone: days <= 30 ? "warning" : "neutral",
     days,
   };
@@ -75,13 +98,14 @@ export function describeExpiry(
 
 export type SignerState = "waiting" | "invited" | "signed" | "declined" | "voided" | "expired";
 
-export const SIGNER_STATE_META: Record<SignerState, { label: string; tone: DocumentStateTone }> = {
-  waiting: { label: "Waiting for turn", tone: "neutral" },
-  invited: { label: "Invited", tone: "warning" },
-  signed: { label: "Signed", tone: "success" },
-  declined: { label: "Declined", tone: "danger" },
-  voided: { label: "Cancelled", tone: "neutral" },
-  expired: { label: "Link expired", tone: "danger" },
+/** Labels live in `labels.documents.signerState.<state>`. */
+export const SIGNER_STATE_META: Record<SignerState, { tone: DocumentStateTone }> = {
+  waiting: { tone: "neutral" },
+  invited: { tone: "warning" },
+  signed: { tone: "success" },
+  declined: { tone: "danger" },
+  voided: { tone: "neutral" },
+  expired: { tone: "danger" },
 };
 
 /** Per-signer state from the recipient row; a sent link past its expiry reads as expired. */
@@ -249,8 +273,8 @@ export function formatDocumentSize(bytes: number) {
   return `${(bytes / (1024 * 1024)).toFixed(bytes > 10 * 1024 * 1024 ? 0 : 1)} MB`;
 }
 
-export function documentTypeLabel(mimeType: string) {
-  return DOCUMENT_MIME_LABELS[mimeType] ?? "File";
+export function documentTypeLabel(mimeType: string, t: DocumentLabelTranslator) {
+  return DOCUMENT_MIME_LABELS[mimeType] ?? t("fileType.fallback");
 }
 
 export function isPreviewable(mimeType: string) {

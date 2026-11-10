@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { AnimatePresence, motion } from "motion/react";
 import { QRCodeSVG } from "qrcode.react";
 import { toast } from "@/lib/notification-island/toast";
@@ -34,6 +35,7 @@ function currentIssuer(): string | undefined {
 export function TwoFactorCard({ enabled }: { enabled: boolean }) {
   const router = useRouter();
   const motionSafe = useMotionSafe();
+  const t = useTranslations("features.security.twoFactorCard");
   const [step, setStep] = useState<Step>("idle");
   const [totpUri, setTotpUri] = useState("");
   const [backupCodes, setBackupCodes] = useState<string[]>([]);
@@ -57,7 +59,7 @@ export function TwoFactorCard({ enabled }: { enabled: boolean }) {
         issuer: currentIssuer(),
       });
       if (res.error) {
-        toast.error(res.error.message ?? "Invalid password");
+        toast.error(res.error.message ?? t("invalidPassword"));
         return;
       }
       const data = res.data as { totpURI?: string; backupCodes?: string[] } | null;
@@ -73,7 +75,7 @@ export function TwoFactorCard({ enabled }: { enabled: boolean }) {
     startTransition(async () => {
       const res = await authClient.twoFactor.verifyTotp({ code: otp });
       if (res.error) {
-        toast.error(res.error.message ?? "Invalid code. Try again");
+        toast.error(res.error.message ?? t("invalidCode"));
         return;
       }
       setOtp("");
@@ -86,10 +88,10 @@ export function TwoFactorCard({ enabled }: { enabled: boolean }) {
     startTransition(async () => {
       const res = await authClient.twoFactor.disable({ password });
       if (res.error) {
-        toast.error(res.error.message ?? "Invalid password");
+        toast.error(res.error.message ?? t("invalidPassword"));
         return;
       }
-      toast.success("Two-factor authentication disabled");
+      toast.success(t("disabledToast"));
       reset();
       router.refresh();
     });
@@ -97,13 +99,13 @@ export function TwoFactorCard({ enabled }: { enabled: boolean }) {
 
   function copyBackupCodes() {
     copyText(backupCodes.join("\n"));
-    toast.success("Backup codes copied");
+    toast.success(t("backupCodesCopied"));
   }
 
   function downloadBackupCodes() {
     const blob = new Blob(
       [
-        `Harly two-factor backup codes\nEach code works once.\n\n${backupCodes.join("\n")}\n`,
+        t("backupFileContents", { codes: backupCodes.join("\n") }),
       ],
       { type: "text/plain" },
     );
@@ -119,11 +121,11 @@ export function TwoFactorCard({ enabled }: { enabled: boolean }) {
     <Card className="gap-5 p-6">
       <SectionHeader
         icon={DeviceMobileDuotoneIcon}
-        title="Two-Factor Authentication"
-        description="Protect your account with a one-time code from your authenticator app or email."
+        title={t("title")}
+        description={t("description")}
         badge={
           <StatusPill tone={enabled ? "on" : "off"}>
-            {enabled ? "Enabled" : "Disabled"}
+            {enabled ? t("enabled") : t("disabled")}
           </StatusPill>
         }
         action={
@@ -134,11 +136,11 @@ export function TwoFactorCard({ enabled }: { enabled: boolean }) {
                 size="sm"
                 onClick={() => setStep("disable")}
               >
-                Disable 2FA
+                {t("disable2fa")}
               </Button>
             ) : (
               <Button size="sm" onClick={() => setStep("password")}>
-                Enable 2FA
+                {t("enable2fa")}
               </Button>
             )
           ) : null
@@ -157,10 +159,10 @@ export function TwoFactorCard({ enabled }: { enabled: boolean }) {
           >
             <div className="space-y-4 rounded-xl border bg-muted/30 p-4">
               <p className="text-sm text-muted-foreground">
-                Confirm your password to generate an authenticator QR code.
+                {t("passwordPrompt")}
               </p>
               <div className="space-y-2">
-                <Label htmlFor="2fa-pw">Password</Label>
+                <Label htmlFor="2fa-pw">{t("password")}</Label>
                 <Input
                   id="2fa-pw"
                   type="password"
@@ -177,10 +179,10 @@ export function TwoFactorCard({ enabled }: { enabled: boolean }) {
                   disabled={!password || isPending}
                 >
                   {isPending && <SpinnerIcon className="mr-1.5 size-3.5" />}
-                  Continue
+                  {t("continue")}
                 </Button>
                 <Button variant="ghost" size="sm" onClick={reset}>
-                  Cancel
+                  {t("cancel")}
                 </Button>
               </div>
             </div>
@@ -198,9 +200,7 @@ export function TwoFactorCard({ enabled }: { enabled: boolean }) {
           >
             <div className="space-y-5 rounded-xl border bg-muted/30 p-4">
               <p className="text-sm text-muted-foreground">
-                Scan this QR code with your authenticator app (Authy, Google
-                Authenticator, 1Password…), then enter the 6-digit code to
-                confirm setup.
+                {t("configureHelp")}
               </p>
 
               <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
@@ -214,7 +214,7 @@ export function TwoFactorCard({ enabled }: { enabled: boolean }) {
                 {/* Backup codes */}
                 <div className="flex-1 space-y-2">
                   <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                    Backup codes
+                    {t("backupCodes")}
                   </p>
                   <div className="grid grid-cols-2 gap-1 rounded-lg border bg-card p-2.5 font-mono text-xs">
                     {backupCodes.map((c) => (
@@ -231,7 +231,7 @@ export function TwoFactorCard({ enabled }: { enabled: boolean }) {
                       onClick={copyBackupCodes}
                     >
                       <CopyIcon className="mr-1 size-3" />
-                      Copy
+                      {t("copy")}
                     </Button>
                     <Button
                       variant="ghost"
@@ -240,7 +240,7 @@ export function TwoFactorCard({ enabled }: { enabled: boolean }) {
                       onClick={downloadBackupCodes}
                     >
                       <DownloadDuotoneIcon className="mr-1 size-3" />
-                      Download
+                      {t("download")}
                     </Button>
                   </div>
                 </div>
@@ -248,7 +248,7 @@ export function TwoFactorCard({ enabled }: { enabled: boolean }) {
 
               {/* OTP input */}
               <div className="space-y-2">
-                <Label htmlFor="2fa-code">Enter code from app</Label>
+                <Label htmlFor="2fa-code">{t("enterCode")}</Label>
                 <div className="flex gap-2">
                   <Input
                     id="2fa-code"
@@ -271,13 +271,13 @@ export function TwoFactorCard({ enabled }: { enabled: boolean }) {
                     disabled={otp.length !== 6 || isPending}
                   >
                     {isPending && <SpinnerIcon className="mr-1.5 size-3.5" />}
-                    Verify & Enable
+                    {t("verifyAndEnable")}
                   </Button>
                 </div>
               </div>
 
               <Button variant="ghost" size="sm" onClick={reset}>
-                Cancel
+                {t("cancel")}
               </Button>
             </div>
           </motion.div>
@@ -295,10 +295,9 @@ export function TwoFactorCard({ enabled }: { enabled: boolean }) {
               <CheckIcon className="size-3 text-pine" />
             </span>
             <div className="space-y-1">
-              <p className="text-sm font-medium">2FA is now active</p>
+              <p className="text-sm font-medium">{t("activeTitle")}</p>
               <p className="text-sm text-muted-foreground">
-                Store your backup codes in a safe place. Each works once if
-                you lose access to your authenticator.
+                {t("storeBackupCodes")}
               </p>
             </div>
           </motion.div>
@@ -315,10 +314,10 @@ export function TwoFactorCard({ enabled }: { enabled: boolean }) {
           >
             <div className="space-y-4 rounded-xl border border-destructive/20 bg-destructive/5 p-4">
               <p className="text-sm text-muted-foreground">
-                Enter your password to disable two-factor authentication.
+                {t("disablePrompt")}
               </p>
               <div className="space-y-2">
-                <Label htmlFor="disable-pw">Password</Label>
+                <Label htmlFor="disable-pw">{t("password")}</Label>
                 <Input
                   id="disable-pw"
                   type="password"
@@ -336,10 +335,10 @@ export function TwoFactorCard({ enabled }: { enabled: boolean }) {
                   disabled={!password || isPending}
                 >
                   {isPending && <SpinnerIcon className="mr-1.5 size-3.5" />}
-                  Disable 2FA
+                  {t("disable2fa")}
                 </Button>
                 <Button variant="ghost" size="sm" onClick={reset}>
-                  Cancel
+                  {t("cancel")}
                 </Button>
               </div>
             </div>

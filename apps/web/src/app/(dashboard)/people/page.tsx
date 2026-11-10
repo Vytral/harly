@@ -1,3 +1,4 @@
+import { getTranslations } from "next-intl/server";
 import { UserRound } from "lucide-react";
 
 import { EmptyState } from "@/components/ui/empty-state";
@@ -10,6 +11,7 @@ export const dynamic = "force-dynamic";
 
 export default async function PeoplePage() {
   await requirePagePermission("members:read");
+  const t = await getTranslations("pages.people.page");
   const rows = await listPeopleAction();
 
   const people: PersonListRow[] = rows.map((row) => ({
@@ -25,16 +27,13 @@ export default async function PeoplePage() {
 
   return (
     <div className="space-y-6">
-      <PageTitleRow
-        title="Team"
-        description="Everyone on the team, with contact details, specialties, and availability."
-      />
+      <PageTitleRow title={t("title")} description={t("description")} />
 
       {people.length === 0 ? (
         <EmptyState
           icon={UserRound}
-          title="No teammates yet"
-          description="Invite people from Settings → Members to see them here."
+          title={t("emptyTitle")}
+          description={t("emptyDescription")}
         />
       ) : (
         <PeopleTable rows={people} />

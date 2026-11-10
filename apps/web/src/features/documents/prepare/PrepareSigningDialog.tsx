@@ -10,6 +10,7 @@ import {
   Trash2,
   Type as TypeIcon,
 } from "lucide-react";
+import { useTranslations } from "next-intl";
 
 import {
   Dialog,
@@ -128,6 +129,7 @@ export function PrepareSigningDialog({
   onSubmit,
 }: Props) {
   const confirm = useConfirm();
+  const t = useTranslations("features.documents.prepareSigningDialog");
   const uid = useId();
   const isMulti = mode.kind === "multi";
 
@@ -176,7 +178,7 @@ export function PrepareSigningDialog({
   }
 
   const signerIndex = (key: string | undefined) => Math.max(0, signers.findIndex((s) => s.key === key));
-  const signerLabel = (s: Signer, i: number) => s.name.trim() || (isMulti ? `Signer ${i + 1}` : mode.signerLabel);
+  const signerLabel = (s: Signer, i: number) => s.name.trim() || (isMulti ? t("signerFallback", { number: i + 1 }) : mode.signerLabel);
   const colorOf = (key: string | undefined) => SIGNER_COLORS[signerIndex(key) % SIGNER_COLORS.length];
   const fieldsOf = (key: string) => placements.filter((p) => p.signerKey === key).length;
 
@@ -292,10 +294,10 @@ export function PrepareSigningDialog({
     if (touched) {
       const ok = await confirm({
         tone: "warning",
-        title: "Discard this setup?",
-        description: "Your signers and field placement have not been sent. Closing now throws them away.",
-        confirmLabel: "Discard",
-        cancelLabel: "Keep editing",
+        title: t("discardTitle"),
+        description: t("discardDescription"),
+        confirmLabel: t("discard"),
+        cancelLabel: t("keepEditing"),
       });
       if (!ok) return;
     }
@@ -334,10 +336,10 @@ export function PrepareSigningDialog({
         setTouched(false);
         onOpenChange(false);
       } else {
-        setError(result.error ?? "Could not send.");
+        setError(result.error ?? t("sendFailed"));
       }
     } catch {
-      setError("Something went wrong. Try again.");
+      setError(t("genericError"));
     } finally {
       setPending(false);
     }
@@ -352,11 +354,11 @@ export function PrepareSigningDialog({
         className="flex max-h-[calc(100dvh-2rem)] flex-col gap-0 overflow-hidden p-0 sm:max-w-[min(1440px,calc(100%-2rem))]"
       >
         <DialogHeader className="border-b border-hairline px-4 py-3 text-left sm:px-6 sm:py-4">
-          <DialogTitle>{isMulti ? "Prepare for signing" : "Place signature fields"}</DialogTitle>
+          <DialogTitle>{isMulti ? t("multiTitle") : t("singleTitle")}</DialogTitle>
           <DialogDescription>
             {isMulti
-              ? <>Add who signs <strong>{subjectName}</strong>, then mark where each person signs, dates or fills in.</>
-              : <>Mark where <strong>{subjectName}</strong> needs a signature, date or other text before it is sent.</>}
+              ? t.rich("multiDescription", { subjectName, b: (chunks) => <strong>{chunks}</strong> })
+              : t.rich("singleDescription", { subjectName, b: (chunks) => <strong>{chunks}</strong> })}
           </DialogDescription>
         </DialogHeader>
         <div className="grid min-h-0 flex-1 grid-cols-[minmax(0,1fr)] grid-rows-[minmax(0,11fr)_minmax(0,9fr)] lg:grid-cols-[minmax(0,1fr)_380px] lg:grid-rows-[minmax(0,1fr)]">
@@ -386,7 +388,7 @@ export function PrepareSigningDialog({
             />
             {pageCount > 0 && placements.length === 0 ? (
               <p className="mt-4 text-center text-sm text-soft-ink">
-                No fields yet. Use the buttons on the right to add a signature field.
+                {t("noFieldsHint")}
               </p>
             ) : null}
           </div>
@@ -397,12 +399,12 @@ export function PrepareSigningDialog({
               <section aria-labelledby={`${uid}-signers`} className="space-y-3">
                 <div>
                   <h3 id={`${uid}-signers`} className="text-sm font-semibold text-near-ink">
-                    {isMulti ? "1. Signers" : "Signer"}
+                    {isMulti ? t("signersHeadingMulti") : t("signersHeadingSingle")}
                   </h3>
                   <p className="mt-1 text-xs leading-5 text-soft-ink">
                     {isMulti
-                      ? "People sign in this order. Each one gets their link only after the previous signer finishes."
-                      : `Only the ${mode.signerLabel.toLowerCase()} signs. They fill in the fields you place; there is no dragging on their end.`}
+                      ? t("signersHelpMulti")
+                      : t("signersHelpSingle", { role: mode.signerLabel.toLowerCase() })}
                   </p>
                 </div>
                 {isMulti ? (
@@ -429,27 +431,27 @@ export function PrepareSigningDialog({
                             >
                               <span className="size-3 shrink-0 rounded-full" style={{ backgroundColor: color }} aria-hidden />
                               <span className="truncate">
-                                Signs {ordinal(i + 1)} · {count} field{count === 1 ? "" : "s"}
+                                {t("signsOrder", { position: i + 1, fields: count })}
                               </span>
-                              {isActive ? <span className="text-soft-ink">· adding fields</span> : null}
+                              {isActive ? <span className="text-soft-ink">{t("addingFields")}</span> : null}
                             </button>
-                            <Button type="button" variant="ghost" size="icon-xs" aria-label={`Move ${signerLabel(signer, i)} earlier`} disabled={i === 0} onClick={() => moveSigner(signer.key, -1)}>
+                            <Button type="button" variant="ghost" size="icon-xs" aria-label={t("moveEarlier", { name: signerLabel(signer, i) })} disabled={i === 0} onClick={() => moveSigner(signer.key, -1)}>
                               <ArrowUp />
                             </Button>
-                            <Button type="button" variant="ghost" size="icon-xs" aria-label={`Move ${signerLabel(signer, i)} later`} disabled={i === signers.length - 1} onClick={() => moveSigner(signer.key, 1)}>
+                            <Button type="button" variant="ghost" size="icon-xs" aria-label={t("moveLater", { name: signerLabel(signer, i) })} disabled={i === signers.length - 1} onClick={() => moveSigner(signer.key, 1)}>
                               <ArrowDown />
                             </Button>
-                            <Button type="button" variant="ghost" size="icon-xs" aria-label={`Remove ${signerLabel(signer, i)}`} disabled={signers.length === 1} onClick={() => requestRemoveSigner(signer.key)}>
+                            <Button type="button" variant="ghost" size="icon-xs" aria-label={t("removeSigner", { name: signerLabel(signer, i) })} disabled={signers.length === 1} onClick={() => requestRemoveSigner(signer.key)}>
                               <Trash2 />
                             </Button>
                           </div>
                           <div className="grid gap-2">
                             <div className="space-y-1">
-                              <Label htmlFor={`${uid}-name-${signer.key}`} className="text-xs">Name</Label>
+                              <Label htmlFor={`${uid}-name-${signer.key}`} className="text-xs">{t("nameLabel")}</Label>
                               <Input id={`${uid}-name-${signer.key}`} value={signer.name} onChange={(e) => updateSigner(signer.key, { name: e.target.value })} autoComplete="off" />
                             </div>
                             <div className="space-y-1">
-                              <Label htmlFor={`${uid}-email-${signer.key}`} className="text-xs">Email</Label>
+                              <Label htmlFor={`${uid}-email-${signer.key}`} className="text-xs">{t("emailLabel")}</Label>
                               <Input
                                 id={`${uid}-email-${signer.key}`}
                                 type="email"
@@ -461,12 +463,10 @@ export function PrepareSigningDialog({
                             </div>
                           </div>
                           {askingRemoval ? (
-                            <div className="mt-3 space-y-2 rounded-[var(--radius-inner)] bg-warning-clay/10 p-3 text-xs text-near-ink" role="alertdialog" aria-label="Remove signer">
-                              <p>
-                                {count} field{count === 1 ? " belongs" : "s belong"} to {signerLabel(signer, i)}. Move {count === 1 ? "it" : "them"} to another signer or delete {count === 1 ? "it" : "them"}.
-                              </p>
+                            <div className="mt-3 space-y-2 rounded-[var(--radius-inner)] bg-warning-clay/10 p-3 text-xs text-near-ink" role="alertdialog" aria-label={t("removeSignerAria")}>
+                              <p>{t("removeSignerWarning", { count, name: signerLabel(signer, i) })}</p>
                               <Select value={removing.moveTo} onValueChange={(v) => setRemoving({ key: signer.key, moveTo: v })}>
-                                <SelectTrigger size="sm" className="w-full" aria-label="Move fields to">
+                                <SelectTrigger size="sm" className="w-full" aria-label={t("moveFieldsTo")}>
                                   <SelectValue />
                                 </SelectTrigger>
                                 <SelectContent>
@@ -478,9 +478,9 @@ export function PrepareSigningDialog({
                                 </SelectContent>
                               </Select>
                               <div className="flex flex-wrap gap-2">
-                                <Button type="button" size="sm" onClick={() => finishRemoveSigner(signer.key, "move", removing.moveTo)}>Move and remove</Button>
-                                <Button type="button" size="sm" variant="outline" onClick={() => finishRemoveSigner(signer.key, "delete")}>Delete fields and remove</Button>
-                                <Button type="button" size="sm" variant="ghost" onClick={() => setRemoving(null)}>Cancel</Button>
+                                <Button type="button" size="sm" onClick={() => finishRemoveSigner(signer.key, "move", removing.moveTo)}>{t("moveAndRemove")}</Button>
+                                <Button type="button" size="sm" variant="outline" onClick={() => finishRemoveSigner(signer.key, "delete")}>{t("deleteFieldsAndRemove")}</Button>
+                                <Button type="button" size="sm" variant="ghost" onClick={() => setRemoving(null)}>{t("cancel")}</Button>
                               </div>
                             </div>
                           ) : null}
@@ -496,7 +496,7 @@ export function PrepareSigningDialog({
                 )}
                 {isMulti ? (
                   <Button type="button" variant="outline" size="sm" onClick={addSigner} disabled={signers.length >= MAX_SIGNERS}>
-                    <Plus /> Add signer
+                    <Plus /> {t("addSigner")}
                   </Button>
                 ) : null}
               </section>
@@ -504,14 +504,14 @@ export function PrepareSigningDialog({
               {/* ---- Email options ---- */}
               {isMulti && mode.showMessage ? (
                 <section aria-labelledby={`${uid}-message`} className="space-y-2">
-                  <h3 id={`${uid}-message`} className="text-sm font-semibold text-near-ink">Invite email</h3>
+                  <h3 id={`${uid}-message`} className="text-sm font-semibold text-near-ink">{t("inviteEmail")}</h3>
                   <div className="space-y-1">
-                    <Label htmlFor={`${uid}-subject`} className="text-xs">Subject (optional)</Label>
-                    <Input id={`${uid}-subject`} value={subject} maxLength={255} placeholder={`Please sign: ${subjectName}`} onChange={(e) => touch(setSubject)(e.target.value)} />
+                    <Label htmlFor={`${uid}-subject`} className="text-xs">{t("subjectOptional")}</Label>
+                    <Input id={`${uid}-subject`} value={subject} maxLength={255} placeholder={t("subjectPlaceholder", { subjectName })} onChange={(e) => touch(setSubject)(e.target.value)} />
                   </div>
                   <div className="space-y-1">
-                    <Label htmlFor={`${uid}-msg`} className="text-xs">Message (optional)</Label>
-                    <Textarea id={`${uid}-msg`} rows={3} value={message} maxLength={4000} placeholder="Add a note for the signers" onChange={(e) => touch(setMessage)(e.target.value)} />
+                    <Label htmlFor={`${uid}-msg`} className="text-xs">{t("messageOptional")}</Label>
+                    <Textarea id={`${uid}-msg`} rows={3} value={message} maxLength={4000} placeholder={t("messagePlaceholder")} onChange={(e) => touch(setMessage)(e.target.value)} />
                   </div>
                 </section>
               ) : null}
@@ -519,10 +519,10 @@ export function PrepareSigningDialog({
               {/* ---- Fields ---- */}
               <section aria-labelledby={`${uid}-fields`} className="space-y-3">
                 <div>
-                  <h3 id={`${uid}-fields`} className="text-sm font-semibold text-near-ink">{isMulti ? "2. Fields" : "Fields"}</h3>
+                  <h3 id={`${uid}-fields`} className="text-sm font-semibold text-near-ink">{isMulti ? t("fieldsHeadingMulti") : t("fieldsHeading")}</h3>
                   {isMulti ? (
                     <p className="mt-1 flex items-center gap-1.5 text-xs leading-5 text-soft-ink">
-                      New fields go to
+                      {t("newFieldsGoTo")}
                       <span className="inline-flex items-center gap-1 font-medium text-near-ink">
                         <span className="size-2.5 rounded-full" style={{ backgroundColor: colorOf(activeSignerKey) }} aria-hidden />
                         {signerLabel(signers[signerIndex(activeSignerKey)], signerIndex(activeSignerKey))}
@@ -531,20 +531,20 @@ export function PrepareSigningDialog({
                   ) : null}
                 </div>
                 <div className="grid grid-cols-3 gap-2">
-                  <Button type="button" variant="outline" size="sm" onClick={() => addField("signature")}><PenLine /> Signature</Button>
-                  <Button type="button" variant="outline" size="sm" onClick={() => addField("date")}><Calendar /> Date</Button>
-                  <Button type="button" variant="outline" size="sm" onClick={() => addField("text")}><TypeIcon /> Text</Button>
+                  <Button type="button" variant="outline" size="sm" onClick={() => addField("signature")}><PenLine /> {t("fieldType.signature")}</Button>
+                  <Button type="button" variant="outline" size="sm" onClick={() => addField("date")}><Calendar /> {t("fieldType.date")}</Button>
+                  <Button type="button" variant="outline" size="sm" onClick={() => addField("text")}><TypeIcon /> {t("fieldType.text")}</Button>
                 </div>
                 {placements.length === 0 ? (
                   <p className="rounded-[var(--radius-inner)] border border-dashed border-hairline p-4 text-center text-xs text-soft-ink">
-                    {pageCount === 0 ? "Loading the document preview…" : "No fields yet. Add a signature field to continue."}
+                    {pageCount === 0 ? t("loadingPreview") : t("noFieldsYet")}
                   </p>
                 ) : (
                   <ul className="space-y-2">
                     {placements.map((p, index) => {
                       const Icon = p.type === "date" ? Calendar : p.type === "text" ? TypeIcon : PenLine;
                       const isActive = index === activeIndex;
-                      const title = p.type === "signature" || !p.type ? "Signature" : p.label?.trim() || (p.type === "date" ? "Date" : "Text");
+                      const title = p.type === "signature" || !p.type ? t("fieldType.signature") : p.label?.trim() || (p.type === "date" ? t("fieldType.date") : t("fieldType.text"));
                       return (
                         <li
                           key={index}
@@ -562,19 +562,19 @@ export function PrepareSigningDialog({
                               <span className="size-2.5 shrink-0 rounded-full" style={{ backgroundColor: colorOf(p.signerKey) }} aria-hidden />
                               <Icon className="size-3.5 shrink-0 text-soft-ink" aria-hidden />
                               <span className="truncate">{title}</span>
-                              <span className="shrink-0 text-xs text-soft-ink">p.{p.page}</span>
+                              <span className="shrink-0 text-xs text-soft-ink">{t("pageNumber", { page: p.page })}</span>
                             </button>
                             <label className="flex shrink-0 items-center gap-1.5 text-xs text-soft-ink">
-                              Required
-                              <Switch size="sm" checked={p.required !== false} onCheckedChange={(v) => patchField(index, { required: v })} aria-label={`Field ${index + 1} required`} />
+                              {t("required")}
+                              <Switch size="sm" checked={p.required !== false} onCheckedChange={(v) => patchField(index, { required: v })} aria-label={t("fieldRequiredAria", { number: index + 1 })} />
                             </label>
-                            <Button type="button" variant="ghost" size="icon-xs" aria-label={`Remove field ${index + 1}`} onClick={() => removeField(index)}>
+                            <Button type="button" variant="ghost" size="icon-xs" aria-label={t("removeFieldAria", { number: index + 1 })} onClick={() => removeField(index)}>
                               <Trash2 />
                             </Button>
                           </div>
                           {isMulti && signers.length > 1 ? (
                             <Select value={p.signerKey ?? signers[0].key} onValueChange={(v) => patchField(index, { signerKey: v })}>
-                              <SelectTrigger size="sm" className="mt-2 w-full" aria-label={`Signer for field ${index + 1}`}>
+                              <SelectTrigger size="sm" className="mt-2 w-full" aria-label={t("fieldSignerAria", { number: index + 1 })}>
                                 <SelectValue />
                               </SelectTrigger>
                               <SelectContent>
@@ -594,18 +594,18 @@ export function PrepareSigningDialog({
 
             <div className="mt-auto space-y-3 border-t border-hairline bg-pure-snow p-4 sm:p-6">
               {rotated ? (
-                <Callout tone="danger">This PDF has rotated pages. Re-export it without rotation before sending.</Callout>
+                <Callout tone="danger">{t("rotatedPages")}</Callout>
               ) : null}
               {!rotated && placements.length > 0 && signersMissingSignature.length > 0 ? (
                 <p className="text-xs text-danger-rust" role="alert">
                   {isMulti
-                    ? `Needs a required signature field: ${signersMissingSignature.map((s) => signerLabel(s, signers.indexOf(s))).join(", ")}.`
-                    : "Add at least one required signature field."}
+                    ? t("missingSignatures", { signers: signersMissingSignature.map((s) => signerLabel(s, signers.indexOf(s))).join(", ") })
+                    : t("missingSignature")}
                 </p>
               ) : null}
               {error ? <Callout tone="danger">{error}</Callout> : null}
               <div className="flex items-center justify-end gap-2">
-                <Button type="button" variant="outline" onClick={() => void requestClose(false)} disabled={pending}>Cancel</Button>
+                <Button type="button" variant="outline" onClick={() => void requestClose(false)} disabled={pending}>{t("cancel")}</Button>
                 <Button type="button" onClick={() => void submit()} disabled={!canSubmit}>
                   {pending ? pendingLabel : submitLabel}
                 </Button>
@@ -616,10 +616,4 @@ export function PrepareSigningDialog({
       </DialogContent>
     </Dialog>
   );
-}
-
-function ordinal(n: number) {
-  const s = ["th", "st", "nd", "rd"];
-  const v = n % 100;
-  return `${n}${s[(v - 20) % 10] || s[v] || s[0]}`;
 }

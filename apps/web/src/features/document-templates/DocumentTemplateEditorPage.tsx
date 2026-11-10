@@ -4,6 +4,7 @@ import type { Route } from "next";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState, useTransition } from "react";
 import DOMPurify from "dompurify";
+import { useLocale, useTranslations } from "next-intl";
 
 import { Button } from "@/components/ui/button";
 import { useConfirm } from "@/components/ui/confirm-dialog";
@@ -27,6 +28,9 @@ const VARIABLE_GROUPS = Array.from(new Set(TEMPLATE_VARIABLES.map((item) => item
 
 export function DocumentTemplateEditorPage({ template }: { template: WorkflowDocumentTemplateItem | null }) {
   const router = useRouter();
+  const t = useTranslations("features.documentTemplates.documentTemplateEditorPage");
+  const tLabels = useTranslations("labels.emailTemplates");
+  const locale = useLocale();
   const confirm = useConfirm();
   const [pending, startTransition] = useTransition();
   const [name, setName] = useState(template?.name ?? "");
@@ -38,10 +42,11 @@ export function DocumentTemplateEditorPage({ template }: { template: WorkflowDoc
   const dirty = name !== saved.name || title !== saved.title || body !== saved.body;
 
   const missing = [
-    !name.trim() && "a library name",
-    !title.trim() && "a PDF title",
-    !body.trim() && "some content",
+    !name.trim() && t("missingName"),
+    !title.trim() && t("missingTitle"),
+    !body.trim() && t("missingContent"),
   ].filter(Boolean) as string[];
+  const missingFields = new Intl.ListFormat(locale, { style: "long", type: "unit" }).format(missing);
 
   // Closing the tab or reloading with unsaved edits asks first.
   useEffect(() => {
@@ -56,10 +61,10 @@ export function DocumentTemplateEditorPage({ template }: { template: WorkflowDoc
       dirty &&
       !(await confirm({
         tone: "warning",
-        title: "Discard your changes?",
-        description: "Edits to this template have not been saved.",
-        confirmLabel: "Discard changes",
-        cancelLabel: "Keep editing",
+        title: t("discardTitle"),
+        description: t("discardDescription"),
+        confirmLabel: t("discardConfirm"),
+        cancelLabel: t("keepEditing"),
       }))
     )
       return;
@@ -72,10 +77,10 @@ export function DocumentTemplateEditorPage({ template }: { template: WorkflowDoc
         ? await updateWorkflowDocumentTemplate({ templateId: template.id, name, title, body, format: "rich_text" })
         : await createWorkflowDocumentTemplate({ name, title, body, format: "rich_text" });
       if (!result.success) {
-        toast.error(result.error ?? "Could not save the document template.");
+        toast.error(result.error ?? t("saveFailed"));
         return;
       }
-      toast.success(template ? "Document template updated." : "Document template created.");
+      toast.success(template ? t("templateUpdated") : t("templateCreated"));
       setSaved({ name, title, body });
       router.push(LIST_HREF as Route);
       router.refresh();
@@ -90,66 +95,62 @@ export function DocumentTemplateEditorPage({ template }: { template: WorkflowDoc
           onClick={() => void leave()}
           className="text-sm font-medium text-soft-ink hover:text-near-ink"
         >
-          ← Documents / Templates
+          {t("backToTemplates")}
         </button>
         <div className="flex items-center gap-3">
           {missing.length > 0 ? (
             <p className="hidden text-xs text-soft-ink sm:block" aria-live="polite">
-              Add {missing.join(", ")} to save
+              {t("missingFields", { fields: missingFields })}
             </p>
           ) : dirty ? (
-            <p className="hidden text-xs text-soft-ink sm:block">Unsaved changes</p>
+            <p className="hidden text-xs text-soft-ink sm:block">{t("unsavedChanges")}</p>
           ) : null}
           <Button variant="ghost" onClick={() => void leave()}>
-            Discard
+            {t("discard")}
           </Button>
           <Button disabled={pending || missing.length > 0} onClick={save}>
-            {pending ? "Saving…" : "Save template"}
+            {pending ? t("saving") : t("saveTemplate")}
           </Button>
         </div>
       </header>
       <main className="mx-auto grid grid-cols-1 w-full max-w-7xl gap-8 px-5 py-8 sm:px-8 lg:grid-cols-[minmax(0,1fr)_22rem]">
         <section className="space-y-6">
           <div>
-            <h1 className="font-display text-2xl">{template ? "Edit document template" : "New document template"}</h1>
-            <p className="mt-1 text-sm text-soft-ink">
-              The PDF is generated the same way every time. Use it by hand from Documents or in any published workflow.
-            </p>
+            <h1 className="font-display text-2xl">{template ? t("editTemplate") : t("newTemplate")}</h1>
+            <p className="mt-1 text-sm text-soft-ink">{t("intro")}</p>
           </div>
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
             <div className="space-y-2">
-              <Label htmlFor="document-template-name">Library name</Label>
+              <Label htmlFor="document-template-name">{t("libraryName")}</Label>
               <Input
                 id="document-template-name"
                 value={name}
                 onChange={(event) => setName(event.target.value)}
-                placeholder="Employment agreement"
+                placeholder={t("libraryNamePlaceholder")}
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="document-template-title">PDF title</Label>
+              <Label htmlFor="document-template-title">{t("pdfTitle")}</Label>
               <Input
                 id="document-template-title"
                 value={title}
                 onChange={(event) => setTitle(event.target.value)}
-                placeholder="Employment agreement for {{candidate_full_name}}"
+                placeholder={t("pdfTitlePlaceholder", { variable: "{{candidate_full_name}}" })}
               />
             </div>
           </div>
           <div className="flex items-center justify-between gap-3">
             <div>
-              <Label>Content</Label>
-              <p className="mt-1 text-xs text-soft-ink">
-                Formatting is sanitized before storage. Variables are filled in when the document is generated.
-              </p>
+              <Label>{t("content")}</Label>
+              <p className="mt-1 text-xs text-soft-ink">{t("contentHelp")}</p>
             </div>
             <SegmentedControl
-              aria-label="Editor mode"
+              aria-label={t("editorMode")}
               value={mode}
               onValueChange={setMode}
               options={[
-                { value: "edit", label: "Edit" },
-                { value: "preview", label: "Preview" },
+                { value: "edit", label: t("modeEdit") },
+                { value: "preview", label: t("modePreview") },
               ]}
             />
           </div>
@@ -158,27 +159,25 @@ export function DocumentTemplateEditorPage({ template }: { template: WorkflowDoc
               defaultValue={body}
               onChange={setBody}
               editorRef={editorRef}
-              placeholder="Dear {{candidate_full_name}},"
+              placeholder={t("bodyPlaceholder", { variable: "{{candidate_full_name}}" })}
               minHeight="30rem"
             />
           ) : (
             <article
               className="prose prose-sm min-h-[30rem] max-w-none rounded-[var(--radius-card)] bg-pure-snow p-7 shadow-[var(--shadow-card)] dark:prose-invert"
               dangerouslySetInnerHTML={{
-                __html: DOMPurify.sanitize(body || "<p>Start writing your document.</p>", allowedPreviewTags),
+                __html: DOMPurify.sanitize(body || `<p>${t("startWriting")}</p>`, allowedPreviewTags),
               }}
             />
           )}
         </section>
         <aside className="h-fit rounded-[var(--radius-card)] bg-pure-snow p-5 shadow-[var(--shadow-card)]">
-          <h2 className="text-sm font-semibold">Variables</h2>
-          <p className="mt-1 text-xs leading-5 text-soft-ink">
-            Insert a variable at the cursor. Unknown variables block saving. Interview values stay blank in documents generated by hand.
-          </p>
+          <h2 className="text-sm font-semibold">{t("variables")}</h2>
+          <p className="mt-1 text-xs leading-5 text-soft-ink">{t("variablesHelp")}</p>
           <div className="mt-5 space-y-4">
             {VARIABLE_GROUPS.map((group) => (
               <div key={group}>
-                <p className="mb-2 text-xs font-medium text-soft-ink">{group}</p>
+                <p className="mb-2 text-xs font-medium text-soft-ink">{tLabels(`groups.${group}`)}</p>
                 <div className="flex flex-wrap gap-1.5">
                   {TEMPLATE_VARIABLES.filter((item) => item.group === group).map((item) => (
                     <button

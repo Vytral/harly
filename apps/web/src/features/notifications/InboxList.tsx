@@ -4,6 +4,7 @@ import { useConfirm } from "@/components/ui/confirm-dialog";
 import { useState, useTransition } from "react";
 import type { Route } from "next";
 import { useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 import {
   CheckCheck,
   EllipsisVertical,
@@ -36,6 +37,7 @@ type Filter = "all" | "unread";
 
 export function InboxList({ items }: { items: NotificationItem[] }) {
   const router = useRouter();
+  const t = useTranslations("features.notifications.inboxList");
   const confirm = useConfirm();
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
@@ -53,9 +55,9 @@ export function InboxList({ items }: { items: NotificationItem[] }) {
             notificationId: item.id,
           });
           if (!result.success)
-            setError("Could not mark the notification as read.");
+            setError(t("markReadFailed"));
         } catch {
-          setError("Could not mark the notification as read.");
+          setError(t("markReadFailed"));
         }
       }
       if (item.href) {
@@ -74,11 +76,11 @@ export function InboxList({ items }: { items: NotificationItem[] }) {
           ? await markNotificationUnread({ notificationId: item.id })
           : await markNotificationRead({ notificationId: item.id });
         if (!result.success) {
-          setError("Could not update the notification.");
+          setError(t("updateFailed"));
           return;
         }
       } catch {
-        setError("Could not update the notification.");
+        setError(t("updateFailed"));
         return;
       }
       router.refresh();
@@ -91,11 +93,11 @@ export function InboxList({ items }: { items: NotificationItem[] }) {
       try {
         const result = await deleteNotification({ notificationId: item.id });
         if (!result.success) {
-          setError("Could not delete the notification.");
+          setError(t("deleteFailed"));
           return;
         }
       } catch {
-        setError("Could not delete the notification.");
+        setError(t("deleteFailed"));
         return;
       }
       router.refresh();
@@ -108,11 +110,11 @@ export function InboxList({ items }: { items: NotificationItem[] }) {
       try {
         const result = await markAllNotificationsRead();
         if (!result.success) {
-          setError("Could not mark all notifications as read.");
+          setError(t("markAllFailed"));
           return;
         }
       } catch {
-        setError("Could not mark all notifications as read.");
+        setError(t("markAllFailed"));
         return;
       }
       router.refresh();
@@ -123,9 +125,9 @@ export function InboxList({ items }: { items: NotificationItem[] }) {
     if (
       !(await confirm({
         tone: "destructive",
-        title: "Delete all notifications?",
-        description: "Your whole inbox is cleared. This cannot be undone.",
-        confirmLabel: "Delete all",
+        title: t("deleteAllTitle"),
+        description: t("deleteAllDescription"),
+        confirmLabel: t("deleteAll"),
       }))
     )
       return;
@@ -134,11 +136,11 @@ export function InboxList({ items }: { items: NotificationItem[] }) {
       try {
         const result = await deleteAllNotifications();
         if (!result.success) {
-          setError("Could not delete all notifications.");
+          setError(t("deleteAllFailed"));
           return;
         }
       } catch {
-        setError("Could not delete all notifications.");
+        setError(t("deleteAllFailed"));
         return;
       }
       router.refresh();
@@ -164,9 +166,9 @@ export function InboxList({ items }: { items: NotificationItem[] }) {
             <path d="M10.3 21a1.94 1.94 0 0 0 3.4 0" />
           </svg>
         </span>
-        <p className="text-sm font-medium">You&apos;re all caught up</p>
+        <p className="text-sm font-medium">{t("caughtUpTitle")}</p>
         <p className="max-w-sm text-sm text-soft-ink">
-          Mentions and updates from your team will land here.
+          {t("caughtUpHelp")}
         </p>
       </div>
     );
@@ -175,11 +177,11 @@ export function InboxList({ items }: { items: NotificationItem[] }) {
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap items-center justify-between gap-2 sm:gap-3">
-        <div role="tablist" aria-label="Filter notifications" className="flex items-center gap-1.5">
+        <div role="tablist" aria-label={t("filterLabel")} className="flex items-center gap-1.5">
           {(
             [
-              ["all", "All", items.length],
-              ["unread", "Unread", unread],
+              ["all", t("all"), items.length],
+              ["unread", t("unread"), unread],
             ] as const
           ).map(([value, label, count]) => (
             <button
@@ -210,7 +212,7 @@ export function InboxList({ items }: { items: NotificationItem[] }) {
               disabled={isPending}
             >
               <CheckCheck className="size-4" />
-              Mark all as read
+              {t("markAllRead")}
             </Button>
           ) : null}
           <Button
@@ -220,7 +222,7 @@ export function InboxList({ items }: { items: NotificationItem[] }) {
             disabled={isPending}
           >
             <Trash2 className="size-4" />
-            Delete all
+            {t("deleteAll")}
           </Button>
         </div>
       </div>
@@ -233,9 +235,9 @@ export function InboxList({ items }: { items: NotificationItem[] }) {
 
       {visible.length === 0 ? (
         <div className="flex flex-col items-center gap-2 rounded-[var(--radius-card)] bg-card px-6 py-12 text-center shadow-[var(--shadow-card)]">
-          <p className="text-sm font-medium">No unread notifications</p>
+          <p className="text-sm font-medium">{t("noUnreadTitle")}</p>
           <p className="text-sm text-soft-ink">
-            Switch to &ldquo;All&rdquo; to see past notifications.
+            {t("noUnreadHelp")}
           </p>
         </div>
       ) : (
@@ -277,7 +279,7 @@ export function InboxList({ items }: { items: NotificationItem[] }) {
                       {item.title}
                     </span>
                     {!item.read ? (
-                      <span aria-label="Unread" className="size-2 shrink-0 rounded-full bg-chartreuse-signal ring-1 ring-success-olive/30" />
+                      <span aria-label={t("unread")}className="size-2 shrink-0 rounded-full bg-chartreuse-signal ring-1 ring-success-olive/30" />
                     ) : null}
                   </span>
                   {item.body ? (
@@ -305,7 +307,7 @@ export function InboxList({ items }: { items: NotificationItem[] }) {
                     className="size-8 shrink-0 max-md:opacity-100 opacity-0 transition-opacity group-hover:opacity-100 data-[state=open]:opacity-100"
                   >
                     <EllipsisVertical className="size-4" />
-                    <span className="sr-only">Actions</span>
+                    <span className="sr-only">{t("actions")}</span>
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end">
@@ -316,12 +318,12 @@ export function InboxList({ items }: { items: NotificationItem[] }) {
                     {item.read ? (
                       <>
                         <EyeOff className="size-4" />
-                        Mark as unread
+                        {t("markUnread")}
                       </>
                     ) : (
                       <>
                         <Eye className="size-4" />
-                        Mark as read
+                        {t("markRead")}
                       </>
                     )}
                   </DropdownMenuItem>
@@ -331,7 +333,7 @@ export function InboxList({ items }: { items: NotificationItem[] }) {
                     className="text-destructive focus:text-destructive"
                   >
                     <Trash2 className="size-4" />
-                    Delete
+                    {t("delete")}
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>

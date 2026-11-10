@@ -2,6 +2,7 @@
 
 import { useActionState, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
+import { useTranslations } from "next-intl";
 import { toast } from "@/lib/notification-island/toast";
 
 import {
@@ -100,6 +101,7 @@ export function CompanyBrandingSection({
   afterIdentity?: React.ReactNode;
 }) {
   const canEdit = currentRole === "owner" || currentRole === "admin";
+  const t = useTranslations("features.workspaces.companyBrandingSection");
 
   const [profileState, profileAction, savingProfile] = useActionState(
     updateWorkspaceProfileAction,
@@ -109,8 +111,8 @@ export function CompanyBrandingSection({
     updateWorkspaceBoardBrandingAction,
     initialActionState,
   );
-  useActionToast(profileState, "Identity saved.");
-  useActionToast(brandingState, "Brand settings saved.");
+  useActionToast(profileState, t("identitySaved"));
+  useActionToast(brandingState, t("brandSaved"));
 
   const identityFormRef = useRef<HTMLFormElement>(null);
   const shouldAutoSaveLogo = useRef(false);
@@ -162,8 +164,8 @@ export function CompanyBrandingSection({
       <Card className="order-1 gap-6 p-6 sm:p-8">
         <SectionHeader
           icon={BuildingsIcon}
-          title="Identity"
-          description="Logo and name shown across Harly and your careers page."
+          title={t("identityTitle")}
+          description={t("identityDescription")}
         />
 
         <form
@@ -190,10 +192,10 @@ export function CompanyBrandingSection({
               }}
               variant="avatar"
               disabled={!canEdit || savingProfile}
-              hint="Square logo · PNG, JPG, SVG or WEBP"
+              hint={t("logoHint")}
             />
             <div className="flex-1 space-y-2">
-              <Label htmlFor="ws-name">Company name</Label>
+              <Label htmlFor="ws-name">{t("companyName")}</Label>
               <Input
                 id="ws-name"
                 name="name"
@@ -202,14 +204,14 @@ export function CompanyBrandingSection({
                 disabled={!canEdit || savingProfile}
               />
               <p className="text-xs text-muted-foreground">
-                Square logo, used as the app icon and avatar.
+                {t("companyNameHelp")}
               </p>
             </div>
           </div>
 
           {/* Reporting time zone */}
           <div className="space-y-2">
-            <Label htmlFor="ws-timezone">Reporting time zone</Label>
+            <Label htmlFor="ws-timezone">{t("timeZone")}</Label>
             <Select
               value={timezone}
               onValueChange={setTimezone}
@@ -228,24 +230,22 @@ export function CompanyBrandingSection({
             </Select>
             <input type="hidden" name="timezone" value={timezone} />
             <p className="text-xs text-muted-foreground">
-              Hiring reports and dashboard days and months are counted in this
-              time zone.
+              {t("timeZoneHelp")}
             </p>
           </div>
 
           {/* Sidebar logo */}
           <div className="space-y-3 border-t pt-6">
             <div className="space-y-1">
-              <Label>Sidebar logo</Label>
+              <Label>{t("sidebarLogo")}</Label>
               <p className="text-xs text-muted-foreground">
-                Replace the workspace name with a wide wordmark logo in the
-                dashboard sidebar.
+                {t("sidebarLogoHelp")}
               </p>
             </div>
             <Segmented
               options={[
-                { value: "bordered", label: "Icon + name" },
-                { value: "full", label: "Full logo" },
+                { value: "bordered", label: t("iconAndName") },
+                { value: "full", label: t("fullLogo") },
               ]}
               value={sidebarLogoStyle}
               onChange={setSidebarLogoStyle}
@@ -256,19 +256,19 @@ export function CompanyBrandingSection({
               <div className="grid gap-4 pt-1 lg:grid-cols-2">
                 <div className="space-y-1.5">
                   <Label className="text-xs font-medium text-muted-foreground">
-                    Light mode
+                    {t("lightMode")}
                   </Label>
                   <FileDropzone
                     value={sidebarLogoUrl || null}
                     onChange={(url) => setSidebarLogoUrl(url ?? "")}
                     aspect="banner"
                     disabled={!canEdit}
-                    hint="Wide logo · transparent PNG/SVG"
+                    hint={t("wideLogoHint")}
                   />
                 </div>
                 <div className="space-y-1.5">
                   <Label className="text-xs font-medium text-muted-foreground">
-                    Dark mode
+                    {t("darkMode")}
                   </Label>
                   <div className="rounded-2xl bg-zinc-950 p-2">
                     <FileDropzone
@@ -276,7 +276,7 @@ export function CompanyBrandingSection({
                       onChange={(url) => setSidebarLogoDarkUrl(url ?? "")}
                       aspect="banner"
                       disabled={!canEdit}
-                      hint="Optional · falls back to light"
+                      hint={t("darkLogoHint")}
                     />
                   </div>
                 </div>
@@ -286,7 +286,7 @@ export function CompanyBrandingSection({
 
           <div className="flex justify-end border-t pt-6">
             <Button type="submit" disabled={!canEdit || savingProfile}>
-              {savingProfile ? "Saving…" : "Save identity"}
+              {savingProfile ? t("saving") : t("saveIdentity")}
             </Button>
           </div>
         </form>
@@ -302,20 +302,18 @@ export function CompanyBrandingSection({
       <Card className="order-3 gap-6 p-6 sm:p-8 lg:order-2">
         <SectionHeader
           icon={PaletteDuotoneIcon}
-          title="Brand & links"
-          description={
-            <>
-              Color, website and fallback banner used across your careers pages,
-              application emails and job posts.{" "}
+          title={t("brandTitle")}
+          description={t.rich("brandDescription", {
+            link: (chunks) => (
               <Link
                 href="/dashboard/career-page"
                 className="inline-flex items-center gap-0.5 font-medium text-pine underline-offset-2 hover:underline"
               >
-                Customize your careers page
+                {chunks}
                 <ArrowUpRightIcon className="size-3.5" />
               </Link>
-            </>
-          }
+            ),
+          })}
         />
 
         <form action={brandingAction} className="space-y-6">
@@ -335,7 +333,7 @@ export function CompanyBrandingSection({
 
           <div className="grid gap-4 lg:grid-cols-2">
             <div className="space-y-2">
-              <Label htmlFor="ws-website">Website</Label>
+              <Label htmlFor="ws-website">{t("website")}</Label>
               <Input
                 id="ws-website"
                 name="websiteUrl"
@@ -348,12 +346,12 @@ export function CompanyBrandingSection({
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="ws-color">Primary color</Label>
+              <Label htmlFor="ws-color">{t("primaryColor")}</Label>
               <div className="flex items-center gap-2 rounded-lg border bg-card p-1 pr-3">
                 <label
                   className="relative size-8 shrink-0 cursor-pointer overflow-hidden rounded-md ring-1 ring-border"
                   style={{ backgroundColor: previewColor }}
-                  aria-label="Pick primary color"
+                  aria-label={t("pickPrimaryColor")}
                 >
                   <input
                     type="color"
@@ -376,29 +374,29 @@ export function CompanyBrandingSection({
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="ws-tagline">Careers page tagline</Label>
+            <Label htmlFor="ws-tagline">{t("tagline")}</Label>
             <Input
               id="ws-tagline"
               name="tagline"
               value={tagline}
               onChange={(event) => setTagline(event.target.value)}
-              placeholder="A short line about your company"
+              placeholder={t("taglinePlaceholder")}
               maxLength={120}
               disabled={!canEdit || savingBranding}
             />
             <p className="text-xs text-muted-foreground">
-              Optional. Shown on your public careers page.
+              {t("taglineHelp")}
             </p>
           </div>
 
           <div className="space-y-2">
-            <Label>Default banner</Label>
+            <Label>{t("defaultBanner")}</Label>
             <FileDropzone
               value={heroImageUrl || null}
               onChange={(url) => setHeroImageUrl(url ?? "")}
               aspect="banner"
               disabled={!canEdit}
-              hint="Fallback banner for your careers page · 1500×500"
+              hint={t("defaultBannerHint")}
             />
           </div>
 
@@ -406,13 +404,8 @@ export function CompanyBrandingSection({
             htmlFor="branding-hide-harly"
             descriptionId="branding-hide-harly-desc"
             className="rounded-[var(--radius-inner)] border border-hairline px-4 py-3"
-            title="Remove Harly branding from emails"
-            description={
-              <>
-                Hides the &quot;Powered by Harly&quot; footer credit on invite,
-                notification and candidate emails.
-              </>
-            }
+            title={t("hideHarlyTitle")}
+            description={t("hideHarlyDescription")}
             control={
               <Switch
                 id="branding-hide-harly"
@@ -426,7 +419,7 @@ export function CompanyBrandingSection({
 
           <div className="flex justify-end border-t pt-6">
             <Button type="submit" disabled={!canEdit || savingBranding}>
-              {savingBranding ? "Saving…" : "Save brand"}
+              {savingBranding ? t("saving") : t("saveBrand")}
             </Button>
           </div>
         </form>

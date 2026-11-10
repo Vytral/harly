@@ -15,6 +15,10 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock("next/navigation", () => ({ notFound: vi.fn(), redirect: vi.fn() }));
+vi.mock("next-intl/server", () => ({
+  getTranslations: vi.fn(async () => (key: string) => key),
+  getLocale: vi.fn(async () => "en"),
+}));
 vi.mock("@/features/workspaces/permissions-server", () => ({
   requirePagePermission: mocks.requirePagePermission,
   can: mocks.can,

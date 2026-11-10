@@ -1,5 +1,8 @@
 import { z } from "zod";
 
+/** Translator scoped to `labels.storageValidation`; callers pass the one for the viewer's language. */
+export type StorageValidationTranslate = (key: string, values?: Record<string, string | number | Date>) => string;
+
 export const maxResumeFileSize = 10 * 1024 * 1024;
 
 export const allowedResumeContentTypes = [
@@ -28,21 +31,21 @@ export function sanitizeFilename(filename: string) {
   return sanitized || "resume";
 }
 
-export function getResumeFileValidationError(file: File) {
+export function getResumeFileValidationError(file: File, t: StorageValidationTranslate) {
   if (
     !allowedResumeContentTypes.includes(
       file.type as (typeof allowedResumeContentTypes)[number],
     )
   ) {
-    return "Upload a PDF, DOC, or DOCX resume.";
+    return t("resumeType");
   }
 
   if (file.size > maxResumeFileSize) {
-    return "Resume must be 10MB or smaller.";
+    return t("resumeTooLarge");
   }
 
   if (file.size <= 0) {
-    return "Resume is required.";
+    return t("resumeRequired");
   }
 
   return null;
@@ -85,21 +88,21 @@ export const imageUploadRequestSchema = z.object({
 
 export type ImageUploadRequest = z.infer<typeof imageUploadRequestSchema>;
 
-export function getImageFileValidationError(file: File) {
+export function getImageFileValidationError(file: File, t: StorageValidationTranslate) {
   if (
     !allowedImageContentTypes.includes(
       file.type as (typeof allowedImageContentTypes)[number],
     )
   ) {
-    return "Upload a PNG, JPG, SVG, or WEBP image.";
+    return t("imageType");
   }
 
   if (file.size > maxImageFileSize) {
-    return "Image must be 5MB or smaller.";
+    return t("imageTooLarge");
   }
 
   if (file.size <= 0) {
-    return "Image is required.";
+    return t("imageRequired");
   }
 
   return null;

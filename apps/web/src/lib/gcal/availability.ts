@@ -1,5 +1,7 @@
 "use server";
 
+import { getTranslations } from "@/i18n/server";
+
 import { and, eq, gt, lt, ne } from "drizzle-orm";
 
 import { db, interviews } from "@harly/db";
@@ -114,11 +116,12 @@ export async function checkAvailability(opts: {
 
     return { gcalBusy, gcalAvailability, internalConflicts };
   } catch {
+    const t = await getTranslations("server.gcal.availability");
     return {
       gcalBusy: [],
       gcalAvailability: "unknown",
       internalConflicts: [],
-      error: "Could not check availability.",
+      error: t("checkFailed"),
     };
   }
 }

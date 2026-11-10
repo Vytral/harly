@@ -1,6 +1,7 @@
 "use client";
 
 import { useSyncExternalStore } from "react";
+import { useLocale, useTranslations } from "next-intl";
 
 import { CalendarPlus as CalendarPlusIcon, Download as DownloadSimpleIcon } from "lucide-react";
 
@@ -45,15 +46,15 @@ function useLocal<T>(compute: () => T, placeholder: T): T {
   return useSyncExternalStore(noopSubscribe, compute, () => placeholder);
 }
 
-function timeRange(start: Date, durationMins: number): string {
-  const fmt = new Intl.DateTimeFormat(undefined, { hour: "numeric", minute: "2-digit" });
+function timeRange(start: Date, durationMins: number, locale: string): string {
+  const fmt = new Intl.DateTimeFormat(locale, { hour: "numeric", minute: "2-digit" });
   const end = new Date(start.getTime() + durationMins * 60_000);
   return `${fmt.format(start)} – ${fmt.format(end)}`;
 }
 
-function zoneName(date: Date): string {
+function zoneName(date: Date, locale: string): string {
   return (
-    new Intl.DateTimeFormat(undefined, { timeZoneName: "short" })
+    new Intl.DateTimeFormat(locale, { timeZoneName: "short" })
       .formatToParts(date)
       .find((part) => part.type === "timeZoneName")?.value ?? ""
   );
@@ -71,14 +72,15 @@ function address(interview: PortalInterviewItemData): string | null {
 }
 
 function DateTile({ date, muted }: { date: Date; muted: boolean }) {
+  const locale = useLocale();
   // A snapshot must be stable between calls, so it is one string, not a fresh
   // object (which useSyncExternalStore treats as a change on every render).
   const [weekday = "", day = "", month = ""] = useLocal(
     () =>
       [
-        new Intl.DateTimeFormat(undefined, { weekday: "short" }).format(date),
-        new Intl.DateTimeFormat(undefined, { day: "numeric" }).format(date),
-        new Intl.DateTimeFormat(undefined, { month: "short" }).format(date),
+        new Intl.DateTimeFormat(locale, { weekday: "short" }).format(date),
+        new Intl.DateTimeFormat(locale, { day: "numeric" }).format(date),
+        new Intl.DateTimeFormat(locale, { month: "short" }).format(date),
       ].join("\u0000"),
     "",
   ).split("\u0000");
@@ -98,13 +100,14 @@ function DateTile({ date, muted }: { date: Date; muted: boolean }) {
 }
 
 function AddToCalendar({ interview, orgName }: { interview: PortalInterviewItemData; orgName: string }) {
+  const t = useTranslations("portal.interview");
   const event: CalendarInterview = {
     id: interview.id,
     title: `${interview.title} · ${orgName}`,
     start: interview.scheduledAt,
     durationMins: interview.durationMins,
     location: meetingLink(interview) ?? address(interview),
-    description: interview.interviewerName ? `With ${interview.interviewerName}` : null,
+    description: interview.interviewerName ? t("with", { name: interview.interviewerName }) : null,
   };
 
   function downloadIcs() {
@@ -124,7 +127,7 @@ function AddToCalendar({ interview, orgName }: { interview: PortalInterviewItemD
       <DropdownMenuTrigger asChild>
         <Button variant="outline" size="sm">
           <CalendarPlusIcon />
-          <span className="max-sm:sr-only">Add to calendar</span>
+          <span className="max-sm:sr-only">{t("addToCalendar")}</span>
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-52">
@@ -152,9 +155,11 @@ export function PortalInterviewItem({
   orgName: string;
   variant?: "upcoming" | "past";
 }) {
+  const t = useTranslations("portal.interview");
+  const locale = useLocale();
   const past = variant === "past";
   const when = useLocal(
-    () => `${timeRange(interview.scheduledAt, interview.durationMins)} ${zoneName(interview.scheduledAt)}`.trim(),
+    () => `${timeRange(interview.scheduledAt, interview.durationMins, locale)} ${zoneName(interview.scheduledAt, locale)}`.trim(),
     "",
   );
   const link = meetingLink(interview);
@@ -177,12 +182,12 @@ export function PortalInterviewItem({
           <p className="mt-0.5 min-h-5 text-[13px] text-soft-ink tabular-nums">
             {when}
             {when ? <span aria-hidden="true"> · </span> : null}
-            {interview.durationMins} min
+            {t("duration", { count: interview.durationMins })}
           </p>
           <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-[12.5px] text-soft-ink">
             <span className="inline-flex items-center gap-1">
               <ModeIcon className="size-3.5" />
-              {interview.mode === "phone" ? "Phone call" : interview.mode === "onsite" ? (place ?? "On-site") : "Video call"}
+              {interview.mode === "phone" ? t("phone") : interview.mode === "onsite" ? (place ?? t("onSite")) : t("video")}
             </span>
             {interview.interviewerName ? (
               <span className="inline-flex items-center gap-1.5">
@@ -190,7 +195,7 @@ export function PortalInterviewItem({
                   // eslint-disable-next-line @next/next/no-img-element -- workspace user avatar
                   <img src={interview.interviewerImage} alt="" className="size-4 rounded-full object-cover" />
                 ) : null}
-                with {interview.interviewerName}
+                {t("with", { name: interview.interviewerName })}
               </span>
             ) : null}
           </div>
@@ -205,7 +210,7 @@ export function PortalInterviewItem({
           )}
         >
           {interview.status === "completed" ? <CheckCircleIcon className="size-4" /> : null}
-          {portalInterviewStatusLabel(interview.status)}
+          {t(interview.status)}
         </span>
       ) : (
         <div className="flex shrink-0 items-center gap-2">
@@ -214,7 +219,7 @@ export function PortalInterviewItem({
             <Button size="sm" asChild>
               <a href={link} target="_blank" rel="noopener noreferrer">
                 <VideoCameraIcon />
-                Join
+                {t("join")}
               </a>
             </Button>
           ) : place ? (
@@ -225,7 +230,7 @@ export function PortalInterviewItem({
                 rel="noopener noreferrer"
               >
                 <MapPinIcon />
-                Directions
+                {t("directions")}
               </a>
             </Button>
           ) : null}

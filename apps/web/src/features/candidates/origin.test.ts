@@ -12,6 +12,17 @@ import {
   pipelineOrigin,
   REVIEW_ORIGIN,
 } from "./origin";
+
+const ENGLISH: Record<string, string> = {
+  review: "Review queue",
+  pipeline: "Pipeline",
+  candidates: "Candidates",
+  filteredCandidates: "Filtered candidates",
+  backToReview: "Back to review queue",
+  backToPipeline: "Back to pipeline",
+  backToCandidates: "Back to candidates",
+};
+const tOrigin = (key: string) => ENGLISH[key] ?? key;
 import { reviewApplicationHref } from "@/features/review/rules";
 
 const CANDIDATE = "11111111-1111-4111-8111-111111111111";
@@ -33,8 +44,8 @@ describe("candidate origin: review queue", () => {
     const { nav } = parseHref(candidateHref(CANDIDATE, REVIEW_ORIGIN, APP));
     expect(nav).toEqual({ origin: REVIEW_ORIGIN, applicationId: APP });
     expect(originHref(nav.origin)).toBe("/dashboard/candidates?queue=review");
-    expect(originLabel(nav.origin)).toBe("Review queue");
-    expect(originBackLabel(nav.origin)).toBe("Back to review queue");
+    expect(originLabel(nav.origin, tOrigin)).toBe("Review queue");
+    expect(originBackLabel(nav.origin, tOrigin)).toBe("Back to review queue");
   });
 
   it("drops an application id that is not a uuid", () => {
@@ -53,7 +64,7 @@ describe("candidate origin: directory", () => {
   it("parses no params as the unfiltered directory", () => {
     expect(parseCandidateNavigation({})).toEqual({ origin: DIRECTORY_ORIGIN, applicationId: null });
     expect(originHref(DIRECTORY_ORIGIN)).toBe("/dashboard/candidates");
-    expect(originLabel(DIRECTORY_ORIGIN)).toBe("Candidates");
+    expect(originLabel(DIRECTORY_ORIGIN, tOrigin)).toBe("Candidates");
   });
 
   it("carries filters readably and restores them on Back", () => {
@@ -63,7 +74,7 @@ describe("candidate origin: directory", () => {
     const { nav } = parseHref(href);
     expect(nav.origin).toEqual({ kind: "candidates", filters: { q: "ana lee", stage: "Interview", sort: "name" } });
     expect(originHref(nav.origin)).toBe("/dashboard/candidates?q=ana+lee&stage=Interview&sort=name");
-    expect(originLabel(nav.origin)).toBe("Filtered candidates");
+    expect(originLabel(nav.origin, tOrigin)).toBe("Filtered candidates");
   });
 
   it("ignores unknown statuses and sorts and trims long text", () => {
@@ -87,7 +98,7 @@ describe("candidate origin: pipeline", () => {
     expect(path).toBe(`/dashboard/candidates/${CANDIDATE}`);
     expect(nav).toEqual({ origin, applicationId: APP });
     expect(originHref(origin)).toBe(`/dashboard/pipeline?jobId=${JOB}&view=board&stage=${STAGE}&q=ana`);
-    expect(originBackLabel(origin)).toBe("Back to pipeline");
+    expect(originBackLabel(origin, tOrigin)).toBe("Back to pipeline");
   });
 
   it("drops the stage when it is the 'all' sentinel or not an id", () => {

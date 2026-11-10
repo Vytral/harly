@@ -17,7 +17,7 @@ describe("prepareCandidateImport", () => {
 
   it("rejects duplicate headers before a user can map the file", () => {
     expect(prepareCandidateImport("Email,email\na@example.com,b@example.com")).toEqual({
-      error: 'The header "email" is repeated. Rename duplicate columns and try again.',
+      error: { code: "duplicateHeader", header: "email" },
     });
   });
 });
@@ -50,11 +50,7 @@ describe("buildCandidateImportRows", () => {
 
 describe("validateCandidateImportMapping", () => {
   it("requires either full name or both name columns, and never permits one column twice", () => {
-    expect(validateCandidateImportMapping({ email: 1 })).toBe(
-      "Map Full name, or both First name and Last name.",
-    );
-    expect(validateCandidateImportMapping({ fullName: 0, email: 0 })).toBe(
-      "Each source column can only be mapped once.",
-    );
+    expect(validateCandidateImportMapping({ email: 1 })).toBe("nameRequired");
+    expect(validateCandidateImportMapping({ fullName: 0, email: 0 })).toBe("duplicateColumn");
   });
 });

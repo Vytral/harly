@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useTranslations } from "next-intl";
 import { ChevronDown } from "lucide-react";
 
 import { PulseIcon } from "@/components/ui/icons/phosphor";
@@ -38,6 +39,7 @@ const DOT_STYLES: Record<string, string> = {
  * stage moves, notes, messages and AI events with a friendly empty state.
  */
 export function CandidateActivityRail({ activity }: { activity: ActivityItem[] }) {
+  const t = useTranslations("candidates.activityRail");
   const [open, setOpen] = useState(true);
 
   return (
@@ -51,7 +53,7 @@ export function CandidateActivityRail({ activity }: { activity: ActivityItem[] }
         >
           <span className="flex items-center gap-2">
             <PulseIcon className="size-4 text-near-ink" />
-            <span className="text-[15px] font-semibold tracking-[-0.01em]">Activity</span>
+            <span className="text-[15px] font-semibold tracking-[-0.01em]">{t("activity")}</span>
             {activity.length > 0 ? (
               <span className="rounded-full bg-muted px-1.5 text-xs font-medium tabular-nums text-muted-foreground">
                 {activity.length}
@@ -78,9 +80,9 @@ export function CandidateActivityRail({ activity }: { activity: ActivityItem[] }
                 <span className="flex size-10 items-center justify-center rounded-xl bg-muted text-muted-foreground">
                   <PulseIcon className="size-5" />
                 </span>
-                <p className="text-sm font-medium">No activity yet</p>
+                <p className="text-sm font-medium">{t("emptyTitle")}</p>
                 <p className="max-w-[16rem] text-xs text-muted-foreground">
-                  Stage moves, comments, messages and AI events will show up here.
+                  {t("emptyDescription")}
                 </p>
               </div>
             ) : (

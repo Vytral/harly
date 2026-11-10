@@ -1,5 +1,7 @@
 "use client";
 
+import { useTranslations } from "next-intl";
+
 import {
   Dialog,
   DialogContent,
@@ -33,19 +35,25 @@ export function ConflictDialog({
   comparing: boolean;
   lines: GraphDiffLine[] | null;
 }) {
+  const t = useTranslations("features.automations.ConflictDialog");
+  const tl = useTranslations("labels.automations");
   const shown =
     lines ??
     (serverGraph
-      ? diffGraphSummaries(summarizeGraph(localGraph), summarizeGraph(serverGraph))
+      ? diffGraphSummaries(
+          summarizeGraph(localGraph, tl),
+          summarizeGraph(serverGraph, tl),
+          tl,
+        )
       : []);
 
   return (
     <Dialog open={open} onOpenChange={(next) => !next && onDismiss()}>
       <DialogContent className="max-w-md">
         <DialogHeader>
-          <DialogTitle>This draft was saved elsewhere</DialogTitle>
+          <DialogTitle>{t("title")}</DialogTitle>
           <DialogDescription>
-            {message || "Someone else saved this recipe while you were editing. We will not overwrite their version."}
+            {message || t("defaultMessage")}
           </DialogDescription>
         </DialogHeader>
         {shown.length > 0 ? (
@@ -58,7 +66,7 @@ export function ConflictDialog({
           </ul>
         ) : (
           <p className="text-xs text-soft-ink">
-            Compare with the server copy, or copy your edits into a new recipe.
+            {t("compareHint")}
           </p>
         )}
         <DialogFooter className="gap-2 sm:justify-between">
@@ -67,7 +75,7 @@ export function ConflictDialog({
             onClick={onDismiss}
             className="rounded-lg px-3 py-1.5 text-xs font-medium text-soft-ink transition-colors duration-150 ease-out hover:text-foreground"
           >
-            Keep editing
+            {t("keepEditing")}
           </button>
           <div className="flex gap-2">
             <button
@@ -76,14 +84,14 @@ export function ConflictDialog({
               disabled={comparing}
               className="rounded-lg border border-border px-3 py-1.5 text-xs font-medium text-foreground transition-colors duration-150 ease-out hover:bg-soft-kraft disabled:opacity-60"
             >
-              {comparing ? "Comparing…" : "Compare with server"}
+              {comparing ? t("comparing") : t("compare")}
             </button>
             <button
               type="button"
               onClick={onCopy}
               className="rounded-lg bg-foreground px-3 py-1.5 text-xs font-semibold text-background transition-colors duration-150 ease-out hover:bg-foreground/90"
             >
-              Copy my edits to a new recipe
+              {t("copyToNew")}
             </button>
           </div>
         </DialogFooter>

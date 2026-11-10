@@ -78,6 +78,8 @@ vi.mock("@/server/webhooks/emit", () => ({
 
 import { importCandidatesAction } from "./actions";
 
+vi.mock("next-intl/server", async () => (await import("@/test-support/intl-server-mock")).intlServerMock);
+
 const JOB_ID = "11111111-1111-4111-8111-111111111111";
 const STAGE_ID = "stage-1";
 const WORKSPACE_ID = "ws-1";

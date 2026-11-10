@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useTransition } from "react";
+import { useTranslations } from "next-intl";
 import { MoreHorizontal, Trash2 } from "lucide-react";
 import { toast } from "@/lib/notification-island/toast";
 
@@ -26,6 +27,7 @@ export function CandidateActionsMenu({
   redirectAfterTrash = false,
   align = "end",
 }: CandidateActionsMenuProps) {
+  const t = useTranslations("features.candidates.CandidateActionsMenu");
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
 
@@ -33,10 +35,10 @@ export function CandidateActionsMenu({
     startTransition(async () => {
       const result = await trashCandidateAction(candidateId);
       if (!result.success) {
-        toast.error(result.error ?? "Could not delete the candidate.");
+        toast.error(result.error ?? t("deleteFailed"));
         return;
       }
-      toast.success("Candidate moved to trash.");
+      toast.success(t("movedToTrash"));
       if (redirectAfterTrash) {
         router.replace("/dashboard/candidates");
       }
@@ -51,7 +53,7 @@ export function CandidateActionsMenu({
           variant="ghost"
           size="icon"
           className="size-8 text-muted-foreground data-[state=open]:bg-accent"
-          aria-label="Candidate actions"
+          aria-label={t("candidateActions")}
           disabled={isPending}
           onClick={(event) => event.stopPropagation()}
         >
@@ -61,7 +63,7 @@ export function CandidateActionsMenu({
       <DropdownMenuContent align={align} className="w-48">
         <DropdownMenuItem variant="destructive" onClick={deleteCandidate}>
           <Trash2 />
-          Move to trash
+          {t("moveToTrash")}
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>

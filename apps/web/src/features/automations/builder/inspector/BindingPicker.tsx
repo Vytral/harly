@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { useTranslations } from "next-intl";
 
 import { cn } from "@/lib/utils";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -22,7 +23,9 @@ export function BindingPicker({
   onChange: (binding: Binding | undefined) => void;
   allowLiteral?: boolean;
 }) {
-  const options = useMemo(() => bindingOptionsFor(graph, nodeId), [graph, nodeId]);
+  const t = useTranslations("features.automations.BindingPicker");
+  const tl = useTranslations("labels.automations");
+  const options = useMemo(() => bindingOptionsFor(graph, nodeId, tl), [graph, nodeId, tl]);
   const usingData = value?.kind === "trigger" || value?.kind === "output";
   const [open, setOpen] = useState(false);
   const groups = [...new Set(options.map((item) => item.group))];
@@ -34,7 +37,7 @@ export function BindingPicker({
           <ModeButton active={!usingData} onClick={() => {
             if (usingData) onChange({ kind: "literal", value: "" });
           }}>
-            Type a value
+            {t("typeValue")}
           </ModeButton>
         </div>
       ) : null}
@@ -44,22 +47,23 @@ export function BindingPicker({
             type="button"
             className="min-h-9 w-full rounded-lg border border-border bg-pure-snow px-2.5 text-left text-xs text-foreground focus-visible:outline-2"
           >
-            {usingData ? describeBinding(value, graph) : "Use data from another step…"}
+            {usingData ? describeBinding(value, graph, tl) : t("useDataFromStep")}
           </button>
           </PopoverTrigger>
           <PopoverContent align="start" className="w-[320px] max-w-[calc(100vw-24px)] p-0">
             <Command>
-              <CommandInput placeholder="Search available data" />
+              <CommandInput placeholder={t("searchPlaceholder")} />
               <CommandList>
-              <CommandEmpty>No data available for this step.</CommandEmpty>
+              <CommandEmpty>{t("noData")}</CommandEmpty>
               {groups.map((group) => (
-                <CommandGroup key={group} heading={group}>
+                <CommandGroup key={group} heading={tl(`bindings.groups.${group}`)}>
                   {options
                     .filter((item) => item.group === group)
                     .map((item) => (
                       <BindingRow
                         key={item.id}
                         option={item}
+                        t={t}
                         onPick={() => {
                           if (item.disabled) return;
                           onChange(item.binding);
@@ -71,7 +75,7 @@ export function BindingPicker({
               ))}
               </CommandList>
             </Command>
-            <p className="border-t border-border px-3 py-2 text-[11px] text-soft-ink">Dynamic values are resolved from the trigger or a completed earlier step when the workflow runs.</p>
+            <p className="border-t border-border px-3 py-2 text-[11px] text-soft-ink">{t("resolvedAtRun")}</p>
           </PopoverContent>
         </Popover>
     </div>
@@ -102,7 +106,15 @@ function ModeButton({
   );
 }
 
-function BindingRow({ option, onPick }: { option: BindingOption; onPick: () => void }) {
+function BindingRow({
+  option,
+  onPick,
+  t,
+}: {
+  option: BindingOption;
+  onPick: () => void;
+  t: ReturnType<typeof useTranslations>;
+}) {
   return (
     <CommandItem
       value={`${option.label} ${option.origin}`}
@@ -113,8 +125,9 @@ function BindingRow({ option, onPick }: { option: BindingOption; onPick: () => v
     >
       <span className="text-xs font-medium text-foreground">{option.label}</span>
       <span className="text-[10px] text-soft-ink">
-        {option.origin} · e.g. {option.example}
-        {option.reason ? ` · ${option.reason}` : ""}
+        {option.reason
+          ? t("exampleOriginReason", { origin: option.origin, example: option.example, reason: option.reason })
+          : t("exampleOrigin", { origin: option.origin, example: option.example })}
       </span>
     </CommandItem>
   );

@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { and, desc, eq, inArray, isNotNull, isNull } from "drizzle-orm";
+import { getTranslations } from "@/i18n/server";
 import { z } from "zod";
 
 import { candidates, db, dsarRequests } from "@harly/db";
@@ -119,9 +120,10 @@ export async function reviewDsarRequestAction(
   input: z.infer<typeof reviewSchema>,
 ) {
   const context = await requirePermission("dsar:manage");
+  const t = await getTranslations("server.workspaces.dsarActions");
   const parsed = reviewSchema.safeParse(input);
   if (!parsed.success) {
-    return { ok: false, error: "Invalid request review." };
+    return { ok: false, error: t("invalidRequestReview") };
   }
 
   const [request] = await db
@@ -139,9 +141,9 @@ export async function reviewDsarRequestAction(
     )
     .limit(1);
 
-  if (!request) return { ok: false, error: "Request not found." };
+  if (!request) return { ok: false, error: t("requestNotFound") };
   if (request.status !== "pending") {
-    return { ok: false, error: "This request has already been reviewed." };
+    return { ok: false, error: t("alreadyReviewed") };
   }
 
   const now = new Date();
@@ -193,7 +195,8 @@ export async function fulfilDsarErasureAction(
   input: z.infer<typeof fulfilSchema>,
 ) {
   const parsed = fulfilSchema.safeParse(input);
-  if (!parsed.success) return { ok: false, error: "Invalid erasure request." };
+  const t = await getTranslations("server.workspaces.dsarActions");
+  if (!parsed.success) return { ok: false, error: t("invalidErasureRequest") };
 
   const context = await requirePermission("dsar:manage");
   await requirePermission("candidates:delete");
@@ -213,7 +216,7 @@ export async function fulfilDsarErasureAction(
   if (!request)
     return {
       ok: false,
-      error: "This erasure request is not ready for fulfilment.",
+      error: t("erasureNotReady"),
     };
 
   const trashed = await trashCandidate(parsed.data.candidateId);
@@ -239,12 +242,12 @@ export async function fulfilDsarErasureAction(
     requestType: "dsar_erasure",
     requestedBy: context.user.email,
   });
-  if (!job) return { ok: false, error: "Could not queue erasure." };
+  if (!job) return { ok: false, error: t("couldNotQueueErasure") };
   if (job.status === "completed") return { ok: true };
   if (["processing", "blocked", "dead_letter"].includes(job.status)) {
     return {
       ok: false,
-      error: "This erasure is already being processed or blocked.",
+      error: t("erasureInProgressOrBlocked"),
     };
   }
   const claimed = await startCandidateDeletionJob(
@@ -252,7 +255,7 @@ export async function fulfilDsarErasureAction(
     `dsar:${context.user.id}`,
   );
   if (!claimed) {
-    return { ok: false, error: "This erasure is already being processed." };
+    return { ok: false, error: t("erasureInProgress") };
   }
 
   const deleted = await permanentlyDeleteCandidate(
@@ -260,7 +263,7 @@ export async function fulfilDsarErasureAction(
     context.user.email,
   );
   if (!deleted.ok) {
-    if (deleted.error.includes("legal hold")) {
+    if ("legalHold" in deleted && deleted.legalHold) {
       await markCandidateDeletionBlocked(
         job.id,
         deleted.error,

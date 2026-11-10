@@ -1,6 +1,7 @@
 "use client";
 
 import { useSyncExternalStore } from "react";
+import { useTranslations } from "next-intl";
 
 import { FileDropzone } from "@/components/ui/FileDropzone";
 
@@ -14,12 +15,13 @@ export function DiscoveryPanel({
   workspace,
   boardPath,
 }: SectionProps & { boardPath: string }) {
-  const title = config.seo.title || workspace.name || "Careers";
+  const t = useTranslations("features.careerPage.DiscoveryPanel");
+  const title = config.seo.title || workspace.name || t("careers");
   const description =
     config.seo.description ||
     workspace.description ||
     workspace.tagline ||
-    "Explore open roles and build your next chapter with us.";
+    t("defaultDescription");
   const host = useSyncExternalStore(
     () => () => {},
     () => window.location.host,
@@ -29,34 +31,34 @@ export function DiscoveryPanel({
 
   return (
     <div className="space-y-4">
-      <PanelHeader title="SEO & sharing" subtitle="How your careers site shows up in search and link previews." />
+      <PanelHeader title={t("title")} subtitle={t("subtitle")} />
 
-      <Group title="Search engines" defaultOpen errorPrefix="seo.">
+      <Group title={t("searchEngines")} defaultOpen errorPrefix="seo.">
         <ToggleRow
-          label="Let search engines index this site"
-          description="When off, the careers page and every job use noindex and leave the sitemap."
+          label={t("indexSite")}
+          description={t("indexSiteDescription")}
           checked={config.seo.indexable}
           onCheckedChange={(value) => update((draft) => void (draft.seo.indexable = value))}
         />
         <TextField
-          label="SEO title"
+          label={t("seoTitle")}
           path="seo.title"
           value={config.seo.title}
           max={70}
-          placeholder={workspace.name || "Careers"}
+          placeholder={workspace.name || t("careers")}
           onChange={(v) => update((draft) => void (draft.seo.title = v))}
         />
         <TextField
-          label="Meta description"
+          label={t("metaDescription")}
           path="seo.description"
           value={config.seo.description}
           max={180}
           rows={3}
-          placeholder={workspace.description ?? "Tell candidates why they should join."}
+          placeholder={workspace.description ?? t("metaDescriptionPlaceholder")}
           onChange={(v) => update((draft) => void (draft.seo.description = v))}
         />
         <div className="space-y-1.5">
-          <span className="block text-[13px] font-medium text-near-ink">Search preview</span>
+          <span className="block text-[13px] font-medium text-near-ink">{t("searchPreview")}</span>
           <div className="space-y-1 rounded-[var(--radius-inner)] border border-hairline bg-pure-snow px-3.5 py-3">
             <p className="truncate text-[12px] text-soft-ink">{previewUrl}</p>
             <p className="line-clamp-2 text-[15px] font-medium leading-snug text-[#1a0dab] dark:text-[#8ab4f8]">
@@ -67,15 +69,15 @@ export function DiscoveryPanel({
         </div>
       </Group>
 
-      <Group title="Share assets" description="Favicon and link-preview image">
-        <Field label="Favicon" hint="Square, at least 64×64.">
+      <Group title={t("shareAssets")} description={t("shareAssetsDescription")}>
+        <Field label={t("favicon")} hint={t("faviconHint")}>
           <FileDropzone
             aspect="square"
             value={config.seo.faviconUrl}
             onChange={(url) => update((draft) => void (draft.seo.faviconUrl = url))}
           />
         </Field>
-        <Field label="Social share image" hint="1200×630 works everywhere.">
+        <Field label={t("socialShareImage")} hint={t("socialShareImageHint")}>
           <FileDropzone
             aspect="banner"
             value={config.seo.socialImageUrl}

@@ -1,6 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { useTransition } from "react";
 import { toast } from "@/lib/notification-island/toast";
 
@@ -14,6 +15,7 @@ type AcceptInvitationButtonProps = {
 export function AcceptInvitationButton({
   invitationId,
 }: AcceptInvitationButtonProps) {
+  const t = useTranslations("accessInvitation");
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
 
@@ -27,7 +29,7 @@ export function AcceptInvitationButton({
           const result = await acceptWorkspaceInvitationAction(invitationId);
 
           if (!result.success || !result.organizationId) {
-            toast.error(result.error ?? "Unable to accept invitation.");
+            toast.error(result.error ?? t("acceptFailed"));
             return;
           }
 
@@ -40,7 +42,7 @@ export function AcceptInvitationButton({
         });
       }}
     >
-      {isPending ? "Accepting…" : "Accept invitation"}
+      {isPending ? t("accepting") : t("accept")}
     </button>
   );
 }

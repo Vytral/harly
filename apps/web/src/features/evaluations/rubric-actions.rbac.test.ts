@@ -34,6 +34,8 @@ import {
   publishEvaluationRubricAction,
 } from "./rubric-actions";
 
+vi.mock("next-intl/server", async () => (await import("@/test-support/intl-server-mock")).intlServerMock);
+
 const JOB_ID = "11111111-1111-4111-8111-111111111111";
 const RUBRIC_ID = "22222222-2222-4222-8222-222222222222";
 

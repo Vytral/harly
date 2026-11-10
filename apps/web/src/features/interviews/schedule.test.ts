@@ -180,6 +180,8 @@ import {
   updateInterview,
 } from "./actions";
 
+vi.mock("next-intl/server", async () => (await import("@/test-support/intl-server-mock")).intlServerMock);
+
 beforeEach(() => {
   mocks.selectQueue.length = 0;
   mocks.transactionImpl.mockReset();
@@ -423,7 +425,7 @@ describe("F1-10 single video provider", () => {
     });
 
     expect(result.success).toBe(true);
-    expect(result.warning).toMatch(/Teams could not create/i);
+    expect(result.warning).toMatch(/Teams couldn't create/i);
   });
 
   it("reports a Jitsi creation failure instead of hiding it", async () => {
@@ -460,7 +462,7 @@ describe("F1-10 single video provider", () => {
     });
 
     expect(result.success).toBe(true);
-    expect(result.warning).toMatch(/Jitsi could not create/i);
+    expect(result.warning).toMatch(/Jitsi couldn't create/i);
   });
 });
 
@@ -938,7 +940,7 @@ describe("interview AI authorization", () => {
   it("rejects an out-of-scope interview brief before reading candidate data", async () => {
     await expect(generateInterviewBriefAction({ interviewId })).resolves.toEqual({
       success: false,
-      error: "You do not have permission to generate briefs.",
+      error: "You don't have permission to generate briefs.",
     });
 
     expect(mocks.requireInterviewPermission).toHaveBeenCalledWith(
@@ -953,7 +955,7 @@ describe("interview AI authorization", () => {
       summarizeInterviewNotesAction({ interviewId, rawNotes: "Private notes" }),
     ).resolves.toEqual({
       success: false,
-      error: "You do not have permission to summarize notes.",
+      error: "You don't have permission to summarize notes.",
     });
 
     expect(mocks.requireInterviewPermission).toHaveBeenCalledWith(

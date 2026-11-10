@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ChevronDown as CaretDown, FileText, Users } from "lucide-react";
+import { useTranslations } from "next-intl";
 import { toast } from "@/lib/notification-island/toast";
 
 import { bulkGenerateAiEvaluationsForJobAction } from "@/features/candidates/ai-actions";
@@ -17,10 +18,10 @@ import { cn } from "@/lib/utils";
 import { scoreBand } from "@/lib/evaluation/score-band";
 
 const RECOMMENDATION_META = {
-  strong_yes: { label: "Strong yes", className: "bg-sage-wash text-success-olive" },
-  yes: { label: "Yes", className: "bg-sage-wash text-success-olive" },
-  maybe: { label: "Maybe", className: "bg-warning/10 text-warning" },
-  no: { label: "No", className: "bg-destructive/10 text-destructive" },
+  strong_yes: { labelKey: "recommendationStrongYes", className: "bg-sage-wash text-success-olive" },
+  yes: { labelKey: "recommendationYes", className: "bg-sage-wash text-success-olive" },
+  maybe: { labelKey: "recommendationMaybe", className: "bg-warning/10 text-warning" },
+  no: { labelKey: "recommendationNo", className: "bg-destructive/10 text-destructive" },
 } as const;
 
 function needsEvaluation(application: PipelineApplication) {
@@ -60,6 +61,7 @@ export function JobCandidateRanking({
   aiConfigured,
 }: JobCandidateRankingProps) {
   const router = useRouter();
+  const t = useTranslations("features.pipeline.JobCandidateRanking");
   const [ranking, setRanking] = useState(false);
   const [showOrder, setShowOrder] = useState(false);
   const stageNameById = useMemo(
@@ -103,8 +105,8 @@ export function JobCandidateRanking({
         if (!result.success) {
           toast.error(
             result.reason === "not_configured"
-              ? "Automatic evaluation is unavailable right now."
-              : result.error ?? "Could not rank applicants.",
+              ? t("evaluationUnavailable")
+              : result.error ?? t("rankFailed"),
           );
           return;
         }
@@ -119,19 +121,20 @@ export function JobCandidateRanking({
 
       if (totalFellBack > 0) {
         toast.warning(
-          `${totalFellBack} of ${totalSucceeded} scored with Harly's built-in rules: the AI provider didn't return a usable answer. Try again in a moment.`,
+          t("fellBackWarning", { fellBack: totalFellBack, total: totalSucceeded }),
         );
       } else if (totalSucceeded > 0 || totalFailed > 0) {
         toast.success(
-          `Scored ${totalSucceeded} candidate${totalSucceeded === 1 ? "" : "s"}` +
-            (totalFailed > 0 ? ` · ${totalFailed} failed` : ""),
+          totalFailed > 0
+            ? t("scoredWithFailures", { count: totalSucceeded, failed: totalFailed })
+            : t("scoredOnly", { count: totalSucceeded }),
         );
       } else {
-        toast.info("Everyone is already scored.");
+        toast.info(t("everyoneScored"));
       }
       router.refresh();
     } catch {
-      toast.error("Could not rank applicants. Try again shortly.");
+      toast.error(t("rankFailedRetry"));
     } finally {
       setRanking(false);
     }
@@ -152,12 +155,12 @@ export function JobCandidateRanking({
           <div className="min-w-0">
             {/* Framed as a suggestion from a colleague, not a verdict. */}
             <p className="text-[14px] font-medium text-near-ink">
-              Harly can suggest an order
+              {t("heading")}
             </p>
             <p className="truncate text-[12px] text-soft-ink">
               {unscored === 0
-                ? `All ${scored} active applicant${scored === 1 ? "" : "s"} rated. Yours to overrule.`
-                : `${unscored} of ${activeApplications.length} not rated yet for ${jobTitle}.`}
+                ? t("allRated", { count: scored })
+                : t("notRatedYet", { unscored, total: activeApplications.length, jobTitle })}
             </p>
           </div>
           {unscored === 0 ? null : (
@@ -173,7 +176,7 @@ export function JobCandidateRanking({
                     ranking && "animate-pulse motion-reduce:animate-none",
                   )}
                 />
-                {ranking ? "Evaluating…" : aiConfigured ? "Rate the rest" : "Evaluate the rest"}
+                {ranking ? t("evaluating") : aiConfigured ? t("rateTheRest") : t("evaluateTheRest")}
               </Button>
             )}
         </div>
@@ -196,7 +199,7 @@ export function JobCandidateRanking({
               !showOrder && "-rotate-90",
             )}
           />
-          {showOrder ? "Hide suggested order" : "Show suggested order"}
+          {showOrder ? t("hideSuggestedOrder") : t("showSuggestedOrder")}
         </button>
 
         {showOrder ? (
@@ -249,7 +252,7 @@ export function JobCandidateRanking({
                       <>
                         {meta ? (
                           <Badge className={cn("hidden text-[11px] sm:inline-flex", meta.className)}>
-                            {meta.label}
+                            {t(meta.labelKey)}
                           </Badge>
                         ) : null}
                         <span
@@ -257,14 +260,14 @@ export function JobCandidateRanking({
                             "text-base font-semibold tabular-nums",
                             scoreTone(application.aiScore),
                           )}
-                          title={`${application.evaluationSource === "rules" ? `Harly Algorithm ${application.evaluationEngineVersion ?? "rules"}` : "Automatic evaluation"}. ${application.aiUsedResume ? "Based on resume + profile" : "Profile only. No readable resume"}`}
+                          title={t("scoreTitle", { source: application.evaluationSource === "rules" ? t("scoreSourceRules", { version: application.evaluationEngineVersion ?? "rules" }) : t("automaticEvaluation"), basis: application.aiUsedResume ? t("basedOnResume") : t("profileOnly") })}
                         >
                           {application.aiScore}
                         </span>
                       </>
                     ) : (
                       <Badge variant="outline" className="font-normal text-muted-foreground">
-                        Not evaluated
+                        {t("notEvaluated")}
                       </Badge>
                     )}
                   </div>
@@ -277,8 +280,7 @@ export function JobCandidateRanking({
         {showOrder && scored > 0 ? (
           <p className="flex items-center gap-1.5 text-[12px] text-soft-ink">
             <FileText className="size-3.5 shrink-0" />
-            Based on each candidate&apos;s resume and answers against this job.
-            Harly can be wrong , you decide.
+            {t("basisNote")}
           </p>
         ) : null}
       </CardContent>

@@ -3,6 +3,7 @@
 import * as React from "react"
 import { ArrowLeftIcon, XIcon } from "lucide-react"
 import { Dialog as DialogPrimitive } from "radix-ui"
+import { useTranslations } from "next-intl"
 
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
@@ -83,6 +84,7 @@ function DialogContent({
   /** sm 400 / md 480 (default) / lg 640 / xl 860 / full (viewport minus gutter). */
   size?: DialogSize
 }) {
+  const t = useTranslations("ui.dialog")
   return (
     <DialogPortal data-slot="dialog-portal">
       <DialogOverlay className={overlayClassName} />
@@ -99,7 +101,7 @@ function DialogContent({
             className={cn(dialogIconButtonClasses, "right-4")}
           >
             <XIcon />
-            <span className="sr-only">Close</span>
+            <span className="sr-only">{t("close")}</span>
           </DialogPrimitive.Close>
         )}
       </DialogPrimitive.Content>
@@ -113,6 +115,7 @@ function DialogBack({
   children,
   ...props
 }: React.ComponentProps<"button">) {
+  const t = useTranslations("ui.dialog")
   return (
     <button
       type="button"
@@ -123,7 +126,7 @@ function DialogBack({
       {children ?? (
         <>
           <ArrowLeftIcon />
-          <span className="sr-only">Back</span>
+          <span className="sr-only">{t("back")}</span>
         </>
       )}
     </button>
@@ -178,6 +181,7 @@ function DialogFooter({
   layout?: "end" | "split" | "stack"
   showCloseButton?: boolean
 }) {
+  const t = useTranslations("ui.dialog")
   return (
     <div
       data-slot="dialog-footer"
@@ -193,7 +197,7 @@ function DialogFooter({
       {children}
       {showCloseButton && (
         <DialogPrimitive.Close asChild>
-          <Button variant="soft">Close</Button>
+          <Button variant="soft">{t("close")}</Button>
         </DialogPrimitive.Close>
       )}
     </div>

@@ -3,6 +3,7 @@
 import { useRouter, useSearchParams } from "next/navigation";
 import type { Route } from "next";
 import { Briefcase, Check, ChevronsUpDown } from "lucide-react";
+import { useTranslations } from "next-intl";
 
 import type { PipelineJobOption } from "@/features/pipeline/data";
 import { JobStatusBadge } from "@/components/ui/StatusBadge";
@@ -28,6 +29,7 @@ export function PipelineJobSelect({
   const router = useRouter();
   const searchParams = useSearchParams();
   const selected = jobs.find((job) => job.id === selectedJobId) ?? jobs[0];
+  const t = useTranslations("features.pipeline.PipelineJobSelect");
 
   return (
     <DropdownMenu>
@@ -53,7 +55,7 @@ export function PipelineJobSelect({
         className="w-(--radix-dropdown-menu-trigger-width) min-w-72"
       >
         <DropdownMenuLabel className="text-xs text-soft-ink">
-          Switch job
+          {t("switchJob")}
         </DropdownMenuLabel>
         {jobs.map((job) => (
           <DropdownMenuItem

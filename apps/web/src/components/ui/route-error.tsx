@@ -4,6 +4,7 @@ import { useEffect } from "react";
 import Link from "next/link";
 import type { Route } from "next";
 import { AlertTriangle } from "lucide-react";
+import { useTranslations } from "next-intl";
 
 import { Button } from "@/components/ui/button";
 
@@ -18,10 +19,10 @@ import { Button } from "@/components/ui/button";
 export function RouteError({
   error,
   reset,
-  title = "This page could not load",
-  message = "Something went wrong while loading this section. Try again, or go back to the dashboard.",
+  title,
+  message,
   homeHref = "/dashboard",
-  homeLabel = "Back to dashboard",
+  homeLabel,
 }: {
   error: Error & { digest?: string };
   reset: () => void;
@@ -30,6 +31,8 @@ export function RouteError({
   homeHref?: Route;
   homeLabel?: string;
 }) {
+  const t = useTranslations("ui.routeError");
+
   useEffect(() => {
     console.error(error);
   }, [error]);
@@ -44,20 +47,24 @@ export function RouteError({
       </span>
 
       <div className="space-y-1.5">
-        <h1 className="text-lg font-semibold text-foreground">{title}</h1>
-        <p className="text-sm leading-6 text-muted-foreground">{message}</p>
+        <h1 className="text-lg font-semibold text-foreground">{title ?? t("title")}</h1>
+        <p className="text-sm leading-6 text-muted-foreground">{message ?? t("message")}</p>
         {error.digest ? (
           <p className="pt-1 text-xs text-muted-foreground">
-            Error reference{" "}
-            <code className="font-mono text-foreground/80">{error.digest}</code>
+            {t.rich("errorReference", {
+              digest: error.digest,
+              code: (chunks) => (
+                <code className="font-mono text-foreground/80">{chunks}</code>
+              ),
+            })}
           </p>
         ) : null}
       </div>
 
       <div className="flex flex-wrap items-center justify-center gap-2">
-        <Button onClick={() => reset()}>Try again</Button>
+        <Button onClick={() => reset()}>{t("tryAgain")}</Button>
         <Button asChild variant="ghost">
-          <Link href={homeHref}>{homeLabel}</Link>
+          <Link href={homeHref}>{homeLabel ?? t("backToDashboard")}</Link>
         </Button>
       </div>
     </div>

@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
+import { useTranslations } from "next-intl";
 import type { Route } from "next";
 import { toast } from "@/lib/notification-island/toast";
 
@@ -25,7 +26,7 @@ import {
   deleteWorkflowAction,
   toggleWorkflowAction,
 } from "./actions";
-import { WORKFLOW_TEMPLATES, type WorkflowTemplate } from "./builder/templates";
+import { templateCopy, WORKFLOW_TEMPLATES, type WorkflowTemplate } from "./builder/templates";
 import { describeGraphWorkflow, describeWorkflow, graphActionCount } from "./builder/preview";
 import { triggerMeta } from "./builder/catalog";
 import type { SerializedWorkflow } from "./builder/types";
@@ -40,6 +41,8 @@ export function AutomationsManager({
   initialWorkflows: SerializedWorkflow[];
   initialApprovals: PendingWorkflowApproval[];
 }) {
+  const t = useTranslations("features.automations.AutomationsManager");
+  const tl = useTranslations("labels.automations");
   const searchParams = useSearchParams();
   const wantsRecipes = searchParams.get("recipes") === "1";
   const [workflows, setWorkflows] = useState(initialWorkflows);
@@ -77,7 +80,7 @@ export function AutomationsManager({
               : w,
           ),
         );
-        toast.error(r.error ?? "Could not toggle automation.");
+        toast.error(r.error ?? t("toggleError"));
       }
     });
   }
@@ -93,21 +96,21 @@ export function AutomationsManager({
       const r = await deleteWorkflowAction(id);
       if (!r.ok) {
         setWorkflows((prev) => restoreAtIndex(prev, index, removed));
-        toast.error(r.error ?? "Could not delete.");
+        toast.error(r.error ?? t("deleteError"));
       } else {
-        toast.success("Automation deleted.");
+        toast.success(t("deletedToast"));
       }
     });
   }
 
-  function fromTemplate(t: WorkflowTemplate) {
+  function fromTemplate(template: WorkflowTemplate) {
     startTransition(async () => {
-      const r = await createWorkflowFromTemplateAction(t.build());
+      const r = await createWorkflowFromTemplateAction(template.build());
       if (r.ok && r.workflow) {
-        toast.success(`Created “${t.name}”.`);
+        toast.success(t("createdToast", { name: templateCopy(template, tl).name }));
         window.location.href = `/dashboard/automations/${r.workflow.id}` as Route;
       } else {
-        toast.error(r.error ?? "Could not create from template.");
+        toast.error(r.error ?? t("templateError"));
       }
     });
   }
@@ -153,14 +156,14 @@ export function AutomationsManager({
           if (!open) setPendingDelete(null);
         }}
         tone="destructive"
-        title="Delete this automation?"
+        title={t("deleteTitle")}
         description={
           pendingDelete
-            ? `“${pendingDelete.name}” will stop running and be removed. This cannot be undone.`
-            : "This cannot be undone."
+            ? t("deleteDescription", { name: pendingDelete.name })
+            : t("cannotBeUndone")
         }
-        confirmLabel="Delete automation"
-        cancelLabel="Keep it"
+        confirmLabel={t("deleteConfirm")}
+        cancelLabel={t("keepIt")}
         onConfirm={confirmRemove}
       />
     </div>
@@ -168,25 +171,25 @@ export function AutomationsManager({
 }
 
 function Header({ count, onCreate }: { count: number; onCreate: () => void }) {
+  const t = useTranslations("features.automations.AutomationsManager");
   return (
     <div className="flex flex-wrap items-end justify-between gap-4">
       <div>
         <h1 className="font-display text-[28px] leading-tight text-near-ink">
-          Automations
+          {t("title")}
         </h1>
         <p className="mt-1 text-sm text-soft-ink">
-          {count} {count === 1 ? "recipe" : "recipes"} · when something happens,
-          Harly can email, tag, task, or move a candidate.
+          {t("countSummary", { count })}
         </p>
       </div>
       <div className="flex items-center gap-2">
         <Button asChild variant="outline">
           <Link href={"/dashboard/automations/new" as Route}>
-            <PlusIcon className="size-4" /> Start from scratch
+            <PlusIcon className="size-4" /> {t("startFromScratch")}
           </Link>
         </Button>
         <Button type="button" onClick={onCreate}>
-          <MagicWandDuotoneIcon className="size-4" /> Templates
+          <MagicWandDuotoneIcon className="size-4" /> {t("templates")}
         </Button>
       </div>
     </div>
@@ -204,25 +207,30 @@ function WorkflowCard({
   onDelete: () => void;
   disabled: boolean;
 }) {
-  const meta = triggerMeta(workflow.trigger.event);
+  const t = useTranslations("features.automations.AutomationsManager");
+  const tl = useTranslations("labels.automations");
+  const meta = triggerMeta(workflow.trigger.event, tl);
   const graph = workflow.engineVersion === 2 ? workflow.graph : undefined;
   const nl = graph
-    ? describeGraphWorkflow(graph)
-    : describeWorkflow({
-        trigger: workflow.trigger,
-        conditions: workflow.conditions,
-        actions: workflow.actions,
-      });
+    ? describeGraphWorkflow(graph, tl)
+    : describeWorkflow(
+        {
+          trigger: workflow.trigger,
+          conditions: workflow.conditions,
+          actions: workflow.actions,
+        },
+        tl,
+      );
   const actionCount = graph ? graphActionCount(graph) : workflow.actions.length;
   const canToggle = workflow.status === "published" || workflow.status === "paused";
 
   const statusLabel = workflow.hasUnpublishedChanges
-    ? "Edits pending"
+    ? t("status.editsPending")
     : workflow.status === "published"
-      ? "On"
+      ? t("status.on")
       : workflow.status === "paused"
-        ? "Paused"
-        : "Draft";
+        ? t("status.paused")
+        : t("status.draft");
 
   return (
     <div
@@ -261,8 +269,15 @@ function WorkflowCard({
           </span>
           <span className="mt-0.5 line-clamp-1 block text-[13px] text-soft-ink">{nl}</span>
           <span className="mt-1 block text-xs text-quiet-mist">
-            {meta.label} · {actionCount} {actionCount === 1 ? "action" : "actions"} · edited{" "}
-            <RelativeTime value={workflow.updatedAt} />
+            {t.rich("workflowMeta", {
+              trigger: meta.label,
+              count: actionCount,
+              edited: (chunks) => (
+                <>
+                  {chunks} <RelativeTime value={workflow.updatedAt} />
+                </>
+              ),
+            })}
           </span>
         </span>
       </Link>
@@ -270,7 +285,7 @@ function WorkflowCard({
         type="button"
         onClick={onDelete}
         disabled={disabled}
-        aria-label={`Delete ${workflow.name}`}
+        aria-label={t("deleteLabel", { name: workflow.name })}
         className="inline-flex size-8 items-center justify-center rounded-full text-soft-ink transition-colors hover:bg-soft-kraft hover:text-danger-rust focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-near-ink disabled:opacity-50"
       >
         <TrashIcon className="size-4" />
@@ -279,7 +294,7 @@ function WorkflowCard({
         checked={workflow.enabled}
         onCheckedChange={onToggle}
         disabled={disabled || !canToggle}
-        aria-label={workflow.enabled ? "Disable automation" : "Enable automation"}
+        aria-label={workflow.enabled ? t("disableLabel") : t("enableLabel")}
       />
       <CaretRightIcon aria-hidden className="size-4 shrink-0 text-quiet-mist" />
     </div>
@@ -287,6 +302,7 @@ function WorkflowCard({
 }
 
 function EmptyState({ onShowTemplates }: { onShowTemplates: () => void }) {
+  const t = useTranslations("features.automations.AutomationsManager");
   const choice =
     "group flex w-full items-center gap-4 rounded-[var(--radius-card)] bg-card p-4 text-left shadow-[var(--shadow-card)] transition-colors hover:bg-row-wash focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-near-ink";
   return (
@@ -297,15 +313,14 @@ function EmptyState({ onShowTemplates }: { onShowTemplates: () => void }) {
         </span>
         <div>
           <h1 className="font-display text-xl text-near-ink">
-            Automate the repetitive hiring work
+            {t("emptyTitle")}
           </h1>
           <p className="mt-1.5 max-w-md text-sm leading-relaxed text-soft-ink">
-            Write a simple recipe:{" "}
-            <strong className="font-medium text-near-ink">When</strong> a candidate
-            applies or moves stage,{" "}
-            <strong className="font-medium text-near-ink">if</strong> they match a
-            filter, <strong className="font-medium text-near-ink">then</strong> send
-            an email, create a task, or tag the profile.
+            {t.rich("emptyBody", {
+              b: (chunks) => (
+                <strong className="font-medium text-near-ink">{chunks}</strong>
+              ),
+            })}
           </p>
         </div>
       </div>
@@ -314,8 +329,8 @@ function EmptyState({ onShowTemplates }: { onShowTemplates: () => void }) {
           <MagicWandDuotoneIcon className="size-5" />
         </span>
         <span className="min-w-0 flex-1">
-          <span className="block text-sm font-semibold text-near-ink">Choose a template</span>
-          <span className="mt-0.5 block text-[13px] text-soft-ink">Start from a ready-made recipe and tweak every detail.</span>
+          <span className="block text-sm font-semibold text-near-ink">{t("chooseTemplate")}</span>
+          <span className="mt-0.5 block text-[13px] text-soft-ink">{t("chooseTemplateHint")}</span>
         </span>
         <CaretRightIcon aria-hidden className="size-4 shrink-0 text-quiet-mist transition-transform group-hover:translate-x-0.5" />
       </button>
@@ -324,8 +339,8 @@ function EmptyState({ onShowTemplates }: { onShowTemplates: () => void }) {
           <PlusIcon className="size-5" />
         </span>
         <span className="min-w-0 flex-1">
-          <span className="block text-sm font-semibold text-near-ink">Start from scratch</span>
-          <span className="mt-0.5 block text-[13px] text-soft-ink">Build your own recipe in the editor.</span>
+          <span className="block text-sm font-semibold text-near-ink">{t("startFromScratch")}</span>
+          <span className="mt-0.5 block text-[13px] text-soft-ink">{t("buildOwnHint")}</span>
         </span>
         <CaretRightIcon aria-hidden className="size-4 shrink-0 text-quiet-mist transition-transform group-hover:translate-x-0.5" />
       </Link>
@@ -342,27 +357,31 @@ function TemplateGallery({
   onClose: () => void;
   pending: boolean;
 }) {
+  const t = useTranslations("features.automations.AutomationsManager");
+  const tl = useTranslations("labels.automations");
   return (
     <Card className="mt-6 gap-3 p-5">
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-[15px] font-semibold tracking-[-0.01em] text-near-ink">
-            Starter recipes
+            {t("starterRecipes")}
           </h2>
           <p className="mt-0.5 text-[13px] text-soft-ink">
-            Pick one to start. You can change every detail in the editor.
+            {t("pickTemplateHint")}
           </p>
         </div>
         <Button type="button" variant="soft" size="sm" onClick={onClose}>
-          Close
+          {t("close")}
         </Button>
       </div>
       <div className="grid grid-cols-1 gap-1 sm:grid-cols-2">
-        {WORKFLOW_TEMPLATES.map((t) => (
+        {WORKFLOW_TEMPLATES.map((template) => {
+          const copy = templateCopy(template, tl);
+          return (
           <button
-            key={t.id}
+            key={template.id}
             type="button"
-            onClick={() => onPick(t)}
+            onClick={() => onPick(template)}
             disabled={pending}
             className="group flex items-center gap-3 rounded-[var(--radius-inner)] p-3 text-left transition-colors hover:bg-row-wash focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-near-ink disabled:opacity-60"
           >
@@ -371,16 +390,17 @@ function TemplateGallery({
             </span>
             <span className="min-w-0 flex-1">
               <span className="block text-[11px] font-medium uppercase tracking-wider text-quiet-mist">
-                {t.category}
+                {copy.category}
               </span>
-              <span className="block text-sm font-semibold text-near-ink">{t.name}</span>
+              <span className="block text-sm font-semibold text-near-ink">{copy.name}</span>
               <span className="mt-0.5 line-clamp-2 block text-[13px] leading-snug text-soft-ink">
-                {t.description}
+                {copy.description}
               </span>
             </span>
             <CaretRightIcon aria-hidden className="size-4 shrink-0 text-quiet-mist transition-transform group-hover:translate-x-0.5" />
           </button>
-        ))}
+          );
+        })}
       </div>
     </Card>
   );

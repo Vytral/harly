@@ -1,3 +1,5 @@
+import { getTranslations } from "next-intl/server";
+
 import { Skeleton } from "@/components/ui/skeleton";
 
 /**
@@ -5,10 +7,12 @@ import { Skeleton } from "@/components/ui/skeleton";
  * back link, title and Cancel/Save, then the two-column main area (name and
  * type, subject, message editor) beside the variables aside.
  */
-export default function TemplateEditorLoading() {
+export default async function TemplateEditorLoading() {
+  const t = await getTranslations("pages.templateEditor.loading");
+
   return (
     <div aria-busy="true" className="flex h-dvh w-full flex-col overflow-hidden bg-warm-paper">
-      <span className="sr-only">Loading…</span>
+      <span className="sr-only">{t("label")}</span>
 
       <header className="shrink-0 bg-pure-snow shadow-[var(--shadow-card)]">
         <div className="grid h-16 grid-cols-[1fr_auto_1fr] items-center gap-4 px-4 sm:px-6">

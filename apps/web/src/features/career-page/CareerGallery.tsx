@@ -1,3 +1,5 @@
+import { useTranslations } from "next-intl";
+
 import { safeImageUrl } from "./config";
 import type { CareerPageConfig } from "./config";
 import { CareerMarquee } from "./CareerMarquee";
@@ -12,13 +14,15 @@ export function CareerGallery({
   gallery,
   rounded = "rounded-[var(--career-r-card,16px)]",
   aspectClass = "h-64 w-80",
-  label = "Photo gallery",
+  label: labelProp,
 }: {
   gallery: CareerPageConfig["gallery"];
   rounded?: string;
   aspectClass?: string;
   label?: string;
 }) {
+  const t = useTranslations("features.careerPage.careerGallery");
+  const label = labelProp ?? t("label");
   const images = gallery.images.map(safeImageUrl).filter((u): u is string => u !== null);
   if (!gallery.enabled || images.length === 0) return null;
 

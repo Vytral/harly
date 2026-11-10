@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 
+import { getTranslations } from "@/i18n/server";
 import { assertNotDemo } from "@/features/demo/assert-not-demo";
 import { requireWorkspaceRole } from "@/features/workspaces/context";
 import { createLogger } from "@/lib/logger";
@@ -24,6 +25,7 @@ export type ChecklistActionResult = { ok: boolean; error?: string };
 async function runChecklistAction(
   action: ChecklistAction,
 ): Promise<ChecklistActionResult> {
+  const t = await getTranslations("server.onboarding.checklistActions");
   try {
     assertNotDemo();
     const { organization, user } = await requireWorkspaceRole(["owner", "admin"]);
@@ -33,12 +35,12 @@ async function runChecklistAction(
       // A skip merges into the stored list in one statement, so concurrent skips
       // cannot overwrite each other. The model still rejects required steps.
       const check = applyChecklistAction(NO_CHECKLIST_PREFERENCES, action);
-      if (!check.ok) return { ok: false, error: check.error };
+      if (!check.ok) return { ok: false, error: t("notSkippable") };
       await addSkippedChecklistKey({ ...scope, key: action.key });
     } else {
       const current = await readChecklistPreferences(scope);
       const transition = applyChecklistAction(current, action);
-      if (!transition.ok) return { ok: false, error: transition.error };
+      if (!transition.ok) return { ok: false, error: t("notSkippable") };
       await writeChecklistPreferences({
         ...scope,
         preferences: transition.preferences,
@@ -48,7 +50,7 @@ async function runChecklistAction(
     return { ok: true };
   } catch (error) {
     log.error(error, "setup checklist action failed");
-    return { ok: false, error: error instanceof Error ? error.message : "Failed." };
+    return { ok: false, error: error instanceof Error ? error.message : t("failed") };
   }
 }
 

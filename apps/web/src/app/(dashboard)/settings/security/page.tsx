@@ -1,4 +1,5 @@
 import { isDemoMode } from "@harly/config";
+import { getTranslations } from "next-intl/server";
 import { getWorkspaceContext } from "@/features/workspaces/context";
 import { can, requirePagePermission } from "@/features/workspaces/permissions-server";
 import { getWorkspaceAuditLogs, getWorkspaceSecuritySettings } from "@/features/security/data";
@@ -17,6 +18,7 @@ import { AdvancedSecurityCard } from "@/features/security/AdvancedSecurityCard";
 export const dynamic = "force-dynamic";
 
 export default async function SecuritySettingsPage() {
+  const t = await getTranslations("pages.settingsSecurity.page");
   await requirePagePermission("security:manage");
   const { organization, roleKey } = await getWorkspaceContext();
 
@@ -40,9 +42,7 @@ export default async function SecuritySettingsPage() {
   return (
     <div className="space-y-6">
       {demoLocked ? (
-        <DemoLockedNotice>
-          Security and identity settings are locked in the demo.
-        </DemoLockedNotice>
+        <DemoLockedNotice>{t("demoLocked")}</DemoLockedNotice>
       ) : null}
       <Force2FACard enabled={securitySettings.require2fa} isOwner={canMutate} />
       <AdvancedSecurityCard settings={securitySettings} isOwner={canMutate} />

@@ -1,11 +1,13 @@
 import { Button, Section, Text } from "@react-email/components";
 
+import { emailTranslator } from "../i18n";
 import { WorkspaceLayout } from "./WorkspaceLayout";
 import { EmailFallbackLink } from "./EmailFallbackLink";
 import type { SocialLink } from "./HarlyLayout";
 
 export type ApplicationReceivedCandidateProps = {
   candidateName: string;
+  locale?: string | null;
   jobTitle: string;
   companyName: string;
   companyLogoUrl?: string;
@@ -20,12 +22,14 @@ export type ApplicationReceivedCandidateProps = {
 export function applicationReceivedCandidateSubject({
   jobTitle,
   companyName,
-}: Pick<ApplicationReceivedCandidateProps, "jobTitle" | "companyName">) {
-  return `Got your application — ${jobTitle} at ${companyName}`;
+  locale,
+}: Pick<ApplicationReceivedCandidateProps, "jobTitle" | "companyName" | "locale">) {
+  return emailTranslator(locale)("applicationCandidate.subject", { job: jobTitle, company: companyName });
 }
 
 export function ApplicationReceivedCandidate({
   candidateName,
+  locale,
   jobTitle,
   companyName,
   companyLogoUrl,
@@ -36,9 +40,11 @@ export function ApplicationReceivedCandidate({
   portalUrl,
   profileUrl,
 }: ApplicationReceivedCandidateProps) {
+  const t = emailTranslator(locale);
   return (
     <WorkspaceLayout
-      preview={`Your application for ${jobTitle} is in. We'll be in touch.`}
+      preview={t("applicationCandidate.preview", { job: jobTitle })}
+      locale={locale}
       companyName={companyName}
       companyLogoUrl={companyLogoUrl}
       accentColor={accentColor}
@@ -46,18 +52,16 @@ export function ApplicationReceivedCandidate({
       hideBranding={hideBranding}
     >
       <Text className="text-[40px] leading-[1.05] tracking-[-1px] font-inter text-fg m-0 mb-3.5 font-medium">
-        Application received
+        {t("applicationCandidate.heading")}
       </Text>
       <Text className="text-[14px] leading-[1.5] font-inter text-fg-2 m-0 mb-4">
-        Hi {candidateName},
+        {t("common.greeting", { name: candidateName })}
       </Text>
       <Text className="text-[14px] leading-[1.5] font-inter text-fg-2 m-0 mb-4">
-        We got your application for{" "}
-        <span className="text-fg font-semibold">{jobTitle}</span>. The team will
-        review it carefully and reach out if there&apos;s a fit.
+        {t.rich("applicationCandidate.body", { job: jobTitle, strong: (chunks) => <span className="text-fg font-semibold">{chunks}</span> })}
       </Text>
       <Text className="text-[14px] leading-[1.5] font-inter text-fg-2 m-0 mb-4">
-        Thanks for taking the time — we appreciate it.
+        {t("applicationCandidate.thanks")}
       </Text>
       {portalUrl ? (
         <Section className="mt-2">
@@ -65,9 +69,9 @@ export function ApplicationReceivedCandidate({
             href={portalUrl}
             className="bg-brand text-[14px] leading-[1.5] font-inter text-fg-inverted inline-block border-none px-4 py-2.5 text-center box-border no-underline"
           >
-            Review your application
+            {t("applicationCandidate.application")}
           </Button>
-          <EmailFallbackLink url={portalUrl} />
+          <EmailFallbackLink url={portalUrl} locale={locale} />
         </Section>
       ) : null}
       {profileUrl ? (
@@ -76,9 +80,9 @@ export function ApplicationReceivedCandidate({
             href={profileUrl}
             className="border border-stroke text-[14px] leading-[1.5] font-inter text-fg inline-block px-4 py-2.5 text-center box-border no-underline"
           >
-            Complete your profile
+            {t("applicationCandidate.profile")}
           </Button>
-          <EmailFallbackLink url={profileUrl} />
+          <EmailFallbackLink url={profileUrl} locale={locale} />
         </Section>
       ) : null}
       {jobBoardUrl ? (
@@ -87,9 +91,9 @@ export function ApplicationReceivedCandidate({
             href={jobBoardUrl}
             className="bg-brand text-[14px] leading-[1.5] font-inter text-fg-inverted inline-block border-none px-4 py-2.5 text-center box-border no-underline"
           >
-            See other open roles
+            {t("applicationCandidate.jobs")}
           </Button>
-          <EmailFallbackLink url={jobBoardUrl} />
+          <EmailFallbackLink url={jobBoardUrl} locale={locale} />
         </Section>
       ) : null}
     </WorkspaceLayout>

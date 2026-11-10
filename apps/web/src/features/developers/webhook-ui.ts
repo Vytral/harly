@@ -4,6 +4,11 @@
  * No server-only imports, so it is shared with client components and tests.
  */
 
+import type { useTranslations } from "next-intl";
+
+/** Translator for the `labels.developers.webhooks` catalog namespace. */
+export type WebhookTranslator = ReturnType<typeof useTranslations>;
+
 export type EventOption = { value: string; label: string };
 
 export type EventGroup = {
@@ -13,63 +18,76 @@ export type EventGroup = {
   events: Array<EventOption & { description: string }>;
 };
 
-const GROUPS: Array<{ key: string; label: string; description: string }> = [
-  { key: "application", label: "Applications", description: "Candidates applying and moving through the pipeline." },
-  { key: "candidate", label: "Candidates", description: "Candidate profiles and referrals." },
-  { key: "interview", label: "Interviews", description: "Scheduling and outcomes." },
-  { key: "task", label: "Tasks", description: "Follow-ups assigned to your team." },
-  { key: "document", label: "Documents", description: "E-signature requests." },
-  { key: "job", label: "Jobs", description: "Publishing and closing roles." },
-  { key: "mail", label: "Mail", description: "Inbound email linked to candidates." },
-  { key: "evaluation", label: "AI", description: "AI-generated evaluations." },
-  { key: "webhook", label: "Integrations", description: "Payloads received from other tools." },
-];
+const GROUP_KEYS = [
+  "application",
+  "candidate",
+  "interview",
+  "task",
+  "document",
+  "job",
+  "mail",
+  "evaluation",
+  "webhook",
+] as const;
 
-export const EVENT_DESCRIPTIONS: Record<string, string> = {
-  "application.created": "A candidate submits an application.",
-  "application.stage_changed": "An application moves to another pipeline stage.",
-  "application.status_changed": "An application is activated, put on hold or withdrawn.",
-  "application.hired": "A candidate is marked as hired.",
-  "application.rejected": "An application is rejected.",
-  "candidate.created": "A candidate profile is created.",
-  "candidate.updated": "A candidate profile changes.",
-  "candidate.referred": "Someone refers a candidate.",
-  "candidate.referral_deleted": "A referral is removed.",
-  "interview.scheduled": "An interview is booked.",
-  "interview.canceled": "An interview is canceled.",
-  "interview.completed": "An interview is marked as completed.",
-  "interview.rescheduled": "An interview moves to a new time.",
-  "task.created": "A task is created.",
-  "task.updated": "A task changes.",
-  "task.completed": "A task is marked as done.",
-  "task.deleted": "A task is deleted.",
-  "document.signature_sent": "A document is sent out for signature.",
-  "document.signature_changed": "A signer views or signs a document.",
-  "document.signature_voided": "A signature request is voided.",
-  "job.published": "A job goes live on your careers page.",
-  "job.updated": "A job's details change.",
-  "job.closed": "A job is closed.",
-  "mail.received": "An email arrives in a candidate's thread.",
-  "evaluation.completed": "An AI evaluation finishes.",
-  "webhook.received": "Harly receives a payload on an inbound webhook.",
+/** Catalog key under `eventDescriptions` for each known event name. */
+const EVENT_DESCRIPTION_KEYS: Record<string, string> = {
+  "application.created": "applicationCreated",
+  "application.stage_changed": "applicationStageChanged",
+  "application.status_changed": "applicationStatusChanged",
+  "application.hired": "applicationHired",
+  "application.rejected": "applicationRejected",
+  "candidate.created": "candidateCreated",
+  "candidate.updated": "candidateUpdated",
+  "candidate.referred": "candidateReferred",
+  "candidate.referral_deleted": "candidateReferralDeleted",
+  "interview.scheduled": "interviewScheduled",
+  "interview.canceled": "interviewCanceled",
+  "interview.completed": "interviewCompleted",
+  "interview.rescheduled": "interviewRescheduled",
+  "task.created": "taskCreated",
+  "task.updated": "taskUpdated",
+  "task.completed": "taskCompleted",
+  "task.deleted": "taskDeleted",
+  "document.signature_sent": "documentSignatureSent",
+  "document.signature_changed": "documentSignatureChanged",
+  "document.signature_voided": "documentSignatureVoided",
+  "job.published": "jobPublished",
+  "job.updated": "jobUpdated",
+  "job.closed": "jobClosed",
+  "mail.received": "mailReceived",
+  "evaluation.completed": "evaluationCompleted",
+  "webhook.received": "webhookReceived",
 };
 
 /** Group a flat event list by its prefix (`application.created` -> Applications). */
-export function groupWebhookEvents(events: EventOption[]): EventGroup[] {
+export function groupWebhookEvents(
+  events: EventOption[],
+  t: WebhookTranslator,
+): EventGroup[] {
   const known = new Map<string, EventGroup>(
-    GROUPS.map((g) => [g.key, { ...g, events: [] }]),
+    GROUP_KEYS.map((key) => [
+      key,
+      {
+        key,
+        label: t(`groups.${key}.label`),
+        description: t(`groups.${key}.description`),
+        events: [],
+      },
+    ]),
   );
   const other: EventGroup = {
     key: "other",
-    label: "Other",
-    description: "Additional events.",
+    label: t("groups.other.label"),
+    description: t("groups.other.description"),
     events: [],
   };
   for (const event of events) {
     const group = known.get(event.value.split(".")[0]) ?? other;
+    const descriptionKey = EVENT_DESCRIPTION_KEYS[event.value];
     group.events.push({
       ...event,
-      description: EVENT_DESCRIPTIONS[event.value] ?? "",
+      description: descriptionKey ? t(`eventDescriptions.${descriptionKey}`) : "",
     });
   }
   return [...known.values(), other].filter((g) => g.events.length > 0);

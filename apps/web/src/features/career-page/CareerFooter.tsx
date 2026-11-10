@@ -1,15 +1,9 @@
+import { useTranslations } from "next-intl";
+
 import { CookiePreferencesButton } from "@/components/CookiePreferencesButton";
 
 import { SocialIcon, socialLabel } from "./social-icons";
 import type { CareerPageConfig } from "./config";
-
-const LEGAL_LINK_LABELS: Record<string, string> = {
-  "privacy-policy": "Privacy Policy",
-  "terms-of-service": "Terms of Service",
-  "cookie-policy": "Cookie Policy",
-  "candidate-notice": "Candidate Notice",
-  "ai-transparency-notice": "AI Transparency",
-};
 
 export function CareerFooter({
   config,
@@ -26,9 +20,18 @@ export function CareerFooter({
   portalEnabled?: boolean;
   legalBasePath?: string;
 }) {
+  const t = useTranslations("features.careerPage.careerFooter");
+  const tSocial = useTranslations("labels.careerPage.social");
   const socials = config.footer.socials.filter((s) => s.url.trim());
   const legalLinks = config.footer.legalLinks ?? [];
   const year = new Date().getFullYear();
+  const legalLabels: Record<string, string> = {
+    "privacy-policy": t("legal.privacyPolicy"),
+    "terms-of-service": t("legal.termsOfService"),
+    "cookie-policy": t("legal.cookiePolicy"),
+    "candidate-notice": t("legal.candidateNotice"),
+    "ai-transparency-notice": t("legal.aiTransparencyNotice"),
+  };
 
   return (
     <div className={`mx-auto ${maxWidth} px-6`}>
@@ -41,7 +44,7 @@ export function CareerFooter({
           rel="noopener noreferrer"
           className="group inline-flex items-center gap-2 text-soft-ink transition-colors hover:text-near-ink"
         >
-          <span className="text-xs font-medium">Powered by</span>
+          <span className="text-xs font-medium">{t("poweredBy")}</span>
           {/* Black wordmark on light, white on dark , swapped via the .dark class
               set by ThemeWrapper. */}
           {/* eslint-disable @next/next/no-img-element */}
@@ -67,8 +70,8 @@ export function CareerFooter({
                 href={s.url}
                 target="_blank"
                 rel="noopener noreferrer"
-                aria-label={socialLabel(s.platform)}
-                title={socialLabel(s.platform)}
+                aria-label={socialLabel(s.platform, tSocial)}
+                title={socialLabel(s.platform, tSocial)}
                 className={`flex size-9 items-center justify-center ${iconRounded} border border-hairline text-soft-ink transition-[transform,color,border-color] duration-200 ease-[cubic-bezier(0.23,1,0.32,1)] hover:-translate-y-0.5 hover:text-near-ink active:scale-95 motion-reduce:transition-none motion-reduce:hover:translate-y-0`}
               >
                 <SocialIcon platform={s.platform} className="size-4" />
@@ -80,16 +83,14 @@ export function CareerFooter({
 
       {/* Bottom tier: copyright + legal links */}
       <div className="mt-6 flex flex-col items-center justify-between gap-3 border-t border-hairline pt-6 text-xs text-soft-ink sm:flex-row">
-        <p>
-          © {year} {workspaceName}
-        </p>
+        <p>{t("copyright", { year, workspaceName })}</p>
         <nav className="flex flex-wrap items-center justify-center gap-x-5 gap-y-2">
           {portalEnabled ? (
             <a
               href="/portal"
               className="transition-colors hover:text-near-ink"
             >
-              Candidate portal
+              {t("candidatePortal")}
             </a>
           ) : null}
           {legalLinks.map((slug) => (
@@ -98,7 +99,7 @@ export function CareerFooter({
               href={`${legalBasePath}/${slug}`}
               className="transition-colors hover:text-near-ink"
             >
-              {LEGAL_LINK_LABELS[slug] ?? slug}
+              {legalLabels[slug] ?? slug}
             </a>
           ))}
           <CookiePreferencesButton />

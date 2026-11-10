@@ -28,6 +28,8 @@ vi.mock("@/lib/logger", () => ({
 
 import { sendPipelineEmails, type PipelineEmail } from "./emails";
 
+vi.mock("next-intl/server", async () => (await import("@/test-support/intl-server-mock")).intlServerMock);
+
 const STAGE_EMAIL: PipelineEmail = {
   type: "stage",
   eventId: "hist-stage-1",
@@ -178,7 +180,7 @@ describe("sendPipelineEmails latency budget", () => {
 
     expect(summary.queued).toBe(1);
     expect(summary.emailWarning).toContain("taking longer than usual");
-    expect(summary.emailWarning).toContain("will continue in the background");
+    expect(summary.emailWarning).toContain("will keep going in the background");
     expect(summary.emailWarning).not.toContain("could not be queued");
   });
 });

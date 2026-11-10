@@ -23,6 +23,8 @@ import {
 } from "./actions";
 import { emptyWorkspaceSearchResults } from "./results";
 
+vi.mock("next-intl/server", async () => (await import("@/test-support/intl-server-mock")).intlServerMock);
+
 const scopedActor = {
   workspaceId: "ws-1",
   userId: "user-1",
@@ -46,7 +48,11 @@ describe("searchWorkspaceAction", () => {
     const result = await searchWorkspaceAction("Ada");
 
     expect(result.ok).toBe(true);
-    expect(mocks.searchWorkspaceForActor).toHaveBeenCalledWith(scopedActor, "Ada");
+    expect(mocks.searchWorkspaceForActor).toHaveBeenCalledWith(
+      scopedActor,
+      "Ada",
+      expect.anything(),
+    );
     if (result.ok) {
       expect(Object.keys(result.results.groups)).toEqual(["jobs"]);
     }
@@ -57,6 +63,7 @@ describe("searchWorkspaceAction", () => {
     expect(mocks.searchWorkspaceForActor).toHaveBeenCalledWith(
       scopedActor,
       "Ada Lovelace",
+      expect.anything(),
     );
   });
 
@@ -73,6 +80,7 @@ describe("searchWorkspaceAction", () => {
     expect(mocks.searchWorkspaceForActor).toHaveBeenCalledWith(
       scopedActor,
       "AdaLovelace",
+      expect.anything(),
     );
   });
 

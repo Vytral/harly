@@ -8,6 +8,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
+import { useTranslations } from "next-intl";
 import { getCandidateContextAction } from "@/features/ai-chat/actions";
 import { DEFAULT_CLIENT_ASSISTANT, type ClientAssistantBranding } from "@/lib/ai/assistant-branding-shared";
 import { HarlyAIContext } from "./HarlyAIContext";
@@ -23,15 +24,31 @@ function candidateIdFromPath(pathname: string | null): string | undefined {
   return match?.[1];
 }
 
-function surfaceLabelFromPath(pathname: string | null): string {
-  if (!pathname || pathname === "/dashboard") return "Dashboard";
-  if (pathname.includes("/tasks")) return "Tasks";
-  if (pathname.includes("/calendars")) return "Interview calendar";
-  if (pathname.includes("/reports")) return "Reports";
-  if (pathname.includes("/inbox")) return "Inbox";
-  if (pathname.includes("/jobs")) return "Jobs";
-  if (pathname.includes("/candidates")) return "Candidates";
-  return "Current workspace";
+// The English label is sent to the assistant as context and drives the
+// panel's starter choice, so it stays English. `displayLabel` is what the
+// viewer reads.
+type SectionKey = "dashboard" | "tasks" | "calendars" | "reports" | "inbox" | "jobs" | "candidates" | "workspace";
+
+const SECTION_LABELS: Record<SectionKey, string> = {
+  dashboard: "Dashboard",
+  tasks: "Tasks",
+  calendars: "Interview calendar",
+  reports: "Reports",
+  inbox: "Inbox",
+  jobs: "Jobs",
+  candidates: "Candidates",
+  workspace: "Current workspace",
+};
+
+function sectionFromPath(pathname: string | null): SectionKey {
+  if (!pathname || pathname === "/dashboard") return "dashboard";
+  if (pathname.includes("/tasks")) return "tasks";
+  if (pathname.includes("/calendars")) return "calendars";
+  if (pathname.includes("/reports")) return "reports";
+  if (pathname.includes("/inbox")) return "inbox";
+  if (pathname.includes("/jobs")) return "jobs";
+  if (pathname.includes("/candidates")) return "candidates";
+  return "workspace";
 }
 
 /**
@@ -69,16 +86,23 @@ export function HarlyAIProvider({
     name: string;
     email: string;
   } | null>(null);
+  const t = useTranslations("shell.harlyAI");
   const pathname = usePathname();
   const persistenceKey = `${workspaceId}:${userId}`;
   const activeCandidateId = candidateId ?? candidateIdFromPath(pathname);
+  const sectionKey = sectionFromPath(pathname);
   const surfaceContext = {
     kind: activeCandidateId ? ("candidate" as const) : ("section" as const),
     label: activeCandidateId
       ? candidateContext?.id === activeCandidateId
         ? candidateContext.name
         : "Current candidate"
-      : surfaceLabelFromPath(pathname),
+      : SECTION_LABELS[sectionKey],
+    displayLabel: activeCandidateId
+      ? candidateContext?.id === activeCandidateId
+        ? candidateContext.name
+        : t("currentCandidate")
+      : t(`sections.${sectionKey}`),
     path: pathname ?? "/dashboard",
   };
 

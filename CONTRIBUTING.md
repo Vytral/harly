@@ -240,3 +240,7 @@ By contributing you agree that your contribution is licensed under the
 Report suspected vulnerabilities privately through [SECURITY.md](SECURITY.md),
 never in a public issue or discussion. Everyone taking part is expected to
 follow the [Code of Conduct](CODE_OF_CONDUCT.md).
+
+## Translations
+
+User-facing text lives in `apps/web/messages/en.json`; never hard-code text in components. Add English messages there and use `useTranslations` or `getTranslations`. Other languages are translated in Crowdin, so do not edit `es`, `pt-BR`, `de`, `fr`, or `nl-NL` files by hand except to fix a mistake. See [docs/localization.md](docs/localization.md) for the Crowdin workflow and the checks to run.

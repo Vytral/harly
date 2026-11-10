@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
+import { useLocale, useTranslations } from "next-intl";
 
 import {
   interviewModeLabel,
@@ -43,7 +44,7 @@ const MODE_TONE: Record<InterviewMode, string> = {
 };
 
 const MAX_VISIBLE_PER_DAY = 3;
-const WEEKDAY_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+const WEEKDAY_KEYS = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"] as const;
 
 type FilterOption = { value: string; label: string };
 
@@ -77,6 +78,9 @@ export function CalendarBoard({
   jobOptions: FilterOption[];
   interviewerOptions: FilterOption[];
 }) {
+  const t = useTranslations("features.interviews.calendarBoard");
+  const ilt = useTranslations("labels.interviews");
+  const locale = useLocale();
   const router = useRouter();
   const shouldReduceMotion = useReducedMotion();
   const [jobFilter, setJobFilter] = useState("all");
@@ -150,45 +154,45 @@ export function CalendarBoard({
   const selectedDayHeading = useMemo(() => {
     if (!selectedDay) return "";
     const [y, m, d] = selectedDay.split("-").map(Number);
-    return new Date(y, m, d).toLocaleDateString("en", {
+    return new Date(y, m, d).toLocaleDateString(locale, {
       weekday: "long",
       month: "long",
       day: "numeric",
     });
-  }, [selectedDay]);
+  }, [selectedDay, locale]);
 
   return (
     <div className="space-y-4">
       <header className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex flex-wrap items-center gap-2">
           <FilterPill
-            label="Job"
+            label={t("filters.job")}
             value={jobFilter}
             onChange={setJobFilter}
             options={jobOptions.map((o) => o.value)}
-            labelMap={{ all: "All", ...Object.fromEntries(jobOptions.map((o) => [o.value, o.label])) }}
+            labelMap={{ all: t("filters.all"), ...Object.fromEntries(jobOptions.map((o) => [o.value, o.label])) }}
             allValue="all"
           />
           <FilterPill
-            label="Interviewer"
+            label={t("filters.interviewer")}
             value={interviewerFilter}
             onChange={setInterviewerFilter}
             options={interviewerOptions.map((o) => o.value)}
-            labelMap={{ all: "All", ...Object.fromEntries(interviewerOptions.map((o) => [o.value, o.label])) }}
+            labelMap={{ all: t("filters.all"), ...Object.fromEntries(interviewerOptions.map((o) => [o.value, o.label])) }}
             allValue="all"
           />
           <FilterPill
-            label="Type"
+            label={t("filters.type")}
             value={typeFilter}
             onChange={setTypeFilter}
             options={["all", "screening", "culture_fit", "technical", "onsite", "final"]}
             labelMap={{
-              all: "All",
-              screening: "Screening",
-              culture_fit: "Culture fit",
-              technical: "Technical",
-              onsite: "Onsite",
-              final: "Final round",
+              all: t("filters.all"),
+              screening: t("types.screening"),
+              culture_fit: t("types.cultureFit"),
+              technical: t("types.technical"),
+              onsite: t("types.onsite"),
+              final: t("types.finalRound"),
             }}
             allValue="all"
           />
@@ -202,7 +206,7 @@ export function CalendarBoard({
               }}
               className="rounded-full px-2 py-1 text-[13px] font-medium text-soft-ink transition-colors hover:text-near-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-near-ink"
             >
-              Clear filters
+              {t("filters.clear")}
             </button>
           ) : null}
         </div>
@@ -211,7 +215,7 @@ export function CalendarBoard({
             type="button"
             onClick={() => goToMonth(-1)}
             className="inline-flex size-9 items-center justify-center rounded-full bg-soft-kraft text-near-ink transition-colors hover:bg-row-wash focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-near-ink active:scale-[0.97]"
-            aria-label="Previous month"
+            aria-label={t("previousMonth")}
           >
             <CaretLeftIcon className="size-4" />
           </button>
@@ -226,7 +230,7 @@ export function CalendarBoard({
             type="button"
             onClick={() => goToMonth(1)}
             className="inline-flex size-9 items-center justify-center rounded-full bg-soft-kraft text-near-ink transition-colors hover:bg-row-wash focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-near-ink active:scale-[0.97]"
-            aria-label="Next month"
+            aria-label={t("nextMonth")}
           >
             <CaretRightIcon className="size-4" />
           </button>
@@ -234,8 +238,9 @@ export function CalendarBoard({
       </header>
 
       <p className="text-[13px] text-soft-ink">
-        {filtered.length} interview{filtered.length === 1 ? "" : "s"} this
-        month{hasAnyFilter ? " (filtered)" : ""}.
+        {hasAnyFilter
+          ? t("summaryFiltered", { count: filtered.length })
+          : t("summary", { count: filtered.length })}
       </p>
 
       {/* Mobile: agenda list grouped by day (7-col grid is unreadable under sm) */}
@@ -246,7 +251,7 @@ export function CalendarBoard({
               .sort(([a], [b]) => (a > b ? 1 : -1))
               .map(([key, dayInterviews]) => {
                 const [y, m, d] = key.split("-").map(Number);
-                const heading = new Date(y, m, d).toLocaleDateString("en", {
+                const heading = new Date(y, m, d).toLocaleDateString(locale, {
                   weekday: "short",
                   month: "short",
                   day: "numeric",
@@ -267,7 +272,7 @@ export function CalendarBoard({
                           >
                             <span className="w-14 shrink-0 text-xs font-medium tabular-nums text-soft-ink">
                               {new Date(iv.scheduledAt).toLocaleTimeString(
-                                "en",
+                                locale,
                                 {
                                   hour: "numeric",
                                   minute: "2-digit",
@@ -287,7 +292,7 @@ export function CalendarBoard({
                                 {iv.candidateName}
                               </span>
                               <span className="block truncate text-xs text-soft-ink">
-                                {interviewTypeLabel(iv.type)} · {iv.jobTitle}
+                                {interviewTypeLabel(iv.type, ilt)} · {iv.jobTitle}
                               </span>
                             </span>
                           </Link>
@@ -312,19 +317,19 @@ export function CalendarBoard({
             className="grid grid-cols-7 border-b border-hairline"
             aria-hidden="true"
           >
-            {WEEKDAY_LABELS.map((d) => (
+            {WEEKDAY_KEYS.map((d) => (
               <div
                 key={d}
                 className="px-2 py-3 text-center text-[11px] font-medium uppercase tracking-wide text-soft-ink"
               >
-                {d}
+                {t(`weekdays.${d}`)}
               </div>
             ))}
           </div>
           <div
             className="grid grid-cols-7"
             role="grid"
-            aria-label={`Interview calendar for ${monthLabel}`}
+            aria-label={t("gridLabel", { month: monthLabel })}
           >
             {grid.map((date) => {
               const key = dayKey(date);
@@ -333,7 +338,7 @@ export function CalendarBoard({
               const isToday = key === today;
               const visible = dayInterviews.slice(0, MAX_VISIBLE_PER_DAY);
               const overflow = dayInterviews.length - visible.length;
-              const dateLabel = date.toLocaleDateString("en", {
+              const dateLabel = date.toLocaleDateString(locale, {
                 weekday: "long",
                 month: "long",
                 day: "numeric",
@@ -344,11 +349,11 @@ export function CalendarBoard({
                   key={key}
                   type="button"
                   role="gridcell"
-                  aria-label={
-                    dayInterviews.length > 0
-                      ? `${dateLabel}, ${dayInterviews.length} interview${dayInterviews.length === 1 ? "" : "s"}${isToday ? ", today" : ""}`
-                      : `${dateLabel}, no interviews${isToday ? ", today" : ""}`
-                  }
+                  aria-label={t("dayLabel", {
+                    date: dateLabel,
+                    count: dayInterviews.length,
+                    today: isToday ? "true" : "false",
+                  })}
                   aria-selected={selectedDay === key}
                   onClick={() =>
                     setSelectedDay(selectedDay === key ? null : key)
@@ -386,7 +391,7 @@ export function CalendarBoard({
                         >
                           <ModeIcon className="size-3 shrink-0" />
                           <span className="truncate">
-                            {new Date(iv.scheduledAt).toLocaleTimeString("en", {
+                            {new Date(iv.scheduledAt).toLocaleTimeString(locale, {
                               hour: "numeric",
                               minute: "2-digit",
                             })}{" "}
@@ -397,7 +402,7 @@ export function CalendarBoard({
                     })}
                     {overflow > 0 ? (
                       <span className="px-1.5 text-[11px] font-medium text-soft-ink">
-                        +{overflow} more
+                        {t("overflow", { count: overflow })}
                       </span>
                     ) : null}
                   </div>
@@ -428,13 +433,13 @@ export function CalendarBoard({
                     onClick={() => setSelectedDay(null)}
                     className="text-xs font-medium text-soft-ink hover:text-near-ink"
                   >
-                    Close
+                    {t("close")}
                   </button>
                 </div>
                 <div className="space-y-1.5">
                   {selectedDayInterviews.length === 0 ? (
                     <p className="py-2 text-sm text-soft-ink">
-                      No interviews on this day. Schedule an interview from a candidate&apos;s profile.
+                      {t("noInterviewsOnDay")}
                     </p>
                   ) : null}
                   {selectedDayInterviews.map((iv) => {
@@ -459,7 +464,7 @@ export function CalendarBoard({
                           >
                             <span className="w-16 shrink-0 text-xs font-medium tabular-nums text-soft-ink">
                               {new Date(iv.scheduledAt).toLocaleTimeString(
-                                "en",
+                                locale,
                                 {
                                   hour: "numeric",
                                   minute: "2-digit",
@@ -479,8 +484,8 @@ export function CalendarBoard({
                                 {iv.title || iv.candidateName}
                               </span>
                               <span className="block truncate text-xs text-soft-ink">
-                                {interviewTypeLabel(iv.type)} · {iv.jobTitle} ·{" "}
-                                {interviewModeLabel(iv.mode)}
+                                {interviewTypeLabel(iv.type, ilt)} · {iv.jobTitle} ·{" "}
+                                {interviewModeLabel(iv.mode, ilt)}
                               </span>
                             </span>
                             {iv.interviewerName ? (
@@ -492,13 +497,13 @@ export function CalendarBoard({
                               />
                             ) : null}
                             <Badge variant="neutral" className="shrink-0">
-                              {iv.durationMins}m
+                              {t("duration", { minutes: iv.durationMins })}
                             </Badge>
                           </button>
                           <Link
                             href={`/dashboard/candidates/${iv.candidateId}`}
                             className="shrink-0 text-soft-ink transition-colors hover:text-near-ink"
-                            title="Open candidate"
+                            title={t("openCandidate")}
                           >
                             <ArrowUpRightIcon className="size-4" />
                           </Link>
@@ -527,7 +532,7 @@ export function CalendarBoard({
                                   </span>{" "}
                                   ·{" "}
                                   {new Date(iv.scheduledAt).toLocaleDateString(
-                                    "en",
+                                    locale,
                                     {
                                       weekday: "short",
                                       month: "short",
@@ -572,7 +577,7 @@ export function CalendarBoard({
                                     }}
                                     className="inline-flex items-center gap-1 text-near-ink/80 transition-colors hover:text-near-ink"
                                   >
-                                    View in Google Calendar
+                                    {t("viewInGoogleCalendar")}
                                     <ArrowUpRightIcon className="size-3" />
                                   </button>
                                 ) : null}
@@ -594,11 +599,11 @@ export function CalendarBoard({
         <Card>
           <CardContent className="flex flex-col items-center gap-2 py-12 text-center">
             <CalendarIcon className="size-8 text-quiet-mist" />
-            <p className="text-sm font-medium">No interviews this month</p>
+            <p className="text-sm font-medium">{t("emptyTitle")}</p>
             <p className="max-w-sm text-sm text-soft-ink">
               {hasAnyFilter
-                ? "Try clearing a filter, or schedule one from a candidate's profile."
-                : "Schedule an interview from a candidate's profile to see it here."}
+                ? t("emptyFilteredDescription")
+                : t("emptyDescription")}
             </p>
           </CardContent>
         </Card>

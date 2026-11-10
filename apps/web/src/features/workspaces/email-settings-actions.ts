@@ -4,6 +4,7 @@ import { createElement } from "react";
 
 import { revalidatePath } from "next/cache";
 import { eq } from "drizzle-orm";
+import { getTranslations } from "@/i18n/server";
 import { z } from "zod";
 
 import { db, workspaceSettings } from "@harly/db";
@@ -25,56 +26,71 @@ import { assertNotDemo } from "@/features/demo/assert-not-demo";
 
 export type EmailSettingsActionResult = { ok: boolean; error?: string };
 
-const baseSchema = z.object({
-  provider: z.enum(["resend", "smtp"]),
-  from: z.string().trim().min(1, "Enter a from address.").max(200),
-  // Optional: when blank, the previously stored secret is kept.
-  apiKey: z.string().trim().max(500).optional(),
-  smtpHost: z
-    .string()
-    .trim()
-    .max(255)
-    .optional()
-    .transform((value) => (value && value.length > 0 ? value : undefined)),
-  smtpPort: z
-    .union([z.coerce.number().int().min(1).max(65535), z.literal("")])
-    .optional()
-    .transform((value) => (value === "" || value === undefined ? null : value)),
-  smtpSecure: z.boolean().optional(),
-  smtpUser: z
-    .string()
-    .trim()
-    .max(255)
-    .optional()
-    .transform((value) => (value && value.length > 0 ? value : undefined)),
-});
+type Translate = (key: string, values?: Record<string, string | number>) => string;
 
-function refineSmtpFields(
-  value: z.infer<typeof baseSchema>,
-  ctx: z.RefinementCtx,
-) {
-  if (value.provider !== "smtp") return;
+function buildEmailSchemas(t: Translate) {
+  const baseSchema = z.object({
+    provider: z.enum(["resend", "smtp"]),
+    from: z.string().trim().min(1, t("fromRequired")).max(200),
+    // Optional: when blank, the previously stored secret is kept.
+    apiKey: z.string().trim().max(500).optional(),
+    smtpHost: z
+      .string()
+      .trim()
+      .max(255)
+      .optional()
+      .transform((value) => (value && value.length > 0 ? value : undefined)),
+    smtpPort: z
+      .union([z.coerce.number().int().min(1).max(65535), z.literal("")])
+      .optional()
+      .transform((value) => (value === "" || value === undefined ? null : value)),
+    smtpSecure: z.boolean().optional(),
+    smtpUser: z
+      .string()
+      .trim()
+      .max(255)
+      .optional()
+      .transform((value) => (value && value.length > 0 ? value : undefined)),
+  });
 
-  if (!value.smtpHost) {
-    ctx.addIssue({
-      code: "custom",
-      message: "Enter an SMTP host.",
-      path: ["smtpHost"],
-    });
+  function refineSmtpFields(
+    value: z.infer<typeof baseSchema>,
+    ctx: z.RefinementCtx,
+  ) {
+    if (value.provider !== "smtp") return;
+
+    if (!value.smtpHost) {
+      ctx.addIssue({
+        code: "custom",
+        message: t("smtpHostRequired"),
+        path: ["smtpHost"],
+      });
+    }
+    if (value.smtpPort === null) {
+      ctx.addIssue({
+        code: "custom",
+        message: t("smtpPortRequired"),
+        path: ["smtpPort"],
+      });
+    }
   }
-  if (value.smtpPort === null) {
-    ctx.addIssue({
-      code: "custom",
-      message: "Enter an SMTP port.",
-      path: ["smtpPort"],
-    });
-  }
+
+  const saveSchema = baseSchema
+    .extend({ enabled: z.boolean() })
+    .superRefine(refineSmtpFields);
+  const testSchema = baseSchema.superRefine(refineSmtpFields);
+
+  const inboundSchema = z.object({
+    provider: z.enum(["resend", "postmark"]),
+    replyDomain: z.string().trim().min(1, t("replyDomainRequired")).max(200),
+    // Optional: when blank, the previously stored secret is kept.
+    webhookSecret: z.string().trim().max(500).optional(),
+    // Resend only. Optional: when blank, the previously stored key is kept.
+    resendApiKey: z.string().trim().max(500).optional(),
+  });
+
+  return { saveSchema, testSchema, inboundSchema };
 }
-
-const saveSchema = baseSchema
-  .extend({ enabled: z.boolean() })
-  .superRefine(refineSmtpFields);
-const testSchema = baseSchema.superRefine(refineSmtpFields);
 
 export async function saveEmailSettingsAction(input: {
   enabled: boolean;
@@ -88,20 +104,20 @@ export async function saveEmailSettingsAction(input: {
 }): Promise<EmailSettingsActionResult> {
   assertNotDemo();
   const context = await requirePermission("integrations:manage");
+  const t = await getTranslations("server.workspaces.emailSettingsActions");
 
   if (!isEncryptionConfigured()) {
     return {
       ok: false,
-      error:
-        "Server is missing AI_ENCRYPTION_KEY. Set it to store email credentials.",
+      error: t("encryptionNotConfiguredEmail"),
     };
   }
 
-  const parsed = saveSchema.safeParse(input);
+  const parsed = buildEmailSchemas(t).saveSchema.safeParse(input);
   if (!parsed.success) {
     return {
       ok: false,
-      error: parsed.error.issues[0]?.message ?? "Invalid settings.",
+      error: parsed.error.issues[0]?.message ?? t("invalidSettings"),
     };
   }
 
@@ -110,7 +126,7 @@ export async function saveEmailSettingsAction(input: {
 
   const status = await getWorkspaceEmailStatus(context.organization.id);
   if (enabled && provider === "resend" && !apiKey && !status.hasSecret) {
-    return { ok: false, error: "Add a Resend API key before enabling." };
+    return { ok: false, error: t("resendKeyRequired") };
   }
 
   const encrypted = apiKey ? encryptSecret(apiKey) : null;
@@ -158,15 +174,6 @@ export async function disableEmailAction(): Promise<EmailSettingsActionResult> {
   return { ok: true };
 }
 
-const inboundSchema = z.object({
-  provider: z.enum(["resend", "postmark"]),
-  replyDomain: z.string().trim().min(1, "Enter a reply domain.").max(200),
-  // Optional: when blank, the previously stored secret is kept.
-  webhookSecret: z.string().trim().max(500).optional(),
-  // Resend only. Optional: when blank, the previously stored key is kept.
-  resendApiKey: z.string().trim().max(500).optional(),
-});
-
 export async function saveInboundEmailSettingsAction(input: {
   enabled: boolean;
   provider: "resend" | "postmark";
@@ -176,16 +183,17 @@ export async function saveInboundEmailSettingsAction(input: {
 }): Promise<EmailSettingsActionResult> {
   assertNotDemo();
   const context = await requirePermission("integrations:manage");
+  const t = await getTranslations("server.workspaces.emailSettingsActions");
 
   if (input.enabled && !isEncryptionConfigured()) {
-    return { ok: false, error: "Server is missing AI_ENCRYPTION_KEY." };
+    return { ok: false, error: t("encryptionKeyMissing") };
   }
 
-  const parsed = inboundSchema.safeParse(input);
+  const parsed = buildEmailSchemas(t).inboundSchema.safeParse(input);
   if (!parsed.success) {
     return {
       ok: false,
-      error: parsed.error.issues[0]?.message ?? "Invalid settings.",
+      error: parsed.error.issues[0]?.message ?? t("invalidSettings"),
     };
   }
 
@@ -193,13 +201,13 @@ export async function saveInboundEmailSettingsAction(input: {
   if (enabled && !normalizeInboundReplyDomain(replyDomain)) {
     return {
       ok: false,
-      error: "Enter a valid reply domain, for example replies.example.com.",
+      error: t("invalidReplyDomain"),
     };
   }
   const status = await getWorkspaceInboundEmailStatus(context.organization.id);
 
   if (enabled && !webhookSecret && !status.hasWebhookSecret) {
-    return { ok: false, error: "Add a webhook secret before enabling." };
+    return { ok: false, error: t("webhookSecretRequired") };
   }
   if (
     enabled &&
@@ -207,7 +215,7 @@ export async function saveInboundEmailSettingsAction(input: {
     !resendApiKey &&
     !status.hasResendApiKey
   ) {
-    return { ok: false, error: "Add a Resend API key before enabling." };
+    return { ok: false, error: t("resendKeyRequired") };
   }
 
   const resendKeyColumns =
@@ -274,16 +282,17 @@ export async function sendTestEmailAction(input: {
 }): Promise<EmailSettingsActionResult> {
   assertNotDemo();
   const context = await requirePermission("integrations:manage");
+  const t = await getTranslations("server.workspaces.emailSettingsActions");
 
   if (!isEncryptionConfigured()) {
-    return { ok: false, error: "Server is missing AI_ENCRYPTION_KEY." };
+    return { ok: false, error: t("encryptionKeyMissing") };
   }
 
-  const parsed = testSchema.safeParse(input);
+  const parsed = buildEmailSchemas(t).testSchema.safeParse(input);
   if (!parsed.success) {
     return {
       ok: false,
-      error: parsed.error.issues[0]?.message ?? "Invalid settings.",
+      error: parsed.error.issues[0]?.message ?? t("invalidSettings"),
     };
   }
 
@@ -296,14 +305,14 @@ export async function sendTestEmailAction(input: {
     if (!key) {
       const stored = await getWorkspaceEmailConfig(context.organization.id);
       if (!stored || stored.provider !== "resend") {
-        return { ok: false, error: "Enter an API key to test." };
+        return { ok: false, error: t("enterApiKeyToTest") };
       }
       key = stored.apiKey;
     }
     config = { provider: "resend", apiKey: key, from };
   } else {
     if (!smtpHost || !smtpPort) {
-      return { ok: false, error: "Enter an SMTP host and port to test." };
+      return { ok: false, error: t("enterSmtpHostAndPortToTest") };
     }
 
     let pass = apiKey;
@@ -327,7 +336,7 @@ export async function sendTestEmailAction(input: {
 
   const sender = createEmailSender(config);
   if (!sender) {
-    return { ok: false, error: "Could not create a sender from these settings." };
+    return { ok: false, error: t("couldNotCreateSender") };
   }
 
   try {
@@ -338,16 +347,16 @@ export async function sendTestEmailAction(input: {
 
     await sender.send({
       to: context.user.email,
-      subject: "Harly test email",
+      subject: t("testEmailSubject"),
       react: createElement(
         "div",
         { style: { fontFamily: "sans-serif", fontSize: 14, lineHeight: 1.6 } },
         createElement(
           "p",
           null,
-          `This is a test email from ${context.organization.name} via Harly.`,
+          t("testEmailBody", { organization: context.organization.name }),
         ),
-        createElement("p", null, "If you received this, your email settings are working."),
+        createElement("p", null, t("testEmailConfirmation")),
       ),
     });
     return { ok: true };
@@ -356,7 +365,9 @@ export async function sendTestEmailAction(input: {
     return {
       ok: false,
       error:
-        error instanceof Error ? `Test failed: ${error.message}` : "Test failed.",
+        error instanceof Error
+          ? t("testFailedWithReason", { reason: error.message })
+          : t("testFailed"),
     };
   }
 }

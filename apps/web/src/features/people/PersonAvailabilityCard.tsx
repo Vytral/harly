@@ -1,18 +1,20 @@
 
+import { getTranslations } from "next-intl/server";
+
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import type { WeeklyAvailability } from "@harly/db";
 
-const DAY_LABELS: Record<keyof WeeklyAvailability, string> = {
-  monday: "Mon",
-  tuesday: "Tue",
-  wednesday: "Wed",
-  thursday: "Thu",
-  friday: "Fri",
-  saturday: "Sat",
-  sunday: "Sun",
-};
+const DAYS: (keyof WeeklyAvailability)[] = [
+  "monday",
+  "tuesday",
+  "wednesday",
+  "thursday",
+  "friday",
+  "saturday",
+  "sunday",
+];
 
-export function PersonAvailabilityCard({
+export async function PersonAvailabilityCard({
   timezone,
   weeklyAvailability,
   capacityHoursPerWeek,
@@ -29,27 +31,31 @@ export function PersonAvailabilityCard({
     return null;
   }
 
+  const t = await getTranslations("features.people.personAvailabilityCard");
+
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Availability</CardTitle>
+        <CardTitle>{t("title")}</CardTitle>
       </CardHeader>
       <CardContent className="space-y-3 text-sm">
         {timezone && (
           <div className="flex items-center justify-between">
-            <span className="text-soft-ink">Timezone</span>
+            <span className="text-soft-ink">{t("timezone")}</span>
             <span className="font-medium">{timezone}</span>
           </div>
         )}
         {capacityHoursPerWeek != null && (
           <div className="flex items-center justify-between">
-            <span className="text-soft-ink">Capacity</span>
-            <span className="font-medium">{capacityHoursPerWeek} hrs/week</span>
+            <span className="text-soft-ink">{t("capacity")}</span>
+            <span className="font-medium">
+              {t("hoursPerWeek", { hours: capacityHoursPerWeek })}
+            </span>
           </div>
         )}
         {hasAvailability && (
           <div className="space-y-1.5 border-t border-hairline pt-3">
-            {(Object.keys(DAY_LABELS) as (keyof WeeklyAvailability)[]).map(
+            {DAYS.map(
               (day) => {
                 const ranges = weeklyAvailability?.[day] ?? [];
                 if (ranges.length === 0) return null;
@@ -59,7 +65,7 @@ export function PersonAvailabilityCard({
                     className="flex items-center justify-between gap-2"
                   >
                     <span className="text-soft-ink">
-                      {DAY_LABELS[day]}
+                      {t(`days.${day}`)}
                     </span>
                     <span className="font-medium tabular-nums">
                       {ranges.map((r) => `${r.start}–${r.end}`).join(", ")}

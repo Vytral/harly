@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { and, eq, isNull } from "drizzle-orm";
 import { z } from "zod";
+import { getTranslations } from "@/i18n/server";
 
 import { db, candidateReferrals, candidates, member as authMembers } from "@harly/db";
 
@@ -45,6 +46,13 @@ async function assertActiveWorkspaceMember(workspaceId: string, userId: string) 
   return Boolean(member);
 }
 
+/** Zod messages are i18n ids; anything else passes through unchanged. */
+async function issueMessage(message: string | undefined, fallbackId: string) {
+  const t = await getTranslations("server.candidates.validation");
+  if (!message) return t(fallbackId);
+  return t.has(message) ? t(message) : message;
+}
+
 /**
  * "Isabella recommends this candidate" for a candidate already in the
  * system. Base gate is collab:write (broader than candidates:edit — a
@@ -54,18 +62,19 @@ async function assertActiveWorkspaceMember(workspaceId: string, userId: string) 
 export async function referCandidate(
   input: z.infer<typeof referCandidateSchema>,
 ): Promise<{ success: boolean; error?: string }> {
+  const t = await getTranslations("server.candidates.referrals");
   try {
     const parsed = referCandidateSchema.safeParse(input);
     if (!parsed.success) {
       return {
         success: false,
-        error: parsed.error.issues[0]?.message ?? "Invalid referral.",
+        error: await issueMessage(parsed.error.issues[0]?.message, "invalidReferral"),
       };
     }
 
     const { organization: workspace, user } = await getWorkspaceContext();
     if (workspace.id !== parsed.data.workspaceId) {
-      return { success: false, error: "Workspace access denied." };
+      return { success: false, error: t("workspaceAccessDenied") };
     }
 
     await requirePermission("collab:write");
@@ -76,7 +85,7 @@ export async function referCandidate(
       if (!(await assertActiveWorkspaceMember(workspace.id, referredById))) {
         return {
           success: false,
-          error: "Referrer is not an active member of this workspace.",
+          error: t("referrerNotActive"),
         };
       }
     }
@@ -99,7 +108,7 @@ export async function referCandidate(
       )
       .limit(1);
     if (!candidate) {
-      return { success: false, error: "Candidate not found." };
+      return { success: false, error: t("candidateNotFound") };
     }
 
     const result = await db.transaction((tx) =>
@@ -117,7 +126,7 @@ export async function referCandidate(
     if ("duplicate" in result) {
       return {
         success: false,
-        error: "This person has already referred this candidate for this role.",
+        error: t("alreadyReferred"),
       };
     }
 
@@ -144,7 +153,7 @@ export async function referCandidate(
     return { success: true };
   } catch (error) {
     console.error("Failed to refer candidate", error);
-    return { success: false, error: "Unable to refer candidate." };
+    return { success: false, error: t("unableToReferCandidate") };
   }
 }
 
@@ -162,10 +171,11 @@ const toggleFeaturedSchema = z.object({
 export async function toggleReferralFeatured(
   input: z.infer<typeof toggleFeaturedSchema>,
 ): Promise<{ success: boolean; error?: string }> {
+  const t = await getTranslations("server.candidates.referrals");
   try {
     const parsed = toggleFeaturedSchema.safeParse(input);
     if (!parsed.success) {
-      return { success: false, error: "Invalid request." };
+      return { success: false, error: t("invalidRequest") };
     }
 
     const { organization: workspace, user } = await getWorkspaceContext();
@@ -182,7 +192,7 @@ export async function toggleReferralFeatured(
       )
       .limit(1);
     if (!referral) {
-      return { success: false, error: "Referral not found." };
+      return { success: false, error: t("referralNotFound") };
     }
 
     if (referral.jobId) {
@@ -219,7 +229,7 @@ export async function toggleReferralFeatured(
     return { success: true };
   } catch (error) {
     console.error("Failed to toggle referral featured", error);
-    return { success: false, error: "Unable to update referral." };
+    return { success: false, error: t("unableToUpdateReferral") };
   }
 }
 
@@ -235,10 +245,11 @@ const deleteReferralSchema = z.object({
 export async function deleteReferral(
   input: z.infer<typeof deleteReferralSchema>,
 ): Promise<{ success: boolean; error?: string }> {
+  const t = await getTranslations("server.candidates.referrals");
   try {
     const parsed = deleteReferralSchema.safeParse(input);
     if (!parsed.success) {
-      return { success: false, error: "Invalid request." };
+      return { success: false, error: t("invalidRequest") };
     }
 
     const { organization: workspace, user } = await getWorkspaceContext();
@@ -255,7 +266,7 @@ export async function deleteReferral(
       )
       .limit(1);
     if (!referral) {
-      return { success: false, error: "Referral not found." };
+      return { success: false, error: t("referralNotFound") };
     }
 
     const isOwnReferral = referral.createdById === user.id;
@@ -303,6 +314,6 @@ export async function deleteReferral(
     return { success: true };
   } catch (error) {
     console.error("Failed to delete referral", error);
-    return { success: false, error: "Unable to delete referral." };
+    return { success: false, error: t("unableToDeleteReferral") };
   }
 }

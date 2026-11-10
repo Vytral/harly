@@ -1,4 +1,8 @@
+import { useLocale, useTranslations } from "next-intl";
+
 import type { CandidateEducationEntry, ResumeEducationItem } from "@harly/db";
+
+type Translator = ReturnType<typeof useTranslations>;
 
 function isStructuredEntry(
   item: ResumeEducationItem | CandidateEducationEntry,
@@ -6,25 +10,25 @@ function isStructuredEntry(
   return "id" in item;
 }
 
-function formatMonth(value: string | null | undefined) {
+function formatMonth(value: string | null | undefined, locale: string) {
   if (!value) return null;
   const [year, month] = value.split("-");
   if (!year || !month) return value;
   const date = new Date(Number(year), Number(month) - 1, 1);
   if (Number.isNaN(date.getTime())) return value;
-  return new Intl.DateTimeFormat("en", {
+  return new Intl.DateTimeFormat(locale, {
     month: "short",
     year: "numeric",
   }).format(date);
 }
 
-function formatDateRange(item: CandidateEducationEntry) {
-  const start = formatMonth(item.startDate);
-  const end = formatMonth(item.endDate);
-  if (start && end) return `${start} - ${end}`;
-  if (start) return `${start} - Not set`;
+function formatDateRange(item: CandidateEducationEntry, locale: string, t: Translator) {
+  const start = formatMonth(item.startDate, locale);
+  const end = formatMonth(item.endDate, locale);
+  if (start && end) return t("range", { start, end });
+  if (start) return t("startOnly", { start });
   if (end) return end;
-  return "Not set";
+  return t("notSet");
 }
 
 /**
@@ -39,6 +43,8 @@ export function EducationList({
   education: Array<ResumeEducationItem | CandidateEducationEntry>;
   fallback: string | null;
 }) {
+  const t = useTranslations("features.candidates.educationList");
+  const locale = useLocale();
   if (education.length === 0 && !fallback) return null;
 
   return (
@@ -50,11 +56,11 @@ export function EducationList({
             className="grid gap-2 sm:grid-cols-[8rem_minmax(0,1fr)]"
           >
             <div className="text-sm text-muted-foreground">
-              {isStructuredEntry(item) ? formatDateRange(item) : item.dateRange ?? "Not set"}
+              {isStructuredEntry(item) ? formatDateRange(item, locale, t) : item.dateRange ?? t("notSet")}
             </div>
             <div>
               <p className="font-medium">
-                {[item.degree, item.field].filter(Boolean).join(" · ") || "Education"}
+                {[item.degree, item.field].filter(Boolean).join(" · ") || t("fallbackTitle")}
               </p>
               <p className="mt-0.5 text-sm text-muted-foreground">{item.school}</p>
               {isStructuredEntry(item) && item.description ? (

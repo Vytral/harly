@@ -1,41 +1,44 @@
 import { Button, Hr, Section, Text } from "@react-email/components";
 
+import { emailTranslator } from "../i18n";
 import { HarlyLayout } from "./HarlyLayout";
 import { EmailFallbackLink } from "./EmailFallbackLink";
 
 export type PortalPasswordResetEmailProps = {
   candidateName?: string;
   loginUrl: string;
+  locale?: string | null;
 };
 
-export function portalPasswordResetSubject() {
-  return "Reset your portal password";
+export function portalPasswordResetSubject(locale?: string | null) {
+  return emailTranslator(locale)("portalReset.subject");
 }
 
-export function PortalPasswordResetEmail({ candidateName, loginUrl }: PortalPasswordResetEmailProps) {
+export function PortalPasswordResetEmail({ candidateName, loginUrl, locale }: PortalPasswordResetEmailProps) {
+  const t = emailTranslator(locale);
   return (
-    <HarlyLayout preview="Reset your portal password — the link expires in 1 hour.">
+    <HarlyLayout preview={t("portalReset.preview")} locale={locale}>
       <Text className="text-[40px] leading-[1.05] tracking-[-1px] font-inter text-fg m-0 mb-3.5 font-medium">
-        Reset your password
+        {t("portalReset.heading")}
       </Text>
       {candidateName ? (
-        <Text className="text-[14px] leading-[1.5] font-inter text-fg-2 m-0 mb-4">Hi {candidateName},</Text>
+        <Text className="text-[14px] leading-[1.5] font-inter text-fg-2 m-0 mb-4">{t("common.greeting", { name: candidateName })}</Text>
       ) : null}
       <Text className="text-[14px] leading-[1.5] font-inter text-fg-2 m-0 mb-4">
-        Click below to choose a new password. This link works once and expires in 1 hour.
+        {t("portalReset.body")}
       </Text>
       <Section className="mt-3">
         <Button
           href={loginUrl}
           className="bg-brand text-[14px] leading-[1.5] font-inter text-fg-inverted inline-block border-none px-4 py-2.5 text-center box-border no-underline"
         >
-          Reset password
+          {t("portalReset.button")}
         </Button>
-        <EmailFallbackLink url={loginUrl} />
+        <EmailFallbackLink url={loginUrl} locale={locale} />
       </Section>
       <Hr className="border-stroke border-t my-7" />
       <Text className="text-[13px] leading-[1.5] tracking-[-0.039px] font-inter text-fg-3 m-0">
-        Didn&apos;t request this? You can safely ignore it. Your password has not changed.
+        {t("portalReset.notice")}
       </Text>
     </HarlyLayout>
   );

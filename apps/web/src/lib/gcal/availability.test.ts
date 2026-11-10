@@ -34,6 +34,8 @@ vi.mock("@/lib/gcal/client", () => ({
 
 import { checkAvailability } from "./availability";
 
+vi.mock("next-intl/server", async () => (await import("@/test-support/intl-server-mock")).intlServerMock);
+
 const timeMin = new Date("2030-06-01T09:00:00.000Z");
 const timeMax = new Date("2030-06-01T10:00:00.000Z");
 

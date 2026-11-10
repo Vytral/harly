@@ -1,6 +1,7 @@
 "use client";
 
 import { Briefcase, Calendar, Link2, User } from "lucide-react";
+import { useTranslations } from "next-intl";
 
 import { Label } from "@/components/ui/label";
 import {
@@ -52,6 +53,7 @@ export function TaskLinkFields({
   options: TaskContextOptions;
   onChange: (value: TaskLinkValues) => void;
 }) {
+  const t = useTranslations("features.tasks.taskLinkFields");
   const applications = options.applications.filter(
     (application) => !value.candidateId || application.candidateId === value.candidateId,
   );
@@ -68,12 +70,12 @@ export function TaskLinkFields({
     <div className="space-y-3 rounded-lg border border-border/60 bg-muted/20 p-3">
       <div className="flex items-center gap-2 text-[12.5px] font-medium text-soft-ink">
         <Link2 className="size-3.5" aria-hidden="true" />
-        Recruiting context
+        {t("recruitingContext")}
       </div>
 
       <div>
         <FieldLabel icon={User} htmlFor="task-candidate">
-          Candidate
+          {t("candidate")}
         </FieldLabel>
         <Select
           value={value.candidateId ?? NONE}
@@ -87,10 +89,10 @@ export function TaskLinkFields({
           }
         >
           <SelectTrigger id="task-candidate" className="w-full">
-            <SelectValue placeholder="No candidate linked" />
+            <SelectValue placeholder={t("noCandidateLinked")} />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value={NONE}>No candidate linked</SelectItem>
+            <SelectItem value={NONE}>{t("noCandidateLinked")}</SelectItem>
             {options.candidates.map((candidate) => (
               <SelectItem key={candidate.id} value={candidate.id}>
                 {candidate.firstName} {candidate.lastName}
@@ -102,7 +104,7 @@ export function TaskLinkFields({
 
       <div>
         <FieldLabel icon={Link2} htmlFor="task-application">
-          Application
+          {t("application")}
         </FieldLabel>
         <Select
           value={value.applicationId ?? NONE}
@@ -119,11 +121,11 @@ export function TaskLinkFields({
         >
           <SelectTrigger id="task-application" className="w-full">
             <SelectValue
-              placeholder={value.candidateId ? "No application linked" : "Select a candidate first"}
+              placeholder={value.candidateId ? t("noApplicationLinked") : t("selectCandidateFirst")}
             />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value={NONE}>No application linked</SelectItem>
+            <SelectItem value={NONE}>{t("noApplicationLinked")}</SelectItem>
             {applications.map((application) => (
               <SelectItem key={application.id} value={application.id}>
                 {application.jobTitle}
@@ -135,7 +137,7 @@ export function TaskLinkFields({
 
       <div>
         <FieldLabel icon={Briefcase} htmlFor="task-job">
-          Job
+          {t("job")}
         </FieldLabel>
         <Select
           value={value.jobId ?? NONE}
@@ -145,10 +147,10 @@ export function TaskLinkFields({
           }
         >
           <SelectTrigger id="task-job" className="w-full">
-            <SelectValue placeholder="No job linked" />
+            <SelectValue placeholder={t("noJobLinked")} />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value={NONE}>No job linked</SelectItem>
+            <SelectItem value={NONE}>{t("noJobLinked")}</SelectItem>
             {options.jobs.map((job) => (
               <SelectItem key={job.id} value={job.id}>
                 {job.title}
@@ -158,14 +160,14 @@ export function TaskLinkFields({
         </Select>
         {selectedApplication ? (
           <p className="mt-1 text-[11px] text-muted-foreground">
-            Derived from the selected application.
+            {t("derivedFromApplication")}
           </p>
         ) : null}
       </div>
 
       <div>
         <FieldLabel icon={Calendar} htmlFor="task-interview">
-          Interview
+          {t("interview")}
         </FieldLabel>
         <Select
           value={value.interviewId ?? NONE}
@@ -176,11 +178,11 @@ export function TaskLinkFields({
         >
           <SelectTrigger id="task-interview" className="w-full">
             <SelectValue
-              placeholder={value.candidateId ? "No interview linked" : "Select a candidate first"}
+              placeholder={value.candidateId ? t("noInterviewLinked") : t("selectCandidateFirst")}
             />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value={NONE}>No interview linked</SelectItem>
+            <SelectItem value={NONE}>{t("noInterviewLinked")}</SelectItem>
             {interviews.map((interview) => (
               <SelectItem key={interview.id} value={interview.id}>
                 {interview.label}

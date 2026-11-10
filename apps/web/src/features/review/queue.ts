@@ -58,7 +58,8 @@ export type ReviewQueueItem = {
   job: string;
   stage: string;
   stageKind: ReviewStageKind;
-  action: "Interview feedback" | "Resume review";
+  /** Stable code for the work owed; the UI resolves its label. */
+  action: "interviewFeedback" | "resumeReview";
   /** Days since the application entered its current stage. */
   ageDays: number;
 };
@@ -194,7 +195,7 @@ export async function getReviewQueue(
     job: r.jobTitle,
     stage: r.stageName,
     stageKind: r.kind,
-    action: r.kind === "interview" ? "Interview feedback" : "Resume review",
+    action: r.kind === "interview" ? "interviewFeedback" : "resumeReview",
     ageDays: r.ageDays,
   }));
 

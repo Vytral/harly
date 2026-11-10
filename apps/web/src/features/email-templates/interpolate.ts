@@ -10,30 +10,29 @@
  * hyphens (-), and dots (.).
  */
 
+/**
+ * Variables a template can use. Labels and group names live in the
+ * `labels.emailTemplates` catalog; resolve them with `labelKey` and `group`.
+ */
 export const TEMPLATE_VARIABLES = [
-  // Candidate
-  { key: "candidate_first_name", label: "Candidate first name", group: "Candidate" },
-  { key: "candidate_last_name", label: "Candidate last name", group: "Candidate" },
-  { key: "candidate_full_name", label: "Candidate full name", group: "Candidate" },
-  // Job & stage
-  { key: "job_title", label: "Job title", group: "Job" },
-  { key: "stage_name", label: "Current stage", group: "Job" },
-  // Interview
-  { key: "interview_date", label: "Interview date", group: "Interview" },
-  { key: "interview_time", label: "Interview time", group: "Interview" },
-  { key: "interview_location", label: "Interview location / link", group: "Interview" },
-  { key: "interview_duration", label: "Interview duration", group: "Interview" },
-  { key: "interviewer_name", label: "Interviewer name", group: "Interview" },
-  // Offer
-  { key: "offer_salary", label: "Offer salary", group: "Offer" },
-  { key: "offer_expiry", label: "Offer expiry date", group: "Offer" },
-  { key: "offer_start_date", label: "Offer start date", group: "Offer" },
-  { key: "offer_url", label: "Offer review link", group: "Offer" },
-  // Workspace
-  { key: "company_name", label: "Company name", group: "Workspace" },
-  { key: "portal_link", label: "Candidate portal link", group: "Workspace" },
-  { key: "booking_link", label: "Candidate booking link", group: "Workspace" },
-  { key: "sender_name", label: "Your name", group: "Workspace" },
+  { key: "candidate_first_name", labelKey: "candidateFirstName", group: "candidate" },
+  { key: "candidate_last_name", labelKey: "candidateLastName", group: "candidate" },
+  { key: "candidate_full_name", labelKey: "candidateFullName", group: "candidate" },
+  { key: "job_title", labelKey: "jobTitle", group: "job" },
+  { key: "stage_name", labelKey: "stageName", group: "job" },
+  { key: "interview_date", labelKey: "interviewDate", group: "interview" },
+  { key: "interview_time", labelKey: "interviewTime", group: "interview" },
+  { key: "interview_location", labelKey: "interviewLocation", group: "interview" },
+  { key: "interview_duration", labelKey: "interviewDuration", group: "interview" },
+  { key: "interviewer_name", labelKey: "interviewerName", group: "interview" },
+  { key: "offer_salary", labelKey: "offerSalary", group: "offer" },
+  { key: "offer_expiry", labelKey: "offerExpiry", group: "offer" },
+  { key: "offer_start_date", labelKey: "offerStartDate", group: "offer" },
+  { key: "offer_url", labelKey: "offerUrl", group: "offer" },
+  { key: "company_name", labelKey: "companyName", group: "workspace" },
+  { key: "portal_link", labelKey: "portalLink", group: "workspace" },
+  { key: "booking_link", labelKey: "bookingLink", group: "workspace" },
+  { key: "sender_name", labelKey: "senderName", group: "workspace" },
 ] as const;
 
 export type TemplateVariableKey = (typeof TEMPLATE_VARIABLES)[number]["key"];

@@ -5,6 +5,7 @@ import fontkit from "@pdf-lib/fontkit";
 import fs from "node:fs/promises";
 import path from "node:path";
 import sharp from "sharp";
+import { getTranslations } from "@/i18n/server";
 
 import {
   rebuildVectorMark,
@@ -236,7 +237,10 @@ export async function renderVectorSignaturePng(input: {
   vectorData: string;
   maxDim?: number;
 }): Promise<RenderedVectorSignature> {
-  const shaped = validateVectorSaveInput({ vectorData: input.vectorData });
+  const shaped = validateVectorSaveInput(
+    { vectorData: input.vectorData },
+    await getTranslations("server.documents.signatureVector"),
+  );
   if (!shaped.ok) throw new Error("The vector signature is invalid.");
   const maxDim = input.maxDim ?? VECTOR_BAKE_MAX_DIM;
   const mark = await rebuildVectorMark(shaped.vectorData, await serverVectorExtractor());

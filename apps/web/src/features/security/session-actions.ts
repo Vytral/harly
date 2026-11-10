@@ -1,6 +1,7 @@
 "use server";
 
 import { headers } from "next/headers";
+import { getTranslations } from "@/i18n/server";
 import { and, eq, ne } from "drizzle-orm";
 import { auth } from "@/lib/auth";
 import { db, member, session } from "@harly/db";
@@ -39,10 +40,11 @@ export async function listMySessionsAction(): Promise<SessionDevice[]> {
 }
 
 export async function revokeMySessionAction(sessionId: string) {
+  const t = await getTranslations("server.security.session");
   assertNotDemo();
   const current = await currentSession();
   const target = await db.select({ id: session.id }).from(session).where(and(eq(session.id, sessionId), eq(session.userId, current.user.id))).limit(1);
-  if (!target[0]) return { ok: false, error: "Session not found." };
+  if (!target[0]) return { ok: false, error: t("sessionNotFound") };
   await db.delete(session).where(eq(session.id, sessionId));
   const { organization } = await getWorkspaceContext();
   await logAuditEvent({ workspaceId: organization.id, actorId: current.user.id, actorEmail: current.user.email, action: "session.revoked", resourceType: "session", resourceId: sessionId, severity: "warning" });
@@ -50,12 +52,13 @@ export async function revokeMySessionAction(sessionId: string) {
 }
 
 export async function revokeMemberSessionAction(memberId: string, sessionId: string) {
+  const t = await getTranslations("server.security.session");
   assertNotDemo();
   const context = await requirePermission("security:manage");
   const [targetMember] = await db.select({ userId: member.userId }).from(member).where(and(eq(member.id, memberId), eq(member.organizationId, context.organization.id))).limit(1);
-  if (!targetMember) return { ok: false, error: "Member not found." };
+  if (!targetMember) return { ok: false, error: t("memberNotFound") };
   const [target] = await db.select({ id: session.id }).from(session).where(and(eq(session.id, sessionId), eq(session.userId, targetMember.userId))).limit(1);
-  if (!target) return { ok: false, error: "Session not found." };
+  if (!target) return { ok: false, error: t("sessionNotFound") };
   await db.delete(session).where(eq(session.id, sessionId));
   await logAuditEvent({ workspaceId: context.organization.id, actorId: context.user.id, actorEmail: context.user.email, action: "member.session_revoked", resourceType: "session", resourceId: sessionId, severity: "warning", metadata: { memberId } });
   return { ok: true };

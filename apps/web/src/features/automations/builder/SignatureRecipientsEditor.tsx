@@ -1,5 +1,7 @@
 "use client";
 
+import { useTranslations } from "next-intl";
+
 import { PlusIcon, TrashIcon } from "@/components/ui/icons/phosphor";
 import { builderFieldClass } from "./field-styles";
 
@@ -25,6 +27,7 @@ export function SignatureRecipientsEditor({
   value: unknown;
   onChange: (value: SignatureRecipientDraft[]) => void;
 }) {
+  const t = useTranslations("features.automations.signatureRecipientsEditor");
   const recipients = normalize(value);
   const emailCounts = new Map<string, number>();
   for (const recipient of recipients) {
@@ -42,9 +45,9 @@ export function SignatureRecipientsEditor({
     <div className="space-y-2 rounded-lg border border-border bg-pure-snow p-2.5">
       <div className="flex items-start justify-between gap-2">
         <div>
-          <p className="text-[11px] font-medium text-foreground">Optional explicit signers</p>
+          <p className="text-[11px] font-medium text-foreground">{t("title")}</p>
           <p className="mt-0.5 text-[11px] leading-4 text-soft-ink">
-            Signers are contacted in this order. If you do not add one, the candidate signs alone.
+            {t("description")}
           </p>
         </div>
         <button
@@ -53,13 +56,13 @@ export function SignatureRecipientsEditor({
           disabled={recipients.length >= MAX_RECIPIENTS}
           className="inline-flex shrink-0 items-center gap-1 rounded-md border border-border bg-warm-paper px-2 py-1 text-[11px] font-medium text-foreground hover:bg-soft-kraft disabled:cursor-not-allowed disabled:opacity-40"
         >
-          <PlusIcon className="size-3" /> Add signer
+          <PlusIcon className="size-3" /> {t("addSigner")}
         </button>
       </div>
 
       {recipients.length === 0 ? (
         <div className="rounded-md border border-dashed border-border px-2.5 py-2 text-[11px] text-soft-ink">
-          Candidate from the workflow trigger will be the only signer.
+          {t("emptyState")}
         </div>
       ) : null}
 
@@ -67,12 +70,12 @@ export function SignatureRecipientsEditor({
         <div key={index} className="rounded-md border border-border/70 bg-warm-paper p-2">
           <div className="mb-1.5 flex items-center justify-between gap-2">
             <span className="font-chrome text-[11px] uppercase tracking-wide text-soft-ink">
-              Signer {index + 1}
+              {t("signerNumber", { index: index + 1 })}
             </span>
             <button
               type="button"
               onClick={() => onChange(recipients.filter((_, recipientIndex) => recipientIndex !== index))}
-              aria-label={`Remove signer ${index + 1}`}
+              aria-label={t("removeSigner", { index: index + 1 })}
               className="rounded p-1 text-soft-ink hover:bg-danger-rust/10 hover:text-danger-rust"
             >
               <TrashIcon className="size-3.5" />
@@ -80,30 +83,30 @@ export function SignatureRecipientsEditor({
           </div>
           <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-2">
             <input
-              aria-label={`Signer ${index + 1} name`}
+              aria-label={t("nameLabel", { index: index + 1 })}
               value={recipient.name}
               onChange={(event) => update(index, { name: event.target.value })}
-              placeholder="Full name"
+              placeholder={t("namePlaceholder")}
               maxLength={200}
               className={builderFieldClass({ compact: true })}
             />
             <input
-              aria-label={`Signer ${index + 1} email`}
+              aria-label={t("emailLabel", { index: index + 1 })}
               type="email"
               value={recipient.email}
               onChange={(event) => update(index, { email: event.target.value })}
-              placeholder="name@company.com"
+              placeholder={t("emailPlaceholder")}
               maxLength={320}
               className={builderFieldClass({ compact: true })}
             />
           </div>
           {(!recipient.name.trim() || !/^\S+@\S+\.\S+$/.test(recipient.email.trim())) ? (
             <p className="mt-1.5 text-[10px] text-danger-rust">
-              Enter a full name and a valid email before publishing.
+              {t("invalidDetails")}
             </p>
           ) : emailCounts.get(recipient.email.trim().toLowerCase()) !== 1 ? (
             <p className="mt-1.5 text-[10px] text-danger-rust">
-              Each signer must have a different email address.
+              {t("duplicateEmail")}
             </p>
           ) : null}
         </div>

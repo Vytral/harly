@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 import type { Route } from "next";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { useLocale, useTranslations } from "next-intl";
 import { toast } from "@/lib/notification-island/toast";
 import { copyText } from "@/lib/utils";
 
@@ -66,6 +67,8 @@ export function ReplyHandlingSettingsCard({
   inboundStatus: WorkspaceInboundEmailStatus;
   canEdit: boolean;
 }) {
+  const t = useTranslations("features.workspaces.replyHandlingSettingsCard");
+  const locale = useLocale();
   const mailboxConfigured = mailboxStatus.configured;
   const inboundConfigured =
     inboundStatus.hasWebhookSecret && Boolean(inboundStatus.replyDomain);
@@ -82,13 +85,13 @@ export function ReplyHandlingSettingsCard({
     mode === "mailbox" ? mailboxStatus.enabled : inboundStatus.enabled;
 
   const badge = bothEnabled ? (
-    <StatusPill tone="warn">Choose one mode</StatusPill>
+    <StatusPill tone="warn">{t("chooseOneMode")}</StatusPill>
   ) : configured ? (
     <StatusPill tone={enabled ? "on" : "off"}>
-      {enabled ? "Connected" : "Disabled"}
+      {enabled ? t("statusConnected") : t("statusDisabled")}
     </StatusPill>
   ) : (
-    <StatusPill tone="neutral">Not connected</StatusPill>
+    <StatusPill tone="neutral">{t("statusNotConnected")}</StatusPill>
   );
 
   return (
@@ -96,22 +99,22 @@ export function ReplyHandlingSettingsCard({
       <div className="p-6">
         <SectionHeader
           icon={EnvelopeIcon}
-          title="Reply handling"
+          title={t("title")}
           badge={badge}
-          description="Choose how candidate replies return to your team: a shared mailbox or threaded replies via webhook."
+          description={t("description")}
           action={
             canEdit ? (
               mailboxStatus.encryptionReady ? (
                 <Button asChild variant={configured ? "outline" : "default"}>
                   <Link href={"/settings/email/replies" as Route}>
                     <KeyDuotoneIcon className="size-4" />
-                    {configured ? "Manage" : "Connect"}
+                    {configured ? t("manage") : t("connect")}
                   </Link>
                 </Button>
               ) : (
                 <Button variant="default" disabled>
                   <KeyDuotoneIcon className="size-4" />
-                  Connect
+                  {t("connect")}
                 </Button>
               )
             ) : null
@@ -123,29 +126,30 @@ export function ReplyHandlingSettingsCard({
         <div className="mx-6 mb-6 flex items-start gap-2 rounded-xl border border-clay/30 bg-clay/5 px-3 py-2 text-sm text-clay">
           <WarningCircleIcon className="mt-0.5 size-4 shrink-0" />
           <p>
-            Set <code className="font-mono text-xs">AI_ENCRYPTION_KEY</code> on
-            the server to store reply credentials.
+            {t.rich("encryptionKeyNotice", {
+              code: (chunks) => <code className="font-mono text-xs">{chunks}</code>,
+            })}
           </p>
         </div>
       ) : null}
 
       {configured || bothEnabled ? (
         <div className="grid grid-cols-1 divide-y border-t bg-muted/20 sm:grid-cols-3 sm:divide-x sm:divide-y-0">
-          <StatCell label="Mode">
+          <StatCell label={t("mode")}>
             {bothEnabled
-              ? "Two modes active"
+              ? t("modeBothActive")
               : mode === "mailbox"
-                ? "Shared mailbox"
-                : "Threaded replies"}
+                ? t("modeSharedMailbox")
+                : t("modeThreaded")}
           </StatCell>
-          <StatCell label={mode === "mailbox" ? "Mailbox" : "Reply domain"}>
+          <StatCell label={mode === "mailbox" ? t("mailbox") : t("replyDomain")}>
             <span className="truncate font-mono text-[13px]">
               {mode === "mailbox"
                 ? mailboxStatus.address
                 : inboundStatus.replyDomain}
             </span>
           </StatCell>
-          <StatCell label="Delivery status">
+          <StatCell label={t("deliveryStatus")}>
             {mode === "mailbox" ? (
               mailboxStatus.lastSyncedAt ? (
                 <span className="inline-flex items-center gap-1.5">
@@ -156,10 +160,12 @@ export function ReplyHandlingSettingsCard({
                         : "size-1.5 rounded-full bg-pine"
                     }
                   />
-                  Synced {formatRelative(mailboxStatus.lastSyncedAt)}
+                  {t("syncedAt", {
+                    time: formatRelative(mailboxStatus.lastSyncedAt, locale),
+                  })}
                 </span>
               ) : (
-                "Never synced"
+                t("neverSynced")
               )
             ) : inboundStatus.provider ? (
               <span className="inline-flex items-center gap-1.5">
@@ -171,7 +177,7 @@ export function ReplyHandlingSettingsCard({
                 {INBOUND_PROVIDER_LABEL[inboundStatus.provider]}
               </span>
             ) : (
-              "Not configured"
+              t("notConfigured")
             )}
           </StatCell>
         </div>
@@ -180,7 +186,7 @@ export function ReplyHandlingSettingsCard({
       {mailboxStatus.lastError && mode === "mailbox" ? (
         <div className="mx-6 mb-6 flex items-start gap-2 rounded-xl border border-clay/30 bg-clay/5 px-3 py-2 text-sm text-clay">
           <WarningCircleIcon className="mt-0.5 size-4 shrink-0" />
-          <p>Last mailbox sync error: {mailboxStatus.lastError}</p>
+          <p>{t("lastSyncError", { error: mailboxStatus.lastError })}</p>
         </div>
       ) : null}
     </Card>
@@ -200,6 +206,7 @@ export function ReplyHandlingSettingsForm({
   initialMode: ReplyMode;
   appUrl: string;
 }) {
+  const t = useTranslations("features.workspaces.replyHandlingSettingsCard");
   const router = useRouter();
   const [mode, setMode] = useState<ReplyMode>(initialMode);
   const [saving, startSave] = useTransition();
@@ -248,7 +255,7 @@ export function ReplyHandlingSettingsForm({
           enabled: mailboxEnabled,
         });
         if (!result.ok) {
-          toast.error(result.error ?? "Could not save reply handling.");
+          toast.error(result.error ?? t("saveError"));
           return;
         }
 
@@ -257,7 +264,7 @@ export function ReplyHandlingSettingsForm({
         // had both legacy settings enabled.
         const disabled = await disableInboundEmailAction();
         if (!disabled.ok) {
-          toast.error(disabled.error ?? "Could not disable threaded replies.");
+          toast.error(disabled.error ?? t("disableThreadedError"));
           return;
         }
       } else {
@@ -270,28 +277,26 @@ export function ReplyHandlingSettingsForm({
             provider === "resend" ? resendApiKey || undefined : undefined,
         });
         if (!result.ok) {
-          toast.error(result.error ?? "Could not save reply handling.");
+          toast.error(result.error ?? t("saveError"));
           return;
         }
 
         const disabled = await disableMailboxSettingsAction();
         if (!disabled.ok) {
-          toast.error(
-            disabled.error ?? "Could not disable the shared mailbox.",
-          );
+          toast.error(disabled.error ?? t("disableMailboxError"));
           return;
         }
       }
 
-      toast.success("Reply handling settings saved");
+      toast.success(t("saved"));
       router.refresh();
     });
   }
 
   return (
     <DrawerLayout
-      title="Set up incoming candidate email"
-      description="Choose how Harly receives replies. A shared mailbox lets you read and send from Inbox; threaded replies import new messages through Resend or Postmark."
+      title={t("formTitle")}
+      description={t("formDescription")}
       surface="page"
       footer={
         <Button
@@ -299,13 +304,13 @@ export function ReplyHandlingSettingsForm({
           disabled={saving || !mailboxStatus.encryptionReady}
         >
           {saving ? <SpinnerIcon className="size-4" /> : null}
-          Save changes
+          {t("saveChanges")}
         </Button>
       }
     >
       <div className="space-y-5">
         <div className="space-y-2">
-          <Label>Reply route</Label>
+          <Label>{t("routeLabel")}</Label>
           <Select
             value={mode}
             onValueChange={(value) => setMode(value as ReplyMode)}
@@ -314,15 +319,14 @@ export function ReplyHandlingSettingsForm({
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="mailbox">Shared mailbox (IMAP + SMTP)</SelectItem>
+              <SelectItem value="mailbox">{t("routeSharedMailbox")}</SelectItem>
               <SelectItem value="threaded">
-                Threaded replies (Resend/Postmark webhook)
+                {t("routeThreaded")}
               </SelectItem>
             </SelectContent>
           </Select>
           <p className="text-xs text-muted-foreground">
-            Only one route is active at a time. You can switch later without
-            losing the saved configuration for the other route.
+            {t("routeHelp")}
           </p>
         </div>
 
@@ -382,27 +386,28 @@ function SharedMailboxFields({
   onFieldChange: (key: keyof typeof form, value: string | boolean) => void;
   onEnabledChange: (value: boolean) => void;
 }) {
+  const t = useTranslations("features.workspaces.replyHandlingSettingsCard");
   const [testingConnection, startTest] = useTransition();
 
   function test() {
     startTest(async () => {
       const result = await testMailboxConnectionAction();
       if (!result.ok) {
-        toast.error(result.error ?? "Connection test failed.");
+        toast.error(result.error ?? t("testConnectionFailed"));
         return;
       }
-      toast.success("IMAP connection is healthy");
+      toast.success(t("imapHealthy"));
     });
   }
 
   const set = onFieldChange;
   const passwordPlaceholder = (hasSecret: boolean) =>
-    hasSecret ? "•••••••• (stored, leave blank to keep)" : undefined;
+    hasSecret ? t("storedSecretPlaceholder") : undefined;
 
   return (
     <div className="space-y-5">
       <div className="space-y-2">
-        <Label htmlFor="reply-mailbox-address">Mailbox address</Label>
+        <Label htmlFor="reply-mailbox-address">{t("mailboxAddress")}</Label>
         <Input
           id="reply-mailbox-address"
           type="email"
@@ -411,17 +416,16 @@ function SharedMailboxFields({
           placeholder="jobs@yourcompany.com"
         />
         <p className="text-xs text-muted-foreground">
-          New messages are imported from this shared mailbox and replies sent
-          from the inbox use its SMTP account.
+          {t("mailboxAddressHelp")}
         </p>
       </div>
 
       <div className="space-y-2">
         <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-          Incoming (IMAP)
+          {t("incomingImap")}
         </p>
         <div className="grid grid-cols-2 gap-3">
-          <Field label="Host" htmlFor="reply-imap-host">
+          <Field label={t("host")} htmlFor="reply-imap-host">
             <Input
               id="reply-imap-host"
               value={form.imapHost}
@@ -430,7 +434,7 @@ function SharedMailboxFields({
               className="font-mono text-xs"
             />
           </Field>
-          <Field label="Port" htmlFor="reply-imap-port">
+          <Field label={t("port")} htmlFor="reply-imap-port">
             <Input
               id="reply-imap-port"
               inputMode="numeric"
@@ -440,7 +444,7 @@ function SharedMailboxFields({
             />
           </Field>
         </div>
-        <Field label="Username" htmlFor="reply-imap-user">
+        <Field label={t("username")} htmlFor="reply-imap-user">
           <Input
             id="reply-imap-user"
             value={form.imapUser}
@@ -448,7 +452,7 @@ function SharedMailboxFields({
             autoComplete="off"
           />
         </Field>
-        <Field label="Password" htmlFor="reply-imap-password">
+        <Field label={t("password")} htmlFor="reply-imap-password">
           <SecretInput
             id="reply-imap-password"
             value={form.imapPassword}
@@ -456,7 +460,7 @@ function SharedMailboxFields({
             placeholder={passwordPlaceholder(status.hasImapPassword)}
           />
         </Field>
-        <Field label="Source folder" htmlFor="reply-source-folder">
+        <Field label={t("sourceFolder")} htmlFor="reply-source-folder">
           <Input
             id="reply-source-folder"
             value={form.sourceFolder}
@@ -465,23 +469,22 @@ function SharedMailboxFields({
           />
         </Field>
         <TlsToggle
-          label="Use TLS"
+          label={t("useTls")}
           checked={form.imapTls}
           onCheckedChange={(value) => set("imapTls", value)}
-          ariaLabel="Use IMAP TLS"
+          ariaLabel={t("useImapTls")}
         />
       </div>
 
       <div className="space-y-2">
         <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-          Reply transport (SMTP)
+          {t("outgoingSmtp")}
         </p>
         <p className="text-xs text-muted-foreground">
-          Used only for replies sent from the shared inbox. General candidate
-          emails use the Email delivery settings above.
+          {t("smtpHelp")}
         </p>
         <div className="grid grid-cols-2 gap-3">
-          <Field label="Host" htmlFor="reply-smtp-host">
+          <Field label={t("host")} htmlFor="reply-smtp-host">
             <Input
               id="reply-smtp-host"
               value={form.smtpHost}
@@ -490,7 +493,7 @@ function SharedMailboxFields({
               className="font-mono text-xs"
             />
           </Field>
-          <Field label="Port" htmlFor="reply-smtp-port">
+          <Field label={t("port")} htmlFor="reply-smtp-port">
             <Input
               id="reply-smtp-port"
               inputMode="numeric"
@@ -500,7 +503,7 @@ function SharedMailboxFields({
             />
           </Field>
         </div>
-        <Field label="Username" htmlFor="reply-smtp-user">
+        <Field label={t("username")} htmlFor="reply-smtp-user">
           <Input
             id="reply-smtp-user"
             value={form.smtpUser}
@@ -508,7 +511,7 @@ function SharedMailboxFields({
             autoComplete="off"
           />
         </Field>
-        <Field label="Password" htmlFor="reply-smtp-password">
+        <Field label={t("password")} htmlFor="reply-smtp-password">
           <SecretInput
             id="reply-smtp-password"
             value={form.smtpPassword}
@@ -516,7 +519,7 @@ function SharedMailboxFields({
             placeholder={passwordPlaceholder(status.hasSmtpPassword)}
           />
         </Field>
-        <Field label="Sent folder" htmlFor="reply-sent-folder">
+        <Field label={t("sentFolder")} htmlFor="reply-sent-folder">
           <Input
             id="reply-sent-folder"
             value={form.sentFolder}
@@ -525,18 +528,18 @@ function SharedMailboxFields({
           />
         </Field>
         <TlsToggle
-          label="Use TLS"
+          label={t("useTls")}
           checked={form.smtpTls}
           onCheckedChange={(value) => set("smtpTls", value)}
-          ariaLabel="Use SMTP TLS"
+          ariaLabel={t("useSmtpTls")}
         />
       </div>
 
       <SettingRow
         htmlFor="replyhandlingsettingscard-switch-1"
         className="rounded-[var(--radius-inner)] border border-hairline px-4 py-3"
-        title={<>Enable shared mailbox</>}
-        description={<>New mail is polled by the self-hosted cron.</>}
+        title={t("enableSharedMailbox")}
+        description={t("enableSharedMailboxDescription")}
         control={<Switch id="replyhandlingsettingscard-switch-1" checked={enabled} onCheckedChange={onEnabledChange} />}
       />
 
@@ -552,7 +555,7 @@ function SharedMailboxFields({
         ) : (
           <ArrowsClockwiseIcon className="size-4" />
         )}
-        Test IMAP connection
+        {t("testImap")}
       </Button>
     </div>
   );
@@ -585,10 +588,11 @@ function ThreadedReplyFields({
   onResendApiKeyChange: (value: string) => void;
   onEnabledChange: (value: boolean) => void;
 }) {
+  const t = useTranslations("features.workspaces.replyHandlingSettingsCard");
   return (
     <div className="space-y-5">
       <div className="space-y-2">
-        <Label>Provider</Label>
+        <Label>{t("provider")}</Label>
         <Select
           value={provider}
           onValueChange={(value) =>
@@ -615,7 +619,7 @@ function ThreadedReplyFields({
         </Select>
       </div>
 
-      <Field label="Reply domain" htmlFor="reply-domain">
+      <Field label={t("replyDomain")} htmlFor="reply-domain">
         <Input
           id="reply-domain"
           value={replyDomain}
@@ -624,16 +628,15 @@ function ThreadedReplyFields({
           className="font-mono text-xs"
         />
           <p className="text-xs text-muted-foreground">
-          Point an MX record here at your provider. Harly gives each application
-          its own reply address under this domain.
+          {t("replyDomainHelp")}
         </p>
       </Field>
 
       <Field
         label={
           provider === "postmark"
-            ? "Basic auth password"
-            : "Webhook signing secret"
+            ? t("basicAuthPassword")
+            : t("webhookSigningSecret")
         }
         htmlFor="reply-webhook-secret"
       >
@@ -643,41 +646,40 @@ function ThreadedReplyFields({
           onChange={(event) => onWebhookSecretChange(event.target.value)}
           placeholder={
             status.hasWebhookSecret
-              ? "•••••••• (stored, leave blank to keep)"
+              ? t("storedSecretPlaceholder")
               : provider === "postmark"
-                ? "Set this as the URL's Basic Auth password"
+                ? t("basicAuthPlaceholder")
                 : "whsec_…"
           }
         />
         <p className="text-xs text-muted-foreground">
           {provider === "postmark"
-            ? "Postmark has no webhook signature scheme. Secure the URL with Basic Auth."
-            : "From Resend → Webhooks, after selecting the email.received event."}
+            ? t("postmarkSecretHelp")
+            : t("resendSecretHelp")}
         </p>
       </Field>
 
       {provider === "resend" ? (
-        <Field label="Resend API key" htmlFor="reply-resend-key">
+        <Field label={t("resendApiKey")} htmlFor="reply-resend-key">
           <SecretInput
             id="reply-resend-key"
             value={resendApiKey}
             onChange={(event) => onResendApiKeyChange(event.target.value)}
             placeholder={
               status.hasResendApiKey
-                ? "•••••••• (stored, leave blank to keep)"
+                ? t("storedSecretPlaceholder")
                 : "re_…"
             }
           />
           <p className="text-xs text-muted-foreground">
-            Used to fetch the email body after the webhook fires. Needs the
-            Emails Receiving scope.
+            {t("resendApiKeyHelp")}
           </p>
         </Field>
       ) : null}
 
       {webhookUrl ? (
         <div className="space-y-2 rounded-xl border bg-muted/30 p-3">
-          <Label>Webhook URL</Label>
+          <Label>{t("webhookUrl")}</Label>
           <div className="flex gap-2">
             <Input readOnly value={webhookUrl} className="font-mono text-xs" />
             <Button
@@ -686,15 +688,15 @@ function ThreadedReplyFields({
               size="icon"
               onClick={() => {
                 void copyText(webhookUrl);
-                toast.success("Webhook URL copied");
+                toast.success(t("webhookUrlCopied"));
               }}
-              aria-label="Copy webhook URL"
+              aria-label={t("copyWebhookUrl")}
             >
               <CopyIcon className="size-4" />
             </Button>
           </div>
           <p className="text-xs text-muted-foreground">
-            Add this URL under your provider&apos;s inbound webhook settings.
+            {t("webhookUrlHelp")}
           </p>
         </div>
       ) : null}
@@ -702,8 +704,8 @@ function ThreadedReplyFields({
       <SettingRow
         htmlFor="replyhandlingsettingscard-switch-2"
         className="rounded-[var(--radius-inner)] border border-hairline px-4 py-3"
-        title={<>Receive candidate replies automatically</>}
-        description={<>Replies are routed directly to the candidate timeline.</>}
+        title={t("autoReceive")}
+        description={t("autoReceiveDescription")}
         control={<Switch id="replyhandlingsettingscard-switch-2" checked={enabled} onCheckedChange={onEnabledChange} />}
       />
     </div>

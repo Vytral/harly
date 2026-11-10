@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 import type { Route } from "next";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { toast } from "@/lib/notification-island/toast";
 
 import {
@@ -53,6 +54,7 @@ export function EmailSettingsCard({
   status: WorkspaceEmailStatus;
   canEdit: boolean;
 }) {
+  const t = useTranslations("features.workspaces.emailSettingsCard");
   const router = useRouter();
   const [togglePending, startToggle] = useTransition();
 
@@ -60,7 +62,7 @@ export function EmailSettingsCard({
 
   function toggleEnabled(next: boolean) {
     if (!isConfigured && next) {
-      toast.error("Configure email settings first.");
+      toast.error(t("configureFirst"));
       return;
     }
     startToggle(async () => {
@@ -72,22 +74,22 @@ export function EmailSettingsCard({
           })
         : await disableEmailAction();
       if (!result.ok) {
-        toast.error(result.error ?? "Could not update.");
+        toast.error(result.error ?? t("updateFailed"));
         return;
       }
-      toast.success(next ? "Email enabled" : "Email disabled");
+      toast.success(next ? t("emailEnabled") : t("emailDisabled"));
       router.refresh();
     });
   }
 
   const badge = isConfigured ? (
     <StatusPill tone={status.enabled ? "on" : "off"}>
-      {status.enabled ? "Connected" : "Disabled"}
+      {status.enabled ? t("statusConnected") : t("statusDisabled")}
     </StatusPill>
   ) : status.usingPlatformDefault ? (
-    <StatusPill tone="neutral">Harly default</StatusPill>
+    <StatusPill tone="neutral">{t("statusHarlyDefault")}</StatusPill>
   ) : (
-    <StatusPill tone="neutral">Not connected</StatusPill>
+    <StatusPill tone="neutral">{t("statusNotConnected")}</StatusPill>
   );
 
   return (
@@ -97,9 +99,9 @@ export function EmailSettingsCard({
         <div className="p-6">
           <SectionHeader
             icon={EnvelopeIcon}
-            title="Email delivery"
+            title={t("title")}
             badge={badge}
-            description="Send candidate and recruiter emails from your own domain via Resend or SMTP. Without it, Harly sends from a shared address."
+            description={t("description")}
             action={
               canEdit ? (
                 <>
@@ -107,13 +109,13 @@ export function EmailSettingsCard({
                     <Button asChild variant={isConfigured ? "outline" : "default"}>
                       <Link href={"/settings/email/configure" as Route}>
                         <KeyDuotoneIcon className="size-4" />
-                        {isConfigured ? "Manage" : "Connect"}
+                        {isConfigured ? t("manage") : t("connect")}
                       </Link>
                     </Button>
                   ) : (
                     <Button variant="default" disabled>
                       <KeyDuotoneIcon className="size-4" />
-                      Connect
+                      {t("connect")}
                     </Button>
                   )}
                   {isConfigured ? (
@@ -122,10 +124,10 @@ export function EmailSettingsCard({
                         checked={status.enabled}
                         disabled={togglePending}
                         onCheckedChange={toggleEnabled}
-                        aria-label="Enable email"
+                        aria-label={t("enableAriaLabel")}
                       />
                       <span className="text-muted-foreground">
-                        {status.enabled ? "On" : "Off"}
+                        {status.enabled ? t("on") : t("off")}
                       </span>
                     </label>
                   ) : null}
@@ -136,7 +138,7 @@ export function EmailSettingsCard({
         </div>
 
         <div className="grid grid-cols-1 divide-y border-t bg-muted/20 sm:grid-cols-2 sm:divide-x sm:divide-y-0">
-          <StatCell label="Provider">
+          <StatCell label={t("provider")}>
             {status.provider === "resend" ? (
               <ResendLogo className="size-3.5" />
             ) : (
@@ -144,7 +146,7 @@ export function EmailSettingsCard({
             )}
             {PROVIDER_LABEL[status.provider!]}
           </StatCell>
-          <StatCell label="From address">
+          <StatCell label={t("fromAddress")}>
             <span className="truncate font-mono text-[13px]">
               {status.from}
             </span>
@@ -156,12 +158,14 @@ export function EmailSettingsCard({
 }
 
 function EncryptionWarning() {
+  const t = useTranslations("features.workspaces.emailSettingsCard");
   return (
     <div className="flex items-start gap-2 rounded-2xl border border-clay/30 bg-clay/5 px-4 py-3 text-sm text-clay">
       <WarningCircleIcon className="mt-0.5 size-4 shrink-0" />
       <p>
-        Set <code className="font-mono text-xs">AI_ENCRYPTION_KEY</code> on the
-        server to store email credentials.
+        {t.rich("encryptionWarning", {
+          code: (chunks) => <code className="font-mono text-xs">{chunks}</code>,
+        })}
       </p>
     </div>
   );
@@ -170,6 +174,7 @@ function EncryptionWarning() {
 export function EmailSettingsForm({ status }: {
   status: WorkspaceEmailStatus;
 }) {
+  const t = useTranslations("features.workspaces.emailSettingsForm");
   const router = useRouter();
   const [provider, setProvider] = useState<EmailProviderId>(
     status.provider ?? "resend",
@@ -204,13 +209,11 @@ export function EmailSettingsForm({ status }: {
     startTest(async () => {
       const result = await sendTestEmailAction(fieldsForAction());
       if (!result.ok) {
-        toast.error(result.error ?? "Test failed.");
+        toast.error(result.error ?? t("testFailed"));
         return;
       }
       toast.success(
-        provider === "smtp"
-          ? "SMTP connection verified"
-          : "Test email sent. Check your inbox",
+        provider === "smtp" ? t("smtpVerified") : t("testEmailSent"),
       );
     });
   }
@@ -222,10 +225,10 @@ export function EmailSettingsForm({ status }: {
         enabled,
       });
       if (!result.ok) {
-        toast.error(result.error ?? "Could not save.");
+        toast.error(result.error ?? t("couldNotSave"));
         return;
       }
-      toast.success("Email settings saved");
+      toast.success(t("saved"));
       router.refresh();
     });
   }
@@ -238,19 +241,19 @@ export function EmailSettingsForm({ status }: {
 
   return (
     <DrawerLayout
-      title="Configure email"
-      description="Secrets are encrypted at rest and never shown again."
+      title={t("title")}
+      description={t("description")}
       surface="page"
       footer={
         <Button onClick={save} disabled={saving || !from.trim()}>
           {saving ? <SpinnerIcon className="size-4" /> : null}
-          Save changes
+          {t("saveChanges")}
         </Button>
       }
     >
       <div className="space-y-5">
         <div className="space-y-2">
-          <Label>Provider</Label>
+          <Label>{t("provider")}</Label>
           <Select
             value={provider}
             onValueChange={(value) => setProvider(value as EmailProviderId)}
@@ -260,13 +263,13 @@ export function EmailSettingsForm({ status }: {
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="resend">Resend</SelectItem>
-              <SelectItem value="smtp">SMTP (custom, AWS SES, etc.)</SelectItem>
+              <SelectItem value="smtp">{t("smtpOption")}</SelectItem>
             </SelectContent>
           </Select>
         </div>
 
         <div className="space-y-2">
-          <Label htmlFor="email-from">From address</Label>
+          <Label htmlFor="email-from">{t("fromAddress")}</Label>
           <Input
             id="email-from"
             value={from}
@@ -274,32 +277,32 @@ export function EmailSettingsForm({ status }: {
             placeholder="Acme <hello@acme.com>"
           />
           <p className="text-xs text-muted-foreground">
-            Must be a verified sender or domain with your provider.
+            {t("fromHelp")}
           </p>
         </div>
 
         {provider === "resend" ? (
           <div className="space-y-2">
-            <Label htmlFor="email-api-key">Resend API key</Label>
+            <Label htmlFor="email-api-key">{t("resendApiKey")}</Label>
             <SecretInput
               id="email-api-key"
               value={apiKey}
               onChange={(event) => setApiKey(event.target.value)}
               placeholder={
                 status.hasSecret
-                  ? "•••••••• (stored, leave blank to keep)"
+                  ? t("storedPlaceholder")
                   : "re_xxxxxxxxxxxxxxxxxxxx"
               }
             />
             <p className="text-xs text-muted-foreground">
-              Resend → API Keys. Needs permission to send from your domain.
+              {t("resendHelp")}
             </p>
           </div>
         ) : (
           <>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-2">
-                <Label htmlFor="email-smtp-host">SMTP host</Label>
+                <Label htmlFor="email-smtp-host">{t("smtpHost")}</Label>
                 <Input
                   id="email-smtp-host"
                   value={smtpHost}
@@ -309,7 +312,7 @@ export function EmailSettingsForm({ status }: {
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="email-smtp-port">Port</Label>
+                <Label htmlFor="email-smtp-port">{t("port")}</Label>
                 <Input
                   id="email-smtp-port"
                   inputMode="numeric"
@@ -321,26 +324,26 @@ export function EmailSettingsForm({ status }: {
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="email-smtp-user">Username</Label>
+              <Label htmlFor="email-smtp-user">{t("username")}</Label>
               <Input
                 id="email-smtp-user"
                 value={smtpUser}
                 onChange={(event) => setSmtpUser(event.target.value)}
-                placeholder="SMTP username"
+                placeholder={t("smtpUsernamePlaceholder")}
                 autoComplete="off"
               />
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="email-smtp-pass">Password</Label>
+              <Label htmlFor="email-smtp-pass">{t("password")}</Label>
               <SecretInput
                 id="email-smtp-pass"
                 value={apiKey}
                 onChange={(event) => setApiKey(event.target.value)}
                 placeholder={
                   status.hasSecret
-                    ? "•••••••• (stored, leave blank to keep)"
-                    : "SMTP password"
+                    ? t("storedPlaceholder")
+                    : t("smtpPasswordPlaceholder")
                 }
               />
             </div>
@@ -348,8 +351,8 @@ export function EmailSettingsForm({ status }: {
             <SettingRow
               htmlFor="emailsettingscard-switch-1"
               className="rounded-[var(--radius-inner)] border border-hairline px-4 py-3"
-              title={<>Use TLS</>}
-              description={<>Enable for port 465. Leave off for 587/25 (STARTTLS).</>}
+              title={<>{t("useTls")}</>}
+              description={<>{t("useTlsDescription")}</>}
               control={<Switch id="emailsettingscard-switch-1" checked={smtpSecure} onCheckedChange={setSmtpSecure} />}
             />
           </>
@@ -358,8 +361,8 @@ export function EmailSettingsForm({ status }: {
         <SettingRow
           htmlFor="emailsettingscard-switch-2"
           className="rounded-[var(--radius-inner)] border border-hairline px-4 py-3"
-          title={<>Enable</>}
-          description={<>When off, Harly sends from its shared address instead.</>}
+          title={<>{t("enable")}</>}
+          description={<>{t("enableDescription")}</>}
           control={<Switch id="emailsettingscard-switch-2" checked={enabled} onCheckedChange={setEnabled} />}
         />
 
@@ -375,7 +378,7 @@ export function EmailSettingsForm({ status }: {
           ) : (
             <PaperPlaneDuotoneIcon className="size-4" />
           )}
-          {provider === "smtp" ? "Test connection" : "Send test email"}
+          {provider === "smtp" ? t("testConnection") : t("sendTestEmail")}
         </Button>
       </div>
     </DrawerLayout>

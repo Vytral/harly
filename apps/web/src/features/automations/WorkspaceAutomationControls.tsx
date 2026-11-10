@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useTranslations } from "next-intl";
 import { PauseCircle, PlayCircle, Zap } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -29,25 +30,31 @@ export function WorkspaceAutomationControls({
   const [reason, setReason] = useState("");
   const [pausedBy, setPausedBy] = useState(pausedByName);
   const enabled = policy.enabled;
+  const t = useTranslations("features.automations.WorkspaceAutomationControls");
 
   async function confirmChange() {
     const trimmed = reason.trim();
     if (!trimmed) {
-      toast.error("Add a short reason so the team knows why.");
+      toast.error(t("reasonRequired"));
       throw new Error("reason required");
     }
     const result = await setWorkspaceAutomationEnabledAction({ enabled: !enabled, reason: trimmed });
     if (!result.ok || !result.policy) {
-      toast.error(result.error ?? "Could not update workspace automations.");
+      toast.error(result.error ?? t("updateError"));
       throw new Error(result.error ?? "update failed");
     }
     setPolicy(result.policy);
-    setPausedBy(enabled ? "you" : null);
+    setPausedBy(enabled ? t("you") : null);
     setReason("");
-    toast.success(enabled ? "All automations paused." : "Automations resumed.");
+    toast.success(enabled ? t("pausedToast") : t("resumedToast"));
   }
 
-  const limits = `Up to ${policy.maxRunsPerMinute} runs and ${policy.maxExternalActionsPerMinute} external actions per minute, ${policy.maxConcurrentRuns} at a time.`;
+  const limits = t("limits", {
+    runs: policy.maxRunsPerMinute,
+    external: policy.maxExternalActionsPerMinute,
+    concurrent: policy.maxConcurrentRuns,
+  });
+  const pausedAt = policy.pausedAt;
 
   return (
     <>
@@ -74,29 +81,46 @@ export function WorkspaceAutomationControls({
             aria-live="polite"
             className="text-[14px] font-semibold text-near-ink"
           >
-            {enabled ? "Automations are running" : "All automations are paused"}
+            {enabled ? t("running") : t("allPaused")}
           </h2>
           <p className="mt-0.5 text-[13px] leading-5 text-soft-ink">
             {enabled ? (
               limits
             ) : (
               <>
-                No workflow runs until someone resumes them
-                {policy.pausedAt ? (
+                {pausedAt && pausedBy
+                  ? t.rich("pausedAtBy", {
+                      by: pausedBy,
+                      when: (chunks) => (
+                        <>
+                          {chunks} <ShortDate value={pausedAt} />
+                        </>
+                      ),
+                    })
+                  : pausedAt
+                    ? t.rich("pausedAt", {
+                        when: (chunks) => (
+                          <>
+                            {chunks} <ShortDate value={pausedAt} />
+                          </>
+                        ),
+                      })
+                    : pausedBy
+                      ? t("pausedBy", { by: pausedBy })
+                      : t("pausedOnly")}
+                {policy.pauseReason ? (
                   <>
                     {" "}
-                    · paused <ShortDate value={policy.pausedAt} />
+                    {t("pauseReason", { reason: policy.pauseReason })}
                   </>
                 ) : null}
-                {pausedBy ? ` by ${pausedBy}` : ""}
-                {policy.pauseReason ? `: “${policy.pauseReason}”` : "."}
               </>
             )}
           </p>
         </div>
         <Button size="sm" variant={enabled ? "ghost" : "default"} onClick={() => setOpen(true)}>
           {enabled ? <PauseCircle /> : <PlayCircle />}
-          {enabled ? "Pause all" : "Resume automations"}
+          {enabled ? t("pauseAll") : t("resumeAutomations")}
         </Button>
       </section>
 
@@ -107,17 +131,15 @@ export function WorkspaceAutomationControls({
           if (!next) setReason("");
         }}
         tone={enabled ? "warning" : "default"}
-        title={enabled ? "Pause every automation in this workspace?" : "Resume automations?"}
-        description={
-          enabled
-            ? "Running workflows stop at their next step and no new runs start until someone resumes them. Nothing is lost."
-            : "Workflows start running again for new events. Events that happened while paused are not replayed."
-        }
-        confirmLabel={enabled ? "Pause all automations" : "Resume automations"}
+        title={enabled ? t("pauseTitle") : t("resumeTitle")}
+        description={enabled ? t("pauseDescription") : t("resumeDescription")}
+        confirmLabel={enabled ? t("pauseConfirm") : t("resumeAutomations")}
         onConfirm={confirmChange}
       >
         <label htmlFor="workspace-automation-reason" className="block text-[13px] font-medium text-near-ink">
-          Reason <span className="font-normal text-soft-ink">(saved to the audit log)</span>
+          {t.rich("reasonLabel", {
+            hint: (chunks) => <span className="font-normal text-soft-ink">{chunks}</span>,
+          })}
         </label>
         <textarea
           id="workspace-automation-reason"
@@ -126,7 +148,7 @@ export function WorkspaceAutomationControls({
           maxLength={500}
           rows={2}
           autoFocus
-          placeholder={enabled ? "e.g. Fixing a template before more emails go out" : "e.g. Template fixed"}
+          placeholder={enabled ? t("reasonPlaceholderPause") : t("reasonPlaceholderResume")}
           className="mt-1.5 w-full rounded-[var(--radius-btn)] border border-mist-border bg-pure-snow px-3 py-2 text-sm text-near-ink placeholder:text-quiet-mist focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-near-ink/30"
         />
       </ConfirmDialog>

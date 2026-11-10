@@ -85,6 +85,8 @@ import { ANONYMIZATION_BLOCKED_MESSAGES } from "@/lib/ai/candidate-context";
 
 import { detectCandidateDuplicatesAction, generateAiEvaluationAction } from "./ai-actions";
 
+vi.mock("next-intl/server", async () => (await import("@/test-support/intl-server-mock")).intlServerMock);
+
 const WORKSPACE_ID = "workspace-1";
 const APPLICATION_ID = "11111111-1111-4111-8111-111111111111";
 const CANDIDATE_ID = "33333333-3333-4333-8333-333333333333";

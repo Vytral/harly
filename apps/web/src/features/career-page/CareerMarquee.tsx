@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useTranslations } from "next-intl";
 import { Pause, Play } from "lucide-react";
 
 import { cn } from "@/lib/utils";
@@ -24,6 +25,7 @@ export function CareerMarquee({
   gap?: string;
   label: string;
 }) {
+  const t = useTranslations("features.careerPage.careerMarquee");
   const [paused, setPaused] = useState(false);
 
   return (
@@ -49,7 +51,7 @@ export function CareerMarquee({
           className="inline-flex h-8 items-center gap-1.5 rounded-full px-3 text-xs font-medium text-soft-ink transition-colors hover:bg-row-wash hover:text-near-ink"
         >
           {paused ? <Play className="size-3.5" aria-hidden /> : <Pause className="size-3.5" aria-hidden />}
-          {paused ? "Play" : "Pause"} motion
+          {paused ? t("playMotion") : t("pauseMotion")}
         </button>
       </div>
     </div>

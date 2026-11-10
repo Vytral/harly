@@ -6,8 +6,6 @@ import { activeStagesOf, type EditorStage } from "./model";
  * DOM. The hook in `useStageEditor.ts` is the only caller.
  */
 
-export const CONFLICT_MESSAGE = "This pipeline changed. Reloaded.";
-
 export type PendingOperation =
   | { kind: "reorder" }
   | { kind: "save"; stageId: string }
@@ -39,7 +37,7 @@ export type EditorAction =
   | { type: "reorder_previewed"; ids: string[] }
   | { type: "operation_succeeded"; announcement?: string }
   | { type: "operation_failed"; message: string }
-  | { type: "conflict"; stages: EditorStage[]; detail?: string }
+  | { type: "conflict"; stages: EditorStage[]; message: string; detail?: string }
   | { type: "notice_dismissed" }
   | { type: "announced"; text: string };
 
@@ -117,8 +115,8 @@ export function editorReducer(state: EditorState, action: EditorAction): EditorS
         pending: null,
         snapshot: null,
         stages: action.stages,
-        notice: action.detail ? `${CONFLICT_MESSAGE} ${action.detail}` : CONFLICT_MESSAGE,
-        announcement: CONFLICT_MESSAGE,
+        notice: action.detail ? `${action.message} ${action.detail}` : action.message,
+        announcement: action.message,
       };
 
     case "notice_dismissed":

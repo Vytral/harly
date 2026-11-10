@@ -1,4 +1,13 @@
+import type { BuilderT } from "./catalog";
+
 export const AUTOSAVE_DELAY_MS = 1500;
+
+/**
+ * Stable code stored in `lastError` when a save was interrupted. It is also the
+ * translation key (`save.interrupted`), so the UI can translate it. Never
+ * compare `lastError` against English text.
+ */
+export const SAVE_INTERRUPTED_CODE = "save.interrupted";
 
 export type SaveKind =
   | "unsaved"
@@ -138,9 +147,7 @@ export function saveFailed(
     ...state,
     inFlightGeneration: inFlight,
     queued: isDirty(state),
-    lastError: aborted
-      ? "Save was interrupted. Checking the server before retrying."
-      : message,
+    lastError: aborted ? SAVE_INTERRUPTED_CODE : message,
     kind: inFlight != null ? "saving" : state.online ? "error" : "offline",
   };
 }
@@ -192,26 +199,26 @@ export function clearConflict(state: SaveState): SaveState {
   };
 }
 
-export function formatSaveStatus(state: SaveState, now = Date.now()): string {
+export function formatSaveStatus(state: SaveState, t: BuilderT, locale: string): string {
   switch (state.kind) {
     case "unsaved":
-      return state.lastSavedAt ? "Unsaved" : "Not saved yet";
+      return state.lastSavedAt ? t("save.unsaved") : t("save.notSavedYet");
     case "saving":
-      return "Saving…";
+      return t("save.saving");
     case "saved": {
-      if (!state.lastSavedAt) return "Saved";
-      const time = new Date(state.lastSavedAt);
-      const hh = String(time.getHours()).padStart(2, "0");
-      const mm = String(time.getMinutes()).padStart(2, "0");
-      if (now - state.lastSavedAt > 18 * 60 * 60 * 1000)
-        return `Saved at ${hh}:${mm}`;
-      return `Saved at ${hh}:${mm}`;
+      if (!state.lastSavedAt) return t("save.saved");
+      const time = new Intl.DateTimeFormat(locale, {
+        hour: "2-digit",
+        minute: "2-digit",
+        hourCycle: "h23",
+      }).format(new Date(state.lastSavedAt));
+      return t("save.savedAt", { time });
     }
     case "offline":
-      return "Offline";
+      return t("save.offline");
     case "conflict":
-      return "Conflict";
+      return t("save.conflict");
     case "error":
-      return "Error saving";
+      return t("save.error");
   }
 }

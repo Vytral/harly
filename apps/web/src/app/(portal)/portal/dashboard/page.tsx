@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { eq, and, isNull } from "drizzle-orm";
 import type { Route } from "next";
+import { getTranslations } from "next-intl/server";
 
 import { candidates, db, organization, workspaceSettings } from "@harly/db";
 import { PORTAL_SESSION_COOKIE, resolvePortalSession } from "@/lib/portal-auth";
@@ -28,6 +29,7 @@ export const dynamic = "force-dynamic";
 const ACTION_SCAN_LIMIT = 5;
 
 export default async function PortalDashboardPage() {
+  const t = await getTranslations("pages.portalDashboard.page");
   const cookieStore = await cookies();
   const token = cookieStore.get(PORTAL_SESSION_COOKIE)?.value;
   if (!token) redirect("/portal/login" as Route);
@@ -69,7 +71,7 @@ export default async function PortalDashboardPage() {
   ]);
 
   const showStages = settings?.showStatus !== false;
-  const orgName = org?.name ?? "this company";
+  const orgName = org?.name ?? t("companyFallback");
   const applications = await listPortalApplications({
     workspaceId: session.workspaceId,
     candidateId: session.candidateId,
@@ -111,6 +113,7 @@ export default async function PortalDashboardPage() {
     }
   }
 
+  const tProgress = await getTranslations("labels.portal.applicationProgress");
   const waiting: PortalNextStepData | null = primary
     ? (() => {
         const progress = portalApplicationProgress({
@@ -119,11 +122,14 @@ export default async function PortalDashboardPage() {
           status: primary.status,
           showStages,
           orgName,
-        });
+        }, tProgress);
         return {
           kind: "waiting",
-          headline: primary.status === "active" ? "Nothing to do right now" : progress.headline,
-          body: primary.status === "active" ? progress.body : `${primary.jobTitle}: ${progress.body}`,
+          headline: primary.status === "active" ? t("waitingTitle") : progress.headline,
+          body:
+            primary.status === "active"
+              ? progress.body
+              : t("waitingBody", { jobTitle: primary.jobTitle, body: progress.body }),
         };
       })()
     : null;
@@ -136,14 +142,14 @@ export default async function PortalDashboardPage() {
       <div className="stagger-in space-y-6">
         <header className="pt-2">
           <h1 className="text-[28px] font-semibold tracking-tight text-near-ink sm:text-[32px]">
-            {firstName ? `Hi, ${firstName}` : "Welcome back"}
+            {firstName ? t("greeting", { firstName }) : t("welcomeBack")}
           </h1>
           <p className="mt-1 text-[15px] text-soft-ink">
             {applications.length === 0
-              ? `Your space for applying to ${orgName}.`
+              ? t("subtitleEmpty", { orgName })
               : openCount > 0
-                ? `You have ${openCount} open ${openCount === 1 ? "application" : "applications"} with ${orgName}.`
-                : `Here's where your applications with ${orgName} ended up.`}
+                ? t("subtitleOpen", { count: openCount, orgName })
+                : t("subtitleClosed", { orgName })}
           </p>
         </header>
 
@@ -153,14 +159,14 @@ export default async function PortalDashboardPage() {
           <section aria-labelledby="applications-title" className="min-w-0 space-y-3">
             <div className="flex items-baseline justify-between gap-3">
               <h2 id="applications-title" className="text-[17px] font-semibold text-near-ink">
-                Your applications
+                {t("applicationsHeading")}
               </h2>
               {applications.length > 4 ? (
                 <Link
                   href={"/portal/applications" as Route}
                   className="inline-flex items-center gap-1 text-[13px] font-medium text-soft-ink hover:text-near-ink"
                 >
-                  View all {applications.length}
+                  {t("viewAll", { count: applications.length })}
                   <CaretRightIcon className="size-3.5" />
                 </Link>
               ) : null}
@@ -168,9 +174,9 @@ export default async function PortalDashboardPage() {
             {applications.length === 0 ? (
               <PortalEmptyState
                 icon={BriefcaseIcon}
-                title="No applications yet"
-                description={`Browse open roles at ${orgName} and apply in a couple of minutes.`}
-                cta={{ label: "Browse open roles", href: "/portal/jobs" as Route }}
+                title={t("emptyTitle")}
+                description={t("emptyDescription", { orgName })}
+                cta={{ label: t("browseRoles"), href: "/portal/jobs" as Route }}
               />
             ) : (
               <ul className="stagger-in space-y-2.5">
@@ -209,7 +215,7 @@ export default async function PortalDashboardPage() {
               ) : null}
               <div className="mt-4 flex flex-wrap gap-x-4 gap-y-2 text-[13px] font-medium">
                 <Link href={"/portal/jobs" as Route} className="inline-flex items-center gap-1 text-near-ink hover:underline underline-offset-2">
-                  Open roles
+                  {t("openRoles")}
                   <CaretRightIcon className="size-3.5" />
                 </Link>
                 {settings?.websiteUrl ? (
@@ -220,7 +226,7 @@ export default async function PortalDashboardPage() {
                     className="inline-flex items-center gap-1 text-soft-ink hover:text-near-ink"
                   >
                     <GlobeIcon className="size-3.5" />
-                    Website
+                    {t("website")}
                     <ArrowUpRightIcon className="size-3" />
                   </a>
                 ) : null}
@@ -229,7 +235,7 @@ export default async function PortalDashboardPage() {
 
             {team.size > 0 ? (
               <section className="rounded-2xl border border-hairline bg-card p-5">
-                <h2 className="text-[13px] font-semibold uppercase tracking-wider text-soft-ink">Your hiring team</h2>
+                <h2 className="text-[13px] font-semibold uppercase tracking-wider text-soft-ink">{t("hiringTeam")}</h2>
                 <ul className="mt-3 space-y-3">
                   {[...team.values()].slice(0, 6).map((member) => (
                     <li key={member.name} className="flex items-center gap-3">
@@ -243,7 +249,7 @@ export default async function PortalDashboardPage() {
                       )}
                       <div className="min-w-0">
                         <p className="truncate text-[13.5px] font-medium text-near-ink">{member.name}</p>
-                        <p className="text-[12px] text-soft-ink">Interviewer</p>
+                        <p className="text-[12px] text-soft-ink">{t("interviewer")}</p>
                       </div>
                     </li>
                   ))}

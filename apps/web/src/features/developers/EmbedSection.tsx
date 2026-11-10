@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useTranslations } from "next-intl";
 
 import {
   buildApiSubmitSnippet,
@@ -29,17 +30,6 @@ import { cn } from "@/lib/utils";
 
 type Mode = "board" | "job";
 
-const THEME_OPTIONS = [
-  { value: "auto", label: "Auto" },
-  { value: "light", label: "Light" },
-  { value: "dark", label: "Dark" },
-] as const;
-
-const MODE_OPTIONS = [
-  { value: "board", label: "All open roles" },
-  { value: "job", label: "One job" },
-] as const;
-
 function useDebounced<T>(value: T, delay = 450): T {
   const [debounced, setDebounced] = useState(value);
   useEffect(() => {
@@ -65,6 +55,17 @@ export function EmbedSection({
   const [height, setHeight] = useState("640");
   const [pk, setPk] = useState("");
   const [previewNonce, setPreviewNonce] = useState(0);
+
+  const t = useTranslations("features.developers.embedSection");
+  const modeOptions = [
+    { value: "board", label: t("modeBoard") },
+    { value: "job", label: t("modeJob") },
+  ] as const;
+  const themeOptions = [
+    { value: "auto", label: t("themeAuto") },
+    { value: "light", label: t("themeLight") },
+    { value: "dark", label: t("themeDark") },
+  ] as const;
 
   const options: EmbedOptions = useMemo(
     () => ({
@@ -97,24 +98,24 @@ export function EmbedSection({
     <Card className="gap-6 p-6">
       <SectionHeader
         icon={CodeDuotoneIcon}
-        title="Embed widget"
-        description="Show your open roles on any website. Pick what to show, check the live preview, then paste the code into your careers page. Candidates can browse roles and apply without leaving your site."
+        title={t("title")}
+        description={t("description")}
       />
 
       <div className="grid gap-6 lg:grid-cols-[minmax(0,5fr)_minmax(0,6fr)]">
         {/* ── Options ─────────────────────────────────────────────── */}
         <div className="min-w-0 space-y-5">
-          <Field label="What to show">
+          <Field label={t("whatToShow")}>
             <SegmentedControl
-              aria-label="What to show"
-              options={MODE_OPTIONS}
+              aria-label={t("whatToShow")}
+              options={modeOptions}
               value={mode}
               onValueChange={setMode}
             />
           </Field>
 
           {mode === "job" ? (
-            <Field label="Job slug" htmlFor="embed-job" help="The last part of the job's public URL, e.g. senior-engineer.">
+            <Field label={t("jobSlug")} htmlFor="embed-job" help={t("jobSlugHelp")}>
               <Input
                 id="embed-job"
                 value={jobSlug}
@@ -127,15 +128,15 @@ export function EmbedSection({
             </Field>
           ) : (
             <div className="grid gap-4 sm:grid-cols-[1fr_7rem]">
-              <Field label="Department (optional)" htmlFor="embed-dept" help="Preselects this filter. Match the name exactly.">
+              <Field label={t("department")} htmlFor="embed-dept" help={t("departmentHelp")}>
                 <Input
                   id="embed-dept"
                   value={department}
                   onChange={(e) => setDepartment(e.target.value)}
-                  placeholder="Engineering"
+                  placeholder={t("departmentPlaceholder")}
                 />
               </Field>
-              <Field label="Max roles" htmlFor="embed-limit" help="1 to 100.">
+              <Field label={t("maxRoles")} htmlFor="embed-limit" help={t("maxRolesHelp")}>
                 <Input
                   id="embed-limit"
                   type="number"
@@ -144,32 +145,32 @@ export function EmbedSection({
                   max={100}
                   value={limit}
                   onChange={(e) => setLimit(e.target.value)}
-                  placeholder="All"
+                  placeholder={t("maxRolesPlaceholder")}
                   className="tabular-nums"
                 />
               </Field>
             </div>
           )}
 
-          <Field label="Theme" help="Auto inherits your site's text color. Light and dark pin the widget's palette.">
+          <Field label={t("theme")} help={t("themeHelp")}>
             <SegmentedControl
-              aria-label="Theme"
-              options={THEME_OPTIONS}
+              aria-label={t("theme")}
+              options={themeOptions}
               value={theme}
               onValueChange={setTheme}
             />
           </Field>
 
           <Field
-            label="Accent color"
+            label={t("accentColor")}
             htmlFor="embed-accent-hex"
-            help={accentInvalid ? undefined : "Buttons and focus rings. Empty uses your brand color."}
-            error={accentInvalid ? "Use a 6-digit hex like #5b5bd6." : undefined}
+            help={accentInvalid ? undefined : t("accentHelp")}
+            error={accentInvalid ? t("accentError") : undefined}
           >
             <div className="flex items-center gap-2">
               <input
                 type="color"
-                aria-label="Pick accent color"
+                aria-label={t("pickAccent")}
                 value={isHexColor(accent) ? accent : "#111827"}
                 onChange={(e) => setAccent(e.target.value)}
                 className="size-9 shrink-0 cursor-pointer rounded-[var(--radius-btn)] border border-hairline bg-pure-snow p-1"
@@ -178,21 +179,21 @@ export function EmbedSection({
                 id="embed-accent-hex"
                 value={accent}
                 onChange={(e) => setAccent(e.target.value.trim())}
-                placeholder="Brand color"
+                placeholder={t("accentPlaceholder")}
                 className="font-mono text-sm"
                 aria-invalid={accentInvalid}
                 spellCheck={false}
               />
               {accent ? (
                 <Button type="button" variant="ghost" size="sm" onClick={() => setAccent("")}>
-                  Reset
+                  {t("reset")}
                 </Button>
               ) : null}
             </div>
           </Field>
 
           <div className="grid gap-4 sm:grid-cols-2">
-            <Field label="Iframe height (px)" htmlFor="embed-height" help="Only used by the iframe snippet.">
+            <Field label={t("iframeHeight")} htmlFor="embed-height" help={t("iframeHeightHelp")}>
               <Input
                 id="embed-height"
                 type="number"
@@ -205,12 +206,14 @@ export function EmbedSection({
               />
             </Field>
             <Field
-              label="Publishable key (optional)"
+              label={t("publishableKey")}
               htmlFor="embed-pk"
               help={
                 publishableKey
-                  ? `Paste your key (${publishableKey.prefix}…${publishableKey.last4}) to tie views to it.`
-                  : "Create a publishable key above to track and revoke this embed."
+                  ? t("publishableKeyHelpExisting", {
+                      preview: `${publishableKey.prefix}…${publishableKey.last4}`,
+                    })
+                  : t("publishableKeyHelpNone")
               }
             >
               <Input
@@ -229,9 +232,9 @@ export function EmbedSection({
         {/* ── Live preview ────────────────────────────────────────── */}
         <div className="min-w-0 space-y-2">
           <div className="flex items-center justify-between gap-3">
-            <p className="text-sm font-medium text-near-ink">Live preview</p>
+            <p className="text-sm font-medium text-near-ink">{t("livePreview")}</p>
             <Button type="button" variant="ghost" size="sm" onClick={() => setPreviewNonce((n) => n + 1)}>
-              <ArrowsClockwiseIcon className="size-3.5" /> Reload
+              <ArrowsClockwiseIcon className="size-3.5" /> {t("reload")}
             </Button>
           </div>
           <div
@@ -245,12 +248,12 @@ export function EmbedSection({
                 className="grid place-items-center px-6 text-center text-[13px] text-neutral-500"
                 style={{ height: previewHeight }}
               >
-                Enter a job slug to preview a single job.
+                {t("enterJobSlug")}
               </div>
             ) : (
               <iframe
                 key={previewNonce}
-                title="Embed widget preview"
+                title={t("previewTitle")}
                 srcDoc={previewDoc}
                 // Same-origin lets the preview call the API even when the dashboard
                 // runs on localhost/private networks; the content is only the
@@ -262,20 +265,16 @@ export function EmbedSection({
             )}
           </div>
           <p className="text-[12px] text-soft-ink">
-            This is the real widget loading your live jobs, so it matches what visitors see.
+            {t("liveWidgetNote")}
           </p>
         </div>
       </div>
 
       {/* ── Code ──────────────────────────────────────────────────── */}
       <div className="space-y-3">
-        <h3 className="text-sm font-semibold text-near-ink">Add it to your site</h3>
+        <h3 className="text-sm font-semibold text-near-ink">{t("addToSite")}</h3>
         <ol className="grid gap-2 text-[13px] text-near-ink sm:grid-cols-3">
-          {[
-            "Choose your options above.",
-            "Copy the snippet for your stack.",
-            "Paste it where the roles should appear, then publish.",
-          ].map((text, i) => (
+          {[t("steps.choose"), t("steps.copy"), t("steps.paste")].map((text, i) => (
             <li key={text} className="flex items-start gap-2.5 rounded-[var(--radius-inner)] bg-card-inset px-3 py-2.5">
               <span className="mt-px grid size-5 shrink-0 place-items-center rounded-full bg-lime-wash text-[11px] font-semibold tabular-nums">
                 {i + 1}
@@ -286,26 +285,26 @@ export function EmbedSection({
         </ol>
 
         <Tabs defaultValue="html">
-          <TabsList aria-label="Snippet type">
+          <TabsList aria-label={t("snippetType")}>
             <TabsTrigger value="html">HTML</TabsTrigger>
             <TabsTrigger value="iframe">Iframe</TabsTrigger>
             <TabsTrigger value="react">React / Next.js</TabsTrigger>
           </TabsList>
           <TabsContent value="html" className="space-y-2">
             <p className="text-[12.5px] text-soft-ink">
-              Works on any page. The widget renders inside the <code className="font-mono">div</code> and inherits your fonts.
+              {t.rich("htmlHelp", { code: (chunks) => <code className="font-mono">{chunks}</code> })}
             </p>
             <CodePanel code={html} language="HTML" />
           </TabsContent>
           <TabsContent value="iframe" className="space-y-2">
             <p className="text-[12.5px] text-soft-ink">
-              Isolates the widget from your page&apos;s CSS and scripts. Good for site builders that only accept an iframe.
+              {t("iframeHelp")}
             </p>
             <CodePanel code={iframe} language="HTML" />
           </TabsContent>
           <TabsContent value="react" className="space-y-2">
             <p className="text-[12.5px] text-soft-ink">
-              A client component for React, Next.js or any bundler. It loads the script on mount and cleans up on unmount.
+              {t("reactHelp")}
             </p>
             <CodePanel code={react} language="TSX" />
           </TabsContent>
@@ -313,15 +312,13 @@ export function EmbedSection({
       </div>
 
       <div className="grid gap-4 lg:grid-cols-2">
-        <Callout tone="info" title="Who can embed it">
-          The widget and the public jobs API are read-only and open to any website, so you can&apos;t restrict them to
-          specific domains yet. A publishable key only identifies the embed; it grants no access to private data.
+        <Callout tone="info" title={t("whoCanEmbedTitle")}>
+          {t("whoCanEmbedBody")}
         </Callout>
         <div className="min-w-0 space-y-2">
-          <p className="text-[13px] font-medium text-near-ink">Content Security Policy</p>
+          <p className="text-[13px] font-medium text-near-ink">{t("cspTitle")}</p>
           <p className="text-[12.5px] text-soft-ink">
-            If your site sets a CSP, allow Harly for scripts and API calls. Add your storage host to{" "}
-            <code className="font-mono">connect-src</code> if candidates upload résumés.
+            {t.rich("cspHelp", { code: (chunks) => <code className="font-mono">{chunks}</code> })}
           </p>
           <CodePanel code={buildCspSnippet(appUrl)} language="CSP" maxHeightClass="max-h-32" />
         </div>
@@ -329,12 +326,12 @@ export function EmbedSection({
 
       <details className="group rounded-[var(--radius-inner)] border border-hairline">
         <summary className="cursor-pointer select-none list-none rounded-[var(--radius-inner)] px-4 py-3 text-[13px] font-medium text-near-ink focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-near-ink/10">
-          Advanced: theme with CSS, or build your own apply form
+          {t("advanced")}
         </summary>
         <div className="space-y-5 border-t border-hairline p-4">
           <div className="space-y-2">
             <p className="text-[12.5px] text-soft-ink">
-              Override any token from your own stylesheet. Your CSS wins over the accent color above.
+              {t("cssHelp")}
             </p>
             <CodePanel
               language="CSS"
@@ -344,7 +341,7 @@ export function EmbedSection({
           </div>
           <div className="space-y-2">
             <p className="text-[12.5px] text-soft-ink">
-              Prefer your own markup? Load a job&apos;s questions and submit applications with the public API.
+              {t("customFormHelp")}
             </p>
             <CodePanel code={buildCustomFormSnippet(appUrl)} language="HTML" />
             <CodePanel code={buildApiSubmitSnippet(appUrl)} language="TypeScript" maxHeightClass="max-h-56" />

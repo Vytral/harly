@@ -1,5 +1,6 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
+import { getTranslations } from "next-intl/server";
 import { and, eq, isNull } from "drizzle-orm";
 import type { Route } from "next";
 
@@ -55,10 +56,11 @@ export async function PortalShell({ children }: { children: React.ReactNode }) {
   ]);
 
   const careerConfig = normalizeCareerPageConfig(org?.careerPageConfig);
+  const t = await getTranslations("features.portal.PortalShellServer");
 
   return (
     <PortalShellClient
-      orgName={org?.name ?? "Careers"}
+      orgName={org?.name ?? t("orgFallback")}
       orgLogo={org?.logo ?? null}
       orgFullLogoUrl={org?.fullLogoUrl ?? null}
       orgFullLogoDarkUrl={org?.fullLogoDarkUrl ?? null}

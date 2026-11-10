@@ -1,6 +1,7 @@
 import "server-only";
 
 import { and, desc, eq, isNull } from "drizzle-orm";
+import { getLocale, getTranslations } from "@/i18n/server";
 
 import {
   applications,
@@ -32,8 +33,6 @@ function escapeHtml(value: string) {
     .replace(/'/g, "&#39;");
 }
 
-const dateFormat = new Intl.DateTimeFormat("en-US", { dateStyle: "medium" });
-
 /**
  * Variable values for one application, the manual twin of the workflow
  * runtime's loader. Interview-only values stay blank: a hand-generated
@@ -43,6 +42,7 @@ async function loadApplicationValues(input: {
   workspaceId: string;
   actorId: string;
   applicationId: string;
+  locale: string;
 }): Promise<{ values: TemplateValues; candidateId: string } | null> {
   const [row] = await db
     .select({
@@ -66,6 +66,7 @@ async function loadApplicationValues(input: {
     )
     .limit(1);
   if (!row) return null;
+  const dateFormat = new Intl.DateTimeFormat(input.locale, { dateStyle: "medium" });
   const [[workspace], [actor], [offer]] = await Promise.all([
     db.select({ name: organization.name }).from(organization).where(eq(organization.id, input.workspaceId)).limit(1),
     db.select({ name: authUsers.name }).from(authUsers).where(eq(authUsers.id, input.actorId)).limit(1),
@@ -124,6 +125,8 @@ export async function renderTemplateForApplication(input: {
   templateId: string;
   applicationId: string;
 }): Promise<RenderedTemplate> {
+  const t = await getTranslations("server.documents.generateFromTemplate");
+  const locale = await getLocale();
   const [template] = await db
     .select({
       name: workflowDocumentTemplates.name,
@@ -139,13 +142,13 @@ export async function renderTemplateForApplication(input: {
       ),
     )
     .limit(1);
-  if (!template) return { ok: false, error: "Document template not found." };
+  if (!template) return { ok: false, error: t("templateNotFound") };
   const unknown = findUnknownVariables(`${template.title}\n${template.body}`);
   if (unknown.length > 0) {
-    return { ok: false, error: `This template uses unknown variables: ${unknown.join(", ")}.` };
+    return { ok: false, error: t("unknownVariables", { names: unknown.join(", ") }) };
   }
-  const loaded = await loadApplicationValues(input);
-  if (!loaded) return { ok: false, error: "Candidate application not found." };
+  const loaded = await loadApplicationValues({ ...input, locale });
+  if (!loaded) return { ok: false, error: t("applicationNotFound") };
 
   const { values } = loaded;
   const escaped = Object.fromEntries(
@@ -155,7 +158,7 @@ export async function renderTemplateForApplication(input: {
   const blank = TEMPLATE_VARIABLES.filter(
     (variable) =>
       !values[variable.key] && new RegExp(`\\{\\{\\s*${variable.key}\\s*\\}\\}`, "i").test(used),
-  ).map((variable) => variable.label);
+  ).map((variable) => variable.key);
   return {
     ok: true,
     title: interpolateTemplate(template.title, values).replace(/[\r\n]/g, " ").trim(),

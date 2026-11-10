@@ -11,6 +11,7 @@
 
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { motion, useReducedMotion } from "motion/react";
+import { useLocale, useTranslations } from "next-intl";
 
 import { cn } from "@/lib/utils";
 import { SourceLogo } from "./brand-logos";
@@ -77,8 +78,6 @@ function smoothPath(points: { x: number; y: number }[]): string {
   return d;
 }
 
-const fmt = new Intl.NumberFormat("en");
-
 // ── Trend chart , multi-series area + line with inspector ────────────────────
 
 export type TrendPoint = { label: string; sub?: string; value: number };
@@ -92,6 +91,7 @@ export type TrendSeries = {
 export function TrendChart({ series }: { series: TrendSeries[] }) {
   const gradientId = useId();
   const shouldReduceMotion = useReducedMotion();
+  const t = useTranslations("features.reports.charts");
   const [hidden, setHidden] = useState<Set<string>>(() => new Set());
   const labels = series[0]?.points.map((p) => p.label) ?? [];
   const subs = series[0]?.points.map((p) => p.sub ?? p.label) ?? [];
@@ -165,7 +165,7 @@ export function TrendChart({ series }: { series: TrendSeries[] }) {
           height={H}
           className="block w-full select-none"
           role="img"
-          aria-label="Hiring trend over time"
+          aria-label={t("trendLabel")}
           onMouseLeave={() => setActive(Math.max(n - 1, 0))}
         >
           <defs>
@@ -240,7 +240,12 @@ export function TrendChart({ series }: { series: TrendSeries[] }) {
               fill="transparent"
               tabIndex={0}
               role="button"
-              aria-label={`${subs[i]}: ${visible.map((s) => `${s.label} ${s.points[i]?.value ?? 0}`).join(", ")}`}
+              aria-label={t("pointLabel", {
+                date: subs[i],
+                values: visible
+                  .map((s) => t("seriesValue", { label: s.label, value: s.points[i]?.value ?? 0 }))
+                  .join(", "),
+              })}
               className="cursor-pointer outline-none focus-visible:stroke-primary focus-visible:[stroke-width:2px]"
               onMouseEnter={() => setActive(i)}
               onFocus={() => setActive(i)}
@@ -294,6 +299,9 @@ export type FunnelDatum = { name: string; count: number; pct: number | null; act
 
 export function FunnelChart({ stages }: { stages: FunnelDatum[] }) {
   const shouldReduceMotion = useReducedMotion();
+  const t = useTranslations("features.reports.charts");
+  const locale = useLocale();
+  const fmt = new Intl.NumberFormat(locale);
   const total = stages.reduce((s, st) => s + st.activeNow, 0);
   const max = Math.max(1, ...stages.map((s) => s.count));
 
@@ -321,8 +329,8 @@ export function FunnelChart({ stages }: { stages: FunnelDatum[] }) {
         </motion.li>
       ))}
       <li className="flex items-center justify-between border-t border-hairline pt-2 text-xs text-soft-ink">
-        <span>Share of applications received that reached each stage</span>
-        <span className="tabular-nums">{fmt.format(total)} active now</span>
+        <span>{t("funnelShareFooter")}</span>
+        <span className="tabular-nums">{t("activeNow", { count: fmt.format(total) })}</span>
       </li>
     </ul>
   );
@@ -340,14 +348,11 @@ export type SourceDatum = {
   conversion: number | null;
 };
 
-const SORT_LABELS = {
-  candidates: "applications",
-  hires: "hires",
-  conversion: "conversion",
-} as const;
-
 export function SourceBars({ sources }: { sources: SourceDatum[] }) {
   const shouldReduceMotion = useReducedMotion();
+  const t = useTranslations("features.reports.charts");
+  const locale = useLocale();
+  const fmt = new Intl.NumberFormat(locale);
   const [sort, setSort] = useState<"candidates" | "hires" | "conversion">("candidates");
   const sorted = useMemo(
     () =>
@@ -380,7 +385,7 @@ export function SourceBars({ sources }: { sources: SourceDatum[] }) {
                   transition={{ type: "spring", stiffness: 500, damping: 35 }}
                 />
               ) : null}
-              {SORT_LABELS[key]}
+              {t(`sortBy.${key}`)}
             </button>
           ))}
         </div>
@@ -404,8 +409,8 @@ export function SourceBars({ sources }: { sources: SourceDatum[] }) {
             </span>
             <span className="flex min-w-0 flex-col gap-1">
               <span className="flex items-baseline justify-between text-[11px] tabular-nums text-soft-ink">
-                <span>{fmt.format(row.candidates)} applications</span>
-                <span>{fmt.format(row.hires)} hired</span>
+                <span>{t("applicationsCount", { count: row.candidates })}</span>
+                <span>{t("hiredCount", { count: fmt.format(row.hires) })}</span>
               </span>
               <span className="relative h-5 overflow-hidden rounded-lg bg-card-inset">
                 <span
@@ -431,19 +436,22 @@ export function SourceBars({ sources }: { sources: SourceDatum[] }) {
 // ── Histogram , vertical columns (time-to-hire) ──────────────────────────────
 
 export function Histogram({ data, color = "var(--chart-2)" }: { data: { bucket: string; count: number }[]; color?: string }) {
+  const t = useTranslations("features.reports.charts");
   const max = niceMax(Math.max(0, ...data.map((d) => d.count)));
   const total = data.reduce((s, d) => s + d.count, 0);
 
   if (total === 0) {
     return (
       <div className="flex h-40 flex-col items-center justify-center gap-1 text-center">
-        <p className="text-sm text-soft-ink">No hires yet</p>
-        <p className="text-xs text-soft-ink">Distribution appears once roles are filled.</p>
+        <p className="text-sm text-soft-ink">{t("noHiresYet")}</p>
+        <p className="text-xs text-soft-ink">{t("distributionEmpty")}</p>
       </div>
     );
   }
 
-  const summary = `Time to hire distribution. ${data.map((d) => `${d.bucket}: ${d.count}`).join("; ")}.`;
+  const summary = t("distributionLabel", {
+    buckets: data.map((d) => t("bucketValue", { bucket: d.bucket, count: d.count })).join("; "),
+  });
 
   return (
     <div className="flex h-44 items-end gap-2" role="img" aria-label={summary}>

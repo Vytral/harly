@@ -1,13 +1,92 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import {
+  getResetPasswordSubject,
+  staffMagicLinkSubject,
+} from "@harly/emails";
 
 import {
+  buildResetPasswordAuthMessage,
+  buildStaffMagicLinkAuthMessage,
   buildSocialProviders,
   enforceInviteOnly,
+  resolveAuthRecipientEmailLocale,
   sendAuthEmail,
   sendMagicLinkEmail,
   type AuthDb,
   type EmailSender,
 } from "./auth-logic";
+
+function messageLocale(message: { react: unknown }) {
+  expect(message.react).toMatchObject({ props: { locale: expect.any(String) } });
+  return (message.react as { props: { locale?: string } }).props.locale;
+}
+
+describe("localized auth email messages", () => {
+  it("uses the saved recipient locale for both reset subject and template", () => {
+    const message = buildResetPasswordAuthMessage({
+      userName: "Ava",
+      resetUrl: "https://example.com/reset",
+      preferredEmailLocale: "PT-br",
+    });
+
+    expect(message.subject).toBe(getResetPasswordSubject("pt-BR"));
+    expect(messageLocale(message)).toBe("pt-BR");
+  });
+
+  it("uses the saved recipient locale for both magic-link subject and template", () => {
+    const message = buildStaffMagicLinkAuthMessage({
+      loginUrl: "https://example.com/login",
+      preferredEmailLocale: "de",
+    });
+
+    expect(message.subject).toBe(staffMagicLinkSubject("de"));
+    expect(messageLocale(message)).toBe("de");
+  });
+
+  it("uses English for missing or unsupported saved locales", () => {
+    for (const preferredEmailLocale of [undefined, "pt-PT"]) {
+      const reset = buildResetPasswordAuthMessage({
+        userName: "Ava",
+        resetUrl: "https://example.com/reset",
+        preferredEmailLocale,
+      });
+      const magicLink = buildStaffMagicLinkAuthMessage({
+        loginUrl: "https://example.com/login",
+        preferredEmailLocale,
+      });
+
+      expect(reset.subject).toBe(getResetPasswordSubject("en"));
+      expect(messageLocale(reset)).toBe("en");
+      expect(magicLink.subject).toBe(staffMagicLinkSubject("en"));
+      expect(messageLocale(magicLink)).toBe("en");
+    }
+  });
+
+  it("looks up magic-link locale by normalized recipient email and falls back without a match", async () => {
+    const readPreference = vi
+      .fn()
+      .mockResolvedValueOnce("fr")
+      .mockResolvedValueOnce(undefined);
+
+    await expect(
+      resolveAuthRecipientEmailLocale(" ADA@Example.com ", readPreference),
+    ).resolves.toBe("fr");
+    await expect(
+      resolveAuthRecipientEmailLocale("unknown@example.com", readPreference),
+    ).resolves.toBe("en");
+
+    expect(readPreference).toHaveBeenNthCalledWith(1, "ada@example.com");
+    expect(readPreference).toHaveBeenNthCalledWith(2, "unknown@example.com");
+  });
+
+  it("falls back to English if the magic-link preference lookup fails", async () => {
+    await expect(
+      resolveAuthRecipientEmailLocale("ada@example.com", async () => {
+        throw new Error("database unavailable");
+      }),
+    ).resolves.toBe("en");
+  });
+});
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Helpers

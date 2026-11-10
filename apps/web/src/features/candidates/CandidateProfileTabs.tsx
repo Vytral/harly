@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useTranslations } from "next-intl";
 import Link from "next/link";
 import type { Route } from "next";
 import {
@@ -88,6 +89,7 @@ export function CandidateProfileTabs({
   privacyRequests = [],
   canFulfilErasure = false,
 }: CandidateProfileTabsProps) {
+  const t = useTranslations("candidates.profileTabs");
   const showOffers = offerAccess
     ? offerAccess.canManage || offerAccess.canDecide
     : true;
@@ -114,32 +116,32 @@ export function CandidateProfileTabs({
         variant="line"
         className="w-full justify-start gap-5 overflow-x-auto border-b border-hairline text-sm [&>button]:flex-none [&>button]:px-0.5"
       >
-        <TabsTrigger value="profile">Profile</TabsTrigger>
+        <TabsTrigger value="profile">{t("profile")}</TabsTrigger>
         <TabsTrigger value="interviews">
-          Interviews
+          {t("interviews")}
           <TabCount value={interviews.length} />
         </TabsTrigger>
         <TabsTrigger value="communication">
-          Communication
+          {t("communication")}
           <TabCount value={messages.length} />
         </TabsTrigger>
         <TabsTrigger value="evaluation">
-          Evaluation
+          {t("evaluation")}
           <TabCount value={scorecards.length} />
         </TabsTrigger>
         {showOffers ? (
           <TabsTrigger value="offers">
-            Offers
+            {t("offers")}
             <TabCount value={offers.length} />
           </TabsTrigger>
         ) : null}
         <TabsTrigger value="activity">
-          Activity
+          {t("activity")}
           <TabCount value={activity.length + notes.length} />
         </TabsTrigger>
         {privacyRequests.length > 0 ? (
           <TabsTrigger value="privacy">
-            Privacy
+            {t("privacy")}
             <TabCount value={privacyRequests.length} />
           </TabsTrigger>
         ) : null}
@@ -157,21 +159,21 @@ export function CandidateProfileTabs({
 
         <div className="flex flex-wrap items-center justify-between gap-3 rounded-[var(--radius-card)] bg-card px-5 py-4 shadow-[var(--shadow-card)]">
           <div className="min-w-0">
-            <p className="text-sm font-semibold text-near-ink">Documents</p>
+            <p className="text-sm font-semibold text-near-ink">{t("documents")}</p>
             <p className="text-[13px] text-soft-ink">
-              Generate an offer letter or agreement from a template, or see everything filed for {candidateName}.
+              {t("documentsDescription", { name: candidateName })}
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
             <Button size="sm" variant="outline" asChild>
               <Link href={`/dashboard/documents?candidateId=${candidateId}` as Route}>
                 <Folder className="size-4" />
-                View all
+                {t("viewAll")}
               </Link>
             </Button>
             <Button size="sm" onClick={() => setGenerateOpen(true)}>
               <FilePlus2 className="size-4" />
-              Generate document
+              {t("generateDocument")}
             </Button>
           </div>
         </div>
@@ -212,7 +214,7 @@ export function CandidateProfileTabs({
             trigger={
               <Button size="sm">
                 <Plus className="size-4" />
-                Schedule interview
+                {t("scheduleInterview")}
               </Button>
             }
           />
@@ -220,8 +222,8 @@ export function CandidateProfileTabs({
         {interviews.length === 0 ? (
           <EmptySection
             icon={CalendarClock}
-            title="No interviews yet"
-            description="Schedule one with the button above. The join link, the interviewer and the notes all stay on the card."
+            title={t("noInterviews")}
+            description={t("noInterviewsDescription")}
           />
         ) : (
           <div className="space-y-3 duration-300 animate-in fade-in slide-in-from-bottom-1">
@@ -254,7 +256,7 @@ export function CandidateProfileTabs({
             trigger={
               <Button size="sm">
                 <Mail className="size-4" />
-                New message
+                {t("newMessage")}
               </Button>
             }
           />
@@ -262,8 +264,8 @@ export function CandidateProfileTabs({
         {messages.length === 0 ? (
           <EmptySection
             icon={Mail}
-            title={`You haven't emailed ${candidateName.split(" ")[0]} yet`}
-            description="Write the first message above. Their replies arrive in the Inbox and thread back here automatically."
+            title={t("noMessages", { name: candidateName.split(" ")[0] })}
+            description={t("noMessagesDescription")}
           />
         ) : (
           <div className="space-y-4 duration-300 animate-in fade-in slide-in-from-bottom-1">
@@ -292,8 +294,8 @@ export function CandidateProfileTabs({
         <div className="flex items-center justify-between gap-3">
           <p className="text-sm text-muted-foreground">
             {scorecards.length === 0
-              ? "Nobody on the team has scored this candidate yet."
-              : `${scorecards.length} evaluation${scorecards.length === 1 ? "" : "s"} from the team.`}
+              ? t("noEvaluations")
+              : t("evaluationCount", { count: scorecards.length })}
           </p>
           {applications[0] ? (
             <EvaluationDrawer
@@ -304,14 +306,14 @@ export function CandidateProfileTabs({
               trigger={
                 <Button size="sm">
                   <ClipboardCheck className="size-4" />
-                  Add evaluation
+                  {t("addEvaluation")}
                 </Button>
               }
             />
           ) : (
-            <Button size="sm" disabled title="This candidate has no application to score">
+            <Button size="sm" disabled title={t("noApplicationToScore")}>
               <ClipboardCheck className="size-4" />
-              Add evaluation
+              {t("addEvaluation")}
             </Button>
           )}
         </div>
@@ -336,7 +338,7 @@ export function CandidateProfileTabs({
         {/* Notes always on top so the form is reachable without scrolling */}
         <div>
           <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-            Notes &amp; comments
+            {t("notesAndComments")}
           </p>
           <NoteForm
             candidateId={candidateId}
@@ -351,7 +353,7 @@ export function CandidateProfileTabs({
         {activity.length > 0 ? (
           <div>
             <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-              Timeline
+              {t("timeline")}
             </p>
             <ActivityTimeline activity={activity} />
           </div>
@@ -360,8 +362,8 @@ export function CandidateProfileTabs({
         {activity.length === 0 && notes.length === 0 ? (
           <EmptySection
             icon={MessageSquare}
-            title="Nothing has happened yet"
-            description="Stage moves, notes, emails and interviews all land here in order, so you can see how this candidate got to where they are."
+            title={t("nothingYet")}
+            description={t("nothingYetDescription")}
           />
         ) : null}
       </TabsContent>

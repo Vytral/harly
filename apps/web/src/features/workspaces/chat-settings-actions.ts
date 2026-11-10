@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { eq } from "drizzle-orm";
 import { z } from "zod";
+import { getTranslations } from "@/i18n/server";
 
 import { db, workspaceSettings } from "@harly/db";
 
@@ -31,21 +32,24 @@ const ALLOWED_HOSTS: Record<ChatProviderId, string[]> = {
   discord: ["discord.com", "discordapp.com", "ptb.discord.com", "canary.discord.com"],
 };
 
+type Translate = (key: string, values?: Record<string, string | number>) => string;
+
 function validateWebhookUrl(
   provider: ChatProviderId,
   url: string,
+  t: Translate,
 ): string | null {
   let parsed: URL;
   try {
     parsed = new URL(url);
   } catch {
-    return "Enter a valid webhook URL.";
+    return t("invalidWebhookUrl");
   }
-  if (parsed.protocol !== "https:") return "Webhook URL must use https.";
+  if (parsed.protocol !== "https:") return t("webhookHttpsRequired");
   if (!ALLOWED_HOSTS[provider].includes(parsed.hostname)) {
     return provider === "slack"
-      ? "Slack webhooks start with https://hooks.slack.com/…"
-      : "Discord webhooks start with https://discord.com/api/webhooks/…";
+      ? t("slackWebhookHost")
+      : t("discordWebhookHost");
   }
   return null;
 }
@@ -65,14 +69,15 @@ export async function saveChatSettingsAction(input: {
 }): Promise<ChatSettingsActionResult> {
   assertNotDemo();
   const context = await requirePermission("integrations:manage");
+  const t = await getTranslations("server.workspaces.chatSettingsActions");
 
   if (!isEncryptionConfigured()) {
-    return { ok: false, error: "Server encryption key not configured." };
+    return { ok: false, error: t("encryptionKeyMissing") };
   }
 
   const parsed = saveSchema.safeParse(input);
   if (!parsed.success) {
-    return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid input." };
+    return { ok: false, error: parsed.error.issues[0]?.message ?? t("invalidInput") };
   }
 
   const { enabled, provider, webhookUrl, events } = parsed.data;
@@ -94,14 +99,14 @@ export async function saveChatSettingsAction(input: {
   };
 
   if (webhookUrl && webhookUrl.length > 0) {
-    const error = validateWebhookUrl(provider, webhookUrl);
+    const error = validateWebhookUrl(provider, webhookUrl, t);
     if (error) return { ok: false, error };
     const enc = encryptSecret(webhookUrl);
     set.chatWebhookCiphertext = enc.ciphertext;
     set.chatWebhookIv = enc.iv;
     set.chatWebhookTag = enc.tag;
   } else if (enabled && !hasStored) {
-    return { ok: false, error: "Add a webhook URL first." };
+    return { ok: false, error: t("webhookUrlRequired") };
   }
 
   await db
@@ -142,19 +147,20 @@ export async function sendTestChatAction(input: {
 }): Promise<ChatSettingsActionResult> {
   assertNotDemo();
   const context = await requirePermission("integrations:manage");
+  const t = await getTranslations("server.workspaces.chatSettingsActions");
 
   let webhookUrl = input.webhookUrl?.trim();
   if (webhookUrl) {
-    const error = validateWebhookUrl(input.provider, webhookUrl);
+    const error = validateWebhookUrl(input.provider, webhookUrl, t);
     if (error) return { ok: false, error };
   } else {
     const stored = await getWorkspaceChatConfig(context.organization.id);
-    if (!stored) return { ok: false, error: "No webhook configured yet." };
+    if (!stored) return { ok: false, error: t("noWebhookConfigured") };
     webhookUrl = stored.webhookUrl;
   }
 
   if (!isChatProviderId(input.provider)) {
-    return { ok: false, error: "Unknown provider." };
+    return { ok: false, error: t("unknownProvider") };
   }
 
   const result = await sendChatMessage(
@@ -169,7 +175,11 @@ export async function sendTestChatAction(input: {
   if (!result.ok) {
     return {
       ok: false,
-      error: result.error ?? `Provider returned ${result.status ?? "an error"}.`,
+      error:
+        result.error ??
+        (result.status
+          ? t("providerReturnedStatus", { status: result.status })
+          : t("providerReturnedError")),
     };
   }
   return { ok: true };

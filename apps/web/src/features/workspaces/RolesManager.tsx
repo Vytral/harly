@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { toast } from "@/lib/notification-island/toast";
 
 import {
@@ -64,6 +65,7 @@ const TOTAL_PERMISSIONS = PERMISSION_GROUPS.reduce(
 );
 
 export function RolesManager({ roles }: { roles: RoleSummary[] }) {
+  const t = useTranslations("features.workspaces.rolesManager");
   const [editing, setEditing] = useState<RoleSummary | null>(null);
 
   return (
@@ -89,12 +91,11 @@ export function RolesManager({ roles }: { roles: RoleSummary[] }) {
                   <div className="flex items-center gap-2">
                     <p className="font-medium">{role.name}</p>
                     <Badge variant={role.isBuiltin ? "secondary" : "outline"}>
-                      {role.isBuiltin ? "Built-in" : "Custom"}
+                      {role.isBuiltin ? t("builtIn") : t("custom")}
                     </Badge>
                   </div>
                   <p className="mt-0.5 text-xs text-muted-foreground">
-                    {role.memberCount}{" "}
-                    {role.memberCount === 1 ? "member" : "members"}
+                    {t("memberCount", { count: role.memberCount })}
                   </p>
                   {role.isBuiltin && isBuiltinRole(role.key) ? (
                     <p className="mt-0.5 text-xs text-muted-foreground">
@@ -115,10 +116,10 @@ export function RolesManager({ roles }: { roles: RoleSummary[] }) {
                       {role.editable ? (
                         <>
                           <PencilIcon className="size-4" />
-                          Edit
+                          {t("edit")}
                         </>
                       ) : (
-                        "View"
+                        t("view")
                       )}
                     </Button>
                   </SheetTrigger>
@@ -133,10 +134,10 @@ export function RolesManager({ roles }: { roles: RoleSummary[] }) {
 
             <div className="mt-4 space-y-1.5">
               <div className="flex items-center justify-between text-xs">
-                <span className="text-muted-foreground">Permissions</span>
+                <span className="text-muted-foreground">{t("permissions")}</span>
                 <span className="font-medium tabular-nums">
                   {fullAccess
-                    ? "Full access"
+                    ? t("fullAccess")
                     : `${role.permissions.length} / ${TOTAL_PERMISSIONS}`}
                 </span>
               </div>
@@ -155,20 +156,21 @@ export function RolesManager({ roles }: { roles: RoleSummary[] }) {
             role.scope.departments.length > 0 ||
             role.scope.regions.length > 0 ? (
               <p className="mt-3 text-xs text-muted-foreground">
-                Scoped to {role.scope.jobAccess === "assigned" ? "assigned jobs" : "selected filters"}
-                {role.scope.departments.length > 0
-                  ? ` · ${role.scope.departments.length} department${role.scope.departments.length === 1 ? "" : "s"}`
-                  : ""}
-                {role.scope.regions.length > 0
-                  ? ` · ${role.scope.regions.length} region${role.scope.regions.length === 1 ? "" : "s"}`
-                  : ""}
+                {t("scopedSummary", {
+                  access:
+                    role.scope.jobAccess === "assigned"
+                      ? t("scopeAssignedJobs")
+                      : t("scopeSelectedFilters"),
+                  departments: role.scope.departments.length,
+                  regions: role.scope.regions.length,
+                })}
               </p>
             ) : null}
 
             {role.members.length > 0 && (
               <div className="mt-4 border-t pt-4">
                 <p className="mb-2 text-xs font-medium text-muted-foreground">
-                  Members with this role
+                  {t("membersWithRole")}
                 </p>
                 <AvatarGroup>
                   {role.members.slice(0, 5).map((member) => (
@@ -204,6 +206,7 @@ export function RoleEditor({
   role?: RoleSummary;
   onDone: () => void;
 }) {
+  const t = useTranslations("features.workspaces.roleEditor");
   const router = useRouter();
   const readOnly = mode === "view";
   const [name, setName] = useState(role?.name ?? "");
@@ -242,10 +245,10 @@ export function RoleEditor({
           ? await createCustomRole({ name, permissions, scope })
           : await updateCustomRole({ key: role!.key, name, permissions, scope });
       if (!result.ok) {
-        toast.error(result.error ?? "Could not save role.");
+        toast.error(result.error ?? t("couldNotSave"));
         return;
       }
-      toast.success(mode === "create" ? "Role created" : "Role updated");
+      toast.success(mode === "create" ? t("roleCreated") : t("roleUpdated"));
       onDone();
       router.refresh();
     });
@@ -256,10 +259,10 @@ export function RoleEditor({
     startDelete(async () => {
       const result = await deleteCustomRole({ key: role.key });
       if (!result.ok) {
-        toast.error(result.error ?? "Could not delete role.");
+        toast.error(result.error ?? t("couldNotDelete"));
         return;
       }
-      toast.success("Role deleted. Members moved to Recruiter");
+      toast.success(t("roleDeleted"));
       onDone();
       router.refresh();
     });
@@ -267,10 +270,10 @@ export function RoleEditor({
 
   const title =
     mode === "create"
-      ? "New role"
+      ? t("newRole")
       : mode === "view"
-        ? role?.name ?? "Role"
-        : `Edit ${role?.name ?? "role"}`;
+        ? role?.name ?? t("roleFallback")
+        : t("editRole", { name: role?.name ?? t("roleFallback") });
 
   return (
     <DrawerLayout
@@ -278,15 +281,15 @@ export function RoleEditor({
       className="sm:max-w-2xl"
       description={
         readOnly
-          ? "The Owner role always has full access and can't be changed."
+          ? t("readOnlyDescription")
           : role?.isBuiltin
-            ? "Built-in role. Tune its permissions. The name is fixed."
-            : "Pick a name and the permissions this role grants."
+            ? t("builtInDescription")
+            : t("createDescription")
       }
       footer={
         readOnly ? (
           <SheetClose asChild>
-            <Button variant="outline">Close</Button>
+            <Button variant="outline">{t("close")}</Button>
           </SheetClose>
         ) : (
           <>
@@ -302,17 +305,17 @@ export function RoleEditor({
                 ) : (
                   <TrashIcon className="size-4" />
                 )}
-                Delete
+                {t("delete")}
               </Button>
             ) : null}
             <SheetClose asChild>
               <Button variant="outline" disabled={saving}>
-                Cancel
+                {t("cancel")}
               </Button>
             </SheetClose>
             <Button onClick={save} disabled={saving || name.trim().length < 2}>
               {saving ? <SpinnerIcon className="size-4" /> : null}
-              Save
+              {t("save")}
             </Button>
           </>
         )
@@ -320,41 +323,41 @@ export function RoleEditor({
     >
       <div className="space-y-5">
         <div className="space-y-2">
-          <Label htmlFor="role-name">Role name</Label>
+          <Label htmlFor="role-name">{t("roleName")}</Label>
           <Input
             id="role-name"
             value={name}
             onChange={(e) => setName(e.target.value)}
-            placeholder="e.g. Sourcer"
+            placeholder={t("roleNamePlaceholder")}
             disabled={readOnly || Boolean(role?.isBuiltin)}
           />
         </div>
 
         <div className="space-y-3 rounded-xl border bg-muted/20 p-4">
           <div>
-            <p className="text-sm font-medium">Access scope</p>
+            <p className="text-sm font-medium">{t("accessScope")}</p>
             <p className="mt-1 text-xs text-muted-foreground">
-              Limit this role to assigned jobs, departments, or regions. Empty filters mean unrestricted access.
+              {t("accessScopeHelp")}
             </p>
           </div>
           <div className="grid gap-3 sm:grid-cols-3">
             <div className="space-y-1.5">
-              <Label htmlFor="role-job-access">Jobs</Label>
+              <Label htmlFor="role-job-access">{t("jobs")}</Label>
               <Select value={jobAccess} onValueChange={(value) => setJobAccess(value as RoleScope["jobAccess"])} disabled={readOnly}>
                 <SelectTrigger id="role-job-access"><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">All matching jobs</SelectItem>
-                  <SelectItem value="assigned">Assigned jobs only</SelectItem>
+                  <SelectItem value="all">{t("allMatchingJobs")}</SelectItem>
+                  <SelectItem value="assigned">{t("assignedJobsOnly")}</SelectItem>
                 </SelectContent>
               </Select>
             </div>
             <div className="space-y-1.5">
-              <Label htmlFor="role-departments">Departments</Label>
-              <Input id="role-departments" value={departments} onChange={(e) => setDepartments(e.target.value)} placeholder="Engineering, Sales" disabled={readOnly} />
+              <Label htmlFor="role-departments">{t("departments")}</Label>
+              <Input id="role-departments" value={departments} onChange={(e) => setDepartments(e.target.value)} placeholder={t("departmentsPlaceholder")} disabled={readOnly} />
             </div>
             <div className="space-y-1.5">
-              <Label htmlFor="role-regions">Regions</Label>
-              <Input id="role-regions" value={regions} onChange={(e) => setRegions(e.target.value)} placeholder="LATAM, EMEA" disabled={readOnly} />
+              <Label htmlFor="role-regions">{t("regions")}</Label>
+              <Input id="role-regions" value={regions} onChange={(e) => setRegions(e.target.value)} placeholder={t("regionsPlaceholder")} disabled={readOnly} />
             </div>
           </div>
         </div>

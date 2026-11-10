@@ -18,6 +18,7 @@ export type ErasePolicyIssue = {
   nodeId: string;
   fieldPath: string;
   message: string;
+  code?: string;
 };
 
 function isEraseAction(node: WorkflowNode): node is Extract<WorkflowNode, { type: "action" }> {
@@ -98,6 +99,7 @@ export function validateEraseCandidatePublishRules(
         fieldPath: "input.executionMode",
         message:
           "Erase candidate data requires an approval step on every path to this action, or set executionMode to automatic when workspace data retention is enabled.",
+        code: "eraseApprovalRequired",
       });
     }
     if (mode === "automatic") {
@@ -109,6 +111,7 @@ export function validateEraseCandidatePublishRules(
           fieldPath: "input.executionMode",
           message:
             "Automatic erasure requires a literal executionMode of automatic.",
+          code: "eraseAutomaticLiteral",
         });
       }
     }

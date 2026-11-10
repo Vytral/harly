@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { Check, ChevronDown } from "lucide-react";
 
 import { cn } from "@/lib/utils";
@@ -79,6 +80,7 @@ export function WorkspaceSwitcher({
    */
   wordmark?: { lightUrl: string; darkUrl: string | null } | null;
 }) {
+  const t = useTranslations("shell.workspaceSwitcher");
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [isPending, startTransition] = useTransition();
@@ -151,7 +153,7 @@ export function WorkspaceSwitcher({
     return (
       <Link
         href="/dashboard"
-        aria-label={`${workspace.name}, go to home`}
+        aria-label={t("goHome", { name: workspace.name })}
         className={cn(triggerClass, "hover:bg-pure-snow/60 md:pr-3")}
       >
         {content}
@@ -162,7 +164,7 @@ export function WorkspaceSwitcher({
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger
-        aria-label={`Switch workspace, current: ${workspace.name}`}
+        aria-label={t("switchWorkspace", { name: workspace.name })}
         className={cn(
           triggerClass,
           "hover:bg-pure-snow/60 data-[state=open]:bg-pure-snow/70",
@@ -179,7 +181,7 @@ export function WorkspaceSwitcher({
         sideOffset={8}
         className="w-64 rounded-[var(--radius-card)] border-0 p-2 shadow-[var(--shadow-float)]"
       >
-        <p className="type-col-head px-2 py-1.5">Workspace</p>
+        <p className="type-col-head px-2 py-1.5">{t("workspace")}</p>
         {workspaceOptions.map((ws) => (
           <button
             key={ws.authOrganizationId}

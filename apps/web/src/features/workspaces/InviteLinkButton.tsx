@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { toast } from "@/lib/notification-island/toast";
 import { copyText } from "@/lib/utils";
 
@@ -63,6 +64,7 @@ export function InviteLinkButton({
   inviteLink: InviteLinkState;
   assignableRoles: AssignableRole[];
 }) {
+  const t = useTranslations("features.workspaces.inviteLinkButton");
   const router = useRouter();
   const [pending, start] = useTransition();
   const [copied, setCopied] = useState(false);
@@ -88,10 +90,10 @@ export function InviteLinkButton({
       fd.set("role", role);
       const result = await enableInviteLinkAction({ success: false }, fd);
       if (result.success) {
-        toast.success("Invite link enabled");
+        toast.success(t("linkEnabled"));
         router.refresh();
       } else {
-        toast.error(result.error ?? "Unable to enable link.");
+        toast.error(result.error ?? t("unableToEnable"));
       }
     });
   }
@@ -100,10 +102,10 @@ export function InviteLinkButton({
     start(async () => {
       const result = await disableInviteLinkAction();
       if (result.success) {
-        toast.success("Invite link disabled");
+        toast.success(t("linkDisabled"));
         router.refresh();
       } else {
-        toast.error(result.error ?? "Unable to disable link.");
+        toast.error(result.error ?? t("unableToDisable"));
       }
     });
   }
@@ -112,10 +114,10 @@ export function InviteLinkButton({
     start(async () => {
       const result = await rotateInviteLinkAction();
       if (result.success) {
-        toast.success("New link generated. Old one disabled");
+        toast.success(t("linkRotated"));
         router.refresh();
       } else {
-        toast.error(result.error ?? "Unable to rotate link.");
+        toast.error(result.error ?? t("unableToRotate"));
       }
     });
   }
@@ -133,8 +135,8 @@ export function InviteLinkButton({
         <Button
           variant="outline"
           size="icon"
-          aria-label="Invite link"
-          title="Invite link"
+          aria-label={t("title")}
+          title={t("title")}
           className={inviteLink.enabled ? "text-pine" : "text-muted-foreground"}
         >
           <ShareLinkIcon className="size-4" />
@@ -143,9 +145,9 @@ export function InviteLinkButton({
       <PopoverContent align="end" className="w-80 space-y-3">
         <div className="flex items-center justify-between">
           <div>
-            <p className="text-sm font-semibold">Invite link</p>
+            <p className="text-sm font-semibold">{t("title")}</p>
             <p className="text-xs text-muted-foreground">
-              Share one link instead of emailing each person.
+              {t("description")}
             </p>
           </div>
           <Switch
@@ -169,7 +171,7 @@ export function InviteLinkButton({
                 size="icon"
                 className="shrink-0"
                 onClick={copy}
-                aria-label="Copy link"
+                aria-label={t("copyLink")}
               >
                 {copied ? (
                   <CheckIcon className="size-4 text-pine" />
@@ -180,11 +182,14 @@ export function InviteLinkButton({
             </div>
             <div className="flex items-center justify-between gap-2">
               <p className="text-[11px] text-muted-foreground">
-                Joins as{" "}
-                <span className="font-medium capitalize text-foreground">
-                  {inviteLink.role.replace("_", " ")}
-                </span>
-                .
+                {t.rich("joinsAs", {
+                  role: inviteLink.role.replace("_", " "),
+                  strong: (chunks) => (
+                    <span className="font-medium capitalize text-foreground">
+                      {chunks}
+                    </span>
+                  ),
+                })}
               </p>
               <Button
                 type="button"
@@ -194,14 +199,14 @@ export function InviteLinkButton({
                 disabled={pending}
                 className="shrink-0 text-xs text-muted-foreground"
               >
-                Rotate
+                {t("rotate")}
               </Button>
             </div>
           </>
         ) : (
           <div className="space-y-1.5">
             <Label className="text-xs text-muted-foreground">
-              Role new joiners get
+              {t("roleLabel")}
             </Label>
             <Select value={role} onValueChange={setRole}>
               <SelectTrigger className="h-9 w-full">
@@ -216,7 +221,7 @@ export function InviteLinkButton({
               </SelectContent>
             </Select>
             <p className="text-[11px] text-muted-foreground">
-              Enable the toggle above to generate the link.
+              {t("enableToggleHint")}
             </p>
           </div>
         )}

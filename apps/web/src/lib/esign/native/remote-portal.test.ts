@@ -66,6 +66,8 @@ vi.mock("@/server/webhooks/emit", () => ({ emitWebhookEvent: mocks.emitWebhookEv
 
 import { createNativeSigningLink, rotateNativePortalSigningLink } from "./remote";
 
+vi.mock("next-intl/server", async () => (await import("@/test-support/intl-server-mock")).intlServerMock);
+
 function query(value: unknown) {
   const builder = new Proxy(function () {}, {
     get(_target, property) {

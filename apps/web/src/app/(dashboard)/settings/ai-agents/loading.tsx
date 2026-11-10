@@ -1,11 +1,14 @@
+import { getTranslations } from "next-intl/server";
+
 import { Card } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 
 /** Mirrors settings/ai-agents/page.tsx: connect card, setup steps, connection rows. */
-export default function AiAgentsSettingsLoading() {
+export default async function AiAgentsSettingsLoading() {
+  const t = await getTranslations("pages.settingsAiAgents.loading");
   return (
     <div aria-busy="true" className="space-y-6">
-      <span className="sr-only">Loading…</span>
+      <span className="sr-only">{t("label")}</span>
       <Card className="gap-5 p-6">
         <div className="flex items-start gap-4">
           <Skeleton className="size-10 rounded-[var(--radius-btn)]" />

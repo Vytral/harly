@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useTranslations } from "next-intl";
 import {
   ArrowRight,
   CheckSquare,
@@ -24,8 +25,8 @@ export type StepInsertOption = {
   id: string;
   kind: BlockKind;
   actionType?: ActionType;
-  label: string;
-  blurb: string;
+  /** Key under `features.automations.stepSelector.options` for the label and blurb. */
+  messageKey: string;
   Icon: React.ComponentType<{ className?: string }>;
 };
 
@@ -34,52 +35,45 @@ export const QUICK_STEP_OPTIONS: StepInsertOption[] = [
     id: "send_email",
     kind: "action",
     actionType: "send_email",
-    label: "Send email",
-    blurb: "Send an email to candidate or team",
+    messageKey: "sendEmail",
     Icon: Mail,
   },
   {
     id: "delay",
     kind: "delay",
-    label: "Wait",
-    blurb: "Pause for a duration or local time",
+    messageKey: "delay",
     Icon: Clock,
   },
   {
     id: "condition",
     kind: "condition",
-    label: "Condition",
-    blurb: "Branch based on candidate or job rules",
+    messageKey: "condition",
     Icon: GitBranch,
   },
   {
     id: "move_stage",
     kind: "action",
     actionType: "move_stage",
-    label: "Move stage",
-    blurb: "Advance candidate to another pipeline stage",
+    messageKey: "moveStage",
     Icon: ArrowRight,
   },
   {
     id: "add_note",
     kind: "action",
     actionType: "add_note",
-    label: "Add note",
-    blurb: "Add an internal note to the candidate profile",
+    messageKey: "addNote",
     Icon: CheckSquare,
   },
   {
     id: "approval",
     kind: "approval",
-    label: "Approval",
-    blurb: "Require team member sign-off to proceed",
+    messageKey: "approval",
     Icon: ShieldCheck,
   },
   {
     id: "end",
     kind: "end",
-    label: "End automation",
-    blurb: "Complete or stop this execution path",
+    messageKey: "end",
     Icon: OctagonX,
   },
 ];
@@ -87,7 +81,7 @@ export const QUICK_STEP_OPTIONS: StepInsertOption[] = [
 export function StepSelector({
   onSelect,
   trigger,
-  title = "Insert step",
+  title,
   align = "center",
 }: {
   onSelect: (kind: BlockKind, actionType?: ActionType) => void;
@@ -95,10 +89,16 @@ export function StepSelector({
   title?: string;
   align?: "center" | "start" | "end";
 }) {
+  const t = useTranslations("features.automations.stepSelector");
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
 
-  const filtered = QUICK_STEP_OPTIONS.filter(
+  const options = QUICK_STEP_OPTIONS.map((opt) => ({
+    ...opt,
+    label: t(`options.${opt.messageKey}.label`),
+    blurb: t(`options.${opt.messageKey}.blurb`),
+  }));
+  const filtered = options.filter(
     (opt) =>
       !search.trim() ||
       opt.label.toLowerCase().includes(search.toLowerCase()) ||
@@ -117,7 +117,7 @@ export function StepSelector({
       >
         <div className="mb-1 border-b border-hairline px-2 py-1.5">
           <p className="font-display text-xs font-semibold text-foreground">
-            {title}
+            {title ?? t("insertStep")}
           </p>
           <div className="mt-1.5 flex items-center gap-1.5 rounded-lg border border-border bg-warm-paper px-2 py-1">
             <Search className="size-3 shrink-0 text-soft-ink" />
@@ -125,7 +125,7 @@ export function StepSelector({
               type="search"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search steps…"
+              placeholder={t("searchPlaceholder")}
               className="w-full bg-transparent text-xs text-foreground outline-none placeholder:text-soft-ink"
               autoFocus
             />
@@ -161,7 +161,7 @@ export function StepSelector({
           })}
           {filtered.length === 0 && (
             <p className="py-4 text-center text-xs text-soft-ink">
-              No steps match your search.
+              {t("noMatches")}
             </p>
           )}
         </div>

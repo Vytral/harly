@@ -12,16 +12,22 @@
 
 export type MailDeliveryConflictCode = "delivery_unknown" | "delivery_in_progress";
 
-export const DELIVERY_UNKNOWN_MESSAGE =
-  "We couldn't confirm this was sent. Check the sent folder before sending again.";
+/**
+ * Translator scoped to `server.mailbox`, so the keys below resolve under
+ * `server.mailbox.deliveryConflict.*` and `server.mailbox.sendFailure.*`.
+ */
+export type MailDeliveryTranslate = (
+  key: string,
+  values?: Record<string, string | number | Date>,
+) => string;
 
-export const DELIVERY_IN_PROGRESS_MESSAGE =
-  "This message is already being sent. Wait a moment, then check the thread.";
-
-export function deliveryConflictMessage(code: MailDeliveryConflictCode): string {
+export function deliveryConflictMessage(
+  code: MailDeliveryConflictCode,
+  t: MailDeliveryTranslate,
+): string {
   return code === "delivery_unknown"
-    ? DELIVERY_UNKNOWN_MESSAGE
-    : DELIVERY_IN_PROGRESS_MESSAGE;
+    ? t("deliveryConflict.unknown")
+    : t("deliveryConflict.inProgress");
 }
 
 /**
@@ -33,7 +39,7 @@ export class MailDeliveryConflictError extends Error {
   readonly code: MailDeliveryConflictCode;
 
   constructor(code: MailDeliveryConflictCode) {
-    super(deliveryConflictMessage(code));
+    super(`Mail delivery conflict: ${code}`);
     this.name = "MailDeliveryConflictError";
     this.code = code;
   }
@@ -53,8 +59,9 @@ export type MailActionConflictResult = {
 
 export function conflictResult(
   code: MailDeliveryConflictCode,
+  t: MailDeliveryTranslate,
 ): MailActionConflictResult {
-  return { ok: false, code, error: deliveryConflictMessage(code) };
+  return { ok: false, code, error: deliveryConflictMessage(code, t) };
 }
 
 /** Thrown before any reservation or provider call: sample recipients never receive mail. */
@@ -65,12 +72,11 @@ export class SampleRecipientError extends Error {
   }
 }
 
-export const SAMPLE_RECIPIENT_SEND_MESSAGE =
-  "This is a sample-data address and can't receive email.";
-export const GENERIC_SEND_FAILURE_MESSAGE = "Unable to send. Please try again.";
-
 /** Recruiter-facing copy for a failed canonical send that is not a reservation conflict. */
-export function canonicalSendFailureMessage(error: unknown): string {
-  if (error instanceof SampleRecipientError) return SAMPLE_RECIPIENT_SEND_MESSAGE;
-  return GENERIC_SEND_FAILURE_MESSAGE;
+export function canonicalSendFailureMessage(
+  error: unknown,
+  t: MailDeliveryTranslate,
+): string {
+  if (error instanceof SampleRecipientError) return t("sendFailure.sampleRecipient");
+  return t("sendFailure.generic");
 }

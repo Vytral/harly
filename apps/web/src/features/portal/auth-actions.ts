@@ -5,6 +5,7 @@ import { createElement } from "react";
 import { createHash } from "node:crypto";
 import { eq } from "drizzle-orm";
 import { z } from "zod";
+import { getTranslations } from "@/i18n/server";
 
 import { candidates, db } from "@harly/db";
 import {
@@ -32,7 +33,13 @@ import {
   verifyCandidatePassword,
   verifyPasswordLogin,
 } from "@/lib/portal-credentials";
-import { verifyAgainstDummy, validatePasswordPolicy } from "@/lib/portal-password";
+import {
+  PASSWORD_MAX_LENGTH,
+  PASSWORD_MIN_LENGTH,
+  verifyAgainstDummy,
+  validatePasswordPolicy,
+  type PasswordPolicyCode,
+} from "@/lib/portal-password";
 import { currentOriginHash, passesPortalRateLimit } from "@/lib/portal-rate-limit";
 import { establishPortalSession } from "@/lib/portal-session";
 import { getWorkspaceEmailSender } from "@/lib/email";
@@ -45,8 +52,20 @@ export type PortalAuthResult =
   | { ok: true; redirectTo?: string; recoveryCodes?: string[]; message?: string }
   | { ok: false; error: string };
 
-const GENERIC_LOGIN_ERROR = "Incorrect email or password.";
-const TOO_MANY = "Too many attempts. Wait a few minutes and try again.";
+type Translate = (key: string, values?: Record<string, string | number>) => string;
+
+function policyMessage(t: Translate, code: PasswordPolicyCode): string {
+  switch (code) {
+    case "tooShort":
+      return t("passwordTooShort", { min: PASSWORD_MIN_LENGTH });
+    case "tooLong":
+      return t("passwordTooLong", { max: PASSWORD_MAX_LENGTH });
+    case "matchesEmail":
+      return t("passwordMatchesEmail");
+    case "repetitive":
+      return t("passwordRepetitive");
+  }
+}
 const emailSchema = z.string().email().max(254).toLowerCase().trim();
 const nameSchema = z.string().trim().min(1).max(80);
 const codeSchema = z.string().trim().min(8).max(200);
@@ -87,16 +106,17 @@ const registerSchema = z.object({
 export async function registerPortalPasswordAction(
   input: z.input<typeof registerSchema>,
 ): Promise<PortalAuthResult> {
+  const t = await getTranslations("server.portal.auth");
   const parsed = registerSchema.safeParse(input);
   if (!parsed.success) {
-    return { ok: false, error: "Check your name, email and password." };
+    return { ok: false, error: t("registerInvalid") };
   }
   const { email, password } = parsed.data;
   const workspace = await requireWorkspace();
-  if (!workspace) return { ok: false, error: "This candidate portal is unavailable." };
+  if (!workspace) return { ok: false, error: t("portalUnavailable") };
   const methods = await getPortalAuthMethods(workspace.id);
   if (!methods.password) {
-    return { ok: false, error: "Creating an account with a password isn't available." };
+    return { ok: false, error: t("passwordSignupUnavailable") };
   }
   const origin = await currentOriginHash();
   if (
@@ -105,10 +125,10 @@ export async function registerPortalPasswordAction(
       { limit: 20, windowMs: 24 * 60 * 60_000 },
     ]))
   ) {
-    return { ok: false, error: TOO_MANY };
+    return { ok: false, error: t("tooManyAttempts") };
   }
   const policy = validatePasswordPolicy(password, { email });
-  if (!policy.ok) return { ok: false, error: policy.error };
+  if (!policy.ok) return { ok: false, error: policyMessage(t, policy.code) };
 
   // Public applications and recruiter imports join candidates by email. An
   // unverified registration could reserve somebody else's email and receive
@@ -117,13 +137,12 @@ export async function registerPortalPasswordAction(
   if (!current || current.session.workspaceId !== workspace.id || current.session.email.toLowerCase() !== email) {
     return {
       ok: false,
-      error:
-        "Verify your access first: use a sign-in link or connected account, or ask the company for an access or password setup link.",
+      error: t("verifyAccessFirst"),
     };
   }
   const candidateId = current.session.candidateId;
   if (await hasCandidatePassword(candidateId)) {
-    return { ok: false, error: "You already have a password. Change it from your profile." };
+    return { ok: false, error: t("alreadyHasPassword") };
   }
   await setCandidatePassword(candidateId, workspace.id, password);
   const recoveryCodes = await regenerateRecoveryCodes(candidateId, workspace.id);
@@ -147,13 +166,14 @@ const loginSchema = z.object({
 export async function loginPortalPasswordAction(
   input: z.input<typeof loginSchema>,
 ): Promise<PortalAuthResult> {
+  const t = await getTranslations("server.portal.auth");
   const parsed = loginSchema.safeParse(input);
-  if (!parsed.success) return { ok: false, error: GENERIC_LOGIN_ERROR };
+  if (!parsed.success) return { ok: false, error: t("incorrectLogin") };
   const { email, password } = parsed.data;
   const workspace = await requireWorkspace();
-  if (!workspace) return { ok: false, error: "This candidate portal is unavailable." };
+  if (!workspace) return { ok: false, error: t("portalUnavailable") };
   const methods = await getPortalAuthMethods(workspace.id);
-  if (!methods.password) return { ok: false, error: GENERIC_LOGIN_ERROR };
+  if (!methods.password) return { ok: false, error: t("incorrectLogin") };
 
   const origin = await currentOriginHash();
   const allowed =
@@ -167,10 +187,10 @@ export async function loginPortalPasswordAction(
     (await passesPortalRateLimit(`pwip:${workspace.id}:${origin}`, [
       { limit: 60, windowMs: 15 * 60_000 },
     ]));
-  if (!allowed) return { ok: false, error: TOO_MANY };
+  if (!allowed) return { ok: false, error: t("tooManyAttempts") };
 
   const result = await verifyPasswordLogin(workspace.id, email, password);
-  if (!result) return { ok: false, error: GENERIC_LOGIN_ERROR };
+  if (!result) return { ok: false, error: t("incorrectLogin") };
 
   await establishPortalSession(result.candidateId, workspace.id, await userAgent());
   await auditPortalEvent({
@@ -201,12 +221,13 @@ const recoverSchema = z.object({
 export async function recoverPortalPasswordAction(
   input: z.input<typeof recoverSchema>,
 ): Promise<PortalAuthResult> {
+  const t = await getTranslations("server.portal.auth");
   const parsed = recoverSchema.safeParse(input);
-  const invalid = "That email and recovery code don't match.";
+  const invalid = t("recoverInvalid");
   if (!parsed.success) return { ok: false, error: invalid };
   const { email, recoveryCode, newPassword } = parsed.data;
   const workspace = await requireWorkspace();
-  if (!workspace) return { ok: false, error: "This candidate portal is unavailable." };
+  if (!workspace) return { ok: false, error: t("portalUnavailable") };
   const methods = await getPortalAuthMethods(workspace.id);
   if (!methods.password) return { ok: false, error: invalid };
 
@@ -220,10 +241,10 @@ export async function recoverPortalPasswordAction(
       ],
     ))
   ) {
-    return { ok: false, error: TOO_MANY };
+    return { ok: false, error: t("tooManyAttempts") };
   }
   const policy = validatePasswordPolicy(newPassword, { email });
-  if (!policy.ok) return { ok: false, error: policy.error };
+  if (!policy.ok) return { ok: false, error: policyMessage(t, policy.code) };
 
   const candidate = await findActiveCandidateByEmail(workspace.id, email);
   if (!candidate) {
@@ -248,10 +269,7 @@ export async function recoverPortalPasswordAction(
   return {
     ok: true,
     redirectTo: "/portal/dashboard",
-    message:
-      remaining <= 2
-        ? "Password updated. You are running low on recovery codes: generate new ones from your profile."
-        : "Password updated.",
+    message: remaining <= 2 ? t("passwordUpdatedLowCodes") : t("passwordUpdated"),
   };
 }
 
@@ -262,11 +280,12 @@ export async function recoverPortalPasswordAction(
 export async function redeemPortalAccessCodeAction(input: {
   code: string;
 }): Promise<PortalAuthResult> {
-  const invalid = "This access code is invalid, expired or already used.";
+  const t = await getTranslations("server.portal.auth");
+  const invalid = t("accessCodeInvalid");
   const parsed = codeSchema.safeParse(input.code);
   if (!parsed.success) return { ok: false, error: invalid };
   const workspace = await requireWorkspace();
-  if (!workspace) return { ok: false, error: "This candidate portal is unavailable." };
+  if (!workspace) return { ok: false, error: t("portalUnavailable") };
   const methods = await getPortalAuthMethods(workspace.id);
   if (!methods.accessCode) return { ok: false, error: invalid };
   const origin = await currentOriginHash();
@@ -276,7 +295,7 @@ export async function redeemPortalAccessCodeAction(input: {
       { limit: 40, windowMs: 24 * 60 * 60_000 },
     ]))
   ) {
-    return { ok: false, error: TOO_MANY };
+    return { ok: false, error: t("tooManyAttempts") };
   }
   const result = await consumeOneTimeCode("access", parsed.data, workspace.id);
   if (!result) return { ok: false, error: invalid };
@@ -300,11 +319,12 @@ export async function resetPortalPasswordAction(input: {
   code: string;
   newPassword: string;
 }): Promise<PortalAuthResult> {
-  const invalid = "This reset link is invalid, expired or already used.";
+  const t = await getTranslations("server.portal.auth");
+  const invalid = t("resetLinkInvalid");
   const parsed = codeSchema.safeParse(input.code);
   if (!parsed.success) return { ok: false, error: invalid };
   const workspace = await requireWorkspace();
-  if (!workspace) return { ok: false, error: "This candidate portal is unavailable." };
+  if (!workspace) return { ok: false, error: t("portalUnavailable") };
   const methods = await getPortalAuthMethods(workspace.id);
   if (!methods.password) return { ok: false, error: invalid };
   const origin = await currentOriginHash();
@@ -313,10 +333,10 @@ export async function resetPortalPasswordAction(input: {
       { limit: 10, windowMs: 15 * 60_000 },
     ]))
   ) {
-    return { ok: false, error: TOO_MANY };
+    return { ok: false, error: t("tooManyAttempts") };
   }
   const policy = validatePasswordPolicy(input.newPassword);
-  if (!policy.ok) return { ok: false, error: policy.error };
+  if (!policy.ok) return { ok: false, error: policyMessage(t, policy.code) };
   const result = await consumeOneTimeCode("reset", parsed.data, workspace.id);
   if (!result) return { ok: false, error: invalid };
   const [cand] = await db
@@ -342,22 +362,22 @@ export async function resetPortalPasswordAction(input: {
 export async function requestPortalPasswordResetEmailAction(input: {
   email: string;
 }): Promise<PortalAuthResult> {
+  const t = await getTranslations("server.portal.auth");
   const done: PortalAuthResult = {
     ok: true,
-    message:
-      "If that email has an account, we've sent a link to reset the password.",
+    message: t("resetEmailSent"),
   };
   const parsed = emailSchema.safeParse(input.email);
-  if (!parsed.success) return { ok: false, error: "Enter a valid email address." };
+  if (!parsed.success) return { ok: false, error: t("enterValidEmail") };
   const workspace = await requireWorkspace();
-  if (!workspace) return { ok: false, error: "This candidate portal is unavailable." };
+  if (!workspace) return { ok: false, error: t("portalUnavailable") };
   const methods = await getPortalAuthMethods(workspace.id);
   if (!methods.password) return done;
   const sender = await getWorkspaceEmailSender(workspace.id).catch(() => null);
   if (!sender) {
     return {
       ok: false,
-      error: "Email isn't set up for this portal. Use a recovery code or ask the company for a reset link.",
+      error: t("emailNotSetUp"),
     };
   }
   const origin = await currentOriginHash();
@@ -383,10 +403,11 @@ export async function requestPortalPasswordResetEmailAction(input: {
     const url = `${getHarlyPublicOrigin()}/portal/reset?code=${encodeURIComponent(code)}`;
     await sender.send({
       to: candidate.email,
-      subject: portalPasswordResetSubject(),
+      subject: portalPasswordResetSubject(candidate.preferredEmailLocale),
       react: createElement(PortalPasswordResetEmail, {
         candidateName: candidate.firstName,
         loginUrl: url,
+        locale: candidate.preferredEmailLocale,
       }),
     });
     await auditPortalEvent({
@@ -410,22 +431,23 @@ export async function changePortalPasswordAction(input: {
   currentPassword?: string;
   newPassword: string;
 }): Promise<PortalAuthResult> {
+  const t = await getTranslations("server.portal.auth");
   const current = await currentSession();
-  if (!current) return { ok: false, error: "Sign in again to continue." };
+  if (!current) return { ok: false, error: t("signInAgain") };
   const { session, rawToken } = current;
   const methods = await getPortalAuthMethods(session.workspaceId);
   if (!methods.password) {
-    return { ok: false, error: "Password sign-in is turned off for this portal." };
+    return { ok: false, error: t("passwordSignInOff") };
   }
   if (
     !(await passesPortalRateLimit(`chg:${session.candidateId}`, [
       { limit: 10, windowMs: 15 * 60_000 },
     ]))
   ) {
-    return { ok: false, error: TOO_MANY };
+    return { ok: false, error: t("tooManyAttempts") };
   }
   const policy = validatePasswordPolicy(input.newPassword, { email: session.email });
-  if (!policy.ok) return { ok: false, error: policy.error };
+  if (!policy.ok) return { ok: false, error: policyMessage(t, policy.code) };
 
   const existing = await hasCandidatePassword(session.candidateId);
   if (existing) {
@@ -433,7 +455,7 @@ export async function changePortalPasswordAction(input: {
       !input.currentPassword ||
       !(await verifyCandidatePassword(session.candidateId, input.currentPassword))
     ) {
-      return { ok: false, error: "Your current password is incorrect." };
+      return { ok: false, error: t("currentPasswordIncorrect") };
     }
   }
   await setCandidatePassword(session.candidateId, session.workspaceId, input.newPassword);
@@ -448,27 +470,28 @@ export async function changePortalPasswordAction(input: {
     email: session.email,
     action: existing ? "portal.password_changed" : "portal.password_set",
   });
-  return { ok: true, recoveryCodes, message: "Password updated. Other devices were signed out." };
+  return { ok: true, recoveryCodes, message: t("passwordUpdatedOtherDevices") };
 }
 
 export async function regeneratePortalRecoveryCodesAction(input: {
   password: string;
 }): Promise<PortalAuthResult> {
+  const t = await getTranslations("server.portal.auth");
   const current = await currentSession();
-  if (!current) return { ok: false, error: "Sign in again to continue." };
+  if (!current) return { ok: false, error: t("signInAgain") };
   const { session } = current;
   if (!(await hasCandidatePassword(session.candidateId))) {
-    return { ok: false, error: "Set a password first." };
+    return { ok: false, error: t("setPasswordFirst") };
   }
   if (
     !(await passesPortalRateLimit(`recgen:${session.candidateId}`, [
       { limit: 5, windowMs: 15 * 60_000 },
     ]))
   ) {
-    return { ok: false, error: TOO_MANY };
+    return { ok: false, error: t("tooManyAttempts") };
   }
   if (!(await verifyCandidatePassword(session.candidateId, input.password))) {
-    return { ok: false, error: "Your password is incorrect." };
+    return { ok: false, error: t("passwordIncorrect") };
   }
   const recoveryCodes = await regenerateRecoveryCodes(
     session.candidateId,

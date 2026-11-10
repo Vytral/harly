@@ -3,6 +3,7 @@
 import type { Route } from "next";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -35,6 +36,7 @@ export function CandidatePager({
   plain?: boolean;
 }) {
   const router = useRouter();
+  const t = useTranslations("features.candidates.candidatePager");
   // J / K walk the same list the buttons do, following the origin queue.
   useShortcut("candidate.next", () => next && router.push(next.href as Route), {
     enabled: Boolean(next),
@@ -47,13 +49,13 @@ export function CandidatePager({
 
   const status =
     position === null
-      ? `Not in ${label} · ${total} left`
+      ? t("notInList", { label, total })
       : plain
-        ? `Candidate ${position} of ${total}`
-        : `${position} of ${total} in ${label}`;
+        ? t("candidateOf", { position, total })
+        : t("positionIn", { position, total, label });
 
   return (
-    <nav aria-label={`${label} navigation`} className="flex items-center gap-1 text-sm text-muted-foreground">
+    <nav aria-label={t("navigationLabel", { label })} className="flex items-center gap-1 text-sm text-muted-foreground">
       <PagerButton link={prev} direction="prev" />
       <span className="tabular-nums" aria-live="polite">
         {status}
@@ -64,10 +66,11 @@ export function CandidatePager({
 }
 
 function PagerButton({ link, direction }: { link: PagerLink; direction: "prev" | "next" }) {
+  const t = useTranslations("features.candidates.candidatePager");
   const Icon = direction === "prev" ? ChevronLeft : ChevronRight;
-  const fallback = direction === "prev" ? "Previous candidate" : "Next candidate";
+  const fallback = direction === "prev" ? t("previousCandidate") : t("nextCandidate");
   const id = direction === "prev" ? "candidate.prev" : "candidate.next";
-  const label = link ? `${fallback}: ${link.name}` : fallback;
+  const label = link ? t("withName", { label: fallback, name: link.name }) : fallback;
   const hinted = `${label} · ${displayKey(SHORTCUTS[id].keys)}`;
 
   if (!link) {

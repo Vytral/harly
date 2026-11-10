@@ -142,7 +142,8 @@ export async function verifyVectorPayload(
   vectorData: string,
   loadExtractor: () => Promise<VectorExtractor> = defaultExtractor,
 ): Promise<VerifiedVector | null> {
-  const shaped = validateVectorSaveInput({ vectorData });
+  // Only the `ok` flag is used here, so the message text is never shown.
+  const shaped = validateVectorSaveInput({ vectorData }, (key) => key);
   if (!shaped.ok) return null;
   try {
     const ext = await loadExtractor();
@@ -181,20 +182,24 @@ export async function verifyVectorPayload(
  * The server action additionally decompresses for real before persisting
  * (fail closed).
  */
+/** Resolves `server.documents.signatureVector.<key>` messages. */
+export type VectorSaveTranslator = (key: string) => string;
+
 export function validateVectorSaveInput(
   input: unknown,
+  t: VectorSaveTranslator,
 ): { ok: true; vectorData: string } | { ok: false; error: string } {
   const raw =
     typeof input === "object" && input !== null
       ? (input as Record<string, unknown>).vectorData
       : undefined;
-  if (typeof raw !== "string") return { ok: false, error: "Invalid vector signature." };
+  if (typeof raw !== "string") return { ok: false, error: t("invalid") };
   const vectorData = raw.trim();
   if (vectorData.length < 1 || vectorData.length > MAX_VECTOR_COMPRESSED_CHARS) {
-    return { ok: false, error: "Invalid vector signature." };
+    return { ok: false, error: t("invalid") };
   }
   if (!/^[A-Za-z0-9+/=_-]+$/.test(vectorData)) {
-    return { ok: false, error: "Invalid vector signature encoding." };
+    return { ok: false, error: t("invalidEncoding") };
   }
   return { ok: true, vectorData };
 }

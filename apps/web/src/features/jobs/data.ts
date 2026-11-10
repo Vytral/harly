@@ -299,7 +299,7 @@ export async function trashJob(jobId: string) {
 
   return job
     ? ({ ok: true, slug: job.slug } as const)
-    : ({ ok: false, error: "Job not found." } as const);
+    : ({ ok: false, code: "jobNotFound" } as const);
 }
 
 /** Restore a job out of the trash. */
@@ -319,7 +319,7 @@ export async function restoreJob(jobId: string) {
 
   return job
     ? ({ ok: true } as const)
-    : ({ ok: false, error: "Job not found." } as const);
+    : ({ ok: false, code: "jobNotFound" } as const);
 }
 
 export async function listOpenJobs() {
@@ -627,7 +627,7 @@ export async function permanentlyDeleteJob(jobId: string) {
       .limit(1);
 
     if (!job) {
-      return { ok: false, error: "Job must be in the trash." } as const;
+      return { ok: false, code: "jobNotInTrash" } as const;
     }
 
     const [application] = await tx
@@ -644,7 +644,7 @@ export async function permanentlyDeleteJob(jobId: string) {
     if (application) {
       return {
         ok: false,
-        error: "This job has applications. Close it instead of deleting it.",
+        code: "hasApplications",
       } as const;
     }
 

@@ -6,7 +6,6 @@ const mocks = vi.hoisted(() => ({
   select: vi.fn(),
   transaction: vi.fn(),
 }));
-
 vi.mock("@harly/db", () => ({
   db: { select: mocks.select, transaction: mocks.transaction },
   domainEventOutbox: {},
@@ -36,6 +35,8 @@ import {
   receiveWorkflowWebhook,
   setWorkflowWebhookEndpointPayloadSchema,
 } from "./webhook-ingress";
+
+vi.mock("next-intl/server", async () => (await import("@/test-support/intl-server-mock")).intlServerMock);
 
 function query<T>(value: T) {
   const builder = new Proxy(function () {}, {

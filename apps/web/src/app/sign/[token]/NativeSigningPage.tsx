@@ -4,6 +4,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Ban, CheckCircle2, Clock, Download, Lock, PenLine, ShieldCheck, XCircle } from "lucide-react";
+import { useTranslations } from "next-intl";
 import { toast } from "@/lib/notification-island/toast";
 
 import { Button } from "@/components/ui/button";
@@ -17,7 +18,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { PdfFieldFiller, type FillableField } from "@/features/documents/PdfFieldFiller";
 import { SignaturePad } from "@/features/documents/SignaturePad";
 import type { VectorSignatureData } from "@/features/documents/signature-vector";
-import { ESIGN_CONSENT_STATEMENT, ESIGN_DISCLOSURE_POINTS, ESIGN_DISCLOSURE_TITLE } from "@/lib/esign/native/consent";
+import { ESIGN_DISCLOSURE_POINT_IDS } from "@/lib/esign/native/consent";
 
 const emptyPng =
   "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=";
@@ -73,6 +74,8 @@ function formatDate(value: string | null) {
 }
 
 export function NativeSigningPage({ token }: { token: string }) {
+  const t = useTranslations("pages.sign.nativeSigningPage");
+  const tConsent = useTranslations("labels.esign.consent");
   const [meta, setMeta] = useState<Meta | null>(null);
   const [loading, setLoading] = useState(true);
   const [signature, setSignature] = useState("");
@@ -138,7 +141,7 @@ export function NativeSigningPage({ token }: { token: string }) {
           if (!cancelled) setNeedsOtp(true);
           return;
         }
-        if (!res.ok) throw new Error(data.error ?? "Could not load the fields to fill in.");
+        if (!res.ok) throw new Error(data.error ?? t("fieldsLoadFailed"));
         if (cancelled) return;
         const loaded: FillableField[] = Array.isArray(data.fields) ? data.fields : [];
         setFields(loaded);
@@ -155,7 +158,7 @@ export function NativeSigningPage({ token }: { token: string }) {
     return () => {
       cancelled = true;
     };
-  }, [token, active, needsOtp, unlockedOnce, reloadKey]);
+  }, [token, active, needsOtp, unlockedOnce, reloadKey, t]);
 
   const signatureFields = useMemo(() => (fields ?? []).filter((f) => f.type === "signature"), [fields]);
   const missingText = useMemo(
@@ -167,19 +170,19 @@ export function NativeSigningPage({ token }: { token: string }) {
   // What is still missing, in the order the signer should do it.
   const steps = useMemo(() => {
     const list: Array<{ key: string; label: string }> = [];
-    if (!hasSignature) list.push({ key: "signature", label: "Add your signature" });
-    if (missingText.length > 0) list.push({ key: "text", label: missingText.length === 1 ? "Fill in 1 required field" : `Fill in ${missingText.length} required fields` });
-    if (!consent) list.push({ key: "consent", label: "Accept the e-sign disclosure" });
+    if (!hasSignature) list.push({ key: "signature", label: t("stepSignature") });
+    if (missingText.length > 0) list.push({ key: "text", label: t("stepRequiredFields", { count: missingText.length }) });
+    if (!consent) list.push({ key: "consent", label: t("stepConsent") });
     return list;
-  }, [hasSignature, missingText.length, consent]);
+  }, [hasSignature, missingText.length, consent, t]);
   const fieldsReady = fields !== null && fields.length > 0 && signatureFields.length > 0;
   const canSubmit = steps.length === 0 && fieldsReady && !needsOtp;
   const disabledReason = fieldsError
-    ? "The document fields could not be loaded."
+    ? t("fieldsNotLoaded")
     : fields === null
-      ? "Loading the document…"
+      ? t("loadingDocument")
       : !fieldsReady
-        ? "This document has no signature field for you."
+        ? t("noSignatureField")
         : steps[0]?.label ?? null;
 
   const goToFirstMissing = useCallback(() => {
@@ -198,7 +201,7 @@ export function NativeSigningPage({ token }: { token: string }) {
 
   async function submit() {
     if (!canSubmit) {
-      toast.error(disabledReason ?? "Finish the steps above first.");
+      toast.error(disabledReason ?? t("finishStepsFirst"));
       goToFirstMissing();
       return;
     }
@@ -215,15 +218,15 @@ export function NativeSigningPage({ token }: { token: string }) {
       const result = await response.json().catch(() => ({}));
       if (response.status === 403 && result.code === "otp_required") {
         setNeedsOtp(true);
-        toast.error("Your email verification timed out. Enter a new code to finish. Nothing you entered was lost.");
+        toast.error(t("otpTimedOut"));
         return;
       }
       if (!response.ok || !result.ok) {
-        toast.error(result.error ?? "Could not complete signing.");
+        toast.error(result.error ?? t("signFailed"));
         return;
       }
       setJustSigned(true);
-      toast.success("Document signed.");
+      toast.success(t("documentSigned"));
     } finally {
       setSubmitting(false);
     }
@@ -244,8 +247,8 @@ export function NativeSigningPage({ token }: { token: string }) {
   if (!meta) {
     return (
       <Shell meta={null}>
-        <StatePanel icon={<Ban className="size-6" />} tone="warning" title="This signing link isn't available">
-          The link may be mistyped, or it was replaced or cancelled. Check the latest email from the sender, or ask them to send a new request.
+        <StatePanel icon={<Ban className="size-6" />} tone="warning" title={t("unavailableTitle")}>
+          {t("unavailableBody")}
         </StatePanel>
       </Shell>
     );
@@ -263,9 +266,9 @@ export function NativeSigningPage({ token }: { token: string }) {
   if (declined || meta.state === "declined") {
     return (
       <Shell meta={meta}>
-        <StatePanel icon={<XCircle className="size-6" />} tone="danger" title="You declined to sign">
-          {meta.company.name} has been told you declined to sign &ldquo;{meta.documentName}&rdquo;. Nothing was signed, and this link no longer works.
-          {meta.declinedReason ? <> Your reason: &ldquo;{meta.declinedReason}&rdquo;.</> : null}
+        <StatePanel icon={<XCircle className="size-6" />} tone="danger" title={t("declinedTitle")}>
+          {t("declinedBody", { company: meta.company.name, document: meta.documentName })}
+          {meta.declinedReason ? <> {t("declinedReason", { reason: meta.declinedReason })}</> : null}
           {contact}
         </StatePanel>
       </Shell>
@@ -274,8 +277,8 @@ export function NativeSigningPage({ token }: { token: string }) {
   if (meta.state === "voided") {
     return (
       <Shell meta={meta}>
-        <StatePanel icon={<Ban className="size-6" />} tone="warning" title="This request was cancelled">
-          {meta.company.name} cancelled the request to sign &ldquo;{meta.documentName}&rdquo;. You don&apos;t need to do anything, and this link no longer works.
+        <StatePanel icon={<Ban className="size-6" />} tone="warning" title={t("cancelledTitle")}>
+          {t("cancelledBody", { company: meta.company.name, document: meta.documentName })}
           {contact}
         </StatePanel>
       </Shell>
@@ -284,8 +287,8 @@ export function NativeSigningPage({ token }: { token: string }) {
   if (meta.state === "expired") {
     return (
       <Shell meta={meta}>
-        <StatePanel icon={<Clock className="size-6" />} tone="warning" title="This signing link has expired">
-          The link to sign &ldquo;{meta.documentName}&rdquo; stopped working on {formatDate(meta.expiresAt)}. Ask {meta.company.name} to send you a new request.
+        <StatePanel icon={<Clock className="size-6" />} tone="warning" title={t("expiredTitle")}>
+          {t("expiredBody", { document: meta.documentName, date: formatDate(meta.expiresAt), company: meta.company.name })}
           {contact}
         </StatePanel>
       </Shell>
@@ -307,12 +310,12 @@ export function NativeSigningPage({ token }: { token: string }) {
           <div className="min-w-0 flex-1">
             <h1 className="font-display text-xl font-semibold tracking-tight text-near-ink sm:text-2xl">{meta.documentName}</h1>
             <p className="mt-1 text-sm text-soft-ink">
-              {meta.sender.name ? `${meta.sender.name} at ${meta.company.name}` : meta.company.name} asked you to review and sign.
-              {" "}Link works until {formatDate(meta.expiresAt)}.
+              {t("requestedBy", { sender: meta.sender.name ? t("senderAtCompany", { name: meta.sender.name, company: meta.company.name }) : meta.company.name })}
+              {" "}{t("linkValidUntil", { date: formatDate(meta.expiresAt) })}
             </p>
           </div>
           <span className="rounded-full bg-card-inset px-3 py-1 text-xs font-medium text-near-ink">
-            Signer {meta.routingOrder} of {meta.signerCount}
+            {t("signerPosition", { position: meta.routingOrder, total: meta.signerCount })}
           </span>
         </section>
         {meta.message ? (
@@ -329,7 +332,7 @@ export function NativeSigningPage({ token }: { token: string }) {
               {fieldsError ? (
                 <div className="space-y-3 p-6 text-center" role="alert">
                   <p className="text-sm text-danger-rust">{fieldsError}</p>
-                  <Button variant="outline" onClick={() => setReloadKey((n) => n + 1)}>Try again</Button>
+                  <Button variant="outline" onClick={() => setReloadKey((n) => n + 1)}>{t("tryAgain")}</Button>
                 </div>
               ) : (
                 <PdfFieldFiller
@@ -347,15 +350,15 @@ export function NativeSigningPage({ token }: { token: string }) {
 
             <aside className="flex h-fit flex-col gap-4 lg:sticky lg:top-5">
               <div id="signature-pad-card" className="rounded-[var(--radius-card)] bg-pure-snow p-5 shadow-[var(--shadow-card)]">
-                <p className="text-sm font-semibold text-near-ink">Your signature</p>
-                <p className="mt-1 text-xs leading-5 text-soft-ink">Draw or type it once. It fills every signature box assigned to you.</p>
+                <p className="text-sm font-semibold text-near-ink">{t("yourSignature")}</p>
+                <p className="mt-1 text-xs leading-5 text-soft-ink">{t("signatureHelp")}</p>
                 <div className="mt-3">
                   {isNarrow ? (
                     <div className="space-y-3">
-                      {signature ? <img src={signature} alt="Your signature" className="h-20 w-full rounded-[var(--radius-inner)] border border-hairline bg-white object-contain" /> : null}
+                      {signature ? <img src={signature} alt={t("yourSignature")} className="h-20 w-full rounded-[var(--radius-inner)] border border-hairline bg-white object-contain" /> : null}
                       <Button variant="outline" className="w-full" onClick={() => setPadOpen(true)}>
                         <PenLine className="size-4" />
-                        {signature ? "Change signature" : "Draw signature"}
+                        {signature ? t("changeSignature") : t("drawSignature")}
                       </Button>
                     </div>
                   ) : (
@@ -365,25 +368,25 @@ export function NativeSigningPage({ token }: { token: string }) {
               </div>
 
               <div ref={consentRef} className="rounded-[var(--radius-card)] bg-pure-snow p-5 shadow-[var(--shadow-card)]">
-                <p className="text-sm font-semibold text-near-ink">{ESIGN_DISCLOSURE_TITLE}</p>
+                <p className="text-sm font-semibold text-near-ink">{tConsent("title")}</p>
                 <ul className="mt-2 list-disc space-y-1.5 pl-4 text-xs leading-5 text-soft-ink">
-                  {ESIGN_DISCLOSURE_POINTS.map((point) => (
-                    <li key={point}>{point}</li>
+                  {ESIGN_DISCLOSURE_POINT_IDS.map((pointId) => (
+                    <li key={pointId}>{tConsent(`points.${pointId}`)}</li>
                   ))}
                 </ul>
                 <p className="mt-2 text-xs text-soft-ink">
-                  Read the{" "}
-                  <a className="underline underline-offset-2" href={meta.termsPath} target="_blank" rel="noopener noreferrer">terms</a>
-                  {" "}and{" "}
-                  <a className="underline underline-offset-2" href={meta.privacyPath} target="_blank" rel="noopener noreferrer">privacy policy</a>.
+                  {t.rich("readPolicies", {
+                    terms: (chunks) => <a className="underline underline-offset-2" href={meta.termsPath} target="_blank" rel="noopener noreferrer">{chunks}</a>,
+                    privacy: (chunks) => <a className="underline underline-offset-2" href={meta.privacyPath} target="_blank" rel="noopener noreferrer">{chunks}</a>,
+                  })}
                 </p>
                 <label className="mt-3 flex min-h-11 items-start gap-3 rounded-[var(--radius-inner)] bg-card-inset p-3 text-sm">
                   <Checkbox className="mt-0.5" checked={consent} onCheckedChange={(value) => setConsent(value === true)} />
-                  <span className="text-xs leading-5 text-near-ink">{ESIGN_CONSENT_STATEMENT}</span>
+                  <span className="text-xs leading-5 text-near-ink">{tConsent("statement")}</span>
                 </label>
                 <p className="mt-2 flex items-start gap-2 text-xs leading-5 text-soft-ink">
                   <ShieldCheck className="mt-0.5 size-4 shrink-0 text-success-olive" />
-                  The time you accept is recorded by our server, together with your IP address, browser and a fingerprint of the document.
+                  {t("consentRecorded")}
                 </p>
               </div>
 
@@ -404,12 +407,12 @@ export function NativeSigningPage({ token }: { token: string }) {
       <Sheet open={padOpen && isNarrow} onOpenChange={setPadOpen} mobilePresentation="bottom-on-mobile">
         <SheetContent side="bottom" className="gap-3 p-5 pb-[max(1.25rem,env(safe-area-inset-bottom))]">
           <SheetHeader className="p-0">
-            <SheetTitle>Your signature</SheetTitle>
-            <SheetDescription>Draw or type it, then tap Use signature.</SheetDescription>
+            <SheetTitle>{t("yourSignature")}</SheetTitle>
+            <SheetDescription>{t("padSheetHelp")}</SheetDescription>
           </SheetHeader>
           {padBlock}
           <Button className="w-full bg-chartreuse-signal text-chartreuse-ink hover:bg-chartreuse-signal/90" disabled={!hasSignature} onClick={() => setPadOpen(false)}>
-            Use signature
+            {t("useSignature")}
           </Button>
         </SheetContent>
       </Sheet>
@@ -429,6 +432,7 @@ export function NativeSigningPage({ token }: { token: string }) {
 }
 
 function Shell({ meta, children }: { meta: Meta | null; children: React.ReactNode }) {
+  const t = useTranslations("pages.sign.nativeSigningPage");
   return (
     <div className="flex min-h-[100dvh] flex-col bg-warm-paper text-near-ink">
       <header className="border-b border-hairline bg-pure-snow">
@@ -440,10 +444,10 @@ function Shell({ meta, children }: { meta: Meta | null; children: React.ReactNod
               {(meta?.company.name ?? "H").slice(0, 1).toUpperCase()}
             </span>
           )}
-          <span className="min-w-0 truncate font-display text-sm font-semibold">{meta?.company.name ?? "Secure signing"}</span>
+          <span className="min-w-0 truncate font-display text-sm font-semibold">{meta?.company.name ?? t("secureSigning")}</span>
           <span className="ml-auto flex shrink-0 items-center gap-1.5 text-xs text-soft-ink">
             <Lock className="size-3.5" aria-hidden />
-            Private link
+            {t("privateLink")}
           </span>
         </div>
       </header>
@@ -451,12 +455,12 @@ function Shell({ meta, children }: { meta: Meta | null; children: React.ReactNod
       <footer className="border-t border-hairline px-4 py-4 text-center text-xs text-soft-ink">
         {meta ? (
           <p className="space-x-3">
-            <a className="underline underline-offset-2" href={meta.termsPath} target="_blank" rel="noopener noreferrer">Terms</a>
-            <a className="underline underline-offset-2" href={meta.privacyPath} target="_blank" rel="noopener noreferrer">Privacy</a>
-            {meta.sender.email ? <a className="underline underline-offset-2" href={`mailto:${meta.sender.email}`}>Contact sender</a> : null}
+            <a className="underline underline-offset-2" href={meta.termsPath} target="_blank" rel="noopener noreferrer">{t("terms")}</a>
+            <a className="underline underline-offset-2" href={meta.privacyPath} target="_blank" rel="noopener noreferrer">{t("privacy")}</a>
+            {meta.sender.email ? <a className="underline underline-offset-2" href={`mailto:${meta.sender.email}`}>{t("contactSender")}</a> : null}
           </p>
         ) : null}
-        {!meta?.company.hideHarlyBranding ? <p className="mt-1">Signing powered by Harly</p> : null}
+        {!meta?.company.hideHarlyBranding ? <p className="mt-1">{t("poweredBy")}</p> : null}
       </footer>
     </div>
   );
@@ -474,21 +478,25 @@ function StatePanel({ icon, tone, title, children }: { icon: React.ReactNode; to
 }
 
 function ContactLine({ meta }: { meta: Meta }) {
+  const t = useTranslations("pages.sign.nativeSigningPage");
   if (!meta.sender.email && !meta.sender.name) return null;
+  const email = meta.sender.email;
+  const name = meta.sender.name ?? meta.company.name;
   return (
     <span className="mt-3 block">
-      Questions? Contact {meta.sender.name ?? meta.company.name}
-      {meta.sender.email ? (
-        <>
-          {" "}at <a className="text-near-ink underline underline-offset-2" href={`mailto:${meta.sender.email}`}>{meta.sender.email}</a>
-        </>
-      ) : null}
-      .
+      {email
+        ? t.rich("contactWithEmail", {
+            name,
+            email,
+            link: (chunks) => <a className="text-near-ink underline underline-offset-2" href={`mailto:${email}`}>{chunks}</a>,
+          })
+        : t("contactNameOnly", { name })}
     </span>
   );
 }
 
 function SignedPanel({ token, meta, justSigned, needsOtp, onNeedsOtp, onVerified }: { token: string; meta: Meta; justSigned: boolean; needsOtp: boolean; onNeedsOtp: () => void; onVerified: () => void }) {
+  const t = useTranslations("pages.sign.nativeSigningPage");
   const [downloading, setDownloading] = useState(false);
   const remaining = Math.max(0, meta.signerCount - meta.routingOrder);
   async function download() {
@@ -500,7 +508,7 @@ function SignedPanel({ token, meta, justSigned, needsOtp, onNeedsOtp, onVerified
         return;
       }
       if (!response.ok) {
-        toast.error("Your copy isn't available yet. It was also sent to your email.");
+        toast.error(t("copyUnavailable"));
         return;
       }
       const blob = await response.blob();
@@ -515,23 +523,25 @@ function SignedPanel({ token, meta, justSigned, needsOtp, onNeedsOtp, onVerified
     }
   }
   if (needsOtp) {
-    return <div className="mx-auto mt-6 max-w-md"><OtpCard token={token} maskedEmail={meta.maskedEmail} onVerified={onVerified} reverify={false} purpose="download your copy" /></div>;
+    return <div className="mx-auto mt-6 max-w-md"><OtpCard token={token} maskedEmail={meta.maskedEmail} onVerified={onVerified} reverify={false} purpose={t("purposeDownload")} /></div>;
   }
   return (
-    <StatePanel icon={<CheckCircle2 className="size-6" />} tone="success" title={justSigned ? "Document signed" : "You have signed this document"}>
+    <StatePanel icon={<CheckCircle2 className="size-6" />} tone="success" title={justSigned ? t("signedTitle") : t("alreadySignedTitle")}>
       <p>
-        Thanks, {meta.recipientName}. {meta.signedAt ? <>You signed &ldquo;{meta.documentName}&rdquo; on {formatDate(meta.signedAt)}.</> : null}
+        {t("thanks", { name: meta.recipientName })}
+        {" "}
+        {meta.signedAt ? t("signedOn", { document: meta.documentName, date: formatDate(meta.signedAt) }) : null}
       </p>
       <p className="mt-2">
         {meta.envelopeCompleted
-          ? `Everyone has signed. A copy with the completion certificate was emailed to ${meta.maskedEmail}.`
+          ? t("everyoneSigned", { email: meta.maskedEmail })
           : remaining > 0
-            ? `${remaining} more ${remaining === 1 ? "person still needs" : "people still need"} to sign. A receipt with your copy was emailed to ${meta.maskedEmail}, and you will get the final document when everyone has finished.`
-            : `A copy was emailed to ${meta.maskedEmail}.`}
+            ? t("peopleRemaining", { count: remaining, email: meta.maskedEmail })
+            : t("copyEmailed", { email: meta.maskedEmail })}
       </p>
       <Button className="mt-4" variant="outline" onClick={download} disabled={downloading}>
         <Download className="size-4" />
-        {downloading ? "Preparing…" : "Download my copy"}
+        {downloading ? t("downloadPreparing") : t("downloadCopy")}
       </Button>
       <ContactLine meta={meta} />
     </StatePanel>
@@ -539,10 +549,15 @@ function SignedPanel({ token, meta, justSigned, needsOtp, onNeedsOtp, onVerified
 }
 
 function SignBar({ steps, reason, canSubmit, submitting, onSubmit, onDecline, inline }: { steps: Array<{ key: string; label: string }>; reason: string | null; canSubmit: boolean; submitting: boolean; onSubmit: () => void; onDecline: () => void; inline?: boolean }) {
+  const t = useTranslations("pages.sign.nativeSigningPage");
   return (
     <div className={inline ? "space-y-3 rounded-[var(--radius-card)] bg-pure-snow p-5 shadow-[var(--shadow-card)]" : "space-y-2"}>
       <p className={`text-xs ${canSubmit ? "text-success-olive" : "text-soft-ink"}`} aria-live="polite">
-        {canSubmit ? "Everything is ready. Review once more, then sign." : `${reason ?? ""}${steps.length > 1 ? ` (${steps.length} steps left)` : ""}`}
+        {canSubmit
+          ? t("signBarReady")
+          : steps.length > 1
+            ? t("stepsRemaining", { reason: reason ?? "", count: steps.length })
+            : (reason ?? "")}
       </p>
       <div className="flex items-center gap-2">
         <Button
@@ -552,10 +567,10 @@ function SignBar({ steps, reason, canSubmit, submitting, onSubmit, onDecline, in
           disabled={submitting}
           onClick={onSubmit}
         >
-          {submitting ? "Signing…" : canSubmit ? "Sign document" : "Continue"}
+          {submitting ? t("signing") : canSubmit ? t("signDocument") : t("continueAction")}
         </Button>
         <Button variant="ghost" className="h-11 text-soft-ink" onClick={onDecline}>
-          Decline
+          {t("declineAction")}
         </Button>
       </div>
     </div>
@@ -563,6 +578,7 @@ function SignBar({ steps, reason, canSubmit, submitting, onSubmit, onDecline, in
 }
 
 function DeclineDialog({ open, onOpenChange, token, companyName, onDeclined }: { open: boolean; onOpenChange: (open: boolean) => void; token: string; companyName: string; onDeclined: () => void }) {
+  const t = useTranslations("pages.sign.nativeSigningPage");
   const [reason, setReason] = useState("");
   const [pending, setPending] = useState(false);
   async function decline() {
@@ -571,7 +587,7 @@ function DeclineDialog({ open, onOpenChange, token, companyName, onDeclined }: {
       const response = await fetch(`/api/native-sign/${token}/decline`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ reason }) });
       const result = await response.json().catch(() => ({}));
       if (!response.ok) {
-        toast.error(result.error ?? "Could not record your decision.");
+        toast.error(result.error ?? t("declineFailed"));
         return;
       }
       onDeclined();
@@ -583,18 +599,18 @@ function DeclineDialog({ open, onOpenChange, token, companyName, onDeclined }: {
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Decline to sign?</DialogTitle>
+          <DialogTitle>{t("declineTitle")}</DialogTitle>
           <DialogDescription>
-            {companyName} will be told that you declined. Nothing will be signed and this link will stop working.
+            {t("declineDescription", { company: companyName })}
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-2">
-          <Label htmlFor="decline-reason">Reason (optional)</Label>
-          <Textarea id="decline-reason" className="text-base" rows={3} maxLength={500} value={reason} onChange={(event) => setReason(event.target.value)} placeholder="For example: the salary is not what we discussed." />
+          <Label htmlFor="decline-reason">{t("declineReasonLabel")}</Label>
+          <Textarea id="decline-reason" className="text-base" rows={3} maxLength={500} value={reason} onChange={(event) => setReason(event.target.value)} placeholder={t("declineReasonPlaceholder")} />
         </div>
         <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={pending}>Keep reviewing</Button>
-          <Button variant="destructive" onClick={decline} disabled={pending}>{pending ? "Declining…" : "Decline to sign"}</Button>
+          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={pending}>{t("keepReviewing")}</Button>
+          <Button variant="destructive" onClick={decline} disabled={pending}>{pending ? t("declining") : t("declineConfirm")}</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
@@ -602,6 +618,7 @@ function DeclineDialog({ open, onOpenChange, token, companyName, onDeclined }: {
 }
 
 function OtpCard({ token, maskedEmail, onVerified, reverify, purpose }: { token: string; maskedEmail: string; onVerified: () => void; reverify: boolean; purpose?: string }) {
+  const t = useTranslations("pages.sign.nativeSigningPage");
   const [challengeId, setChallengeId] = useState("");
   const [otp, setOtp] = useState("");
   const [busy, setBusy] = useState(false);
@@ -626,7 +643,7 @@ function OtpCard({ token, maskedEmail, onVerified, reverify, purpose }: { token:
     try {
       const { response, result } = await post({ action: "request_otp" });
       if (!response.ok || !result.ok) {
-        setError(result.error ?? "Could not send the code.");
+        setError(result.error ?? t("sendCodeFailed"));
         if (result.retryAfterSeconds) setCooldown(result.retryAfterSeconds);
         return;
       }
@@ -645,7 +662,7 @@ function OtpCard({ token, maskedEmail, onVerified, reverify, purpose }: { token:
     try {
       const { response, result } = await post({ action: "verify_otp", challengeId, code: otp });
       if (!response.ok || !result.ok) {
-        setError(result.error ?? "That code didn't work. Check it and try again, or send a new one.");
+        setError(result.error ?? t("codeInvalid"));
         return;
       }
       onVerified();
@@ -663,16 +680,16 @@ function OtpCard({ token, maskedEmail, onVerified, reverify, purpose }: { token:
       }}
     >
       <div>
-        <h2 className="font-display text-lg font-semibold tracking-tight">{reverify ? "Confirm it's still you" : "Verify your email"}</h2>
+        <h2 className="font-display text-lg font-semibold tracking-tight">{reverify ? t("otpRecheckTitle") : t("otpTitle")}</h2>
         <p className="mt-1 text-sm leading-6 text-soft-ink">
           {reverify
-            ? `For your security the code expires after 10 minutes. Nothing you entered was lost. We'll send a new code to ${maskedEmail}.`
-            : `To ${purpose ?? "open this document"}, we'll send a one-time code to ${maskedEmail}.`}
+            ? t("otpRecheckBody", { email: maskedEmail })
+            : t("otpBody", { purpose: purpose ?? t("purposeOpen"), email: maskedEmail })}
         </p>
       </div>
       {challengeId ? (
         <div className="space-y-2">
-          <Label htmlFor="otp">6-digit code</Label>
+          <Label htmlFor="otp">{t("otpCodeLabel")}</Label>
           <Input
             id="otp"
             name="one-time-code"
@@ -692,15 +709,15 @@ function OtpCard({ token, maskedEmail, onVerified, reverify, purpose }: { token:
       {error ? <p className="text-sm text-danger-rust" role="alert">{error}</p> : null}
       <div className="flex flex-wrap items-center gap-2">
         <Button type="submit" size="lg" className="h-11" disabled={busy || (Boolean(challengeId) && otp.length !== 6)}>
-          {challengeId ? (busy ? "Checking…" : "Verify code") : busy ? "Sending…" : "Send code"}
+          {challengeId ? (busy ? t("checking") : t("verifyCode")) : busy ? t("sending") : t("sendCode")}
         </Button>
         {challengeId ? (
           <Button type="button" variant="ghost" className="h-11" disabled={busy || cooldown > 0} onClick={() => void sendCode()}>
-            {cooldown > 0 ? `Resend in ${cooldown}s` : "Resend code"}
+            {cooldown > 0 ? t("resendIn", { seconds: cooldown }) : t("resendCode")}
           </Button>
         ) : null}
       </div>
-      {challengeId ? <p className="text-xs text-soft-ink">Sent to {maskedEmail}. Check your spam folder if it doesn&apos;t arrive within a minute.</p> : null}
+      {challengeId ? <p className="text-xs text-soft-ink">{t("codeSentTo", { email: maskedEmail })}</p> : null}
     </form>
   );
 }

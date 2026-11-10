@@ -1,3 +1,5 @@
+import { getTranslations } from "next-intl/server";
+
 import { Card } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 
@@ -6,10 +8,11 @@ import { Skeleton } from "@/components/ui/skeleton";
  * list, the search + role filter + invite toolbar, and the members card with
  * its count header and avatar/name/role rows.
  */
-export default function MembersSettingsLoading() {
+export default async function MembersSettingsLoading() {
+  const t = await getTranslations("pages.settingsMembers.loading");
   return (
     <div aria-busy="true" className="space-y-6">
-      <span className="sr-only">Loading…</span>
+      <span className="sr-only">{t("label")}</span>
 
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex h-11 items-center gap-1 rounded-[var(--radius-btn)] bg-card-inset p-1">

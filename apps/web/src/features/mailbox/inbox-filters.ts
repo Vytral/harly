@@ -1,16 +1,19 @@
 import type { InboxFilter, InboxThread } from "@/features/mailbox/data";
 
-export const inboxFilters: ReadonlyArray<[InboxFilter, string]> = [
-  ["all", "All"],
-  ["needs-reply", "Needs reply"],
-  ["replies", "Replies"],
-  ["unassigned", "Unassigned"],
-  ["unread", "Unread"],
-  ["candidates", "Candidates"],
-  ["assigned", "Assigned"],
-  ["assigned-to-me", "Assigned to me"],
-  ["archived", "Archived"],
-];
+/** Translator passed in by callers; keys are full catalog paths. */
+export type MailboxTranslator = (key: string, values?: Record<string, string | number | Date>) => string;
+
+const FILTER_LABEL_KEYS: Record<InboxFilter, string> = {
+  all: "all",
+  "needs-reply": "needsReply",
+  replies: "replies",
+  unassigned: "unassigned",
+  unread: "unread",
+  candidates: "candidates",
+  assigned: "assigned",
+  "assigned-to-me": "assignedToMe",
+  archived: "archived",
+};
 
 /**
  * `currentUserId` is only known client-side when passed in — without it,
@@ -44,13 +47,16 @@ export function matchesInboxFilter(thread: InboxThread, filter: InboxFilter, cur
 export const PRIMARY_INBOX_FILTERS: InboxFilter[] = ["all", "unread", "needs-reply", "assigned-to-me", "candidates", "archived"];
 export const MORE_INBOX_FILTERS: InboxFilter[] = ["replies", "unassigned", "assigned"];
 
-export function inboxFilterLabel(value: InboxFilter) {
-  return inboxFilters.find(([key]) => key === value)?.[1] ?? "All";
+export function inboxFilterLabel(value: InboxFilter, t: MailboxTranslator) {
+  return t(`labels.mailbox.filters.${FILTER_LABEL_KEYS[value]}`);
 }
 
 /** Display name for whoever the thread is with. */
-export function threadPersonName(thread: Pick<InboxThread, "candidateName" | "participantEmail">) {
-  return thread.candidateName ?? thread.participantEmail ?? "Unknown sender";
+export function threadPersonName(
+  thread: Pick<InboxThread, "candidateName" | "participantEmail">,
+  t: MailboxTranslator,
+) {
+  return thread.candidateName ?? thread.participantEmail ?? t("labels.mailbox.unknownSender");
 }
 
 /** Plain-text search over what the list already holds (subject, person, messages). */

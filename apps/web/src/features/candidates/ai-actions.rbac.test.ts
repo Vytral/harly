@@ -91,6 +91,8 @@ import {
   generateAiEvaluationAction,
 } from "./ai-actions";
 
+vi.mock("next-intl/server", async () => (await import("@/test-support/intl-server-mock")).intlServerMock);
+
 const WORKSPACE_ID = "workspace-1";
 
 function makeSelectReturning(rows: unknown[]) {

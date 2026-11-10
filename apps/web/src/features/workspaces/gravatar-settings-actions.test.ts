@@ -8,7 +8,6 @@ const mocks = vi.hoisted(() => ({
   logAuditEvent: vi.fn(),
   revalidatePath: vi.fn(),
 }));
-
 vi.mock("next/cache", () => ({ revalidatePath: mocks.revalidatePath }));
 vi.mock("@harly/db", () => ({
   db: { insert: mocks.insert },
@@ -25,6 +24,8 @@ vi.mock("@/lib/audit-log", () => ({ logAuditEvent: mocks.logAuditEvent }));
 vi.mock("@/features/demo/assert-not-demo", () => ({ assertNotDemo: vi.fn() }));
 
 import { saveGravatarEnabledAction } from "./gravatar-settings-actions";
+
+vi.mock("next-intl/server", async () => (await import("@/test-support/intl-server-mock")).intlServerMock);
 
 describe("saveGravatarEnabledAction", () => {
   beforeEach(() => {

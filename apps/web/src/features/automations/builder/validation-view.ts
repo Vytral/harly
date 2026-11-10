@@ -1,4 +1,4 @@
-import { actionMeta } from "./catalog";
+import { actionMeta, type BuilderT } from "./catalog";
 import { nodeTitle } from "./node-copy";
 import type { GraphValidationIssue } from "../definition/issues";
 import type { WorkflowGraphV2, WorkflowNode } from "../definition/schema-v2";
@@ -44,11 +44,11 @@ function literalMissing(node: Extract<WorkflowNode, { type: "action" }>, key: st
   return false;
 }
 
-export function requiredConfigIssues(graph: WorkflowGraphV2): GraphValidationIssue[] {
+export function requiredConfigIssues(graph: WorkflowGraphV2, t: BuilderT): GraphValidationIssue[] {
   const issues: GraphValidationIssue[] = [];
   for (const node of graph.nodes) {
     if (node.type !== "action") continue;
-    const meta = actionMeta(node.actionType);
+    const meta = actionMeta(node.actionType, t);
     if (!meta) continue;
 
     // Cross-field validation: send_email requires template OR (subject and body)
@@ -60,7 +60,7 @@ export function requiredConfigIssues(graph: WorkflowGraphV2): GraphValidationIss
         issues.push({
           nodeId: node.id,
           fieldPath: "input.templateId",
-          message: "Choose an email template or write a subject and body.",
+          message: t("validation.chooseEmailTemplate"),
         });
       }
     }
@@ -71,7 +71,7 @@ export function requiredConfigIssues(graph: WorkflowGraphV2): GraphValidationIss
         issues.push({
           nodeId: node.id,
           fieldPath: `input.${field.key}`,
-          message: `Fill in ${field.label}.`,
+          message: t("validation.fillIn", { field: field.label }),
         });
       }
     }
@@ -79,12 +79,12 @@ export function requiredConfigIssues(graph: WorkflowGraphV2): GraphValidationIss
   return issues;
 }
 
-export function visibleIssues(graph: WorkflowGraphV2): VisibleIssue[] {
+export function visibleIssues(graph: WorkflowGraphV2, t: BuilderT): VisibleIssue[] {
   const byId = new Map(graph.nodes.map((node) => [node.id, node]));
   const order = traversalOrder(graph);
   const rank = new Map(order.map((id, index) => [id, index]));
   const structural = validateGraph(graph);
-  const required = requiredConfigIssues(graph);
+  const required = requiredConfigIssues(graph, t);
   const merged = [
     ...structural.map((issue) => ({ ...issue, category: "connection" as const, blockingPublish: true })),
     ...required.map((issue) => ({ ...issue, category: "configuration" as const, blockingPublish: true })),
@@ -92,7 +92,7 @@ export function visibleIssues(graph: WorkflowGraphV2): VisibleIssue[] {
   return merged
     .map((issue) => ({
       ...issue,
-      title: byId.get(issue.nodeId) ? nodeTitle(byId.get(issue.nodeId)!) : "Automation",
+      title: byId.get(issue.nodeId) ? nodeTitle(byId.get(issue.nodeId)!, t) : t("validation.automation"),
     }))
     .sort((a, b) => {
       const ra = rank.get(a.nodeId) ?? Number.MAX_SAFE_INTEGER;

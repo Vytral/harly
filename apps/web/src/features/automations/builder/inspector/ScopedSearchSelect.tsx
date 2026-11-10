@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useId, useRef, useState } from "react";
+import { useTranslations } from "next-intl";
 
 import { CaretDownIcon } from "@/components/ui/icons/phosphor";
 import {
@@ -17,6 +18,8 @@ import { cn } from "@/lib/utils";
 import { searchBuilderOptionsAction } from "../../actions";
 import type { BuilderSearchItem, BuilderSearchKind } from "../search-kinds";
 
+type SearchError = "search" | "unavailable" | "loadMore" | null;
+
 export function ScopedSearchSelect({
   kind,
   value,
@@ -24,7 +27,7 @@ export function ScopedSearchSelect({
   initialItems,
   placeholder,
   jobId,
-  emptyLabel = "None",
+  emptyLabel,
   allowEmpty = true,
   disabled = false,
 }: {
@@ -38,13 +41,15 @@ export function ScopedSearchSelect({
   allowEmpty?: boolean;
   disabled?: boolean;
 }) {
+  const t = useTranslations("features.automations.ScopedSearchSelect");
+  const label = emptyLabel ?? t("none");
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [remote, setRemote] = useState<BuilderSearchItem[]>([]);
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<SearchError>(null);
   const [picked, setPicked] = useState<BuilderSearchItem | undefined>();
   const listId = useId();
   const needle = query.trim();
@@ -70,9 +75,9 @@ export function ScopedSearchSelect({
             setRemote(result.items ?? []);
             setNextCursor(result.nextCursor ?? null);
           }
-          else setError("Could not search this workspace. Try again.");
+          else setError("search");
         } catch {
-          if (active) setError("Search unavailable. Check your connection and try again.");
+          if (active) setError("unavailable");
         } finally {
           if (active) setPending(false);
         }
@@ -111,7 +116,7 @@ export function ScopedSearchSelect({
         cursor: nextCursor,
       });
       if (!result.ok) {
-        if (queryKeyRef.current === queryKey) setError("Could not load more results. Try again.");
+        if (queryKeyRef.current === queryKey) setError("loadMore");
         return;
       }
       if (queryKeyRef.current !== queryKey) return;
@@ -121,7 +126,7 @@ export function ScopedSearchSelect({
       });
       setNextCursor(result.nextCursor ?? null);
     } catch {
-      if (queryKeyRef.current === queryKey) setError("Could not load more results. Try again.");
+      if (queryKeyRef.current === queryKey) setError("loadMore");
     } finally {
       setLoadingMore(false);
     }
@@ -130,6 +135,12 @@ export function ScopedSearchSelect({
   const items = needle.length > 0 ? remote : initialItems;
   const selected = initialItems.find((item) => item.id === value) ??
     (picked?.id === value ? picked : undefined) ?? items.find((item) => item.id === value);
+
+  const errorMessage = error === "search"
+    ? t("searchFailed")
+    : error === "unavailable"
+      ? t("searchUnavailable")
+      : t("loadMoreFailed");
 
   return (
     <Popover open={open} onOpenChange={(next) => { setOpen(next); if (!next) setQuery(""); }}>
@@ -157,11 +168,11 @@ export function ScopedSearchSelect({
             onValueChange={setQuery}
           />
           <CommandList id={listId} aria-busy={pending}>
-            {pending || error ? <p role="status" className="px-3 py-3 text-xs text-soft-ink">{pending ? "Searching workspace…" : error}</p> : <CommandEmpty>No matches in this workspace.</CommandEmpty>}
+            {pending || error ? <p role="status" className="px-3 py-3 text-xs text-soft-ink">{pending ? t("searching") : errorMessage}</p> : <CommandEmpty>{t("noMatches")}</CommandEmpty>}
             <CommandGroup>
               {allowEmpty ? (
                 <CommandItem
-                  value={emptyLabel}
+                  value={label}
                   onSelect={() => {
                     onChange("");
                     setPicked(undefined);
@@ -169,7 +180,7 @@ export function ScopedSearchSelect({
                     setOpen(false);
                   }}
                 >
-                  {emptyLabel}
+                  {label}
                 </CommandItem>
               ) : null}
               {!pending && !error && items.map((item) => (
@@ -195,7 +206,7 @@ export function ScopedSearchSelect({
                   disabled={loadingMore}
                   className="w-full border-t border-border px-3 py-2 text-left text-xs font-medium text-foreground hover:bg-soft-kraft/50 disabled:opacity-50"
                 >
-                  {loadingMore ? "Loading more…" : "Load more results"}
+                  {loadingMore ? t("loadingMore") : t("loadMore")}
                 </button>
               ) : null}
             </CommandGroup>

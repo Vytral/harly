@@ -1,7 +1,9 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import { normalizeCareerPageConfig } from "./config";
 import { publicBoardMetadata, serializeJsonLd } from "./seo";
+
+vi.mock("next-intl/server", async () => (await import("@/test-support/intl-server-mock")).intlServerMock);
 
 describe("career page SEO", () => {
   it("escapes script terminators in JSON-LD", () => {
@@ -11,8 +13,8 @@ describe("career page SEO", () => {
     expect(serialized).toContain("\\u003c/script\\u003e");
   });
 
-  it("uses workspace branding as the default title and favicon", () => {
-    const metadata = publicBoardMetadata(
+  it("uses workspace branding as the default title and favicon", async () => {
+    const metadata = await publicBoardMetadata(
       {
         name: "Syntrix",
         slug: "syntrix",
@@ -36,8 +38,8 @@ describe("career page SEO", () => {
     expect(metadata.icons).toEqual({ icon: "https://cdn.example.com/syntrix.svg" });
   });
 
-  it("uses the Harly favicon when workspace branding has no logo", () => {
-    const metadata = publicBoardMetadata(
+  it("uses the Harly favicon when workspace branding has no logo", async () => {
+    const metadata = await publicBoardMetadata(
       {
         name: "Syntrix",
         slug: "syntrix",

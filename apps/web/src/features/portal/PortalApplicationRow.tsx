@@ -1,5 +1,6 @@
 import Link from "next/link";
 import type { Route } from "next";
+import { getLocale, getTranslations } from "next-intl/server";
 
 import { StatusPill, type StatusPillTone } from "@/components/ui/status-pill";
 import { CaretRightIcon } from "@/components/ui/icons/phosphor";
@@ -17,7 +18,7 @@ export const PROGRESS_PILL_TONE: Record<PortalProgressTone, StatusPillTone> = {
 };
 
 /** One application in a list: title, context, where it stands, a mini progress bar. */
-export function PortalApplicationRow({
+export async function PortalApplicationRow({
   application,
   showStages,
   orgName,
@@ -26,15 +27,18 @@ export function PortalApplicationRow({
   showStages: boolean;
   orgName: string;
 }) {
+  const t = await getTranslations("features.portal.PortalApplicationRow");
+  const tProgress = await getTranslations("labels.portal.applicationProgress");
   const progress = portalApplicationProgress({
     stages: application.stages,
     currentStageId: application.currentStageId,
     status: application.status,
     showStages,
     orgName,
-  });
+  }, tProgress);
   const meta = [application.jobDepartment, application.jobLocation].filter(Boolean).join(" · ");
   const closed = application.status !== "active";
+  const appliedOn = formatShort(application.appliedAt, await getLocale());
 
   return (
     <li>
@@ -50,7 +54,9 @@ export function PortalApplicationRow({
             </StatusPill>
           </div>
           <p className="mt-1 truncate text-[13px] text-soft-ink">
-            {meta ? `${meta} · ` : ""}Applied {formatShort(application.appliedAt)}
+            {meta
+              ? t("metaApplied", { meta, date: appliedOn })
+              : t("applied", { date: appliedOn })}
           </p>
           {application.stages.length > 0 && showStages ? (
             <div className="mt-3 flex items-center gap-3">
@@ -63,7 +69,7 @@ export function PortalApplicationRow({
               />
               <span className={closed ? "shrink-0 text-[12px] text-soft-ink" : "shrink-0 text-[12px] font-medium text-foreground"}>
                 {progress.step && application.status === "active"
-                  ? `${progress.currentStageName} · ${progress.step}/${progress.total}`
+                  ? t("stepProgress", { stage: progress.currentStageName ?? "", step: progress.step, total: progress.total })
                   : progress.headline}
               </span>
             </div>

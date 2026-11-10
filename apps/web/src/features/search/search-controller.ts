@@ -11,6 +11,10 @@ import { normalizeSearchQuery } from "./query";
 
 export const SEARCH_DEBOUNCE_MS = 150;
 export const SEARCH_TIMEOUT_MS = 8000;
+/**
+ * English fallbacks. The React binding passes translated messages in through
+ * `messages`, so these only apply when a caller does not supply its own.
+ */
 export const SEARCH_TIMEOUT_MESSAGE = "Search took too long. Try again.";
 export const SEARCH_FAILED_MESSAGE = "Search didn't load. Try again.";
 
@@ -55,10 +59,17 @@ export type WorkspaceSearchFn = (
   rawQuery: string,
 ) => Promise<WorkspaceSearchActionResult>;
 
+export type WorkspaceSearchMessages = {
+  timeout: string;
+  failed: string;
+};
+
 export type WorkspaceSearchControllerOptions = {
   search: WorkspaceSearchFn;
   debounceMs?: number;
   timeoutMs?: number;
+  /** Shown when a search times out or fails. Translated by the caller. */
+  messages?: WorkspaceSearchMessages;
 };
 
 const IDLE: WorkspaceSearchState = {
@@ -78,11 +89,16 @@ export class WorkspaceSearchController {
   private readonly search: WorkspaceSearchFn;
   private readonly debounceMs: number;
   private readonly timeoutMs: number;
+  private readonly messages: WorkspaceSearchMessages;
 
   constructor(options: WorkspaceSearchControllerOptions) {
     this.search = options.search;
     this.debounceMs = options.debounceMs ?? SEARCH_DEBOUNCE_MS;
     this.timeoutMs = options.timeoutMs ?? SEARCH_TIMEOUT_MS;
+    this.messages = options.messages ?? {
+      timeout: SEARCH_TIMEOUT_MESSAGE,
+      failed: SEARCH_FAILED_MESSAGE,
+    };
   }
 
   /** Stable getter for `useSyncExternalStore`: same object until something changes. */
@@ -149,7 +165,7 @@ export class WorkspaceSearchController {
     this.timeoutTimer = setTimeout(() => {
       this.timeoutTimer = null;
       if (generation !== this.generation) return;
-      this.fail(generation, SEARCH_TIMEOUT_MESSAGE);
+      this.fail(generation, this.messages.timeout);
     }, this.timeoutMs);
 
     let pending: Promise<WorkspaceSearchActionResult>;
@@ -171,12 +187,12 @@ export class WorkspaceSearchController {
             error: null,
           });
         } else {
-          this.fail(generation, response.error || SEARCH_FAILED_MESSAGE);
+          this.fail(generation, response.error || this.messages.failed);
         }
       },
       () => {
         if (generation !== this.generation) return;
-        this.fail(generation, SEARCH_FAILED_MESSAGE);
+        this.fail(generation, this.messages.failed);
       },
     );
   }

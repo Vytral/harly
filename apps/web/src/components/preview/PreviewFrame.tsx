@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from "react";
 import { createPortal } from "react-dom";
+import { useTranslations } from "next-intl";
 
 import { cn } from "@/lib/utils";
 
@@ -59,6 +60,7 @@ export function PreviewFrame({
   onDocumentReady?: (doc: Document | null) => void;
   className?: string;
 }) {
+  const t = useTranslations("ui.previewFrame");
   const containerRef = useRef<HTMLDivElement>(null);
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const [mountNode, setMountNode] = useState<HTMLElement | null>(null);
@@ -133,7 +135,7 @@ export function PreviewFrame({
         <iframe
           ref={iframeRef}
           onLoad={setup}
-          title={`${device} preview`}
+          title={t("frameTitle", { device: t(`devices.${device}`) })}
           srcDoc={BLANK_DOC}
           className={cn(
             "block border-0 bg-pure-snow shadow-[var(--shadow-card)]",

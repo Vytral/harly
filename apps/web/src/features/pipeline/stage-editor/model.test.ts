@@ -1,16 +1,17 @@
 import { describe, expect, it } from "vitest";
 
+import { makeT } from "@/test-support/translator";
 import {
   activeStagesOf,
   archivedStagesOf,
   canStep,
   checkStageName,
-  countLabel,
   decideKindChange,
   describeShapeIssue,
   insertionRange,
   kindLockNote,
   mergeMessage,
+  nameErrorMessage,
   normalizeEmailConfig,
   planArchive,
   planMove,
@@ -21,6 +22,8 @@ import {
   validMergeTargets,
   type EditorStage,
 } from "./model";
+
+const t = makeT("labels.pipeline.stageEditor");
 
 let counter = 0;
 
@@ -78,7 +81,7 @@ describe("checkStageName", () => {
   const active = defaultPipeline();
 
   it("rejects an empty or whitespace-only name", () => {
-    expect(checkStageName("   ", active)).toEqual({ ok: false, error: "Enter a stage name." });
+    expect(checkStageName("   ", active)).toEqual({ ok: false, code: "empty" });
   });
 
   it("normalizes whitespace in accepted names", () => {
@@ -90,13 +93,15 @@ describe("checkStageName", () => {
 
   it("rejects names longer than 120 characters", () => {
     const result = checkStageName("x".repeat(121), active);
-    expect(result.ok).toBe(false);
+    expect(result).toEqual({ ok: false, code: "tooLong" });
+    if (!result.ok) expect(nameErrorMessage(result, t)).toBe("Stage names can be 120 characters or fewer.");
   });
 
   it("treats names as unique among active stages, ignoring case", () => {
     const result = checkStageName("  INTERVIEW ", active);
     expect(result).toMatchObject({ ok: false });
-    if (!result.ok) expect(result.error).toContain('"Interview"');
+    expect(result).toEqual({ ok: false, code: "duplicate", existingName: "Interview" });
+    if (!result.ok) expect(nameErrorMessage(result, t)).toContain('"Interview"');
   });
 
   it("lets a stage keep its own name when it is renamed", () => {
@@ -145,13 +150,13 @@ describe("validMergeTargets", () => {
 describe("planArchive", () => {
   it("asks for a plain confirm when the stage holds no candidates", () => {
     const stages = defaultPipeline();
-    expect(planArchive(stages[1], stages)).toEqual({ mode: "confirm" });
+    expect(planArchive(stages[1], stages, t, "Hired")).toEqual({ mode: "confirm" });
   });
 
   it("requires a merge target, defaulting to the first valid one, when candidates are present", () => {
     const stages = defaultPipeline();
     stages[1] = { ...stages[1], applicationCount: 12 };
-    const plan = planArchive(stages[1], stages);
+    const plan = planArchive(stages[1], stages, t, "Hired");
     expect(plan).toMatchObject({ mode: "merge", defaultTargetId: "applied" });
     if (plan.mode === "merge") {
       expect(plan.targets.map((s) => s.id)).toEqual(["applied", "interview", "offer"]);
@@ -161,7 +166,7 @@ describe("planArchive", () => {
   it("blocks archiving an outcome that has candidates and no other stage of its kind", () => {
     const stages = defaultPipeline();
     stages[4] = { ...stages[4], applicationCount: 3 };
-    const plan = planArchive(stages[4], stages);
+    const plan = planArchive(stages[4], stages, t, "Hired");
     expect(plan.mode).toBe("blocked");
     if (plan.mode === "blocked") {
       expect(plan.reason).toContain("3 candidates");
@@ -174,10 +179,10 @@ describe("planArchive", () => {
       stage({ id: "only", name: "Only", kind: "custom", order: 0 }),
       stage({ id: "hired", name: "Hired", kind: "hired", order: 1 }),
     ];
-    const plan = planArchive(stages[0], stages);
+    const plan = planArchive(stages[0], stages, t, "Hired");
     expect(plan).toEqual({
       mode: "blocked",
-      reason: describeShapeIssue({ code: "no_active_stage" }),
+      reason: describeShapeIssue({ code: "no_active_stage" }, t),
     });
   });
 
@@ -186,29 +191,29 @@ describe("planArchive", () => {
       stage({ id: "only", name: "Only", kind: "custom", order: 0, applicationCount: 2 }),
       stage({ id: "hired", name: "Hired", kind: "hired", order: 1 }),
     ];
-    const plan = planArchive(stages[0], stages);
+    const plan = planArchive(stages[0], stages, t, "Hired");
     expect(plan.mode).toBe("blocked");
   });
 });
 
-describe("mergeMessage and countLabel", () => {
+describe("mergeMessage and candidateCount", () => {
   it("states how many candidates move and that history is kept", () => {
-    expect(mergeMessage(12, "Screening")).toBe(
+    expect(mergeMessage(12, "Screening", t)).toBe(
       "12 candidates will move to Screening. History is kept.",
     );
   });
 
   it("uses the singular for one candidate", () => {
-    expect(mergeMessage(1, "Screening")).toBe("1 candidate will move to Screening. History is kept.");
-    expect(countLabel(1)).toBe("1 candidate");
-    expect(countLabel(0)).toBe("0 candidates");
+    expect(mergeMessage(1, "Screening", t)).toBe("1 candidate will move to Screening. History is kept.");
+    expect(t("candidateCount", { count: 1 })).toBe("1 candidate");
+    expect(t("candidateCount", { count: 0 })).toBe("0 candidates");
   });
 });
 
 describe("decideKindChange", () => {
   it("allows keeping the same kind", () => {
     const stages = defaultPipeline();
-    expect(decideKindChange({ stage: stages[1], stages, nextKind: "screening" })).toEqual({
+    expect(decideKindChange({ stage: stages[1], stages, nextKind: "screening" }, t)).toEqual({
       allowed: true,
     });
   });
@@ -216,7 +221,7 @@ describe("decideKindChange", () => {
   it("allows moving between active kinds even with candidates in the stage", () => {
     const stages = defaultPipeline();
     stages[1] = { ...stages[1], applicationCount: 4 };
-    expect(decideKindChange({ stage: stages[1], stages, nextKind: "interview" })).toEqual({
+    expect(decideKindChange({ stage: stages[1], stages, nextKind: "interview" }, t)).toEqual({
       allowed: true,
     });
   });
@@ -224,7 +229,7 @@ describe("decideKindChange", () => {
   it("refuses to turn a stage with candidates into an outcome", () => {
     const stages = defaultPipeline();
     stages[2] = { ...stages[2], applicationCount: 2 };
-    const decision = decideKindChange({ stage: stages[2], stages, nextKind: "rejected" });
+    const decision = decideKindChange({ stage: stages[2], stages, nextKind: "rejected" }, t);
     expect(decision.allowed).toBe(false);
     if (!decision.allowed) expect(decision.reason).toContain("2 candidates");
   });
@@ -232,12 +237,12 @@ describe("decideKindChange", () => {
   it("refuses to move candidates out of an outcome by changing its kind", () => {
     const stages = defaultPipeline();
     stages[4] = { ...stages[4], applicationCount: 1 };
-    expect(decideKindChange({ stage: stages[4], stages, nextKind: "custom" }).allowed).toBe(false);
+    expect(decideKindChange({ stage: stages[4], stages, nextKind: "custom" }, t).allowed).toBe(false);
   });
 
   it("allows an empty stage to become an outcome when another active stage remains", () => {
     const stages = defaultPipeline();
-    expect(decideKindChange({ stage: stages[3], stages, nextKind: "hired" })).toEqual({
+    expect(decideKindChange({ stage: stages[3], stages, nextKind: "hired" }, t)).toEqual({
       allowed: true,
     });
   });
@@ -247,22 +252,22 @@ describe("decideKindChange", () => {
       stage({ id: "only", name: "Only", kind: "custom", order: 0 }),
       stage({ id: "hired", name: "Hired", kind: "hired", order: 1 }),
     ];
-    const decision = decideKindChange({ stage: stages[0], stages, nextKind: "rejected" });
+    const decision = decideKindChange({ stage: stages[0], stages, nextKind: "rejected" }, t);
     expect(decision).toEqual({
       allowed: false,
-      reason: describeShapeIssue({ code: "no_active_stage" }),
+      reason: describeShapeIssue({ code: "no_active_stage" }, t),
     });
   });
 });
 
 describe("kindLockNote", () => {
   it("is empty when the stage holds no candidates", () => {
-    expect(kindLockNote(stage({ name: "A", kind: "screening" }))).toBeNull();
+    expect(kindLockNote(stage({ name: "A", kind: "screening" }), t)).toBeNull();
   });
 
   it("explains the lock for a populated active stage and for a populated outcome", () => {
-    const active = kindLockNote(stage({ name: "A", kind: "screening", applicationCount: 1 }));
-    const outcome = kindLockNote(stage({ name: "H", kind: "hired", applicationCount: 1 }));
+    const active = kindLockNote(stage({ name: "A", kind: "screening", applicationCount: 1 }), t);
+    const outcome = kindLockNote(stage({ name: "H", kind: "hired", applicationCount: 1 }), t);
     expect(active).toContain("locked while candidates are here");
     expect(outcome).toContain("Archive the stage");
   });
@@ -352,7 +357,7 @@ describe("insertionRange and positionOptions", () => {
 
   it("labels each slot with the stage it goes before", () => {
     const stages = defaultPipeline();
-    const { options, defaultValue } = positionOptions(stages, "custom");
+    const { options, defaultValue } = positionOptions(stages, "custom", t);
     expect(defaultValue).toBe(4);
     expect(options.map((option) => option.label)).toEqual([
       "Before Applied",
@@ -365,7 +370,7 @@ describe("insertionRange and positionOptions", () => {
 
   it("offers the end of the pipeline when there are no outcomes", () => {
     const stages = [stage({ id: "a", name: "A", kind: "custom", order: 0 })];
-    const { options, defaultValue } = positionOptions(stages, "custom");
+    const { options, defaultValue } = positionOptions(stages, "custom", t);
     expect(defaultValue).toBe(1);
     expect(options.at(-1)).toEqual({ value: 1, label: "At the end" });
   });
@@ -375,7 +380,7 @@ describe("reorderAnnouncement", () => {
   it("names the stage and its new position", () => {
     const stages = defaultPipeline();
     const ids = ["screening", "applied", "interview", "offer"];
-    expect(reorderAnnouncement(stages, "screening", ids)).toBe(
+    expect(reorderAnnouncement(stages, "screening", ids, t)).toBe(
       "Moved Screening to position 1 of 4.",
     );
   });

@@ -4,6 +4,7 @@ import { cookies, headers } from "next/headers";
 import { createElement } from "react";
 import { and, eq, asc, count, desc, gt, inArray, isNull, sql } from "drizzle-orm";
 import { z } from "zod";
+import { getTranslations } from "@/i18n/server";
 
 import {
   applications,
@@ -37,9 +38,13 @@ import {
 } from "@/lib/portal-auth";
 import { getWorkspaceEmailSender } from "@/lib/email";
 import { getPortalAuthMethods } from "@/lib/portal-auth-methods";
+import { findActiveCandidateByEmail } from "@/lib/portal-credentials";
 import { createLogger } from "@/lib/logger";
 import { normalizeJobApplicationConfig } from "@/features/jobs/config";
-import { validatePortalApplication } from "@/features/portal/application-validation";
+import {
+  validatePortalApplication,
+  type PortalApplicationValidationError,
+} from "@/features/portal/application-validation";
 import { magicLinkDelivery } from "@/features/portal/magic-link-delivery";
 import { sendApplicationReceivedEmails } from "@/features/applications/notifications";
 import { verifyResumeUpload } from "@/features/applications/resume-upload";
@@ -62,6 +67,16 @@ const emailSchema = z.string().email().max(254).toLowerCase().trim();
 
 export type SendMagicLinkResult = { ok: true } | { ok: false; error: string };
 
+type Translate = (key: string, values?: Record<string, string | number>) => string;
+
+function applicationValidationMessage(
+  t: Translate,
+  error: PortalApplicationValidationError,
+): string {
+  if (error.code === "minLength") return t("minLength", { min: error.min });
+  return t(error.code);
+}
+
 // Used as the form's progressive-enhancement action. This ensures a submit
 // that happens before the client component hydrates is still handled by the
 // server action instead of falling back to GET /portal/login?email=....
@@ -77,21 +92,22 @@ export async function sendPortalMagicLinkFormAction(
 export async function sendPortalMagicLinkAction(
   email: string,
 ): Promise<SendMagicLinkResult> {
+  const t = await getTranslations("server.portal.actions");
   const parsed = emailSchema.safeParse(email);
   if (!parsed.success) {
-    return { ok: false, error: "Enter a valid email address." };
+    return { ok: false, error: t("invalidEmail") };
   }
 
   const workspace = await getSinglePortalWorkspace();
   if (!workspace) {
-    return { ok: false, error: "This candidate portal is unavailable." };
+    return { ok: false, error: t("portalUnavailable") };
   }
   const workspaceId = workspace.id;
   // The server decides: a magic link is only sent when the recruiter enabled it
   // and outgoing email actually exists.
   const methods = await getPortalAuthMethods(workspaceId);
   if (!methods.magicLink) {
-    return { ok: false, error: "Email sign-in links aren't available for this portal." };
+    return { ok: false, error: t("magicLinkUnavailable") };
   }
 
   const requestHeaders = await headers();
@@ -133,6 +149,7 @@ export async function sendPortalMagicLinkAction(
   }
 
   try {
+    const candidate = await findActiveCandidateByEmail(workspaceId, parsed.data);
     const token = await createMagicLinkToken(workspaceId, parsed.data);
     const appUrl = getHarlyPublicOrigin();
     const url = `${appUrl}/api/portal/auth/magic?token=${token}`;
@@ -150,8 +167,12 @@ export async function sendPortalMagicLinkAction(
     if (delivery === "send" && sender) {
       await sender.send({
         to: parsed.data,
-        subject: portalMagicLinkSubject(),
-        react: createElement(PortalMagicLinkEmail, { loginUrl: url }),
+        subject: portalMagicLinkSubject(candidate?.preferredEmailLocale),
+        react: createElement(PortalMagicLinkEmail, {
+          candidateName: candidate?.firstName,
+          loginUrl: url,
+          locale: candidate?.preferredEmailLocale,
+        }),
       });
     } else if (delivery === "log") {
       console.info(`[portal] Magic link for ${parsed.data}: ${url}`);
@@ -160,7 +181,7 @@ export async function sendPortalMagicLinkAction(
     return { ok: true };
   } catch (err) {
     log.error(err, "sendPortalMagicLinkAction failed");
-    return { ok: false, error: "Could not send the sign-in link. Try again." };
+    return { ok: false, error: t("sendLinkFailed") };
   }
 }
 
@@ -186,13 +207,15 @@ type ApplyInput = {
 export async function applyToJobAction(
   input: ApplyInput,
 ): Promise<{ ok: boolean; applicationId?: string; error?: string }> {
+  const t = await getTranslations("server.portal.actions");
+  const tValidation = await getTranslations("server.portal.applicationValidation");
   try {
     const cookieStore = await cookies();
     const token = cookieStore.get(PORTAL_SESSION_COOKIE)?.value;
-    if (!token) return { ok: false, error: "Unauthorized." };
+    if (!token) return { ok: false, error: t("unauthorized") };
 
     const session = await resolvePortalSession(token);
-    if (!session) return { ok: false, error: "Unauthorized." };
+    if (!session) return { ok: false, error: t("unauthorized") };
 
     const [job] = await db
       .select({
@@ -212,7 +235,7 @@ export async function applyToJobAction(
       .limit(1);
 
     if (!job || job.status !== "open") {
-      return { ok: false, error: "Job is no longer open." };
+      return { ok: false, error: t("jobNotOpen") };
     }
 
     const questions = await db
@@ -242,7 +265,9 @@ export async function applyToJobAction(
       answers: input.answers,
       questions,
     });
-    if (!validation.ok) return validation;
+    if (!validation.ok) {
+      return { ok: false, error: applicationValidationMessage(tValidation, validation) };
+    }
 
     const verifiedResume = input.resumeKey
       ? await verifyResumeUpload({
@@ -254,7 +279,7 @@ export async function applyToJobAction(
         })
       : null;
     if (input.resumeKey && !verifiedResume) {
-      return { ok: false, error: "Resume upload is invalid." };
+      return { ok: false, error: t("resumeInvalid") };
     }
 
     const [settings] = await db
@@ -269,7 +294,7 @@ export async function applyToJobAction(
     if (settings?.legalConfigured && !input.consentGiven) {
       return {
         ok: false,
-        error: "You must consent to data processing to apply.",
+        error: t("consentRequired"),
       };
     }
 
@@ -300,7 +325,7 @@ export async function applyToJobAction(
       .limit(1);
 
     if (existing) {
-      return { ok: false, error: "You have already applied to this job." };
+      return { ok: false, error: t("alreadyApplied") };
     }
 
     const firstStage = await resolveEntryStage(db, {
@@ -309,7 +334,7 @@ export async function applyToJobAction(
     });
 
     if (!firstStage) {
-      return { ok: false, error: "Job pipeline not configured." };
+      return { ok: false, error: t("pipelineNotConfigured") };
     }
 
     const application = await db.transaction(async (tx) => {
@@ -468,7 +493,10 @@ export async function applyToJobAction(
           .where(eq(organization.id, session.workspaceId))
           .limit(1),
         db
-          .select({ email: authUsers.email })
+          .select({
+            email: authUsers.email,
+            preferredEmailLocale: authUsers.preferredEmailLocale,
+          })
           .from(authMembers)
           .innerJoin(authUsers, eq(authUsers.id, authMembers.userId))
           .where(
@@ -491,6 +519,10 @@ export async function applyToJobAction(
           candidateName: `${session.firstName} ${session.lastName}`.trim(),
           jobTitle: job.title,
           ownerEmails: owners.map((owner) => owner.email),
+          ownerRecipients: owners.map((owner) => ({
+            email: owner.email,
+            preferredEmailLocale: owner.preferredEmailLocale,
+          })),
         });
       }
     } catch (emailError) {
@@ -502,7 +534,7 @@ export async function applyToJobAction(
     const conflict = getApplicationConflictMessage(error);
     if (conflict) return { ok: false, error: conflict };
     log.error(error, "applyToJobAction failed");
-    return { ok: false, error: "Unable to submit application." };
+    return { ok: false, error: t("submitFailed") };
   }
 }
 
@@ -517,11 +549,12 @@ export async function applyToJobAction(
 export async function createOfferSigningViewAction(input: {
   applicationId: string;
 }): Promise<{ ok: true; signingUrl: string } | { ok: false; error: string }> {
+  const t = await getTranslations("server.portal.actions");
   const cookieStore = await cookies();
   const token = cookieStore.get(PORTAL_SESSION_COOKIE)?.value;
-  if (!token) return { ok: false, error: "Your session has expired." };
+  if (!token) return { ok: false, error: t("sessionExpired") };
   const session = await resolvePortalSession(token);
-  if (!session) return { ok: false, error: "Your session has expired." };
+  if (!session) return { ok: false, error: t("sessionExpired") };
 
   // The offer must belong to this candidate's application in this workspace and
   // be an e-signature offer still awaiting decision.
@@ -556,10 +589,10 @@ export async function createOfferSigningViewAction(input: {
     .limit(1);
 
   if (!offer || !offer.esignSubmissionId || !offer.signatureEnvelopeRefId) {
-    return { ok: false, error: "No offer is waiting for your signature." };
+    return { ok: false, error: t("noOfferWaiting") };
   }
   if (offerHasExpired(offer.expiresAt)) {
-    return { ok: false, error: "This offer has expired and is no longer actionable." };
+    return { ok: false, error: t("offerExpired") };
   }
 
   const [recipient] = await db
@@ -579,12 +612,12 @@ export async function createOfferSigningViewAction(input: {
     .limit(1);
 
   if (!recipient) {
-    return { ok: false, error: "Electronic signing is not available for this offer." };
+    return { ok: false, error: t("esignUnavailable") };
   }
 
   const ctx = await freshEsignContext(session.workspaceId);
   if (!ctx) {
-    return { ok: false, error: "Electronic signing is not available for this offer." };
+    return { ok: false, error: t("esignUnavailable") };
   }
 
   let submission;
@@ -592,7 +625,7 @@ export async function createOfferSigningViewAction(input: {
     submission = await getSubmission(ctx, offer.esignSubmissionId);
   } catch (error) {
     log.warn({ error, offerId: offer.id }, "Could not refresh DocuSeal signing session");
-    return { ok: false, error: "Electronic signing is temporarily unavailable." };
+    return { ok: false, error: t("esignTemporarilyUnavailable") };
   }
 
   if (
@@ -601,7 +634,7 @@ export async function createOfferSigningViewAction(input: {
       submission.status?.toLowerCase() ?? "",
     )
   ) {
-    return { ok: false, error: "This offer is no longer waiting for your signature." };
+    return { ok: false, error: t("offerNoLongerWaiting") };
   }
 
   // Correlate with provider-owned submitter fields and the local recipient row.
@@ -615,7 +648,7 @@ export async function createOfferSigningViewAction(input: {
   );
   const signingUrl = signerSigningUrl(ctx.baseUrl, signer);
   if (!signingUrl) {
-    return { ok: false, error: "Electronic signing is not available for this offer." };
+    return { ok: false, error: t("esignUnavailable") };
   }
   return { ok: true, signingUrl };
 }

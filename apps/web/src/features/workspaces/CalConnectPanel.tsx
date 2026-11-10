@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { toast } from "@/lib/notification-island/toast";
 import { copyText } from "@/lib/utils";
 
@@ -54,6 +55,7 @@ export function CalConnectPanel({
   tileClassName: string;
   description: string;
 }) {
+  const t = useTranslations("features.workspaces.calConnectPanel");
   const router = useRouter();
   const [open, setOpen] = useState(status.hasApiKey);
   const [togglePending, startToggle] = useTransition();
@@ -65,13 +67,13 @@ export function CalConnectPanel({
     : "neutral";
   const statusLabel = status.hasApiKey
     ? status.enabled
-      ? "Connected"
-      : "Disabled"
-    : "Not connected";
+      ? t("connected")
+      : t("disabled")
+    : t("notConnected");
 
   function toggleEnabled(next: boolean) {
     if (!status.hasApiKey && next) {
-      toast.error("Add a Cal.com API key first.");
+      toast.error(t("addApiKeyFirst"));
       return;
     }
     startToggle(async () => {
@@ -79,10 +81,10 @@ export function CalConnectPanel({
         ? await saveCalSettingsAction({ enabled: true })
         : await disableCalAction();
       if (!result.ok) {
-        toast.error(result.error ?? "Could not update.");
+        toast.error(result.error ?? t("updateFailed"));
         return;
       }
-      toast.success(next ? "Cal.com enabled" : "Cal.com disabled");
+      toast.success(next ? t("enabledToast") : t("disabledToast"));
       router.refresh();
     });
   }
@@ -112,9 +114,9 @@ export function CalConnectPanel({
                 )}
                 {status.hasApiKey
                   ? open
-                    ? "Hide settings"
-                    : "Manage"
-                  : "Connect"}
+                    ? t("hideSettings")
+                    : t("manage")
+                  : t("connect")}
               </Button>
               {status.hasApiKey ? (
                 <label className="flex h-9 items-center gap-2 rounded-[var(--radius-btn)] border border-mist-border bg-pure-snow px-3 text-sm">
@@ -122,10 +124,10 @@ export function CalConnectPanel({
                     checked={status.enabled}
                     disabled={togglePending}
                     onCheckedChange={toggleEnabled}
-                    aria-label="Enable Cal.com"
+                    aria-label={t("enableSwitchLabel")}
                   />
                   <span className="text-muted-foreground">
-                    {status.enabled ? "On" : "Off"}
+                    {status.enabled ? t("on") : t("off")}
                   </span>
                 </label>
               ) : null}
@@ -138,8 +140,11 @@ export function CalConnectPanel({
         <div className="flex items-start gap-2 rounded-xl border border-clay/30 bg-clay/5 px-3 py-2 text-sm text-clay">
           <WarningCircleIcon className="mt-0.5 size-4 shrink-0" />
           <p>
-            Set <code className="font-mono text-xs">AI_ENCRYPTION_KEY</code> on
-            the server to store the Cal.com key.
+            {t.rich("encryptionKeyMissing", {
+              code: (chunks) => (
+                <code className="font-mono text-xs">{chunks}</code>
+              ),
+            })}
           </p>
         </div>
       ) : null}
@@ -147,19 +152,19 @@ export function CalConnectPanel({
       {status.hasApiKey ? (
         <Card className="overflow-hidden p-0">
           <div className="grid grid-cols-1 divide-y sm:grid-cols-3 sm:divide-x sm:divide-y-0">
-            <StatCell label="Booking page">
+            <StatCell label={t("bookingPage")}>
               <span className="truncate text-muted-foreground">
-                {status.bookingUrl ?? "Not set"}
+                {status.bookingUrl ?? t("notSet")}
               </span>
             </StatCell>
-            <StatCell label="Event type">
+            <StatCell label={t("eventType")}>
               <span className="font-mono text-[13px]">
                 {status.defaultEventTypeId
                   ? `#${status.defaultEventTypeId}`
-                  : "Not configured"}
+                  : t("notConfigured")}
               </span>
             </StatCell>
-            <StatCell label="Webhook">
+            <StatCell label={t("webhook")}>
               <WebhookCell canEdit={canEdit} status={status} />
             </StatCell>
           </div>
@@ -189,6 +194,7 @@ function WebhookCell({
   canEdit: boolean;
   status: WorkspaceCalStatus;
 }) {
+  const t = useTranslations("features.workspaces.calConnectPanel");
   const router = useRouter();
   const [registering, startRegister] = useTransition();
 
@@ -196,16 +202,18 @@ function WebhookCell({
     startRegister(async () => {
       const result = await registerCalWebhookAction();
       if (!result.ok) {
-        toast.error(result.error ?? "Could not register webhook.");
+        toast.error(result.error ?? t("registerFailed"));
         return;
       }
-      toast.success("Webhook registered with Cal.com");
+      toast.success(t("webhookRegistered"));
       router.refresh();
     });
   }
 
   if (!canEdit) {
-    return <span>{status.hasWebhookSecret ? "Active" : "Not set"}</span>;
+    return (
+      <span>{status.hasWebhookSecret ? t("active") : t("notSet")}</span>
+    );
   }
 
   return (
@@ -220,7 +228,7 @@ function WebhookCell({
       ) : (
         <WebhooksDuotoneIcon className="size-3.5" />
       )}
-      {status.hasWebhookSecret ? "Re-register" : "Register"}
+      {status.hasWebhookSecret ? t("reregister") : t("register")}
     </button>
   );
 }
@@ -244,6 +252,7 @@ function CalConnectForm({
   const [test, setTest] = useState<TestState>({ kind: "idle" });
   const [testing, startTest] = useTransition();
   const [saving, startSave] = useTransition();
+  const t = useTranslations("features.workspaces.calConnectPanel");
 
   function testConnection() {
     startTest(async () => {
@@ -251,11 +260,11 @@ function CalConnectForm({
       const result = await testCalConnectionAction({ apiKey, baseUrl });
       if (result.ok) {
         setTest({ kind: "ok" });
-        toast.success("Cal.com reachable with that key");
+        toast.success(t("connectionOkToast"));
       } else {
         setTest({
           kind: "error",
-          message: result.error ?? "Could not reach Cal.com.",
+          message: result.error ?? t("couldNotReach"),
         });
       }
     });
@@ -271,10 +280,10 @@ function CalConnectForm({
         defaultEventTypeId: eventTypeId || undefined,
       });
       if (!result.ok) {
-        toast.error(result.error ?? "Could not save.");
+        toast.error(result.error ?? t("couldNotSave"));
         return;
       }
-      toast.success("Cal.com settings saved");
+      toast.success(t("settingsSaved"));
       onSaved();
     });
   }
@@ -282,7 +291,7 @@ function CalConnectForm({
   function copyWebhook() {
     if (!webhookUrl) return;
     void copyText(webhookUrl);
-    toast.success("Webhook URL copied");
+    toast.success(t("webhookUrlCopied"));
   }
 
   const canTest = Boolean(apiKey.trim()) || status.hasApiKey;
@@ -292,10 +301,10 @@ function CalConnectForm({
       <div className="mb-5 flex items-start justify-between gap-4">
         <div className="space-y-0.5">
           <h2 className="font-display text-base font-semibold tracking-tight">
-            {status.hasApiKey ? "Manage connection" : "Connect Cal.com"}
+            {status.hasApiKey ? t("manageConnection") : t("connectTitle")}
           </h2>
           <p className="text-sm text-muted-foreground">
-            Your API key is encrypted at rest and never shown again.
+            {t("keyStoredNote")}
           </p>
         </div>
         <a
@@ -304,14 +313,14 @@ function CalConnectForm({
           rel="noopener noreferrer"
           className="inline-flex shrink-0 items-center gap-1 text-xs font-medium text-pine transition-colors hover:text-pine-strong"
         >
-          API docs
+          {t("apiDocs")}
           <ArrowUpRightIcon className="size-3.5" />
         </a>
       </div>
 
       <div className="space-y-5">
         <div className="space-y-2">
-          <Label htmlFor="cal-key">API key</Label>
+          <Label htmlFor="cal-key">{t("apiKeyLabel")}</Label>
           <SecretInput
             id="cal-key"
             value={apiKey}
@@ -321,26 +330,28 @@ function CalConnectForm({
             }}
             placeholder={
               status.hasApiKey
-                ? "•••••••• (stored, leave blank to keep)"
-                : "cal_live_…"
+                ? t("apiKeyStoredPlaceholder")
+                : t("apiKeyPlaceholder")
             }
           />
           <p className="text-xs text-muted-foreground">
-            Cal.com → Settings → Developer →{" "}
-            <a
-              href="https://app.cal.com/settings/developer/api-keys"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="underline underline-offset-2 hover:text-foreground"
-            >
-              API keys
-            </a>
-            . Needs booking + webhook scopes.
+            {t.rich("apiKeyHelp", {
+              link: (chunks) => (
+                <a
+                  href="https://app.cal.com/settings/developer/api-keys"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="underline underline-offset-2 hover:text-foreground"
+                >
+                  {chunks}
+                </a>
+              ),
+            })}
           </p>
         </div>
 
         <div className="space-y-2">
-          <Label htmlFor="cal-booking-url">Booking page URL</Label>
+          <Label htmlFor="cal-booking-url">{t("bookingUrlLabel")}</Label>
           <Input
             id="cal-booking-url"
             value={bookingUrl}
@@ -348,23 +359,23 @@ function CalConnectForm({
             placeholder="https://cal.com/your-team/interview"
           />
           <p className="text-xs text-muted-foreground">
-            Public link candidates use to pick a slot. Prefilled per candidate.
+            {t("bookingUrlHelp")}
           </p>
         </div>
 
         <div className="grid grid-cols-2 gap-3">
           <div className="space-y-2">
-            <Label htmlFor="cal-event">Default event type ID</Label>
+            <Label htmlFor="cal-event">{t("eventTypeIdLabel")}</Label>
             <Input
               id="cal-event"
               inputMode="numeric"
               value={eventTypeId}
               onChange={(event) => setEventTypeId(event.target.value)}
-              placeholder="e.g. 123456"
+              placeholder={t("eventTypeIdPlaceholder")}
             />
           </div>
           <div className="space-y-2">
-            <Label htmlFor="cal-base">API base URL</Label>
+            <Label htmlFor="cal-base">{t("apiBaseUrlLabel")}</Label>
             <Input
               id="cal-base"
               value={baseUrl}
@@ -377,22 +388,21 @@ function CalConnectForm({
 
         {webhookUrl ? (
           <div className="space-y-2 rounded-xl border bg-muted/30 p-3">
-            <Label>Webhook URL</Label>
+            <Label>{t("webhookUrlLabel")}</Label>
             <div className="flex gap-2">
               <Input readOnly value={webhookUrl} className="font-mono text-xs" />
               <Button
                 type="button"
                 variant="outline"
                 size="icon"
-                aria-label="Copy webhook URL"
+                aria-label={t("copyWebhookUrl")}
                 onClick={copyWebhook}
               >
                 <CopyIcon className="size-4" />
               </Button>
             </div>
             <p className="text-xs text-muted-foreground">
-              Save first, then “Register webhook” auto-creates it in Cal.com. Or
-              add this URL manually under Cal.com webhooks.
+              {t("webhookUrlHelp")}
             </p>
           </div>
         ) : null}
@@ -400,8 +410,8 @@ function CalConnectForm({
         <SettingRow
           htmlFor="calconnectpanel-switch-1"
           className="rounded-[var(--radius-inner)] border border-hairline px-4 py-3"
-          title={<>Enable Cal.com</>}
-          description={<>When off, scheduling stays manual.</>}
+          title={t("enableTitle")}
+          description={t("enableDescription")}
           control={<Switch id="calconnectpanel-switch-1" checked={enabled} onCheckedChange={setEnabled} />}
         />
 
@@ -425,11 +435,11 @@ function CalConnectForm({
           ) : test.kind === "ok" ? (
             <CheckCircleIcon className="size-4 text-pine" />
           ) : null}
-          {test.kind === "ok" ? "Connection OK" : "Test connection"}
+          {test.kind === "ok" ? t("connectionOk") : t("testConnection")}
         </Button>
         <Button onClick={save} disabled={saving || !status.encryptionReady}>
           {saving ? <SpinnerIcon className="size-4" /> : null}
-          Save
+          {t("save")}
         </Button>
       </div>
     </Card>

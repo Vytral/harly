@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef } from "react";
+import { useTranslations } from "next-intl";
 
 import { UserAvatar } from "@/components/ui/UserAvatar";
 import { EnvelopeSimpleDuotoneIcon } from "@/components/ui/icons/phosphor";
@@ -10,14 +11,16 @@ import { ThreadChips } from "@/features/mailbox/InboxThreadMeta";
 import { threadPersonName } from "@/features/mailbox/inbox-filters";
 import type { InboxThread } from "@/features/mailbox/data";
 
-function snippet(value: string | null) {
+function snippet(value: string | null, fallback: string) {
   const flat = (value ?? "").replace(/\s+/g, " ").trim();
-  return flat || "No message preview.";
+  return flat || fallback;
 }
 
 function ThreadRow({ thread, selected, unread, onSelect }: { thread: InboxThread; selected: boolean; unread: boolean; onSelect: (thread: InboxThread) => void }) {
+  const t = useTranslations("features.mailbox.inboxConversationList");
   const ref = useRef<HTMLButtonElement>(null);
-  const name = threadPersonName(thread);
+  const tRoot = useTranslations();
+  const name = threadPersonName(thread, tRoot);
 
   // Keep the keyboard-selected row in view (j/k can move past the fold).
   useEffect(() => {
@@ -43,7 +46,7 @@ function ThreadRow({ thread, selected, unread, onSelect }: { thread: InboxThread
             <span
               className="absolute -right-0.5 -top-0.5 size-2.5 rounded-full border-2 border-card bg-chartreuse-signal"
               role="img"
-              aria-label={`${thread.unreadCount} unread`}
+              aria-label={t("unreadCount", { count: thread.unreadCount })}
             />
           ) : null}
         </span>
@@ -55,22 +58,22 @@ function ThreadRow({ thread, selected, unread, onSelect }: { thread: InboxThread
             </time>
           </span>
           <span className={cn("mt-0.5 block truncate text-[13px]", unread ? "font-medium text-near-ink" : "text-near-ink/80")}>{thread.subject}</span>
-          <span className="mt-0.5 block truncate text-xs leading-5 text-soft-ink">{snippet(thread.preview)}</span>
+          <span className="mt-0.5 block truncate text-xs leading-5 text-soft-ink">{snippet(thread.preview, t("noPreview"))}</span>
           <span className="mt-1.5 flex items-center gap-1.5">
             <span className="flex min-w-0 flex-1 flex-wrap items-center gap-1.5">
               {thread.needsReply ? (
                 <span className="inline-flex items-center gap-1.5 rounded-full bg-lime-wash px-2 py-0.5 text-[11px] font-medium text-success-olive">
                   <span aria-hidden="true" className="size-1.5 rounded-full bg-current" />
-                  Needs reply
+                  {t("needsReply")}
                 </span>
               ) : null}
               <ThreadChips thread={thread} />
-              {!thread.candidateId ? <span className="rounded-full bg-card-inset px-2 py-0.5 text-[11px] font-medium text-soft-ink">Not linked</span> : null}
+              {!thread.candidateId ? <span className="rounded-full bg-card-inset px-2 py-0.5 text-[11px] font-medium text-soft-ink">{t("notLinked")}</span> : null}
             </span>
             {thread.ownerName ? (
-              <span className="shrink-0" title={`Assigned to ${thread.ownerName}`}>
+              <span className="shrink-0" title={t("assignedTo", { name: thread.ownerName })}>
                 <UserAvatar name={thread.ownerName} src={thread.ownerImage} size="sm" className="size-5" />
-                <span className="sr-only">Assigned to {thread.ownerName}</span>
+                <span className="sr-only">{t("assignedTo", { name: thread.ownerName })}</span>
               </span>
             ) : null}
           </span>
@@ -104,6 +107,7 @@ export function InboxConversationList({
   onClearFilter?: () => void;
   footer?: React.ReactNode;
 }) {
+  const t = useTranslations("features.mailbox.inboxConversationList");
   if (!threads.length) {
     const searching = query.trim().length > 0;
     return (
@@ -111,17 +115,17 @@ export function InboxConversationList({
         <span className="flex size-11 items-center justify-center rounded-[var(--radius-inner)] bg-card-inset text-soft-ink">
           <EnvelopeSimpleDuotoneIcon className="size-5" />
         </span>
-        <h3 className="mt-4 text-sm font-semibold">{searching ? "No matching conversations" : `Nothing in ${filterLabel}`}</h3>
+        <h3 className="mt-4 text-sm font-semibold">{searching ? t("noMatching") : t("nothingIn", { filter: filterLabel })}</h3>
         <p className="mt-1.5 max-w-[16rem] text-xs leading-5 text-soft-ink">
-          {searching ? "Search covers the conversations loaded in this view. Try a name, subject or phrase." : "When something lands here it will show up on its own."}
+          {searching ? t("searchHint") : t("filterHint")}
         </p>
         {searching ? (
           <button type="button" onClick={onClearSearch} className="mt-4 rounded-full bg-soft-kraft px-3.5 py-1.5 text-[13px] font-medium transition-colors hover:bg-row-wash focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-near-ink">
-            Clear search
+            {t("clearSearch")}
           </button>
         ) : onClearFilter ? (
           <button type="button" onClick={onClearFilter} className="mt-4 rounded-full bg-soft-kraft px-3.5 py-1.5 text-[13px] font-medium transition-colors hover:bg-row-wash focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-near-ink">
-            Show all conversations
+            {t("showAll")}
           </button>
         ) : null}
       </div>
@@ -130,7 +134,7 @@ export function InboxConversationList({
 
   return (
     <div className={cn("min-h-0 flex-1 overflow-y-auto overscroll-contain py-1 transition-opacity duration-150", loading && "opacity-60")} aria-busy={loading}>
-      <ul role="list" aria-label="Conversations">
+      <ul role="list" aria-label={t("conversations")}>
         {threads.map((thread) => (
           <ThreadRow key={thread.id} thread={thread} selected={thread.id === selectedId} unread={unreadFor(thread)} onSelect={onSelect} />
         ))}

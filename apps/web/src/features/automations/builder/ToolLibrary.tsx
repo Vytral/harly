@@ -15,6 +15,8 @@ import {
   X,
   Zap,
 } from "lucide-react";
+import { useTranslations } from "next-intl";
+
 import { cn } from "@/lib/utils";
 
 import { filterLibraryItems, libraryItems, type LibraryItem } from "./library";
@@ -44,9 +46,11 @@ export function ToolLibrary({
   searchRef?: React.MutableRefObject<(() => void) | null>;
   toolManifests: readonly SafeAutomationToolManifest[];
 }) {
+  const t = useTranslations("features.automations.toolLibrary");
+  const tl = useTranslations("labels.automations");
   const inputRef = useRef<HTMLInputElement>(null);
   const [query, setQuery] = useState("");
-  const items = useMemo(() => libraryItems(toolManifests), [toolManifests]);
+  const items = useMemo(() => libraryItems(toolManifests, tl), [toolManifests, tl]);
   const filtered = filterLibraryItems(items, query);
   const groups = [...new Set(filtered.map((item) => item.group))];
 
@@ -73,10 +77,10 @@ export function ToolLibrary({
     <aside className="flex h-full min-h-0 w-full flex-col bg-warm-paper">
       <div className="border-b border-hairline-c px-3 py-3">
         <p className="font-display text-sm font-semibold text-foreground">
-          Step library
+          {t("title")}
         </p>
         <p className="mt-1 text-xs leading-relaxed text-soft-ink">
-          Drag onto the canvas, or click to add. Connect steps to define your flow.
+          {t("description")}
         </p>
         <div className="relative mt-3">
           <label className="flex items-center gap-2 rounded-lg border border-border bg-pure-snow px-3 py-2 focus-within:ring-1 focus-within:ring-foreground/30">
@@ -86,16 +90,16 @@ export function ToolLibrary({
               type="search"
               value={query}
               onChange={(event) => setQuery(event.target.value)}
-              placeholder="Search steps…"
+              placeholder={t("searchPlaceholder")}
               className="w-full bg-transparent text-xs text-foreground outline-none placeholder:text-soft-ink"
-              aria-label="Search steps"
+              aria-label={t("searchLabel")}
             />
             {query && (
               <button
                 type="button"
                 onClick={() => setQuery("")}
                 className="text-soft-ink hover:text-foreground"
-                aria-label="Clear search"
+                aria-label={t("clearSearch")}
               >
                 <X className="size-3" />
               </button>
@@ -107,7 +111,7 @@ export function ToolLibrary({
         {!query && frequentlyUsed.length > 0 && (
           <div>
             <p className="font-chrome px-2 pb-1.5 text-[10px] font-semibold uppercase tracking-wider text-soft-ink">
-              Frequently used
+              {t("frequentlyUsed")}
             </p>
             <div className="space-y-1">
               {frequentlyUsed.map((item) => {
@@ -153,13 +157,13 @@ export function ToolLibrary({
 
         {filtered.length === 0 ? (
           <div className="py-8 text-center">
-            <p className="text-xs text-soft-ink">No steps match “{query}”.</p>
+            <p className="text-xs text-soft-ink">{t("noMatches", { query })}</p>
             <button
               type="button"
               onClick={() => setQuery("")}
               className="mt-2 text-xs font-medium text-foreground underline underline-offset-2"
             >
-              Clear search
+              {t("clearSearch")}
             </button>
           </div>
         ) : (
@@ -212,7 +216,7 @@ export function ToolLibrary({
                             <Plus className="size-3 shrink-0 text-soft-ink group-hover:text-foreground transition-colors" />
                           </div>
                           <p className="mt-0.5 text-[11px] leading-tight text-soft-ink line-clamp-1">
-                            {disabled ? "One trigger per automation" : item.blurb}
+                            {disabled ? t("oneTriggerPerAutomation") : item.blurb}
                           </p>
                         </div>
                       </button>

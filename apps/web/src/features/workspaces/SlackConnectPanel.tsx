@@ -8,6 +8,7 @@ import {
 import { providerStatusLabel, providerStatusTone } from "@/features/integrations/health/connection-label";
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { toast } from "@/lib/notification-island/toast";
 
 import {
@@ -63,6 +64,7 @@ export function SlackConnectPanel({
   tileClassName: string;
   description: string;
 }) {
+  const t = useTranslations("features.workspaces.slackConnectPanel");
   const router = useRouter();
   const isConnected = status.hasToken;
   const [open, setOpen] = useState(isConnected || !status.hasCredentials);
@@ -72,16 +74,16 @@ export function SlackConnectPanel({
   const statusTone = providerStatusTone(health, isConnected ? (status.enabled ? "on" : "off") : "neutral");
   const statusLabel = providerStatusLabel(health, isConnected
     ? status.enabled
-      ? "Connected"
-      : "Disabled"
-    : "Not connected");
+      ? t("connected")
+      : t("disabled")
+    : t("notConnected"));
 
   const installUrl = `/api/integrations/slack/install?ws=${workspaceId}`;
 
   function toggleEnabled(next: boolean) {
     if (!isConnected) return;
     if (next && !status.channelId) {
-      toast.error("Select a channel first.");
+      toast.error(t("selectChannelFirst"));
       return;
     }
     startToggle(async () => {
@@ -92,10 +94,10 @@ export function SlackConnectPanel({
         events: status.events,
       });
       if (!result.ok) {
-        toast.error(result.error ?? "Could not update.");
+        toast.error(result.error ?? t("couldNotUpdate"));
         return;
       }
-      toast.success(next ? "Slack notifications on" : "Slack notifications off");
+      toast.success(next ? t("notificationsOn") : t("notificationsOff"));
       router.refresh();
     });
   }
@@ -104,10 +106,10 @@ export function SlackConnectPanel({
     startDisconnect(async () => {
       const result = await disconnectSlackAction();
       if (!result.ok) {
-        toast.error(result.error ?? "Could not disconnect.");
+        toast.error(result.error ?? t("couldNotDisconnect"));
         return;
       }
-      toast.success("Slack disconnected");
+      toast.success(t("disconnected"));
       router.refresh();
     });
   }
@@ -131,17 +133,17 @@ export function SlackConnectPanel({
                   aria-expanded={open}
                 >
                   <GearSixIcon className="size-4" />
-                  {open ? "Hide settings" : "Manage"}
+                  {open ? t("hideSettings") : t("manage")}
                 </Button>
                 <label className="flex h-9 items-center gap-2 rounded-[var(--radius-btn)] border border-mist-border bg-pure-snow px-3 text-sm">
                   <Switch
                     checked={status.enabled}
                     disabled={togglePending}
                     onCheckedChange={toggleEnabled}
-                    aria-label="Enable Slack notifications"
+                    aria-label={t("enableNotificationsAria")}
                   />
                   <span className="text-muted-foreground">
-                    {status.enabled ? "On" : "Off"}
+                    {status.enabled ? t("on") : t("off")}
                   </span>
                 </label>
               </>
@@ -149,7 +151,7 @@ export function SlackConnectPanel({
               <Button asChild>
                 <a href={installUrl}>
                   <SlackLogo className="size-4" />
-                  Add to Slack
+                  {t("addToSlack")}
                 </a>
               </Button>
             ) : (
@@ -159,7 +161,7 @@ export function SlackConnectPanel({
                 aria-expanded={open}
               >
                 <SlackLogo className="size-4" />
-                Set up Slack
+                {t("setUp")}
               </Button>
             )
           ) : null
@@ -171,8 +173,9 @@ export function SlackConnectPanel({
         <div className="flex items-start gap-2 rounded-xl border border-clay/30 bg-clay/5 px-3 py-2 text-sm text-clay">
           <WarningCircleIcon className="mt-0.5 size-4 shrink-0" />
           <p>
-            Set <code className="font-mono text-xs">AI_ENCRYPTION_KEY</code> on
-            the server to enable encrypted credential storage.
+            {t.rich("encryptionKeyMissing", {
+              code: (chunks) => <code className="font-mono text-xs">{chunks}</code>,
+            })}
           </p>
         </div>
       ) : null}
@@ -180,18 +183,18 @@ export function SlackConnectPanel({
       {isConnected ? (
         <Card className="overflow-hidden p-0">
           <div className="grid grid-cols-1 divide-y sm:grid-cols-3 sm:divide-x sm:divide-y-0">
-            <StatCell label="Workspace">
+            <StatCell label={t("workspace")}>
               <SlackLogo className="size-4" />
-              {status.teamName ?? "Not connected"}
+              {status.teamName ?? t("notConnected")}
             </StatCell>
-            <StatCell label="Channel">
-              {status.channelName ? `#${status.channelName}` : "Not selected"}
+            <StatCell label={t("channel")}>
+              {status.channelName ? `#${status.channelName}` : t("notSelected")}
             </StatCell>
-            <StatCell label="Events">
+            <StatCell label={t("events")}>
               <span className="text-muted-foreground">
                 {status.events.length === 0
-                  ? "None selected"
-                  : `${status.events.length} subscribed`}
+                  ? t("noneSelected")
+                  : t("eventsSubscribed", { count: status.events.length })}
               </span>
             </StatCell>
           </div>
@@ -201,19 +204,19 @@ export function SlackConnectPanel({
       {isConnected && status.lastDelivery ? (
         <Card className="p-4 text-sm">
           <div className="flex items-center justify-between gap-3">
-            <span className="font-medium">Delivery health</span>
+            <span className="font-medium">{t("deliveryHealth")}</span>
             <span className="text-muted-foreground">
               {status.lastDelivery.status === "success"
-                ? "Healthy"
+                ? t("healthy")
                 : status.lastDelivery.status === "dead_letter"
-                  ? "Action required"
-                  : "Retrying"}
+                  ? t("actionRequired")
+                  : t("retrying")}
             </span>
           </div>
           <p className="mt-1 text-xs text-muted-foreground">
             {status.pendingDeliveries > 0
-              ? `${status.pendingDeliveries} notification${status.pendingDeliveries === 1 ? "" : "s"} pending.`
-              : `Last delivery attempt: ${status.lastDelivery.attempts}.`}
+              ? t("pendingNotifications", { count: status.pendingDeliveries })
+              : t("lastDeliveryAttempt", { attempts: status.lastDelivery.attempts })}
             {status.lastDelivery.error ? ` ${sanitizeIntegrationError(status.lastDelivery.error)}` : ""}
           </p>
         </Card>
@@ -239,6 +242,7 @@ export function SlackConnectPanel({
 }
 
 function SlackCredentialsForm({ onSaved }: { onSaved: () => void }) {
+  const t = useTranslations("features.workspaces.slackConnectPanel");
   const [clientId, setClientId] = useState("");
   const [clientSecret, setClientSecret] = useState("");
   const [saving, startSave] = useTransition();
@@ -247,10 +251,10 @@ function SlackCredentialsForm({ onSaved }: { onSaved: () => void }) {
     startSave(async () => {
       const result = await saveSlackCredentialsAction({ clientId, clientSecret });
       if (!result.ok) {
-        toast.error(result.error ?? "Could not save.");
+        toast.error(result.error ?? t("couldNotSave"));
         return;
       }
-      toast.success("Slack credentials saved. You can now connect.");
+      toast.success(t("credentialsSaved"));
       onSaved();
     });
   }
@@ -265,11 +269,10 @@ function SlackCredentialsForm({ onSaved }: { onSaved: () => void }) {
       <div className="mb-5 flex items-start justify-between gap-4">
         <div className="space-y-0.5">
           <h2 className="font-display text-base font-semibold tracking-tight">
-            Set up Slack integration
+            {t("setUpIntegration")}
           </h2>
           <p className="text-sm text-muted-foreground">
-            Create a Slack App, then paste the credentials. Your Client Secret is
-            encrypted at rest.
+            {t("credentialsDescription")}
           </p>
         </div>
         <a
@@ -278,61 +281,67 @@ function SlackCredentialsForm({ onSaved }: { onSaved: () => void }) {
           rel="noopener noreferrer"
           className="inline-flex shrink-0 items-center gap-1 text-xs font-medium text-pine transition-colors hover:text-pine-strong"
         >
-          Slack apps
+          {t("slackApps")}
           <ArrowUpRightIcon className="size-3.5" />
         </a>
       </div>
 
       <div className="space-y-4">
         <div className="rounded-lg border bg-muted/30 px-3 py-2.5 text-xs text-muted-foreground space-y-1.5">
-          <p className="font-medium text-foreground">How to get credentials:</p>
+          <p className="font-medium text-foreground">{t("howToGetCredentials")}</p>
           <ol className="list-decimal space-y-1 pl-4">
             <li>
-              Go to{" "}
-              <a
-                href="https://api.slack.com/apps"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="underline"
-              >
-                api.slack.com/apps
-              </a>{" "}
-              and create a new app
+              {t.rich("stepCreateApp", {
+                link: (chunks) => (
+                  <a
+                    href="https://api.slack.com/apps"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="underline"
+                  >
+                    {chunks}
+                  </a>
+                ),
+              })}
             </li>
             <li>
-              Under OAuth &amp; Permissions, add scopes: <code>chat:write</code>,{" "}
-              <code>channels:read</code>, <code>groups:read</code>
+              {t.rich("stepScopes", {
+                code: (chunks) => <code>{chunks}</code>,
+              })}
             </li>
             <li>
-              Set the Redirect URL to: <code>{redirectUrl}</code>
+              {t.rich("stepRedirectUrl", {
+                code: (chunks) => <code>{chunks}</code>,
+                redirectUrl,
+              })}
             </li>
-            <li>Copy Client ID and Client Secret from Basic Information</li>
+            <li>{t("stepCopyCredentials")}</li>
           </ol>
         </div>
 
         <div className="space-y-2">
-          <Label htmlFor="slack-client-id">Client ID</Label>
+          <Label htmlFor="slack-client-id">{t("clientId")}</Label>
           <Input
             id="slack-client-id"
             value={clientId}
             onChange={(e) => setClientId(e.target.value)}
-            placeholder="e.g. 1234567890.1234567890"
+            placeholder={t("clientIdPlaceholder")}
             autoComplete="off"
             className="font-mono text-xs"
           />
         </div>
 
         <div className="space-y-2">
-          <Label htmlFor="slack-client-secret">Client Secret</Label>
+          <Label htmlFor="slack-client-secret">{t("clientSecret")}</Label>
           <SecretInput
             id="slack-client-secret"
             value={clientSecret}
             onChange={(e) => setClientSecret(e.target.value)}
-            placeholder="e.g. abcdef1234567890abcdef1234567890"
+            placeholder={t("clientSecretPlaceholder")}
             className="font-mono text-xs"
           />
           <p className="text-xs text-muted-foreground">
-            Encrypted at rest. Never visible again after saving.
+            {t("secretHint")}
           </p>
         </div>
       </div>
@@ -343,7 +352,7 @@ function SlackCredentialsForm({ onSaved }: { onSaved: () => void }) {
           disabled={saving || !clientId.trim() || !clientSecret.trim()}
         >
           {saving ? <SpinnerIcon className="size-4" /> : null}
-          Save credentials
+          {t("saveCredentials")}
         </Button>
       </div>
     </Card>
@@ -363,6 +372,7 @@ function SlackConfigForm({
   onDisconnect: () => void;
   disconnecting: boolean;
 }) {
+  const t = useTranslations("features.workspaces.slackConnectPanel");
   const [channels, setChannels] = useState<SlackChannel[]>([]);
   const [loadingChannels, startLoadChannels] = useTransition();
   const [channelId, setChannelId] = useState(status.channelId ?? "");
@@ -406,10 +416,10 @@ function SlackConfigForm({
     startTest(async () => {
       const result = await testSlackAction();
       if (!result.ok) {
-        toast.error(result.error ?? "Test failed.");
+        toast.error(result.error ?? t("testFailed"));
         return;
       }
-      toast.success("Test message sent to Slack!");
+      toast.success(t("testSent"));
     });
   }
 
@@ -424,9 +434,9 @@ function SlackConfigForm({
   function replay(id: string) {
     setReplaying(id);
     void replaySlackDeliveryAction(id).then((result) => {
-      if (!result.ok) toast.error(result.error ?? "Could not replay delivery.");
+      if (!result.ok) toast.error(result.error ?? t("couldNotReplay"));
       else {
-        toast.success("Slack delivery replay queued");
+        toast.success(t("replayQueued"));
         loadDeliveries();
       }
       setReplaying(null);
@@ -435,7 +445,7 @@ function SlackConfigForm({
 
   function save() {
     if (!channelId) {
-      toast.error("Select a channel first.");
+      toast.error(t("selectChannelFirst"));
       return;
     }
     startSave(async () => {
@@ -446,10 +456,10 @@ function SlackConfigForm({
         events: selected,
       });
       if (!result.ok) {
-        toast.error(result.error ?? "Could not save.");
+        toast.error(result.error ?? t("couldNotSave"));
         return;
       }
-      toast.success("Slack settings saved");
+      toast.success(t("settingsSaved"));
       onSaved();
     });
   }
@@ -458,16 +468,16 @@ function SlackConfigForm({
     <Card className="p-6">
       <div className="mb-5 space-y-0.5">
         <h2 className="font-display text-base font-semibold tracking-tight">
-          Configure Slack
+          {t("configureSlack")}
         </h2>
         <p className="text-sm text-muted-foreground">
-          Connected to {status.teamName ?? "Slack"}. Choose a channel and events.
+          {t("configureDescription", { teamName: status.teamName ?? "Slack" })}
         </p>
       </div>
 
       <div className="space-y-5">
         <div className="space-y-2">
-          <Label>Channel</Label>
+          <Label>{t("channel")}</Label>
           {!loaded ? (
             <Button
               variant="outline"
@@ -476,13 +486,13 @@ function SlackConfigForm({
               disabled={loadingChannels}
             >
               {loadingChannels ? <SpinnerIcon className="size-4" /> : null}
-              Load channels from Slack
+              {t("loadChannels")}
             </Button>
           ) : (
             <div className="max-h-48 space-y-1 overflow-y-auto rounded-lg border p-2">
               {channels.length === 0 ? (
                 <p className="py-2 text-center text-sm text-muted-foreground">
-                  No channels found. Invite the Harly bot to a channel first.
+                  {t("noChannels")}
                 </p>
               ) : (
                 channels.map((ch) => (
@@ -506,13 +516,16 @@ function SlackConfigForm({
           )}
           {channelName && (
             <p className="text-xs text-muted-foreground">
-              Selected: <span className="font-medium">#{channelName}</span>
+              {t.rich("selectedChannel", {
+                b: (chunks) => <span className="font-medium">{chunks}</span>,
+                channelName,
+              })}
             </p>
           )}
         </div>
 
         <div className="space-y-2">
-          <Label>Notify on</Label>
+          <Label>{t("notifyOn")}</Label>
           <div className="flex flex-wrap gap-1.5">
             {events.map((event) => (
               <button
@@ -535,8 +548,8 @@ function SlackConfigForm({
         <SettingRow
           htmlFor="slackconnectpanel-switch-1"
           className="rounded-[var(--radius-inner)] border border-hairline px-4 py-3"
-          title={<>Enable</>}
-          description={<>When off, no messages are posted.</>}
+          title={t("enable")}
+          description={t("whenOffNoPosts")}
           control={<Switch id="slackconnectpanel-switch-1" checked={enabled} onCheckedChange={setEnabled} />}
         />
       </div>
@@ -551,7 +564,7 @@ function SlackConfigForm({
           disabled={disconnecting}
         >
           {disconnecting ? <SpinnerIcon className="size-3.5" /> : null}
-          Disconnect
+          {t("disconnect")}
         </Button>
         <div className="flex items-center gap-2">
           <Button
@@ -565,11 +578,11 @@ function SlackConfigForm({
             ) : (
               <PaperPlaneDuotoneIcon className="size-4" />
             )}
-            Send test
+            {t("sendTest")}
           </Button>
           <Button onClick={save} disabled={saving || !channelId}>
             {saving ? <SpinnerIcon className="size-4" /> : null}
-            Save
+            {t("save")}
           </Button>
         </div>
       </div>
@@ -577,14 +590,14 @@ function SlackConfigForm({
       <div className="mt-5 border-t pt-5">
         <div className="flex items-center justify-between gap-3">
           <div>
-            <p className="text-sm font-medium">Recent deliveries</p>
+            <p className="text-sm font-medium">{t("recentDeliveries")}</p>
             <p className="text-xs text-muted-foreground">
-              Inspect failures and replay safe summaries without exposing payloads.
+              {t("deliveriesDescription")}
             </p>
           </div>
           <Button variant="outline" size="sm" onClick={loadDeliveries} disabled={loadingDeliveries}>
             {loadingDeliveries ? <SpinnerIcon className="size-3.5" /> : null}
-            Load history
+            {t("loadHistory")}
           </Button>
         </div>
         {deliveries.length > 0 ? (
@@ -594,14 +607,22 @@ function SlackConfigForm({
                 <div className="min-w-0">
                   <p className="truncate font-medium">{delivery.event}</p>
                   <p className="text-muted-foreground">
-                    {delivery.status} · {delivery.attempts} attempt{delivery.attempts === 1 ? "" : "s"}
-                    {delivery.lastError ? ` · ${sanitizeIntegrationError(delivery.lastError)}` : ""}
+                    {delivery.lastError
+                      ? t("deliveryAttemptsWithError", {
+                          status: delivery.status,
+                          count: delivery.attempts,
+                          error: sanitizeIntegrationError(delivery.lastError),
+                        })
+                      : t("deliveryAttempts", {
+                          status: delivery.status,
+                          count: delivery.attempts,
+                        })}
                   </p>
                 </div>
                 {delivery.status === "dead_letter" || delivery.status === "failed" ? (
                   <Button size="sm" variant="outline" onClick={() => replay(delivery.id)} disabled={replaying === delivery.id}>
                     {replaying === delivery.id ? <SpinnerIcon className="size-3.5" /> : null}
-                    Replay
+                    {t("replay")}
                   </Button>
                 ) : null}
               </div>

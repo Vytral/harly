@@ -1,6 +1,7 @@
 "use client"
 
 import * as React from "react"
+import { useTranslations } from "next-intl"
 
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
@@ -14,8 +15,8 @@ function FormFooter({
   onSave,
   dirty,
   saving = false,
-  saveLabel = "Save changes",
-  discardLabel = "Discard",
+  saveLabel,
+  discardLabel,
   saveType = "button",
   disabled = false,
   hint,
@@ -33,6 +34,7 @@ function FormFooter({
   hint?: React.ReactNode
   className?: string
 }) {
+  const t = useTranslations("ui.formFooter")
   const pristine = dirty === false
   return (
     <div
@@ -45,7 +47,7 @@ function FormFooter({
       {hint ? <p className="mr-auto text-[12.5px] text-soft-ink">{hint}</p> : null}
       {onDiscard ? (
         <Button type="button" variant="outline" onClick={onDiscard} disabled={pristine || saving || disabled}>
-          {discardLabel}
+          {discardLabel ?? t("discard")}
         </Button>
       ) : null}
       <Button
@@ -53,7 +55,7 @@ function FormFooter({
         onClick={saveType === "button" ? onSave : undefined}
         disabled={pristine || saving || disabled}
       >
-        {saving ? "Saving…" : saveLabel}
+        {saving ? t("saving") : (saveLabel ?? t("save"))}
       </Button>
     </div>
   )

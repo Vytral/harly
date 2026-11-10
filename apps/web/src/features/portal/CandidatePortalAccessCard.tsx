@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { useLocale, useTranslations } from "next-intl";
 
 import { issueCandidatePortalCodeAction } from "@/features/portal/admin-actions";
 import { Button } from "@/components/ui/button";
@@ -13,6 +14,8 @@ type Issued = { kind: "access" | "reset"; url: string; expiresAt: string };
  * over by phone, chat or in person, for candidates who can't receive email.
  */
 export function CandidatePortalAccessCard({ candidateId }: { candidateId: string }) {
+  const t = useTranslations("features.portal.CandidatePortalAccessCard");
+  const locale = useLocale();
   const [issued, setIssued] = useState<Issued | null>(null);
   const [pending, start] = useTransition();
 
@@ -31,9 +34,9 @@ export function CandidatePortalAccessCard({ candidateId }: { candidateId: string
     if (!issued) return;
     try {
       await navigator.clipboard.writeText(issued.url);
-      toast.success("Link copied");
+      toast.success(t("linkCopied"));
     } catch {
-      toast.error("Copy failed. Select the link and copy it manually.");
+      toast.error(t("copyFailed"));
     }
   }
 
@@ -43,18 +46,17 @@ export function CandidatePortalAccessCard({ candidateId }: { candidateId: string
       className="rounded-xl border bg-card p-4"
     >
       <h3 id={`portal-access-${candidateId}`} className="text-sm font-semibold">
-        Candidate portal access
+        {t("title")}
       </h3>
       <p className="mt-1 text-xs text-muted-foreground">
-        Create a one-time link to share through another channel. It works once
-        and is shown only now.
+        {t("description")}
       </p>
       <div className="mt-3 flex flex-wrap gap-2">
         <Button size="sm" variant="outline" disabled={pending} onClick={() => issue("access")}>
-          Create access link
+          {t("createAccessLink")}
         </Button>
         <Button size="sm" variant="outline" disabled={pending} onClick={() => issue("reset")}>
-          Create password reset link
+          {t("createResetLink")}
         </Button>
       </div>
       {issued ? (
@@ -63,9 +65,9 @@ export function CandidatePortalAccessCard({ candidateId }: { candidateId: string
             htmlFor={`portal-link-${candidateId}`}
             className="text-xs font-medium"
           >
-            {issued.kind === "access" ? "Access link" : "Password reset link"}{" "}
+            {issued.kind === "access" ? t("accessLink") : t("resetLink")}{" "}
             <span className="font-normal text-muted-foreground">
-              (expires {new Date(issued.expiresAt).toLocaleString()})
+              {t("expires", { date: new Date(issued.expiresAt).toLocaleString(locale) })}
             </span>
           </label>
           <div className="flex gap-2">
@@ -77,7 +79,7 @@ export function CandidatePortalAccessCard({ candidateId }: { candidateId: string
               className="h-9 min-w-0 flex-1 rounded-lg border bg-muted/40 px-2.5 font-mono text-xs"
             />
             <Button size="sm" onClick={copy}>
-              Copy
+              {t("copy")}
             </Button>
           </div>
         </div>

@@ -1,3 +1,5 @@
+import { getTranslations } from "next-intl/server";
+
 import { Card } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 
@@ -7,10 +9,12 @@ import { Skeleton } from "@/components/ui/skeleton";
  * expiration input, and the Discard/Save footer. The saved-signatures card is
  * only rendered when that toggle is on, so it is not reserved here.
  */
-export default function SignatureSettingsLoading() {
+export default async function SignatureSettingsLoading() {
+  const t = await getTranslations("pages.settingsSignature.loading");
+
   return (
     <div aria-busy="true" className="space-y-6">
-      <span className="sr-only">Loading…</span>
+      <span className="sr-only">{t("label")}</span>
 
       <Card className="gap-5 p-6">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">

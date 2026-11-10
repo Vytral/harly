@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, type ComponentType, type ReactNode } from "react";
+import { useTranslations } from "next-intl";
 
 import { Button } from "@/components/ui/button";
 import { SecretField } from "@/components/ui/secret-field";
@@ -10,10 +11,10 @@ import { cn, copyText } from "@/lib/utils";
 
 /** Shared building blocks for the Developers & API settings sections. */
 
-export function copy(value: string) {
+export function copy(value: string, t: ReturnType<typeof useTranslations>) {
   copyText(value).then(
-    () => toast.success("Copied"),
-    () => toast.error("Could not copy"),
+    () => toast.success(t("copied")),
+    () => toast.error(t("copyFailed")),
   );
 }
 
@@ -76,6 +77,7 @@ export function SecretBanner({
   value: string;
   onDismiss: () => void;
 }) {
+  const t = useTranslations("features.developers.developersUi");
   return (
     <div
       role="status"
@@ -83,7 +85,7 @@ export function SecretBanner({
     >
       <p className="text-[13px] font-medium text-near-ink">{label}</p>
       <p className="mt-0.5 text-[12.5px] text-soft-ink">
-        Copy it now. You won&apos;t be able to see it again.
+        {t("copyNotice")}
       </p>
       <div className="mt-2">
         <SecretField
@@ -92,7 +94,7 @@ export function SecretBanner({
           defaultRevealed
           actions={
             <Button variant="ghost" className="shrink-0" onClick={onDismiss}>
-              Done
+              {t("done")}
             </Button>
           }
         />
@@ -113,6 +115,7 @@ export function CodePanel({
   className?: string;
   maxHeightClass?: string;
 }) {
+  const t = useTranslations("features.developers.developersUi");
   const [copied, setCopied] = useState(false);
   return (
     <div
@@ -128,7 +131,7 @@ export function CodePanel({
         <button
           type="button"
           onClick={() => {
-            copy(code);
+            copy(code, t);
             setCopied(true);
             window.setTimeout(() => setCopied(false), 1500);
           }}
@@ -136,11 +139,11 @@ export function CodePanel({
         >
           {copied ? (
             <>
-              <CheckIcon className="size-3.5 text-success-olive" /> Copied
+              <CheckIcon className="size-3.5 text-success-olive" /> {t("copied")}
             </>
           ) : (
             <>
-              <CopyIcon className="size-3.5" /> Copy
+              <CopyIcon className="size-3.5" /> {t("copy")}
             </>
           )}
         </button>

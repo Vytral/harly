@@ -4,6 +4,7 @@ import { useCallback, useState } from "react";
 import Cropper from "react-easy-crop";
 import type { Area } from "react-easy-crop";
 import { Minus, Plus, RotateCcw } from "lucide-react";
+import { useTranslations } from "next-intl";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -71,6 +72,7 @@ export function AvatarCropDialog({
   imageSrc,
   onCropComplete,
 }: AvatarCropDialogProps) {
+  const t = useTranslations("ui.avatarCropDialog");
   const [crop, setCrop] = useState({ x: 0, y: 0 });
   const [zoom, setZoom] = useState(1);
   const [minZoom, setMinZoom] = useState(0.5);
@@ -117,10 +119,8 @@ export function AvatarCropDialog({
       <DialogContent className="flex max-h-[90vh] max-w-md flex-col gap-0 overflow-hidden p-0">
         <div className="min-h-0 overflow-y-auto">
         <DialogHeader className="px-6 pt-6 pb-4">
-          <DialogTitle>Adjust photo</DialogTitle>
-          <DialogDescription>
-            Drag to reposition. Use the slider to zoom in or out.
-          </DialogDescription>
+          <DialogTitle>{t("title")}</DialogTitle>
+          <DialogDescription>{t("description")}</DialogDescription>
         </DialogHeader>
 
         <div className="relative mx-6 aspect-square overflow-hidden rounded-2xl bg-muted">
@@ -163,7 +163,7 @@ export function AvatarCropDialog({
             type="button"
             onClick={() => setZoom((z) => Math.max(minZoom, z - 0.25))}
             className="flex size-8 shrink-0 items-center justify-center rounded-lg border text-muted-foreground transition-colors hover:bg-accent hover:text-foreground active:scale-[0.97]"
-            aria-label="Zoom out"
+            aria-label={t("zoomOut")}
           >
             <Minus className="size-4" />
           </button>
@@ -179,13 +179,13 @@ export function AvatarCropDialog({
               "[&::-webkit-slider-thumb]:size-4 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-foreground [&::-webkit-slider-thumb]:shadow-sm [&::-webkit-slider-thumb]:transition-transform [&::-webkit-slider-thumb]:active:scale-110",
               "[&::-moz-range-thumb]:size-4 [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:border-0 [&::-moz-range-thumb]:bg-foreground [&::-moz-range-thumb]:shadow-sm",
             )}
-            aria-label="Zoom level"
+            aria-label={t("zoomLevel")}
           />
           <button
             type="button"
             onClick={() => setZoom((z) => Math.min(3, z + 0.25))}
             className="flex size-8 shrink-0 items-center justify-center rounded-lg border text-muted-foreground transition-colors hover:bg-accent hover:text-foreground active:scale-[0.97]"
-            aria-label="Zoom in"
+            aria-label={t("zoomIn")}
           >
             <Plus className="size-4" />
           </button>
@@ -193,7 +193,7 @@ export function AvatarCropDialog({
             type="button"
             onClick={resetZoom}
             className="flex size-8 shrink-0 items-center justify-center rounded-lg border text-muted-foreground transition-colors hover:bg-accent hover:text-foreground active:scale-[0.97]"
-            aria-label="Reset position"
+            aria-label={t("resetPosition")}
           >
             <RotateCcw className="size-3.5" />
           </button>
@@ -206,10 +206,10 @@ export function AvatarCropDialog({
             onClick={() => handleOpenChange(false)}
             disabled={saving}
           >
-            Cancel
+            {t("cancel")}
           </Button>
           <Button onClick={handleSave} disabled={saving}>
-            {saving ? "Saving…" : "Apply"}
+            {saving ? t("saving") : t("apply")}
           </Button>
         </DialogFooter>
       </DialogContent>

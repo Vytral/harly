@@ -12,6 +12,7 @@ import {
   workflowDefinitions,
   workspaceSettings,
 } from "@harly/db";
+import { getTranslations } from "@/i18n/server";
 import { getWorkspaceContext } from "@/features/workspaces/context";
 import { getHarlyPublicOrigin } from "@/lib/public-origin";
 import { getWorkspaceAiStatus } from "@/lib/ai/config";
@@ -151,7 +152,13 @@ export async function getSetupChecklist(): Promise<SetupChecklist> {
     aiConfigured: aiStatus.enabled && aiStatus.hasApiKey && aiStatus.encryptionReady,
   };
 
-  const model = buildSetupChecklist({ facts, preferences, canManage });
+  const tChecklist = await getTranslations("labels.onboarding.checklist");
+  const model = buildSetupChecklist({
+    facts,
+    preferences,
+    canManage,
+    t: (key) => tChecklist(key as never),
+  });
   const openJob = publishedRows[0] ?? null;
 
   return {

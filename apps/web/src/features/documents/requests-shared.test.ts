@@ -34,7 +34,7 @@ describe("document request status rules", () => {
   it("has display metadata for every status", () => {
     for (const status of ["pending", "submitted", "accepted", "declined", "waived"] as const) {
       expect(DOCUMENT_REQUEST_STATUS_META[status]).toBeDefined();
-      expect(DOCUMENT_REQUEST_STATUS_META[status].label.length).toBeGreaterThan(0);
+      expect(DOCUMENT_REQUEST_STATUS_META[status].className.length).toBeGreaterThan(0);
     }
   });
 });

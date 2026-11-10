@@ -1,3 +1,5 @@
+import { getTranslations } from "next-intl/server";
+
 import { Card } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 
@@ -6,10 +8,11 @@ import { Skeleton } from "@/components/ui/skeleton";
  * toggle card. Only the right column, settings/layout.tsx owns the nav and
  * the section title.
  */
-export default function SettingsLoading() {
+export default async function SettingsLoading() {
+  const t = await getTranslations("pages.settings.loading");
   return (
     <div aria-busy="true" className="space-y-6">
-      <span className="sr-only">Loading…</span>
+      <span className="sr-only">{t("label")}</span>
 
       <Card className="gap-5 p-6">
         <div className="flex items-start gap-4">

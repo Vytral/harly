@@ -1,3 +1,5 @@
+import { getTranslations } from "next-intl/server";
+
 import { Skeleton } from "@/components/ui/skeleton";
 
 /**
@@ -6,10 +8,11 @@ import { Skeleton } from "@/components/ui/skeleton";
  * fields in a two-column grid, the enabled switch row, the read-only webhook
  * URL with copy button, and the Save footer.
  */
-export default function ConfigureReplyHandlingLoading() {
+export default async function ConfigureReplyHandlingLoading() {
+  const t = await getTranslations("pages.settingsEmailReplies.loading");
   return (
     <div aria-busy="true" className="space-y-5">
-      <span className="sr-only">Loading…</span>
+      <span className="sr-only">{t("loading")}</span>
 
       <div className="-ml-3 flex h-8 w-fit items-center px-3">
         <Skeleton className="h-4 w-32" />

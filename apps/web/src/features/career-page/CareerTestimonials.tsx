@@ -1,5 +1,7 @@
 "use client";
 
+import { useTranslations } from "next-intl";
+
 import type { CareerTestimonial } from "./config";
 import { safeImageUrl } from "./config";
 import { CareerMarquee } from "./CareerMarquee";
@@ -72,11 +74,12 @@ export function CareerTestimonials({
   items: CareerTestimonial[];
   accent: string;
 }) {
+  const t = useTranslations("features.careerPage.careerTestimonials");
   if (items.length === 0) return null;
 
   if (items.length >= 3) {
     return (
-      <CareerMarquee label="Testimonials" gap="gap-5">
+      <CareerMarquee label={t("label")} gap="gap-5">
         {items.map((t, i) => (
           <Card key={`${i}-${t.name}`} t={t} accent={accent} fixedWidth />
         ))}

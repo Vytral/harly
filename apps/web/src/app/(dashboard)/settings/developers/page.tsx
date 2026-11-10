@@ -16,14 +16,16 @@ import {
 } from "@/features/workspaces/permissions-server";
 import {
   WEBHOOK_EVENTS,
-  WEBHOOK_EVENT_LABELS,
+  webhookEventLabelKey,
 } from "@/server/webhooks/events";
 import { summarizeDeliveries } from "@/features/developers/webhook-ui";
 import { getHarlyPublicOrigin } from "@/lib/public-origin";
+import { getTranslations } from "next-intl/server";
 
 export const dynamic = "force-dynamic";
 
 export default async function DevelopersSettingsPage() {
+  const tWebhookEvents = await getTranslations("labels.webhooks.events");
   await requirePagePermission("integrations:manage");
   const { organization, roleKey } = await getWorkspaceContext();
   const permissions = await getRolePermissions(organization.id, roleKey);
@@ -64,7 +66,7 @@ export default async function DevelopersSettingsPage() {
       publishableScopes={[...PUBLISHABLE_SCOPES]}
       webhookEvents={WEBHOOK_EVENTS.map((event) => ({
         value: event,
-        label: WEBHOOK_EVENT_LABELS[event],
+        label: tWebhookEvents(webhookEventLabelKey(event)),
       }))}
     />
   );

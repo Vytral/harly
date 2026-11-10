@@ -2,6 +2,8 @@
 
 import { Fragment, useMemo, useState } from "react";
 import { format, formatDistanceToNow } from "date-fns";
+import { dateFnsLocale } from "@/lib/date-fns-locale";
+import { useLocale, useTranslations } from "next-intl";
 
 import { SectionHeader, StatusPill } from "@/features/workspaces/settings-ui";
 import {
@@ -44,6 +46,7 @@ const SEVERITY_ORDER: Severity[] = ["critical", "warning", "info"];
 
 function SeverityBadge({ severity }: { severity: Severity }) {
   const s = severityStyle[severity];
+  const t = useTranslations("features.security.auditLogsCard");
   return (
     <span
       className={cn(
@@ -52,7 +55,7 @@ function SeverityBadge({ severity }: { severity: Severity }) {
       )}
     >
       <span className={cn("size-1.5 rounded-full", s.dot)} />
-      {severity}
+      {t(`severity.${severity}`)}
     </span>
   );
 }
@@ -60,6 +63,7 @@ function SeverityBadge({ severity }: { severity: Severity }) {
 /** Small copy-to-clipboard affordance for IDs and metadata blobs. */
 function CopyButton({ value }: { value: string }) {
   const [copied, setCopied] = useState(false);
+  const t = useTranslations("features.security.auditLogsCard");
   return (
     <button
       type="button"
@@ -76,7 +80,7 @@ function CopyButton({ value }: { value: string }) {
       ) : (
         <CopyIcon className="size-3" />
       )}
-      {copied ? "Copied" : "Copy"}
+      {copied ? t("copied") : t("copy")}
     </button>
   );
 }
@@ -91,6 +95,8 @@ export function AuditLogsCard({
   const [query, setQuery] = useState("");
   const [severityFilter, setSeverityFilter] = useState<Severity | "all">("all");
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const t = useTranslations("features.security.auditLogsCard");
+  const locale = useLocale();
 
   const counts = useMemo(() => {
     const c: Record<Severity, number> = { info: 0, warning: 0, critical: 0 };
@@ -126,11 +132,11 @@ export function AuditLogsCard({
     <Card className="gap-5 p-6">
       <SectionHeader
         icon={AuditDuotoneIcon}
-        title="Audit Log"
-        description="A workspace audit trail of security and administrative events."
+        title={t("title")}
+        description={t("description")}
         badge={
           <StatusPill tone="neutral" dot={false}>
-            Last {logs.length} events
+            {t("lastEvents", { count: logs.length })}
           </StatusPill>
         }
       />
@@ -141,7 +147,7 @@ export function AuditLogsCard({
           <SearchIcon className="absolute left-3 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
           <Input
             className="pl-8"
-            placeholder="Filter by action, email, IP, resource…"
+            placeholder={t("searchPlaceholder")}
             value={query}
             onChange={(e) => setQuery(e.target.value)}
           />
@@ -158,7 +164,7 @@ export function AuditLogsCard({
                 : "text-muted-foreground hover:text-foreground",
             )}
           >
-            All{" "}
+            {t("all")}{" "}
             <span className="tabular-nums text-muted-foreground">
               {logs.length}
             </span>
@@ -178,7 +184,7 @@ export function AuditLogsCard({
               <span
                 className={cn("size-1.5 rounded-full", severityStyle[sev].dot)}
               />
-              {sev}{" "}
+              {t(`severity.${sev}`)}{" "}
               <span className="tabular-nums opacity-70">{counts[sev]}</span>
             </button>
           ))}
@@ -204,11 +210,11 @@ export function AuditLogsCard({
             <thead className="sticky top-0 z-10 bg-card/95 backdrop-blur-sm">
               <tr className="border-b text-left text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
                 <th className="w-8 py-2.5 pl-4" />
-                <th className="py-2.5 pr-4">When</th>
-                <th className="py-2.5 pr-4">Action</th>
-                <th className="py-2.5 pr-4">Actor</th>
-                <th className="py-2.5 pr-4">IP</th>
-                <th className="py-2.5 pr-4">Severity</th>
+                <th className="py-2.5 pr-4">{t("when")}</th>
+                <th className="py-2.5 pr-4">{t("action")}</th>
+                <th className="py-2.5 pr-4">{t("actor")}</th>
+                <th className="py-2.5 pr-4">{t("ip")}</th>
+                <th className="py-2.5 pr-4">{t("severityColumn")}</th>
               </tr>
             </thead>
             <tbody className="divide-y">
@@ -218,14 +224,10 @@ export function AuditLogsCard({
                     <div className="flex flex-col items-center gap-2 text-center">
                       <AuditDuotoneIcon className="size-8 text-muted-foreground/40" />
                       <p className="text-sm font-medium text-foreground">
-                        {hasFilter
-                          ? "No matching events"
-                          : "No audit events yet"}
+                        {hasFilter ? t("noMatching") : t("noEvents")}
                       </p>
                       <p className="max-w-[28ch] text-xs text-muted-foreground">
-                        {hasFilter
-                          ? "Try a different search term or clear the severity filter."
-                          : "Security and admin actions will appear here as they happen."}
+                        {hasFilter ? t("noMatchingHint") : t("noEventsHint")}
                       </p>
                     </div>
                   </td>
@@ -254,7 +256,7 @@ export function AuditLogsCard({
                             aria-expanded={expanded}
                             aria-controls={`audit-detail-${log.id}`}
                             aria-label={
-                              expanded ? "Collapse details" : "Expand details"
+                              expanded ? t("collapseDetails") : t("expandDetails")
                             }
                             onClick={(e) => {
                               e.stopPropagation();
@@ -278,6 +280,7 @@ export function AuditLogsCard({
                         >
                           {formatDistanceToNow(new Date(log.createdAt), {
                             addSuffix: true,
+                            locale: dateFnsLocale(locale),
                           })}
                         </span>
                       </td>
@@ -290,10 +293,10 @@ export function AuditLogsCard({
                         ) : null}
                       </td>
                       <td className="py-2.5 pr-4 align-top text-xs text-muted-foreground">
-                        {log.actorEmail ?? "Unknown actor"}
+                        {log.actorEmail ?? t("unknownActor")}
                       </td>
                       <td className="py-2.5 pr-4 align-top font-mono text-xs tabular-nums text-muted-foreground">
-                        {log.ipAddress ?? "Not recorded"}
+                        {log.ipAddress ?? t("notRecorded")}
                       </td>
                       <td className="py-2.5 pr-4 align-top">
                         <SeverityBadge severity={log.severity} />
@@ -305,18 +308,18 @@ export function AuditLogsCard({
                           <div className="animate-in fade-in slide-in-from-top-1 grid gap-3 px-4 py-3 duration-150 sm:grid-cols-2">
                             <div className="space-y-1">
                               <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-                                Full timestamp
+                                {t("fullTimestamp")}
                               </p>
                               <p className="font-mono text-xs">
-                                {format(new Date(log.createdAt), "PPpp")}
+                                {format(new Date(log.createdAt), "PPpp", { locale: dateFnsLocale(locale) })}
                               </p>
                             </div>
                             <div className="space-y-1">
                               <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-                                Resource
+                                {t("resource")}
                               </p>
                               <p className="flex items-center gap-1.5 font-mono text-xs">
-                                {log.resourceType ?? "Not recorded"}
+                                {log.resourceType ?? t("notRecorded")}
                                 {log.resourceId ? (
                                   <>
                                     <span className="text-muted-foreground">
@@ -332,17 +335,17 @@ export function AuditLogsCard({
                             </div>
                             <div className="space-y-1 sm:col-span-2">
                               <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-                                User agent
+                                {t("userAgent")}
                               </p>
                               <p className="truncate font-mono text-xs text-muted-foreground">
-                                {log.userAgent ?? "Unknown browser"}
+                                {log.userAgent ?? t("unknownBrowser")}
                               </p>
                             </div>
                             {log.metadata ? (
                               <div className="space-y-1 sm:col-span-2">
                                 <div className="flex items-center justify-between">
                                   <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-                                    Metadata
+                                    {t("metadata")}
                                   </p>
                                   <CopyButton
                                     value={JSON.stringify(

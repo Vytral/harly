@@ -11,6 +11,7 @@ import { clearIntegrationHealth } from "@/features/integrations/health/repositor
 import { sanitizeIntegrationError } from "@/features/integrations/health/model";
 import { encryptSecret, isEncryptionConfigured } from "@/lib/crypto";
 import { zoomFetch } from "@/lib/zoom/client";
+import { getTranslations } from "@/i18n/server";
 
 export type ZoomActionResult = { success: boolean; error?: string };
 
@@ -21,16 +22,17 @@ export async function saveZoomCredentialsAction(input: {
 }): Promise<ZoomActionResult> {
   assertNotDemo();
   const { organization } = await requirePermission("integrations:manage");
+  const t = await getTranslations("server.workspaces.zoomSettingsActions");
 
   if (!isEncryptionConfigured()) {
-    return { success: false, error: "Server encryption key not configured." };
+    return { success: false, error: t("encryptionKeyMissing") };
   }
 
   const clientId = input.clientId.trim();
   const clientSecret = input.clientSecret.trim();
 
   if (!clientId || !clientSecret) {
-    return { success: false, error: "Both Client ID and Client Secret are required." };
+    return { success: false, error: t("credentialsRequired") };
   }
 
   const encrypted = encryptSecret(clientSecret);
@@ -55,6 +57,7 @@ export async function saveZoomCredentialsAction(input: {
 export async function uninstallZoom() {
   assertNotDemo();
   const { organization } = await requirePermission("integrations:manage");
+  const t = await getTranslations("server.workspaces.zoomSettingsActions");
   const [settings] = await db
     .select()
     .from(workspaceSettings)
@@ -62,7 +65,7 @@ export async function uninstallZoom() {
     .limit(1);
 
   if (!settings?.zoomEnabled) {
-    return { success: false, error: "Zoom is not installed." };
+    return { success: false, error: t("notInstalled") };
   }
 
   await db

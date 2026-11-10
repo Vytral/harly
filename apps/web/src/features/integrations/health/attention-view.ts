@@ -22,9 +22,10 @@ export function reconnectHref(integration: IntegrationHealthKey): string {
   return `/settings/integrations/${ATTENTION_TARGET[integration].slug}`;
 }
 
-export function attentionMessage(item: {
-  state: "degraded" | "needs_reconnect" | "error";
-}): string {
-  if (item.state === "needs_reconnect") return "Access was revoked or expired. Reconnect to resume.";
-  return "Recent calls are failing. Check the connection.";
+export function attentionMessage(
+  item: { state: "degraded" | "needs_reconnect" | "error" },
+  t: (key: string) => string,
+): string {
+  if (item.state === "needs_reconnect") return t("shell.integrationAttention.accessRevoked");
+  return t("shell.integrationAttention.callsFailing");
 }

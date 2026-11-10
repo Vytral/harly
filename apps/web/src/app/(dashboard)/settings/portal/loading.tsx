@@ -1,3 +1,5 @@
+import { getTranslations } from "next-intl/server";
+
 import { Card } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 
@@ -27,10 +29,11 @@ function ProviderRowSkeleton({ withPill = false }: { withPill?: boolean }) {
  * with the enable switch, the portal URL line, and the three-cell feature
  * strip), the sign-in methods list, and the "Show on portal" switch rows.
  */
-export default function PortalSettingsLoading() {
+export default async function PortalSettingsLoading() {
+  const t = await getTranslations("pages.settingsPortal.loading");
   return (
     <div aria-busy="true" className="space-y-5">
-      <span className="sr-only">Loading…</span>
+      <span className="sr-only">{t("label")}</span>
 
       <Card className="gap-0 overflow-hidden p-0">
         <div className="p-6">

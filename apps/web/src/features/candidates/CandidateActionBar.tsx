@@ -5,6 +5,7 @@ import type { ComponentType, ReactNode, RefObject } from "react";
 import { useRef, useState, useTransition } from "react";
 
 import { useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 import {
   Briefcase,
   CalendarClock,
@@ -90,22 +91,22 @@ type CandidateStatus = "active" | "hired" | "rejected" | "withdrawn";
 // the remaining lifecycle transitions.
 const STATUS_ACTIONS: Array<{
   status: CandidateStatus;
-  label: string;
+  labelKey: "markHired" | "reactivate";
   icon: ComponentType<{ className?: string }>;
-  confirm: string;
+  confirmKey: "confirmHire" | "confirmReactivate";
   destructive?: boolean;
 }> = [
   {
     status: "hired",
-    label: "Mark as hired",
+    labelKey: "markHired",
     icon: CheckCircle2,
-    confirm: "Mark {name}'s application for {job} as hired?",
+    confirmKey: "confirmHire",
   },
   {
     status: "active",
-    label: "Reactivate",
+    labelKey: "reactivate",
     icon: RotateCcw,
-    confirm: "Reactivate {name}'s application for {job}?",
+    confirmKey: "confirmReactivate",
   },
 ];
 
@@ -147,6 +148,7 @@ function DecisionApplicationSelector({
   onChange: (applicationId: string) => void;
   className?: string;
 }) {
+  const t = useTranslations("candidates.actionBar");
   const selected = decisionApplication(applications, selectedApplicationId);
   if (!selected) return null;
 
@@ -155,7 +157,7 @@ function DecisionApplicationSelector({
 
   if (applications.length < 2) {
     return (
-      <span className={cn(pillClass, className)} title={`Job: ${selected.jobTitle}`}>
+      <span className={cn(pillClass, className)} title={t("jobTitle", { job: selected.jobTitle })}>
         <Briefcase className="size-3.5 shrink-0 text-soft-ink" strokeWidth={1.8} />
         <span className="truncate">{selected.jobTitle}</span>
       </span>
@@ -164,7 +166,7 @@ function DecisionApplicationSelector({
 
   return (
     <label
-      title="Decide for"
+      title={t("decideFor")}
       className={cn(
         pillClass,
         "relative cursor-pointer transition-colors duration-150 hover:bg-card-inset focus-within:ring-[3px] focus-within:ring-ring/50",
@@ -175,7 +177,7 @@ function DecisionApplicationSelector({
       <span className="truncate">{selected.jobTitle}</span>
       <ChevronDown className="size-3.5 shrink-0 text-soft-ink" strokeWidth={1.8} />
       <select
-        aria-label="Application to update"
+        aria-label={t("applicationToUpdate")}
         className="absolute inset-0 size-full cursor-pointer opacity-0"
         value={selected.applicationId}
         onChange={(event) => onChange(event.target.value)}
@@ -199,21 +201,22 @@ function useApplicationStatus(
   name: string,
   application: ScheduleApplicationOption | null,
 ) {
+  const t = useTranslations("candidates.actionBar");
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const confirm = useConfirm();
 
   async function withdraw() {
     if (!application) {
-      toast.error("This candidate has no application to update.");
+      toast.error(t("noApplicationToUpdate"));
       return;
     }
     if (
       !(await confirm({
         tone: "warning",
-        title: `Mark ${name}'s application as withdrawn?`,
-        description: `Applies to ${application.jobTitle}. No rejection email is sent.`,
-        confirmLabel: "Mark withdrawn",
+        title: t("confirmWithdrawTitle", { name }),
+        description: t("confirmWithdrawDescription", { job: application.jobTitle }),
+        confirmLabel: t("markWithdrawn"),
       }))
     ) {
       return;
@@ -225,13 +228,13 @@ function useApplicationStatus(
       });
       if (result.success) {
         if (result.emailWarning) {
-          toast.warning(`${name} withdrawn. ${result.emailWarning}`);
+          toast.warning(t("withdrawnWarning", { name, warning: result.emailWarning }));
         } else {
-          toast.success(`${name} withdrawn.`);
+          toast.success(t("withdrawnSuccess", { name }));
         }
         (router as { refresh?: () => void }).refresh?.();
       } else {
-        toast.error(result.error ?? "Could not update candidate.");
+        toast.error(result.error ?? t("updateCandidateError"));
       }
     });
   }
@@ -242,7 +245,7 @@ function useApplicationStatus(
     confirmMessage: string,
   ) {
     if (!application) {
-      toast.error("This candidate has no application to update.");
+      toast.error(t("noApplicationToUpdate"));
       return;
     }
     if (
@@ -250,7 +253,7 @@ function useApplicationStatus(
         title: confirmMessage
           .replace("{name}", name)
           .replace("{job}", application.jobTitle),
-        description: "You can change the status again later.",
+        description: t("statusChangeDescription"),
         confirmLabel: label,
       }))
     ) {
@@ -264,13 +267,13 @@ function useApplicationStatus(
       });
       if (result.success) {
         if (result.emailWarning) {
-          toast.warning(`${name} ${label.toLowerCase()}. ${result.emailWarning}`);
+          toast.warning(t("statusUpdateWarning", { name, status: label.toLowerCase(), warning: result.emailWarning }));
         } else {
-          toast.success(`${name} ${label.toLowerCase()}.`);
+          toast.success(t("statusUpdateSuccess", { name, status: label.toLowerCase() }));
         }
         (router as { refresh?: () => void }).refresh?.();
       } else {
-        toast.error(result.error ?? "Could not update candidate status.");
+        toast.error(result.error ?? t("updateStatusError"));
       }
     });
   }
@@ -290,6 +293,7 @@ function RejectButton({
   compact?: boolean;
   className?: string;
 }) {
+  const t = useTranslations("candidates.actionBar");
   return (
     <Button
       size="sm"
@@ -300,11 +304,11 @@ function RejectButton({
         "border-destructive/30 text-destructive hover:border-destructive/50 hover:bg-destructive/10 hover:text-destructive",
         className,
       )}
-      title={withHint("Reject candidate", "candidate.reject")}
+      title={withHint(t("rejectCandidate"), "candidate.reject")}
       aria-keyshortcuts={ariaKeys("candidate.reject")}
     >
       <ProhibitIcon className="size-4" />
-      {compact ? <span className="sr-only">Reject</span> : "Reject"}
+      {compact ? <span className="sr-only">{t("reject")}</span> : t("reject")}
     </Button>
   );
 }
@@ -320,15 +324,16 @@ function DeleteCandidateDialog({
   candidateId: string;
   name: string;
 }) {
+  const t = useTranslations("candidates.actionBar");
   const router = useRouter();
 
   async function deleteCandidate() {
     const result = await trashCandidateAction(candidateId);
     if (!result.success) {
-      toast.error(result.error ?? "Could not delete candidate.");
+      toast.error(result.error ?? t("deleteCandidateError"));
       throw new Error("trash failed");
     }
-    toast.success(`${name} moved to trash.`);
+    toast.success(t("movedToTrash", { name }));
     router.push("/dashboard/candidates");
   }
 
@@ -337,9 +342,9 @@ function DeleteCandidateDialog({
       open={open}
       onOpenChange={onOpenChange}
       tone="destructive"
-      title={`Delete ${name}?`}
-      description="They will move to the trash. You can restore them later, or delete them permanently from the Trash tab."
-      confirmLabel="Move to trash"
+      title={t("deleteConfirmTitle", { name })}
+      description={t("deleteConfirmDescription")}
+      confirmLabel={t("moveToTrash")}
       onConfirm={deleteCandidate}
     />
   );
@@ -388,6 +393,8 @@ export function CandidateActionBar({
   /** Full variant only: the identity block rendered at the left of row 1. */
   identity?: ReactNode;
 }) {
+  const t = useTranslations("candidates.actionBar");
+  const tFeature = useTranslations("features.candidates.CandidateActionBar");
   const [selectedApplicationId, setSelectedApplicationId] = useState(
     applications[0]?.applicationId ?? null,
   );
@@ -497,8 +504,8 @@ export function CandidateActionBar({
       aiConfigured={aiConfigured}
       trigger={
         variant === "compact"
-          ? compactTrigger(Mail, "Email")
-          : triggerButton("email", Mail, "Email")
+          ? compactTrigger(Mail, t("email"))
+          : triggerButton("email", Mail, t("email"))
       }
     />
   );
@@ -514,8 +521,8 @@ export function CandidateActionBar({
       cal={cal}
       trigger={
         variant === "compact"
-          ? compactTrigger(CalendarClock, "Schedule", "candidate.schedule")
-          : triggerButton("schedule", CalendarClock, "Schedule", "candidate.schedule")
+          ? compactTrigger(CalendarClock, t("schedule"), "candidate.schedule")
+          : triggerButton("schedule", CalendarClock, t("schedule"), "candidate.schedule")
       }
     />
   );
@@ -528,8 +535,8 @@ export function CandidateActionBar({
       stageName={selectedApplication.currentStageName ?? stageName}
       trigger={
         variant === "compact"
-          ? compactTrigger(ClipboardCheck, "Evaluate", "candidate.evaluate")
-          : triggerButton("evaluate", ClipboardCheck, "Evaluate", "candidate.evaluate")
+          ? compactTrigger(ClipboardCheck, t("evaluate"), "candidate.evaluate")
+          : triggerButton("evaluate", ClipboardCheck, t("evaluate"), "candidate.evaluate")
       }
     />
   ) : null;
@@ -556,7 +563,7 @@ export function CandidateActionBar({
       pending={status.isPending}
       onReject={() => {
         if (!selectedApplication) {
-          toast.error("This candidate has no application to update.");
+          toast.error(t("noApplicationToUpdate"));
           return;
         }
         setRejectOpen(true);
@@ -589,12 +596,12 @@ export function CandidateActionBar({
   usePublishCandidateActions(
     {
       ...(canMove && moveTarget?.nextStage
-        ? { move: { label: `Move to ${moveTarget.nextStage.name}`, run: openMove } }
+        ? { move: { label: t("moveToStage", { stage: moveTarget.nextStage.name }), run: openMove } }
         : {}),
-      ...(canReject && mayReject ? { reject: { label: "Reject…", run: openReject } } : {}),
-      ...(canEvaluate ? { evaluate: { label: "Evaluate", run: openEvaluate } } : {}),
-      schedule: { label: "Schedule interview", run: openSchedule },
-      email: { label: "Email", run: openEmail },
+      ...(canReject && mayReject ? { reject: { label: t("rejectEllipsis"), run: openReject } } : {}),
+      ...(canEvaluate ? { evaluate: { label: t("evaluate"), run: openEvaluate } } : {}),
+      schedule: { label: t("scheduleInterview"), run: openSchedule },
+      email: { label: t("email"), run: openEmail },
     },
     owner,
   );
@@ -627,15 +634,18 @@ export function CandidateActionBar({
    * contextual action · the primary "Move to <next stage>".
    */
   const menuStatusItems = STATUS_ACTIONS.map(
-    ({ status: next, label, icon: Icon, confirm }) => (
+    ({ status: next, labelKey, confirmKey, icon: Icon }) => {
+      const label = t(labelKey);
+      return (
       <DropdownMenuItem
         key={next}
-        onSelect={() => queueAfterMenu(() => status.change(next, label, confirm))}
+        onSelect={() => queueAfterMenu(() => status.change(next, label, t(confirmKey, { name, job: selectedApplication?.jobTitle ?? "" })))}
       >
         <Icon className="size-4" />
         {label}
       </DropdownMenuItem>
-    ),
+    );
+    },
   );
 
   const resumeIsPdf = resumeUrl
@@ -669,8 +679,8 @@ export function CandidateActionBar({
               <Button
                 size="icon-sm"
                 variant="outline"
-                aria-label="More actions"
-                title="More actions"
+                aria-label={t("moreActions")}
+                title={t("moreActions")}
               >
                 <MoreHorizontal className="size-4" />
               </Button>
@@ -691,14 +701,14 @@ export function CandidateActionBar({
                 onSelect={() => queueAfterMenu(() => clickTrigger(scheduleRef))}
               >
                 <CalendarClock className="size-4" />
-                Schedule
+                {t("schedule")}
               </DropdownMenuItem>
               {stageActionKey !== "evaluate" && selectedApplication ? (
                 <DropdownMenuItem
                   onSelect={() => queueAfterMenu(() => clickTrigger(evaluateRef))}
                 >
                   <ClipboardCheck className="size-4" />
-                  Evaluate
+                  {t("evaluate")}
                   <DropdownMenuShortcut aria-hidden>E</DropdownMenuShortcut>
                 </DropdownMenuItem>
               ) : null}
@@ -708,7 +718,7 @@ export function CandidateActionBar({
                   onSelect={() => queueAfterMenu(() => status.withdraw())}
                 >
                   <UserMinus className="size-4" />
-                  Mark withdrawn
+                  {t("markWithdrawn")}
                 </DropdownMenuItem>
               ) : null}
               <DropdownMenuSeparator />
@@ -719,31 +729,31 @@ export function CandidateActionBar({
                 <BookmarkSimpleIcon
                   className={cn("size-4", pool.inPool && "fill-current")}
                 />
-                {pool.inPool ? "Remove from pool" : "Add to pool"}
+                {pool.inPool ? t("removeFromPool") : t("addToPool")}
               </DropdownMenuItem>
               <DropdownMenuItem onSelect={() => queueAfterMenu(() => clickTrigger(editRef))}>
                 <Pencil className="size-4" />
-                Edit candidate
+                {t("editCandidate")}
               </DropdownMenuItem>
               {resumeUrl ? (
                 <>
                   {resumeIsPdf ? (
                     <DropdownMenuItem onSelect={() => queueAfterMenu(() => setResumeOpen(true))}>
                       <FileText className="size-4" />
-                      View resume
+                      {t("viewResume")}
                     </DropdownMenuItem>
                   ) : (
                     <DropdownMenuItem asChild>
                       <a href={resumeUrl} target="_blank" rel="noreferrer">
                         <FileText className="size-4" />
-                        View resume
+                        {t("viewResume")}
                       </a>
                     </DropdownMenuItem>
                   )}
                   <DropdownMenuItem asChild>
                     <a href={resumeUrl} target="_blank" rel="noreferrer" download>
                       <Download className="size-4" />
-                      Download resume
+                      {t("downloadResume")}
                     </a>
                   </DropdownMenuItem>
                 </>
@@ -756,7 +766,7 @@ export function CandidateActionBar({
                     onSelect={() => queueAfterMenu(() => setDeleteOpen(true))}
                   >
                     <Trash2 className="size-4" />
-                    Delete candidate
+                    {t("deleteCandidate")}
                   </DropdownMenuItem>
                 </>
               ) : null}
@@ -768,14 +778,14 @@ export function CandidateActionBar({
       {/* Decision bar */}
       <div className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-[var(--radius-inner)] bg-card-inset px-3 py-2.5">
         <div className="flex min-w-0 items-center gap-3 max-sm:w-full">
-          <span className="sr-only">Decide for</span>
+          <span className="sr-only">{t("decideFor")}</span>
           {applicationSelector}
           <CandidateStageStepper stageName={stepperStage} className="hidden md:flex" />
         </div>
 
         {isHired ? (
           <Badge variant="success" className="ml-auto">
-            Hired
+            {t("hired")}
           </Badge>
         ) : (
           <div className="ml-auto flex items-center gap-2 max-sm:w-full">
@@ -800,9 +810,9 @@ export function CandidateActionBar({
         <EditCandidateDrawer
           candidate={candidate}
           trigger={
-            <Button size="sm" variant="ghost" title="Edit candidate">
+            <Button size="sm" variant="ghost" title={t("editCandidate")}>
               <Pencil className="size-4" />
-              <span className="sr-only">Edit</span>
+              <span className="sr-only">{t("edit")}</span>
             </Button>
           }
         />
@@ -814,17 +824,17 @@ export function CandidateActionBar({
             <DialogHeader>
               <DialogTitle className="flex items-center justify-between gap-3 pr-8">
                 <span className="truncate">
-                  {resumeFileName ?? `${name}'s resume`}
+                  {resumeFileName ?? tFeature("resumeTitle", { name })}
                 </span>
                 <Button asChild size="sm" variant="outline">
                   <a href={resumeUrl} target="_blank" rel="noreferrer">
                     <Download className="size-4" />
-                    Download
+                    {t("download")}
                   </a>
                 </Button>
               </DialogTitle>
               <DialogDescription className="sr-only">
-                Resume preview for {name}
+                {t("resumePreviewFor", { name })}
               </DialogDescription>
             </DialogHeader>
             <PdfViewer

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useTranslations } from "next-intl";
 import Link from "next/link";
 import type { Route } from "next";
 import { ArrowRight, CheckCircle2, Info, TriangleAlert } from "lucide-react";
@@ -91,22 +92,6 @@ function Shell({ title, count, children, className }: { title?: string; count?: 
 
 // ── Candidates ─────────────────────────────────────────────────────────────
 
-const ACTION_LABEL: Record<Exclude<CandidateAction, "open">, string> = {
-  score: "Score",
-  move: "Move",
-  reject: "Reject",
-  schedule: "Schedule",
-  email: "Email",
-};
-
-const ACTION_MESSAGE: Record<Exclude<CandidateAction, "open">, (name: string) => string> = {
-  score: (name) => `Score ${name}'s CV for the job they applied to.`,
-  move: (name) => `Move ${name} to the next stage.`,
-  reject: (name) => `Reject ${name}.`,
-  schedule: (name) => `Schedule an interview with ${name}.`,
-  email: (name) => `Draft an email to ${name}.`,
-};
-
 function CandidateList({
   block,
   onSend,
@@ -116,6 +101,7 @@ function CandidateList({
   onSend: Send;
   disabled?: boolean;
 }) {
+  const t = useTranslations("shell.uiBlocks");
   const actions = (block.actions ?? []).filter((a): a is Exclude<CandidateAction, "open"> => a !== "open");
   return (
     <Shell title={block.title} count={block.title ? block.items.length : undefined}>
@@ -128,7 +114,7 @@ function CandidateList({
               <Link href={href} className="min-w-0 flex-1 rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-near-ink">
                 <span className="block truncate text-[13px] font-medium text-near-ink hover:underline">{item.name}</span>
                 <span className="block truncate text-[11.5px] text-soft-ink">
-                  {[item.subtitle, item.stage, typeof item.waitingDays === "number" ? waitingLabel(item.waitingDays) : null]
+                  {[item.subtitle, item.stage, typeof item.waitingDays === "number" ? (item.waitingDays === 0 ? t("today") : t("days", { count: item.waitingDays })) : null]
                     .filter(Boolean)
                     .join(" · ")}
                 </span>
@@ -141,15 +127,15 @@ function CandidateList({
                     variant={action === "reject" ? "ghost" : "outline"}
                     className={cn("h-7 px-2 text-[12px]", action === "reject" && "text-danger-rust")}
                     disabled={disabled}
-                    onClick={() => onSend(ACTION_MESSAGE[action](item.name))}
+                    onClick={() => onSend(t(`candidatePrompts.${action}`, { name: item.name }))}
                   >
-                    {ACTION_LABEL[action]}
+                    {t(`candidateActions.${action}`)}
                   </Button>
                 ))}
                 {actions.length === 0 ? (
                   <Link
                     href={href}
-                    aria-label={`Open ${item.name}`}
+                    aria-label={t("openCandidate", { name: item.name })}
                     className="grid size-7 place-items-center rounded-md text-soft-ink hover:bg-card-inset hover:text-near-ink"
                   >
                     <ArrowRight className="size-3.5" />
@@ -164,24 +150,20 @@ function CandidateList({
   );
 }
 
-function waitingLabel(days: number) {
-  if (days === 0) return "today";
-  return days === 1 ? "1 day" : `${days} days`;
-}
-
 // ── Tasks ──────────────────────────────────────────────────────────────────
 
 function TaskList({ block }: { block: Extract<UiBlock, { kind: "task_list" }> }) {
+  const t = useTranslations("shell.uiBlocks");
   const [done, setDone] = useState<Record<string, boolean>>({});
   async function complete(taskId: string, title: string) {
     setDone((previous) => ({ ...previous, [taskId]: true }));
     const result = await updateTask({ taskId, status: "completed" });
     if (!result.success) {
       setDone((previous) => ({ ...previous, [taskId]: false }));
-      toast.error(result.error ?? "Couldn't complete the task.");
+      toast.error(result.error ?? t("taskError"));
       return;
     }
-    toast.success(title.length > 28 ? "Task completed" : `Done: ${title}`);
+    toast.success(title.length > 28 ? t("taskCompleted") : t("doneWithTitle", { title }));
   }
   return (
     <Shell title={block.title}>
@@ -196,7 +178,7 @@ function TaskList({ block }: { block: Extract<UiBlock, { kind: "task_list" }> })
                   checked={Boolean(checked)}
                   disabled={Boolean(checked)}
                   onCheckedChange={() => item.taskId && complete(item.taskId, item.title)}
-                  aria-label={`Complete ${item.title}`}
+                  aria-label={t("completeTask", { title: item.title })}
                 />
               ) : (
                 <span aria-hidden="true" className="mt-1.5 size-1.5 shrink-0 rounded-full bg-quiet-mist" />
@@ -253,6 +235,7 @@ function TableBlock({ block }: { block: Extract<UiBlock, { kind: "table" }> }) {
 }
 
 function ChartBlock({ block }: { block: Extract<UiBlock, { kind: "chart" }> }) {
+  const t = useTranslations("shell.uiBlocks");
   const max = Math.max(1, ...block.data.map((d) => d.value));
   const fmt = (v: number) => `${Number.isInteger(v) ? v : v.toFixed(1)}${block.unit ?? ""}`;
   if (block.type === "line") {
@@ -263,7 +246,7 @@ function ChartBlock({ block }: { block: Extract<UiBlock, { kind: "chart" }> }) {
     return (
       <Shell title={block.title}>
         <div className="px-3 py-3">
-          <svg viewBox={`0 0 ${w} ${h}`} className="h-[72px] w-full" role="img" aria-label={block.title ?? "Line chart"}>
+          <svg viewBox={`0 0 ${w} ${h}`} className="h-[72px] w-full" role="img" aria-label={block.title ?? t("lineChart")}>
             <polyline points={points} fill="none" stroke="var(--chart-1)" strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" />
           </svg>
           <div className="mt-1 flex justify-between text-[11px] text-soft-ink">
@@ -342,6 +325,7 @@ function Choices({ block, onSend, disabled }: { block: Extract<UiBlock, { kind: 
 }
 
 function FormBlock({ block, onSend, disabled }: { block: Extract<UiBlock, { kind: "form" }>; onSend: Send; disabled?: boolean }) {
+  const t = useTranslations("shell.uiBlocks");
   const [values, setValues] = useState<Record<string, string>>(() =>
     Object.fromEntries(block.fields.map((field) => [field.name, field.value ?? ""])),
   );
@@ -387,7 +371,7 @@ function FormBlock({ block, onSend, disabled }: { block: Extract<UiBlock, { kind
                     disabled={sent}
                     className="h-9 rounded-[var(--radius-btn)] border border-mist-border bg-pure-snow px-2.5 text-[13px] text-near-ink focus-visible:border-near-ink focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-near-ink/10"
                   >
-                    <option value="">Choose…</option>
+                    <option value="">{t("choose")}</option>
                     {(field.options ?? []).map((option) => (
                       <option key={option} value={option}>
                         {option}
@@ -409,7 +393,7 @@ function FormBlock({ block, onSend, disabled }: { block: Extract<UiBlock, { kind
           })}
         </div>
         <div className="flex items-center justify-end gap-2">
-          {sent ? <span className="text-[12px] text-soft-ink">Sent. Review the confirmation below.</span> : null}
+          {sent ? <span className="text-[12px] text-soft-ink">{t("sentReview")}</span> : null}
           <Button type="submit" size="sm" className="h-8 text-[13px]" disabled={disabled || missing || sent}>
             {block.submitLabel}
           </Button>

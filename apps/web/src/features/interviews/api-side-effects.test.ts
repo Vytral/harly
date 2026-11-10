@@ -90,6 +90,8 @@ vi.mock("@/lib/logger", () => ({
 
 import { runApiInterviewSideEffects } from "./api-side-effects";
 
+vi.mock("next-intl/server", async () => (await import("@/test-support/intl-server-mock")).intlServerMock);
+
 beforeEach(() => {
   mocks.dbSelect.mockReset();
   mocks.dbSelect.mockReturnValue(

@@ -2,6 +2,8 @@ import "server-only";
 
 import { and, desc, eq, inArray, isNull } from "drizzle-orm";
 
+import { getLocale, getTranslations } from "@/i18n/server";
+
 import { db, emailOutbox } from "@harly/db";
 
 import { processEmailOutbox } from "@/lib/email/outbox-processor";
@@ -51,6 +53,8 @@ export async function listDeliveryLog(input: {
 }): Promise<DeliveryLogPage> {
   const page = Math.max(1, Math.floor(input.page));
   const statuses = statusesForFilter(input.filter);
+  const t = await getTranslations("labels.emailOutbox");
+  const locale = await getLocale();
   const rows = await db
     .select({
       id: emailOutbox.id,
@@ -91,9 +95,9 @@ export async function listDeliveryLog(input: {
       return {
         id: row.id,
         kind: row.kind,
-        kindLabel: kindLabelOf(row.kind),
+        kindLabel: kindLabelOf(row.kind, t),
         recipient: recipientOf(payload),
-        summary: summaryOf(row.kind, payload),
+        summary: summaryOf(row.kind, payload, t, locale),
         status: row.status,
         attempts: row.attempts,
         lastError: row.lastError,
@@ -113,16 +117,17 @@ async function refusalFor(
   id: string,
   verb: "retried" | "cancelled",
 ): Promise<string> {
+  const t = await getTranslations("server.emailOutbox");
   const [row] = await db
     .select({ status: emailOutbox.status, providerMessageId: emailOutbox.providerMessageId, sentAt: emailOutbox.sentAt })
     .from(emailOutbox)
     .where(and(eq(emailOutbox.id, id), eq(emailOutbox.workspaceId, workspaceId)))
     .limit(1);
   if (row && (row.providerMessageId || row.sentAt)) {
-    return `The email provider already accepted this email, so it cannot be ${verb}.`;
+    return t(`service.refusal.${verb}.accepted`);
   }
-  if (row?.status === "sent") return `This email was already sent, so it cannot be ${verb}.`;
-  return `This email can no longer be ${verb}.`;
+  if (row?.status === "sent") return t(`service.refusal.${verb}.sent`);
+  return t(`service.refusal.${verb}.gone`);
 }
 
 /**

@@ -89,18 +89,24 @@ export function formatPricePerM(input?: number, output?: number): string | null 
   return `${fmt(input)} / ${fmt(output)} per M`;
 }
 
+/** Translator for the `labels.ai.modelSource` catalog namespace. */
+export type ModelSourceTranslator = (
+  key: "builtin" | "updated" | "updatedJustNow" | "updatedMinutesAgo" | "updatedHoursAgo" | "updatedDaysAgo",
+  values?: { count: number },
+) => string;
+
 export function describeModelSource(
   source: ModelListSource,
   fetchedAt: string | null,
+  t: ModelSourceTranslator,
   now = Date.now(),
 ): string {
-  if (source === "builtin" || source === "snapshot") return "Built-in list (offline)";
-  const label = "Updated from models.dev";
-  if (!fetchedAt) return label;
+  if (source === "builtin" || source === "snapshot") return t("builtin");
+  if (!fetchedAt) return t("updated");
   const minutes = Math.max(0, Math.round((now - new Date(fetchedAt).getTime()) / 60_000));
-  if (minutes < 1) return `${label} · just now`;
-  if (minutes < 60) return `${label} · ${minutes} min ago`;
+  if (minutes < 1) return t("updatedJustNow");
+  if (minutes < 60) return t("updatedMinutesAgo", { count: minutes });
   const hours = Math.round(minutes / 60);
-  if (hours < 48) return `${label} · ${hours} h ago`;
-  return `${label} · ${Math.round(hours / 24)} d ago`;
+  if (hours < 48) return t("updatedHoursAgo", { count: hours });
+  return t("updatedDaysAgo", { count: Math.round(hours / 24) });
 }

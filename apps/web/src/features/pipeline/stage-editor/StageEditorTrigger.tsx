@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { Settings2 } from "lucide-react";
+import { useTranslations } from "next-intl";
 
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -22,6 +23,7 @@ export function StageEditorTrigger({
   jobTitle: string;
   className?: string;
 }) {
+  const t = useTranslations("features.pipeline.StageEditorTrigger");
   const [open, setOpen] = useState(false);
   return (
     <>
@@ -34,7 +36,7 @@ export function StageEditorTrigger({
         aria-haspopup="dialog"
       >
         <Settings2 className="size-4" aria-hidden="true" />
-        Edit stages
+        {t("editStages")}
       </Button>
       <StageEditor open={open} onOpenChange={setOpen} jobId={jobId} jobTitle={jobTitle} />
     </>
