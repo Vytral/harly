@@ -36,10 +36,6 @@ import { useTheme } from "@/components/ThemeProvider";
 import type { WorkspaceOption } from "@/features/workspaces/data";
 import { restoreSetupChecklistAction } from "@/features/onboarding/checklist-actions";
 
-// Root package.json version, inlined by next.config.ts at build time.
-const VERSION = process.env.NEXT_PUBLIC_HARLY_VERSION
-  ? `v${process.env.NEXT_PUBLIC_HARLY_VERSION}`
-  : null;
 const REPO_URL = "https://github.com/Vytral/harly";
 const ISSUES_URL = `${REPO_URL}/issues`;
 const DOCS_URL = "https://docs.harly.dev";
@@ -51,6 +47,10 @@ type UserMenuProps = {
   workspaceOptions: WorkspaceOption[];
   /** The public demo hides the beta chip and the checklist restore entry. */
   demoMode?: boolean;
+  /** Running Harly version, resolved on the server at request time. */
+  version?: string | null;
+  /** Whether the viewer may open organization settings. */
+  canManageSettings?: boolean;
   /** When set, the menu offers "Invite teammates" and calls this on select. */
   onInvite?: () => void;
 };
@@ -89,6 +89,8 @@ export function UserMenu({
   workspace,
   workspaceOptions,
   demoMode = false,
+  version = null,
+  canManageSettings = false,
   onInvite,
 }: UserMenuProps) {
   const t = useTranslations("shell.userMenu");
@@ -233,15 +235,17 @@ export function UserMenu({
               {t("accountSettings")}
             </Link>
           </DropdownMenuItem>
-          <DropdownMenuItem asChild className={itemClass}>
-            <Link href="/settings">
-              <Building2
-                className="size-4 text-muted-foreground"
-                strokeWidth={1.5}
-              />
-              {t("organizationSettings")}
-            </Link>
-          </DropdownMenuItem>
+          {canManageSettings ? (
+            <DropdownMenuItem asChild className={itemClass}>
+              <Link href="/settings">
+                <Building2
+                  className="size-4 text-muted-foreground"
+                  strokeWidth={1.5}
+                />
+                {t("organizationSettings")}
+              </Link>
+            </DropdownMenuItem>
+          ) : null}
           {onInvite ? (
             <DropdownMenuItem
               onSelect={() => onInvite()}
@@ -299,9 +303,9 @@ export function UserMenu({
                 <Badge variant="outline" className="text-[11px] font-normal">
                   {t("publicBeta")}
                 </Badge>
-                {VERSION ? (
+                {version ? (
                   <span className="font-mono text-[0.65rem] text-muted-foreground">
-                    {VERSION}
+                    v{version}
                   </span>
                 ) : null}
               </div>

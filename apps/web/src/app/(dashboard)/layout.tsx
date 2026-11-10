@@ -13,6 +13,7 @@ import {
   listNotifications,
 } from "@/features/notifications/data";
 import { getUnreadInboxThreadCount } from "@/features/mailbox/data";
+import { parseReleaseVersion } from "@/features/updates/release-version";
 import { isDemoMode } from "@harly/config";
 
 import { isLiveSandboxWorkspace } from "@/features/demo/sandbox-access";
@@ -31,6 +32,12 @@ import { getMyTasksDueCount } from "@/features/tasks/data";
 import { getOwnProfileAction } from "@/features/people/actions";
 import { RealtimeProvider } from "@/components/dashboard/RealtimeProvider";
 import { RealtimePageSync } from "@/components/dashboard/RealtimePageSync";
+
+/** Running version, read per request so it tracks the deployed image. */
+function runningVersion(): string | null {
+  const raw = process.env.HARLY_VERSION?.trim() || process.env.NEXT_PUBLIC_HARLY_VERSION || "";
+  return parseReleaseVersion(raw) ? raw.replace(/^v/, "") : null;
+}
 
 export async function generateMetadata(): Promise<Metadata> {
   const { organization } = await getWorkspaceContext();
@@ -132,6 +139,7 @@ export default async function DashboardLayout({
               sidebarLogo={sidebarLogo}
               assignableRoles={assignableRoles}
               demoMode={demo}
+              version={runningVersion()}
             />
             <PageTitleProvider>
               <main

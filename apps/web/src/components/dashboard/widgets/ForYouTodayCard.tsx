@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { useTranslations } from "next-intl";
 import type { Route } from "next";
-import { Sparkles, type LucideIcon } from "lucide-react";
+import { ListTodo, type LucideIcon } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Tile, TileHeader, EmptyHint } from "./primitives";
@@ -29,7 +29,7 @@ export function ForYouTodayCard({
   const pending = items.filter((item) => item.count > 0);
   return (
     <Tile className={className}>
-      <TileHeader icon={Sparkles} title={t("title")} />
+      <TileHeader icon={ListTodo} title={t("title")} />
       {pending.length > 0 ? (
         <ul className="flex flex-col gap-1 px-2 pb-3 pt-3">
           {pending.map((item) => {
@@ -56,7 +56,7 @@ export function ForYouTodayCard({
           })}
         </ul>
       ) : (
-        <EmptyHint icon={Sparkles} text={t("empty")} />
+        <EmptyHint icon={ListTodo} text={t("empty")} />
       )}
     </Tile>
   );

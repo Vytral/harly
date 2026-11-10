@@ -31,6 +31,12 @@ operators. How to cut a release is in [RELEASING.md](RELEASING.md). The
 - The README and documentation use the globally installed CLI
   (`npm install -g @harly/cli`, then `harly <command>`); `npx @harly/cli`
   still works for one-off use.
+- The first-run Home is quieter: no "Your workspace is ready" label, no icon
+  on the primary button, and the optional AI card no longer uses a robot icon.
+  The sparkle icon is gone from "For you today".
+- The account menu shows the version the instance is actually running (read
+  at request time) instead of the version baked in at build time, and hides
+  "Organization settings" from members without settings access.
 
 ### Fixed
 
