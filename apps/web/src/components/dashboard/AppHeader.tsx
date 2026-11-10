@@ -77,6 +77,8 @@ type AppHeaderProps = {
   assignableRoles: AssignableRole[];
   /** When true, show a one-time demo notice in the floating island. */
   demoMode?: boolean;
+  /** Running Harly version (runtime), shown in the account menu. */
+  version?: string | null;
 };
 
 function formatRole(role: string) {
@@ -103,6 +105,7 @@ export function AppHeader({
   sidebarLogo,
   assignableRoles,
   demoMode = false,
+  version = null,
 }: AppHeaderProps) {
   const t = useTranslations("shell.nav");
   const roleText = useTranslations("shell.userMenu");
@@ -241,6 +244,8 @@ export function AppHeader({
               workspace={workspace}
               workspaceOptions={demoMode ? [] : workspaceOptions}
               demoMode={demoMode}
+              version={version}
+              canManageSettings={canSettings}
               onInvite={canInvite ? () => setInviteOpen(true) : undefined}
             />
           </div>

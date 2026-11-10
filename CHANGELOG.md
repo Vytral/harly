@@ -45,6 +45,15 @@ anything an operator must do before upgrading.
 - Notifications, default pipeline stage names, duplicate-candidate prompts and
   the built-in email, job and document templates show in the viewer's language.
 
+### Changed
+
+- The first-run Home is quieter: no "Your workspace is ready" label, no icon
+  on the primary button, and the optional AI card no longer uses a robot icon.
+  The sparkle icon is gone from "For you today".
+- The account menu shows the version the instance is actually running (read
+  at request time) instead of the version baked in at build time, and hides
+  "Organization settings" from members without settings access.
+
 ### Fixed
 
 - The job editor form now uses the full width on narrow windows, scrolls from

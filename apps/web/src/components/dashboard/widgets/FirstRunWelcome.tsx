@@ -3,10 +3,9 @@ import { useTranslations } from "next-intl";
 import type { Route } from "next";
 import {
   ArrowRight,
-  Bot,
   Check,
   Globe,
-  Briefcase,
+  Plug,
   Upload,
   UserPlus,
   type LucideIcon,
@@ -79,7 +78,7 @@ export function FirstRunWelcome({
   if (!aiConfigured) {
     cards.push({
       key: "ai",
-      icon: Bot,
+      icon: Plug,
       title: t("aiTitle"),
       text: t("aiText"),
       href: "/settings/ai" as Route,
@@ -95,12 +94,9 @@ export function FirstRunWelcome({
       <div className={cn(tileClass, "overflow-hidden")}>
         <div className="grid gap-8 p-6 sm:p-8 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)] lg:items-center">
           <div className="min-w-0">
-            <p className="font-chrome text-[11px] uppercase tracking-[0.14em] text-soft-ink">
-              {t("ready")}
-            </p>
             <h2
               id="first-run-title"
-              className="font-display mt-2 text-balance text-[26px] leading-[1.15] text-near-ink sm:text-[30px]"
+              className="font-display text-balance text-[26px] leading-[1.15] text-near-ink sm:text-[30px]"
             >
               {t("start")}
             </h2>
@@ -110,7 +106,6 @@ export function FirstRunWelcome({
             <div className="mt-5 flex flex-wrap gap-2.5">
               <Button asChild>
                 <Link href={"/dashboard/jobs/new" as Route}>
-                  <Briefcase className="size-4" />
                   {t("createJob")}
                 </Link>
               </Button>
