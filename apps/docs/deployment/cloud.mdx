@@ -82,6 +82,23 @@ local file unless `--save-env` is explicitly supplied; that opt-in file is
 written with mode `0600` and a warning. Complete `/setup` only after readiness
 is green.
 
+## Setup secret handling
+
+`HARLY_SETUP_SECRET` claims the first owner at `/setup` (matching
+`HARLY_INITIAL_ADMIN_EMAIL`), so record it before you deploy:
+
+- **Render** only lets an account Admin view saved secrets later, and cannot
+  share one generated secret across services. Generate each value with
+  `openssl rand -base64 32` and paste the same value into both services.
+  Keep the image tag pinned so a redeploy does not silently change release.
+- **DigitalOcean** SECRET variables are write-only. The only recovery is to set
+  a new value and redeploy. A manual, placeholder-based copy of the spec lives in
+  `deploy/digitalocean/app.template.yaml`.
+- **Railway** and **Fly.io**: the CLI generates the secret and returns the
+  setup URL (Railway) or writes it to `harly-fly/.env` (Fly.io). Railway secrets
+  are saved locally only with `--save-env` (mode `0600`; keep it out of Git).
+  Fly.io terminates HTTPS, so do not add Caddy.
+
 ## Production checklist
 
 <Check>Web and scheduler run as separate long-lived processes.</Check>

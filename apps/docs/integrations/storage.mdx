@@ -102,6 +102,32 @@ MinIO does not enforce HTTPS by default. Use it only on trusted networks.
   </Step>
 </Steps>
 
+### Keep the bucket private
+
+Resumes must never be anonymously readable. Apply the provider equivalent of
+these AWS controls before enabling S3 in production: `BlockPublicAcls`,
+`IgnorePublicAcls`, `BlockPublicPolicy`, and `RestrictPublicBuckets` all `true`.
+Grant `s3:GetObject`, `s3:PutObject`, and `s3:DeleteObject` only to the Harly
+runtime identity, scoped to the required prefixes, and never to
+`Principal: "*"`. If a CDN serves images, its origin policy must deny
+`workspaces/*/resumes/*`.
+
+### Migrating old public resume URLs
+
+Installations that stored public resume URLs can convert them to the private,
+authenticated application route:
+
+```bash
+pnpm --filter web exec tsx scripts/migrate-private-resume-urls.ts          # dry run
+pnpm --filter web exec tsx scripts/migrate-private-resume-urls.ts --apply
+```
+
+`--apply` changes only `candidate_files.file_url` and deletes no objects. Run it
+before disabling public access, keep the reported counts, then confirm that an
+anonymous request to every old public URL returns `403` or `404`. Treat old
+public URLs as compromised: invalidate CDN caches and review access logs under
+your incident-response policy. The change is reversible from a database backup.
+
 <Warning>
   Candidate files are personal data. Keep buckets private and let Harly issue
   authenticated download responses. Do not make the entire bucket public.

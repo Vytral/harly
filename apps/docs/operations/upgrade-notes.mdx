@@ -1,0 +1,225 @@
+---
+title: "Upgrade notes"
+description: "Per-release upgrade notes for self-hosters: migrations, behavior changes, new environment variables, known limitations, and post-upgrade checks for Harly 0.3.0 and 0.2.4."
+---
+
+Existing installations upgrade in place. Read the notes for every release you
+skip, and take a [backup](/operations/backups) first. `npx @harly/cli update`
+does this for you.
+
+## Upgrading to 0.3.0
+
+0.3.0 redesigns the product and adds an MCP server for AI agents, an in-app
+updater, native e-signature and document generation, and rejection reasons.
+
+### Migrations
+
+The container applies six additive migrations (`0159`–`0164`) on start. Nothing
+is dropped, renamed, or rewritten destructively, so a 0.2.4 process keeps
+working while they run. Migrations wait at most 30 seconds for a table lock
+(`HARLY_MIGRATION_LOCK_TIMEOUT_MS`).
+
+| Migration | What it does | Notes |
+| --- | --- | --- |
+| `0159` | `rejection_reasons` table; reason, note, rejected by, and rejected at on `applications` | Existing rejections keep no reason. |
+| `0160` | E-sign signer experience: envelope message, expiry days, void reason, invite/view/consent timestamps, reminder counters, previous token hashes, workspace reminder cadence (3 days) and cap (3) | Backfills `invited_at` for sent envelopes. `consent_at` stays empty for documents signed before 0.3.0. |
+| `0161` | `signature_envelopes.document_id` and `document_name` | Backfilled from documents that reference an envelope. |
+| `0162` | Allows `date` signature fields | Re-adds one `CHECK` constraint with a wider list. |
+| `0163` | In-app updater tables | Auto-update is off by default. |
+| `0164` | MCP: OAuth clients, grants, tokens, authorization codes, `workspace_mcp_settings` | MCP is on for every workspace but nobody is connected. |
+
+### Behavior changes
+
+1. **Rejecting asks for a reason.** Seven default reasons are created on first
+   use; manage them in **Settings → Company & brand**. REST and AI callers that
+   send no reason record "Other" and still send the rejection email.
+2. **MCP is on and members can connect agents.** `mcp:use` is added to the
+   built-in Recruiter and Hiring manager roles and `mcp:manage` to Admin. Custom
+   roles saved before 0.3.0 that were based on those roles inherit `mcp:use`.
+   To forbid agents, switch MCP off in **Settings → AI agents (MCP)** or remove
+   `mcp:use` from a role. An agent never has more access than the person who
+   connected it.
+3. **E-signature reminders** follow the workspace cadence and cap (every 3 days,
+   at most 3), measured from the current signer's invite. Configure them in
+   **Settings → Harly Signature**.
+4. **Public pages.** The career page builder, Showcase template, candidate
+   portal, and signing pages are redesigned. Stored career page configurations
+   still parse. Check your published page once.
+5. **AI scoring** drops evidence quotes it cannot find in the resume, uses a
+   job's published rubric for every candidate, and re-scores only when the
+   engine version changes. Scores may differ slightly from 0.2.4; use
+   **Regenerate** if needed.
+6. **Harly AI** uses a shorter prompt and routes tools per turn, which lowers
+   usage and cost. `HARLY_AI_TOKEN_DEBUG=1` logs a per-step token breakdown.
+
+### New environment variables
+
+All are optional; see [configuration](/deployment/configuration#updates-and-ai-agents)
+for `HARLY_RELEASE_MANIFEST_URL`, `HARLY_DISABLE_UPDATE_CHECK`,
+`HARLY_UPDATER_INTERVAL`, and `MCP_ALLOWED_ORIGINS`. Installations created by an
+older `harly init` keep their own `compose.yaml`, and `harly update` does not
+rewrite it. Add these lines to the shared `environment` block of the app
+service to use the variables:
+
+```yaml
+HARLY_RELEASE_MANIFEST_URL: ${HARLY_RELEASE_MANIFEST_URL:-}
+HARLY_DISABLE_UPDATE_CHECK: ${HARLY_DISABLE_UPDATE_CHECK:-false}
+MCP_ALLOWED_ORIGINS: ${MCP_ALLOWED_ORIGINS:-}
+```
+
+### DocuSeal image is pinned
+
+With the optional `esign` profile, `compose.yaml` pulls
+`docuseal/docuseal:3.3.4` instead of `:latest`. Override it with
+`HARLY_DOCUSEAL_VERSION` in `.env` when you decide to upgrade DocuSeal. An
+installation with an older `compose.yaml` keeps the tag that file names. To pin
+the other base images by digest, see
+[pinning third-party images](/deployment/configuration#pinning-third-party-images).
+
+### Reverse proxy: let `/mcp` stream and cap request bodies
+
+The MCP endpoint can reply with a server-sent event stream. The proxy must not
+compress or buffer it, and `/mcp`, `/oauth/*`, and `/.well-known/*` must be
+reachable without a Harly session. The bundled `Caddyfile` is updated. If you
+maintain your own, use:
+
+```caddyfile
+{$HARLY_DOMAIN} {
+  request_body {
+    max_size 30MB
+  }
+  @mcp path /mcp /mcp/*
+  handle @mcp {
+    reverse_proxy app:3000 {
+      flush_interval -1
+    }
+  }
+  handle {
+    encode zstd gzip
+    reverse_proxy app:3000
+  }
+}
+```
+
+The 30 MB limit covers the 25 MB document upload. With nginx use
+`client_max_body_size 30m;`, and add `proxy_buffering off; gzip off;` to the
+`/mcp` location. With Cloudflare, do not challenge `/mcp`, `/oauth/*`, or
+`/.well-known/*`. Claude and ChatGPT connect from the provider's servers, so
+Harly must be reachable over HTTPS from the internet. See
+[Connect AI agents](/developers/mcp).
+
+### Install the updater (optional)
+
+**Settings → Updates** is visible to owners from the first start and shows "The
+server updater is not running" until you install the host service:
+
+```bash
+npm install -g @harly/cli@latest      # 0.6.0 or newer
+harly updater install-service /path/to/installation
+harly updater status /path/to/installation
+```
+
+Run it with `sudo` to write and start the systemd unit directly. Without
+systemd, run `harly updater run` under any supervisor, or
+`harly updater run --once` from cron every minute. The updater derives its token
+from `CRON_SECRET`; no new secret is needed. Render, Railway, Fly.io, and
+DigitalOcean update by pointing the service at the new image tag, and the
+updater does not apply. Auto-updates are off by default and install only patch
+or minor releases inside the window you set.
+
+### Known limitations
+
+- **Rollback.** A 0.2.4 image runs against the 0.3.0 schema because every change
+  is additive, but it does not understand `date` signature fields or the new
+  reminder settings. Restore the pre-update backup if you must roll back after
+  sending documents with date fields.
+- Existing rejections have no reason.
+- MCP connections end 90 days after approval and must be approved again.
+- MCP is not available in the public demo sandbox.
+- REST API authorization is unchanged; see
+  [API authorization](/developers/api-authorization).
+
+### After upgrading
+
+1. Decide in **Settings → AI agents (MCP)** whether MCP stays on and which
+   clients may connect.
+2. Review **Settings → Roles** for `mcp:use` and `mcp:manage`.
+3. Open your published career page and the candidate portal once.
+4. Install the updater if you want in-app updates.
+5. Run `harly doctor` to confirm the scheduler and migrations are healthy.
+
+## Upgrading to 0.2.4
+
+0.2.4 changes how pipeline stages are modelled, how reports are computed, and
+who can see what.
+
+### Migrations
+
+The container applies six additive migrations (`0153`–`0158`) on start.
+
+| Migration | What it does | Notes |
+| --- | --- | --- |
+| `0153` | Adds `job_stages.kind` (nullable) and `archived_at`; partial unique indexes on active stages | Additive |
+| `0154` | Backfills `kind` | Pass 1 maps the legacy names Applied, Screening, Interview, Offer, Hired, Rejected, Withdrawn (trimmed, case-insensitive). Pass 2 classifies renamed stages whose applications all share one terminal status. Anything else becomes `custom`. |
+| `0155` | Integration health, sample-data tracking, setup checklist state, `cron_runs.error`, `workspace_settings.timezone` | Additive |
+| `0156` | Trigram search indexes | Guarded: if `pg_trgm` cannot be created, indexes are skipped with a notice and search still works, slower on very large workspaces. |
+| `0157` | Database guard refusing to place an application in an archived stage | Trigger only |
+| `0158` | `workspace_settings.gravatar_enabled` (default off) | Additive |
+
+- Migrations wait at most 30 seconds for a table lock and then fail with a
+  readable message instead of blocking traffic. `0` disables the limit.
+- A stage whose `kind` is still `NULL` (written by a 0.2.x process during a
+  rolling upgrade) is classified by its legacy name at read time.
+- Stage names that differ only by case or whitespace are left alone; renaming or
+  archiving one resolves the duplicate.
+
+### Behavior changes
+
+1. **Gravatar is off.** An owner or admin can re-enable it in **Settings →
+   Company**.
+2. **Exports need `dsar:manage`.** The consent report and the audit-log export
+   (which also needs `security:manage`) no longer key off the owner/admin role.
+   Owners, admins, and the default Recruiter role hold `dsar:manage`; grant it to
+   custom roles in **Settings → Roles**.
+3. **Role scope is enforced everywhere.** Roles limited to specific jobs,
+   departments, or regions see only in-scope data in the UI, AI tools, and AI
+   write actions. Reports are not available to such roles yet.
+4. **Scheduled reports** run only while their creator is still a member with
+   `reports:read` and an unrestricted scope; otherwise the run is recorded as
+   skipped with a reason.
+5. **REST API.** Publishable (`pk_`) keys can create applications and read jobs
+   only; `move`, `reject`, `hire`, and `bulk` need a secret key. Creating a key
+   from the UI requires the permission behind every requested scope. Keys remain
+   workspace-wide and do not follow role scope.
+6. **Search recents** are per user and workspace, expire after 30 days, and are
+   cleared on sign-out.
+7. **Email.** Messages the provider accepted are never retried; an SMTP timeout
+   or reset after connecting is an unknown outcome to retry manually from the
+   delivery log. Events in flight at upgrade time may be delivered once more.
+8. **AI anonymization** also covers Harly AI chat tool results; replies use a
+   per-conversation pseudonym.
+9. **Demo instances** must set `DEMO_WORKSPACE_ID` when `DEMO_MODE` is on.
+10. A hire withdraws the candidate's other applications through the normal
+    withdrawal path (history, `application.withdrawn` events, webhooks).
+
+### Known limitations
+
+- **Rollback.** Rolling back to a 0.2.x image is supported only if no stage has
+  been archived or reclassified. Otherwise restore from backup.
+- **Legacy hire dates.** Hires before 0.2.4 without a stage-history row are
+  dated by their last activity event, so report dates may differ.
+- Reports are unavailable to role-scoped users.
+- Auth screens always use the light theme.
+- The Zoom refresh token is kept in memory if the database write fails after a
+  rotation; a restart before the next successful write requires reconnecting
+  Zoom.
+
+### After upgrading
+
+1. Review any integration reported as needs reconnect or degraded in
+   **Settings → Integrations**.
+2. Open a job's pipeline and use **Edit stages** to confirm stage kinds,
+   especially custom-named hired and rejected stages.
+3. Grant `dsar:manage` where needed.
+4. Check the delivery log for messages marked unknown outcome.
+5. Run `harly doctor`.
