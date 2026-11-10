@@ -18,6 +18,18 @@ STORAGE_PROVIDER=local
 Back up the uploads volume together with PostgreSQL. Do not use local storage
 on a platform whose service filesystem is ephemeral.
 
+With local storage, the `/uploads/*` path serves only public images, such as
+workspace images and logos. Harly returns `404 Not Found` for any other file
+under `/uploads/`. Documents, offer letters, signed e-signature PDFs, and saved
+signatures are reachable only through their permission-checked routes. Resumes
+require a signed-in user with permission to view the candidate.
+
+<Warning>
+  Direct `/uploads/` links to documents, offer letters, signed PDFs, or
+  signatures saved before Harly 0.3.0 no longer work. Open these files from
+  the candidate, offer, or document page in Harly instead.
+</Warning>
+
 ## S3-compatible storage
 
 ```dotenv
