@@ -4607,7 +4607,7 @@
         "noneImported": "No se importó ningún candidato.",
         "importedSummary": "<strong>{count}</strong> {count, plural, one {candidato} other {candidatos}} importados.",
         "alreadyInPipeline": "{count} ya están en el proceso de selección de esta vacante.",
-        "skippedSummary": "{count} {count, plural, one {perfil incompleto de {source} omitido} other {perfiles incompletos de {source} omitidos}}.",
+        "skippedSummary": "{count} incomplete {source} {count, plural, one {profile was} other {profiles were}} skipped.",
         "skippedRows": "{count, plural, one {# fila omitida:} other {# filas omitidas:}}",
         "rowError": "Fila {row}: {reason}",
         "rowErrorWithEmail": "Fila {row} ({email}): {reason}",
