@@ -19,13 +19,21 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
-const escape = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+/** The version a "## [0.4.0] - date" or "## 0.7.0 — date" heading names. */
+function headingVersion(line) {
+  if (!line.startsWith("## ")) return null;
+  const rest = line.slice(3).trimStart();
+  if (rest.startsWith("[")) {
+    const end = rest.indexOf("]");
+    return end === -1 ? null : rest.slice(1, end);
+  }
+  return rest.split(/\s/, 1)[0];
+}
 
 /** Returns the trimmed section body, or null when there is no such section. */
 export function changelogSection(text, version) {
-  const heading = new RegExp(`^## \\[?${escape(version)}\\]?(?=[\\s]|$)`);
   const lines = text.split(/\r?\n/);
-  const start = lines.findIndex((line) => heading.test(line));
+  const start = lines.findIndex((line) => headingVersion(line) === version);
   if (start === -1) return null;
   const body = [];
   for (const line of lines.slice(start + 1)) {

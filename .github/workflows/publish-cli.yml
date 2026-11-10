@@ -64,6 +64,8 @@ jobs:
 
       - name: Read the version to publish
         id: version
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           name=$(node -p "require('./package.json').name")
           version=$(node -p "require('./package.json').version")
@@ -78,6 +80,13 @@ jobs:
             *) echo "tag=latest" >> "$GITHUB_OUTPUT" ;;
           esac
           echo "version=$version" >> "$GITHUB_OUTPUT"
+          # Checked on its own, so a re-run creates a release that failed
+          # after npm publish succeeded.
+          if gh release view "cli-v$version" -R "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "release=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "release=true" >> "$GITHUB_OUTPUT"
+          fi
 
       # A stable tag that does not own the channel (an older patch) gets no
       # release commit; then the embedded release is not this one, so skip.
@@ -106,7 +115,7 @@ jobs:
 
       - name: Check the changelog names this version
         id: notes
-        if: steps.version.outputs.publish == 'true' && steps.embedded.outputs.skip != 'true'
+        if: (steps.version.outputs.publish == 'true' || steps.version.outputs.release == 'true') && steps.embedded.outputs.skip != 'true'
         run: |
           notes="$RUNNER_TEMP/cli-notes.md"
           node ../scripts/changelog-section.mjs CHANGELOG.md "${{ steps.version.outputs.version }}" \
@@ -120,7 +129,7 @@ jobs:
       # The CLI's own GitHub Release, tagged cli-vX.Y.Z, with its changelog
       # section as the body. It is never marked Latest: that belongs to the app.
       - name: Publish the CLI GitHub Release
-        if: steps.version.outputs.publish == 'true' && steps.embedded.outputs.skip != 'true'
+        if: (steps.version.outputs.publish == 'true' || steps.version.outputs.release == 'true') && steps.embedded.outputs.skip != 'true'
         env:
           GH_TOKEN: ${{ github.token }}
           VERSION: ${{ steps.version.outputs.version }}

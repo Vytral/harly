@@ -13,6 +13,15 @@ operators. How to cut a release is in [RELEASING.md](RELEASING.md). The
 
 ## [Unreleased]
 
+### Changed
+
+- GitHub Releases now carry the full changelog section for their version,
+  and `@harly/cli` versions get their own `cli-vX.Y.Z` release with the CLI
+  changelog. Earlier releases were updated to match.
+- The README and documentation use the globally installed CLI
+  (`npm install -g @harly/cli`, then `harly <command>`); `npx @harly/cli`
+  still works for one-off use.
+
 ## [0.4.0] - 2026-11-08
 
 A release that makes a fresh installation usable without a mail provider, an AI

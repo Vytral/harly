@@ -34,8 +34,8 @@ harly update
 ```
 
 Upgrade the CLI itself with `npm install -g @harly/cli@latest`. To try it
-without installing, prefix any command with `harly` instead of
-`harly`. Release notes are in [CHANGELOG.md](CHANGELOG.md).
+without installing, use `npx @harly/cli <command>` instead of
+`harly <command>`. Release notes are in [CHANGELOG.md](CHANGELOG.md).
 
 ## Installation lifecycle
 

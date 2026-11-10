@@ -105,3 +105,30 @@ test("makes relative links absolute and leaves the rest alone", () => {
     `[a](${base}docs/a.md) [b](https://x.dev) [c](#top) [d](mailto:x@y.z)`,
   );
 });
+
+test("the command exits as the release workflows expect", async () => {
+  const { spawnSync } = await import("node:child_process");
+  const { mkdtempSync, writeFileSync } = await import("node:fs");
+  const { tmpdir } = await import("node:os");
+  const { join } = await import("node:path");
+  const script = new URL("./changelog-section.mjs", import.meta.url).pathname;
+  const file = join(mkdtempSync(join(tmpdir(), "changelog-")), "CHANGELOG.md");
+  writeFileSync(file, sample);
+  const run = (...args) =>
+    spawnSync(process.execPath, [script, file, ...args], { encoding: "utf8" });
+
+  const stable = run("0.4.0", "--link-base=https://x/");
+  assert.equal(stable.status, 0);
+  assert.match(stable.stdout, /- A feature\./);
+
+  const missing = run("9.9.9");
+  assert.equal(missing.status, 1);
+  assert.equal(missing.stdout, "");
+  assert.match(missing.stderr, /no notes for 9\.9\.9/);
+
+  const beta = run("0.5.0-beta.1", "--prerelease");
+  assert.equal(beta.status, 0);
+  assert.equal(beta.stdout, "- Next thing.\n");
+
+  assert.equal(run().status, 2);
+});
