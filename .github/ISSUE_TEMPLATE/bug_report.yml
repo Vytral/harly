@@ -1,0 +1,74 @@
+name: Bug report
+description: Something in Harly or the CLI does not work as documented.
+labels: ["bug", "needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting. Use synthetic data only: remove candidate names, emails, files, secrets, API keys and private URLs from everything below.
+        **Security problems go to the [private advisory form](https://github.com/Vytral/harly/security/advisories/new), not here.**
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: What you did, what you expected, and what happened instead.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Go to …
+        2. Click …
+        3. See …
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Harly version
+      description: Settings → Updates, or the first line of `harly status`.
+      placeholder: "0.4.0"
+    validations:
+      required: true
+  - type: dropdown
+    id: deployment
+    attributes:
+      label: How do you run Harly?
+      options:
+        - Harly CLI on a server (harly init)
+        - Docker Compose without the CLI
+        - Render
+        - DigitalOcean App Platform
+        - Railway
+        - Fly.io
+        - Local development (pnpm dev)
+        - Other
+    validations:
+      required: true
+  - type: input
+    id: cli-version
+    attributes:
+      label: CLI version
+      description: "`harly --version`, if the problem involves the CLI."
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs or error output
+      description: "`harly doctor`, browser console or container logs, with secrets removed."
+      render: text
+  - type: textarea
+    id: context
+    attributes:
+      label: Anything else?
+      description: Browser, operating system, reverse proxy, integrations involved, screenshots.
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Before submitting
+      options:
+        - label: I searched existing issues and discussions.
+          required: true
+        - label: I removed personal data and secrets from this report.
+          required: true

@@ -65,6 +65,13 @@ jobs:
           else
             echo "prerelease=false" >> "$GITHUB_OUTPUT"
           fi
+      # Fail before a 40-minute build, not after it: a stable release must
+      # have its CHANGELOG.md section, which becomes the GitHub Release body.
+      - name: Require release notes
+        run: |
+          flag=""
+          if [ "${{ steps.version.outputs.prerelease }}" = "true" ]; then flag="--prerelease"; fi
+          node tooling/scripts/changelog-section.mjs CHANGELOG.md "${{ steps.version.outputs.version }}" $flag > /dev/null
       - id: meta
         uses: docker/metadata-action@v5
         with:
@@ -329,7 +336,7 @@ jobs:
 
   github-release:
     # Published last, and only once the channel has been settled: the stable
-    # notes tell operators to run `npx @harly/cli update`, which reads the
+    # notes tell operators to run `harly update`, which reads the
     # manifest that release-channel writes. A prerelease skips that job by
     # design, so a skipped dependency still counts as success here.
     needs: [image, release-channel]
@@ -342,10 +349,10 @@ jobs:
     permissions:
       contents: write
     steps:
+      # The tagged commit, for its CHANGELOG.md.
+      - uses: actions/checkout@v4
       - name: Publish the GitHub Release
         env:
-          # gh resolves the repository from a local checkout or from GH_REPO.
-          # There is no checkout in this job, so GH_REPO is what makes it work.
           GH_REPO: ${{ github.repository }}
           GH_TOKEN: ${{ github.token }}
           VERSION: ${{ needs.image.outputs.version }}
@@ -357,38 +364,28 @@ jobs:
           TAG: ${{ github.ref_name }}
         run: |
           notes="$(mktemp)"
+          flag=""
+          if [ "$PRERELEASE" = "true" ]; then flag="--prerelease"; fi
           {
-            echo "Harly ${VERSION}"
-            echo
             if [ "$PRERELEASE" = "true" ]; then
-              echo "This is a prerelease. \`npx @harly/cli update\` stays on the current stable version."
-              echo
-              echo "Opt in from an existing install:"
-              echo
-              echo '```bash'
-              echo "npx @harly/cli update --to ${VERSION}"
-              echo '```'
+              echo "> [!NOTE]"
+              echo "> This is a prerelease. \`harly update\` stays on the current stable version. Opt in from an existing install with \`harly update --to ${VERSION}\`."
             elif [ "$LATEST" = "true" ]; then
-              echo "Self-hosted installs move to this version with:"
-              echo
-              echo '```bash'
-              echo "npx @harly/cli update"
-              echo '```'
-              echo
-              echo "\`ghcr.io/vytral/harly:latest\` points at this same image."
+              echo "Self-hosted installs move to this version with \`harly update\`. \`ghcr.io/vytral/harly:latest\` points at this same image."
             else
-              echo "This is a patch on an older release line, so it does not become the default."
-              echo "\`ghcr.io/vytral/harly:latest\` and \`npx @harly/cli update\` stay on the newest stable version."
-              echo
-              echo "Install it deliberately:"
-              echo
-              echo '```bash'
-              echo "npx @harly/cli update --to ${VERSION}"
-              echo '```'
+              echo "> [!NOTE]"
+              echo "> This is a patch on an older release line, so it does not become the default. Install it deliberately with \`harly update --to ${VERSION}\`."
             fi
+            echo
+            node tooling/scripts/changelog-section.mjs CHANGELOG.md "$VERSION" $flag \
+              "--link-base=https://github.com/${GH_REPO}/blob/${TAG}/"
+            echo
+            echo "---"
             echo
             echo "Image: \`ghcr.io/vytral/harly:${VERSION}\`"
             echo "Digest: \`${DIGEST}\`"
+            echo
+            echo "Full changelog: [CHANGELOG.md](https://github.com/${GH_REPO}/blob/${TAG}/CHANGELOG.md)"
           } > "$notes"
           # Only a release that actually owns the latest channel is marked Latest.
           if [ "$LATEST" = "true" ]; then

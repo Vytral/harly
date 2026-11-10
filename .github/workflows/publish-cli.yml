@@ -40,7 +40,7 @@ jobs:
        !contains(github.event.workflow_run.head_branch, '-'))
     runs-on: ubuntu-latest
     permissions:
-      contents: read
+      contents: write
       id-token: write
     defaults:
       run:
@@ -64,6 +64,8 @@ jobs:
 
       - name: Read the version to publish
         id: version
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           name=$(node -p "require('./package.json').name")
           version=$(node -p "require('./package.json').version")
@@ -78,6 +80,13 @@ jobs:
             *) echo "tag=latest" >> "$GITHUB_OUTPUT" ;;
           esac
           echo "version=$version" >> "$GITHUB_OUTPUT"
+          # Checked on its own, so a re-run creates a release that failed
+          # after npm publish succeeded.
+          if gh release view "cli-v$version" -R "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "release=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "release=true" >> "$GITHUB_OUTPUT"
+          fi
 
       # A stable tag that does not own the channel (an older patch) gets no
       # release commit; then the embedded release is not this one, so skip.
@@ -105,13 +114,36 @@ jobs:
           pnpm test
 
       - name: Check the changelog names this version
-        if: steps.version.outputs.publish == 'true' && steps.embedded.outputs.skip != 'true'
+        id: notes
+        if: (steps.version.outputs.publish == 'true' || steps.version.outputs.release == 'true') && steps.embedded.outputs.skip != 'true'
         run: |
-          if ! grep -q "^## ${{ steps.version.outputs.version }}\b" CHANGELOG.md; then
-            echo "::error::tooling/harly/CHANGELOG.md has no section for ${{ steps.version.outputs.version }}."
-            exit 1
-          fi
+          notes="$RUNNER_TEMP/cli-notes.md"
+          node ../scripts/changelog-section.mjs CHANGELOG.md "${{ steps.version.outputs.version }}" \
+            "--link-base=https://github.com/${{ github.repository }}/blob/main/tooling/harly/" > "$notes"
+          echo "notes=$notes" >> "$GITHUB_OUTPUT"
 
       - name: Publish
         if: steps.version.outputs.publish == 'true' && steps.embedded.outputs.skip != 'true'
         run: npm publish --access public --tag ${{ steps.version.outputs.tag }}
+
+      # The CLI's own GitHub Release, tagged cli-vX.Y.Z, with its changelog
+      # section as the body. It is never marked Latest: that belongs to the app.
+      - name: Publish the CLI GitHub Release
+        if: (steps.version.outputs.publish == 'true' || steps.version.outputs.release == 'true') && steps.embedded.outputs.skip != 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          tag="cli-v$VERSION"
+          flags=(--latest=false)
+          case "$VERSION" in *-*) flags+=(--prerelease) ;; esac
+          if gh release view "$tag" >/dev/null 2>&1; then
+            gh release edit "$tag" --title "@harly/cli $VERSION" --notes-file "${{ steps.notes.outputs.notes }}" "${flags[@]}"
+          else
+            # Tag the commit npm recorded for this version, not today's main:
+            # on a retry, main may have moved since the package was published.
+            target=$(npm view "@harly/cli@$VERSION" gitHead 2>/dev/null || true)
+            target=${target:-$(git rev-parse HEAD)}
+            gh release create "$tag" --target "$target" --title "@harly/cli $VERSION" \
+              --notes-file "${{ steps.notes.outputs.notes }}" "${flags[@]}"
+          fi

@@ -20,7 +20,7 @@ The OpenAPI document is the source of truth:
 - `GET /api/v1/openapi.json`
 - `GET /docs/api`
 
-If you want a human-readable inventory, see [`../../docs/api-reference.md`](../../docs/api-reference.md).
+If you want a human-readable inventory, see [API resource reference](https://docs.harly.dev/developers/api-reference).
 
 Summary of the public REST surface:
 

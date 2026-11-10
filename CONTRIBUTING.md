@@ -6,6 +6,8 @@ reviewable, tested, and safe to operate.
 
 ## Before you start
 
+- Questions and ideas go to [Discussions](https://github.com/Vytral/harly/discussions);
+  issues are for confirmed bugs and agreed work. See [SUPPORT.md](SUPPORT.md).
 - Search existing issues and pull requests before starting work.
 - Open an issue before a material feature or behavior change so the outcome can
   be discussed. Small bug fixes and documentation corrections can go directly
@@ -43,6 +45,10 @@ pnpm db:down
 
 ## Development workflow
 
+Fork the repository (or branch, if you have write access) from `main` and open
+the pull request against `main`. Name branches with a conventional prefix such
+as `feat/`, `fix/`, `docs/` or `chore/`.
+
 1. Keep each pull request focused on one user, operator, or maintenance
    outcome.
 2. Add or update tests whenever behavior changes, especially for authorization,
@@ -50,11 +56,16 @@ pnpm db:down
    jobs.
 3. Update the relevant user, operator, API, or environment documentation when
    behavior or configuration changes.
-4. Describe the problem, solution, verification, migration/configuration
+4. Add a bullet under `## [Unreleased]` in [CHANGELOG.md](CHANGELOG.md) for
+   anything a user, operator or API client would notice (CLI changes go in
+   `tooling/harly/CHANGELOG.md`). These sections are published as the GitHub
+   Release notes, so write them for the people upgrading.
+5. Describe the problem, solution, verification, migration/configuration
    impact, and security impact in the pull request.
-5. Use the [pull request template](.github/pull_request_template.md) and keep
-   commits understandable. Conventional commit subjects are encouraged, for
-   example `fix(auth): reject expired setup claims`.
+6. Use the [pull request template](.github/pull_request_template.md). Commit
+   subjects and pull request titles follow
+   [Conventional Commits](https://www.conventionalcommits.org), for example
+   `fix(auth): reject expired setup claims`.
 
 Do not include secrets or sensitive production details in commit messages,
 issues, pull requests, logs, screenshots, or generated artifacts.
@@ -62,7 +73,8 @@ issues, pull requests, logs, screenshots, or generated artifacts.
 ## Validation before review
 
 Run the checks relevant to your change before requesting review. These are the
-same core checks enforced by CI:
+core checks CI runs; CI additionally runs database integration suites, the
+browser end-to-end suite and a Docker image build with a backup/restore check:
 
 ```bash
 pnpm lint
@@ -75,6 +87,8 @@ pnpm docs:validate
 pnpm docs:broken-links
 pnpm docs:a11y
 pnpm audit --prod --audit-level=high
+pnpm --filter web check:automation-capabilities
+node --test tooling/scripts/*.test.mjs
 ```
 
 For changes to the CLI, release assets, Docker image, or deployment files, also
@@ -205,11 +219,27 @@ that a nav entry's `requiredPermission` matches the guard of the page it links t
 - Do not commit generated secret files or provider credentials. The CLI's
   generated deployment artifacts must remain owner-readable and outside Git.
 
+## Releases
+
+Maintainers cut releases with [RELEASING.md](RELEASING.md). Contributors only
+need the changelog entry described above.
+
+## AI-assisted contributions
+
+AI tools are welcome. You are responsible for every line you submit: read it,
+run the checks, and make sure the pull request description is accurate. Agents
+should follow [AGENTS.md](AGENTS.md).
+
+## License
+
+By contributing you agree that your contribution is licensed under the
+[MIT License](LICENSE), the same license as the project.
+
 ## Security and conduct
 
 Report suspected vulnerabilities privately through [SECURITY.md](SECURITY.md),
-never in a public issue or discussion. Be respectful, assume good intent, and
-keep feedback focused on the code, its users, and its operational impact.
+never in a public issue or discussion. Everyone taking part is expected to
+follow the [Code of Conduct](CODE_OF_CONDUCT.md).
 
 ## Translations
 

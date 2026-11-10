@@ -1,6 +1,6 @@
 ---
 title: "Career page"
-description: "Publish your public job board in Harly — apply company branding, embed it on your marketing site, and control which jobs are listed for candidates."
+description: "Design and publish your public job board in Harly with the Career Page Builder. Choose a template, edit sections, preview on any device, and control which jobs candidates see."
 ---
 
 The career page is your public job board, served from your own Harly domain.
@@ -25,10 +25,129 @@ location, and the description you wrote on the job.
 Set the workspace name, logo, and public origin in **Settings → Workspace**.
 The career page uses these automatically.
 
-- **Logo and name** — shown in the header of the board and each listing.
-- **Public origin** — the domain candidates see and the base for application
+- **Logo and name**: shown in the header of the board and each listing.
+- **Public origin**: the domain candidates see and the base for application
   links. Must match `HARLY_URL` so email links and the candidate portal use
   the same origin.
+
+## Career Page Builder
+
+The Career Page Builder is where you design the public page. It opens in a
+focused, full-screen view with three areas:
+
+- **Section rail**: Template, Content, Sections, Jobs, Style, Footer, and SEO.
+- **Editor**: the controls for the selected section.
+- **Preview**: a live render of the page that updates as you type.
+
+On narrow screens, the editor and preview share the screen. Switch between them
+with the **Edit** and **Preview** toggle.
+
+### Templates
+
+Pick a base layout in the **Template** section. Switching templates keeps your
+content. The builder hides controls the new template doesn't use, and sections
+the template ignores are listed at the end of the **Sections** panel as
+unsupported.
+
+| Template | Style | Job filters |
+| --- | --- | --- |
+| Minimal | Clean type, just the essentials. Supports a full-width banner. | None |
+| Playful | Colorful, friendly, high-energy. Hero image with a gradient wash. | Department |
+| Ashby | Structured, with sidebar filters. | Department, location, type |
+| Join | Company profile tabs, job-board style. Gallery can scroll automatically. | Department, location |
+| Showcase | Editorial hero with an eyebrow badge, stats, benefits with icons, and filterable jobs. | Department, location, type |
+
+Showcase is the only template that supports every section, including
+**How we hire** and value icons. A workspace that has never configured its
+career page starts from Minimal.
+
+Under **Start over**, you can reset the current template:
+
+- **Reset design**: restores colors, font, hero layout, and job filters to the
+  template's defaults. Your text, photos, sections, SEO, socials, and legal
+  links stay as they are.
+- **Reset everything**: restores a fresh template page and clears your intro,
+  sections, testimonials, FAQ, SEO, indexing, social, and legal links. You must
+  confirm that you understand your content will be cleared.
+
+Neither reset changes the live page until you publish.
+
+### Sections
+
+The **Sections** panel holds the blocks below the hero. Each block stays hidden
+on the public page until you turn it on and add content.
+
+| Section | What you add | Limit |
+| --- | --- | --- |
+| Key facts | Label and value pairs, such as Founded · 2019, each with an icon | 8 facts |
+| Values & benefits | A title and description per item. Showcase adds an icon per value. | 8 items |
+| Photo gallery | Team and office photos. Join can scroll them automatically at slow or normal speed. | 12 photos |
+| Testimonials | A quote, name, role, and uploaded avatar per person | 12 quotes |
+| How we hire | Your interview steps, in order, each with a title and details. Shown on the career page and job pages. | 8 steps |
+| FAQ | Questions and answers | 20 questions |
+| Call to action | A closing band with a heading, body, button label, button link, and color | One band |
+
+The call to action needs a heading, or the band stays hidden. Leave the button
+link empty to point it at your company website, or at the candidate portal if no
+website is set. Playful uses a fixed button label and doesn't render a custom button link. Its
+button always links to your company website, which you set in
+**Settings → Branding**. If no website is set, the button is hidden.
+
+### Device preview
+
+Use the device switcher above the preview to see the page at real viewport
+widths:
+
+| Device | Width |
+| --- | --- |
+| Desktop | 1280px |
+| Tablet | 834px |
+| Mobile | 390px |
+
+The preview renders at the true width and scales down to fit, so layout
+breakpoints match what candidates see. Links in the preview are inactive. Click
+one to get the option to open it in a new tab.
+
+### Contrast warnings
+
+When you pick an accent or call-to-action color, the builder checks it against
+WCAG contrast ratios:
+
+- Button text on the color must reach 4.5:1.
+- The accent against the page background must reach 3:1 so links and icons stay
+  visible.
+
+If a color fails, a warning appears under the field with a **Use readable
+shade** button. Click it to apply the nearest shade that passes.
+
+### Publish your changes
+
+Saving publishes. The top bar shows the page's state:
+
+| State | Meaning |
+| --- | --- |
+| Not published yet | The page has never been published. Candidates see the default board. |
+| Unpublished changes | You have edits that aren't live. |
+| Live | The public page matches the builder. |
+
+Click **Publish changes**, or press <kbd>Cmd</kbd>+<kbd>S</kbd> on macOS or
+<kbd>Ctrl</kbd>+<kbd>S</kbd> on Windows and Linux. Click **View live** to open
+the public page in a new tab.
+
+Harly validates every field before publishing, using the same rules as the
+server. If a field fails, such as text over its character limit or a button link that
+isn't a full `http(s)` URL, Harly opens the
+section, scrolls to the first invalid field, and shows a count of fields to fix
+next to each affected section in the rail. Errors then update live as you edit.
+
+If you click **Exit** or leave the page with unpublished changes, Harly asks
+you to confirm before discarding them.
+
+### Motion and accessibility
+
+Templates use restrained motion, such as staggered job rows and press feedback
+on buttons. When a candidate's device has reduced motion turned on, the career
+page skips these animations.
 
 ## Applying
 
@@ -71,6 +190,9 @@ Before announcing the career page to candidates, submit a test application:
 | --- | --- | --- |
 | No jobs listed | Jobs are in draft or closed state | Publish at least one job |
 | Logo missing | Logo not set in Settings → Workspace | Upload logo file |
+| Edits not visible to candidates | Builder shows **Unpublished changes** | Click **Publish changes** or press Cmd+S |
+| Section missing on the public page | Section is off, empty, or unsupported by the template | Turn it on, add content, or switch to a template that supports it |
+| Publish blocked | A field fails validation | Fix the fields counted in the section rail |
 | Confirmation email not received | Outbound email not configured | Configure sender in [email settings](/integrations/email) |
 | Application lands in wrong stage | Pipeline misconfigured | Check pipeline stage order in Settings → Pipelines |
 

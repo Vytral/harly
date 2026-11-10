@@ -18,6 +18,18 @@ STORAGE_PROVIDER=local
 Back up the uploads volume together with PostgreSQL. Do not use local storage
 on a platform whose service filesystem is ephemeral.
 
+With local storage, the `/uploads/*` path serves only public images, such as
+workspace images and logos. Harly returns `404 Not Found` for any other file
+under `/uploads/`. Documents, offer letters, signed e-signature PDFs, and saved
+signatures are reachable only through their permission-checked routes. Resumes
+require a signed-in user with permission to view the candidate.
+
+<Warning>
+  Direct `/uploads/` links to documents, offer letters, signed PDFs, or
+  signatures saved before Harly 0.3.0 no longer work. Open these files from
+  the candidate, offer, or document page in Harly instead.
+</Warning>
+
 ## S3-compatible storage
 
 ```dotenv
@@ -101,6 +113,32 @@ MinIO does not enforce HTTPS by default. Use it only on trusted networks.
     Run a backup or provider snapshot according to your recovery runbook.
   </Step>
 </Steps>
+
+### Keep the bucket private
+
+Resumes must never be anonymously readable. Apply the provider equivalent of
+these AWS controls before enabling S3 in production: `BlockPublicAcls`,
+`IgnorePublicAcls`, `BlockPublicPolicy`, and `RestrictPublicBuckets` all `true`.
+Grant `s3:GetObject`, `s3:PutObject`, and `s3:DeleteObject` only to the Harly
+runtime identity, scoped to the required prefixes, and never to
+`Principal: "*"`. If a CDN serves images, its origin policy must deny
+`workspaces/*/resumes/*`.
+
+### Migrating old public resume URLs
+
+Installations that stored public resume URLs can convert them to the private,
+authenticated application route:
+
+```bash
+pnpm --filter web exec tsx scripts/migrate-private-resume-urls.ts          # dry run
+pnpm --filter web exec tsx scripts/migrate-private-resume-urls.ts --apply
+```
+
+`--apply` changes only `candidate_files.file_url` and deletes no objects. Run it
+before disabling public access, keep the reported counts, then confirm that an
+anonymous request to every old public URL returns `403` or `404`. Treat old
+public URLs as compromised: invalidate CDN caches and review access logs under
+your incident-response policy. The change is reversible from a database backup.
 
 <Warning>
   Candidate files are personal data. Keep buckets private and let Harly issue

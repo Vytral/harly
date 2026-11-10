@@ -8,12 +8,12 @@ These packages define the stable boundaries that make Harly easy to self-host, c
 
 | Package | Status | Description |
 |---------|--------|-------------|
-| `@harly/db` | **Complete** | Drizzle schema (40+ tables, 6 enums), 53 migrations, seed helpers, database client singleton. |
+| `@harly/db` | **Complete** | Drizzle schema, migrations, seed helpers and the database client. Read [db/AGENTS.md](db/AGENTS.md) before changing migrations. |
 | `@harly/auth` | **Complete** | Better Auth integration — email/password, magic link, Google OAuth, passkeys (WebAuthn), 2FA (TOTP), SSO/OIDC+SAML, organization plugin, workspace membership, roles & permissions. |
 | `@harly/api` | **Complete** | Framework-agnostic contracts for REST API v1 — API key auth (harly_pk_/sk_), scopes, pagination, error envelope, HMAC webhook signing. |
-| `@harly/emails` | **Complete** | 19 React Email templates + Resend sender (console fallback), AI email drafting, inbound email receiver. |
+| `@harly/emails` | **Complete** | React Email templates, the sender (SMTP or Resend, with a console fallback) and inbound email handling. |
 | `@harly/storage` | **Complete** | Abstract storage adapters — local filesystem + S3/R2/MinIO with presigned URLs. |
-| `@harly/config` | **Placeholder** | Environment validation, feature flags, deployment config. |
+| `@harly/config` | **Complete** | Fail-fast runtime configuration: environment parsing, the canonical public origin and production checks. |
 | `@harly/ui` | **Placeholder** | Shared UI primitives and design tokens. |
 | `@harly/validators` | **Placeholder** | Shared Zod schemas for forms and API inputs. |
 

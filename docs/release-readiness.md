@@ -59,10 +59,11 @@ not use local generated files, stale build output, or production candidate data.
   interactive install, verify the resolved image and digest before continuing:
 
   ```bash
-  npx -y @harly/cli
+  npm install -g @harly/cli
+  harly init
   ```
 
-- [ ] Run `npx @harly/cli check` on the target host and record Docker, Compose,
+- [ ] Run `harly check` on the target host and record Docker, Compose,
   memory, disk, DNS, firewall, and port results.
 - [ ] Confirm the deployment uses an HTTPS `HARLY_URL` with the public domain,
   not a path suffix or an internal hostname.
@@ -75,21 +76,21 @@ not use local generated files, stale build output, or production candidate data.
   owner email and invite-only registration behavior.
 - [ ] Verify `/api/health/live` and `/api/health/ready` from the public URL after
   migrations finish.
-- [ ] Run `npx @harly/cli doctor` after the first deployment.
+- [ ] Run `harly doctor` after the first deployment.
 
 ## 4. Upgrade and rollback drill
 
 - [ ] Create an off-host backup of PostgreSQL and uploads before upgrading:
 
   ```bash
-  npx @harly/cli backup
+  harly backup
   ```
 
 - [ ] Test the exact upgrade command on a disposable installation:
 
   ```bash
-  npx @harly/cli update
-  npx @harly/cli doctor
+  harly update
+  harly doctor
   ```
 
 - [ ] Verify migrations run once, the scheduler resumes, queued work is not
@@ -98,9 +99,7 @@ not use local generated files, stale build output, or production candidate data.
   jobs, candidates, applications, files, messages, offers, and audit history.
 - [ ] Exercise the documented rollback path if the upgrade fails or readiness
   does not recover.
-- [ ] For unattended automation only, pass the CLI's supported `--yes` flag;
-  `-y` is the `npx` install-confirmation shorthand, not a replacement for the
-  CLI's own confirmation flag.
+- [ ] For unattended automation only, pass the CLI's supported `--yes` flag.
 
 ## 5. Core recruiter smoke test
 
@@ -165,8 +164,8 @@ Use fictional data in a disposable workspace and capture evidence for each step.
   restore drill.
 - [ ] Configure logs, metrics, uptime checks, disk alerts, database health, and
   provider failure visibility appropriate for the deployment size.
-- [ ] Publish the operator links: [self-hosting](self-hosting.md),
-  [backups](backups.md), [configuration](configuration.md),
+- [ ] Publish the operator links: [self-hosting](../apps/docs/self-hosting/overview.mdx),
+  [backups](../apps/docs/operations/backups.mdx), [configuration](../apps/docs/deployment/configuration.mdx),
   [troubleshooting](https://docs.harly.dev/operations/troubleshooting), and
   [security reporting](../SECURITY.md).
 - [ ] Confirm the support/contact path, known limitations, and release notes are

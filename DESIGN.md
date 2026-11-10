@@ -4,7 +4,7 @@ A light reference, not a rulebook. We are experimenting toward a calmer, more
 professional HR/ATS product, using Deel's product language as the benchmark
 (screens in `design/inspiration/deel/`, local only). When this file and
 `apps/web/src/app/globals.css` disagree, the CSS wins. The previous, stricter
-doctrine lives in `docs/DESIGN.legacy.md` for history.
+doctrine lives in git history (`docs/DESIGN.legacy.md`, removed).
 
 ## Feel
 
