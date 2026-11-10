@@ -3,11 +3,13 @@ files:
     translation: /apps/web/messages/%two_letters_code%.json
     languages_mapping:
       two_letters_code:
-        pt-BR: pt-BR
+        es-ES: es
         nl: nl-NL
+        pt-BR: pt-BR
   - source: /packages/emails/messages/en.json
     translation: /packages/emails/messages/%two_letters_code%.json
     languages_mapping:
       two_letters_code:
-        pt-BR: pt-BR
+        es-ES: es
         nl: nl-NL
+        pt-BR: pt-BR
