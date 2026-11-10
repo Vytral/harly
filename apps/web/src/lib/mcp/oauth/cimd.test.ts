@@ -82,6 +82,40 @@ describe("parseClientMetadataDocument", () => {
     expect(() => parseClientMetadataDocument(ID, { ...goodDoc, redirect_uris: ["javascript:alert(1)"] })).toThrow(ClientMetadataError);
     expect(() => parseClientMetadataDocument(ID, { ...goodDoc, redirect_uris: ["http://evil.test/cb"] })).toThrow(/loopback/);
     expect(() => parseClientMetadataDocument(ID, { ...goodDoc, grant_types: ["client_credentials"] })).toThrow(/grant_types/);
+    expect(() => parseClientMetadataDocument(ID, { ...goodDoc, grant_types: "authorization_code" })).toThrow(/grant_types/);
+    expect(() => parseClientMetadataDocument(ID, { ...goodDoc, response_types: ["token"] })).toThrow(/response_types/);
+    expect(() => parseClientMetadataDocument(ID, { ...goodDoc, grant_types: [] })).toThrow(/grant_types/);
+    expect(() => parseClientMetadataDocument(ID, { ...goodDoc, response_types: [] })).toThrow(/response_types/);
+    expect(() => parseClientMetadataDocument(ID, { ...goodDoc, grant_types: ["authorization_code", ""] })).toThrow(/grant_types/);
+    expect(() => parseClientMetadataDocument(ID, { ...goodDoc, response_types: ["code", ""] })).toThrow(/response_types/);
+  });
+
+  it("ignores extra grant types that real clients publish", () => {
+    // Verbatim shape of https://claude.ai/oauth/mcp-oauth-client-metadata (2026-11).
+    const claudeId = "https://claude.ai/oauth/mcp-oauth-client-metadata";
+    const claude = parseClientMetadataDocument(claudeId, {
+      client_id: claudeId,
+      client_name: "Claude",
+      client_uri: "https://claude.ai",
+      redirect_uris: ["https://claude.ai/api/mcp/auth_callback"],
+      grant_types: ["authorization_code", "refresh_token", "urn:ietf:params:oauth:grant-type:jwt-bearer"],
+      response_types: ["code", "urn:example:extra"],
+      token_endpoint_auth_method: "none",
+    });
+    expect(claude).toMatchObject({ name: "Claude", redirectUris: ["https://claude.ai/api/mcp/auth_callback"] });
+
+    // Shape of https://vscode.dev/oauth/client-metadata.json (2026-11).
+    const vscodeId = "https://vscode.dev/oauth/client-metadata.json";
+    const vscode = parseClientMetadataDocument(vscodeId, {
+      client_id: vscodeId,
+      client_name: "Visual Studio Code",
+      application_type: "native",
+      grant_types: ["authorization_code", "refresh_token", "urn:ietf:params:oauth:grant-type:device_code"],
+      response_types: ["code"],
+      token_endpoint_auth_method: "none",
+      redirect_uris: ["http://127.0.0.1:33418/", "https://vscode.dev/redirect"],
+    });
+    expect(vscode.redirectUris).toEqual(["http://127.0.0.1:33418/", "https://vscode.dev/redirect"]);
   });
 
   it("falls back to the host for a missing name and drops unsafe logo URLs", () => {

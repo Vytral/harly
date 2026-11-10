@@ -13,9 +13,13 @@ import {
   sanitizeClientName,
   type ClientMetadata,
 } from "./cimd";
+import { createLogger } from "@/lib/logger";
+
 import { generateOpaqueToken } from "./crypto";
 import { matchKnownClient, type KnownClientMatch } from "./known-clients";
 import { MAX_REDIRECT_URIS, validateRedirectUriForRegistration } from "./redirect";
+
+const log = createLogger("mcp-oauth");
 
 export type ResolvedOAuthClient = ClientMetadata & {
   source: "dcr" | "cimd";
@@ -82,7 +86,11 @@ export async function resolveOAuthClient(clientId: string): Promise<ResolvedOAut
         });
       return toResolved("cimd", meta);
     } catch (error) {
-      if (error instanceof ClientMetadataError) return null;
+      if (error instanceof ClientMetadataError) {
+        // The page shows fixed copy; the log carries the real reason.
+        log.warn({ clientId: clientId.slice(0, 200), reason: error.message }, "oauth client metadata document rejected");
+        return null;
+      }
       throw error;
     }
   }
