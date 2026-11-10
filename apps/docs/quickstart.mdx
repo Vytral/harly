@@ -18,7 +18,7 @@ behind the proxy you select.
 | Disk | 5 GB free minimum, 20 GB recommended (plus uploads and backups) |
 | Docker Engine | 24+ |
 | Docker Compose | 2.20+ |
-| Node.js | 20.12+ (for `npx`) |
+| Node.js | 20.12+ (for the CLI) |
 
 See [self-hosting overview](/self-hosting/overview) for full sizing, DNS, and
 firewall setup before you install.
@@ -60,10 +60,11 @@ firewall setup before you install.
   </Step>
 
   <Step title="Run the installer">
-    From any directory on the VPS:
+    Install the CLI, then start the installer from any directory on the VPS:
 
     ```bash
-    npx @harly/cli
+    npm install -g @harly/cli
+    harly init
     ```
 
     The guided installer:
@@ -92,7 +93,7 @@ firewall setup before you install.
     <Warning>
       Keep `HARLY_SETUP_SECRET` private. If `/setup` is unavailable, verify
       that the owner account has not already been claimed and confirm the value
-      in `.env` with `npx @harly/cli setup-secret`.
+      in `.env` with `harly setup-secret`.
     </Warning>
 
     <Note>
@@ -107,7 +108,7 @@ firewall setup before you install.
 Run these from the installation directory:
 
 ```bash
-npx @harly/cli doctor
+harly doctor
 docker compose ps
 curl -fsS https://careers.example.com/api/health/ready
 ```
@@ -186,7 +187,7 @@ Confirm `postgres` is `Up (healthy)` before the app starts.
 Run from the installation directory at any time to open the management menu:
 
 ```bash
-npx @harly/cli
+harly
 ```
 
 Re-running `init` preserves `.env` and secrets. Modified templates are

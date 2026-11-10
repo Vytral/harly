@@ -1,0 +1,58 @@
+name: Feature request
+description: A concrete, agreed improvement. Unsure? Start in Discussions → Ideas.
+labels: ["enhancement", "needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Larger ideas work best as a [discussion](https://github.com/Vytral/harly/discussions/categories/ideas) first. Check the [roadmap](https://github.com/Vytral/harly/blob/main/ROADMAP.md) too: it may already be planned, or deliberately out of scope.
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: Who has this problem, and what are they trying to do? Describe the need, not the solution.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+      description: What should Harly do? Include the interface, API or CLI behavior you have in mind.
+    validations:
+      required: true
+  - type: textarea
+    id: workaround
+    attributes:
+      label: Current workaround
+      description: How do you handle this today?
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - Jobs and pipeline
+        - Candidates and review
+        - Candidate portal or career page
+        - Inbox and email
+        - Interviews and scheduling
+        - Offers and documents
+        - Harly AI
+        - API, webhooks, MCP or automations
+        - Integrations
+        - Permissions and security
+        - Self-hosting and CLI
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: privacy
+    attributes:
+      label: Data and privacy impact
+      description: Does this store new candidate data, send data to a third party, or change who can see what?
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Before submitting
+      options:
+        - label: I searched existing issues, discussions and the roadmap.
+          required: true

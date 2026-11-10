@@ -73,6 +73,19 @@ function optionalHttpsUrl(value: unknown): string | null {
   }
 }
 
+/**
+ * An optional list of grant/response types. When present it must be a
+ * non-empty array of non-empty strings naming `required`; other (unsupported)
+ * entries are allowed and ignored.
+ */
+function assertTypeList(value: unknown, field: string, required: string): void {
+  if (value === undefined) return;
+  if (!Array.isArray(value) || value.length === 0 || !value.every((v) => typeof v === "string" && v.length > 0)) {
+    throw new ClientMetadataError(`${field} must be a non-empty array of non-empty strings`);
+  }
+  if (!value.includes(required)) throw new ClientMetadataError(`${field} must include ${required}`);
+}
+
 /** Validate a parsed metadata document against the URL it was served from. */
 export function parseClientMetadataDocument(clientId: string, doc: unknown): ClientMetadata {
   if (!doc || typeof doc !== "object" || Array.isArray(doc)) {
@@ -89,18 +102,12 @@ export function parseClientMetadataDocument(clientId: string, doc: unknown): Cli
   if (method !== undefined && method !== "none") {
     throw new ClientMetadataError("only token_endpoint_auth_method \"none\" is supported");
   }
-  const grantTypes = body.grant_types;
-  if (grantTypes !== undefined) {
-    if (!Array.isArray(grantTypes) || !grantTypes.every((g) => g === "authorization_code" || g === "refresh_token")) {
-      throw new ClientMetadataError("unsupported grant_types");
-    }
-  }
-  const responseTypes = body.response_types;
-  if (responseTypes !== undefined) {
-    if (!Array.isArray(responseTypes) || !responseTypes.every((t) => t === "code")) {
-      throw new ClientMetadataError("unsupported response_types");
-    }
-  }
+  // Real documents list grants this server never issues (Claude: jwt-bearer,
+  // VS Code: device_code). As with DCR (RFC 7591 section 2) we ignore what we
+  // don't support; the token endpoint only ever runs code + refresh anyway.
+  // The client must still be able to use the authorization code flow.
+  assertTypeList(body.grant_types, "grant_types", "authorization_code");
+  assertTypeList(body.response_types, "response_types", "code");
   const redirectUris = body.redirect_uris;
   if (!Array.isArray(redirectUris) || redirectUris.length === 0 || redirectUris.length > MAX_REDIRECT_URIS) {
     throw new ClientMetadataError(`redirect_uris must list 1 to ${MAX_REDIRECT_URIS} URIs`);

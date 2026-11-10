@@ -2,9 +2,9 @@ name: CI
 
 on:
   push:
-    branches: [main, develop]
+    branches: [main]
   pull_request:
-    branches: [main, develop]
+    branches: [main]
   # Called by release-image.yml so the exact tagged commit is linted, typechecked,
   # built and tested before any image is published.
   workflow_call:
@@ -399,6 +399,11 @@ jobs:
 
       - name: Test
         run: pnpm test
+
+      # Release notes come from the changelogs; this fails when the released
+      # app or CLI version has no section.
+      - name: Test repository scripts and changelogs
+        run: node --test tooling/scripts/*.test.mjs
 
       - name: Upload coverage
         if: always()

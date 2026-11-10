@@ -205,10 +205,9 @@ test("a stable manifest published under the lock blocks older queued releases", 
 });
 
 test("cloud documentation links and provider instructions resolve", async () => {
-  const [guide, readme, selfHosting, source] = await Promise.all([
-    readFile(path.join(repositoryRoot, "docs/cloud-deployments.md"), "utf8"),
+  const [guide, readme, source] = await Promise.all([
+    readFile(path.join(repositoryRoot, "apps/docs/deployment/cloud.mdx"), "utf8"),
     readFile(path.join(repositoryRoot, "README.md"), "utf8"),
-    readFile(path.join(repositoryRoot, "docs/self-hosting.md"), "utf8"),
     readFile(path.join(packageRoot, "src/index.ts"), "utf8"),
   ]);
 
@@ -222,8 +221,7 @@ test("cloud documentation links and provider instructions resolve", async () => 
   assert.doesNotMatch(readme, /Deploy to Vercel/);
   assert.match(readme, /https:\/\/cloud\.digitalocean\.com\/apps\/new\?repo=/);
   assert.match(readme, /https:\/\/render\.com\/deploy\?repo=/);
-  assert.match(guide, /\[\`fly\.toml\`\]\(\.\.\/fly\.toml\)/);
-  assert.match(selfHosting, /cloud-deployments\.md/);
+  assert.match(guide, /fly\.toml/);
   assert.match(source, /railwayApi/);
   assert.match(source, /serviceCreate/);
 
@@ -233,7 +231,7 @@ test("cloud documentation links and provider instructions resolve", async () => 
     "render.yaml",
     "fly.toml",
     "railway.toml",
-    "docs/cloud-deployments.md",
+    "apps/docs/deployment/cloud.mdx",
   ])
     await access(path.join(repositoryRoot, relativePath));
 });

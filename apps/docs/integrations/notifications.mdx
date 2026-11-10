@@ -131,6 +131,25 @@ dead-letters permanent failures for operator review.
   back to Harly.
 </Warning>
 
+## Slack delivery failures
+
+Check **Settings → Integrations → Slack → Recent deliveries** for the failure
+code, and `harly_slack_deliveries_total` plus recent cron runs in Prometheus.
+
+| Code | Action |
+| --- | --- |
+| `ratelimited` | Wait for the recorded retry; check channel volume and Slack's `Retry-After`. |
+| `not_in_channel` | Invite the Harly bot to the channel, select it again, and send a test. |
+| `missing_scope` | Update the Slack app scopes, then disconnect and reconnect so Slack issues a token with the new grant. |
+| `invalid_auth` / `token_revoked` | Reconnect the workspace. Harly disables the installation after a confirmed authentication failure. |
+| `dead_letter` | Fix the channel or installation problem first, then use **Replay**. Replay creates a new delivery and keeps the original attempt history. |
+
+Replay is always an explicit operator action, and a delivery can appear more
+than once because delivery is at-least-once. Never paste resumes, contact
+details, candidate notes, tokens, or Client Secrets into an incident ticket or
+channel. Before enabling Slack for new workspaces, apply database migrations and
+confirm `CRON_SECRET` and the webhooks-dispatch scheduler job are healthy.
+
 ## Troubleshooting
 
 | Symptom | Likely cause | Fix |

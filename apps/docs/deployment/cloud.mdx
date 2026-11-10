@@ -13,8 +13,8 @@ serverless functions cannot provide the scheduler lifecycle Harly requires.
 | --- | --- | --- | --- | --- |
 | Render | Blueprint-based setup | Managed PostgreSQL | S3-compatible bucket | Deploy from `render.yaml` |
 | DigitalOcean | App Platform and managed infrastructure | Managed PostgreSQL | S3-compatible bucket | Deploy from `.do/app.yaml` |
-| Railway | Config-as-code for one service; CLI for the full stack | Railway PostgreSQL | S3-compatible bucket | `railway.toml` or `npx @harly/cli` |
-| Fly.io | Teams comfortable with Fly processes | Managed PostgreSQL | S3-compatible bucket | `npx @harly/cli`, then `fly deploy` |
+| Railway | Config-as-code for one service; CLI for the full stack | Railway PostgreSQL | S3-compatible bucket | `railway.toml` or `harly` |
+| Fly.io | Teams comfortable with Fly processes | Managed PostgreSQL | S3-compatible bucket | `harly`, then `fly deploy` |
 
 <Warning>
   App Platform filesystems are ephemeral. Use S3, R2, or another S3-compatible
@@ -59,7 +59,7 @@ service-scoped; it does not create the database, scheduler, or migration
 service. Use the CLI for a complete project:
 
 ```bash
-npx @harly/cli deploy railway --non-interactive
+harly deploy railway --non-interactive
 ```
 
 Railway Templates are the native multi-service equivalent, but publishing one
@@ -72,7 +72,7 @@ API path is the reproducible full-stack path.
 Run the CLI from a secure workstation:
 
 ```bash
-npx @harly/cli
+harly
 ```
 
 For Fly.io, the CLI prepares `fly.toml`; run `fly deploy` after attaching a
@@ -81,6 +81,23 @@ scheduler, and migration roles through the API. Secrets are never written to a
 local file unless `--save-env` is explicitly supplied; that opt-in file is
 written with mode `0600` and a warning. Complete `/setup` only after readiness
 is green.
+
+## Setup secret handling
+
+`HARLY_SETUP_SECRET` claims the first owner at `/setup` (matching
+`HARLY_INITIAL_ADMIN_EMAIL`), so record it before you deploy:
+
+- **Render** only lets an account Admin view saved secrets later, and cannot
+  share one generated secret across services. Generate each value with
+  `openssl rand -base64 32` and paste the same value into both services.
+  Keep the image tag pinned so a redeploy does not silently change release.
+- **DigitalOcean** SECRET variables are write-only. The only recovery is to set
+  a new value and redeploy. A manual, placeholder-based copy of the spec lives in
+  `deploy/digitalocean/app.template.yaml`.
+- **Railway** and **Fly.io**: the CLI generates the secret and returns the
+  setup URL (Railway) or writes it to `harly-fly/.env` (Fly.io). Railway secrets
+  are saved locally only with `--save-env` (mode `0600`; keep it out of Git).
+  Fly.io terminates HTTPS, so do not add Caddy.
 
 ## Production checklist
 

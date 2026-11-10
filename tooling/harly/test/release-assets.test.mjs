@@ -49,8 +49,6 @@ test("self-host deployment assets retain required lifecycle settings", () => {
 test("local Markdown links in self-host documentation resolve", () => {
   const documents = [
     "README.md",
-    "docs/self-hosting.md",
-    "docs/cloud-deployments.md",
     "docs/release-readiness.md",
     "tooling/harly/README.md",
     "tooling/harly/README.md",

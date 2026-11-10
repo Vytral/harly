@@ -39,18 +39,22 @@ work:
 
 | Job | Interval |
 | --- | --- |
-| `domain-events` | 15 seconds |
+| `domain-events` | 15 seconds (replays committed realtime events after a failed fast publish) |
+| `automations` | 10 seconds (drains workflow runs, retries, waits, and lease recovery) |
 | `email-outbox` | 1 minute |
 | `webhooks-dispatch` | 1 minute |
 | `esign-reconciliation` | 1 minute |
+| `esign-reminders` | 1 hour (at most one reminder per recipient per day) |
 | `interview-sync` | 1 minute |
 | `evaluation-jobs` | 1 minute |
 | `document-expiry` | 1 minute |
 | `retention-enforcement` | 1 minute |
+| `candidate-deletions` | 1 minute |
 | `candidate-reconciliation` | daily |
 | `mail-reconciliation` | 1 minute |
 | `scheduled-reports` | 1 minute |
 | `mailbox-sync` | 2 minutes |
+| `demo-reset` | 2 hours, only when `DEMO_MODE=true` |
 
 Queue rows left `processing` by a crash become eligible again after five minutes.
 Mail deliveries left `sending` beyond the reconciliation lease become
@@ -101,6 +105,39 @@ hours. Metrics count each run once, and older `success` rows are reported as
 means another run still holds the lock, so it does not refresh a job's
 last-success time in the doctor.
 
+### Candidate deletion jobs
+
+Deleting a candidate creates a durable, workspace-scoped purge job that the
+scheduler retries until it completes, is blocked, or is dead-lettered.
+
+```text
+pending -> processing -> completed
+                    \-> failed -> processing
+                    \-> blocked
+                    \-> dead_letter
+```
+
+- A stale `processing` lock is reclaimable after ten minutes. Failed jobs back
+  off exponentially and are dead-lettered after eight attempts.
+- The purge fails closed: if a storage object, interview provider event, or
+  e-signature submission cannot be removed, the candidate stays in the trash and
+  the job is retried. Already-removed remote resources count as success.
+- An active document legal hold blocks the purge before any database deletion.
+  A blocked DSAR request records the reason, the responsible operator, and a
+  30-day review deadline. Once the hold is released, retry the same request; no
+  duplicate job is created.
+- Blocked, failed, and dead-letter jobs can be replayed from the application
+  after the underlying hold, storage, database, or provider problem is fixed.
+  Replay resets the retry budget and stays auditable.
+- `candidate-reconciliation` is report-only by default: it lists soft-deleted
+  candidates with remaining relations and unreferenced storage keys. A request
+  with `{ "dryRun": false }` only queues purge jobs; the deletion worker does
+  the destructive work. Never delete rows or objects by hand.
+
+Prometheus exposes job counts by status (pending, processing, failed, blocked,
+dead letter, stale) as `harly_candidate_deletion_jobs`, and the bundled alert
+rules cover failures, legal holds, dead letters, and stale workers.
+
 ### Email warnings in doctor output
 
 The doctor's `email` check reports counts of `failed`, overdue `pending`, and
@@ -120,7 +157,7 @@ Change this only when the instance is intentionally suspended for longer than fi
 After a deployment, a restart, or an alert, run these from the installation directory:
 
 ```bash
-npx @harly/cli doctor
+harly doctor
 docker compose ps
 docker compose logs --tail=100 scheduler
 docker compose exec -T scheduler node /app/runtime.mjs doctor --strict
@@ -142,13 +179,13 @@ The image exposes `serve`, `migrate`, `scheduler`, and `doctor`. Runtime migrati
 
 ```bash
 # Works everywhere: a private local rollback point (mode 0600).
-npx @harly/cli backup
-npx @harly/cli update
-npx @harly/cli restore backups/harly-2026-...tar.gz --force
+harly backup
+harly update
+harly restore backups/harly-2026-...tar.gz --force
 
 # Optional advanced encryption for a portable backup.
-AGE_RECIPIENT=age1... npx @harly/cli backup --encrypt
-AGE_IDENTITY=/secure/key.txt npx @harly/cli restore backup.tar.gz.age --force
+AGE_RECIPIENT=age1... harly backup --encrypt
+AGE_IDENTITY=/secure/key.txt harly restore backup.tar.gz.age --force
 ```
 
 Backup stops app and scheduler, keeps PostgreSQL running, creates a `pg_dump -Fc`, includes local uploads and config, and checksums every included file before it can succeed. By default it creates a local rollback archive readable only by the deployment owner — this is convenient for a failed update, not a replacement for off-host disaster recovery.
@@ -156,7 +193,7 @@ Backup stops app and scheduler, keeps PostgreSQL running, creates a `pg_dump -Fc
 Restore verifies every archived file checksum, creates a safety backup before changing data, stops the app, scheduler, and migration services to avoid a database race, restores PostgreSQL and local uploads, then requires readiness to succeed. A failed restore keeps the safety archive under `backups/`.
 
 <Note>
-  S3 objects are not embedded in the archive. Use bucket versioning and an off-provider backup policy alongside `npx @harly/cli backup`.
+  S3 objects are not embedded in the archive. Use bucket versioning and an off-provider backup policy alongside `harly backup`.
 </Note>
 
 Upgrades take a backup first, run the single migrator, wait for readiness, and finish with `doctor`. Migrations are forward-only — restore the full backup when a release does not declare schema-compatible image rollback.
@@ -294,7 +331,7 @@ extension is added later the trigram indexes are not created retroactively.
 
 ### Restore fails checksum verification
 
-**Symptom:** `npx @harly/cli restore` exits before touching data.
+**Symptom:** `harly restore` exits before touching data.
 **Cause:** the archive is corrupted or was modified after the backup ran.
 **Solution:** use a different backup archive. The safety backup created before the attempted restore is preserved under `backups/`.
 
