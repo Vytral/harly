@@ -7,6 +7,92 @@ Existing installations upgrade in place. Read the notes for every release you
 skip, and take a [backup](/operations/backups) first. `harly update`
 does this for you.
 
+## Upgrading to 0.5.0
+
+0.5.0 translates the web app and interview emails into Spanish, French,
+German, Brazilian Portuguese and Dutch. There is nothing to configure.
+
+### Migrations
+
+The container applies one additive migration (`0167`) on start. It adds a
+nullable email language column to candidates and users. Existing records keep
+no stored language.
+
+### Behavior changes
+
+1. **Language follows the browser.** Harly picks the interface language from
+   the browser. Each person can change it in **Settings → Account** or on the
+   sign-in and onboarding screens.
+2. **Interview emails** go out in the candidate's language. Notifications,
+   default pipeline stage names and the built-in email, job and document
+   templates show in the viewer's language.
+
+## Upgrading to 0.4.0
+
+0.4.0 makes a fresh installation usable without a mail or AI provider, adds
+candidate portal sign-in methods, and splits rejecting, exporting and offer
+decisions into their own permissions. The CLI is `@harly/cli` 0.7.0.
+
+### Migrations
+
+The container applies two migrations (`0165`, `0166`) on start. Neither drops
+or renames anything.
+
+| Migration | What it does | Notes |
+| --- | --- | --- |
+| `0165` | Candidate portal sign-in: password credentials, one-time codes, passkeys, challenges, and the workspace's enabled sign-in methods | Existing workspaces keep magic link and OAuth on and passkeys off. Password and access code are turned on only where neither outgoing email nor any portal OAuth client is configured. |
+| `0166` | Adds the new permissions to stored roles: `candidates:reject` to roles with `candidates:edit`, `offers:decide` to roles with `offers:manage` or `offers:approve`, and `candidates:export` to roles with `candidates:view` | Touches custom roles and saved overrides of built-in roles. No role loses a capability. |
+
+### Behavior changes
+
+1. **Separate permissions for rejecting, exporting and offer answers.**
+   Rejecting, deleting and exporting candidates are now separate permissions,
+   and recording a candidate's answer to an offer is separate from approving
+   it. Because `0166` grants `candidates:export` to every role that can view
+   candidates, remove **Export candidate data** from roles that should not
+   download candidate data. See
+   [existing custom roles](/security/access-control#existing-custom-roles).
+2. **Hiring managers no longer export** the candidate directory by default.
+3. **New built-in roles**: Viewer, Interviewer, Coordinator and Sourcer. See
+   [built-in roles](/security/access-control#built-in-roles).
+4. **Candidate portal sign-in methods** are chosen in **Settings → Candidate
+   portal**. New installations start with password and access code, which need
+   no external service. See [candidate portal](/product/candidate-portal).
+5. **Offers without an email provider** are marked as sent, and the recruiter
+   shares the portal link with the candidate.
+6. **API key scopes.** `jobs:publish`, `jobs:delete`, `applications:reject`,
+   `applications:hire` and `offers:decide` are new. The older `*:write` scopes
+   still cover them, so existing keys keep working. See
+   [API authorization](/developers/api-authorization).
+7. **Harly AI stays hidden** until an AI provider is configured and usable.
+
+### New environment variables
+
+All are optional; see [configuration](/deployment/configuration).
+
+| Variable | What it does |
+| --- | --- |
+| `HARLY_ORG_NAME` | Organization name that `harly init` writes to `.env` and the onboarding wizard uses as the default. |
+| `HARLY_MODELS_DEV` | Set to `0` so the model picker never contacts models.dev and uses its bundled list. |
+| `HARLY_ALLOW_LOCAL_LLM` | Set to `1` to allow a custom AI endpoint on a local or LAN host. |
+
+Installations created by an older `harly init` keep their own `compose.yaml`,
+and `harly update` does not rewrite it. Add the variables you use to the shared
+`environment` block of the app service:
+
+```yaml
+HARLY_ORG_NAME: ${HARLY_ORG_NAME:-}
+HARLY_MODELS_DEV: ${HARLY_MODELS_DEV:-}
+HARLY_ALLOW_LOCAL_LLM: ${HARLY_ALLOW_LOCAL_LLM:-}
+```
+
+### After upgrading
+
+1. Review roles in **Settings → Members & roles** and remove **Export
+   candidate data** where it does not belong.
+2. Check the enabled sign-in methods in **Settings → Candidate portal**.
+3. Run `harly doctor` to confirm the scheduler and migrations are healthy.
+
 ## Upgrading to 0.3.0
 
 0.3.0 redesigns the product and adds an MCP server for AI agents, an in-app
