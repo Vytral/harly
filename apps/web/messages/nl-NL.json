@@ -12,7 +12,7 @@
     "emailLabel": "E-mailadres",
     "sending": "Verzenden…",
     "submit": "Herstellink versturen",
-    "emailPlaceholder": "you@company.com"
+    "emailPlaceholder": "jij@jouwbedrijf.nl"
   },
   "language": {
     "label": "Taal",
@@ -116,7 +116,7 @@
       "portalHint": "Portaal waar kandidaten sollicitaties bekijken en hun profiel bijwerken.",
       "email": "E-mail",
       "emailHint": "E-mailbezorging en routering van antwoorden.",
-      "signature": "Harly Signature",
+      "signature": "Harly Handtekening",
       "signatureHint": "Ingebouwde ondertekening, links op afstand, OTP-beveiliging en bewijsstukken.",
       "ai": "AI",
       "aiHint": "Modellen voor analyse en concepten, AI-functies en gebruik.",
@@ -143,7 +143,7 @@
       "hiring": "Werving",
       "jobs": "Vacatures",
       "pipeline": "Pijplijn",
-      "inbox": "Inbox",
+      "inbox": "Postvak In",
       "people": "Personen",
       "candidates": "Kandidaten",
       "talentPool": "Talentenpool",
@@ -212,7 +212,7 @@
       "general": "Algemeen",
       "goTo": "Ga naar",
       "candidatePage": "Kandidaatpagina",
-      "inbox": "Inbox",
+      "inbox": "Postvak In",
       "then": "dan",
       "reserved": "Gereserveerd: {chords}",
       "items": {
@@ -490,7 +490,7 @@
       "done": "Klaar",
       "failed": "mislukt",
       "unknown": "Onbekend",
-      "pipeline": "Pipeline",
+      "pipeline": "Pijplijn",
       "applications": "Sollicitaties",
       "interviews": "Gesprekken",
       "hires": "Aannames",
@@ -731,7 +731,7 @@
         "tasks": "Taken",
         "calendars": "Interviewagenda",
         "reports": "Rapportages",
-        "inbox": "Inbox",
+        "inbox": "Postvak In",
         "jobs": "Vacatures",
         "candidates": "Kandidaten",
         "workspace": "Huidige werkruimte"
@@ -803,7 +803,7 @@
     "subtitle": "Welkom terug. Vul je inloggegevens in om door te gaan.",
     "organizationListFailed": "Organisaties konden niet worden geladen.",
     "organizationActivateFailed": "Organisatie kon niet worden geactiveerd.",
-    "emailPlaceholder": "you@company.com"
+    "emailPlaceholder": "jij@jouwbedrijf.nl"
   },
   "accessReset": {
     "back": "Terug naar inloggen",
@@ -846,7 +846,7 @@
     "creating": "Account aanmaken…",
     "continue": "Doorgaan",
     "or": "of",
-    "emailPlaceholder": "you@company.com",
+    "emailPlaceholder": "jij@jouwbedrijf.nl",
     "namePlaceholder": "Ada Lovelace"
   },
   "portal": {
@@ -1370,7 +1370,7 @@
     },
     "table": {
       "search": "Vacatures zoeken…",
-      "status": "Status",
+      "status": "Status:",
       "department": "Afdeling",
       "type": "Type",
       "workplace": "Werkplek",
@@ -1834,11 +1834,11 @@
     "saveError": "De taalvoorkeur voor e-mails kon niet worden opgeslagen.",
     "demoLocked": "In de demo kun je de taal van e-mails niet wijzigen.",
     "locales": {
-      "en": "English",
-      "es": "Español",
-      "pt-BR": "Português (Brasil)",
-      "de": "Deutsch",
-      "fr": "Français",
+      "en": "Engels",
+      "es": "Spaans",
+      "pt-BR": "Portugees (Brazilië)",
+      "de": "Duits",
+      "fr": "Frans",
       "nl-NL": "Nederlands"
     }
   },
@@ -1965,7 +1965,7 @@
       "department": "Afdeling",
       "job": "Vacature",
       "stage": "Fase",
-      "status": "Status",
+      "status": "Status:",
       "active": "Actief",
       "hired": "Aangenomen",
       "rejected": "Afgewezen",
@@ -2045,7 +2045,7 @@
       "emptyDescription": "Fasewijzigingen, opmerkingen, berichten en AI-gebeurtenissen verschijnen hier."
     },
     "detailsPanel": {
-      "pipeline": "Pipeline",
+      "pipeline": "Pijplijn",
       "answerCount": "{count, plural, one {# antwoord} other {# antwoorden}}",
       "yearsExperience": "{count}+ jaar ervaring",
       "profile": "Profiel",
@@ -4607,7 +4607,7 @@
         "noneImported": "Er zijn geen kandidaten geïmporteerd.",
         "importedSummary": "<strong>{count}</strong> {count, plural, one {kandidaat} other {kandidaten}} geïmporteerd.",
         "alreadyInPipeline": "{count} al in de pipeline van deze vacature.",
-        "skippedSummary": "{count} {count, plural, one {onvolledig {source}-profiel overgeslagen} other {onvolledige {source}-profielen overgeslagen}}.",
+        "skippedSummary": "{count} incomplete {source} {count, plural, one {profile was} other {profiles were}} skipped.",
         "skippedRows": "{count, plural, one {# rij} other {# rijen}} overgeslagen:",
         "rowError": "Rij {row}: {reason}",
         "rowErrorWithEmail": "Rij {row} ({email}): {reason}",
