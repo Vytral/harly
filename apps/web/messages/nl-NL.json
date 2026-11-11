@@ -1370,7 +1370,7 @@
     },
     "table": {
       "search": "Vacatures zoeken…",
-      "status": "Status",
+      "status": "Status:",
       "department": "Afdeling",
       "type": "Type",
       "workplace": "Werkplek",
@@ -1965,7 +1965,7 @@
       "department": "Afdeling",
       "job": "Vacature",
       "stage": "Fase",
-      "status": "Status",
+      "status": "Status:",
       "active": "Actief",
       "hired": "Aangenomen",
       "rejected": "Afgewezen",
