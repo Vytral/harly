@@ -439,7 +439,7 @@ async function usage(topic?: string): Promise<boolean> {
   return true;
 }
 
-function unwrapPrompt<T>(value: T | symbol): T {
+function unwrapPrompt<T>(value: T | typeof p.CANCEL_SYMBOL): T {
   if (!p.isCancel(value)) return value;
   p.cancel("Installation cancelled.");
   throw new CliError("Operation cancelled.", 2, "CANCELLED");

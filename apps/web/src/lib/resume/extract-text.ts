@@ -159,7 +159,7 @@ async function extractPdf(buffer: Buffer): Promise<string> {
     const { text } = await extractText(pdf, { mergePages: false });
     return Array.isArray(text) ? text.join("\n") : text;
   } finally {
-    void pdf.destroy?.();
+    void pdf.loadingTask.destroy();
   }
 }
 
