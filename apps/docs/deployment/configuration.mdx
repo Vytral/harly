@@ -135,14 +135,16 @@ e-sign reconciliation, scheduled reports, and governed evaluation jobs.
 
 ## Resource profiles
 
-The CLI selects a resource profile based on the available free memory at
-install time. You can override any value in `.env`.
+The CLI selects a resource profile based on the free memory at install time,
+after reserving 1.5 GB for PostgreSQL, the scheduler, Caddy, and headroom.
+The free RAM in the table is the amount before that reservation. You can
+override any value in `.env`.
 
 | Profile | When selected | App RAM | PostgreSQL | Scheduler | Caddy |
 | --- | --- | --- | --- | --- | --- |
-| `compact` | Free RAM < 1.5 GB | 1024 MB | 384 MB | 192 MB | 128 MB |
-| `standard` | Free RAM 1.5–3.5 GB | 1536 MB | 768 MB | 256 MB | 256 MB |
-| `performance` | Free RAM > 3.5 GB | 3072 MB | 1536 MB | 512 MB | 256 MB |
+| `compact` | Free RAM < 3 GB | 1024 MB | 384 MB | 192 MB | 128 MB |
+| `standard` | Free RAM 3–5 GB | 1536 MB | 768 MB | 256 MB | 256 MB |
+| `performance` | Free RAM 5 GB or more | 3072 MB | 1536 MB | 512 MB | 256 MB |
 
 Override individual limits in `.env`:
 
