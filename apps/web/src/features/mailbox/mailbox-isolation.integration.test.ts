@@ -6,6 +6,11 @@ import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 const context = vi.hoisted(() => ({
   workspaceId: "mailbox-it-integration-workspace",
   userId: "mailbox-it-integration-user",
+  scope: { jobAccess: "all", departments: [] as string[], regions: [] as string[] } as {
+    jobAccess: "all" | "assigned";
+    departments: string[];
+    regions: string[];
+  },
 }));
 
 vi.mock("server-only", () => ({}));
@@ -14,7 +19,7 @@ vi.mock("@/features/workspaces/permissions-server", () => ({
   requirePermission: vi.fn().mockResolvedValue(undefined),
   getRolePolicy: vi.fn(async () => ({
     permissions: [],
-    scope: { jobAccess: "all", departments: [], regions: [] },
+    scope: context.scope,
   })),
 }));
 vi.mock("@/features/workspaces/context", () => ({
@@ -41,7 +46,9 @@ import {
 } from "@harly/db";
 import {
   linkMailboxThreadToApplicationAction,
+  markMailboxThreadReadAction,
   replyMailboxThreadAction,
+  updateMailboxThreadAction,
 } from "./actions";
 import { getInboxData } from "./data";
 import { getWorkspaceMailboxAttachment } from "@/lib/mailbox/attachment-access";
@@ -419,5 +426,37 @@ integration("Inbox tenant and active-job isolation", () => {
     });
     expect(resolved.id).not.toBe(foreignThread.id);
     await db.delete(organization).where(eq(organization.id, foreignWorkspaceId));
+  });
+
+  it("applies the caller's role scope to thread writes", async () => {
+    const original = { ...context.scope };
+    // The thread's job has no hiring-team assignment for this user, so an
+    // `assigned` role must not see it, and therefore must not write to it.
+    context.scope.jobAccess = "assigned";
+    try {
+      await expect(
+        updateMailboxThreadAction({ threadId: activeThreadId, status: "archived" }),
+      ).resolves.toMatchObject({ ok: false });
+      await expect(
+        markMailboxThreadReadAction({ threadId: activeThreadId }),
+      ).resolves.toMatchObject({ ok: false });
+      await expect(
+        replyMailboxThreadAction({
+          threadId: activeThreadId,
+          body: "Out-of-scope reply",
+          idempotencyKey: `mailbox-scope-${randomUUID()}`,
+        }),
+      ).resolves.toMatchObject({ ok: false });
+      const [thread] = await db
+        .select({ status: mailThreads.status })
+        .from(mailThreads)
+        .where(eq(mailThreads.id, activeThreadId));
+      expect(thread?.status).toBe("open");
+    } finally {
+      context.scope.jobAccess = original.jobAccess;
+    }
+    await expect(
+      updateMailboxThreadAction({ threadId: activeThreadId, status: "open" }),
+    ).resolves.toMatchObject({ ok: true });
   });
 });
