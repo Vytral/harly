@@ -10875,6 +10875,10 @@
         "title": "Possible duplicate candidate",
         "body": "Harly AI found a possible match with {names}."
       },
+      "scheduledReportFailing": {
+        "title": "Scheduled report keeps failing: {name}",
+        "body": "The last {failures} runs failed. Harly keeps retrying; check the schedule in Reports."
+      },
       "jobApprovalRequested": {
         "title": "Approval requested: {jobTitle}",
         "body": "Review this job before recruiting starts."
