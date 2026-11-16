@@ -63,6 +63,7 @@ export const POST = withApi(
         jobId: values.jobId,
         candidateId: values.candidateId,
         source: values.source,
+        requirePublicJob: auth.type === "publishable",
       });
       after(async () => {
         await Promise.allSettled([
