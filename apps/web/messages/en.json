@@ -2627,6 +2627,16 @@
         "poweredBy": "Powered by <b>Harly</b>"
       }
     },
+    "portalMagic": {
+      "page": {
+        "metadataTitle": "Confirm sign-in",
+        "title": "Confirm sign-in",
+        "description": "Select the button to sign in to the candidate portal. This link works once.",
+        "missingToken": "This sign-in link is incomplete. Request a new one.",
+        "confirm": "Sign in",
+        "backToLogin": "Back to sign in"
+      }
+    },
     "portalNotifications": {
       "page": {
         "title": "Updates",

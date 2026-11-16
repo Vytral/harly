@@ -17,6 +17,28 @@ export type JobLike = {
   salaryPeriod?: string | null;
 };
 
+/**
+ * Project a job row onto the public fields the client chrome renders. The
+ * chrome is a client component, so anything passed to it is serialized into the
+ * page payload; a whitelist keeps internal columns (workspace id, creator,
+ * evaluation mode, application and board config) out of it.
+ */
+export function toPublicJobLike(job: JobLike): JobLike {
+  return {
+    slug: job.slug,
+    title: job.title,
+    department: job.department,
+    location: job.location,
+    employmentType: job.employmentType,
+    workplaceType: job.workplaceType,
+    experienceLevel: job.experienceLevel ?? null,
+    salaryMin: job.salaryMin ?? null,
+    salaryMax: job.salaryMax ?? null,
+    currency: job.currency ?? null,
+    salaryPeriod: job.salaryPeriod ?? null,
+  };
+}
+
 /** Human compensation string, or null when no salary is set. `t` is `labels.careerPage.jobMeta`. */
 export function formatCompensation(job: JobLike, locale: string, t: Translate): string | null {
   if (job.salaryMin == null && job.salaryMax == null) return null;

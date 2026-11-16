@@ -48,6 +48,15 @@ describe("GET /embed/widget.js", () => {
     expect(script).toContain('consentInput.type = "checkbox"');
   });
 
+  it("ships the hidden honeypot field and sends it with the payload", async () => {
+    const response = await GET(new Request("https://harly.example/embed/widget.js"));
+    const script = await response.text();
+
+    expect(script).toContain('hp.name = "_hp"');
+    expect(script).toContain("payload._hp = hp.value");
+    expect(() => new Function(script)).not.toThrow();
+  });
+
   it("reads the documented data attributes and has no undefined free variables in boot", async () => {
     const response = await GET(new Request("https://harly.example/embed/widget.js"));
     const script = await response.text();

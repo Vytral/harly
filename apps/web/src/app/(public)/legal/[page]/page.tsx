@@ -15,7 +15,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const data = slug ? await getLegalPageData(slug, page) : null;
   return data
     ? {
-        title: `${data.pageTitle} , ${data.workspaceName}`,
+        title: `${data.pageTitle} - ${data.workspaceName}`,
         robots: { index: false },
       }
     : {};

@@ -13,6 +13,7 @@ import {
   CAPTCHA_RESPONSE_FIELDS,
   verifyCaptchaToken,
 } from "@/lib/captcha";
+import { HONEYPOT_FIELD, isHoneypotTripped } from "@/lib/honeypot";
 import { clientIp, enforceRateLimit } from "@/server/api/ratelimit";
 import {
   createApplicationFormSchema,
@@ -280,6 +281,10 @@ export async function submitApplicationAction(
       status: "error",
       message: t("tooManyAttempts"),
     };
+  }
+
+  if (isHoneypotTripped(formData.get(HONEYPOT_FIELD))) {
+    return { status: "error", message: t("botVerificationFailed") };
   }
 
   const captchaValid = await verifyCaptchaToken(
