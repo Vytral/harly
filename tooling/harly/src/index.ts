@@ -43,6 +43,7 @@ import {
   type HarlyRelease,
 } from "./release.js";
 import composeSource from "../../../compose.yaml";
+import { AUTOMATIC_BACKUP_KEEP, AUTOMATIC_BACKUP_PREFIX, pruneBackups } from "./backups.js";
 import { pullWithProgress } from "./pull.js";
 import { updaterCommand, updaterHelp } from "./updater.js";
 import { installGlobalCli, offerGlobalCliInstallation } from "./global-cli.js";
@@ -407,7 +408,7 @@ const commandHelp: HelpEntry[] = [
   ["harly status [directory] [--json]", "Health, version, disk, backup and certificate at a glance"],
   ["harly doctor [directory] [--json] [--fix]", "Check services and public readiness; --fix offers repairs"],
   ["harly setup-secret [directory]", "Print HARLY_SETUP_SECRET from .env"],
-  ["harly backup [directory] [--encrypt]", "Write a private rollback archive"],
+  ["harly backup [directory] [--encrypt]", "Write a private rollback archive (`backup prune --keep N` removes old ones)"],
   ["harly restore <archive> [directory] --force", "Restore from an archive"],
   ["harly update [directory] [--to version]", "Update the install here to the current stable release"],
   ...updaterHelp,
@@ -2614,6 +2615,9 @@ async function backup(
   // An update keeps app and scheduler stopped after the backup, so nothing is
   // written that a rollback to this archive would silently discard.
   restartWriters = true,
+  // Rollback points written by update and restore are named differently and
+  // capped, so they cannot fill the disk over years of updates.
+  automatic = false,
 ): Promise<string> {
   const directory = path.resolve(explicitDirectory ?? positionals[0] ?? ".");
   const config = await readConfig(directory);
@@ -2676,7 +2680,7 @@ async function backup(
     );
     const archive = path.join(
       outputDirectory,
-      `harly-${new Date().toISOString().replace(/[:.]/g, "-")}.tar.gz`,
+      `${automatic ? AUTOMATIC_BACKUP_PREFIX : "harly-"}${new Date().toISOString().replace(/[:.]/g, "-")}.tar.gz`,
     );
     run("tar", ["-czf", archive, "-C", temp, "."]);
     await chmod(archive, 0o600);
@@ -2685,6 +2689,7 @@ async function backup(
     // an off-host disaster-recovery backup.
     if (!encrypt) {
       written = true;
+      if (automatic) await pruneAutomaticBackups(directory);
       if (print) process.stdout.write(`${archive}\n`);
       return archive;
     }
@@ -2693,6 +2698,7 @@ async function backup(
     await chmod(encrypted, 0o600);
     await rm(archive, { force: true });
     written = true;
+    if (automatic) await pruneAutomaticBackups(directory);
     if (print) process.stdout.write(`${encrypted}\n`);
     return encrypted;
   } finally {
@@ -2703,6 +2709,87 @@ async function backup(
       });
     await rm(temp, { recursive: true, force: true });
   }
+}
+
+/** Trims old automatic rollback archives. Never fails the backup that called it. */
+async function pruneAutomaticBackups(directory: string): Promise<void> {
+  try {
+    await pruneBackups(directory, { keep: AUTOMATIC_BACKUP_KEEP, onlyAutomatic: true });
+  } catch {
+    // Keeping an extra archive is harmless; failing an update over it is not.
+  }
+}
+
+async function backupPrune() {
+  const keepRaw = option(parsed, "--keep");
+  if (keepRaw === undefined)
+    throw usageError("backup prune requires --keep N (the number of newest archives to keep).");
+  const keep = Number(keepRaw);
+  if (!/^\d+$/.test(keepRaw) || keep < 1)
+    throw usageError("--keep must be a whole number of at least 1.");
+  if (positionals.length > 2)
+    throw usageError("backup prune accepts one directory argument.");
+  const directory = path.resolve(positionals[1] ?? ".");
+  await readConfig(directory);
+  const dryRun = flags.has("--dry-run");
+  const { kept, removed } = await pruneBackups(directory, { keep, dryRun });
+  const freed = removed.reduce((sum, entry) => sum + entry.bytes, 0);
+  if (json) {
+    writeResult(
+      resultOk("backup", dryRun ? "dry-run" : "pruned", {
+        keep,
+        kept: kept.map((entry) => entry.name),
+        removed: removed.map((entry) => entry.name),
+        freedBytes: freed,
+        sideEffects: !dryRun && removed.length > 0,
+      }),
+    );
+    return;
+  }
+  for (const entry of removed) humanOut(`${dryRun ? "Would remove" : "Removed"} ${entry.name}\n`);
+  humanOut(
+    removed.length === 0
+      ? `Nothing to remove: ${kept.length} archive${kept.length === 1 ? "" : "s"} found, keeping up to ${keep}.\n`
+      : `${dryRun ? "Would free" : "Freed"} ${humanBytes(freed)} by removing ${removed.length} archive${removed.length === 1 ? "" : "s"}; kept the newest ${kept.length}.\n`,
+  );
+}
+
+/**
+ * Reads and validates manifest.json from an extracted archive. A restore
+ * replaces the live database, so an archive that cannot prove its dump is
+ * intact is rejected before anything is touched.
+ */
+async function readBackupManifest(extracted: string): Promise<{
+  files: Record<string, string>;
+  storage?: "local" | "s3";
+}> {
+  const invalid = (reason: string) =>
+    new CliError(
+      `This is not a usable Harly backup: ${reason} Nothing was changed.`,
+      2,
+      "INVALID_ARGUMENT",
+    );
+  let raw: string;
+  try {
+    raw = await readFile(path.join(extracted, "manifest.json"), "utf8");
+  } catch {
+    throw invalid("manifest.json is missing from the archive.");
+  }
+  let manifest: unknown;
+  try {
+    manifest = JSON.parse(raw);
+  } catch {
+    throw invalid("manifest.json is not valid JSON.");
+  }
+  const files = (manifest as { files?: unknown } | null)?.files;
+  if (!files || typeof files !== "object" || Array.isArray(files))
+    throw invalid("manifest.json does not list the archive files.");
+  if (!Object.hasOwn(files, "database.dump"))
+    throw invalid("manifest.json does not list database.dump.");
+  const entries = Object.entries(files as Record<string, unknown>);
+  if (entries.some(([, checksum]) => typeof checksum !== "string"))
+    throw invalid("manifest.json has an invalid checksum entry.");
+  return manifest as { files: Record<string, string>; storage?: "local" | "s3" };
 }
 
 async function restore() {
@@ -2727,9 +2814,7 @@ async function restore() {
     run("age", ["-d", "-i", identity, "-o", plaintext, archive]);
   }
   run("tar", ["-xzf", plaintext, "-C", temp]);
-  const manifest = JSON.parse(
-    await readFile(path.join(temp, "manifest.json"), "utf8"),
-  ) as { files: Record<string, string>; storage?: "local" | "s3" };
+  const manifest = await readBackupManifest(temp);
   const actual = await checksums(temp);
   for (const [file, checksum] of Object.entries(manifest.files)) {
     if (actual[file] !== checksum)
@@ -2745,7 +2830,7 @@ async function restore() {
   process.stdout.write("Creating a safety backup of the current deployment…\n");
   // Writers stay stopped from the safety backup until the restore finishes, so
   // nothing is accepted that neither snapshot holds.
-  await backup(directory, true, false);
+  await backup(directory, true, false, true);
   process.stdout.write("Safety backup saved. Preparing restore…\n");
   // Stop the one-shot migration service too: otherwise it can race pg_restore
   // and recreate tables while the database is being restored.
@@ -2932,7 +3017,7 @@ async function upgrade(explicitDirectory?: string) {
     const step = p.spinner(spinnerStyle);
     step.start(phase(1, "Writing a rollback point"));
     try {
-      archive = await backup(directory, false, false);
+      archive = await backup(directory, false, false, true);
     } catch (error) {
       step.stop(phase(1, "Rollback point failed"));
       throw error;
@@ -2947,7 +3032,7 @@ async function upgrade(explicitDirectory?: string) {
       )}`,
     );
   } else {
-    archive = await backup(directory, false, false);
+    archive = await backup(directory, false, false, true);
     process.stdout.write(`${archive}\n`);
   }
   // From here app and scheduler stay stopped until phase 4 starts the new
@@ -3944,6 +4029,7 @@ async function main() {
     case "setup-secret":
       return setupSecret();
     case "backup":
+      if (positionals[0] === "prune") return backupPrune();
       return backup();
     case "restore":
       return restore();

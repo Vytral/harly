@@ -97,9 +97,13 @@ export const commandDetails: Record<string, CommandDetail> = {
     note: "Prints HARLY_SETUP_SECRET from .env, needed on first sign-in. Treat it like a password.",
   },
   backup: {
-    flags: [["--encrypt", "Encrypt the archive with age (AGE_RECIPIENT)"]],
-    examples: ["harly backup", "harly backup ./harly --encrypt"],
-    note: "Prints the archive path on stdout, so $(harly backup) works in scripts.",
+    flags: [
+      ["--encrypt", "Encrypt the archive with age (AGE_RECIPIENT)"],
+      ["--keep N", "With `backup prune`: keep the newest N archives, delete the rest"],
+      ["--dry-run", "With `backup prune`: list what would be deleted"],
+    ],
+    examples: ["harly backup", "harly backup ./harly --encrypt", "harly backup prune ./harly --keep 7"],
+    note: "Prints the archive path on stdout, so $(harly backup) works in scripts. Updates and restores keep only their newest 5 automatic rollback archives; `backup prune` also trims archives you wrote yourself.",
   },
   restore: {
     flags: [["--force", "Required: confirms the current data may be replaced"]],
