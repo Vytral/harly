@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from "vitest";
 
-import { detectSuspiciousSession, getTrustedClientIp, isEmailDomainAllowed, isIpAllowed, normalizeSecurityPolicy } from "./policy";
+import { detectSuspiciousSession, getTrustedClientIp, userAgentFamily, isEmailDomainAllowed, isIpAllowed, normalizeSecurityPolicy } from "./policy";
 
 const originalTrustedProxyIps = process.env.TRUSTED_PROXY_IPS;
 
@@ -41,5 +41,37 @@ describe("enterprise security policy", () => {
       },
     });
     expect(getTrustedClientIp(spoofed)).toBe("192.0.2.50");
+  });
+
+  describe("user-agent families", () => {
+    const chromeWin = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36";
+    const chromeWinNewer = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36";
+    const edgeWin = `${chromeWin} Edg/126.0.0.0`;
+    const firefoxMac = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:128.0) Gecko/20100101 Firefox/128.0";
+    const safariIos = "Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Mobile/15E148 Safari/604.1";
+    const chromeAndroid = "Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Mobile Safari/537.36";
+
+    it("derives a real browser and OS family", () => {
+      expect(userAgentFamily(chromeWin)).toBe("chrome/windows");
+      expect(userAgentFamily(edgeWin)).toBe("edge/windows");
+      expect(userAgentFamily(firefoxMac)).toBe("firefox/macos");
+      expect(userAgentFamily(safariIos)).toBe("safari/ios");
+      expect(userAgentFamily(chromeAndroid)).toBe("chrome/android");
+      expect(userAgentFamily("")).toBeNull();
+      expect(userAgentFamily(null)).toBeNull();
+    });
+
+    it("flags a different browser or OS together with an IP change", () => {
+      const base = { previousIp: "10.0.0.1", currentIp: "203.0.113.1", previousUserAgent: chromeWin };
+      expect(detectSuspiciousSession({ ...base, currentUserAgent: firefoxMac })).toBe(true);
+      expect(detectSuspiciousSession({ ...base, currentUserAgent: edgeWin })).toBe(true);
+      expect(detectSuspiciousSession({ ...base, currentUserAgent: chromeAndroid })).toBe(true);
+    });
+
+    it("ignores browser upgrades and IP-only or UA-only changes", () => {
+      const base = { previousIp: "10.0.0.1", currentIp: "203.0.113.1", previousUserAgent: chromeWin };
+      expect(detectSuspiciousSession({ ...base, currentUserAgent: chromeWinNewer })).toBe(false);
+      expect(detectSuspiciousSession({ ...base, currentIp: "10.0.0.1", currentUserAgent: firefoxMac })).toBe(false);
+    });
   });
 });

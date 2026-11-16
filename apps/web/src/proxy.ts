@@ -252,7 +252,8 @@ export async function proxy(request: NextRequest) {
           return new NextResponse("Your email domain is not allowed for this workspace.", { status: 403 });
         }
         if (
-          wsRow?.riskDetectionEnabled &&
+          // Same default as the schema and the settings UI (enabled).
+          (wsRow?.riskDetectionEnabled ?? true) &&
           detectSuspiciousSession({
             previousIp: sessionMeta?.ipAddress,
             currentIp: requestIp,
