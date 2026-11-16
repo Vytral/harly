@@ -44,6 +44,7 @@ import { isExternallyManagedSignatureProvider } from "@/lib/esign/signature-stat
 import { sendDocumentForEnvelope } from "@/lib/esign/document-signing";
 import { archiveSubmission, freshEsignContext } from "@/lib/esign/client";
 import { createLogger } from "@/lib/logger";
+import { deleteStorageObjects } from "./storage-cleanup";
 import { storage } from "@/lib/storage";
 import { persistDomainEvent, publishPersistedDomainEvents } from "@/server/events/emit";
 import { documentAutomationContext } from "@/lib/esign/document-automation-context";
@@ -410,9 +411,7 @@ export async function deleteDocument(input: { documentId: string }): Promise<Doc
     );
   });
 
-  const deletions = await Promise.allSettled(storageKeys.map((key) => storage.delete(key)));
-  const failed = deletions.filter((result) => result.status === "rejected").length;
-  if (failed > 0) log.warn({ documentId: input.documentId, failed, total: storageKeys.length }, "Some document storage objects could not be deleted");
+  await deleteStorageObjects(storageKeys, { documentId: input.documentId });
   revalidatePath("/dashboard/documents");
   return { ok: true, documentId: input.documentId };
 }
@@ -1063,9 +1062,7 @@ export async function bulkDeleteDocuments(input: { documentIds: string[] }): Pro
     await tx.delete(documents).where(and(eq(documents.workspaceId, context.organization.id), inArray(documents.id, ids)));
   });
 
-  const deletions = await Promise.allSettled(storageKeys.map((key) => storage.delete(key)));
-  const failed = deletions.filter((result) => result.status === "rejected").length;
-  if (failed > 0) log.warn({ failed, total: storageKeys.length }, "Some document storage objects could not be deleted during bulk delete");
+  await deleteStorageObjects(storageKeys, { bulk: true, documentIds: ids });
 
   revalidatePath("/dashboard/documents");
   const skipped = candidates.length - deletable.length;
