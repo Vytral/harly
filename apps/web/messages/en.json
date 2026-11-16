@@ -12207,6 +12207,7 @@
         "onlySentDecide": "Only sent offers can be decided.",
         "expiredDecide": "This offer has expired and can no longer be decided.",
         "applicationNoLongerActive": "This application is no longer active. Refresh and try again.",
+        "offerChanged": "This offer was changed by another recruiter. Refresh and try again.",
         "cannotWithdraw": "This offer can no longer be withdrawn.",
         "candidateFallback": "Candidate",
         "hiringTeamTitle": "Offer {decision}, {title}",
