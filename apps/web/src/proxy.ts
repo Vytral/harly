@@ -83,6 +83,16 @@ function isSecurityExempt(pathname: string): boolean {
   return SECURITY_EXEMPT_PREFIXES.some((p) => pathname.startsWith(p));
 }
 
+/**
+ * Server actions POST to the URL of the page that hosts them and carry a
+ * `Next-Action` header. The exemptions below exist so a member can *reach* the
+ * security pages to fix a missing factor; they must never cover arbitrary
+ * actions invoked from those pages.
+ */
+function isServerActionRequest(request: NextRequest): boolean {
+  return request.headers.has("next-action");
+}
+
 function isPortalProtected(pathname: string): boolean {
   return PORTAL_PROTECTED.some((p) => pathname === p || pathname.startsWith(`${p}/`));
 }
@@ -155,8 +165,13 @@ export async function proxy(request: NextRequest) {
     return NextResponse.redirect(publicRedirectUrl(request, "/login"));
   }
 
-  // 2FA + org enforcement for protected paths
-  if (isProtected(pathname) && !isSecurityExempt(pathname)) {
+  // Workspace security enforcement for protected paths. The IP allowlist,
+  // email-domain and session-risk checks always apply; only the "set up a
+  // factor / change password first" redirects are waived for the security
+  // pages themselves, and never for server actions.
+  if (isProtected(pathname)) {
+    const skipSetupGates =
+      isSecurityExempt(pathname) && !isServerActionRequest(request);
     const { auth } = await import("@harly/auth");
     const session = await auth.api.getSession({ headers: request.headers });
 
@@ -255,6 +270,7 @@ export async function proxy(request: NextRequest) {
         // A forced password change takes priority over the 2FA gate: the member
         // must replace the owner-set temporary password before anything else.
         if (
+          !skipSetupGates &&
           userRow?.mustChangePassword &&
           !CHANGE_PASSWORD_EXEMPT.some((p) => pathname.startsWith(p))
         ) {
@@ -265,6 +281,7 @@ export async function proxy(request: NextRequest) {
 
         // A passkey is a valid second factor too, not just TOTP.
         if (
+          !skipSetupGates &&
           mustSetUp2fa({
             workspaceRequires2fa: wsRow?.require2fa ?? false,
             userHas2fa: Boolean(userRow?.twoFactorEnabled) || Boolean(existingPasskey),
@@ -274,7 +291,7 @@ export async function proxy(request: NextRequest) {
           return NextResponse.redirect(publicRedirectUrl(request, "/setup-2fa"));
         }
 
-        if (wsRow?.requirePasskey && !existingPasskey) {
+        if (!skipSetupGates && wsRow?.requirePasskey && !existingPasskey) {
           return NextResponse.redirect(publicRedirectUrl(request, "/setup-2fa"));
         }
       }
