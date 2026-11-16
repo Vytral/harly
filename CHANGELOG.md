@@ -13,6 +13,8 @@ operators. How to cut a release is in [RELEASING.md](RELEASING.md). The
 
 ## [Unreleased]
 
+## [0.5.1] - 2026-11-16
+
 This release fixes the findings of a security and correctness audit. It adds
 one database migration (new indexes, a nullable document version column and a
 job slug index that ignores trashed jobs), applied by `harly update` as usual.
@@ -933,7 +935,8 @@ upgrade holds locks until it commits. On managed Postgres, check that
 `statement_timeout` and `idle_in_transaction_session_timeout` are high enough to
 let it finish.
 
-[Unreleased]: https://github.com/Vytral/harly/compare/v0.5.0...HEAD
+[Unreleased]: https://github.com/Vytral/harly/compare/v0.5.1...HEAD
+[0.5.1]: https://github.com/Vytral/harly/releases/tag/v0.5.1
 [0.5.0]: https://github.com/Vytral/harly/releases/tag/v0.5.0
 [0.4.0]: https://github.com/Vytral/harly/releases/tag/v0.4.0
 [0.3.3]: https://github.com/Vytral/harly/releases/tag/v0.3.3
