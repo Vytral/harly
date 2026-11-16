@@ -1,8 +1,8 @@
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 
-import { db, member, scheduledReportRuns, scheduledReports } from "@harly/db";
+import { db, member, notifications, scheduledReportRuns, scheduledReports } from "@harly/db";
 
 import {
   createAuthorizationFixture,
@@ -144,5 +144,34 @@ describe.skipIf(!runPipelineIntegration)("scheduled reports: creator scope (data
     expect(scoped?.lastRun?.error).toMatch(/limited to specific jobs/);
     const full = rows.find((row) => row.id === fullSchedule);
     expect(full?.lastRun).toMatchObject({ status: "queued" });
+  });
+
+  it("backs off after a failed run and tells the creator once the failures pile up", async () => {
+    const failing = await schedule("Failing report", fx.users.full);
+    mocks.enqueueEmailOutbox.mockRejectedValue(new Error("mail relay down"));
+    const notices = () =>
+      db
+        .select()
+        .from(notifications)
+        .where(and(eq(notifications.workspaceId, fx.workspaceId), eq(notifications.type, "report.schedule_failing")));
+    try {
+      for (let attempt = 1; attempt <= 5; attempt += 1) {
+        await db.update(scheduledReports).set({ nextRunAt: new Date(Date.now() - 60_000) }).where(eq(scheduledReports.id, failing));
+        const result = await runDueScheduledReports(100, { workspaceId: fx.workspaceId });
+        expect(result.failed).toBe(1);
+        const [row] = await db.select().from(scheduledReports).where(eq(scheduledReports.id, failing));
+        // Retries are pushed out, doubling from 15 minutes, and stay within the cap.
+        const delayMin = (row.nextRunAt!.getTime() - Date.now()) / 60_000;
+        const expected = Math.min(15 * 2 ** (attempt - 1), 12 * 60);
+        expect(delayMin).toBeGreaterThan(expected - 2);
+        expect(delayMin).toBeLessThanOrEqual(expected + 1);
+        expect(row.lockedAt).toBeNull();
+        expect(await notices()).toHaveLength(attempt < 5 ? 0 : 1);
+      }
+      const [notice] = await notices();
+      expect(notice.userId).toBe(fx.users.full);
+    } finally {
+      mocks.enqueueEmailOutbox.mockResolvedValue(undefined);
+    }
   });
 });
