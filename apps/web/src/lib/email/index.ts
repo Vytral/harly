@@ -15,6 +15,7 @@ import { isDemoMode } from "@harly/config";
 import { getWorkspaceEmailConfig } from "./config";
 import { resolveSenderFromOverride } from "./sender-identity";
 import { createLogger } from "@/lib/logger";
+import { sanitizeDeliveryError } from "./delivery-warning";
 
 const log = createLogger("email");
 
@@ -29,8 +30,6 @@ const log = createLogger("email");
  * enqueue-call-sites.test.ts fails on any call site that passes no key.
  */
 
-export const emailSender = createEmailSender();
-
 export type SendEmailOptions = {
   to: string;
   subject: string;
@@ -40,26 +39,6 @@ export type SendEmailOptions = {
   idempotencyKey?: string;
   attachments?: EmailAttachment[];
 };
-
-/** Send a platform-level email (welcome, invitations...) using the env-configured sender. */
-export async function sendEmail(options: SendEmailOptions): Promise<void> {
-  // Public demo: never send real outbound email (an anonymous visitor could
-  // otherwise trigger invites/notifications to arbitrary addresses).
-  if (isDemoMode()) {
-    log.info({ to: options.to, subject: options.subject }, "[email] Suppressed (demo mode)");
-    return;
-  }
-
-  if (!emailSender) {
-    return;
-  }
-
-  try {
-    await emailSender.send(options);
-  } catch (error) {
-    log.error(error, "[email] Failed to send email");
-  }
-}
 
 /**
  * Resolve the email sender for a workspace: its own configured provider
@@ -87,6 +66,17 @@ export type SendWorkspaceEmailOptions = {
    * Only callers that can record "do not resend" should set this.
    */
   rethrowUnknownOutcome?: boolean;
+  /**
+   * Called with why a send returned `false`, so the caller can record the real
+   * cause: demo mode, no sender configured, or the provider's (sanitized) error.
+   */
+  onFailure?: (failure: SendWorkspaceEmailFailure) => void;
+};
+
+export type SendWorkspaceEmailFailure = {
+  reason: "demo_mode" | "no_sender" | "provider_error";
+  /** Short, sanitized text that is safe to store on an outbox row. */
+  detail: string;
 };
 
 /**
@@ -103,11 +93,13 @@ export async function sendWorkspaceEmail(
   // Public demo: swallow all workspace-scoped outbound email.
   if (isDemoMode()) {
     log.info({ to: options.to, subject: options.subject }, "[email] Suppressed workspace send (demo mode)");
+    sendOptions?.onFailure?.({ reason: "demo_mode", detail: "Email sending is disabled in demo mode." });
     return false;
   }
 
   const sender = await getWorkspaceEmailSender(workspaceId, actorUserId);
   if (!sender) {
+    sendOptions?.onFailure?.({ reason: "no_sender", detail: "No configured workspace email sender." });
     return false;
   }
 
@@ -118,6 +110,10 @@ export async function sendWorkspaceEmail(
       throw error;
     }
     log.error(error, "[email] Failed to send workspace email");
+    sendOptions?.onFailure?.({
+      reason: "provider_error",
+      detail: `Provider error: ${sanitizeDeliveryError(error instanceof Error ? error.message : String(error))}`,
+    });
     return false;
   }
 }

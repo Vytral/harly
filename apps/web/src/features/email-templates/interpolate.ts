@@ -63,6 +63,34 @@ export function interpolateTemplate(
   });
 }
 
+/** Escape a string for use as HTML text or a double-quoted attribute value. */
+export function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+/**
+ * Like `interpolateTemplate`, but for templates whose output is HTML: every
+ * substituted value is HTML-escaped so candidate-controlled fields (a name
+ * such as `<a href=...>`) cannot inject markup. The template itself is
+ * trusted author markup and is left as written; callers still sanitize the
+ * result before it is sent.
+ */
+export function interpolateTemplateHtml(
+  template: string,
+  values: TemplateValues,
+): string {
+  const escaped: TemplateValues = {};
+  for (const [key, value] of Object.entries(values)) {
+    escaped[key as TemplateVariableKey] = escapeHtml(value ?? "");
+  }
+  return interpolateTemplate(template, escaped);
+}
+
 /** Variables referenced in a template that aren't in the whitelist.
  *
  *  This is stricter than `interpolateTemplate`: it checks the raw key exactly

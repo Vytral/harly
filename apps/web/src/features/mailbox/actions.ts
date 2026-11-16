@@ -7,6 +7,8 @@ import { and, desc, eq, isNull } from "drizzle-orm";
 import { z } from "zod";
 import { applications, candidates, db, jobs, mailMessages, mailThreads, member } from "@harly/db";
 import { getWorkspaceContext } from "@/features/workspaces/context";
+import { mailThreadScopeSql } from "@/features/mailbox/data";
+import { resolveSearchActor } from "@/features/search/workspace-search";
 import { requirePermission } from "@/features/workspaces/permissions-server";
 import { getMailboxConfig } from "@/lib/mailbox/config";
 import { createLogger } from "@/lib/logger";
@@ -73,6 +75,21 @@ const updateMailboxThreadSchema = z.object({
   ownerId: z.string().trim().min(1).max(255).nullable().optional(),
 });
 
+/**
+ * Thread predicate for every write or AI action that targets one thread:
+ * workspace, id and the caller's role scope (`mailThreadScopeSql`), the same
+ * rule the Inbox reads apply. A thread outside the scope behaves exactly like
+ * a missing one.
+ */
+async function scopedThreadWhere(threadId: string, workspaceId: string) {
+  const actor = await resolveSearchActor();
+  return and(
+    eq(mailThreads.id, threadId),
+    eq(mailThreads.workspaceId, workspaceId),
+    mailThreadScopeSql(actor),
+  );
+}
+
 async function getActiveMailboxApplicationId(input: {
   workspaceId: string;
   candidateId: string | null;
@@ -121,7 +138,7 @@ export async function updateMailboxThreadAction(input: { threadId: string; statu
     const [assignee] = await db.select({ userId: member.userId }).from(member).where(and(eq(member.organizationId, organization.id), eq(member.userId, parsed.data.ownerId))).limit(1);
     if (!assignee) return { ok: false, error: t("actions.assigneeNotMember") };
   }
-  const [updated] = await db.update(mailThreads).set({ ...(parsed.data.status ? { status: parsed.data.status } : {}), ...(parsed.data.ownerId !== undefined ? { ownerId: parsed.data.ownerId } : {}) }).where(and(eq(mailThreads.id, parsed.data.threadId), eq(mailThreads.workspaceId, organization.id))).returning({ id: mailThreads.id });
+  const [updated] = await db.update(mailThreads).set({ ...(parsed.data.status ? { status: parsed.data.status } : {}), ...(parsed.data.ownerId !== undefined ? { ownerId: parsed.data.ownerId } : {}) }).where(await scopedThreadWhere(parsed.data.threadId, organization.id)).returning({ id: mailThreads.id });
   if (!updated) return { ok: false, error: t("actions.threadNotFound") };
   await logAuditEvent({
     workspaceId: organization.id,
@@ -153,8 +170,9 @@ export async function linkMailboxThreadToApplicationAction(input: { threadId: st
   if (!parsed.success) return { ok: false, error: t("actions.invalidThreadOrApplication") };
   await requirePermission("candidates:edit");
   const { organization, user } = await getWorkspaceContext();
-  const [thread] = await db.select({ candidateId: mailThreads.candidateId }).from(mailThreads).where(and(eq(mailThreads.id, parsed.data.threadId), eq(mailThreads.workspaceId, organization.id))).limit(1);
-  if (!thread?.candidateId) return { ok: false, error: t("actions.linkCandidateFirst") };
+  const [thread] = await db.select({ candidateId: mailThreads.candidateId }).from(mailThreads).where(await scopedThreadWhere(parsed.data.threadId, organization.id)).limit(1);
+  if (!thread) return { ok: false, error: t("actions.threadNotFound") };
+  if (!thread.candidateId) return { ok: false, error: t("actions.linkCandidateFirst") };
   const [activeCandidate] = await db
     .select({ id: candidates.id })
     .from(candidates)
@@ -214,6 +232,8 @@ export async function linkMailboxThreadToCandidateAction(input: { threadId: stri
   if (!parsed.success) return { ok: false, error: t("actions.invalidThreadOrCandidate") };
   await requirePermission("candidates:edit");
   const { organization, user } = await getWorkspaceContext();
+  const [visibleThread] = await db.select({ id: mailThreads.id }).from(mailThreads).where(await scopedThreadWhere(parsed.data.threadId, organization.id)).limit(1);
+  if (!visibleThread) return { ok: false, error: t("actions.threadNotFound") };
   if (parsed.data.candidateId) {
     const [candidate] = await db.select({ id: candidates.id }).from(candidates).where(and(eq(candidates.id, parsed.data.candidateId), eq(candidates.workspaceId, organization.id), isNull(candidates.deletedAt))).limit(1);
     if (!candidate) return { ok: false, error: t("actions.candidateOtherWorkspace") };
@@ -243,7 +263,7 @@ export async function markMailboxThreadReadAction(input: { threadId: string }) {
   const { organization } = await getWorkspaceContext();
   const [updated] = await db.update(mailThreads)
     .set({ unreadCount: 0 })
-    .where(and(eq(mailThreads.id, parsed.data), eq(mailThreads.workspaceId, organization.id)))
+    .where(await scopedThreadWhere(parsed.data, organization.id))
     .returning({ id: mailThreads.id });
   if (!updated) return { ok: false, error: t("actions.threadNotFound") };
   await db.update(mailMessages).set({ readAt: new Date() }).where(and(eq(mailMessages.threadId, parsed.data), eq(mailMessages.workspaceId, organization.id)));
@@ -283,7 +303,7 @@ export async function replyMailboxThreadAction(input: {
   await requirePermission("collab:write");
   const { organization, user } = await getWorkspaceContext();
 
-  const [thread] = await db.select().from(mailThreads).where(and(eq(mailThreads.id, parsed.data.threadId), eq(mailThreads.workspaceId, organization.id))).limit(1);
+  const [thread] = await db.select().from(mailThreads).where(await scopedThreadWhere(parsed.data.threadId, organization.id)).limit(1);
   if (!thread) return { ok: false, error: t("actions.threadNotFound") };
   if (!thread.participantEmail) return { ok: false, error: t("actions.noReplyAddress") };
   if (thread.candidateId) {
@@ -662,7 +682,7 @@ export async function retryMailboxSyncAction() {
 
 async function getMailboxMessagesForAi(threadId: string) {
   const { organization } = await getWorkspaceContext();
-  const [thread] = await db.select({ id: mailThreads.id, subject: mailThreads.subject, participantEmail: mailThreads.participantEmail, candidateId: mailThreads.candidateId }).from(mailThreads).where(and(eq(mailThreads.id, threadId), eq(mailThreads.workspaceId, organization.id))).limit(1);
+  const [thread] = await db.select({ id: mailThreads.id, subject: mailThreads.subject, participantEmail: mailThreads.participantEmail, candidateId: mailThreads.candidateId }).from(mailThreads).where(await scopedThreadWhere(threadId, organization.id)).limit(1);
   if (!thread) return null;
   if (thread.candidateId) {
     const [activeCandidate] = await db
@@ -756,7 +776,7 @@ export async function createCandidateFromMailboxThreadAction(input: { threadId: 
   const parsed = threadId.safeParse(input.threadId); if (!parsed.success) return { ok: false, error: t("actions.invalidThread") };
   await requirePermission("candidates:edit");
   const { organization, user } = await getWorkspaceContext();
-  const [thread] = await db.select().from(mailThreads).where(and(eq(mailThreads.id, parsed.data), eq(mailThreads.workspaceId, organization.id))).limit(1);
+  const [thread] = await db.select().from(mailThreads).where(await scopedThreadWhere(parsed.data, organization.id)).limit(1);
   if (!thread?.participantEmail) return { ok: false, error: t("actions.noSenderEmail") };
   const [existing] = await db.select({ id: candidates.id, deletedAt: candidates.deletedAt }).from(candidates).where(and(eq(candidates.workspaceId, organization.id), eq(candidates.email, thread.participantEmail))).limit(1);
   if (existing?.deletedAt) return { ok: false, error: t("actions.senderInTrash") };

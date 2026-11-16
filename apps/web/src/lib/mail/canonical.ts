@@ -234,7 +234,25 @@ export async function insertCanonicalMessage(input: CanonicalMessageInput) {
         ),
       ),
     );
-    return { messageId: input.messageId ?? "", threadId: thread.id, duplicate: true };
+    // Return the row that won the race: its UUID (not the provider
+    // Message-ID) is what callers use for attachments and links, and its
+    // thread is the one that actually holds the message.
+    const [winner] = input.messageId
+      ? await db
+          .select({ id: mailMessages.id, threadId: mailMessages.threadId })
+          .from(mailMessages)
+          .where(
+            and(
+              eq(mailMessages.workspaceId, input.workspaceId),
+              eq(mailMessages.messageId, input.messageId),
+            ),
+          )
+          .limit(1)
+      : [];
+    if (!winner) {
+      throw new Error("Mail message insert conflicted but no existing message was found.");
+    }
+    return { messageId: winner.id, threadId: winner.threadId, duplicate: true };
   }
   if (input.attachments?.length) {
     await db.insert(mailAttachments).values(input.attachments.map((attachment) => ({

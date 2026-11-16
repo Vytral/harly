@@ -3,7 +3,7 @@ import { Hr, Section, Text } from "@react-email/components";
 import { emailTranslator } from "../i18n";
 import { WorkspaceLayout } from "./WorkspaceLayout";
 import { DetailTable } from "./DetailTable";
-import { buildCalendarLinks } from "./calendarLinks";
+import { buildCalendarLinks, interviewIcsUid } from "./calendarLinks";
 import type { SocialLink } from "./HarlyLayout";
 
 export type InterviewRescheduledProps = {
@@ -22,6 +22,10 @@ export type InterviewRescheduledProps = {
   duration?: string;
   startIso?: string;
   durationMins?: number;
+  /** Interview id: keeps the calendar entry stable across invite, reschedule and cancel. */
+  interviewId?: string;
+  /** Revision counter for the calendar entry (must not decrease). */
+  sequence?: number;
   notes?: string;
 };
 
@@ -49,6 +53,8 @@ export function InterviewRescheduled({
   duration,
   startIso,
   durationMins,
+  interviewId,
+  sequence,
   notes,
 }: InterviewRescheduledProps) {
   const t = emailTranslator(locale);
@@ -67,6 +73,9 @@ export function InterviewRescheduled({
       durationMins,
       description: notes,
       location,
+      uid: interviewIcsUid(interviewId ?? `${jobTitle}-${startIso}`),
+      sequence,
+      method: "REQUEST",
     });
   }
 

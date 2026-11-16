@@ -1252,6 +1252,7 @@ export async function getCandidateProfile(candidateId: string) {
   const messageAttachments = canonicalMessageRows.length
     ? await db
         .select({
+          id: mailAttachments.id,
           messageId: mailAttachments.messageId,
           filename: mailAttachments.filename,
           contentType: mailAttachments.contentType,
@@ -1268,6 +1269,8 @@ export async function getCandidateProfile(candidateId: string) {
             ),
           ),
         )
+        // Unordered rows made any position-based reference unstable.
+        .orderBy(asc(mailAttachments.createdAt), asc(mailAttachments.id))
     : [];
   const attachmentsByMessage = new Map<string, typeof messageAttachments>();
   for (const attachment of messageAttachments) {
@@ -1853,6 +1856,7 @@ export async function getCandidateProfile(candidateId: string) {
       attachments: ("legacyAttachments" in row
         ? row.legacyAttachments
         : (attachmentsByMessage.get(row.id) ?? [])) as Array<{
+        id?: string;
         filename: string;
         contentType: string;
         size: number;

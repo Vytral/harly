@@ -22,6 +22,23 @@ export type CanonicalInboundEmail = {
   receivedAt: Date;
 };
 
+/**
+ * The webhook payload itself is unusable (malformed JSON, an event type we do
+ * not handle). Retrying cannot help, unlike a failed follow-up API call.
+ */
+export class InboundPayloadError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "InboundPayloadError";
+  }
+}
+
+export type InboundParseContext = {
+  apiKey?: string;
+  /** Receives a note whenever an adapter has to leave something out of the email. */
+  warn?: (message: string, meta?: Record<string, unknown>) => void;
+};
+
 export type InboundProviderId = "resend" | "postmark";
 
 /**
@@ -35,6 +52,6 @@ export interface InboundEmailAdapter {
   verifySignature(rawBody: string, headers: Headers, secret: string): boolean;
   parse(
     rawBody: string,
-    ctx: { apiKey?: string },
+    ctx: InboundParseContext,
   ): Promise<CanonicalInboundEmail>;
 }

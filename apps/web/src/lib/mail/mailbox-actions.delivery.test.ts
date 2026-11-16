@@ -60,6 +60,8 @@ vi.mock("@/features/workspaces/context", () => ({
   }),
 }));
 vi.mock("@/features/workspaces/permissions-server", () => ({ requirePermission: async () => ({}) }));
+vi.mock("@/features/search/workspace-search", () => ({ resolveSearchActor: async () => ({}) }));
+vi.mock("@/features/mailbox/data", () => ({ mailThreadScopeSql: () => undefined }));
 vi.mock("@/lib/mailbox/config", () => ({ getMailboxConfig: async () => null }));
 vi.mock("@/lib/logger", () => ({
   createLogger: () => ({ info: vi.fn(), warn: vi.fn(), error: vi.fn() }),

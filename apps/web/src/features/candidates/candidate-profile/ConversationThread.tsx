@@ -103,7 +103,11 @@ export function ConversationThread({
                     {message.attachments.map((attachment, index) => (
                       <a
                         key={`${attachment.storageKey}-${index}`}
-                        href={`/api/inbound-email/attachments/${message.id}/${index}`}
+                        href={
+                          attachment.id
+                            ? `/api/mailbox/attachments/${encodeURIComponent(attachment.id)}`
+                            : `/api/inbound-email/attachments/${message.id}/${index}`
+                        }
                         className="inline-flex items-center gap-1 rounded-md border px-2 py-1 text-xs text-muted-foreground"
                       >
                         <Paperclip className="size-3" />

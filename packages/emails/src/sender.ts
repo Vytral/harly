@@ -48,6 +48,8 @@ export function isAmbiguousSmtpError(error: unknown): boolean {
 }
 
 export type EmailSender = {
+  /** The "From" this sender uses (`Name <address>` or a bare address). */
+  from?: string;
   send(options: SendEmailOptions): Promise<SendEmailResult>;
   /**
    * Cheap connectivity/credentials check that doesn't send mail. Only
@@ -77,6 +79,7 @@ export type EmailProviderConfig = ResendProviderConfig | SmtpProviderConfig;
 
 function createResendSender(config: ResendProviderConfig): EmailSender {
   return {
+    from: config.from,
     async send({ to, subject, react, replyTo, messageId, idempotencyKey, headers, attachments }) {
       const [{ render }, { Resend }] = await Promise.all([
         import("@react-email/render"),
@@ -138,6 +141,7 @@ function createSmtpSender(config: SmtpProviderConfig): EmailSender {
   }
 
   return {
+    from: config.from,
     async send({ to, subject, react, replyTo, messageId, headers, attachments }) {
       const [{ render }, transport] = await Promise.all([
         import("@react-email/render"),

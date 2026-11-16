@@ -18,6 +18,7 @@ import {
 } from "@harly/db";
 
 export type WorkspaceMailboxAttachment = {
+  id: string;
   filename: string;
   contentType: string;
   size: number;
@@ -43,6 +44,7 @@ function attachmentQuery(
 ) {
   return db
     .select({
+      id: mailAttachments.id,
       filename: mailAttachments.filename,
       contentType: mailAttachments.contentType,
       size: mailAttachments.size,
@@ -117,5 +119,7 @@ export async function listWorkspaceMailboxAttachments(input: {
     eq(mailAttachments.messageId, input.messageId),
     input.threadScope,
   )
-    .orderBy(asc(mailAttachments.createdAt));
+    // Same order the candidate conversation uses; `id` breaks ties so a
+    // positional reference always points at the same file.
+    .orderBy(asc(mailAttachments.createdAt), asc(mailAttachments.id));
 }
