@@ -12,7 +12,10 @@ import { getPortalAuthMethods } from "@/lib/portal-auth-methods";
 import { auditPortalEvent } from "@/lib/portal-credentials";
 import { establishPortalSession } from "@/lib/portal-session";
 import { PORTAL_OAUTH_STATE_COOKIE, verifyPortalOAuthState } from "@/lib/portal-oauth-state";
+import { createLogger } from "@/lib/logger";
 import { getHarlyPublicOrigin } from "@/lib/public-origin";
+
+const log = createLogger("portal-oauth-linkedin");
 
 export const runtime = "nodejs";
 
@@ -51,7 +54,7 @@ export async function GET(request: NextRequest) {
     redirect(oauthState!.next as Route);
   } catch (err) {
     unstable_rethrow(err);
-    console.error("LinkedIn OAuth callback error:", err);
+    log.error(err, "LinkedIn OAuth callback failed");
     redirect("/portal/login?error=oauth_failed" as Route);
   }
 }

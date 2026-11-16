@@ -396,11 +396,6 @@ export async function getDashboardJob(jobId: string) {
   return { job, stages, workspace };
 }
 
-export async function getPublicJob(slug: string) {
-  const detail = await getPublicJobDetail({ jobSlug: slug });
-  return detail?.job ?? null;
-}
-
 const getPublicJobDetailCached = cache(async function getPublicJobDetailCached(
   jobSlug: string,
   workspaceSlug?: string,

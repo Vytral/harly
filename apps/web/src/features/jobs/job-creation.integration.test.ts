@@ -52,7 +52,10 @@ vi.mock("@/features/workspaces/context", () => ({
 vi.mock("@/lib/audit-log", () => ({ logAuditEvent: vi.fn(async () => undefined) }));
 
 import { createJobAction, updateJobStatusAction } from "./actions";
-import { getPublicJob } from "./data";
+import { getPublicJobDetail } from "./data";
+
+const getPublicJob = async (slug: string) =>
+  (await getPublicJobDetail({ jobSlug: slug }))?.job ?? null;
 import { createJobForApi, serializeJob } from "./service";
 
 async function redirectTarget(run: () => Promise<unknown>) {
