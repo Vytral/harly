@@ -23,6 +23,22 @@ export const optionalTrimmedString = z
   .transform((value) => (typeof value === "string" ? value.trim() : ""))
   .transform((value) => (value.length > 0 ? value : undefined));
 
+/**
+ * True for an absolute URL that uses http or https. Candidate profile links are
+ * rendered as clickable links, so schemes such as `javascript:`, `data:` or
+ * `ftp:` must never be stored.
+ */
+export function isHttpUrl(value: string): boolean {
+  if (!URL.canParse(value)) return false;
+  const protocol = new URL(value).protocol;
+  return protocol === "http:" || protocol === "https:";
+}
+
+/** The one schema for a required http(s) URL (candidate profile links). */
+export const httpUrlSchema = z
+  .url({ protocol: /^https?$/, message: "URL must use http or https." })
+  .max(2048);
+
 export const optionalHttpsUrlSchema = optionalTrimmedString.refine(
   (value) => !value || (URL.canParse(value) && value.startsWith("https://")),
   "URL must use HTTPS.",
@@ -187,9 +203,9 @@ export const candidateCreateSchema = z.object({
   location: nullableString,
   headline: nullableString,
   summary: nullableString,
-  linkedinUrl: z.url().nullish(),
-  githubUrl: z.url().nullish(),
-  websiteUrl: z.url().nullish(),
+  linkedinUrl: httpUrlSchema.nullish(),
+  githubUrl: httpUrlSchema.nullish(),
+  websiteUrl: httpUrlSchema.nullish(),
   educationEntries: z.array(candidateEducationEntrySchema).max(100).nullish(),
   experienceEntries: z.array(candidateExperienceEntrySchema).max(100).nullish(),
 });

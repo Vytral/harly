@@ -55,7 +55,7 @@ import { serializeCandidate } from "./service";
 import { EMAIL_DRAFT_TYPES, type EmailDraftType } from "./email-draft-types";
 import { createScorecardForApi } from "@/features/scorecards/service";
 import { ApiError } from "@harly/api";
-import { scorecardCreateSchema } from "@harly/validators";
+import { isHttpUrl, scorecardCreateSchema } from "@harly/validators";
 import {
   createReferralRecord,
   serializeReferral as serializeCandidateReferral,
@@ -282,14 +282,11 @@ const optionalText = z
   .trim()
   .transform((value) => (value.length > 0 ? value : null));
 
-const optionalHttpsUrl = z
+const optionalHttpUrl = z
   .string()
   .trim()
   .transform((value) => (value.length > 0 ? value : null))
-  .refine((value) => !value || URL.canParse(value), "invalidUrl")
-  .refine((value) => !value || value.startsWith("https://"), {
-    message: "urlMustUseHttps",
-  });
+  .refine((value) => !value || isHttpUrl(value), "invalidUrl");
 
 const candidateUpdateSchema = z.object({
   firstName: z.string().trim().min(1, "firstNameRequired"),
@@ -297,9 +294,9 @@ const candidateUpdateSchema = z.object({
   email: z.string().trim().email("invalidEmail"),
   phone: optionalText,
   address: optionalText,
-  linkedinUrl: optionalHttpsUrl,
-  githubUrl: optionalHttpsUrl,
-  websiteUrl: optionalHttpsUrl,
+  linkedinUrl: optionalHttpUrl,
+  githubUrl: optionalHttpUrl,
+  websiteUrl: optionalHttpUrl,
   avatarUrl: optionalText,
   headline: optionalText,
   summary: optionalText,
@@ -641,9 +638,9 @@ const createCandidateSchema = z.object({
   phone: optionalText,
   address: optionalText,
   headline: optionalText,
-  linkedinUrl: optionalHttpsUrl,
-  githubUrl: optionalHttpsUrl,
-  websiteUrl: optionalHttpsUrl,
+  linkedinUrl: optionalHttpUrl,
+  githubUrl: optionalHttpUrl,
+  websiteUrl: optionalHttpUrl,
   referral: createReferralInputSchema,
 });
 
