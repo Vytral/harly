@@ -39,7 +39,7 @@ import {
   type OfferTerms,
 } from "./core";
 import {
-  archiveDocusealOffer,
+  revokeOfferSigning,
   createOfferEnvelope,
 } from "@/lib/esign/offer-signing";
 import {
@@ -600,7 +600,7 @@ export async function withdrawOfferForApi(input: {
     // conditional offer transition will wait for this transaction and then
     // observe `withdrawn`.
     if (lockedOffer.status === "sent") {
-      const archived = await archiveDocusealOffer({
+      const archived = await revokeOfferSigning({
         workspaceId: input.workspaceId,
         esignSubmissionId: lockedOffer.esignSubmissionId,
       });

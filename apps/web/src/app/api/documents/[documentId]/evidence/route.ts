@@ -49,7 +49,6 @@ export async function GET(
         .select({
           id: documentVersions.id,
           versionNumber: documentVersions.versionNumber,
-          storageKey: documentVersions.storageKey,
           sizeBytes: documentVersions.sizeBytes,
           checksum: documentVersions.checksum,
           isCurrent: documentVersions.isCurrent,

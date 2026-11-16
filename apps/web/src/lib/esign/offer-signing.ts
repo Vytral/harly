@@ -50,8 +50,12 @@ const SIGNABLE_MIME = new Set([
   "image/jpeg",
 ]);
 
-/** Archive a DocuSeal ceremony before a sent offer is withdrawn. */
-export async function archiveDocusealOffer(input: {
+/**
+ * Revoke the signing ceremony of a sent offer before it is withdrawn: archives
+ * the DocuSeal submission, and is a no-op (returns true) for native offers,
+ * whose envelope is voided by the withdraw transaction itself.
+ */
+export async function revokeOfferSigning(input: {
   workspaceId: string;
   esignSubmissionId: string | null;
 }): Promise<boolean> {

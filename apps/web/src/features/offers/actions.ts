@@ -41,7 +41,7 @@ import { withNotificationCopy, type NotificationCopy } from "@/features/notifica
 import { getWorkspaceEmailSender } from "@/lib/email";
 import { offerEmailDedupeKey, offerExtendedEmailDedupeKey } from "@/lib/email/dedupe-keys";
 import {
-  archiveDocusealOffer,
+  revokeOfferSigning,
   createOfferEnvelope,
 } from "@/lib/esign/offer-signing";
 import {
@@ -1050,7 +1050,7 @@ export async function withdrawOffer(input: {
     }
 
     if (lockedOffer.status === "sent") {
-      const archived = await archiveDocusealOffer({
+      const archived = await revokeOfferSigning({
         workspaceId,
         esignSubmissionId: lockedOffer.esignSubmissionId,
       });
