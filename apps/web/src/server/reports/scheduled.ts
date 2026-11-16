@@ -179,7 +179,6 @@ async function notifyCreatorOfFailures(
       body: `The last ${failures} runs failed (${reason.slice(0, 200)}). Harly keeps retrying; check the schedule in Reports.`,
       href: "/dashboard/reports",
       metadata: { scheduledReportId: report.id, failures },
-      copy: { key: "scheduledReportFailing", values: { name: report.name, failures } },
       dedupeKey: `scheduled-report:${report.id}:failing:${runId}`,
     });
   } catch (notifyError) {
