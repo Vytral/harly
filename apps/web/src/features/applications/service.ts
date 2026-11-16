@@ -29,7 +29,7 @@ import {
   type StageExecutor,
 } from "@/features/pipeline/stage-resolver";
 
-import { publicJobVisibilityConditions } from "@/features/jobs/data";
+import { publicJobVisibilityConditions } from "@/features/jobs/visibility";
 import { emitWebhookEvent } from "@/server/webhooks/emit";
 import {
   persistDomainEvent,

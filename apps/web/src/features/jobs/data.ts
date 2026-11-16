@@ -5,12 +5,9 @@ import {
   asc,
   desc,
   eq,
-  gte,
   isNotNull,
   isNull,
-  lte,
   ne,
-  or,
   sql,
 } from "drizzle-orm";
 import { cache } from "react";
@@ -43,6 +40,7 @@ import { jobScopeSql } from "@/features/search/scope";
 import { resolveSearchActor } from "@/features/search/workspace-search";
 import { normalizeCareerPageConfig } from "@/features/career-page/config";
 import type { JobFormValues, JobStatus } from "./validation";
+import { publicJobVisibilityConditions } from "./visibility";
 
 // Branding is sourced from the Better Auth `organization` (name/slug/logo) plus
 // the `workspace_settings` satellite (board theming). Left join so a workspace
@@ -108,19 +106,7 @@ export function toBoardBranding(
   };
 }
 
-/**
- * A public job must be open, not deleted, already published, and not past its
- * configured closing date. Null dates preserve legacy open jobs that predate
- * publication scheduling.
- */
-export function publicJobVisibilityConditions(now = new Date()) {
-  return and(
-    eq(jobs.status, "open"),
-    isNull(jobs.deletedAt),
-    or(isNull(jobs.publishedAt), lte(jobs.publishedAt, now)),
-    or(isNull(jobs.validThrough), gte(jobs.validThrough, now)),
-  );
-}
+export { publicJobVisibilityConditions };
 
 export {
   formatEmploymentType,
