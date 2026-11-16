@@ -31,23 +31,15 @@ describe("enterprise security policy", () => {
     expect(normalizeSecurityPolicy({ ipAllowlist: [" 10.0.0.0/8 "], allowedDomains: ["@Acme.com"], reauthMinutes: 999 })).toMatchObject({ ipAllowlist: ["10.0.0.0/8"], allowedDomains: ["acme.com"], reauthMinutes: 60 });
   });
 
-  it("uses the rightmost forwarded hop unless the peer is trusted", () => {
-    const request = new Request("https://harly.test", {
+  it("ignores a client-supplied x-forwarded-peer marker", () => {
+    process.env.TRUSTED_PROXY_IPS = "203.0.113.9";
+    const spoofed = new Request("https://harly.test", {
       headers: {
-        "x-forwarded-for": "198.51.100.7, 203.0.113.9",
+        "x-forwarded-for": "198.51.100.7, 192.0.2.50",
+        "x-forwarded-peer": "203.0.113.9",
         "x-real-ip": "203.0.113.9",
       },
     });
-    delete process.env.TRUSTED_PROXY_IPS;
-    expect(getTrustedClientIp(request)).toBe("203.0.113.9");
-
-    process.env.TRUSTED_PROXY_IPS = "203.0.113.9";
-    const trustedRequest = new Request("https://harly.test", {
-      headers: {
-        "x-forwarded-for": "198.51.100.7, 203.0.113.9",
-        "x-forwarded-peer": "203.0.113.9",
-      },
-    });
-    expect(getTrustedClientIp(trustedRequest)).toBe("198.51.100.7");
+    expect(getTrustedClientIp(spoofed)).toBe("192.0.2.50");
   });
 });

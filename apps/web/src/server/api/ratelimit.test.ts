@@ -16,6 +16,7 @@ vi.mock("@harly/db", () => ({
 
 import {
   DatabaseStore,
+  clientIp,
   MemoryStore,
   enforceRateLimit,
   rateLimitResultFromError,
@@ -81,5 +82,24 @@ describe("DatabaseStore rate limiting (shared, multi-instance)", () => {
     await expect(
       new DatabaseStore().consume("db-key", 5, 60_000),
     ).rejects.toThrow(ApiError);
+  });
+});
+
+describe("clientIp", () => {
+  it("is not fooled by a spoofed x-forwarded-peer header", () => {
+    const previous = process.env.TRUSTED_PROXY_IPS;
+    process.env.TRUSTED_PROXY_IPS = "127.0.0.1";
+    try {
+      const request = new Request("https://harly.test/api", {
+        headers: {
+          "x-forwarded-for": "1.2.3.4, 198.51.100.20",
+          "x-forwarded-peer": "127.0.0.1",
+        },
+      });
+      expect(clientIp(request)).toBe("198.51.100.20");
+    } finally {
+      if (previous === undefined) delete process.env.TRUSTED_PROXY_IPS;
+      else process.env.TRUSTED_PROXY_IPS = previous;
+    }
   });
 });

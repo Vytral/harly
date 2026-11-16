@@ -263,17 +263,17 @@ addresses. In all other deployments, leave at the default. Harly blocks
 loopback, private, link-local, and cloud-metadata addresses on all outbound
 HTTP actions.
 
-`TRUSTED_PROXY_IPS` lists the peer addresses of reverse proxies whose
-`X-Forwarded-For` header Harly should trust. When the immediate peer matches
-one of these values, Harly uses the leftmost forwarded address as the client
-IP. Otherwise it falls back to the rightmost hop so the header cannot be
-spoofed. This value drives what audit logs record for `ipAddress`, which
+`TRUSTED_PROXY_IPS` lists proxy addresses (comma-separated) that may appear as
+hops in `X-Forwarded-For` in front of Harly, such as a CDN edge or load
+balancer. Harly reads `X-Forwarded-For` from the right, skips these hops, and
+uses the first other address as the client IP. The `X-Forwarded-Peer` header is
+ignored. This value drives what audit logs record for `ipAddress`, which
 address workspace IP allowlists evaluate, and how per-IP rate limits partition
 traffic.
 
 Leave `TRUSTED_PROXY_IPS` empty when Harly is exposed directly or served
-through the bundled Caddy proxy. Set it to the address (or comma-separated
-addresses) that Harly sees as the TCP peer when running behind an external
-reverse proxy, load balancer, or CDN. See
+through the bundled Caddy proxy or a single reverse proxy that appends to
+`X-Forwarded-For`. Set it only when more of your own proxies sit in the chain.
+See
 [proxy modes](/self-hosting/proxy-modes#trust-your-reverse-proxy-for-client-ips)
 for concrete examples.
