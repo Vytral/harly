@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { normalizeEmailLocale } from "@harly/config/email-locale";
+import { isHttpUrl } from "@harly/validators";
 
 const optionalText = (max: number) =>
   z.preprocess(
@@ -13,10 +14,7 @@ const optionalHttpUrl = z.preprocess(
     .string()
     .max(2_048, "textTooLong")
     .url("urlInvalid")
-    .refine((value) => {
-      const protocol = new URL(value).protocol;
-      return protocol === "https:" || protocol === "http:";
-    }, "urlProtocol")
+    .refine(isHttpUrl, "urlProtocol")
     .nullable(),
 );
 

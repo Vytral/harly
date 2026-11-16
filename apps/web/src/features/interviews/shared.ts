@@ -13,6 +13,23 @@ export type InterviewType =
   | "onsite"
   | "final";
 export type InterviewMode = "video" | "phone" | "onsite";
+
+/**
+ * Interview type choices for the schedule and edit forms, in display order.
+ * `labelKey` is the key under the scheduling drawers' messages and
+ * `dialogLabelKey` the key under the edit dialog's messages.
+ */
+export const INTERVIEW_TYPE_OPTIONS = [
+  { key: "screening", labelKey: "screening", dialogLabelKey: "typeScreening" },
+  { key: "technical", labelKey: "technical", dialogLabelKey: "typeTechnical" },
+  { key: "culture_fit", labelKey: "cultureFit", dialogLabelKey: "typeCultureFit" },
+  { key: "onsite", labelKey: "onsite", dialogLabelKey: "typeOnsite" },
+  { key: "final", labelKey: "final", dialogLabelKey: "typeFinal" },
+] as const satisfies readonly {
+  key: InterviewType;
+  labelKey: string;
+  dialogLabelKey: string;
+}[];
 export type InterviewStatus = "scheduled" | "completed" | "canceled";
 export type InterviewSyncProvider =
   | "google_calendar"

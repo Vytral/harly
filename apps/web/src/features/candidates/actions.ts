@@ -20,7 +20,6 @@ import {
   jobs,
   member as authMembers,
   notifications,
-  scorecards,
   mailMessages,
   mailThreads,
 } from "@harly/db";
@@ -53,7 +52,10 @@ import {
   publishPersistedDomainEvents,
 } from "@/server/events/emit";
 import { serializeCandidate } from "./service";
-import { findActiveJobStage } from "@/features/scorecards/stage";
+import { EMAIL_DRAFT_TYPES, type EmailDraftType } from "./email-draft-types";
+import { createScorecardForApi } from "@/features/scorecards/service";
+import { ApiError } from "@harly/api";
+import { isHttpUrl, scorecardCreateSchema } from "@harly/validators";
 import {
   createReferralRecord,
   serializeReferral as serializeCandidateReferral,
@@ -280,14 +282,11 @@ const optionalText = z
   .trim()
   .transform((value) => (value.length > 0 ? value : null));
 
-const optionalHttpsUrl = z
+const optionalHttpUrl = z
   .string()
   .trim()
   .transform((value) => (value.length > 0 ? value : null))
-  .refine((value) => !value || URL.canParse(value), "invalidUrl")
-  .refine((value) => !value || value.startsWith("https://"), {
-    message: "urlMustUseHttps",
-  });
+  .refine((value) => !value || isHttpUrl(value), "invalidUrl");
 
 const candidateUpdateSchema = z.object({
   firstName: z.string().trim().min(1, "firstNameRequired"),
@@ -295,9 +294,9 @@ const candidateUpdateSchema = z.object({
   email: z.string().trim().email("invalidEmail"),
   phone: optionalText,
   address: optionalText,
-  linkedinUrl: optionalHttpsUrl,
-  githubUrl: optionalHttpsUrl,
-  websiteUrl: optionalHttpsUrl,
+  linkedinUrl: optionalHttpUrl,
+  githubUrl: optionalHttpUrl,
+  websiteUrl: optionalHttpUrl,
   avatarUrl: optionalText,
   headline: optionalText,
   summary: optionalText,
@@ -639,9 +638,9 @@ const createCandidateSchema = z.object({
   phone: optionalText,
   address: optionalText,
   headline: optionalText,
-  linkedinUrl: optionalHttpsUrl,
-  githubUrl: optionalHttpsUrl,
-  websiteUrl: optionalHttpsUrl,
+  linkedinUrl: optionalHttpUrl,
+  githubUrl: optionalHttpUrl,
+  websiteUrl: optionalHttpUrl,
   referral: createReferralInputSchema,
 });
 
@@ -1273,6 +1272,7 @@ const scorecardSchema = z.object({
   stageId: z.string().uuid().nullable().optional(),
   rating: z.enum(["strong", "mixed", "weak"]),
   comment: z.string().max(5000).optional(),
+  criteria: scorecardCreateSchema.shape.criteria,
 });
 
 export async function createScorecard(input: {
@@ -1282,93 +1282,52 @@ export async function createScorecard(input: {
   stageId?: string | null;
   rating: "strong" | "mixed" | "weak";
   comment?: string;
+  criteria?: { label: string; score?: number }[];
 }): Promise<{ success: boolean; error?: string }> {
   const t = await getTranslations("server.candidates.actions");
+  const parsed = scorecardSchema.safeParse(input);
+  if (!parsed.success) {
+    return {
+      success: false,
+      error: await issueMessage(parsed.error.issues[0]?.message, "invalidEvaluation"),
+    };
+  }
+  const { organization: workspace, user } = await getWorkspaceContext();
+  if (workspace.id !== input.workspaceId) {
+    return { success: false, error: t("workspaceAccessDenied") };
+  }
   try {
-    const parsed = scorecardSchema.safeParse(input);
-    if (!parsed.success) {
-      return {
-        success: false,
-        error: await issueMessage(parsed.error.issues[0]?.message, "invalidEvaluation"),
-      };
-    }
-    const { organization: workspace, user } = await getWorkspaceContext();
-    if (workspace.id !== input.workspaceId) {
-      return { success: false, error: t("workspaceAccessDenied") };
-    }
+    // Permission and scope errors carry their own message; show it instead of
+    // a generic failure.
     await requireCandidatePermission("collab:write", input.candidateId);
-    if (!(await assertCandidate(input.candidateId, input.workspaceId))) {
-      return { success: false, error: t("candidateNotFound") };
-    }
-    const [application] = await db
-      .select({ id: applications.id, jobId: applications.jobId })
-      .from(applications)
-      .where(
-        and(
-          eq(applications.id, parsed.data.applicationId),
-          eq(applications.workspaceId, input.workspaceId),
-          eq(applications.candidateId, input.candidateId),
-        ),
-      )
-      .limit(1);
-    if (!application) {
-      return { success: false, error: t("applicationNotFound") };
-    }
-    let stageName: string | null = null;
-    if (parsed.data.stageId) {
-      const stage = await findActiveJobStage(db, {
-        workspaceId: input.workspaceId,
-        jobId: application.jobId,
-        stageId: parsed.data.stageId,
-      });
-      if (!stage) {
-        return {
-          success: false,
-          error: t("stageUnavailable"),
-        };
-      }
-      stageName = stage.name;
-    }
-    const [existingScorecard] = await db
-      .select({ id: scorecards.id })
-      .from(scorecards)
-      .where(
-        and(
-          eq(scorecards.workspaceId, input.workspaceId),
-          eq(scorecards.applicationId, application.id),
-          eq(scorecards.authorId, user.id),
-          parsed.data.stageId
-            ? eq(scorecards.stageId, parsed.data.stageId)
-            : isNull(scorecards.stageId),
-        ),
-      )
-      .limit(1);
-
-    if (existingScorecard) {
-      await db
-        .update(scorecards)
-        .set({
-          rating: parsed.data.rating,
-          comment: parsed.data.comment?.trim() || null,
-          stageName,
-          updatedAt: new Date(),
-        })
-        .where(eq(scorecards.id, existingScorecard.id));
-    } else {
-      await db.insert(scorecards).values({
-        workspaceId: input.workspaceId,
-        candidateId: input.candidateId,
-        applicationId: application.id,
+    await requireApplicationPermission("collab:write", parsed.data.applicationId);
+  } catch (error) {
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : t("unableToSaveEvaluation"),
+    };
+  }
+  try {
+    // Same writer as the REST API, so stage rules and criteria stay in one place.
+    await createScorecardForApi({
+      workspaceId: workspace.id,
+      actorUserId: user.id,
+      values: {
+        candidateId: parsed.data.candidateId,
+        applicationId: parsed.data.applicationId,
         stageId: parsed.data.stageId ?? null,
-        authorId: user.id,
         rating: parsed.data.rating,
-        comment: parsed.data.comment?.trim() || null,
-        stageName,
-      });
-    }
+        comment: parsed.data.comment,
+        criteria: parsed.data.criteria,
+      },
+    });
     revalidatePath(`/dashboard/candidates/${input.candidateId}`);
     return { success: true };
-  } catch {
+  } catch (error) {
+    if (error instanceof ApiError && error.status < 500) {
+      return { success: false, error: error.message };
+    }
+    emailLog.error({ err: error }, "Unable to save scorecard");
     return {
       success: false,
       error: t("unableToSaveEvaluation"),
@@ -1693,13 +1652,7 @@ const draftEmailSchema = z.object({
   candidateId: z.string().min(1),
   threadId: z.string().uuid().nullable().optional(),
   applicationId: z.string().uuid().nullable().optional(),
-  type: z.enum([
-    "screening",
-    "interview_invite",
-    "rejection",
-    "offer",
-    "followup",
-  ]),
+  type: z.enum(EMAIL_DRAFT_TYPES),
   additionalInstructions: z.string().trim().max(2000).nullable().optional(),
 });
 
@@ -1711,7 +1664,7 @@ export async function generateEmailDraftAction(input: {
   candidateId: string;
   threadId?: string | null;
   applicationId?: string | null;
-  type: "screening" | "interview_invite" | "rejection" | "offer" | "followup";
+  type: EmailDraftType;
   additionalInstructions?: string | null;
 }): Promise<GenerateEmailDraftResult> {
   const t = await getTranslations("server.candidates.actions");

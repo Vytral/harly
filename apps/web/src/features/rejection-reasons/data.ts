@@ -192,7 +192,7 @@ function splitName(fullName: string) {
  * Mirrors CandidateRejected and reads the same catalog keys, so the preview
  * matches what is sent.
  */
-export function builtInRejectionBody(input: {
+function builtInRejectionBody(input: {
   candidateName: string;
   jobTitle: string;
   companyName: string;

@@ -26,6 +26,7 @@ import { SidePanel } from "@/components/ui/side-panel";
 import { Textarea } from "@/components/ui/textarea";
 import {
   getBrowserTimeZone,
+  INTERVIEW_TYPE_OPTIONS,
   NonexistentLocalTimeError,
   parseScheduledAt,
 } from "@/features/interviews/shared";
@@ -43,13 +44,7 @@ export type ScheduleMemberOption = {
   image?: string | null;
 };
 
-const TYPES = [
-  { key: "screening", labelKey: "screening" },
-  { key: "technical", labelKey: "technical" },
-  { key: "culture_fit", labelKey: "cultureFit" },
-  { key: "onsite", labelKey: "onsite" },
-  { key: "final", labelKey: "final" },
-] as const;
+const TYPES = INTERVIEW_TYPE_OPTIONS;
 
 const MODES = [
   { key: "video", labelKey: "video", icon: Video },

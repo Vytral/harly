@@ -1,13 +1,20 @@
 # @harly/validators
 
-Shared Zod validation schemas for Harly.
+Shared Zod validation schemas used by the web app and the REST API.
 
-> **Status:** Placeholder — not yet implemented. Validation schemas currently live alongside their features in `apps/web`.
+## What lives here
 
-## Planned contents
+- Candidate create and update inputs, including the http(s)-only profile link schema (`httpUrlSchema`, `isHttpUrl`)
+- Job, application, offer, scorecard, task, webhook and API key inputs for the public REST API
+- Upload request limits for resumes and images
+- Small shared primitives such as `optionalTrimmedString` and `optionalHttpsUrlSchema`
 
-- Job forms
-- Application forms
-- Candidate forms
-- Workspace settings
-- Public API inputs
+Feature-specific forms and server actions that need translated messages still keep their schemas next to the feature in `apps/web`; they reuse the primitives from this package where one exists.
+
+## Usage
+
+```ts
+import { candidateCreateSchema, isHttpUrl } from "@harly/validators";
+```
+
+Run the tests with `pnpm --filter @harly/validators test`.

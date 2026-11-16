@@ -18,6 +18,7 @@ import {
   type WorkspaceSearchActor,
 } from "@/features/search/scope";
 import { resolveSearchActor } from "@/features/search/workspace-search";
+import { requirePermission } from "@/features/workspaces/permissions-server";
 
 /**
  * A pool entry is visible to a restricted actor when its pool job is inside
@@ -62,6 +63,7 @@ export async function listPoolCandidates(filters?: {
   maxExperience?: number;
   skills?: string[];
 }): Promise<PoolCandidate[]> {
+  await requirePermission("candidates:view");
   const actor = await resolveSearchActor();
   const workspace = { id: actor.workspaceId };
   const gravatarEnabled = await getWorkspaceGravatarEnabled(workspace.id);
@@ -242,6 +244,7 @@ export async function listPoolCandidates(filters?: {
 export async function isCandidateInPool(
   candidateId: string,
 ): Promise<{ inPool: boolean; poolEntryId?: string }> {
+  await requirePermission("candidates:view");
   const actor = await resolveSearchActor();
   const workspace = { id: actor.workspaceId };
   const visibleEntry = poolEntryScopeSql(actor);
@@ -275,6 +278,7 @@ export async function getPoolStats(): Promise<{
   total: number;
   bySource: Record<string, number>;
 }> {
+  await requirePermission("candidates:view");
   const actor = await resolveSearchActor();
   const workspace = { id: actor.workspaceId };
   const visibleEntry = poolEntryScopeSql(actor);
@@ -312,6 +316,7 @@ export type OpenJob = {
 };
 
 export async function listOpenJobs(): Promise<OpenJob[]> {
+  await requirePermission("jobs:view");
   const actor = await resolveSearchActor();
   const workspace = { id: actor.workspaceId };
 

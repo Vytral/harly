@@ -139,4 +139,17 @@ describe.skipIf(!runPipelineIntegration)("talent pool: role scope (database)", (
     const ids = (await listOpenJobs()).map((job) => job.id);
     expect(ids).toEqual(expect.arrayContaining([fx.jobB, fx.jobUnassignedEmpty, fx.jobAssignedEmpty]));
   });
+
+  it("requires candidates:view for pool reads and jobs:view for the open job list", async () => {
+    actAs("none");
+    await expect(listPoolCandidates()).rejects.toThrow();
+    await expect(getPoolStats()).rejects.toThrow();
+    await expect(isCandidateInPool(fx.candidateA)).rejects.toThrow();
+    await expect(listOpenJobs()).rejects.toThrow();
+
+    // jobs:view alone opens the job list but not the pool.
+    actAs("plain");
+    await expect(listOpenJobs()).resolves.toBeDefined();
+    await expect(listPoolCandidates()).rejects.toThrow();
+  });
 });

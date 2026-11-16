@@ -3,7 +3,11 @@ import { describe, expect, it } from "vitest";
 import {
   allowedImageContentTypes,
   allowedResumeContentTypes,
+  candidateCreateSchema,
+  candidateUpdateSchema,
+  httpUrlSchema,
   imageUploadRequestSchema,
+  isHttpUrl,
   invitationSchema,
   jobCreateSchema,
   inviteEmailSchema,
@@ -519,5 +523,43 @@ describe("jobCreateSchema minimum", () => {
 
   it("publishes a job with readable content", () => {
     expect(jobCreateSchema.safeParse({ title: "Support Engineer", status: "open", description: "<p>Help customers run their servers.</p>" }).success).toBe(true);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// http(s)-only candidate URLs
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe("httpUrlSchema and isHttpUrl", () => {
+  it.each(["https://example.com/in/ada", "http://example.com"])("accepts %s", (url) => {
+    expect(httpUrlSchema.safeParse(url).success).toBe(true);
+    expect(isHttpUrl(url)).toBe(true);
+  });
+
+  it.each([
+    "javascript:alert(1)",
+    "data:text/html,hello",
+    "ftp://example.com/file",
+    "file:///etc/passwd",
+    "not a url",
+    "",
+  ])("rejects %s", (url) => {
+    expect(httpUrlSchema.safeParse(url).success).toBe(false);
+    expect(isHttpUrl(url)).toBe(false);
+  });
+
+  it("is enforced on candidate create and update profile links", () => {
+    const base = { firstName: "Ada", lastName: "Example", email: "ada@example.test" };
+    expect(
+      candidateCreateSchema.safeParse({ ...base, linkedinUrl: "javascript:alert(1)" }).success,
+    ).toBe(false);
+    expect(
+      candidateCreateSchema.safeParse({ ...base, githubUrl: "ftp://example.com/ada" }).success,
+    ).toBe(false);
+    expect(
+      candidateCreateSchema.safeParse({ ...base, websiteUrl: "https://example.com" }).success,
+    ).toBe(true);
+    expect(candidateUpdateSchema.safeParse({ websiteUrl: "data:text/html,x" }).success).toBe(false);
+    expect(candidateUpdateSchema.safeParse({ websiteUrl: null }).success).toBe(true);
   });
 });

@@ -3,6 +3,7 @@ import "server-only";
 import { and, desc, eq, isNull, lt, or } from "drizzle-orm";
 
 import { ApiError, type Cursor } from "@harly/api";
+import { jobSalaryIssues } from "@harly/validators";
 import {
   db,
   defaultStageRows,
@@ -268,6 +269,21 @@ export async function updateJobForApi(input: {
     workspaceId: input.workspaceId,
     jobId: input.jobId,
   });
+
+  // A partial update can only be judged against the row it produces: sending
+  // only `salaryMin` must still be checked against the stored maximum.
+  const touchesSalary = (["salaryMin", "salaryMax", "currency", "salaryPeriod"] as const).some(
+    (key) => input.values[key] !== undefined,
+  );
+  if (touchesSalary) {
+    const [salaryIssue] = jobSalaryIssues({
+      salaryMin: input.values.salaryMin === undefined ? existing.salaryMin : input.values.salaryMin,
+      salaryMax: input.values.salaryMax === undefined ? existing.salaryMax : input.values.salaryMax,
+      currency: input.values.currency === undefined ? existing.currency : input.values.currency,
+      salaryPeriod: input.values.salaryPeriod === undefined ? existing.salaryPeriod : input.values.salaryPeriod,
+    });
+    if (salaryIssue) throw ApiError.unprocessable(salaryIssue.message);
+  }
 
   const nextStatus = input.values.status ?? existing.status;
   const nextDescription = input.values.description ?? existing.description;

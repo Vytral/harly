@@ -219,7 +219,9 @@ export async function fulfilDsarErasureAction(
       error: t("erasureNotReady"),
     };
 
-  const trashed = await trashCandidate(parsed.data.candidateId);
+  const trashed = await trashCandidate(parsed.data.candidateId, {
+    bypassRoleScope: true,
+  });
   if (!trashed.ok) {
     const [alreadyTrashed] = await db
       .select({ id: candidates.id })
@@ -261,6 +263,8 @@ export async function fulfilDsarErasureAction(
   const deleted = await permanentlyDeleteCandidate(
     parsed.data.candidateId,
     context.user.email,
+    undefined,
+    { bypassRoleScope: true },
   );
   if (!deleted.ok) {
     if ("legalHold" in deleted && deleted.legalHold) {

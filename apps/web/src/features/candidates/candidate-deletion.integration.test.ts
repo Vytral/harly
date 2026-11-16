@@ -29,6 +29,10 @@ vi.mock("@/features/workspaces/permissions-server", () => ({
     user: { id: context.userId, email: "deleter@example.test" },
   }),
   requireCandidatePermission: vi.fn().mockResolvedValue(undefined),
+  getRolePolicy: vi.fn().mockResolvedValue({
+    permissions: [],
+    scope: { jobAccess: "all", departments: [], regions: [] },
+  }),
 }));
 vi.mock("@/features/workspaces/context", () => ({
   getWorkspaceContext: async () => ({

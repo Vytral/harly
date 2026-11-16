@@ -108,4 +108,28 @@ describe("updateJobForApi", () => {
     await expect(updateJobForApi({ workspaceId: "w1", jobId: "j1", values: { status: "open" } })).resolves.toBeDefined();
     expect(state.setArg).toMatchObject({ status: "open" });
   });
+
+  it("validates a partial salary update against the stored row", async () => {
+    // Stored range is 10-20: raising only the minimum above the maximum is invalid.
+    await expect(
+      updateJobForApi({ workspaceId: "w1", jobId: "j1", values: { salaryMin: 50 } }),
+    ).rejects.toMatchObject({ status: 422 });
+    expect(state.setArg).toBeNull();
+
+    // Clearing the currency while an amount remains is invalid too.
+    await expect(
+      updateJobForApi({ workspaceId: "w1", jobId: "j1", values: { currency: null } }),
+    ).rejects.toMatchObject({ status: 422 });
+
+    await expect(
+      updateJobForApi({ workspaceId: "w1", jobId: "j1", values: { salaryMin: 15 } }),
+    ).resolves.toBeDefined();
+  });
+
+  it("does not block unrelated updates on a legacy row with an invalid range", async () => {
+    state.existing = { ...base, salaryMin: 90, salaryMax: 20 };
+    await expect(
+      updateJobForApi({ workspaceId: "w1", jobId: "j1", values: { title: "New" } }),
+    ).resolves.toBeDefined();
+  });
 });

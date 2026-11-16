@@ -8,7 +8,10 @@ import { after } from "next/server";
 
 import { db, workspaceSettings } from "@harly/db";
 import { isDemoMode } from "@harly/config";
-import { createPublicApplication } from "@/features/applications/data";
+import {
+  createPublicApplication,
+  DEFAULT_APPLICATION_CONSENT_TEXT,
+} from "@/features/applications/data";
 import {
   CAPTCHA_RESPONSE_FIELDS,
   verifyCaptchaToken,
@@ -264,7 +267,6 @@ export async function submitApplicationAction(
     headers: new Headers({
       "x-forwarded-for": requestHeaders.get("x-forwarded-for") ?? "",
       "x-real-ip": requestHeaders.get("x-real-ip") ?? "",
-      "cf-connecting-ip": requestHeaders.get("cf-connecting-ip") ?? "",
     }),
   } as Request);
 
@@ -342,7 +344,9 @@ export async function submitApplicationAction(
         if (typeof raw === "string" && raw.startsWith("[")) {
           return JSON.parse(raw) as string[];
         }
-      } catch {}
+      } catch (error) {
+        aiParseLogger.warn({ err: error }, "Ignoring malformed skills field on application form");
+      }
       return undefined;
     })(),
     experienceYears: (() => {
@@ -384,8 +388,7 @@ export async function submitApplicationAction(
   const consentGiven = formData.get("consentGiven") === "true";
 
   // Resolve the wording on the server, rather than trusting a browser value.
-  let consentText =
-    "I agree to the privacy policy and consent to the processing of my personal data.";
+  let consentText = DEFAULT_APPLICATION_CONSENT_TEXT;
   const [settings] = await db
     .select({
       consentCheckboxText: workspaceSettings.consentCheckboxText,
