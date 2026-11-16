@@ -67,7 +67,7 @@ export async function resolveInterviewEmailTimeZone(
       const [settings] = await db
         .select({ timezone: workspaceSettings.timezone })
         .from(workspaceSettings)
-        .where(eq(workspaceSettings.workspaceId, workspaceId))
+        .where(eq(workspaceSettings.organizationId, workspaceId))
         .limit(1);
       workspaceZone = settings?.timezone ?? null;
     } catch (error) {

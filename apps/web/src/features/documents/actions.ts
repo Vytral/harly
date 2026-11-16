@@ -45,7 +45,6 @@ import { sendDocumentForEnvelope } from "@/lib/esign/document-signing";
 import { archiveSubmission, freshEsignContext } from "@/lib/esign/client";
 import { createLogger } from "@/lib/logger";
 import { deleteStorageObjects } from "./storage-cleanup";
-import { storage } from "@/lib/storage";
 import { persistDomainEvent, publishPersistedDomainEvents } from "@/server/events/emit";
 import { documentAutomationContext } from "@/lib/esign/document-automation-context";
 import { voidNativeSignature } from "@/lib/esign/native/void";

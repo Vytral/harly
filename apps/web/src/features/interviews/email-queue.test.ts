@@ -28,7 +28,7 @@ vi.mock("@harly/db", () => {
     emailOutbox: { id: "id", status: "status", payload: "payload", kind: "kind", workspaceId: "ws", createdAt: "createdAt", dedupeKey: "dedupeKey" },
     interviews: { id: "id", workspaceId: "ws", updatedAt: "updatedAt" },
     user: { id: "userId", timezone: "timezone" },
-    workspaceSettings: { workspaceId: "wsId", timezone: "wsTimezone" },
+    workspaceSettings: { organizationId: "wsId", timezone: "wsTimezone" },
   };
 });
 vi.mock("@/lib/email/outbox-processor", () => ({
