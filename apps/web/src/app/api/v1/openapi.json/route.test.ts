@@ -114,7 +114,8 @@ describe("GET /api/v1/openapi.json", () => {
         }
         if (entry.isFile() && entry.name === "route.ts") {
           const route = normalizeRoute(`/${segments.join("/")}`);
-          if (route !== "/openapi.json") {
+          // The Automations HTTP API is withdrawn (410) and deliberately not in the spec.
+          if (route !== "/openapi.json" && !route.startsWith("/automations")) {
             implementedRoutes.push(route);
           }
         }

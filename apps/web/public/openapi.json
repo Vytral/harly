@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "Harly API",
-    "version": "1.0.0"
+    "version": "0.1.0-dev"
   },
   "servers": [
     {
@@ -19,7 +19,7 @@
     "/api/v1/jobs": {
       "get": {
         "summary": "List jobs",
-        "description": "Retrieve a cursor-paginated list of jobs for the workspace.",
+        "description": "Retrieve a cursor-paginated list of jobs for the workspace. Publishable keys only see jobs that are public on the career page, with public fields only.",
         "operationId": "listJobs",
         "tags": [
           "Jobs"
@@ -177,14 +177,11 @@
                           "description",
                           "requirements",
                           "benefits",
-                          "keywords",
                           "salaryMin",
                           "salaryMax",
                           "currency",
                           "salaryPeriod",
-                          "publishedAt",
-                          "createdAt",
-                          "updatedAt"
+                          "publishedAt"
                         ],
                         "additionalProperties": false
                       }
@@ -495,14 +492,11 @@
                         "description",
                         "requirements",
                         "benefits",
-                        "keywords",
                         "salaryMin",
                         "salaryMax",
                         "currency",
                         "salaryPeriod",
-                        "publishedAt",
-                        "createdAt",
-                        "updatedAt"
+                        "publishedAt"
                       ],
                       "additionalProperties": false
                     },
@@ -918,7 +912,7 @@
     "/api/v1/jobs/{id}": {
       "get": {
         "summary": "Get job",
-        "description": "Retrieve details of a single job by its ID.",
+        "description": "Retrieve details of a single job by its ID. Publishable keys only see jobs that are public on the career page, with public fields only.",
         "operationId": "getJob",
         "tags": [
           "Jobs"
@@ -1053,14 +1047,11 @@
                         "description",
                         "requirements",
                         "benefits",
-                        "keywords",
                         "salaryMin",
                         "salaryMax",
                         "currency",
                         "salaryPeriod",
-                        "publishedAt",
-                        "createdAt",
-                        "updatedAt"
+                        "publishedAt"
                       ],
                       "additionalProperties": false
                     },
@@ -1381,14 +1372,11 @@
                         "description",
                         "requirements",
                         "benefits",
-                        "keywords",
                         "salaryMin",
                         "salaryMax",
                         "currency",
                         "salaryPeriod",
-                        "publishedAt",
-                        "createdAt",
-                        "updatedAt"
+                        "publishedAt"
                       ],
                       "additionalProperties": false
                     },
@@ -2149,14 +2137,11 @@
                         "description",
                         "requirements",
                         "benefits",
-                        "keywords",
                         "salaryMin",
                         "salaryMax",
                         "currency",
                         "salaryPeriod",
-                        "publishedAt",
-                        "createdAt",
-                        "updatedAt"
+                        "publishedAt"
                       ],
                       "additionalProperties": false
                     },
@@ -2479,14 +2464,11 @@
                         "description",
                         "requirements",
                         "benefits",
-                        "keywords",
                         "salaryMin",
                         "salaryMax",
                         "currency",
                         "salaryPeriod",
-                        "publishedAt",
-                        "createdAt",
-                        "updatedAt"
+                        "publishedAt"
                       ],
                       "additionalProperties": false
                     },
