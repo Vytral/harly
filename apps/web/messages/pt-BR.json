@@ -826,6 +826,7 @@
     "signIn": "Sign in",
     "title": "Create your account",
     "subtitle": "Set up your ATS in minutes. No credit card required.",
+    "joinSubtitle": "Create your account to join {name}.",
     "already": "Already have an account? <link>Sign in</link>",
     "inviteOnly": "Signups are invite-only.",
     "inviteHelp": "This Harly workspace is already set up. Ask an admin to invite you; your invite link takes you straight to the right role.",
@@ -1062,6 +1063,7 @@
     "joinName": "Join {name}",
     "joinRole": "You'll join as <strong>{role}</strong>.",
     "signInJoin": "Sign in to join",
+    "createAccountJoin": "Create an account",
     "signInJoinHelp": "Sign in or create an account to join this workspace.",
     "invitedRole": "You were invited as <strong>{role}</strong> using {email}.",
     "invitedBy": "Invited by <strong>{name}</strong>",
@@ -2625,6 +2627,16 @@
         "welcomeBack": "Welcome back",
         "signInSubtitle": "Sign in to your candidate portal",
         "poweredBy": "Powered by <b>Harly</b>"
+      }
+    },
+    "portalMagic": {
+      "page": {
+        "metadataTitle": "Confirm sign-in",
+        "title": "Confirm sign-in",
+        "description": "Select the button to sign in to the candidate portal. This link works once.",
+        "missingToken": "This sign-in link is incomplete. Request a new one.",
+        "confirm": "Sign in",
+        "backToLogin": "Back to sign in"
       }
     },
     "portalNotifications": {
@@ -7658,7 +7670,8 @@
         "errors": {
           "optionsFailed": "Could not get registration options.",
           "registrationFailed": "Registration failed.",
-          "registerFailed": "Could not register the passkey."
+          "registerFailed": "Could not register the passkey.",
+          "removeFailed": "Could not remove the passkey."
         }
       },
       "scimProvisioningCard": {
@@ -10865,6 +10878,10 @@
         "title": "Possible duplicate candidate",
         "body": "Harly AI found a possible match with {names}."
       },
+      "scheduledReportFailing": {
+        "title": "Scheduled report keeps failing: {name}",
+        "body": "The last {failures} runs failed. Harly keeps retrying; check the schedule in Reports."
+      },
       "jobApprovalRequested": {
         "title": "Approval requested: {jobTitle}",
         "body": "Review this job before recruiting starts."
@@ -11221,6 +11238,7 @@
         "unableToUpdateBoardBranding": "Unable to update board branding.",
         "inviteOwnerBlocked": "The Owner role can't be given through an invite. Invite this person with another role, then promote them from the members list.",
         "alreadyPendingInvitation": "This email already has a pending invitation.",
+        "alreadyMember": "This person is already a member of the workspace. Change their role from the members list.",
         "invalidInvitation": "This invitation isn't valid.",
         "unknownRole": "Unknown role.",
         "unableToInviteMember": "Unable to invite member.",
@@ -12207,6 +12225,7 @@
         "onlySentDecide": "Only sent offers can be decided.",
         "expiredDecide": "This offer has expired and can no longer be decided.",
         "applicationNoLongerActive": "This application is no longer active. Refresh and try again.",
+        "offerChanged": "This offer was changed by another recruiter. Refresh and try again.",
         "cannotWithdraw": "This offer can no longer be withdrawn.",
         "candidateFallback": "Candidate",
         "hiringTeamTitle": "Offer {decision}, {title}",
