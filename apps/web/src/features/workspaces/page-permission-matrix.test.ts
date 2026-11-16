@@ -80,14 +80,55 @@ function allowlistKey(file: string): string {
   return `${name}:${route}`;
 }
 
+/**
+ * Remove `//` and block comments so a commented-out guard call cannot satisfy
+ * the matrix. A small scanner rather than a regex so comment markers inside
+ * string, template and regex-free literals (`"https://..."`) are left alone.
+ */
+function stripComments(source: string): string {
+  let out = "";
+  let i = 0;
+  let quote: string | null = null;
+  while (i < source.length) {
+    const ch = source[i];
+    const next = source[i + 1];
+    if (quote) {
+      out += ch;
+      if (ch === "\\") {
+        out += next ?? "";
+        i += 2;
+        continue;
+      }
+      if (ch === quote) quote = null;
+      i += 1;
+      continue;
+    }
+    if (ch === "/" && next === "/") {
+      while (i < source.length && source[i] !== "\n") i += 1;
+      continue;
+    }
+    if (ch === "/" && next === "*") {
+      const end = source.indexOf("*/", i + 2);
+      i = end === -1 ? source.length : end + 2;
+      out += " ";
+      continue;
+    }
+    if (ch === '"' || ch === "'" || ch === "`") quote = ch;
+    out += ch;
+    i += 1;
+  }
+  return out;
+}
+
 function callsGuard(source: string): boolean {
-  return PAGE_GUARD_CALLS.some((name) => new RegExp(`\\b${name}\\(`).test(source));
+  return PAGE_GUARD_CALLS.some((name) => new RegExp(`\\b${name}\\(`).test(stripComments(source)));
 }
 
 /** Literal permissions passed to the page-level guards in a page source. */
-function pageGuardPermissions(source: string): Permission[] {
+function pageGuardPermissions(rawSource: string): Permission[] {
+  const source = stripComments(rawSource);
   const found = new Set<string>();
-  for (const match of source.matchAll(/\brequirePagePermission\(\s*"([^"]+)"\s*\)/g)) {
+  for (const match of source.matchAll(/\b(?:requirePagePermission|requirePermission)\(\s*"([^"]+)"\s*\)/g)) {
     found.add(match[1]);
   }
   for (const match of source.matchAll(/\brequireAnyPagePermission\(\s*\[([^\]]*)\]\s*\)/g)) {
@@ -212,5 +253,20 @@ describe("dashboard page permission matrix", () => {
       console.info(rows.join("\n"));
     }
     expect(rows.length).toBe(pages.length);
+  });
+});
+
+describe("matrix comment stripping", () => {
+  it("ignores guard calls that only appear in comments", () => {
+    expect(callsGuard('// await requirePagePermission("jobs:view");\nexport default 1;')).toBe(false);
+    expect(callsGuard('/* requirePermission("jobs:view") */ export default 1;')).toBe(false);
+    expect(callsGuard('/**\n * requireAnyPagePermission(["a"])\n */')).toBe(false);
+    expect(pageGuardPermissions('// requirePagePermission("jobs:view")')).toEqual([]);
+  });
+
+  it("keeps real calls and does not treat // inside strings as a comment", () => {
+    expect(callsGuard('await requirePagePermission("jobs:view");')).toBe(true);
+    expect(callsGuard('const u = "https://example.test"; await requirePagePermission("jobs:view");')).toBe(true);
+    expect(pageGuardPermissions('await requirePermission("members:read");')).toEqual(["members:read"]);
   });
 });
