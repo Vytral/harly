@@ -259,18 +259,24 @@ vi.mock("./runtime/operational-policy", () => ({
     policyMocks.withWorkspaceAutomationEffectPermit,
 }));
 
-vi.mock("@/features/workspaces/permissions-server", () => ({
-  getRolePermissions: vi.fn().mockResolvedValue(["candidates:edit", "candidates:move"]),
+// The shared runtime permission check (active membership + role permissions)
+// is covered by runtime/workflow-permissions.test.ts; here it is a stub.
+const permissionMocks = vi.hoisted(() => ({
+  held: ["candidates:edit", "candidates:move"] as string[],
 }));
-vi.mock("@/features/workspaces/permissions", () => ({
-  roleIsAllPowerful: vi.fn((role: string) => role === "owner"),
+vi.mock("./runtime/workflow-permissions", () => ({
+  actorHasPermission: vi.fn(
+    async (_db: unknown, _workspaceId: string, _actor: string, permission: string) =>
+      permissionMocks.held.includes(permission)
+        ? { ok: true }
+        : { ok: false, reason: `Workflow creator lacks the \`${permission}\` permission.` },
+  ),
 }));
 vi.mock("@/features/workspaces/context", () => ({ getWorkspaceContext: vi.fn() }));
 
 import { runWorkflow } from "./engine";
 import { loadConditionContext } from "./conditions";
 import { getActionHandler } from "./registry";
-import { getRolePermissions } from "@/features/workspaces/permissions-server";
 import { db } from "@harly/db";
 
 const baseRun = {
@@ -338,10 +344,7 @@ describe("workflow engine — end-to-end", () => {
         value: await effect(),
       }),
     );
-    (getRolePermissions as ReturnType<typeof vi.fn>).mockResolvedValue([
-      "candidates:edit",
-      "candidates:move",
-    ]);
+    permissionMocks.held = ["candidates:edit", "candidates:move"];
   });
 
   it("skips the run when conditions do not match (records no steps)", async () => {
