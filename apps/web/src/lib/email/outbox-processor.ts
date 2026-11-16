@@ -48,6 +48,8 @@ import {
   renderRejectionTemplateById,
 } from "@/features/email-templates/data";
 import { isSampleEmailAddress } from "@/features/sample-data/constants";
+import { sanitizeTemplateHtml } from "@/features/email-templates/template-html.server";
+import { templateHtmlToPlainText } from "@/features/email-templates/plain-text";
 import { sendWorkspaceEmail, type SendEmailOptions } from "@/lib/email";
 import { getWorkspaceEmailBranding } from "@/lib/email/branding";
 import { getWorkspaceEmailConfig } from "@/lib/email/config";
@@ -614,12 +616,15 @@ async function deliverAutomationEmail(row: OutboxRow, database: typeof db = db):
     await markFailed(row.id, "Automation email payload is incomplete.", database);
     return false;
   }
+  // Rows queued before the producer sanitized (or by any other producer) are
+  // sanitized again here: this is the last step before HTML reaches a candidate.
+  const bodyHtml = sanitizeTemplateHtml(payload.bodyHtml);
   const branding = await getWorkspaceEmailBranding(row.workspaceId);
   const delivered = await sendRecorded(row, database, {
     to: payload.to,
     subject: payload.subject,
     react: createElement(CustomTemplateEmail, {
-      bodyHtml: payload.bodyHtml,
+      bodyHtml,
       companyName: payload.companyName || branding.name || "Harly",
       companyLogoUrl: branding.logoUrl ?? undefined,
       hideBranding: branding.hideBranding,
@@ -637,7 +642,7 @@ async function deliverAutomationEmail(row: OutboxRow, database: typeof db = db):
     workspaceId: row.workspaceId,
     toEmail: payload.to,
     subject: payload.subject,
-    textBody: payload.bodyHtml.replaceAll(/<[^>]*>/g, " "),
+    textBody: templateHtmlToPlainText(bodyHtml),
     outboxRowId: row.id,
     candidateId: payload.candidateId,
   });

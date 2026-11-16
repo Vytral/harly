@@ -40,8 +40,11 @@ import {
   WorkflowChatDeliveryUncertainError,
 } from "@/server/notify/dispatch";
 import { enqueueEmailOutbox } from "@/lib/email/outbox-processor";
+import { sanitizeTemplateHtml } from "@/features/email-templates/template-html.server";
 import {
+  escapeHtml,
   interpolateTemplate,
+  interpolateTemplateHtml,
   findUnknownVariables,
   type TemplateValues,
 } from "@/features/email-templates/interpolate";
@@ -2010,7 +2013,9 @@ const sendEmailHandler: ActionHandler<z.infer<typeof sendEmailSchema>> = {
     }
 
     const finalSubject = interpolateTemplate(subject, values);
-    const finalBody = interpolateTemplate(body, values);
+    // The body is HTML: escape candidate-controlled values, then sanitize the
+    // whole result before it is queued.
+    const finalBody = sanitizeTemplateHtml(interpolateTemplateHtml(body, values));
 
     const outboxId = await enqueueEmailOutbox(
       ctx.workspaceId,
@@ -2084,14 +2089,17 @@ const sendBookingLinkHandler: ActionHandler<z.infer<typeof sendBookingLinkSchema
       },
     });
     const subject = interpolateTemplate(input.subject ?? "Choose a time to meet with {{company_name}}", values);
-    const message = interpolateTemplate(input.body ?? "Pick a time that works for you: {{booking_link}}", {
+    const message = interpolateTemplateHtml(input.body ?? "Pick a time that works for you: {{booking_link}}", {
       ...values,
       booking_link: bookingUrl,
     });
+    const bodyHtml = sanitizeTemplateHtml(
+      `${message}<br/><br/><a href="${escapeHtml(bookingUrl)}">Choose a time</a>`,
+    );
     const outboxId = await enqueueEmailOutbox(
       ctx.workspaceId,
       "automation.email",
-      { to: toEmail, subject, bodyHtml: `${message}<br/><br/><a href="${bookingUrl}">Choose a time</a>`, candidateId: candidateId ?? null, companyName },
+      { to: toEmail, subject, bodyHtml, candidateId: candidateId ?? null, companyName },
       ctx.effectKey,
       ctx.actorUserId,
       database,

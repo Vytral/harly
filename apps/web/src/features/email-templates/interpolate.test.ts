@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   findUnknownVariables,
   interpolateTemplate,
+  interpolateTemplateHtml,
 } from "./interpolate";
 
 describe("interpolateTemplate", () => {
@@ -125,5 +126,25 @@ describe("findUnknownVariables", () => {
 
   it("detects dotted variable names as unknown", () => {
     expect(findUnknownVariables("{{job.title}}")).toEqual(["job.title"]);
+  });
+});
+
+describe("interpolateTemplateHtml", () => {
+  it("escapes candidate-controlled values but keeps the author's markup", () => {
+    expect(
+      interpolateTemplateHtml("<p>Hi {{candidate_first_name}}</p>", {
+        candidate_first_name: '<a href="https://evil.example.test">Ava</a>',
+      }),
+    ).toBe(
+      "<p>Hi &lt;a href=&quot;https://evil.example.test&quot;&gt;Ava&lt;/a&gt;</p>",
+    );
+  });
+
+  it("escapes ampersands and quotes so values stay inert inside attributes", () => {
+    expect(
+      interpolateTemplateHtml('<a href="{{portal_link}}">Open</a>', {
+        portal_link: 'https://example.test/?a=1&b="2"',
+      }),
+    ).toBe('<a href="https://example.test/?a=1&amp;b=&quot;2&quot;">Open</a>');
   });
 });

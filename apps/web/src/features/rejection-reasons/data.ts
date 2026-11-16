@@ -13,7 +13,7 @@ import {
 } from "@harly/db";
 import { candidateRejectedSubject, emailTranslator } from "@harly/emails";
 
-import { interpolateTemplate } from "@/features/email-templates/interpolate";
+import { interpolateTemplate, interpolateTemplateHtml } from "@/features/email-templates/interpolate";
 import { templateHtmlToPlainText } from "@/features/email-templates/plain-text";
 import { sanitizeTemplateHtml } from "@/features/email-templates/template-html.server";
 
@@ -276,7 +276,7 @@ export async function buildRejectionEmailPreview(
       candidateName,
       subject: interpolateTemplate(template.subject, values),
       body: templateHtmlToPlainText(
-        sanitizeTemplateHtml(interpolateTemplate(template.body, values)),
+        sanitizeTemplateHtml(interpolateTemplateHtml(template.body, values)),
       ),
     };
   }
