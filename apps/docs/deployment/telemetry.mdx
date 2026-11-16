@@ -1,0 +1,79 @@
+---
+title: "CLI telemetry"
+description: "What the Harly CLI sends when you opt in to anonymous install statistics, what it never sends, and every way to turn it off."
+---
+
+The Harly CLI can send one anonymous message when an installation finishes.
+It is off unless you say yes. Harly itself, the web app and the scheduler,
+never send telemetry.
+
+## What is sent
+
+One `install_completed` event, sent once after `harly init` launches the
+installation:
+
+| Field | Example | Notes |
+| --- | --- | --- |
+| `instanceId` | `3f1c9a52-8d0e-...` | A random UUID generated on your machine and saved in the CLI config. It is not derived from your host, domain, or account. |
+| `cliVersion` | `0.7.0` | The CLI version. |
+| `os`, `arch` | `linux`, `x64` | Operating system and CPU architecture. |
+| `deployMode` | `caddy` | The proxy mode you chose: `caddy`, `external`, or `local`. |
+| `referral` | `github` | Your optional answer to "how did you hear about Harly?". Skipping sends nothing. |
+
+## What is never sent
+
+Your domain or URL, email address, organization name, hostnames, secrets,
+`.env` contents, candidate data, and any information about your
+installation's contents. The payload is built from a fixed list of fields, so
+nothing else can be added by accident.
+
+Like any HTTPS request, the collector's server sees the connecting IP address
+while handling it. The open-source collector
+([`apps/telemetry`](https://github.com/Vytral/harly/tree/main/apps/telemetry))
+does not store or log it. IP addresses, user agents, and other headers are
+never written. The rate limiter keeps only a salted hash in memory, and the
+salt rotates every hour. If you point the CLI at your own collector with
+`HARLY_TELEMETRY_URL`, that operator's policy applies.
+
+## When it is asked and sent
+
+- `harly init` asks once, in an interactive terminal. The default answer is no.
+- Non-interactive runs, CI, and pipes send nothing unless you pass
+  `--telemetry` or set `HARLY_TELEMETRY=1`.
+- A failed or slow request never affects the installation. The CLI waits at
+  most two seconds and does not retry.
+
+## Turn it off
+
+Any one of these is enough. An opt-out always wins over a saved yes:
+
+| Method | Scope |
+| --- | --- |
+| `harly telemetry disable` | Saves your choice in the CLI config. |
+| `--no-telemetry` | One command. |
+| `HARLY_TELEMETRY=0` | Your environment. |
+| `DO_NOT_TRACK=1` | Your environment. |
+
+```bash
+harly telemetry status    # shows whether it is on, why, and the endpoint
+harly telemetry enable
+harly telemetry disable
+```
+
+Your choice, and the random instance id once you have opted in, are stored in
+`config.json` under `$XDG_CONFIG_HOME/harly` (default `~/.config/harly`), or
+`%APPDATA%\harly` on Windows. Set `HARLY_CONFIG_DIR` to use another directory.
+Disabling keeps the id so a later opt-in is not counted twice; delete the file
+to discard it.
+
+## Change the endpoint
+
+The CLI posts to `https://telemetry.harly.dev/v1/events`. Set
+`HARLY_TELEMETRY_URL` to an `http(s)` URL to send it elsewhere, for example to
+inspect the payload on your own server. `harly telemetry status` prints the
+endpoint in use.
+
+## Related pages
+
+- [Deploy with the Harly CLI](/deployment/cli)
+- [Configuration reference](/deployment/configuration)

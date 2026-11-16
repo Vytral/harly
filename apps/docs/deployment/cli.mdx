@@ -15,6 +15,7 @@ backups and upgrades.
 - Automate the installer from CI or an agent without unexpected prompts.
 - Provision Railway or prepare Fly.io and DigitalOcean deployments.
 - Check an installation at a glance with `harly status`.
+- Look up every command in the [command reference](#command-reference).
 - Interpret JSON results, exit codes, and readiness failures.
 
 ## Prerequisites
@@ -151,24 +152,100 @@ checks the npm registry at most once a day, with a short timeout. Set
 ### Anonymous telemetry
 
 `harly init` asks once, in an interactive terminal, whether to share anonymous
-usage data. The default is no. The payload is a random instance id, the CLI
-version, the operating system and architecture, the deployment mode, and an
-optional answer to how you heard about Harly. It never includes your domain,
-email, organization name, or IP address.
+install statistics. The default is no. See
+[CLI telemetry](/deployment/telemetry) for exactly what is sent and every way
+to opt out, including `harly telemetry disable` and `HARLY_TELEMETRY=0`.
+
+`init` also writes `HARLY_ORG_NAME` to `.env`, so the setup wizard does not ask
+for the company name again.
+
+## Command reference
+
+Every command takes an optional installation directory. When you omit it, the
+CLI uses the current directory (and, for most commands, any installation
+directory above it).
+
+| Command | What it does |
+| --- | --- |
+| `harly` | Opens the guided menu in a terminal. In scripts it checks the installation instead of prompting. |
+| `harly check [directory]` | Verifies host requirements without installing. |
+| `harly init [directory]` | Generates a new installation. See [Run the guided installer](#run-the-guided-installer). |
+| `harly launch [directory]` | Pulls images and starts the services. |
+| `harly resume [directory]` | Retries startup from the saved configuration. |
+| `harly status [directory]` | Shows health, version, disk, backup, and certificate. |
+| `harly doctor [directory]` | Checks services and public readiness. `--fix` offers repairs. |
+| `harly setup-secret [directory]` | Prints `HARLY_SETUP_SECRET` from `.env`. |
+| `harly backup [directory]` | Writes a private rollback archive. |
+| `harly backup prune [directory] --keep N` | Deletes all but the newest N archives. |
+| `harly restore <archive> [directory] --force` | Restores an archive. |
+| `harly update [directory]` | Updates the install to the current stable release. `upgrade` is an alias. |
+| `harly updater <run\|install-service\|status>` | Host-side helper for **Settings → Updates**. |
+| `harly uninstall [directory]` | Stops and removes Harly. |
+| `harly deploy <railway\|fly\|digitalocean>` | Provisions or prepares a cloud deployment. |
+| `harly install-global` | Installs this CLI globally with npm. |
+| `harly telemetry <status\|enable\|disable>` | Shows or changes anonymous install statistics. |
+
+### `status`
 
 ```bash
-harly telemetry status
+harly status [directory] [--json]
+```
+
+Prints one screen of health information and exits `1` when a service is
+stopped or the readiness check fails. See
+[See installation status](#see-installation-status).
+
+### `update` and `upgrade`
+
+```bash
+harly update [directory] [--to <version|latest>] [--yes]
+harly upgrade                      # same command
+```
+
+`upgrade` is an alias for `update`. Both move the application, not the CLI.
+`--to` installs a specific release (a prerelease only when you name it), and
+`--yes` skips the confirmation. Upgrade the CLI itself with
+`npm install -g @harly/cli@latest`. The steps are described in
+[Back up before updates](#back-up-before-updates).
+
+### `updater`
+
+```bash
+harly updater run [directory] [--once] [--interval <seconds>]
+harly updater install-service [directory] [--dry-run] [--output-dir <dir>]
+harly updater status [directory] [--json]
+```
+
+| Subcommand | Purpose |
+| --- | --- |
+| `run` | Polls the instance and applies updates that an owner requested or scheduled in the app. `--once` checks a single time (for cron). `--interval` sets the poll period, 15 to 3600 seconds (default 60, or `HARLY_UPDATER_INTERVAL`). |
+| `install-service` | Installs and starts a systemd unit named `harly-updater` on Linux when run as root. Otherwise it prints the unit, or writes it to `--output-dir`, with the commands to enable it. `--dry-run` installs nothing. It needs a permanent global CLI install, not `npx`. |
+| `status` | Shows the service state, whether the instance answers, and whether an update is running. |
+
+The updater reads `CRON_SECRET` and `HARLY_PORT` from the installation's
+`.env` and talks to the app on the loopback port, so no credentials cross the
+network.
+
+### `install-global`
+
+```bash
+harly install-global [--yes] [--dry-run]
+```
+
+Installs this CLI version globally with `npm install --global @harly/cli`, or
+refreshes an older global copy. It asks first in a terminal. Without a
+terminal, `--yes` is required. `--dry-run` shows the npm command and installs
+nothing.
+
+### `telemetry`
+
+```bash
+harly telemetry status      # default
 harly telemetry enable
 harly telemetry disable
 ```
 
-`--no-telemetry`, `HARLY_TELEMETRY=0`, or `DO_NOT_TRACK=1` turn it off and win
-over a saved yes. Non-interactive runs send nothing unless you pass
-`--telemetry` or set `HARLY_TELEMETRY=1`. `HARLY_TELEMETRY_URL` changes the
-endpoint.
-
-`init` also writes `HARLY_ORG_NAME` to `.env`, so the setup wizard does not ask
-for the company name again.
+Shows or saves your telemetry choice. See [CLI telemetry](/deployment/telemetry).
 
 ## Configure installer inputs
 
@@ -470,6 +547,20 @@ harly backup ./harly
 harly update
 ```
 
+`update` and `restore` write their own rollback archives, named
+`harly-auto-<timestamp>.tar.gz`, and keep only the newest 5. Archives you
+create with `harly backup` are never deleted automatically. To trim old
+archives yourself:
+
+```bash
+harly backup prune ./harly --keep 7 --dry-run   # preview
+harly backup prune ./harly --keep 7
+```
+
+`--keep` is required and counts every archive in `backups/`, manual and
+automatic. Restore also rejects an archive whose `manifest.json` is missing or
+does not list `database.dump`, before anything is changed.
+
 Run `update` from the installation directory, or from any directory inside it.
 It reads the current stable release and moves this install there. It does
 nothing when that version is already running. `--to 0.2.1-beta.1` opts into a
@@ -502,7 +593,10 @@ and options.
 
 ### Database pool settings in compose.yaml
 
-`harly init` writes a `compose.yaml` that forwards the database pool sizes
+`harly init` writes a copy of the repository's `compose.yaml`, which includes
+the optional `docuseal` e-signature service (start it with
+`COMPOSE_PROFILES=proxy,esign`; `init` generates `DOCUSEAL_SECRET_KEY_BASE`).
+It forwards the database pool sizes
 (`HARLY_DB_POOL_MAX`, `HARLY_DB_LOCK_POOL_MAX`, and
 `HARLY_DB_MAILBOX_LOCK_POOL_MAX`) from `.env` to the app, scheduler, and
 migrate services. See

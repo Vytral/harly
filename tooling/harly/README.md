@@ -33,9 +33,8 @@ harly backup
 harly update
 ```
 
-Upgrade the CLI itself with `npm install -g @harly/cli@latest`. To try it
-without installing, use `npx @harly/cli <command>` instead of
-`harly <command>`. Release notes are in [CHANGELOG.md](CHANGELOG.md).
+Upgrade the CLI itself with `npm install -g @harly/cli@latest`. Release notes
+are in [CHANGELOG.md](CHANGELOG.md).
 
 ## Installation lifecycle
 
@@ -63,13 +62,14 @@ web service, the scheduler, and Caddy when enabled. With automatic HTTPS,
 | `harly doctor [directory]` | Check service health and public readiness. |
 | `harly setup-secret [directory]` | Read the setup secret from the local `.env` file. |
 | `harly backup [directory]` | Create a private rollback archive. |
+| `harly backup prune [directory] --keep N` | Delete all but the newest N archives in `backups/` (`--dry-run` previews). Update and restore keep only their newest 5 automatic archives. |
 | `harly restore <archive> [directory]` | Restore database and uploads after explicit confirmation. |
 | `harly update [directory]` | Find this install and update it to the current stable release. |
 | `harly uninstall [directory]` | Stop and remove Harly; data is kept unless `--remove-data` is used. |
 | `harly deploy railway` | Provision and deploy the Railway project. |
 | `harly deploy fly prepare` | Generate a Fly.io deployment configuration. |
 | `harly deploy digitalocean prepare` | Generate a DigitalOcean App Platform specification. |
-| `harly install-global` | Install this CLI globally with npm so you can type `harly` instead of `npx @harly/cli`. |
+| `harly install-global` | Install this CLI globally with npm so you can type `harly` from anywhere. |
 
 Run `harly --help` for the commands grouped by purpose, and
 `harly help <command>` (or `harly <command> --help`) for one command's options

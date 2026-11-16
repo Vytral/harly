@@ -314,6 +314,7 @@ jobs:
           RUN_MAILBOX_INTEGRATION=1
           RUN_MCP_OAUTH_INTEGRATION=1
           RUN_JOB_CREATE_INTEGRATION=1
+          RUN_EVALUATION_PERSISTENCE_INTEGRATION=1
           PORTAL_AUTH_INTEGRATION=1
           pnpm --filter web exec vitest run .integration.test.ts
 
@@ -457,6 +458,17 @@ jobs:
           key: node-modules-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
       - name: Check Drizzle chain
         run: pnpm exec drizzle-kit check --config packages/db/drizzle.config.ts
+      # A schema.ts change without its generated migration would ship a
+      # database that does not match the code. Generating must be a no-op.
+      - name: Schema and migrations are in sync
+        run: |
+          pnpm --filter @harly/db db:generate
+          if [ -n "$(git status --porcelain -- packages/db)" ]; then
+            git status --short -- packages/db
+            git diff -- packages/db | head -80
+            echo "::error::packages/db/src/schema.ts has changes without a migration. Run pnpm db:generate and commit the result."
+            exit 1
+          fi
       - name: Clean migration and idempotent second run
         run: |
           pnpm --filter @harly/db db:migrate:local

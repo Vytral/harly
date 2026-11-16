@@ -36,7 +36,7 @@ type CommandDetail = {
 /** Per-command flags and examples, shown by `harly help <command>`. */
 export const commandDetails: Record<string, CommandDetail> = {
   menu: {
-    examples: ["harly", "npx @harly/cli"],
+    examples: ["harly"],
     note: "In a terminal, opens a menu of the common actions. In scripts and CI it checks the installation (or lists commands) instead of prompting.",
   },
   check: {
@@ -97,9 +97,13 @@ export const commandDetails: Record<string, CommandDetail> = {
     note: "Prints HARLY_SETUP_SECRET from .env, needed on first sign-in. Treat it like a password.",
   },
   backup: {
-    flags: [["--encrypt", "Encrypt the archive with age (AGE_RECIPIENT)"]],
-    examples: ["harly backup", "harly backup ./harly --encrypt"],
-    note: "Prints the archive path on stdout, so $(harly backup) works in scripts.",
+    flags: [
+      ["--encrypt", "Encrypt the archive with age (AGE_RECIPIENT)"],
+      ["--keep N", "With `backup prune`: keep the newest N archives, delete the rest"],
+      ["--dry-run", "With `backup prune`: list what would be deleted"],
+    ],
+    examples: ["harly backup", "harly backup ./harly --encrypt", "harly backup prune ./harly --keep 7"],
+    note: "Prints the archive path on stdout, so $(harly backup) works in scripts. Updates and restores keep only their newest 5 automatic rollback archives; `backup prune` also trims archives you wrote yourself.",
   },
   restore: {
     flags: [["--force", "Required: confirms the current data may be replaced"]],
@@ -138,8 +142,8 @@ export const commandDetails: Record<string, CommandDetail> = {
       ["--yes", "Install without asking (for scripts)"],
       ["--dry-run", "Show the npm command; install nothing"],
     ],
-    examples: ["npx @harly/cli install-global", "harly install-global --yes"],
-    note: "Installs this CLI with npm so you can type harly instead of npx @harly/cli. If npm's global bin directory is not on PATH, prints the exact command for your shell.",
+    examples: ["harly install-global", "harly install-global --yes"],
+    note: "Installs or refreshes this CLI with npm so you can type harly from anywhere. If npm's global bin directory is not on PATH, prints the exact command for your shell.",
   },
 };
 
@@ -216,7 +220,7 @@ export function renderHelp(
   for (const [example, description] of examples) lines.push(`    ${accent(example.padEnd(exampleWidth))}  ${soft(description)}`);
   lines.push(
     "",
-    `  ${soft("Not installed globally? Prefix any command with npx @harly/cli. Docs: https://docs.harly.dev")}`,
+    `  ${soft("Install the CLI with npm install -g @harly/cli. Docs: https://docs.harly.dev")}`,
     "",
   );
   return lines.join("\n");

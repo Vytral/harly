@@ -409,3 +409,54 @@ test("`harly doctor --fix` is wired into the command without breaking non-fix mo
   assert.equal(help.status, 0);
   assert.match(help.stdout, /--fix/);
 });
+
+async function restoreWithManifest(manifest) {
+  const { mkdir } = await import("node:fs/promises");
+  const root = await mkdtemp(path.join(os.tmpdir(), "harly-restore-manifest-"));
+  const installation = path.join(root, "install");
+  const content = path.join(root, "content");
+  await mkdir(installation);
+  await mkdir(content);
+  await writeFile(path.join(installation, "harly.config.json"), JSON.stringify({ storage: "local" }));
+  await writeFile(path.join(installation, ".env"), "POSTGRES_USER=harly\nPOSTGRES_DB=harly\n");
+  await writeFile(path.join(content, "database.dump"), "dump");
+  if (manifest !== undefined) await writeFile(path.join(content, "manifest.json"), manifest);
+  const archive = path.join(root, "backup.tar.gz");
+  const tar = spawnSync("tar", ["-czf", archive, "-C", content, "."]);
+  assert.equal(tar.status, 0);
+  const bin = await makeFakeDocker(`#!/bin/sh
+echo "docker must not be called: $@" >> "${root}/docker-calls"
+exit 0
+`);
+  try {
+    const result = spawnSync(process.execPath, [cli, "restore", archive, installation, "--force"], {
+      encoding: "utf8",
+      env: { ...process.env, PATH: `${bin}:${process.env.PATH}` },
+    });
+    const calls = await import("node:fs/promises").then(({ readFile }) =>
+      readFile(path.join(root, "docker-calls"), "utf8").catch(() => ""),
+    );
+    return { result, calls };
+  } finally {
+    await rm(root, { recursive: true, force: true });
+    await rm(bin, { recursive: true, force: true });
+  }
+}
+
+test("restore rejects an archive whose manifest lists no files before touching Docker", async () => {
+  for (const manifest of [undefined, "not json", "{}", JSON.stringify({ files: [] })]) {
+    const { result, calls } = await restoreWithManifest(manifest);
+    assert.equal(result.status, 2, `${manifest}: ${result.stderr}`);
+    const combined = `${result.stdout}${result.stderr}`;
+    assert.match(combined, /not a usable Harly backup/);
+    assert.doesNotMatch(combined, /TypeError|Cannot convert|at .*\.js:\d+/);
+    assert.equal(calls, "", "no docker command may run for an invalid archive");
+  }
+});
+
+test("restore rejects a manifest that does not list the database dump", async () => {
+  const { result, calls } = await restoreWithManifest(JSON.stringify({ files: { ".env": "abc" } }));
+  assert.equal(result.status, 2, result.stderr);
+  assert.match(`${result.stdout}${result.stderr}`, /does not list database\.dump/);
+  assert.equal(calls, "");
+});
