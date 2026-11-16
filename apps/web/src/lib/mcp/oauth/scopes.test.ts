@@ -18,8 +18,10 @@ describe("scopes", () => {
     expect(parseRequestedScopes("bogus other")).toBeNull();
   });
 
-  it("treats offline_access alone as the default set", () => {
-    expect(parseRequestedScopes("offline_access")).toEqual([...MCP_SCOPES]);
+  it("grants only a minimal read set for pass-through scopes alone", () => {
+    for (const raw of ["offline_access", "openid profile email", "openid offline_access"]) {
+      expect(parseRequestedScopes(raw)).toEqual(["candidates:read", "jobs:read"]);
+    }
   });
 
   it("clamps to the workspace policy", () => {

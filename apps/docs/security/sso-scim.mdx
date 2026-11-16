@@ -99,8 +99,8 @@ Your workspace ID is visible in **Settings → Security → SCIM**.
 
 | Method | Path | What it does |
 | --- | --- | --- |
-| `GET` | `/Users` | List members (supports `filter`, `startIndex`, `count`) |
-| `POST` | `/Users` | Provision a new member |
+| `GET` | `/Users` | List members (supports `startIndex`, `count` and the filters `userName eq "..."` and `externalId eq "..."`; other filters return `400 invalidFilter`) |
+| `POST` | `/Users` | Provision a new member (`409` if the `userName` or `externalId` already exists) |
 | `GET` | `/Users/{id}` | Read a member |
 | `PUT` | `/Users/{id}` | Replace a member |
 | `PATCH` | `/Users/{id}` | Update a member (active flag for deprovisioning) |
