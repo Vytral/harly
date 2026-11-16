@@ -826,6 +826,7 @@
     "signIn": "Se connecter",
     "title": "Créer votre compte",
     "subtitle": "Configurez votre ATS en quelques minutes, sans carte bancaire.",
+    "joinSubtitle": "Create your account to join {name}.",
     "already": "Vous avez déjà un compte ? <link>Connectez-vous</link>",
     "inviteOnly": "L'inscription se fait sur invitation uniquement.",
     "inviteHelp": "Cet espace Harly est déjà configuré. Demandez une invitation à un administrateur : le lien vous attribuera le rôle approprié.",
@@ -1062,6 +1063,7 @@
     "joinName": "Rejoindre {name}",
     "joinRole": "Vous rejoindrez l'espace en tant que <strong>{role}</strong>.",
     "signInJoin": "Connectez-vous pour rejoindre",
+    "createAccountJoin": "Create an account",
     "signInJoinHelp": "Connectez-vous ou créez un compte pour rejoindre cet espace de travail.",
     "invitedRole": "Vous avez été invité en tant que <strong>{role}</strong> avec {email}.",
     "invitedBy": "Invitation de <strong>{name}</strong>",
@@ -2625,6 +2627,16 @@
         "welcomeBack": "Bon retour",
         "signInSubtitle": "Connectez-vous à votre portail candidat",
         "poweredBy": "Propulsé par <b>Harly</b>"
+      }
+    },
+    "portalMagic": {
+      "page": {
+        "metadataTitle": "Confirm sign-in",
+        "title": "Confirm sign-in",
+        "description": "Select the button to sign in to the candidate portal. This link works once.",
+        "missingToken": "This sign-in link is incomplete. Request a new one.",
+        "confirm": "Sign in",
+        "backToLogin": "Back to sign in"
       }
     },
     "portalNotifications": {
@@ -7658,7 +7670,8 @@
         "errors": {
           "optionsFailed": "Impossible d’obtenir les options d’enregistrement.",
           "registrationFailed": "Échec de l’enregistrement.",
-          "registerFailed": "Impossible d’enregistrer la clé d’accès."
+          "registerFailed": "Impossible d’enregistrer la clé d’accès.",
+          "removeFailed": "Could not remove the passkey."
         }
       },
       "scimProvisioningCard": {
@@ -10865,6 +10878,10 @@
         "title": "Doublon de candidat possible",
         "body": "Harly AI a trouvé une correspondance possible avec {names}."
       },
+      "scheduledReportFailing": {
+        "title": "Scheduled report keeps failing: {name}",
+        "body": "The last {failures} runs failed. Harly keeps retrying; check the schedule in Reports."
+      },
       "jobApprovalRequested": {
         "title": "Approbation demandée : {jobTitle}",
         "body": "Examinez ce poste avant le début du recrutement."
@@ -11221,6 +11238,7 @@
         "unableToUpdateBoardBranding": "Impossible de mettre à jour la marque du tableau.",
         "inviteOwnerBlocked": "Le rôle Propriétaire ne peut pas être attribué par invitation. Invitez cette personne avec un autre rôle, puis promouvez-la depuis la liste des membres.",
         "alreadyPendingInvitation": "Cette adresse e-mail a déjà une invitation en attente.",
+        "alreadyMember": "This person is already a member of the workspace. Change their role from the members list.",
         "invalidInvitation": "Cette invitation n’est pas valide.",
         "unknownRole": "Rôle inconnu.",
         "unableToInviteMember": "Impossible d’inviter le membre.",
@@ -12207,6 +12225,7 @@
         "onlySentDecide": "Seules les offres envoyées peuvent recevoir une décision.",
         "expiredDecide": "Cette offre a expiré et ne peut plus recevoir de décision.",
         "applicationNoLongerActive": "Cette candidature n’est plus active. Actualisez la page et réessayez.",
+        "offerChanged": "This offer was changed by another recruiter. Refresh and try again.",
         "cannotWithdraw": "Cette offre ne peut plus être retirée.",
         "candidateFallback": "Candidat",
         "hiringTeamTitle": "Offre {decision} : {title}",
