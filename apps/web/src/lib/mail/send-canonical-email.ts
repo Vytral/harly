@@ -51,6 +51,27 @@ export type SendCanonicalEmailInput = {
 
 export { SampleRecipientError };
 
+/** The bare address of a `Name <address>` From value. */
+export function bareAddress(from: string): string {
+  const match = from.match(/<([^<>\s]+)>/);
+  return (match ? match[1]! : from).trim();
+}
+
+/**
+ * The address the message was actually sent from: the per-recruiter identity
+ * when one applies, else the workspace provider's From, else the platform
+ * default. Resolved with the same inputs the send used.
+ */
+async function senderAddress(input: SendCanonicalEmailInput): Promise<string> {
+  try {
+    const sender = await getWorkspaceEmailSender(input.workspaceId, input.authorId);
+    if (sender?.from) return bareAddress(sender.from);
+  } catch (error) {
+    log.warn({ error }, "could not resolve the sender address for the conversation record");
+  }
+  return bareAddress(process.env.EMAIL_FROM ?? "noreply@harly.local");
+}
+
 export type SendCanonicalEmailResult = {
   /** True once the provider accepted the message (even if local persistence failed). */
   delivered: boolean;
@@ -160,6 +181,7 @@ async function writeLegacy(
   input: SendCanonicalEmailInput,
   messageId: string,
   mailMessageId: string,
+  fromEmail: string,
 ) {
   if (!input.candidateId) return undefined;
   try {
@@ -173,7 +195,7 @@ async function writeLegacy(
         authorId: input.authorId ?? null,
         direction: "outbound",
         toEmail: input.toEmail,
-        fromEmail: process.env.EMAIL_FROM ?? "noreply@harly.local",
+        fromEmail,
         subject: input.subject,
         body: input.textBody,
         providerMessageId: messageId,
@@ -256,13 +278,14 @@ async function persistAccepted(
   acceptanceRecorded: boolean,
 ): Promise<SendCanonicalEmailResult> {
   let canonical: Awaited<ReturnType<typeof insertCanonicalMessage>>;
+  const fromEmail = await senderAddress(input);
   try {
     canonical = await insertCanonicalMessage({
       ...input,
       source: input.sourceHint ?? ("provider" as MailSource),
       mailboxId: null,
       messageId: row.messageId,
-      fromEmail: process.env.EMAIL_FROM ?? "noreply@harly.local",
+      fromEmail,
       toEmails: [input.toEmail],
       direction: "outbound",
       receivedAt: new Date(),
@@ -288,6 +311,7 @@ async function persistAccepted(
     input,
     row.messageId,
     canonical.messageId,
+    fromEmail,
   );
   try {
     await db
