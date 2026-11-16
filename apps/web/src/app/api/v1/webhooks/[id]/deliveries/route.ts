@@ -31,6 +31,7 @@ export const GET = withApi(
         id: params.id,
       });
       const deliveries = await listWebhookDeliveries({
+        caller: auth,
         workspaceId: auth.workspaceId,
         endpointId: params.id,
         limit: q.limit ?? parseLimit(null),

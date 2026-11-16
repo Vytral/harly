@@ -71,6 +71,7 @@ export const POST = withApi(
     if (replay) return replay;
 
     const { key, raw } = await createApiKey({
+      caller: auth,
       workspaceId: auth.workspaceId,
       name: values.name,
       type: values.type,

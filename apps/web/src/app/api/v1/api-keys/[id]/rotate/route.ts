@@ -66,6 +66,7 @@ export const POST = withApi(
     );
 
     const { key, raw } = await createApiKey({
+      caller: auth,
       workspaceId: auth.workspaceId,
       name: existing.name,
       type: existing.type as "publishable" | "secret",
@@ -74,7 +75,7 @@ export const POST = withApi(
       createdById: actorUserId,
       expiresAt: existing.expiresAt ? new Date(existing.expiresAt) : null,
     });
-    await revokeApiKey({ workspaceId: auth.workspaceId, keyId: existing.id });
+    await revokeApiKey({ caller: auth, workspaceId: auth.workspaceId, keyId: existing.id });
 
     const data = { replacedKeyId: existing.id, apiKey: serializeApiKey(key) };
     const response = apiOk({ ...data, key: raw }, { status: 201 });

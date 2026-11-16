@@ -33,6 +33,7 @@ export const POST = withApi(
       });
     }
     const { endpoint, secret } = await createWebhookEndpoint({
+      caller: auth,
       workspaceId: auth.workspaceId,
       url: values.url,
       events: values.events,
