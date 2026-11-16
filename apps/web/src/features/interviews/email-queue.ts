@@ -4,7 +4,7 @@ import { randomUUID } from "node:crypto";
 
 import { and, desc, eq, gte, lt, sql } from "drizzle-orm";
 
-import { db, emailOutbox, user as authUsers } from "@harly/db";
+import { db, emailOutbox, user as authUsers, workspaceSettings } from "@harly/db";
 
 import { getTranslations } from "@/i18n/server";
 
@@ -37,14 +37,16 @@ export type InterviewEmailQueueResult = {
 };
 
 /**
- * The zone the candidate should see: the zone from the scheduling request,
- * then the scheduler's profile zone, then UTC.
+ * The zone for the base chain "requested zone, scheduler's profile zone,
+ * workspace zone, UTC". Prefer `resolveInterviewZone`, which also honours the
+ * original invite's zone; this is its tail and is exported for tests.
  */
 export async function resolveInterviewEmailTimeZone(
   requested: string | null | undefined,
   actorUserId?: string | null,
+  workspaceId?: string | null,
 ): Promise<string> {
-  // A valid zone from the request needs no profile read.
+  // A valid zone from the request needs no profile or workspace read.
   if (isValidTimeZone(requested)) return requested;
   let profileZone: string | null = null;
   if (actorUserId) {
@@ -59,16 +61,34 @@ export async function resolveInterviewEmailTimeZone(
       log.warn({ error }, "could not read the scheduler's time zone");
     }
   }
-  return resolveInterviewTimeZone(requested, profileZone);
+  let workspaceZone: string | null = null;
+  if (workspaceId && !isValidTimeZone(profileZone)) {
+    try {
+      const [settings] = await db
+        .select({ timezone: workspaceSettings.timezone })
+        .from(workspaceSettings)
+        .where(eq(workspaceSettings.organizationId, workspaceId))
+        .limit(1);
+      workspaceZone = settings?.timezone ?? null;
+    } catch (error) {
+      log.warn({ error }, "could not read the workspace time zone");
+    }
+  }
+  return resolveInterviewTimeZone(requested, profileZone, workspaceZone);
 }
 
 /**
- * The zone a candidate email about this interview is written in. Reschedule and
- * cancel emails keep the original invite's zone; a new invite uses the request
- * zone, then the scheduler's profile zone, then UTC. In-app text must call this
- * too, so it shows the same zone as the email.
+ * THE interview time zone resolver. Candidate emails, the in-app text and the
+ * calendar / video-provider events all use it, so they always agree. Order:
+ *   1. the interview's own zone: for a reschedule or cancel, the zone the
+ *      original invite was sent in (the candidate keeps one zone per interview);
+ *   2. the zone from the scheduling request;
+ *   3. the scheduler's profile zone;
+ *   4. the workspace time zone (Settings > Company);
+ *   5. UTC.
+ * A new invite starts at step 2.
  */
-export async function resolveInterviewEmailZoneFor(input: {
+export async function resolveInterviewZone(input: {
   workspaceId: string;
   kind: InterviewEmailKind;
   interviewId?: string | null;
@@ -80,7 +100,14 @@ export async function resolveInterviewEmailZoneFor(input: {
     input.kind !== "interview.scheduled" && input.interviewId
       ? await resolveOriginalInviteTimeZone(input.workspaceId, input.interviewId, input.database)
       : null;
-  return original ?? (await resolveInterviewEmailTimeZone(input.requested, input.actorId));
+  return (
+    original ??
+    (await resolveInterviewEmailTimeZone(
+      input.requested,
+      input.actorId,
+      input.workspaceId,
+    ))
+  );
 }
 
 /**
@@ -173,7 +200,7 @@ export async function queueInterviewEmail(
     const interviewId = typeof payload.interviewId === "string" ? payload.interviewId : null;
     const timeZone = isValidTimeZone(resolvedTimeZone)
       ? resolvedTimeZone
-      : await resolveInterviewEmailZoneFor({
+      : await resolveInterviewZone({
           workspaceId,
           kind,
           interviewId,

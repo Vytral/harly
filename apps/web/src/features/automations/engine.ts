@@ -5,7 +5,6 @@ import { randomUUID } from "node:crypto";
 
 import {
   db,
-  member as authMembers,
   workflowDefinitions,
   workflowActionEffects,
   workflowRunSteps,
@@ -16,8 +15,6 @@ import {
 } from "@harly/db";
 
 import { createLogger } from "@/lib/logger";
-import { getRolePermissions } from "@/features/workspaces/permissions-server";
-import { roleIsAllPowerful } from "@/features/workspaces/permissions";
 import { assertNotDemo } from "@/features/demo/assert-not-demo";
 import {
   releaseUnstartedExternalActionReservation,
@@ -35,6 +32,7 @@ import {
   type ConditionContext,
   type ConditionsResult,
 } from "./conditions";
+import { actorHasPermission as runtimeActorHasPermission } from "./runtime/workflow-permissions";
 import { getActionHandler, type ActionContext, type ActionResult } from "./registry";
 import {
   conditionsSchema,
@@ -193,7 +191,9 @@ function parseDefinitionJson(def: WorkflowDefinition | Record<string, unknown>):
 
 /**
  * Resolve whether `actorUserId` still holds `permission` in the workspace.
- * Mirrors requirePermission but for an explicit actor (no HTTP session).
+ * Mirrors requirePermission but for an explicit actor (no HTTP session). The
+ * check itself lives in runtime/workflow-permissions so the engine and the v2
+ * worker cannot drift apart (it also requires an active membership).
  * Returns { ok, reason } so the engine can record a clear error (trade-off T1).
  */
 export async function actorHasPermission(
@@ -201,30 +201,7 @@ export async function actorHasPermission(
   actorUserId: string,
   permission: string,
 ): Promise<{ ok: boolean; reason?: string }> {
-  const [membership] = await db
-    .select({ role: authMembers.role })
-    .from(authMembers)
-    .where(
-      and(
-        eq(authMembers.organizationId, workspaceId),
-        eq(authMembers.userId, actorUserId),
-      ),
-    )
-    .limit(1);
-
-  if (!membership) {
-    return { ok: false, reason: "Workflow creator no longer has access to this workspace." };
-  }
-  if (roleIsAllPowerful(membership.role)) return { ok: true };
-
-  const perms = await getRolePermissions(workspaceId, membership.role);
-  if (!perms.includes(permission as never)) {
-    return {
-      ok: false,
-      reason: `Workflow creator lacks the \`${permission}\` permission.`,
-    };
-  }
-  return { ok: true };
+  return runtimeActorHasPermission(db, workspaceId, actorUserId, permission);
 }
 
 function extractTriggerIds(payload: Record<string, unknown>): {

@@ -6,6 +6,11 @@ import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 const context = vi.hoisted(() => ({
   workspaceId: "mailbox-it-integration-workspace",
   userId: "mailbox-it-integration-user",
+  scope: { jobAccess: "all", departments: [] as string[], regions: [] as string[] } as {
+    jobAccess: "all" | "assigned";
+    departments: string[];
+    regions: string[];
+  },
 }));
 
 vi.mock("server-only", () => ({}));
@@ -14,7 +19,7 @@ vi.mock("@/features/workspaces/permissions-server", () => ({
   requirePermission: vi.fn().mockResolvedValue(undefined),
   getRolePolicy: vi.fn(async () => ({
     permissions: [],
-    scope: { jobAccess: "all", departments: [], regions: [] },
+    scope: context.scope,
   })),
 }));
 vi.mock("@/features/workspaces/context", () => ({
@@ -41,15 +46,13 @@ import {
 } from "@harly/db";
 import {
   linkMailboxThreadToApplicationAction,
+  markMailboxThreadReadAction,
   replyMailboxThreadAction,
+  updateMailboxThreadAction,
 } from "./actions";
 import { getInboxData } from "./data";
 import { getWorkspaceMailboxAttachment } from "@/lib/mailbox/attachment-access";
-import {
-  getUnreadInboundReplyCount,
-  listInboundReplies,
-} from "@/features/inbound-email/data";
-import { findOrCreateCanonicalThread } from "@/lib/mail/canonical";
+import { findOrCreateCanonicalThread, insertCanonicalMessage } from "@/lib/mail/canonical";
 
 integration("Inbox tenant and active-job isolation", () => {
   let activeJobId: string;
@@ -313,11 +316,6 @@ integration("Inbox tenant and active-job isolation", () => {
       }),
     ).resolves.toBeNull();
     await db.update(candidates).set({ deletedAt: null }).where(eq(candidates.id, candidateId));
-    const replies = await listInboundReplies();
-    expect(replies.find((reply) => reply.subject === "Active application")?.jobTitle).toBe(
-      "Active requisition",
-    );
-    expect(replies.find((reply) => reply.subject === "Deleted application")?.jobTitle).toBeNull();
   });
 
   it("rejects linking an application whose job is in the trash", async () => {
@@ -348,39 +346,6 @@ integration("Inbox tenant and active-job isolation", () => {
       .where(eq(mailMessages.threadId, deletedJobThreadId));
     expect(thread?.applicationId).toBeNull();
     expect(messages.every((message) => message.applicationId === null)).toBe(true);
-  });
-
-  it("does not count an unread message linked to a foreign workspace candidate", async () => {
-    const foreignWorkspaceId = `mailbox-unread-foreign-${randomUUID()}`;
-    await db.insert(organization).values({
-      id: foreignWorkspaceId,
-      name: "Foreign unread workspace",
-      slug: foreignWorkspaceId,
-      createdAt: new Date(),
-    });
-    const [foreignCandidate] = await db
-      .insert(candidates)
-      .values({
-        workspaceId: foreignWorkspaceId,
-        firstName: "Foreign",
-        lastName: "Unread",
-        email: `foreign-unread-${randomUUID()}@example.test`,
-      })
-      .returning({ id: candidates.id });
-    const before = await getUnreadInboundReplyCount();
-    await db.insert(mailMessages).values({
-      workspaceId: context.workspaceId,
-      threadId: activeThreadId,
-      candidateId: foreignCandidate.id,
-      direction: "inbound",
-      fromEmail: "foreign@example.test",
-      subject: "Foreign unread message",
-      textBody: "Must not affect the current workspace badge",
-      readAt: null,
-    });
-    const after = await getUnreadInboundReplyCount();
-    expect(after).toBe(before);
-    await db.delete(organization).where(eq(organization.id, foreignWorkspaceId));
   });
 
   it("does not reuse a foreign workspace thread through message references", async () => {
@@ -419,5 +384,63 @@ integration("Inbox tenant and active-job isolation", () => {
     });
     expect(resolved.id).not.toBe(foreignThread.id);
     await db.delete(organization).where(eq(organization.id, foreignWorkspaceId));
+  });
+
+  it("applies the caller's role scope to thread writes", async () => {
+    const original = { ...context.scope };
+    // The thread's job has no hiring-team assignment for this user, so an
+    // `assigned` role must not see it, and therefore must not write to it.
+    context.scope.jobAccess = "assigned";
+    try {
+      await expect(
+        updateMailboxThreadAction({ threadId: activeThreadId, status: "archived" }),
+      ).resolves.toMatchObject({ ok: false });
+      await expect(
+        markMailboxThreadReadAction({ threadId: activeThreadId }),
+      ).resolves.toMatchObject({ ok: false });
+      await expect(
+        replyMailboxThreadAction({
+          threadId: activeThreadId,
+          body: "Out-of-scope reply",
+          idempotencyKey: `mailbox-scope-${randomUUID()}`,
+        }),
+      ).resolves.toMatchObject({ ok: false });
+      const [thread] = await db
+        .select({ status: mailThreads.status })
+        .from(mailThreads)
+        .where(eq(mailThreads.id, activeThreadId));
+      expect(thread?.status).toBe("open");
+    } finally {
+      context.scope.jobAccess = original.jobAccess;
+    }
+    await expect(
+      updateMailboxThreadAction({ threadId: activeThreadId, status: "open" }),
+    ).resolves.toMatchObject({ ok: true });
+  });
+
+  it("returns the stored row id, not the provider Message-ID, when concurrent deliveries collide", async () => {
+    const providerMessageId = `<race-${randomUUID()}@example.test>`;
+    const input = {
+      workspaceId: context.workspaceId,
+      source: "provider" as const,
+      subject: "Concurrent delivery",
+      participantEmail: "race@example.test",
+      messageId: providerMessageId,
+      direction: "inbound" as const,
+      fromEmail: "race@example.test",
+      toEmails: ["inbox@example.test"],
+      textBody: "Same message delivered twice",
+      receivedAt: new Date(),
+    };
+    const results = await Promise.all([
+      insertCanonicalMessage(input),
+      insertCanonicalMessage(input),
+      insertCanonicalMessage(input),
+    ]);
+    const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+    for (const result of results) expect(result.messageId).toMatch(uuid);
+    expect(new Set(results.map((result) => result.messageId)).size).toBe(1);
+    expect(new Set(results.map((result) => result.threadId)).size).toBe(1);
+    expect(results.filter((result) => !result.duplicate)).toHaveLength(1);
   });
 });

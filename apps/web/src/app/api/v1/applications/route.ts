@@ -56,6 +56,7 @@ export const POST = withApi(
       if (reservation.kind === "replay") {
         return NextResponse.json(reservation.response.body, {
           status: reservation.response.status,
+          headers: { "Idempotent-Replayed": "true" },
         });
       }
       const application = await createApplicationForApi({
@@ -63,6 +64,7 @@ export const POST = withApi(
         jobId: values.jobId,
         candidateId: values.candidateId,
         source: values.source,
+        requirePublicJob: auth.type === "publishable",
       });
       after(async () => {
         await Promise.allSettled([

@@ -40,6 +40,7 @@ const valueFlags = new Set([
   "--email",
   "--image",
   "--interval",
+  "--keep",
   "--organization",
   "--output-dir",
   "--port",

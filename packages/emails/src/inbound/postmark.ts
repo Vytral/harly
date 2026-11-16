@@ -1,6 +1,6 @@
 import { timingSafeEqual } from "node:crypto";
 
-import type { CanonicalInboundEmail, InboundEmailAdapter } from "./types";
+import { InboundPayloadError, type CanonicalInboundEmail, type InboundEmailAdapter } from "./types";
 
 type PostmarkHeader = { Name: string; Value: string };
 
@@ -64,7 +64,12 @@ function verifySignature(
 }
 
 async function parse(rawBody: string): Promise<CanonicalInboundEmail> {
-  const payload = JSON.parse(rawBody) as PostmarkInboundPayload;
+  let payload: PostmarkInboundPayload;
+  try {
+    payload = JSON.parse(rawBody) as PostmarkInboundPayload;
+  } catch {
+    throw new InboundPayloadError("Postmark webhook body is not valid JSON.");
+  }
 
   return {
     messageId: payload.MessageID,

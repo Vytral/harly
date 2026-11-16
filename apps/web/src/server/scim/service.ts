@@ -1,7 +1,7 @@
 import "server-only";
 
 import crypto from "node:crypto";
-import { and, eq, ilike, sql } from "drizzle-orm";
+import { and, asc, eq, sql } from "drizzle-orm";
 import {
   db,
   member,
@@ -50,6 +50,55 @@ export type ScimUser = {
   manager?: { value: string };
   meta: { resourceType: "User"; created: string; lastModified: string; location: string };
 };
+
+/** An error the SCIM routes translate into an RFC 7644 error response. */
+export class ScimError extends Error {
+  constructor(
+    message: string,
+    readonly status: number,
+    readonly scimType?: string,
+  ) {
+    super(message);
+    this.name = "ScimError";
+  }
+}
+
+export type ScimFilter =
+  | { attribute: "userName"; value: string }
+  | { attribute: "externalId"; value: string };
+
+/**
+ * Parse the filters Harly supports: `userName eq "x"` and `externalId eq "x"`.
+ * Anything else is rejected with `invalidFilter` rather than silently ignored,
+ * so an IdP never mistakes "unsupported" for "matches everything".
+ */
+export function parseScimFilter(filter: string | undefined): ScimFilter | null {
+  const trimmed = filter?.trim();
+  if (!trimmed) return null;
+  const match = trimmed.match(/^(userName|externalId)\s+eq\s+"((?:[^"\\]|\\.)*)"$/i);
+  if (!match) {
+    throw new ScimError(
+      'Unsupported filter. Only `userName eq "value"` and `externalId eq "value"` are supported.',
+      400,
+      "invalidFilter",
+    );
+  }
+  const value = match[2]!.replace(/\\(.)/g, "$1");
+  return match[1]!.toLowerCase() === "username"
+    ? { attribute: "userName", value }
+    : { attribute: "externalId", value };
+}
+
+/** SCIM clients send booleans as JSON booleans or as "True"/"False" strings. */
+export function parseScimBoolean(value: unknown): boolean {
+  if (typeof value === "boolean") return value;
+  if (typeof value === "string") {
+    const normalized = value.trim().toLowerCase();
+    if (normalized === "true") return true;
+    if (normalized === "false") return false;
+  }
+  throw new ScimError("`active` must be a boolean.", 400, "invalidValue");
+}
 
 export function hashScimToken(token: string) {
   return crypto.createHash("sha256").update(token).digest("hex");
@@ -214,10 +263,15 @@ export async function listScimUsers(
 ) {
   const safeStart = Math.max(1, startIndex);
   const safeCount = Math.min(100, Math.max(1, count));
-  const match = filter?.match(/^userName\s+eq\s+"([^"]+)"$/i)?.[1];
+  const parsed = parseScimFilter(filter);
   const where = and(
     eq(member.organizationId, workspaceId),
-    match ? ilike(user.email, match) : undefined,
+    parsed?.attribute === "userName"
+      ? sql`lower(${user.email}) = ${parsed.value.toLowerCase()}`
+      : undefined,
+    parsed?.attribute === "externalId"
+      ? eq(member.scimExternalId, parsed.value)
+      : undefined,
   );
   const rows = await db
     .select({
@@ -238,7 +292,7 @@ export async function listScimUsers(
     .from(member)
     .innerJoin(user, eq(user.id, member.userId))
     .where(where)
-    .orderBy(user.email)
+    .orderBy(asc(user.email), asc(member.id))
     .limit(safeCount)
     .offset(safeStart - 1);
   const [{ total }] = await db
@@ -259,10 +313,23 @@ export async function upsertScimUser(
   workspaceId: string,
   input: ScimUserInput,
   baseUrl: string,
+  options: {
+    /** `create` (POST) refuses to touch an existing member with a 409. */
+    mode?: "create" | "update";
+    /** Update exactly this member (PUT/PATCH) instead of matching by identity. */
+    memberId?: string;
+  } = {},
 ) {
   const email = emailFromInput(input);
-  if (!email || !email.includes("@")) throw new Error("SCIM userName/email is required.");
+  if (!email || !email.includes("@")) {
+    throw new ScimError("SCIM userName/email is required.", 400, "invalidValue");
+  }
   const externalId = clean(input.externalId, 255);
+  const identityMatch = options.memberId
+    ? eq(member.id, options.memberId)
+    : externalId
+      ? sql`(${member.scimExternalId} = ${externalId} or lower(${user.email}) = ${email})`
+      : sql`lower(${user.email}) = ${email}`;
   const existingRows = await db
     .select({
       memberId: member.id,
@@ -282,15 +349,38 @@ export async function upsertScimUser(
     .from(member)
     .innerJoin(user, eq(user.id, member.userId))
     .where(
-      and(
-        eq(member.organizationId, workspaceId),
-        externalId
-          ? eq(member.scimExternalId, externalId)
-          : ilike(user.email, email),
-      ),
+      and(eq(member.organizationId, workspaceId), identityMatch),
+    )
+    // Deterministic when an externalId and an email point at different members:
+    // the externalId owner wins, then the oldest membership.
+    .orderBy(
+      sql`(${member.scimExternalId} is not distinct from ${externalId ?? null}) desc`,
+      asc(member.createdAt),
+      asc(member.id),
     )
     .limit(1);
   const existing = existingRows[0];
+  if (options.memberId && !existing) {
+    throw new ScimError("User not found.", 404);
+  }
+  if (existing && options.mode === "create") {
+    throw new ScimError(
+      "A user with this userName or externalId already exists.",
+      409,
+      "uniqueness",
+    );
+  }
+  if (!existing) {
+    // The email belongs to an account outside this workspace: never attach it.
+    const [taken] = await db
+      .select({ id: user.id })
+      .from(user)
+      .where(sql`lower(${user.email}) = ${email}`)
+      .limit(1);
+    if (taken) {
+      throw new ScimError("userName is already in use.", 409, "uniqueness");
+    }
+  }
   const name = displayNameFromInput(input, email.split("@")[0] ?? email);
   const active = statusFromActive(input.active);
   const managerId = clean(input.manager?.value);

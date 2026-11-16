@@ -9,6 +9,7 @@ import {
   member,
   organization,
   user,
+  workspaceSettings,
 } from "@harly/db";
 
 import {
@@ -72,5 +73,60 @@ integration("deployment bootstrap concurrency", () => {
     expect(organizations.value).toBe(1);
     expect(owners.value).toBe(1);
     expect(bootstraps.value).toBe(1);
+  });
+});
+
+integration("invite-link sign-up gate", () => {
+  const orgId = randomUUID();
+  const linkToken = `link-${randomUUID()}`;
+
+  beforeAll(async () => {
+    await db.delete(deploymentBootstrap);
+    await db.insert(deploymentBootstrap).values({
+      id: 1,
+      authorizedEmail: "owner@example.test",
+      completedAt: new Date(),
+    });
+    await db.insert(organization).values({
+      id: orgId,
+      name: "Link Workspace",
+      slug: `link-${orgId.slice(0, 8)}`,
+      createdAt: new Date(),
+    });
+    await db.insert(workspaceSettings).values({
+      organizationId: orgId,
+      inviteLinkToken: linkToken,
+      inviteLinkRole: "recruiter",
+      inviteLinkEnabled: true,
+    });
+  });
+
+  afterAll(async () => {
+    await db.delete(workspaceSettings).where(eq(workspaceSettings.organizationId, orgId));
+    await db.delete(organization).where(eq(organization.id, orgId));
+    await db.delete(deploymentBootstrap);
+  });
+
+  it("allows sign-up with a valid invite link token", async () => {
+    await expect(
+      authorizeUserCreation({ email: "newcomer@example.test", inviteLinkToken: linkToken }),
+    ).resolves.toBeUndefined();
+  });
+
+  it("still blocks sign-up without a token or with a wrong one", async () => {
+    await expect(authorizeUserCreation({ email: "newcomer@example.test" })).rejects.toThrow(/invite-only/i);
+    await expect(
+      authorizeUserCreation({ email: "newcomer@example.test", inviteLinkToken: "wrong" }),
+    ).rejects.toThrow(/invite-only/i);
+  });
+
+  it("rejects a disabled invite link", async () => {
+    await db
+      .update(workspaceSettings)
+      .set({ inviteLinkEnabled: false })
+      .where(eq(workspaceSettings.organizationId, orgId));
+    await expect(
+      authorizeUserCreation({ email: "newcomer@example.test", inviteLinkToken: linkToken }),
+    ).rejects.toThrow(/invite-only/i);
   });
 });

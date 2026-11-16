@@ -20,7 +20,7 @@ import {
 } from "@harly/emails";
 import { decryptSecret, isEncryptionConfigured } from "./crypto-adapter";
 import { loadHarlyConfig } from "@harly/config";
-import { authorizeUserCreation, setupClaimCookieName } from "./setup";
+import { INVITE_LINK_HEADER, authorizeUserCreation, setupClaimCookieName } from "./setup";
 import {
   buildResetPasswordAuthMessage,
   buildStaffMagicLinkAuthMessage,
@@ -389,6 +389,9 @@ export const auth = betterAuth({
           await authorizeUserCreation({
             email: newUser.email,
             claimId: context?.getCookie(setupClaimCookieName(appUrl)),
+            inviteLinkToken:
+              context?.headers?.get(INVITE_LINK_HEADER) ??
+              context?.request?.headers.get(INVITE_LINK_HEADER),
             allowSsoProvisioning:
               context?.path === "/sign-in/sso" ||
               context?.path?.startsWith("/sso/callback/") === true ||

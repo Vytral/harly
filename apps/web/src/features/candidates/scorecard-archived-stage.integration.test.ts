@@ -3,12 +3,12 @@ import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { and, eq } from "drizzle-orm";
 
-import { applications, db, jobStages, scorecards } from "@harly/db";
+import { applications, db, jobStages, member, scorecards } from "@harly/db";
 
 import { createAuthorizationFixture, type AuthorizationFixture } from "@/test-support/authorization-fixture";
 import { runPipelineIntegration } from "@/test-support/pipeline-fixture";
 
-const ctx = vi.hoisted(() => ({ workspaceId: "", userId: "" }));
+const ctx = vi.hoisted(() => ({ workspaceId: "", userId: "", denied: "" }));
 
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 vi.mock("@/features/workspaces/context", () => ({
@@ -26,6 +26,10 @@ vi.mock("@/features/workspaces/permissions-server", () => ({
   requireCandidatePermission: vi.fn(async () => ({})),
   requirePermission: vi.fn(async () => ({})),
   requireJobPermission: vi.fn(async () => ({})),
+  requireApplicationPermission: vi.fn(async () => {
+    if (ctx.denied) throw new Error(ctx.denied);
+    return {};
+  }),
 }));
 vi.mock("@/lib/ai/config", () => ({ getWorkspaceAiConfig: vi.fn() }));
 vi.mock("@/lib/audit-log", () => ({ logAuditEvent: vi.fn() }));
@@ -50,6 +54,14 @@ describe.skipIf(!runPipelineIntegration)("UI scorecard writer and archived stage
     fx = await createAuthorizationFixture();
     ctx.workspaceId = fx.workspaceId;
     ctx.userId = fx.users.full;
+    // The shared writer resolves the author from workspace membership.
+    await db.insert(member).values({
+      id: randomUUID(),
+      organizationId: fx.workspaceId,
+      userId: fx.users.full,
+      role: "owner",
+      createdAt: new Date(),
+    });
     const [app] = await db
       .select({ id: applications.id })
       .from(applications)
@@ -101,5 +113,39 @@ describe.skipIf(!runPipelineIntegration)("UI scorecard writer and archived stage
       .from(scorecards)
       .where(eq(scorecards.stageId, screening.id));
     expect(row?.stageName).toBe(screening.name);
+  });
+
+  it("stores the criteria the form sends and keeps them on resubmit", async () => {
+    const applied = fx.stagesA.applied!;
+    const criteria = [{ label: "Communication", score: 4 }];
+    const first = await createScorecard({
+      candidateId: fx.candidateA,
+      workspaceId: fx.workspaceId,
+      applicationId,
+      stageId: applied.id,
+      rating: "strong",
+      criteria,
+    });
+    expect(first).toEqual({ success: true });
+    const [row] = await db
+      .select({ criteria: scorecards.criteria })
+      .from(scorecards)
+      .where(and(eq(scorecards.stageId, applied.id), eq(scorecards.applicationId, applicationId)));
+    expect(row?.criteria).toEqual(criteria);
+  });
+
+  it("shows the permission error instead of a generic failure", async () => {
+    ctx.denied = "You are not assigned to this job.";
+    try {
+      const result = await createScorecard({
+        candidateId: fx.candidateA,
+        workspaceId: fx.workspaceId,
+        applicationId,
+        rating: "weak",
+      });
+      expect(result).toEqual({ success: false, error: "You are not assigned to this job." });
+    } finally {
+      ctx.denied = "";
+    }
   });
 });

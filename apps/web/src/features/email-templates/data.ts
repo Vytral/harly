@@ -7,6 +7,7 @@ import { db, emailTemplates } from "@harly/db";
 import { getWorkspaceContext } from "@/features/workspaces/context";
 import {
   interpolateTemplate,
+  interpolateTemplateHtml,
   type TemplateValues,
 } from "@/features/email-templates/interpolate";
 import { sanitizeTemplateHtml } from "@/features/email-templates/template-html.server";
@@ -105,7 +106,7 @@ export async function renderActiveEmailTemplate(
 
   return {
     subject: interpolateTemplate(template.subject, values),
-    bodyHtml: sanitizeTemplateHtml(interpolateTemplate(template.body, values)),
+    bodyHtml: sanitizeTemplateHtml(interpolateTemplateHtml(template.body, values)),
   };
 }
 
@@ -134,6 +135,6 @@ export async function renderRejectionTemplateById(
 
   return {
     subject: interpolateTemplate(template.subject, values),
-    bodyHtml: sanitizeTemplateHtml(interpolateTemplate(template.body, values)),
+    bodyHtml: sanitizeTemplateHtml(interpolateTemplateHtml(template.body, values)),
   };
 }

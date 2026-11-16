@@ -1,7 +1,7 @@
 import "server-only";
 
 import { cache } from "react";
-import { and, asc, count, desc, eq, exists, gte, inArray, isNull, lt, or, sql } from "drizzle-orm";
+import { and, asc, count, desc, eq, exists, gte, inArray, isNull, lt, ne, or, sql } from "drizzle-orm";
 import { getTranslations } from "@/i18n/server";
 
 import {
@@ -22,6 +22,8 @@ import {
   getHiringKpis,
   getWorkspaceTimeZone,
 } from "@/features/reports/canonical";
+import { rankRiskJobs } from "./risk-order";
+import { notSampleRecordSql } from "@/features/reports/sample-records";
 import {
   allTimeWindow,
   dayLabel,
@@ -231,8 +233,8 @@ export const getPipelineOverview = cache(async (jobId?: string) => {
 const TODAY_INTERVIEWS_SHOWN = 8;
 
 /**
- * Interviews on the workspace's local day. `total` counts every interview of
- * the day (the calendar lists the same set); `items` is the first few. `date`
+ * Interviews on the workspace's local day, canceled ones excluded. `total`
+ * counts every remaining interview of the day; `items` is the first few. `date`
  * is that local day as `YYYY-MM-DD`, ready for `/dashboard/calendars?date=`.
  */
 export const getTodayInterviews = cache(async () => {
@@ -286,6 +288,7 @@ export const getTodayInterviews = cache(async () => {
         eq(interviews.workspaceId, workspace.id),
         gte(interviews.scheduledAt, start),
         lt(interviews.scheduledAt, end),
+        ne(interviews.status, "canceled"),
         jobScopeSql(actor),
       ),
     )
@@ -330,6 +333,8 @@ export const getInterviewsToSchedule = cache(async () =>
 
 // ── Jobs at risk ─────────────────────────────────────────────────────────────
 
+const RISK_JOBS_SHOWN = 4;
+
 export const getJobsAtRisk = cache(async () => {
   const { organization: workspace } = await getWorkspaceContext();
   const actor = await widgetActor();
@@ -355,6 +360,7 @@ export const getJobsAtRisk = cache(async () => {
         and(
           eq(applications.workspaceId, workspace.id),
           eq(applications.jobId, jobs.id),
+          notSampleRecordSql("application", applications.id, applications.workspaceId),
           exists(
             db
               .select({ id: candidates.id })
@@ -374,6 +380,8 @@ export const getJobsAtRisk = cache(async () => {
           eq(jobs.workspaceId, workspace.id),
           eq(jobs.status, "open"),
           isNull(jobs.deletedAt),
+          // Tracked sample jobs are not real roles, so they are never "at risk".
+          notSampleRecordSql("job", jobs.id, jobs.workspaceId),
           jobScopeSql(actor),
         ),
       )
@@ -383,7 +391,7 @@ export const getJobsAtRisk = cache(async () => {
     getHiresByJob({ workspaceId: workspace.id, window: allTimeWindow(timeZone) }),
   ]);
 
-  return rows
+  const atRisk = rows
     .map((r) => {
       const total = Number(r.total);
       const hiresLast30 = recentHires.get(r.id) ?? 0;
@@ -424,8 +432,10 @@ export const getJobsAtRisk = cache(async () => {
     .filter(
       (r): r is { id: string; title: string; reason: string; reasonCode: "noApplications" | "noApplicationsWeek" | "noHires" | "lowConversion"; severity: "critical" | "danger" | "warning" } =>
         r !== null,
-    )
-    .slice(0, 4);
+    );
+
+  // Most severe first (oldest first within a severity), then the top few.
+  return rankRiskJobs(atRisk).slice(0, RISK_JOBS_SHOWN);
 });
 
 // ── Hiring performance (KPIs + daily series) ────────────────────────────────
@@ -535,6 +545,7 @@ export const getInbox = cache(async () => {
         eq(jobs.workspaceId, workspace.id),
         eq(jobs.status, "draft"),
         isNull(jobs.deletedAt),
+        notSampleRecordSql("job", jobs.id, jobs.workspaceId),
         jobScopeSql(actor),
       ),
     )

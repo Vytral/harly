@@ -3,12 +3,13 @@ import {
   generateRegistrationOptions,
   verifyRegistrationResponse,
 } from "@simplewebauthn/server";
-import { eq } from "drizzle-orm";
-import { db, passkeys } from "@harly/db";
+import { and, eq } from "drizzle-orm";
+import { db, member, passkeys } from "@harly/db";
 import { isDemoMode } from "@harly/config";
 import { auth } from "@/lib/auth";
 import { createLogger } from "@/lib/logger";
 import { RP_ID, RP_NAME, ORIGIN, storeChallenge, consumeChallenge } from "@/lib/passkey";
+import { requireRecentReauth } from "@/server/security/reauth";
 
 const log = createLogger("api-passkey-register");
 
@@ -74,6 +75,41 @@ export async function POST(req: NextRequest) {
 
   const body = await req.json();
   const { response, name } = body;
+
+  // Adding a credential is a persistent account-takeover primitive, so once the
+  // user already holds a passkey they must have just proven it (the reauth
+  // token is single-use). The very first passkey cannot be gated this way:
+  // there is nothing to assert with yet.
+  const existingPasskeys = await db
+    .select({ id: passkeys.id })
+    .from(passkeys)
+    .where(eq(passkeys.userId, session.user.id));
+  if (existingPasskeys.length > 0) {
+    const activeOrganizationId = session.session?.activeOrganizationId;
+    const [membership] = await db
+      .select({ organizationId: member.organizationId })
+      .from(member)
+      .where(
+        and(
+          eq(member.userId, session.user.id),
+          activeOrganizationId ? eq(member.organizationId, activeOrganizationId) : undefined,
+        ),
+      )
+      .limit(1);
+    const reauthed = membership
+      ? await requireRecentReauth({
+          userId: session.user.id,
+          workspaceId: membership.organizationId,
+          purpose: "sensitive_action",
+        })
+      : false;
+    if (!reauthed) {
+      return NextResponse.json(
+        { error: "Confirm your identity with a registered passkey, then try again." },
+        { status: 403 },
+      );
+    }
+  }
 
   const expectedChallenge = typeof body.challengeId === "string"
     ? await consumeChallenge(body.challengeId, session.user.id, "registration")

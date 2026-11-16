@@ -1,6 +1,4 @@
-import { redirect } from "next/navigation";
-import { type NextRequest } from "next/server";
-import type { Route } from "next";
+import { NextResponse, type NextRequest } from "next/server";
 
 import {
   consumeMagicLinkToken,
@@ -10,35 +8,59 @@ import {
 import { auditPortalEvent } from "@/lib/portal-credentials";
 import { establishPortalSession } from "@/lib/portal-session";
 import { getPortalAuthMethods } from "@/lib/portal-auth-methods";
+import { getHarlyPublicOrigin } from "@/lib/public-origin";
 
 export const runtime = "nodejs";
 
+function redirectTo(path: string, status = 303): NextResponse {
+  return NextResponse.redirect(new URL(path, getHarlyPublicOrigin()), status);
+}
+
+/**
+ * Opening an emailed link must never consume the one-time token: mail
+ * scanners and link previewers issue GET requests. GET only forwards to the
+ * confirmation page; the token is consumed by the POST below.
+ */
 export async function GET(request: NextRequest) {
-  const { searchParams } = new URL(request.url);
-  const token = searchParams.get("token");
+  const token = new URL(request.url).searchParams.get("token");
+  if (!token) return redirectTo("/portal/login?error=missing_token", 302);
+  return redirectTo(`/portal/magic?token=${encodeURIComponent(token)}`, 302);
+}
 
-  if (!token) redirect("/portal/login?error=missing_token" as Route);
+export async function POST(request: NextRequest) {
+  // The confirm form is same-origin; refuse forged cross-site submissions that
+  // could sign a victim into an attacker-chosen account.
+  if (request.headers.get("sec-fetch-site") === "cross-site") {
+    return redirectTo("/portal/login?error=invalid_token");
+  }
 
-  const result = await consumeMagicLinkToken(token!);
-  if (!result) redirect("/portal/login?error=invalid_token" as Route);
+  let token: string | null = null;
+  try {
+    const form = await request.formData();
+    const value = form.get("token");
+    token = typeof value === "string" ? value : null;
+  } catch {
+    token = null;
+  }
+  if (!token) return redirectTo("/portal/login?error=missing_token");
 
-  const workspaceId = result!.workspaceId;
+  const result = await consumeMagicLinkToken(token);
+  if (!result) return redirectTo("/portal/login?error=invalid_token");
+
+  const workspaceId = result.workspaceId;
   if (!(await isPortalEnabled(workspaceId))) {
-    redirect("/portal/login?error=no_workspace" as Route);
+    return redirectTo("/portal/login?error=no_workspace");
   }
 
   if (!(await getPortalAuthMethods(workspaceId)).magicLink) {
-    redirect("/portal/login?error=method_disabled" as Route);
+    return redirectTo("/portal/login?error=method_disabled");
   }
 
   let candidateId: string;
   try {
-    candidateId = await findOrCreateCandidateByEmail(
-      workspaceId,
-      result!.email,
-    );
+    candidateId = await findOrCreateCandidateByEmail(workspaceId, result.email);
   } catch {
-    redirect("/portal/login?error=unavailable" as Route);
+    return redirectTo("/portal/login?error=unavailable");
   }
 
   const ua = request.headers.get("user-agent") ?? undefined;
@@ -46,10 +68,10 @@ export async function GET(request: NextRequest) {
   await auditPortalEvent({
     workspaceId,
     candidateId,
-    email: result!.email,
+    email: result.email,
     action: "portal.login",
     metadata: { method: "magic_link" },
   });
 
-  redirect("/portal/dashboard" as Route);
+  return redirectTo("/portal/dashboard");
 }

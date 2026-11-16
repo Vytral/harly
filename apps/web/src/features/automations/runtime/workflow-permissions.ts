@@ -24,7 +24,11 @@ import {
   type RoleScope,
 } from "@/features/workspaces/permissions";
 
-/** Runtime-only actor check without importing session/auth configuration. */
+/**
+ * Runtime-only actor check without importing session/auth configuration. The
+ * single source of truth for "may this workflow actor still do X": the actor
+ * must be an active member and hold the permission.
+ */
 export async function actorHasPermission(
   database: typeof db,
   workspaceId: string,
@@ -34,10 +38,17 @@ export async function actorHasPermission(
   const [membership] = await database
     .select({ role: authMembers.role })
     .from(authMembers)
-    .where(and(eq(authMembers.organizationId, workspaceId), eq(authMembers.userId, actorUserId)))
+    .where(
+      and(
+        eq(authMembers.organizationId, workspaceId),
+        eq(authMembers.userId, actorUserId),
+        // Suspended and deactivated members keep their role row but must not act.
+        eq(authMembers.status, "active"),
+      ),
+    )
     .limit(1);
 
-  if (!membership) return { ok: false, reason: "Workflow actor no longer has workspace access." };
+  if (!membership) return { ok: false, reason: "Workflow creator no longer has access to this workspace." };
   if (roleIsAllPowerful(membership.role)) return { ok: true };
 
   const [custom] = await database
@@ -56,7 +67,7 @@ export async function actorHasPermission(
       : [];
   return permissions.includes(permission as never)
     ? { ok: true }
-    : { ok: false, reason: `Workflow actor lacks permission: ${permission}.` };
+    : { ok: false, reason: `Workflow creator lacks the \`${permission}\` permission.` };
 }
 
 /**
@@ -74,7 +85,14 @@ export async function actorCanActOnApplication(
   const [membership] = await database
     .select({ role: authMembers.role })
     .from(authMembers)
-    .where(and(eq(authMembers.organizationId, workspaceId), eq(authMembers.userId, actorUserId)))
+    .where(
+      and(
+        eq(authMembers.organizationId, workspaceId),
+        eq(authMembers.userId, actorUserId),
+        // Suspended and deactivated members keep their role row but must not act.
+        eq(authMembers.status, "active"),
+      ),
+    )
     .limit(1);
   if (!membership) return { ok: false, reason: "Workflow creator no longer has workspace access." };
   if (roleIsAllPowerful(membership.role)) return { ok: true };

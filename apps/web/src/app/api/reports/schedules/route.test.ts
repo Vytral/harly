@@ -136,4 +136,25 @@ describe("POST /api/reports/schedules", () => {
       createdById: "user-1",
     });
   });
+
+  it("answers malformed JSON with 400 instead of throwing", async () => {
+    mocks.getWorkspaceContextOrNull.mockResolvedValue({
+      organization: { id: "ws-1" },
+      roleKey: "admin",
+      user: { id: "user-1" },
+    });
+    mocks.requirePermission.mockResolvedValue(undefined);
+    mocks.getRolePolicy.mockResolvedValue({ permissions: ["reports:read"], scope: UNRESTRICTED });
+
+    const response = await POST(
+      new Request("http://harly.test/api/reports/schedules", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: "{not json",
+      }) as never,
+    );
+
+    expect(response.status).toBe(400);
+    expect(mocks.createScheduledReport).not.toHaveBeenCalled();
+  });
 });

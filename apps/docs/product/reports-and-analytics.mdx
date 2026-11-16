@@ -93,7 +93,9 @@ An application whose current status is **hired**. Its hire date is the most
 recent move into a stage whose **kind** is hired. Harly reads the stage kind,
 not the stage name, so a stage renamed "Welcome aboard" still counts. Hires
 recorded before stage kinds existed fall back to the earliest "hired" activity
-event, and then to the last update time. Each application counts once, in the
+event, and then to the application date. That last fallback is a stable date,
+so later edits to an old record never move the hire into a newer window; such a
+hire shows a time to hire of zero days. Each application counts once, in the
 window that contains its hire date.
 
 ### Time to hire
@@ -118,9 +120,11 @@ change the funnel.
 
 ### Source effectiveness
 
-For each application source, the number of applications and hires, and hires
-per application as a whole percentage. A source with no applications shows no
-conversion rather than zero.
+For each application source, the applications received in the window and how
+many of those same applications ended up hired (whenever the hire happened),
+and hires per application as a whole percentage. Because both numbers describe
+the same group of applications, conversion never exceeds 100%. A source with no
+applications shows no conversion rather than zero.
 
 ### Windows and time zone
 
@@ -132,6 +136,16 @@ conversion rather than zero.
   workspace settings. If no zone is set, or the saved zone is not recognised,
   Harly uses UTC. Changing the zone changes which day a late-evening event
   falls on, and is reflected in every report immediately.
+
+### Scheduled reports
+
+A scheduled report is emailed daily, weekly or monthly, one step after it was
+created, at the same local time in the workspace's reporting time zone (so a
+09:00 report stays at 09:00 across a daylight-saving change). If a run fails,
+Harly retries with a growing delay (15 minutes, then 30, 60 and so on, up to
+12 hours, and never later than the next regular send). After 5 failed runs in
+a row the person who created the schedule gets an in-app notification; Harly
+keeps retrying, and a successful run resets the count.
 
 ### Small groups are hidden in diversity reports
 

@@ -396,8 +396,8 @@ async function inviteOneMember(
 
   if (authUser) {
     // A `user` row surviving with no active membership means they were
-    // removed before , this workspace is the only org they could ever have
-    // belonged to. Re-adding them is silent by default; without an email
+    // removed before (this workspace is the only org they could ever have
+    // belonged to). Re-adding them is silent by default; without an email
     // they'd have no idea access came back.
     const [existingMembership] = await db
       .select({ id: authMembers.id })
@@ -410,8 +410,15 @@ async function inviteOneMember(
       )
       .limit(1);
 
+    // Never touch an existing member's role from the invite path: it would let
+    // an invite demote an owner (and the last owner). Role changes go through
+    // updateWorkspaceMemberRoleAction, which enforces owner protections.
+    if (existingMembership) {
+      return { ok: false, reason: t("alreadyMember") };
+    }
+
     const memberId = crypto.randomUUID();
-    await db
+    const inserted = await db
       .insert(authMembers)
       .values({
         id: memberId,
@@ -420,21 +427,17 @@ async function inviteOneMember(
         role,
         createdAt: new Date(),
       })
-      .onConflictDoNothing();
+      .onConflictDoNothing()
+      .returning({ id: authMembers.id });
 
-    await db
-      .update(authMembers)
-      .set({ role })
-      .where(
-        and(
-          eq(authMembers.organizationId, context.organization.id),
-          eq(authMembers.userId, authUser.id),
-        ),
-      );
+    if (inserted.length === 0) {
+      // Lost a race with a concurrent add: they are a member now.
+      return { ok: false, reason: t("alreadyMember") };
+    }
 
     await provisionMemberSenderIdentity(db, {
       organizationId: context.organization.id,
-      memberId: existingMembership?.id ?? memberId,
+      memberId,
       userId: authUser.id,
       name: authUser.name,
     });
@@ -450,19 +453,17 @@ async function inviteOneMember(
         ),
       );
 
-    if (!existingMembership) {
-      const branding = await getWorkspaceEmailBranding(context.organization.id);
-      void sendWorkspaceEmail(context.organization.id, {
-        to: email,
-        subject: `You've been added back to ${context.organization.name}`,
-        react: createElement(WelcomeEmail, {
-          userName: authUser.name,
-          workspaceName: context.organization.name,
-          dashboardUrl: `${appUrl}/login`,
-          branding,
-        }),
-      });
-    }
+    const branding = await getWorkspaceEmailBranding(context.organization.id);
+    void sendWorkspaceEmail(context.organization.id, {
+      to: email,
+      subject: `You've been added back to ${context.organization.name}`,
+      react: createElement(WelcomeEmail, {
+        userName: authUser.name,
+        workspaceName: context.organization.name,
+        dashboardUrl: `${appUrl}/login`,
+        branding,
+      }),
+    });
 
     await logAuditEvent({
       workspaceId: context.organization.id,
@@ -1475,7 +1476,8 @@ export async function joinViaInviteLinkAction(
     }
 
     const joinedMemberId = crypto.randomUUID();
-    await db
+    // Existing members keep their role: the link only ever adds new people.
+    const inserted = await db
       .insert(authMembers)
       .values({
         id: joinedMemberId,
@@ -1484,7 +1486,8 @@ export async function joinViaInviteLinkAction(
         role,
         createdAt: new Date(),
       })
-      .onConflictDoNothing();
+      .onConflictDoNothing()
+      .returning({ id: authMembers.id });
 
     const [joinedMember] = await db
       .select({ id: authMembers.id })
@@ -1504,14 +1507,18 @@ export async function joinViaInviteLinkAction(
       name: session.user.name,
     });
 
-    await logAuditEvent({
-      workspaceId: ws.organizationId,
-      actorId: session.user.id,
-      actorEmail: session.user.email,
-      action: "member.invited",
-      severity: "info",
-      metadata: { via: "invite_link", role },
-    });
+    if (inserted.length > 0) {
+      await logAuditEvent({
+        workspaceId: ws.organizationId,
+        actorId: session.user.id,
+        actorEmail: session.user.email,
+        action: "member.joined",
+        resourceType: "member",
+        resourceId: joinedMemberId,
+        severity: "info",
+        metadata: { via: "invite_link", role },
+      });
+    }
 
     return { success: true, organizationId: ws.organizationId };
   } catch (error) {

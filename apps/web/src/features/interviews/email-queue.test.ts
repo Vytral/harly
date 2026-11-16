@@ -28,6 +28,7 @@ vi.mock("@harly/db", () => {
     emailOutbox: { id: "id", status: "status", payload: "payload", kind: "kind", workspaceId: "ws", createdAt: "createdAt", dedupeKey: "dedupeKey" },
     interviews: { id: "id", workspaceId: "ws", updatedAt: "updatedAt" },
     user: { id: "userId", timezone: "timezone" },
+    workspaceSettings: { organizationId: "wsId", timezone: "wsTimezone" },
   };
 });
 vi.mock("@/lib/email/outbox-processor", () => ({
@@ -38,7 +39,7 @@ vi.mock("@/lib/logger", () => ({
   createLogger: () => ({ info: vi.fn(), warn: vi.fn(), error: vi.fn() }),
 }));
 
-import { queueInterviewEmail } from "./email-queue";
+import { queueInterviewEmail, resolveInterviewZone } from "./email-queue";
 import { makeT } from "@/test-support/translator";
 
 const t = makeT("server.interviews.actions");
@@ -161,5 +162,49 @@ describe("queueInterviewEmail latency budget", () => {
     expect(result.warning).toContain("taking longer than usual");
     expect(result.warning).toContain("will continue in the background");
     expect(result.warning).not.toContain("could not be queued");
+  });
+});
+
+describe("resolveInterviewZone", () => {
+  const base = { workspaceId: "ws-1", kind: "interview.scheduled" as const };
+
+  it("uses the request zone first, without reading anything", async () => {
+    mocks.reads = [[{ timezone: "Asia/Tokyo" }]];
+    await expect(
+      resolveInterviewZone({ ...base, requested: "Europe/Madrid", actorId: "u1" }),
+    ).resolves.toBe("Europe/Madrid");
+    expect(mocks.reads).toHaveLength(1);
+  });
+
+  it("falls back to the scheduler's profile zone", async () => {
+    mocks.reads = [[{ timezone: "Asia/Tokyo" }]];
+    await expect(
+      resolveInterviewZone({ ...base, requested: null, actorId: "u1" }),
+    ).resolves.toBe("Asia/Tokyo");
+  });
+
+  it("falls back to the workspace zone, then UTC", async () => {
+    mocks.reads = [[{ timezone: null }], [{ timezone: "America/Santiago" }]];
+    await expect(
+      resolveInterviewZone({ ...base, requested: null, actorId: "u1" }),
+    ).resolves.toBe("America/Santiago");
+
+    mocks.reads = [[{ timezone: null }], [{ timezone: null }]];
+    await expect(
+      resolveInterviewZone({ ...base, requested: null, actorId: "u1" }),
+    ).resolves.toBe("UTC");
+  });
+
+  it("keeps the original invite's zone for a reschedule", async () => {
+    mocks.reads = [[{ payload: { timeZone: "Europe/Madrid" } }]];
+    await expect(
+      resolveInterviewZone({
+        workspaceId: "ws-1",
+        kind: "interview.rescheduled",
+        interviewId: "interview-1",
+        requested: "Asia/Tokyo",
+        actorId: "u1",
+      }),
+    ).resolves.toBe("Europe/Madrid");
   });
 });

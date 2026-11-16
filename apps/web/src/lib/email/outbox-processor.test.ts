@@ -197,6 +197,21 @@ describe("email_outbox worker", () => {
     expect(failedUpdate?.set).toHaveProperty("nextRetryAt");
   });
 
+  it("stores the real send failure on the row instead of a generic message", async () => {
+    mocks.selectQueue.push([PENDING], [LOCKED], [OFFER_DRAFT], [APPLICATION_ACTIVE], [RECIPIENT]);
+    mocks.sendWorkspaceEmail.mockImplementation(
+      async (_w: string, _o: unknown, _a: unknown, sendOptions: { onFailure?: (f: { reason: string; detail: string }) => void }) => {
+        sendOptions.onFailure?.({ reason: "provider_error", detail: "Provider error: Domain not verified" });
+        return false;
+      },
+    );
+
+    await processEmailOutbox({ workerId: WORKER });
+
+    const failedUpdate = mocks.updateCalls.find((c) => c.set.lastError !== undefined);
+    expect(failedUpdate?.set.lastError).toContain("Provider error: Domain not verified");
+  });
+
   it("records the sent offer in the canonical conversation model", async () => {
     mocks.selectQueue.push([PENDING], [LOCKED], [OFFER_DRAFT], [APPLICATION_ACTIVE], [RECIPIENT]);
     mocks.sendWorkspaceEmail.mockResolvedValue(true);

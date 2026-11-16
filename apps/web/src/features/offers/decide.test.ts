@@ -242,13 +242,10 @@ describe("decideOffer guards", () => {
   });
 
   it("accepts an active application: marks offer accepted, hires, and logs inside the tx", async () => {
-    // Select order: [offer] (pre-tx), [application active] (pre-tx guard),
-    // then inside tx: [application] (re-select for stage), [hiredStage].
+    // Select order: [offer] (pre-tx), then inside tx: [application] (locked),
+    // [hiredStage].
     // Post-tx: [recipient], [hiringTeam].
     mocks.selectQueue.push([OFFER]);
-    mocks.selectQueue.push([
-      { id: "app-1", status: "active", currentStageId: "stage-old" },
-    ]);
     mocks.transactionImpl.mockImplementation(async (fn: (tx: unknown) => Promise<unknown>) => {
       const tx = __makeTx();
       mocks.selectQueue.push([
@@ -260,9 +257,10 @@ describe("decideOffer guards", () => {
       mocks.selectQueue.push([
         { id: "stage-hired", name: "Hired", kind: "hired", order: 4, archivedAt: null },
       ]);
-      await fn(tx);
+      const result = await fn(tx);
       mocks.selectQueue.push([null]); // getOfferRecipient
       mocks.selectQueue.push([]); // jobHiringTeam (none)
+      return result;
     });
 
     const result = await decideOffer({
@@ -309,9 +307,6 @@ describe("decideOffer guards", () => {
     // application where it was, with no history row, when no stage was named
     // "Hired". The hired stage must now be created and the move recorded.
     mocks.selectQueue.push([OFFER]);
-    mocks.selectQueue.push([
-      { id: "app-1", status: "active", currentStageId: "stage-old" },
-    ]);
     mocks.transactionImpl.mockImplementation(async (fn: (tx: unknown) => Promise<unknown>) => {
       const tx = __makeTx();
       mocks.selectQueue.push([
@@ -324,9 +319,10 @@ describe("decideOffer guards", () => {
         { id: "stage-old", name: "Interview", kind: "interview", order: 2, archivedAt: null },
       ]);
       mocks.selectQueue.push([{ lastOrder: 2 }]);
-      await fn(tx);
+      const result = await fn(tx);
       mocks.selectQueue.push([null]); // getOfferRecipient
       mocks.selectQueue.push([]); // jobHiringTeam (none)
+      return result;
     });
 
     const result = await decideOffer({
@@ -354,14 +350,15 @@ describe("decideOffer guards", () => {
   });
 
   it("refuses to accept an offer whose application was already rejected", async () => {
-    // Select order: [offer], [application rejected] (pre-tx guard trips here).
-    // The transaction never runs.
+    // The shared transition locks the application inside the transaction and
+    // refuses before any write, so the offer is never marked accepted.
     mocks.selectQueue.push([OFFER]);
-    mocks.selectQueue.push([
-      { id: "app-1", status: "rejected", currentStageId: "stage-old" },
-    ]);
-    mocks.transactionImpl.mockImplementation(async () => {
-      throw new Error("tx should not run when the pre-tx guard refuses");
+    mocks.transactionImpl.mockImplementation(async (fn: (tx: unknown) => Promise<unknown>) => {
+      const tx = __makeTx();
+      mocks.selectQueue.push([
+        { id: "app-1", status: "rejected", currentStageId: "stage-old" },
+      ]);
+      return fn(tx);
     });
 
     const result = await decideOffer({
@@ -371,8 +368,8 @@ describe("decideOffer guards", () => {
 
     expect(result.success).toBe(false);
     expect(result.error ?? "").toMatch(/no longer active/i);
-    // No hire mutation, no application.hired event, no webhook.
-    expect(mocks.txUpdates.find((u) => u.set.status === "hired")).toBeUndefined();
+    // No offer update, no hire mutation, no application.hired event, no webhook.
+    expect(mocks.txUpdates).toHaveLength(0);
     expect(mocks.txInserts.find((i) => i.values.type === "application.hired")).toBeUndefined();
     expect(mocks.emitWebhookEvent).not.toHaveBeenCalled();
   });
@@ -384,9 +381,10 @@ describe("decideOffer guards", () => {
     mocks.selectQueue.push([OFFER]);
     mocks.transactionImpl.mockImplementation(async (fn: (tx: unknown) => Promise<unknown>) => {
       const tx = __makeTx();
-      await fn(tx);
+      const result = await fn(tx);
       mocks.selectQueue.push([null]); // getOfferRecipient
       mocks.selectQueue.push([]); // jobHiringTeam (none)
+      return result;
     });
 
     const result = await decideOffer({

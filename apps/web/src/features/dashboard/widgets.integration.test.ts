@@ -3,7 +3,7 @@ import { randomUUID } from "node:crypto";
 
 import { and, eq } from "drizzle-orm";
 
-import { db, jobStages, tasks } from "@harly/db";
+import { db, interviews, jobStages, sampleDataItems, tasks } from "@harly/db";
 
 import {
   createAuthorizationFixture,
@@ -135,6 +135,19 @@ describe.skipIf(!runPipelineIntegration)("dashboard widgets: permission and scop
     await expect(getTodayInterviews()).resolves.toMatchObject({ total: 2 });
   });
 
+  it("interviews widget: canceled interviews are not counted", async () => {
+    actAs("full");
+    const rows = await db.select({ id: interviews.id }).from(interviews).where(eq(interviews.workspaceId, fx.workspaceId));
+    await db.update(interviews).set({ status: "canceled" }).where(eq(interviews.workspaceId, fx.workspaceId));
+    try {
+      await expect(getTodayInterviews()).resolves.toMatchObject({ total: 0, items: [] });
+    } finally {
+      await db.update(interviews).set({ status: "scheduled" }).where(eq(interviews.workspaceId, fx.workspaceId));
+    }
+    expect(rows.length).toBeGreaterThan(0);
+    await expect(getTodayInterviews()).resolves.toMatchObject({ total: 2 });
+  });
+
   it("pipeline widget: unauthorized gets an empty overview, scoped sees assigned open jobs only", async () => {
     actAs("plain");
     await expect(getPipelineOverview()).resolves.toMatchObject({ jobs: [], selected: null });
@@ -234,5 +247,22 @@ describe.skipIf(!runPipelineIntegration)("dashboard widgets: permission and scop
     actAs("full");
     const full = (await getJobsAtRisk()).map((job) => job.id);
     expect(full).toEqual(expect.arrayContaining([fx.jobAssignedEmpty, fx.jobUnassignedEmpty]));
+  });
+
+  it("tracked sample jobs are neither at risk nor waiting for approval", async () => {
+    actAs("full");
+    await db.insert(sampleDataItems).values([
+      { workspaceId: fx.workspaceId, entityType: "job", entityId: fx.jobAssignedEmpty, batchId: randomUUID() },
+      { workspaceId: fx.workspaceId, entityType: "job", entityId: fx.jobDraft, batchId: randomUUID() },
+    ]);
+    try {
+      expect((await getJobsAtRisk()).map((job) => job.id)).not.toContain(fx.jobAssignedEmpty);
+      const inbox = await getInbox();
+      expect(inbox.items.map((item) => item.id)).not.toContain(fx.jobDraft);
+    } finally {
+      await db.delete(sampleDataItems).where(eq(sampleDataItems.workspaceId, fx.workspaceId));
+    }
+    expect((await getJobsAtRisk()).map((job) => job.id)).toContain(fx.jobAssignedEmpty);
+    expect((await getInbox()).items.map((item) => item.id)).toContain(fx.jobDraft);
   });
 });

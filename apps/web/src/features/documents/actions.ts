@@ -44,7 +44,7 @@ import { isExternallyManagedSignatureProvider } from "@/lib/esign/signature-stat
 import { sendDocumentForEnvelope } from "@/lib/esign/document-signing";
 import { archiveSubmission, freshEsignContext } from "@/lib/esign/client";
 import { createLogger } from "@/lib/logger";
-import { storage } from "@/lib/storage";
+import { deleteStorageObjects } from "./storage-cleanup";
 import { persistDomainEvent, publishPersistedDomainEvents } from "@/server/events/emit";
 import { documentAutomationContext } from "@/lib/esign/document-automation-context";
 import { voidNativeSignature } from "@/lib/esign/native/void";
@@ -410,9 +410,7 @@ export async function deleteDocument(input: { documentId: string }): Promise<Doc
     );
   });
 
-  const deletions = await Promise.allSettled(storageKeys.map((key) => storage.delete(key)));
-  const failed = deletions.filter((result) => result.status === "rejected").length;
-  if (failed > 0) log.warn({ documentId: input.documentId, failed, total: storageKeys.length }, "Some document storage objects could not be deleted");
+  await deleteStorageObjects(storageKeys, { documentId: input.documentId });
   revalidatePath("/dashboard/documents");
   return { ok: true, documentId: input.documentId };
 }
@@ -573,7 +571,7 @@ export async function createDocumentVersion(input: { documentId: string; origina
     const [current] = await tx.select({ versionNumber: documentVersions.versionNumber }).from(documentVersions).where(eq(documentVersions.documentId, input.documentId)).orderBy(desc(documentVersions.versionNumber)).limit(1);
     const versionNumber = (current?.versionNumber ?? 0) + 1;
     await tx.update(documentVersions).set({ isCurrent: false }).where(eq(documentVersions.documentId, input.documentId));
-    await tx.insert(documentVersions).values({ workspaceId: context.organization.id, documentId: input.documentId, versionNumber, storageKey: input.storageKey, sizeBytes: input.sizeBytes, checksum: checked.checksum, uploadedById: context.user.id });
+    await tx.insert(documentVersions).values({ workspaceId: context.organization.id, documentId: input.documentId, versionNumber, storageKey: input.storageKey, sizeBytes: input.sizeBytes, checksum: checked.checksum, mimeType: input.mimeType, uploadedById: context.user.id });
     await tx.update(documents).set({ storageKey: input.storageKey, sizeBytes: input.sizeBytes, checksum: checked.checksum, mimeType: input.mimeType, originalName: input.originalName.replace(/[\r\n]/g, "") }).where(and(eq(documents.id, input.documentId), eq(documents.workspaceId, context.organization.id)));
     await logDocumentActivity(tx, { workspaceId: context.organization.id, actorId: context.user.id, documentId: input.documentId, type: "document.version_created", metadata: { versionNumber } });
     return true;
@@ -1063,9 +1061,7 @@ export async function bulkDeleteDocuments(input: { documentIds: string[] }): Pro
     await tx.delete(documents).where(and(eq(documents.workspaceId, context.organization.id), inArray(documents.id, ids)));
   });
 
-  const deletions = await Promise.allSettled(storageKeys.map((key) => storage.delete(key)));
-  const failed = deletions.filter((result) => result.status === "rejected").length;
-  if (failed > 0) log.warn({ failed, total: storageKeys.length }, "Some document storage objects could not be deleted during bulk delete");
+  await deleteStorageObjects(storageKeys, { bulk: true, documentIds: ids });
 
   revalidatePath("/dashboard/documents");
   const skipped = candidates.length - deletable.length;

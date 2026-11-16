@@ -2,7 +2,10 @@
 
 Shared UI primitives for Harly.
 
-> **Status:** Placeholder — not yet implemented. UI components currently live in `apps/web/src/components/ui/` (shadcn/ui + lucide).
+> **Status:** Placeholder. There are no components in this package yet.
+
+The shared UI components currently live in `apps/web/src/components/ui`
+(shadcn/ui + lucide). Use that directory until components move here.
 
 ## Planned contents
 

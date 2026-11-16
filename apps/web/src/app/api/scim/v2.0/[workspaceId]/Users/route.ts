@@ -1,6 +1,7 @@
 import { NextRequest } from "next/server";
 import {
   listScimUsers,
+  ScimError,
   upsertScimUser,
   type ScimUserInput,
 } from "@/server/scim/service";
@@ -22,14 +23,21 @@ export async function GET(request: NextRequest, { params }: Params) {
   if (!auth.ok) return auth.response;
   const startIndex = Number(request.nextUrl.searchParams.get("startIndex") ?? 1);
   const count = Number(request.nextUrl.searchParams.get("count") ?? 100);
-  const result = await listScimUsers(
-    workspaceId,
-    scimBaseUrl(request, workspaceId),
-    Number.isFinite(startIndex) ? startIndex : 1,
-    Number.isFinite(count) ? count : 100,
-    request.nextUrl.searchParams.get("filter") ?? undefined,
-  );
-  return scimJson(result);
+  try {
+    const result = await listScimUsers(
+      workspaceId,
+      scimBaseUrl(request, workspaceId),
+      Number.isFinite(startIndex) ? startIndex : 1,
+      Number.isFinite(count) ? count : 100,
+      request.nextUrl.searchParams.get("filter") ?? undefined,
+    );
+    return scimJson(result);
+  } catch (error) {
+    if (error instanceof ScimError) {
+      return scimError(error.message, error.status, error.scimType);
+    }
+    throw error;
+  }
 }
 
 export async function POST(request: NextRequest, { params }: Params) {
@@ -44,9 +52,14 @@ export async function POST(request: NextRequest, { params }: Params) {
   }
   if (!body || typeof body !== "object") return scimError("User payload is required.", 400);
   try {
-    const user = await upsertScimUser(workspaceId, body, scimBaseUrl(request, workspaceId));
+    const user = await upsertScimUser(workspaceId, body, scimBaseUrl(request, workspaceId), {
+      mode: "create",
+    });
     return scimJson(user, 201);
   } catch (error) {
+    if (error instanceof ScimError) {
+      return scimError(error.message, error.status, error.scimType);
+    }
     const message = error instanceof Error ? error.message : "Unable to provision user.";
     return scimError(message, 400, "invalidValue");
   }

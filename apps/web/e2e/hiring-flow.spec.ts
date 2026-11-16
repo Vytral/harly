@@ -263,8 +263,18 @@ test.describe("candidate-to-hire native signing flow", () => {
       timeout: 30_000,
     });
     const magicLink = await waitForMagicLink(captureOffset);
+    // Opening the link only shows a confirmation page; the one-time token is
+    // used when the candidate presses the button (so mail scanners can't burn it).
     await candidatePage.goto(magicLink, { waitUntil: "domcontentloaded" });
-    await expect(candidatePage).toHaveURL(/\/portal\//, { timeout: 30_000 });
+    await expect(
+      candidatePage.getByRole("heading", { name: "Confirm sign-in", exact: true }),
+    ).toBeVisible({ timeout: 30_000 });
+    await candidatePage
+      .getByRole("button", { name: "Sign in", exact: true })
+      .click();
+    await expect(candidatePage).toHaveURL(/\/portal\/(?!magic)/, {
+      timeout: 30_000,
+    });
 
     await candidatePage.goto(`/portal/applications/${applicationId}`, {
       waitUntil: "domcontentloaded",
@@ -373,8 +383,10 @@ function captureSize() {
 
 async function waitForMagicLink(offset: number) {
   const deadline = Date.now() + 30_000;
+  // Emails link to the confirmation page; links sent before it existed point at
+  // the API route, which redirects to the same page.
   const pattern =
-    /https?:\/\/[^\s"'<>]+\/api\/portal\/auth\/magic\?token=([A-Za-z0-9_-]+)/;
+    /https?:\/\/[^\s"'<>]+\/(?:portal\/magic|api\/portal\/auth\/magic)\?token=([A-Za-z0-9_-]+)/;
 
   while (Date.now() < deadline) {
     try {

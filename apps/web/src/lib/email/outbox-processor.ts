@@ -28,6 +28,8 @@ import {
   candidateStageUpdateSubject,
   CustomTemplateEmail,
   InterviewCanceled,
+  buildIcsAttachment,
+  interviewIcsUid,
   interviewCanceledSubject,
   InterviewRescheduled,
   interviewRescheduledSubject,
@@ -48,6 +50,8 @@ import {
   renderRejectionTemplateById,
 } from "@/features/email-templates/data";
 import { isSampleEmailAddress } from "@/features/sample-data/constants";
+import { sanitizeTemplateHtml } from "@/features/email-templates/template-html.server";
+import { templateHtmlToPlainText } from "@/features/email-templates/plain-text";
 import { sendWorkspaceEmail, type SendEmailOptions } from "@/lib/email";
 import { getWorkspaceEmailBranding } from "@/lib/email/branding";
 import { getWorkspaceEmailConfig } from "@/lib/email/config";
@@ -433,6 +437,13 @@ async function recordAcceptance(
  * If that write keeps failing the error is logged and the caller continues:
  * `markSent` writes the same id again, and the next claim finds it either way.
  */
+/**
+ * Why the last send for a row returned `false` (no sender, or the provider's
+ * sanitized error). `markFailed` appends it so the stored error says what
+ * actually went wrong instead of a generic message.
+ */
+const sendFailureDetail = new Map<string, string>();
+
 async function sendRecorded(
   row: OutboxRow,
   database: typeof db,
@@ -441,8 +452,12 @@ async function sendRecorded(
 ): Promise<Awaited<ReturnType<typeof sendWorkspaceEmail>>> {
   let delivered: Awaited<ReturnType<typeof sendWorkspaceEmail>>;
   try {
+    sendFailureDetail.delete(row.id);
     delivered = await sendWorkspaceEmail(row.workspaceId, options, actorUserId, {
       rethrowUnknownOutcome: true,
+      onFailure: (failure) => {
+        sendFailureDetail.set(row.id, failure.detail);
+      },
     });
   } catch (error) {
     if (!(error instanceof DeliveryOutcomeUnknownError)) throw error;
@@ -614,12 +629,15 @@ async function deliverAutomationEmail(row: OutboxRow, database: typeof db = db):
     await markFailed(row.id, "Automation email payload is incomplete.", database);
     return false;
   }
+  // Rows queued before the producer sanitized (or by any other producer) are
+  // sanitized again here: this is the last step before HTML reaches a candidate.
+  const bodyHtml = sanitizeTemplateHtml(payload.bodyHtml);
   const branding = await getWorkspaceEmailBranding(row.workspaceId);
   const delivered = await sendRecorded(row, database, {
     to: payload.to,
     subject: payload.subject,
     react: createElement(CustomTemplateEmail, {
-      bodyHtml: payload.bodyHtml,
+      bodyHtml,
       companyName: payload.companyName || branding.name || "Harly",
       companyLogoUrl: branding.logoUrl ?? undefined,
       hideBranding: branding.hideBranding,
@@ -629,7 +647,7 @@ async function deliverAutomationEmail(row: OutboxRow, database: typeof db = db):
     ...deliveryOptions(row),
   }, row.actorId ?? undefined);
   if (!delivered) {
-    await markFailed(row.id, "No configured workspace email sender.", database);
+    await markFailed(row.id, "Email was not sent.", database);
     return false;
   }
   await markSent(row.id, delivered, database);
@@ -637,7 +655,7 @@ async function deliverAutomationEmail(row: OutboxRow, database: typeof db = db):
     workspaceId: row.workspaceId,
     toEmail: payload.to,
     subject: payload.subject,
-    textBody: payload.bodyHtml.replaceAll(/<[^>]*>/g, " "),
+    textBody: templateHtmlToPlainText(bodyHtml),
     outboxRowId: row.id,
     candidateId: payload.candidateId,
   });
@@ -665,7 +683,7 @@ async function deliverScheduledReport(row: OutboxRow, database: typeof db = db):
     ...deliveryOptions(row),
   });
   if (!delivered) {
-    await markFailed(row.id, "No configured workspace email sender.", database);
+    await markFailed(row.id, "Email was not sent.", database);
     return false;
   }
   await markSent(row.id, delivered, database);
@@ -1662,6 +1680,9 @@ type InterviewEmailPayload = {
   replyTo?: string | null;
   interviewerName?: string;
   recipientLocale?: string | null;
+  /** Stable calendar identity and revision; older rows lack them. */
+  interviewId?: string;
+  revision?: number;
 };
 
 async function deliverInterviewEmail(row: OutboxRow, database: typeof db = db): Promise<boolean> {
@@ -1710,6 +1731,29 @@ async function deliverInterviewEmail(row: OutboxRow, database: typeof db = db): 
     : undefined;
   let delivered: Awaited<ReturnType<typeof sendWorkspaceEmail>> = false;
   let interviewSubject = "";
+  // One calendar entry per interview: the invite, every reschedule and the
+  // cancellation share the UID and carry a non-decreasing SEQUENCE.
+  const calendarUid = payload.interviewId ?? row.id;
+  const calendarSequence =
+    typeof payload.revision === "number" ? Math.floor(payload.revision / 1000) : 0;
+  const calendarAttachments = (method: "REQUEST" | "CANCEL") => [
+    buildIcsAttachment({
+      uid: interviewIcsUid(calendarUid),
+      method,
+      sequence: calendarSequence,
+      summary: `${interviewTypeLabel} — ${payload.jobTitle}`,
+      start: when,
+      durationMins: payload.durationMins ?? 60,
+      description: method === "REQUEST" ? payload.notes : undefined,
+      location: payload.location,
+      organizer: payload.replyTo
+        ? { email: payload.replyTo, name: payload.companyName }
+        : undefined,
+      attendee: payload.candidateEmail
+        ? { email: payload.candidateEmail, name: payload.candidateName }
+        : undefined,
+    }),
+  ];
 
   try {
     if (row.kind === "interview.scheduled") {
@@ -1752,12 +1796,14 @@ async function deliverInterviewEmail(row: OutboxRow, database: typeof db = db): 
                 accentColor: branding.primaryColor ?? undefined,
                 socialLinks: branding.socialLinks,
               }),
+              attachments: calendarAttachments("REQUEST"),
               ...deliveryOptions(row),
             }
           : {
               to: payload.candidateEmail,
               subject: interviewSubject,
               replyTo: payload.replyTo ?? undefined,
+              attachments: calendarAttachments("REQUEST"),
               react: createElement(InterviewScheduled, {
                 ...common,
                 interviewType: interviewTypeLabel,
@@ -1767,6 +1813,8 @@ async function deliverInterviewEmail(row: OutboxRow, database: typeof db = db): 
                 duration,
                 startIso: when.toISOString(),
                 durationMins: payload.durationMins,
+                interviewId: calendarUid,
+                sequence: calendarSequence,
                 notes: payload.notes,
                 locale: recipientLocale,
               }),
@@ -1787,6 +1835,7 @@ async function deliverInterviewEmail(row: OutboxRow, database: typeof db = db): 
           to: payload.candidateEmail,
           subject: interviewSubject,
           replyTo: payload.replyTo ?? undefined,
+          attachments: calendarAttachments("REQUEST"),
           react: createElement(InterviewRescheduled, {
             ...common,
             interviewType: interviewTypeLabel,
@@ -1796,6 +1845,8 @@ async function deliverInterviewEmail(row: OutboxRow, database: typeof db = db): 
             duration,
             startIso: when.toISOString(),
             durationMins: payload.durationMins,
+            interviewId: calendarUid,
+            sequence: calendarSequence,
           }),
           ...deliveryOptions(row),
         },
@@ -1814,6 +1865,7 @@ async function deliverInterviewEmail(row: OutboxRow, database: typeof db = db): 
           to: payload.candidateEmail,
           subject: interviewSubject,
           replyTo: payload.replyTo ?? undefined,
+          attachments: calendarAttachments("CANCEL"),
           react: createElement(InterviewCanceled, {
             ...common,
             interviewType: interviewTypeLabel,
@@ -1945,10 +1997,12 @@ async function markSent(
 async function markFailed(id: string, message: string, database: typeof db = db) {
   // A row the provider accepted, or whose outcome is unknown, is never made retryable here.
   if (acceptedInFlight.has(id) || unknownOutcomeInFlight.has(id)) return;
+  const detail = sendFailureDetail.get(id);
+  sendFailureDetail.delete(id);
   await database
     .update(emailOutbox)
     .set({
-      lastError: sanitizeDeliveryError(message),
+      lastError: sanitizeDeliveryError(detail ? `${message} ${detail}` : message),
       nextRetryAt: sql`CASE
         WHEN ${emailOutbox.attempts} >= ${MAX_ATTEMPTS} THEN NULL
         ELSE now() + (${emailOutbox.attempts} * interval '1 minute')

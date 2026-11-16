@@ -4,7 +4,9 @@ import {
   capacityHoursPerWeekSchema,
   normalizeUsername,
   preferredEmailLocaleSchema,
+  profileUrlSchema,
   timeRangeSchema,
+  updateProfileSchema,
   usernameSchema,
   weeklyAvailabilitySchema,
 } from "./validators";
@@ -136,5 +138,44 @@ describe("normalizeUsername", () => {
 
   it("collapses and trims hyphens", () => {
     expect(normalizeUsername("--Ada--Lovelace--")).toBe("ada-lovelace");
+  });
+});
+
+describe("profile URLs", () => {
+  it.each([
+    "javascript:alert(1)",
+    "JaVaScRiPt:alert(1)",
+    "data:text/html;base64,PHNjcmlwdD4=",
+    "file:///etc/passwd",
+    "ftp://files.example.test/me",
+    "vbscript:msgbox(1)",
+    "https://",
+  ])("rejects %s", (value) => {
+    expect(profileUrlSchema.safeParse(value).success).toBe(false);
+    expect(
+      updateProfileSchema.safeParse({ name: "Ada", websiteUrl: value }).success,
+    ).toBe(false);
+  });
+
+  it("accepts http(s) links and trims them", () => {
+    expect(profileUrlSchema.parse(" https://example.com/in/ada ")).toBe("https://example.com/in/ada");
+    expect(profileUrlSchema.parse("http://example.com")).toBe("http://example.com");
+  });
+
+  it("adds https to scheme-less links and clears blanks", () => {
+    expect(profileUrlSchema.parse("example.com/in/ada")).toBe("https://example.com/in/ada");
+    expect(profileUrlSchema.parse("localhost:3000/x")).toBe("https://localhost:3000/x");
+    expect(profileUrlSchema.parse("")).toBeNull();
+    expect(profileUrlSchema.parse(null)).toBeNull();
+    expect(profileUrlSchema.parse(undefined)).toBeNull();
+  });
+
+  it("validates every profile link field", () => {
+    for (const field of ["linkedinUrl", "githubUrl", "websiteUrl"]) {
+      expect(
+        updateProfileSchema.safeParse({ name: "Ada", [field]: "javascript:alert(1)" }).success,
+      ).toBe(false);
+    }
+    expect(updateProfileSchema.safeParse({ name: "Ada" }).success).toBe(true);
   });
 });

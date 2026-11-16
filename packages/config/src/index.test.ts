@@ -1,6 +1,12 @@
+import { randomBytes } from "node:crypto";
+
 import { describe, expect, it, vi } from "vitest";
 
-import { demoSandboxSettings, loadHarlyConfig } from "./index";
+import {
+  demoSandboxSettings,
+  loadHarlyConfig,
+  secretHasEnoughEntropy,
+} from "./index";
 import {
   isEmailLocale,
   normalizeEmailLocale,
@@ -41,11 +47,11 @@ const production = {
   NODE_ENV: "production",
   HARLY_URL: "https://harly.example.com",
   DATABASE_URL: "postgresql://harly:secret@postgres:5432/harly",
-  BETTER_AUTH_SECRET: "a".repeat(32),
-  AI_ENCRYPTION_KEY: "b".repeat(32),
-  STORAGE_UPLOAD_SECRET: "c".repeat(32),
-  CRON_SECRET: "d".repeat(32),
-  HARLY_SETUP_SECRET: "e".repeat(32),
+  BETTER_AUTH_SECRET: "ci-only-auth-secret-7Qx2mV9pLk4Rt8Wz",
+  AI_ENCRYPTION_KEY: "ci-only-ai-key-Hn3Zc6Yd1Fs5Jb0Xu8Pa",
+  STORAGE_UPLOAD_SECRET: "ci-only-upload-Tg4Ke7Ow2Mi9Rv5Cn1Ly",
+  CRON_SECRET: "ci-only-cron-secret-Bp6Qa3Xe8Uz1Wk4Dj7",
+  HARLY_SETUP_SECRET: "ci-only-setup-secret-Nf5Hs2Vy9Gt0Lm6Ro3",
   HARLY_INITIAL_ADMIN_EMAIL: "owner@example.com",
 };
 
@@ -60,6 +66,28 @@ describe("loadHarlyConfig", () => {
     expect(() =>
       loadHarlyConfig({ ...production, CRON_SECRET: "short" }),
     ).toThrow(/CRON_SECRET/);
+  });
+
+  it("rejects long but low-entropy secrets", () => {
+    for (const weak of ["a".repeat(64), "ab".repeat(32), "abcd".repeat(16)]) {
+      expect(() =>
+        loadHarlyConfig({ ...production, CRON_SECRET: weak }),
+      ).toThrow(/CRON_SECRET/);
+    }
+  });
+
+  it("accepts openssl and CLI style generated secrets", () => {
+    const generated = [
+      randomBytes(32).toString("base64"),
+      randomBytes(32).toString("hex"),
+      randomBytes(32).toString("base64url"),
+    ];
+    for (const value of generated) {
+      expect(secretHasEnoughEntropy(value)).toBe(true);
+      expect(() =>
+        loadHarlyConfig({ ...production, CRON_SECRET: value }),
+      ).not.toThrow();
+    }
   });
 
   it("rejects an unspecified production public origin", () => {

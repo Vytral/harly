@@ -13,6 +13,97 @@ operators. How to cut a release is in [RELEASING.md](RELEASING.md). The
 
 ## [Unreleased]
 
+This release fixes the findings of a security and correctness audit. It adds
+one database migration (new indexes, a nullable document version column and a
+job slug index that ignores trashed jobs), applied by `harly update` as usual.
+Before upgrading, check three things: API keys created by members who have
+since left the workspace stop working and must be re-issued; production
+secrets made of repeated or low-variety characters are now rejected at
+startup; and deployments that relied on the `X-Forwarded-Peer` header must
+list their extra proxy hops in `TRUSTED_PROXY_IPS`.
+
+### Security
+
+- Automation emails and workspace email templates now HTML-escape candidate-controlled values (names, job titles, links) and sanitize the final HTML, so a candidate can no longer inject links or markup into emails sent to others. Queued automation emails are sanitized again at delivery.
+- Mailbox replies and new messages composed in the editor are sanitized server-side before sending.
+- Updating, archiving, assigning, marking read, replying to and linking mailbox threads, and AI thread summaries and reply suggestions, now respect the member's role scope, like the Inbox reads do.
+- The inbound email webhook caps request size (413), and answers an unknown workspace the same way as a bad signature.
+- Inviting someone who is already a workspace member (single or bulk) no longer changes their role. Previously an owner could be demoted to viewer by inviting their email.
+- The client IP used for IP allowlists, rate limits and audit logs no longer trusts the client-settable `X-Forwarded-Peer` header. Harly reads `X-Forwarded-For` from the right, skipping addresses listed in `TRUSTED_PROXY_IPS`. If you relied on `X-Forwarded-Peer`, list your extra proxy hops in `TRUSTED_PROXY_IPS` instead.
+- Server actions posted from `/settings/security` are no longer exempt from forced 2FA, required-passkey and forced-password-change checks, and the IP allowlist and email-domain policy now also apply to the security pages.
+- Reauthentication tokens are single-use. Deleting a passkey, adding one when you already have one, creating SCIM tokens and registering SSO providers now require a fresh passkey confirmation.
+- Session risk detection compares the real browser and operating system instead of the constant "Mozilla" prefix, and is enabled by default when no setting exists, matching the settings page.
+- The people profile lookup only returns active members of your workspace, and profile links (LinkedIn, GitHub, website) must be http(s).
+- Demo mode now also blocks magic-link and passkey sign-in.
+- The passkey sign-in compatibility lookup no longer reveals whether an email has an account.
+- Role resolution fails closed when a member's role cannot be determined.
+- Publishable API keys (`pk_`) only list and read jobs that are public on the career page, with public fields only, and can no longer apply to draft or closed jobs.
+- API keys stop working when the member who created them is removed or deactivated, or their account was deleted. Re-issue such keys from an active account.
+- Automations no longer run with the permissions of a deactivated or suspended workflow creator.
+- `GET /api/v1/activity-events` requires a key created by a member whose role is not limited to specific jobs, matching the MCP activity tool.
+- API key and webhook management enforce `integrations:manage` and the matching API scope in the data layer, not only at their call sites.
+- MCP OAuth: a client that requests only `offline_access` or `openid` style scopes gets a minimal read set (`candidates:read`, `jobs:read`) instead of every scope.
+- Assigning candidates from the Talent Pool to a job checks the caller's job and candidate access, so restricted roles can no longer assign out-of-scope candidates or assign to out-of-scope jobs.
+- The "possible duplicates" banner on a candidate page no longer shows candidates outside the viewer's role scope.
+- Trashing, restoring and permanently deleting a single candidate respect role scope. DSAR erasure and the deletion worker are unaffected.
+- Talent Pool reads require `candidates:view` and the open-job picker requires `jobs:view`.
+- Candidate LinkedIn, GitHub and website links are limited to http and https in the dashboard, REST API and candidate portal (the REST API used to accept any scheme; the dashboard used to require https and now also accepts http).
+- Candidate portal sign-in links are no longer consumed when the link is merely opened, so email scanners can no longer burn them. Opening the link shows a confirmation page and sign-in happens when the candidate selects the button. Links already sent keep working.
+- The public job page no longer sends internal job columns (workspace id, creator, evaluation mode, application and board configuration) to the browser.
+- The portal's presigned-upload routes are rate limited per candidate and return 400 instead of 500 on malformed JSON.
+- CAPTCHA verification times out after 5 seconds and fails closed when the provider is unreachable or returns an unreadable reply.
+- Portal rate-limit keys no longer fall back to a fixed built-in secret in production.
+
+### Fixed
+
+- Concurrent inbound deliveries of the same email no longer break attachment saving.
+- Failed emails in the delivery log show the real, sanitized provider error instead of "No configured workspace email sender".
+- Inbound attachment links in a candidate conversation open the right file. The legacy download route writes an audit event and sends `X-Content-Type-Options: nosniff`.
+- Interview calendar invites use a stable UID per interview with DTSTAMP, SEQUENCE and METHOD:REQUEST, so reschedules update the same calendar entry, and cancellations send METHOD:CANCEL. The `.ics` file is now attached to interview emails.
+- Outbound messages record the sender address actually used (per-recruiter identity or workspace sender) instead of `EMAIL_FROM`.
+- The inbound email webhook returns 5xx for transient failures so providers retry, and 400 only for unusable payloads.
+- Resend inbound attachments that cannot be fetched or are too large are logged instead of dropped silently.
+- The shareable invite link page lets new people create an account (`/signup?invite=...`) and join. Joining through a link is recorded as `member.joined` in the audit log.
+- SCIM `userName` filters match exactly (case-insensitive) instead of treating `%` and `_` as wildcards. `externalId eq` is supported and other filters return `400 invalidFilter`. PUT and PATCH update the member in the URL, PATCH accepts `"True"`/`"False"` for `active`, and the ServiceProviderConfig no longer claims sorting support.
+- An inbound automation webhook whose duplicate receipt disappears mid-request returns an error instead of a fake duplicate with an empty event id.
+- `limit` query values such as `10abc` or `1.5` are rejected instead of silently truncated.
+- Replayed idempotent API responses carry the `Idempotent-Replayed: true` header.
+- Evaluations saved from the candidate page go through the same writer as the REST API, keep their criteria, and show the real permission error instead of "Unable to save evaluation".
+- PATCH on a job validates salary rules (minimum not above maximum, currency and period required) against the stored values, not only the fields in the request.
+- The hidden honeypot field now exists on the hosted apply form, the portal apply form and the embed widget, so simple bots that fill it are rejected.
+- The sitemap no longer lists jobs that are scheduled for the future or past their closing date.
+- When no email sender is configured in production, requesting a portal sign-in link reports a failure and logs it instead of claiming the email was sent.
+- A database failure during portal rate limiting is no longer shown to candidates as "too many attempts".
+- The public API and the public site always pick the same workspace when no API key is sent.
+- The root job page (`/jobs/<slug>`) includes JobPosting structured data, like the board job page.
+- The legal page browser title no longer contains a stray comma.
+- Accepting or declining an offer behaves the same from the dashboard, the REST API and the MCP tools: the application is locked first, an accepted offer is refused unless the application is still active, and the offer's `updatedAt` is always refreshed.
+- Interview calendar and video events created from the REST API and the dashboard edit form use the same time zone as the candidate's invite email instead of always UTC: the zone supplied with the request, then the scheduler's profile zone, then the workspace time zone, then UTC. Reschedules and cancellations keep the original invite's zone.
+- Private resume downloads in workspaces with more than 5,000 candidate files no longer go through a truncated lookup.
+- Failed deletions of document and saved-signature files from storage are logged with the storage key, so orphaned objects can be cleaned up.
+- "Candidates tracked" on Reports, and the "Jobs to approve" and "Jobs at risk" cards on the dashboard, no longer count sample records from "Load sample data".
+- Source conversion on Reports is cohort-based (applications received in the window and how many of them were hired), so it can no longer exceed 100%.
+- A legacy hire with no stage history is dated by its application date instead of its last-edited time, so editing an old record no longer moves it into a newer reporting window.
+- "Jobs at risk" on the dashboard shows the most severe jobs first.
+- "Interviews today" on the dashboard no longer counts canceled interviews.
+- Scheduled reports run at the same local time in the workspace time zone, without drift across daylight-saving changes, and a late cron tick no longer shifts the schedule.
+- A failing scheduled report is retried with a growing delay (15 minutes up to 12 hours) instead of once a day, and after 5 failed runs in a row its creator gets an in-app notification.
+- `POST /api/reports/schedules` returns 400 for a malformed JSON body instead of a server error.
+- Downloading an older version of a document serves it with the MIME type it was uploaded with. Versions created before this release fall back to the document's type.
+- Trashed jobs no longer reserve their URL slug, and restoring a trashed job whose slug was taken by a newer job brings it back under a fresh unique slug instead of failing.
+- Moving a candidate on the pipeline board no longer fails with "Unable to move" when someone changes a stage's type at the same moment: a move that Postgres aborts as a deadlock victim is now retried.
+
+### Changed
+
+- Production secrets (`BETTER_AUTH_SECRET`, `AI_ENCRYPTION_KEY`, `STORAGE_UPLOAD_SECRET`, `CRON_SECRET`, `HARLY_SETUP_SECRET`) must be at least 32 random-looking characters. Repeated or low-variety values such as `aaaa...` are rejected at startup. Values from the `harly` CLI and `openssl rand -base64 32` or `-hex 32` are accepted.
+- Duplicate SCIM `POST /Users` now returns `409 Conflict`, as does a POST whose email belongs to an account outside the workspace. Identity providers that re-POST existing users will see the conflict.
+- `GET /api/reports/advanced` accepts only `days=30`, `90` or `365` (default 90), the ranges the Reports page offers, and returns 400 otherwise.
+- The withdrawn Automations HTTP API (`/api/v1/automations`) answers `410 Gone` in the standard error envelope and is no longer listed in the OpenAPI document.
+- `compose.yaml` forwards OAuth credentials, `TRUSTED_PROXY_IPS`, `RATE_LIMIT_STORE`, `LOG_LEVEL`, `NATIVE_SIGN_SESSION_SECRET`, retention, Turnstile, database pool and email settings to the app, scheduler and migrate services, and includes the `docuseal` service under the `esign` profile. It no longer sets the deprecated `NEXT_PUBLIC_APP_URL` and `BETTER_AUTH_URL` aliases; if you set only those in `.env`, set `HARLY_URL` instead.
+- `.env.example` and the configuration reference cover every environment variable Harly reads. The `EMAIL_FROM` example uses a reserved domain and the `LOG_LEVEL` default is documented as `info`.
+- Added indexes on foreign keys of evaluation jobs, mail threads, mail messages and candidate messages to speed up deletes and lookups.
+- Turborepo passes runtime secrets and optional integration settings through to tasks started via `turbo`.
+
 ## [0.5.0] - 2026-11-10
 
 Harly now speaks six languages. The web app and the interview emails are

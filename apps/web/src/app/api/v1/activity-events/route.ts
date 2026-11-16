@@ -5,6 +5,7 @@ import {
   serializeActivityEvent,
   type ActivityEntityType,
 } from "@/features/activity/service";
+import { requireUnrestrictedKeyScope } from "@/server/api/actor";
 import { buildRouteHandler } from "@/server/api/contracts";
 import { listActivityEventsContract } from "@/server/api/contracts/activity-events";
 import { apiOk, withApi } from "@/server/api/respond";
@@ -23,6 +24,7 @@ export const GET = withApi(
     if (q.entityId && !q.entityType) {
       throw ApiError.badRequest("`entityType` is required with `entityId`.");
     }
+    await requireUnrestrictedKeyScope(auth.workspaceId, auth.createdById);
     const limit = q.limit ?? parseLimit(null);
     const rows = await listActivityEventsForApi({
       workspaceId: auth.workspaceId,

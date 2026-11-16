@@ -15,7 +15,7 @@ import {
   type StageKind,
 } from "@harly/db";
 
-import { TIME_TO_HIRE_BUCKETS } from "./metrics";
+import { notSampleRecordRawSql, notSampleRecordSql } from "./sample-records";
 import { dayKeysInWindow, normalizeTimeZone, type ReportWindow } from "./window";
 
 /**
@@ -31,11 +31,17 @@ import { dayKeysInWindow, normalizeTimeZone, type ReportWindow } from "./window"
  * - Hire: an application whose current status is `hired`. Its hire date is the
  *   latest transition into a stage whose EFFECTIVE KIND is `hired` (never a
  *   stage name). Legacy hires with no such transition fall back to the
- *   earliest `application.hired` activity event, then to `updated_at`. Each
- *   application counts once, in the window that contains its hire date.
+ *   earliest `application.hired` activity event, then to the application's
+ *   `applied_at`: a stable date that later edits to the row cannot move
+ *   (`updated_at` changes on every edit, which would drag the hire into
+ *   whatever window the last edit fell in). Such a hire has a time to hire of
+ *   zero days. Each application counts once, in the window that contains its
+ *   hire date.
  * - Time to hire: hire date minus `applied_at`, in days, for hires in window.
  * - Offer acceptance: accepted / (accepted + declined) over offers whose
  *   `decided_at` falls in the window. `null` when nothing was decided.
+ * - Source effectiveness: a cohort. Applications received in the window per
+ *   source, and how many of those applications were hired (at any date).
  * - Funnel: applications received in the window that ever reached each stage
  *   kind (history or current stage). Conversion is against applications
  *   received, not against the stage called "Applied".
@@ -121,12 +127,7 @@ export function activeAppsSql(workspaceId: string): SQL {
       inner join candidates c
         on c.id = a.candidate_id and c.workspace_id = a.workspace_id and c.deleted_at is null
       where a.workspace_id = ${workspaceId}
-        and not exists (
-          select 1 from sample_data_items s
-          where s.workspace_id = a.workspace_id
-            and s.entity_type = 'application'
-            and s.entity_id = a.id
-        )
+        and ${notSampleRecordRawSql("application", "a.id", "a.workspace_id")}
     )`;
 }
 
@@ -167,7 +168,7 @@ export function hireCtesSql(workspaceId: string): SQL {
     ),
     hires as (
       select ha.id as application_id, ha.candidate_id, ha.job_id, ha.source, ha.applied_at,
-        coalesce(sh.hired_at, ah.hired_at, ha.updated_at) as hired_at
+        coalesce(sh.hired_at, ah.hired_at, ha.applied_at) as hired_at
       from hired_apps ha
       left join stage_hire sh on sh.application_id = ha.id
       left join activity_hire ah on ah.application_id = ha.id
@@ -193,12 +194,17 @@ function wholePercent(part: number, whole: number): number | null {
  * Two calls in one request for the same window share a single computation.
  */
 function windowKey(window: ReportWindow): string {
-  return [window.from.getTime(), window.to.getTime(), window.timeZone].join("|");
+  return [window.from.getTime(), window.to.getTime(), window.timeZone, window.days ?? ""].join("|");
 }
 
 function windowFromKey(key: string): ReportWindow {
-  const [from, to, timeZone] = key.split("|");
-  return { from: new Date(Number(from)), to: new Date(Number(to)), timeZone, days: null };
+  const [from, to, timeZone, days] = key.split("|");
+  return {
+    from: new Date(Number(from)),
+    to: new Date(Number(to)),
+    timeZone,
+    days: days === "" ? null : Number(days),
+  };
 }
 
 function memoForWindow<T>(compute: (scope: ScopedWindow) => Promise<T>) {
@@ -229,11 +235,24 @@ export async function getPopulationCounts(workspaceId: string) {
     db
       .select({ n: sql<number>`count(*)::int` })
       .from(jobs)
-      .where(and(eq(jobs.workspaceId, workspaceId), eq(jobs.status, "open"), isNull(jobs.deletedAt))),
+      .where(
+        and(
+          eq(jobs.workspaceId, workspaceId),
+          eq(jobs.status, "open"),
+          isNull(jobs.deletedAt),
+          notSampleRecordSql("job", jobs.id, jobs.workspaceId),
+        ),
+      ),
     db
       .select({ n: sql<number>`count(*)::int` })
       .from(candidates)
-      .where(and(eq(candidates.workspaceId, workspaceId), isNull(candidates.deletedAt))),
+      .where(
+        and(
+          eq(candidates.workspaceId, workspaceId),
+          isNull(candidates.deletedAt),
+          notSampleRecordSql("candidate", candidates.id, candidates.workspaceId),
+        ),
+      ),
   ]);
   return { openRoles: openRoles[0]?.n ?? 0, candidatesAllTime: tracked[0]?.n ?? 0 };
 }
@@ -254,11 +273,21 @@ export const getApplicationsReceived = memoForWindow(computeApplicationsReceived
 
 // ── Hires and time to hire ──────────────────────────────────────────────────
 
+/** Time-to-hire distribution, in whole days: [label, min, max inclusive]. */
+export const TIME_TO_HIRE_BUCKETS: [string, number, number][] = [
+  ["0–14d", 0, 14],
+  ["15–30d", 15, 30],
+  ["31–60d", 31, 60],
+  ["61–90d", 61, 90],
+  ["90d+", 91, Number.POSITIVE_INFINITY],
+];
+
 const BUCKETS = TIME_TO_HIRE_BUCKETS.map(([bucket, min, max]) => ({ bucket, min, max }));
 
 /**
- * Bucket membership on the whole-day value. `floor(d) in [min, max]` is the
- * same as `d in [min, max + 1)`, so SQL matches the JS bucketTimeToHire rule.
+ * Bucket membership on the whole-day value: `floor(d) in [min, max]` is the
+ * same as `d in [min, max + 1)`. Averages and medians are rounded to one
+ * decimal (`round1`); buckets use the unrounded duration.
  */
 function bucketPredicate(min: number, max: number): SQL {
   return max === Number.POSITIVE_INFINITY
@@ -544,7 +573,7 @@ async function computeSourceEffectiveness({ workspaceId, window }: ScopedWindow)
       with ${hireCtesSql(workspaceId)}
       select coalesce(source, 'unknown') as source, count(*)::int as n
       from hires
-      where hired_at >= ${at(window.from)} and hired_at < ${at(window.to)}
+      where applied_at >= ${at(window.from)} and applied_at < ${at(window.to)}
       group by 1
     `),
   ]);
@@ -567,7 +596,11 @@ async function computeSourceEffectiveness({ workspaceId, window }: ScopedWindow)
     .sort((a, b) => b.applications - a.applications || b.hires - a.hires || a.source.localeCompare(b.source));
 }
 
-/** Applications and hires per source, with the window's hire rule. */
+/**
+ * Applications received per source in the window, and how many of those same
+ * applications ended up hired (a cohort, whatever the hire date). Both counts
+ * share one population, so conversion never exceeds 100%.
+ */
 export const getSourceEffectiveness = memoForWindow(computeSourceEffectiveness);
 
 // ── Time series (zone-local buckets, computed in SQL) ───────────────────────
@@ -606,12 +639,7 @@ async function computeDailyCounts(
         on j.id = i.job_id and j.workspace_id = i.workspace_id and j.deleted_at is null
       where i.workspace_id = ${workspaceId}
         and i.status <> 'canceled'
-        and not exists (
-          select 1 from sample_data_items s
-          where s.workspace_id = i.workspace_id
-            and s.entity_type = 'interview'
-            and s.entity_id = i.id
-        )
+        and ${notSampleRecordRawSql("interview", "i.id", "i.workspace_id")}
         and i.scheduled_at >= ${at(window.from)} and i.scheduled_at < ${at(window.to)}
       group by 1
     `);
@@ -623,12 +651,19 @@ async function computeDailyCounts(
  * One count per local day in the window, zero-filled, oldest first. The
  * window must be a day window (`days` set).
  */
-export async function getDailySeries(
+const dailySeriesCached = cache(
+  async (workspaceId: string, key: string, metric: SeriesMetric): Promise<{ key: string; count: number }[]> => {
+    const window = windowFromKey(key);
+    const counts = await computeDailyCounts({ workspaceId, window }, metric);
+    return dayKeysInWindow(window).map((day) => ({ key: day, count: counts.get(day) ?? 0 }));
+  },
+);
+
+export function getDailySeries(
   scope: ScopedWindow,
   metric: SeriesMetric,
 ): Promise<{ key: string; count: number }[]> {
-  const counts = await computeDailyCounts(scope, metric);
-  return dayKeysInWindow(scope.window).map((key) => ({ key, count: counts.get(key) ?? 0 }));
+  return dailySeriesCached(scope.workspaceId, windowKey(scope.window), metric);
 }
 
 async function computeMonthlyCounts(
@@ -655,5 +690,17 @@ async function computeMonthlyCounts(
   return new Map(rowsOf<{ bucket: string; n: number }>(result).map((r) => [r.bucket, r.n]));
 }
 
-/** Monthly counts keyed by zone-local `YYYY-MM`, for a window of whole months. */
-export const getMonthlyCounts = computeMonthlyCounts;
+const monthlyCountsCached = cache((workspaceId: string, key: string, metric: "applications" | "hires") =>
+  computeMonthlyCounts({ workspaceId, window: windowFromKey(key) }, metric),
+);
+
+/**
+ * Monthly counts keyed by zone-local `YYYY-MM`, for a window of whole months.
+ * Computed once per request for the same workspace, window and metric.
+ */
+export function getMonthlyCounts(
+  scope: ScopedWindow,
+  metric: "applications" | "hires",
+): Promise<Map<string, number>> {
+  return monthlyCountsCached(scope.workspaceId, windowKey(scope.window), metric);
+}

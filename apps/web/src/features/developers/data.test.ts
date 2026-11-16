@@ -37,6 +37,11 @@ vi.mock("@harly/db", () => ({
   webhookEndpoints: {},
 }));
 
+// Access control itself is covered in data-access.test.ts.
+vi.mock("@/features/workspaces/permissions-server", () => ({
+  requirePermission: vi.fn(async () => ({ organization: { id: "workspace-1" } })),
+}));
+vi.mock("@/server/api/auth", () => ({ hasApiScope: () => true }));
 vi.mock("@/server/webhooks/dispatch", () => ({
   dispatchDueWebhooks: mocks.dispatchDueWebhooks,
 }));

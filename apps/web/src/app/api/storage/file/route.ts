@@ -1,7 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { and, eq, or, sql } from "drizzle-orm";
 
-import { candidateFiles, db } from "@harly/db";
 import { getWorkspaceContextOrNull } from "@/features/workspaces/context";
 import {
   PORTAL_SESSION_COOKIE,
@@ -9,7 +7,8 @@ import {
 } from "@/lib/portal-auth";
 import { requireCandidatePermission } from "@/features/workspaces/permissions-server";
 import { storage } from "@/lib/storage";
-import { privateResumeFileUrl, resumeKeyFromUrl } from "@/lib/resume/storage-key";
+import { findCandidateFileForKey } from "@/lib/resume/find-candidate-file";
+import { resumeKeyFromUrl } from "@/lib/resume/storage-key";
 import { cookies } from "next/headers";
 
 export const runtime = "nodejs";
@@ -24,29 +23,6 @@ const CONTENT_TYPES: Record<string, string> = {
 function contentTypeFor(key: string) {
   const extension = key.split(".").pop()?.toLowerCase() ?? "";
   return CONTENT_TYPES[extension] ?? "application/octet-stream";
-}
-
-async function findCandidateFileForKey(workspaceId: string, key: string) {
-  const privateUrl = privateResumeFileUrl(key);
-  const rows = await db
-    .select({ candidateId: candidateFiles.candidateId, fileUrl: candidateFiles.fileUrl })
-    .from(candidateFiles)
-    .where(
-      and(
-        eq(candidateFiles.workspaceId, workspaceId),
-        or(
-          eq(candidateFiles.fileUrl, privateUrl),
-          eq(candidateFiles.fileUrl, key),
-          eq(candidateFiles.fileUrl, `/uploads/${key}`),
-          sql`right(${candidateFiles.fileUrl}, ${key.length}) = ${key}`,
-        ),
-      ),
-    )
-    .limit(20);
-
-  return (
-    rows.find((row) => resumeKeyFromUrl(row.fileUrl) === key) ?? null
-  );
 }
 
 export async function GET(request: NextRequest) {

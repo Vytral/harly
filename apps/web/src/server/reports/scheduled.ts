@@ -13,12 +13,12 @@ import { enqueueEmailOutbox } from "@/lib/email/outbox-processor";
 import { scheduledReportEmailDedupeKey } from "@/lib/email/dedupe-keys";
 import { getServerLogger } from "@/lib/logger";
 
-import { nextRun } from "./cadence";
+import { nextRetryAt, nextRun, nextRunAfter, SCHEDULE_FAILURE_NOTIFY_AFTER } from "./cadence";
 import { getAdvancedHiringAnalytics, type AdvancedHiringAnalytics } from "@/features/reports/advanced";
 import { getWorkspaceTimeZone } from "@/features/reports/canonical";
 import { loadReportsData, type ReportsData } from "@/features/reports/data";
 import { type ReportsActor } from "@/features/reports/scope";
-import { resolveWindow, type ReportWindow } from "@/features/reports/window";
+import { resolveWindow, zonedParts, type ReportWindow } from "@/features/reports/window";
 import { isUnrestrictedScope } from "@/features/search/scope";
 import { getRolePolicy } from "@/features/workspaces/permissions-server";
 
@@ -45,6 +45,9 @@ export async function createScheduledReport(input: {
 }) {
   const recipients = [...new Set(input.recipients.map((email) => email.trim().toLowerCase()).filter(Boolean))];
   if (recipients.length === 0) throw new Error("At least one report recipient is required.");
+  // The first run is one cadence step from now, at this wall-clock time in the
+  // workspace's reporting zone.
+  const timeZone = await getWorkspaceTimeZone(input.workspaceId);
   const [row] = await db.insert(scheduledReports).values({
     workspaceId: input.workspaceId,
     name: input.name.trim().slice(0, 120),
@@ -52,7 +55,7 @@ export async function createScheduledReport(input: {
     frequency: input.frequency,
     reportType: input.reportType ?? "hiring_overview",
     createdById: input.createdById ?? null,
-    nextRunAt: nextRun(input.frequency),
+    nextRunAt: nextRun(input.frequency, new Date(), timeZone),
   }).returning();
   return row;
 }
@@ -133,7 +136,55 @@ async function recordSkippedRun(
     recipientCount: Array.isArray(report.recipients) ? report.recipients.length : 0,
     error: reason.slice(0, 500),
   });
-  await db.update(scheduledReports).set({ nextRunAt: nextRun(report.frequency, now), lockedAt: null, lockedBy: null, updatedAt: now }).where(and(eq(scheduledReports.id, report.id), eq(scheduledReports.lockedBy, workerId)));
+  const timeZone = await getWorkspaceTimeZone(report.workspaceId);
+  await db.update(scheduledReports).set({ nextRunAt: nextRunAfter(report.frequency, report.nextRunAt ?? now, now, timeZone), lockedAt: null, lockedBy: null, updatedAt: now }).where(and(eq(scheduledReports.id, report.id), eq(scheduledReports.lockedBy, workerId)));
+}
+
+/** Failed runs in a row, newest first, ending at the first run that did not fail. */
+async function countConsecutiveFailures(scheduledReportId: string): Promise<number> {
+  const recent = await db
+    .select({ status: scheduledReportRuns.status })
+    .from(scheduledReportRuns)
+    .where(eq(scheduledReportRuns.scheduledReportId, scheduledReportId))
+    .orderBy(desc(scheduledReportRuns.createdAt))
+    .limit(SCHEDULE_FAILURE_NOTIFY_AFTER + 1);
+  let count = 0;
+  for (const row of recent) {
+    if (row.status !== "failed") break;
+    count += 1;
+  }
+  return count;
+}
+
+/**
+ * Tells the schedule's creator that it keeps failing. Sent once, when the
+ * streak reaches the threshold; the schedule keeps retrying at the capped
+ * backoff, and a later success resets the streak.
+ */
+async function notifyCreatorOfFailures(
+  report: typeof scheduledReports.$inferSelect,
+  runId: string,
+  failures: number,
+  reason: string,
+) {
+  if (!report.createdById) return;
+  try {
+    // Loaded on demand: the in-app notification stack is only needed on this rare path.
+    const { createNotification } = await import("@/server/notify/inbox");
+    await createNotification({
+      workspaceId: report.workspaceId,
+      recipientIds: [report.createdById],
+      type: "report.schedule_failing",
+      title: `Scheduled report keeps failing: ${report.name}`,
+      body: `The last ${failures} runs failed (${reason.slice(0, 200)}). Harly keeps retrying; check the schedule in Reports.`,
+      href: "/dashboard/reports",
+      metadata: { scheduledReportId: report.id, failures },
+      copy: { key: "scheduledReportFailing", values: { name: report.name, failures } },
+      dedupeKey: `scheduled-report:${report.id}:failing:${runId}`,
+    });
+  } catch (notifyError) {
+    log.warn({ scheduledReportId: report.id, err: notifyError }, "could not notify scheduled report creator");
+  }
 }
 
 /**
@@ -149,6 +200,7 @@ export async function runDueScheduledReports(limit = 25, options: { workspaceId?
   let skipped = 0;
   for (const report of due) {
     const workerId = randomUUID();
+    const timeZone = await getWorkspaceTimeZone(report.workspaceId);
     const [claimed] = await db.update(scheduledReports).set({ lockedAt: now, lockedBy: workerId, updatedAt: now }).where(and(eq(scheduledReports.id, report.id), or(isNull(scheduledReports.lockedAt), lte(scheduledReports.lockedAt, new Date(now.getTime() - 10 * 60_000))))).returning();
     if (!claimed) continue;
     const resolution = await resolveScheduleActor(report.workspaceId, report.createdById);
@@ -189,12 +241,17 @@ export async function runDueScheduledReports(limit = 25, options: { workspaceId?
         }, scheduledReportEmailDedupeKey({ scheduledReportId: report.id, periodStart, recipient: to }));
       }
       await db.update(scheduledReportRuns).set({ status: "queued", sentAt: new Date() }).where(eq(scheduledReportRuns.id, run.id));
-      await db.update(scheduledReports).set({ lastRunAt: now, nextRunAt: nextRun(report.frequency, now), lockedAt: null, lockedBy: null, updatedAt: now }).where(and(eq(scheduledReports.id, report.id), eq(scheduledReports.lockedBy, workerId)));
+      await db.update(scheduledReports).set({ lastRunAt: now, nextRunAt: nextRunAfter(report.frequency, report.nextRunAt ?? now, now, timeZone), lockedAt: null, lockedBy: null, updatedAt: now }).where(and(eq(scheduledReports.id, report.id), eq(scheduledReports.lockedBy, workerId)));
       processed += 1;
     } catch (error) {
       failed += 1;
-      await db.update(scheduledReportRuns).set({ status: "failed", error: error instanceof Error ? error.message.slice(0, 500) : "report failed" }).where(eq(scheduledReportRuns.id, run.id));
-      await db.update(scheduledReports).set({ nextRunAt: nextRun("daily", now), lockedAt: null, lockedBy: null, updatedAt: now }).where(and(eq(scheduledReports.id, report.id), eq(scheduledReports.lockedBy, workerId)));
+      const reason = error instanceof Error ? error.message.slice(0, 500) : "report failed";
+      await db.update(scheduledReportRuns).set({ status: "failed", error: reason }).where(eq(scheduledReportRuns.id, run.id));
+      // Capped exponential backoff from the number of failed runs in a row.
+      const failures = await countConsecutiveFailures(report.id);
+      const retryAt = nextRetryAt(report.frequency, report.nextRunAt ?? now, now, failures, timeZone);
+      await db.update(scheduledReports).set({ nextRunAt: retryAt, lockedAt: null, lockedBy: null, updatedAt: now }).where(and(eq(scheduledReports.id, report.id), eq(scheduledReports.lockedBy, workerId)));
+      if (failures === SCHEDULE_FAILURE_NOTIFY_AFTER) await notifyCreatorOfFailures(report, run.id, failures, reason);
     }
   }
   return { processed, failed, skipped };
@@ -229,7 +286,7 @@ export async function buildScheduledReport({
     reportType === "advanced_hiring"
       ? await getAdvancedHiringAnalytics({ workspaceId, window, actor })
       : null;
-  return { data, advanced, window, html: renderReportHtml(name, data, advanced) };
+  return { data, advanced, window, html: renderReportHtml(name, data, advanced, timeZone) };
 }
 
 function formatDays(value: number | null): string {
@@ -240,9 +297,11 @@ function formatPct(value: number | null): string {
   return value == null ? "—" : `${value}%`;
 }
 
-function renderReportHtml(name: string, data: ReportsData, advanced: AdvancedHiringAnalytics | null) {
+function renderReportHtml(name: string, data: ReportsData, advanced: AdvancedHiringAnalytics | null, timeZone: string) {
   const { summary, range } = data;
-  const scope = `${range.label} · as of ${data.generatedAt.slice(0, 16).replace("T", " ")} UTC`;
+  const asOf = zonedParts(new Date(data.generatedAt), timeZone);
+  const pad = (n: number) => String(n).padStart(2, "0");
+  const scope = `${range.label} · as of ${asOf.year}-${pad(asOf.month)}-${pad(asOf.day)} ${pad(asOf.hour)}:${pad(asOf.minute)} ${timeZone}`;
   const funnelRows = data.funnel
     .map((stage) => `<tr><td>${escapeHtml(stage.name)}</td><td>${stage.count}</td><td>${formatPct(stage.pct)}</td></tr>`)
     .join("");

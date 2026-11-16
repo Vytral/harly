@@ -10,19 +10,28 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { SectionHeader, StatusPill } from "@/features/workspaces/settings-ui";
+import { ensureSensitiveActionReauth } from "@/features/security/reauth-client";
 import { createScimTokenAction, revokeScimTokenAction, type ScimTokenSummary } from "@/features/security/scim-actions";
 import { copyText } from "@/lib/utils";
 
 export function ScimProvisioningCard({ tokens, workspaceId, isOwner }: { tokens: ScimTokenSummary[]; workspaceId: string; isOwner: boolean }) {
   const router = useRouter();
   const t = useTranslations("features.security.scimProvisioningCard");
+  const tReauth = useTranslations("labels.security.reauth");
   const [name, setName] = useState("");
   const [expiresAt, setExpiresAt] = useState("");
   const [newToken, setNewToken] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
   function create() {
     startTransition(async () => {
-      const result = await createScimTokenAction({ name, expiresAt: expiresAt || undefined });
+      let result;
+      try {
+        await ensureSensitiveActionReauth(tReauth);
+        result = await createScimTokenAction({ name, expiresAt: expiresAt || undefined });
+      } catch (error) {
+        toast.error(error instanceof Error ? error.message : t("errors.createFailed"));
+        return;
+      }
       if (!result.ok) {
         toast.error(result.error ?? t("errors.createFailed"));
         return;

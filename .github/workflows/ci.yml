@@ -215,10 +215,10 @@ jobs:
       NEXT_PUBLIC_APP_URL: https://ci.example.invalid
       HARLY_URL: https://ci.example.invalid
       BETTER_AUTH_SECRET: ci-test-secret-do-not-use-in-production
-      AI_ENCRYPTION_KEY: bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
-      STORAGE_UPLOAD_SECRET: cccccccccccccccccccccccccccccccc
-      CRON_SECRET: dddddddddddddddddddddddddddddddd
-      HARLY_SETUP_SECRET: eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee
+      AI_ENCRYPTION_KEY: ci-only-ai-key-Hn3Zc6Yd1Fs5Jb0Xu8Pa
+      STORAGE_UPLOAD_SECRET: ci-only-upload-Tg4Ke7Ow2Mi9Rv5Cn1Ly
+      CRON_SECRET: ci-only-cron-secret-Bp6Qa3Xe8Uz1Wk4Dj7
+      HARLY_SETUP_SECRET: ci-only-setup-secret-Nf5Hs2Vy9Gt0Lm6Ro3
       HARLY_INITIAL_ADMIN_EMAIL: owner@example.com
       HARLY_DISABLE_WEBPACK_BUILD_WORKER: "1"
       NODE_OPTIONS: --max-old-space-size=4096
@@ -267,9 +267,9 @@ jobs:
     env:
       DATABASE_URL: postgresql://harly:harly@localhost:5432/harly
       BETTER_AUTH_SECRET: ci-test-secret-do-not-use-in-production
-      AI_ENCRYPTION_KEY: bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
-      STORAGE_UPLOAD_SECRET: cccccccccccccccccccccccccccccccc
-      CRON_SECRET: dddddddddddddddddddddddddddddddd
+      AI_ENCRYPTION_KEY: ci-only-ai-key-Hn3Zc6Yd1Fs5Jb0Xu8Pa
+      STORAGE_UPLOAD_SECRET: ci-only-upload-Tg4Ke7Ow2Mi9Rv5Cn1Ly
+      CRON_SECRET: ci-only-cron-secret-Bp6Qa3Xe8Uz1Wk4Dj7
     steps:
       - uses: actions/checkout@v4
 
@@ -314,6 +314,7 @@ jobs:
           RUN_MAILBOX_INTEGRATION=1
           RUN_MCP_OAUTH_INTEGRATION=1
           RUN_JOB_CREATE_INTEGRATION=1
+          RUN_EVALUATION_PERSISTENCE_INTEGRATION=1
           PORTAL_AUTH_INTEGRATION=1
           pnpm --filter web exec vitest run .integration.test.ts
 
@@ -457,6 +458,17 @@ jobs:
           key: node-modules-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
       - name: Check Drizzle chain
         run: pnpm exec drizzle-kit check --config packages/db/drizzle.config.ts
+      # A schema.ts change without its generated migration would ship a
+      # database that does not match the code. Generating must be a no-op.
+      - name: Schema and migrations are in sync
+        run: |
+          pnpm --filter @harly/db db:generate
+          if [ -n "$(git status --porcelain -- packages/db)" ]; then
+            git status --short -- packages/db
+            git diff -- packages/db | head -80
+            echo "::error::packages/db/src/schema.ts has changes without a migration. Run pnpm db:generate and commit the result."
+            exit 1
+          fi
       - name: Clean migration and idempotent second run
         run: |
           pnpm --filter @harly/db db:migrate:local
@@ -502,9 +514,9 @@ jobs:
           export HARLY_IMAGE="$(node -p 'const r=require("./release-manifest.json"); r.image + "@" + r.digest')"
           export HARLY_VERSION="$(node -p 'require("./release-manifest.json").version')" HARLY_URL=https://ci.example.invalid
           export POSTGRES_USER=harly POSTGRES_PASSWORD=harly POSTGRES_DB=harly
-          export BETTER_AUTH_SECRET=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa AI_ENCRYPTION_KEY=bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
-          export STORAGE_UPLOAD_SECRET=cccccccccccccccccccccccccccccccc CRON_SECRET=dddddddddddddddddddddddddddddddd
-          export HARLY_SETUP_SECRET=eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee HARLY_INITIAL_ADMIN_EMAIL=owner@example.com
+          export BETTER_AUTH_SECRET=ci-only-auth-secret-7Qx2mV9pLk4Rt8Wz AI_ENCRYPTION_KEY=ci-only-ai-key-Hn3Zc6Yd1Fs5Jb0Xu8Pa
+          export STORAGE_UPLOAD_SECRET=ci-only-upload-Tg4Ke7Ow2Mi9Rv5Cn1Ly CRON_SECRET=ci-only-cron-secret-Bp6Qa3Xe8Uz1Wk4Dj7
+          export HARLY_SETUP_SECRET=ci-only-setup-secret-Nf5Hs2Vy9Gt0Lm6Ro3 HARLY_INITIAL_ADMIN_EMAIL=owner@example.com
           docker compose config --quiet
           COMPOSE_PROFILES=proxy docker compose config --quiet
       - name: Build runtime image
@@ -535,11 +547,11 @@ jobs:
           POSTGRES_USER: harly
           POSTGRES_PASSWORD: harly-ci-postgres-password
           POSTGRES_DB: harly
-          BETTER_AUTH_SECRET: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
-          AI_ENCRYPTION_KEY: bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
-          STORAGE_UPLOAD_SECRET: cccccccccccccccccccccccccccccccc
-          CRON_SECRET: ddddddddddddddddddddddddddddddddd
-          HARLY_SETUP_SECRET: eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee
+          BETTER_AUTH_SECRET: ci-only-auth-secret-7Qx2mV9pLk4Rt8Wz
+          AI_ENCRYPTION_KEY: ci-only-ai-key-Hn3Zc6Yd1Fs5Jb0Xu8Pa
+          STORAGE_UPLOAD_SECRET: ci-only-upload-Tg4Ke7Ow2Mi9Rv5Cn1Ly
+          CRON_SECRET: ci-only-cron-secret-Bp6Qa3Xe8Uz1Wk4Dj7
+          HARLY_SETUP_SECRET: ci-only-setup-secret-Nf5Hs2Vy9Gt0Lm6Ro3
           HARLY_INITIAL_ADMIN_EMAIL: owner@example.com
           STORAGE_PROVIDER: local
         run: |

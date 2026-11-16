@@ -39,7 +39,7 @@ Set in `.env`:
 
 ```bash
 RESEND_API_KEY="re_..."
-EMAIL_FROM="noreply@harly.com"
+EMAIL_FROM="Harly <noreply@example.com>"
 ```
 
 Authentication emails require a configured sender in production. For local

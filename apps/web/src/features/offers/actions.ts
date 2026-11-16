@@ -8,7 +8,6 @@ import { getTranslations } from "@/i18n/server";
 import {
   activityEvents,
   applications,
-  applicationStageHistory,
   db,
   documentAssociations,
   documents,
@@ -30,7 +29,6 @@ import { resolveDocumentAccessInScope } from "@/features/documents/scope-access"
 import { createLogger } from "@/lib/logger";
 import { emitWebhookEvent } from "@/server/webhooks/emit";
 import {
-  persistDomainEvent,
   publishPersistedDomainEvents,
 } from "@/server/events/emit";
 import {
@@ -43,7 +41,7 @@ import { withNotificationCopy, type NotificationCopy } from "@/features/notifica
 import { getWorkspaceEmailSender } from "@/lib/email";
 import { offerEmailDedupeKey, offerExtendedEmailDedupeKey } from "@/lib/email/dedupe-keys";
 import {
-  archiveDocusealOffer,
+  revokeOfferSigning,
   createOfferEnvelope,
 } from "@/lib/esign/offer-signing";
 import {
@@ -52,12 +50,10 @@ import {
 } from "@/lib/esign/native/offer-signing";
 import { isSignableNativeFieldsSnapshot } from "@/lib/esign/native/fields";
 import { getWorkspaceEsignStatus } from "@/lib/esign/config";
-import { ensureStageOfKind } from "@/features/pipeline/stage-resolver";
 import {
   publishSiblingWithdrawals,
-  withdrawSiblingApplicationsForHire,
-  type SiblingWithdrawal,
 } from "./withdraw-siblings";
+import { applyOfferDecision, OfferDecisionError } from "./decision";
 import {
   assertOfferTerms,
   getOfferRecipient,
@@ -935,161 +931,32 @@ export async function decideOffer(input: {
 
   const decision = parsed.data.decision;
 
-  // Guard (accepted only): accepting moves the application to `hired`. Refuse
-  // up front if the application is no longer `active` (rejected/withdrawn/hired
-  // by another flow) — otherwise we'd silently revive a dead candidacy or
-  // overwrite a competing decision. Checked before the tx so we can return a
-  // clean ActionResult instead of throwing mid-transaction.
-  if (decision === "accepted") {
-    const [application] = await db
-      .select({ id: applications.id, status: applications.status })
-      .from(applications)
-      .where(
-        and(
-          eq(applications.workspaceId, workspaceId),
-          eq(applications.id, offer.applicationId),
-        ),
-      )
-      .limit(1);
-    if (!application) {
-      return { success: false, error: t("applicationNotFound") };
+  // The shared transition (./decision) locks the application, applies the hire
+  // guard and writes everything atomically; see its header comment.
+  let decided;
+  try {
+    decided = await db.transaction((tx) =>
+      applyOfferDecision(tx, {
+        workspaceId,
+        actorUserId: context.user.id,
+        offer,
+        decision,
+      }),
+    );
+  } catch (error) {
+    if (error instanceof OfferDecisionError) {
+      const key = {
+        offerChanged: "offerChanged",
+        applicationNotFound: "applicationNotFound",
+        applicationNotActive: "applicationNoLongerActive",
+        applicationChanged: "applicationNoLongerActive",
+      }[error.code];
+      return { success: false, error: t(key) };
     }
-    if (application.status !== "active") {
-      return {
-        success: false,
-        error: t("applicationNoLongerActive"),
-      };
-    }
+    throw error;
   }
-
-  const hiredEvent: { current: Awaited<ReturnType<typeof persistDomainEvent>> | null } = {
-    current: null,
-  };
-  const siblingWithdrawals: { current: SiblingWithdrawal[] } = { current: [] };
-  await db.transaction(async (tx) => {
-    const [updatedOffer] = await tx
-      .update(offers)
-      .set({ status: decision, decidedAt: new Date() })
-      .where(
-        and(
-          eq(offers.workspaceId, workspaceId),
-          eq(offers.id, offer.id),
-          eq(offers.status, "sent"),
-        ),
-      )
-      .returning({ id: offers.id });
-
-    if (!updatedOffer) {
-      throw new Error(
-        "Offer changed by another recruiter. Refresh and try again.",
-      );
-    }
-
-    if (decision === "accepted") {
-      const [application] = await tx
-        .select({
-          id: applications.id,
-          currentStageId: applications.currentStageId,
-          status: applications.status,
-        })
-        .from(applications)
-        .where(
-          and(
-            eq(applications.workspaceId, workspaceId),
-            eq(applications.id, offer.applicationId),
-          ),
-        )
-        .for("update")
-        .limit(1);
-
-      if (application) {
-        if (application.status !== "active") {
-          throw new Error(
-            "Application changed by another recruiter. Refresh and try again.",
-          );
-        }
-        // A hire is always recorded as a stage move. The hired stage is found
-        // by kind (not by name) and created when the job has none, so the
-        // application never ends up `hired` without a history row.
-        const hiredStage = await ensureStageOfKind(tx, {
-          workspaceId,
-          jobId: offer.jobId,
-          kind: "hired",
-        });
-
-        const [hired] = await tx
-          .update(applications)
-          .set({
-            status: "hired",
-            currentStageId: hiredStage.id,
-            updatedAt: new Date(),
-          })
-          .where(
-            and(
-              eq(applications.workspaceId, workspaceId),
-              eq(applications.id, application.id),
-              eq(applications.status, "active"),
-            ),
-          )
-          .returning({ id: applications.id });
-        if (!hired) {
-          throw new Error(
-            "Application changed while the offer was being accepted. Refresh and try again.",
-          );
-        }
-
-        if (hiredStage.id !== application.currentStageId) {
-          await tx.insert(applicationStageHistory).values({
-            workspaceId,
-            applicationId: application.id,
-            fromStageId: application.currentStageId,
-            toStageId: hiredStage.id,
-            movedById: context.user.id,
-          });
-        }
-
-        siblingWithdrawals.current = await withdrawSiblingApplicationsForHire(tx, {
-          workspaceId,
-          candidateId: offer.candidateId,
-          hiredApplicationId: application.id,
-          actorUserId: context.user.id,
-        });
-
-        await tx.insert(activityEvents).values({
-          workspaceId,
-          actorId: context.user.id,
-          entityType: "application",
-          entityId: application.id,
-          type: "application.hired",
-          metadata: { via: "offer", offerId: offer.id },
-        });
-      } else {
-        throw new Error("Application not found. Refresh and try again.");
-      }
-    }
-
-    // Audit log inside the tx so it's atomic with the decision mutation.
-    await logOfferActivity(tx, {
-      workspaceId,
-      actorId: context.user.id,
-      applicationId: offer.applicationId,
-      type: decision === "accepted" ? "offer.accepted" : "offer.declined",
-      metadata: { title: offer.title },
-    });
-    if (decision !== "accepted") return;
-    hiredEvent.current = await persistDomainEvent(tx, {
-      name: "application.hired",
-      workspaceId,
-      actorId: context.user.id,
-      aggregateType: "application",
-      aggregateId: offer.applicationId,
-      payload: {
-        application: { id: offer.applicationId, jobId: offer.jobId },
-        candidate: { id: offer.candidateId },
-        offer: { id: offer.id, title: offer.title },
-      },
-    });
-  });
+  const hiredEvent = { current: decided.hiredEvent };
+  const siblingWithdrawals = { current: decided.siblingWithdrawals };
 
   await publishSiblingWithdrawals({
     workspaceId,
@@ -1183,7 +1050,7 @@ export async function withdrawOffer(input: {
     }
 
     if (lockedOffer.status === "sent") {
-      const archived = await archiveDocusealOffer({
+      const archived = await revokeOfferSigning({
         workspaceId,
         esignSubmissionId: lockedOffer.esignSubmissionId,
       });

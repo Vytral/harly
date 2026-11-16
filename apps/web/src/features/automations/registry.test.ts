@@ -301,6 +301,30 @@ describe("automation action registry", () => {
     );
   });
 
+  it("sanitizes the booking email body and escapes the booking link", async () => {
+    enqueueEmailOutbox.mockClear();
+    await ACTION_REGISTRY.send_booking_link!.run(
+      {
+        toEmail: "candidate@example.com",
+        body: '<p onclick="x()">Hello</p><script>alert(1)</script>{{booking_link}}',
+      },
+      {
+        database: memberDatabase([]),
+        workspaceId: "workspace-1",
+        actorUserId: "actor-1",
+        triggerEvent: "application.created",
+        triggerPayload: {},
+        effectKey: "workflow:run-4:node:booking",
+        runId: "run-4",
+      },
+    );
+
+    const payload = enqueueEmailOutbox.mock.calls[0]![2] as { bodyHtml: string };
+    expect(payload.bodyHtml).not.toContain("<script");
+    expect(payload.bodyHtml).not.toContain("onclick");
+    expect(payload.bodyHtml).toContain("Choose a time");
+  });
+
   it("accepts the builder's line-based HTTP headers and rejects malformed entries", () => {
     const schema = ACTION_REGISTRY.http_request?.schema;
     expect(schema).toBeDefined();

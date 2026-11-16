@@ -6,8 +6,10 @@ const mocks = vi.hoisted(() => {
   const updates: Array<{ set: Record<string, unknown> }> = [];
   const updateFilters: unknown[] = [];
   const inserts: Array<{ values: Record<string, unknown> }> = [];
+  const wheres: unknown[] = [];
   return {
     selectQueue,
+    wheres,
     updates,
     updateFilters,
     inserts,
@@ -46,7 +48,10 @@ vi.mock("@harly/db", () => {
         Promise.resolve(mocks.selectQueue.shift() ?? []).then(resolve),
     };
     q.from = () => q;
-    q.where = () => q;
+    q.where = (condition: unknown) => {
+      mocks.wheres.push(condition);
+      return q;
+    };
     q.innerJoin = () => q;
     q.orderBy = () => q;
     q.limit = async () => mocks.selectQueue.shift() ?? [];
@@ -97,7 +102,12 @@ vi.mock("@harly/db", () => {
         oldUsername: "usernameHistory.oldUsername",
         userId: "usernameHistory.userId",
       },
-      member: { organizationId: "member.organizationId", role: "member.role" },
+      member: {
+        organizationId: "member.organizationId",
+        role: "member.role",
+        status: "member.status",
+        userId: "member.userId",
+      },
       jobHiringTeam: {
         workspaceId: "jobHiringTeam.workspaceId",
         userId: "jobHiringTeam.userId",
@@ -247,6 +257,28 @@ describe("getProfileByUsernameAction", () => {
     mocks.selectQueue.push([{ id: "user-2", name: "Ada", username: "ada" }]);
     const result = await getProfileByUsernameAction("ada");
     expect(result.kind).toBe("found");
+  });
+
+  it("only looks up active members of the current workspace", async () => {
+    mocks.wheres.length = 0;
+    mocks.selectQueue.push([{ id: "user-2", name: "Ada", username: "ada" }]);
+    await getProfileByUsernameAction("ada");
+    const serialized = JSON.stringify(mocks.wheres[0]);
+    expect(serialized).toContain("member.organizationId");
+    expect(serialized).toContain("org-1");
+    expect(serialized).toContain("member.status");
+    expect(serialized).toContain("active");
+  });
+
+  it("scopes the alias lookup to active members of the workspace too", async () => {
+    mocks.wheres.length = 0;
+    mocks.selectQueue.push([]); // no current user
+    mocks.selectQueue.push([]); // alias belongs to someone outside the workspace
+    const result = await getProfileByUsernameAction("ada");
+    expect(result.kind).toBe("not_found");
+    const serialized = JSON.stringify(mocks.wheres[1]);
+    expect(serialized).toContain("member.organizationId");
+    expect(serialized).toContain("member.status");
   });
 
   it("returns redirect when the username matches a historical alias", async () => {

@@ -78,6 +78,12 @@ export default async function JoinPage({ params }: JoinPageProps) {
                 >
                   {t("signInJoin")}
                 </Link>
+                <Link
+                  href={`/signup?invite=${encodeURIComponent(token)}`}
+                  className="block w-full rounded-lg border border-border py-3.5 text-center text-sm font-semibold text-foreground transition hover:bg-muted"
+                >
+                  {t("createAccountJoin")}
+                </Link>
                 <p className="text-center text-xs text-muted-foreground">
                   {t("signInJoinHelp")}
                 </p>

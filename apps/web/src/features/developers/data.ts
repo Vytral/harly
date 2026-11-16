@@ -5,6 +5,7 @@ import { and, desc, eq } from "drizzle-orm";
 import {
   ApiError,
   allowedScopesForType,
+  type ApiScope,
   generateApiKey,
   generateWebhookSecret,
   type ApiKeyType,
@@ -19,6 +20,8 @@ import {
   type WebhookDelivery,
   type WebhookEndpoint,
 } from "@harly/db";
+import { requirePermission } from "@/features/workspaces/permissions-server";
+import { hasApiScope, type ApiKeyContext } from "@/server/api/auth";
 import { encryptSecret } from "@/lib/crypto";
 import { createLogger } from "@/lib/logger";
 import { validateWebhookUrl } from "@/lib/ssrf";
@@ -31,6 +34,47 @@ const log = createLogger("developers");
  * Developer-platform data layer: API keys + webhook endpoints, scoped by
  * workspace. Shared by the dashboard Settings → Developers UI and the REST API.
  */
+
+// ----- Access control ------------------------------------------------------
+
+/**
+ * Who is calling a mutating or secret-bearing function here. REST routes pass
+ * the authenticated API key (`auth`); dashboard server actions pass nothing and
+ * are checked against the signed-in member's `integrations:manage` permission.
+ * A caller that is neither fails closed, so a new call site cannot forget it.
+ */
+export type DeveloperCaller = Pick<
+  ApiKeyContext,
+  "workspaceId" | "type" | "scopes"
+>;
+
+export async function assertDeveloperAccess(
+  workspaceId: string,
+  apiScope: ApiScope,
+  caller?: DeveloperCaller,
+): Promise<void> {
+  if (caller) {
+    if (caller.workspaceId !== workspaceId) {
+      throw ApiError.forbidden("This key does not belong to this workspace.");
+    }
+    if (apiScope.startsWith("api_keys:") && caller.type !== "secret") {
+      throw ApiError.forbidden("API key management requires a secret API key.");
+    }
+    if (!hasApiScope(caller.scopes, apiScope)) {
+      throw ApiError.forbidden(`This key is missing the \`${apiScope}\` scope.`);
+    }
+    return;
+  }
+  let context: Awaited<ReturnType<typeof requirePermission>>;
+  try {
+    context = await requirePermission("integrations:manage");
+  } catch {
+    throw ApiError.forbidden("You do not have permission to manage developer settings.");
+  }
+  if (context.organization.id !== workspaceId) {
+    throw ApiError.forbidden("You do not have permission to manage developer settings.");
+  }
+}
 
 // ----- API keys ------------------------------------------------------------
 
@@ -66,7 +110,9 @@ export async function createApiKey(input: {
   environment?: "live" | "test";
   createdById?: string | null;
   expiresAt?: Date | null;
+  caller?: DeveloperCaller;
 }): Promise<{ key: ApiKey; raw: string }> {
+  await assertDeveloperAccess(input.workspaceId, "api_keys:write", input.caller);
   const scopes = allowedScopesForType(input.type, input.scopes);
   if (scopes.length === 0) {
     throw ApiError.badRequest("At least one valid scope is required.");
@@ -98,7 +144,9 @@ export async function createApiKey(input: {
 export async function revokeApiKey(input: {
   workspaceId: string;
   keyId: string;
+  caller?: DeveloperCaller;
 }): Promise<void> {
+  await assertDeveloperAccess(input.workspaceId, "api_keys:write", input.caller);
   const [row] = await db
     .update(apiKeys)
     .set({ revokedAt: new Date() })
@@ -168,7 +216,9 @@ export async function createWebhookEndpoint(input: {
   events: string[];
   description?: string | null;
   createdById?: string | null;
+  caller?: DeveloperCaller;
 }): Promise<{ endpoint: WebhookEndpoint; secret: string }> {
+  await assertDeveloperAccess(input.workspaceId, "webhooks:write", input.caller);
   await validateWebhookUrl(input.url).catch((error) => {
     throw ApiError.badRequest(
       error instanceof Error ? error.message : "Invalid webhook URL.",
@@ -204,7 +254,9 @@ export async function updateWebhookEndpoint(input: {
     enabled?: boolean;
     description?: string | null;
   };
+  caller?: DeveloperCaller;
 }): Promise<WebhookEndpoint> {
+  await assertDeveloperAccess(input.workspaceId, "webhooks:write", input.caller);
   const set: Partial<typeof webhookEndpoints.$inferInsert> = {
     updatedAt: new Date(),
   };
@@ -239,7 +291,9 @@ export async function updateWebhookEndpoint(input: {
 export async function rotateWebhookSecret(input: {
   workspaceId: string;
   id: string;
+  caller?: DeveloperCaller;
 }): Promise<{ endpoint: WebhookEndpoint; secret: string }> {
+  await assertDeveloperAccess(input.workspaceId, "webhooks:write", input.caller);
   const secret = generateWebhookSecret();
   const enc = encryptSecret(secret);
   const [endpoint] = await db
@@ -264,7 +318,9 @@ export async function rotateWebhookSecret(input: {
 export async function deleteWebhookEndpoint(input: {
   workspaceId: string;
   id: string;
+  caller?: DeveloperCaller;
 }): Promise<void> {
+  await assertDeveloperAccess(input.workspaceId, "webhooks:write", input.caller);
   const [row] = await db
     .delete(webhookEndpoints)
     .where(
@@ -327,7 +383,9 @@ export async function listWebhookDeliveries(input: {
   endpointId: string;
   limit?: number;
   status?: WebhookDeliveryStatus;
+  caller?: DeveloperCaller;
 }): Promise<WebhookDelivery[]> {
+  await assertDeveloperAccess(input.workspaceId, "webhooks:read", input.caller);
   return db
     .select()
     .from(webhookDeliveries)
@@ -346,7 +404,9 @@ export async function listWebhookDeliveryAttempts(input: {
   workspaceId: string;
   endpointId: string;
   deliveryId: string;
+  caller?: DeveloperCaller;
 }) {
+  await assertDeveloperAccess(input.workspaceId, "webhooks:read", input.caller);
   await getWebhookEndpoint({ workspaceId: input.workspaceId, id: input.endpointId });
   return db.select().from(webhookDeliveryAttempts).innerJoin(webhookDeliveries, eq(webhookDeliveries.id, webhookDeliveryAttempts.deliveryId)).where(and(eq(webhookDeliveryAttempts.workspaceId, input.workspaceId), eq(webhookDeliveries.endpointId, input.endpointId), eq(webhookDeliveryAttempts.deliveryId, input.deliveryId))).orderBy(webhookDeliveryAttempts.attempt);
 }
@@ -356,7 +416,9 @@ export async function replayWebhookDelivery(input: {
   workspaceId: string;
   endpointId: string;
   deliveryId: string;
+  caller?: DeveloperCaller;
 }): Promise<WebhookDelivery> {
+  await assertDeveloperAccess(input.workspaceId, "webhooks:write", input.caller);
   await getWebhookEndpoint({
     workspaceId: input.workspaceId,
     id: input.endpointId,
