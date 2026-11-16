@@ -78,9 +78,11 @@ export function serializeJob(job: Job) {
  * timestamps stay out.
  */
 export function serializeJobForPublishableKey(job: Job) {
-  const { keywords: _keywords, createdAt: _createdAt, updatedAt: _updatedAt, ...rest } =
-    serializeJob(job);
-  return rest;
+  const full: Record<string, unknown> = serializeJob(job);
+  delete full.keywords;
+  delete full.createdAt;
+  delete full.updatedAt;
+  return full as Omit<ReturnType<typeof serializeJob>, "keywords" | "createdAt" | "updatedAt">;
 }
 
 /** Serialize a job for the key type that asked for it. */

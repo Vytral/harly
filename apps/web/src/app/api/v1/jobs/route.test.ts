@@ -18,7 +18,10 @@ vi.mock("@/features/jobs/service", () => ({
     keyType: "publishable" | "secret",
   ) => {
     if (keyType === "secret") return job;
-    const { keywords: _k, createdAt: _c, updatedAt: _u, ...rest } = job;
+    const rest = { ...job };
+    delete rest.keywords;
+    delete rest.createdAt;
+    delete rest.updatedAt;
     return rest;
   },
   serializeJob: (job: {
