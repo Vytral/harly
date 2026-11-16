@@ -1,14 +1,12 @@
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 
-import { candidateFiles, db } from "@harly/db";
 import { getLocalUploadPath } from "@harly/storage";
-import { eq } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { getWorkspaceContextOrNull } from "@/features/workspaces/context";
 import { requireCandidatePermission } from "@/features/workspaces/permissions-server";
 import { isPrivateResumeStorageKey, isPublicUploadStorageKey } from "@/lib/upload-access";
-import { resumeKeyFromUrl } from "@/lib/resume/storage-key";
+import { findCandidateFileForKey } from "@/lib/resume/find-candidate-file";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -23,16 +21,6 @@ const CONTENT_TYPES: Record<string, string> = {
   ".svg": "image/svg+xml",
   ".webp": "image/webp",
 };
-
-async function findCandidateFileForKey(workspaceId: string, key: string) {
-  const rows = await db
-    .select({ candidateId: candidateFiles.candidateId, fileUrl: candidateFiles.fileUrl })
-    .from(candidateFiles)
-    .where(eq(candidateFiles.workspaceId, workspaceId))
-    .limit(5000);
-
-  return rows.find((row) => resumeKeyFromUrl(row.fileUrl) === key) ?? null;
-}
 
 export async function GET(
   _request: Request,

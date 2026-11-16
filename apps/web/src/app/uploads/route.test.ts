@@ -8,7 +8,7 @@ const mocks = vi.hoisted(() => ({
   getLocalUploadPath: vi.fn(),
 }));
 
-vi.mock("drizzle-orm", () => ({ eq: vi.fn() }));
+vi.mock("drizzle-orm", () => ({ and: vi.fn(), eq: vi.fn(), or: vi.fn(), sql: vi.fn() }));
 vi.mock("@harly/db", () => ({
   db: { select: mocks.select },
   candidateFiles: { workspaceId: "workspaceId", candidateId: "candidateId", fileUrl: "fileUrl" },

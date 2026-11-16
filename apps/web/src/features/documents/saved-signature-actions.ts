@@ -10,6 +10,7 @@ import { db, savedSignatures, workspaceSettings } from "@harly/db";
 
 import { requirePermission } from "@/features/workspaces/permissions-server";
 import { storage } from "@/lib/storage";
+import { deleteStorageObjects } from "./storage-cleanup";
 import {
   serverVectorExtractor,
   validateVectorSaveInput,
@@ -157,6 +158,6 @@ export async function deleteSavedSignature(input: { id: string }) {
     .limit(1);
   if (!signature) return { ok: false, error: t("notFound") };
   await db.update(savedSignatures).set({ deletedAt: new Date() }).where(eq(savedSignatures.id, parsed.data.id));
-  await storage.delete(signature.storageKey).catch(() => undefined);
+  await deleteStorageObjects([signature.storageKey], { savedSignatureId: parsed.data.id });
   return { ok: true };
 }
