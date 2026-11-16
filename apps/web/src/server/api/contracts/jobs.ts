@@ -24,14 +24,17 @@ const jobSchema = z.object({
   description: z.string(),
   requirements: z.string().nullable(),
   benefits: z.string().nullable(),
-  keywords: z.array(z.string()),
+  /** Omitted for publishable keys. */
+  keywords: z.array(z.string()).optional(),
   salaryMin: z.number().nullable(),
   salaryMax: z.number().nullable(),
   currency: z.string().nullable(),
   salaryPeriod: z.string().nullable(),
   publishedAt: z.string().nullable(),
-  createdAt: z.string(),
-  updatedAt: z.string(),
+  /** Omitted for publishable keys. */
+  createdAt: z.string().optional(),
+  /** Omitted for publishable keys. */
+  updatedAt: z.string().optional(),
 });
 
 const jobStageSchema = z.object({
@@ -71,7 +74,8 @@ export const listJobsContract = defineContract({
   path: "/api/v1/jobs",
   operationId: "listJobs",
   summary: "List jobs",
-  description: "Retrieve a cursor-paginated list of jobs for the workspace.",
+  description:
+    "Retrieve a cursor-paginated list of jobs for the workspace. Publishable keys only see jobs that are public on the career page, with public fields only.",
   tags: ["Jobs"],
   auth: { scopes: ["jobs:read"] },
   parameters: { query: listQuery },
@@ -108,7 +112,8 @@ export const getJobContract = defineContract({
   path: "/api/v1/jobs/{id}",
   operationId: "getJob",
   summary: "Get job",
-  description: "Retrieve details of a single job by its ID.",
+  description:
+    "Retrieve details of a single job by its ID. Publishable keys only see jobs that are public on the career page, with public fields only.",
   tags: ["Jobs"],
   auth: { scopes: ["jobs:read"] },
   parameters: { path: idPath },

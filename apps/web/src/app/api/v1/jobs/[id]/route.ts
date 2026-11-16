@@ -2,6 +2,7 @@ import {
   deleteJobForApi,
   getJobForApi,
   serializeJob,
+  serializeJobForKey,
   updateJobForApi,
 } from "@/features/jobs/service";
 import { withApi, apiOk } from "@/server/api/respond";
@@ -20,8 +21,9 @@ export const GET = withApi(
     const job = await getJobForApi({
       workspaceId: auth.workspaceId,
       jobId: params.id,
+      publicOnly: auth.type === "publishable",
     });
-    return apiOk(serializeJob(job));
+    return apiOk(serializeJobForKey(job, auth.type));
   }),
 );
 

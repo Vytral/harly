@@ -17,6 +17,7 @@ export const PATCH = withApi(
   buildRouteHandler(updateWebhookContract, async ({ params, body, auth }) => {
     const patch = webhookUpdateSchema.parse(body);
     const endpoint = await updateWebhookEndpoint({
+      caller: auth,
       workspaceId: auth.workspaceId,
       id: params.id,
       patch,
@@ -28,6 +29,7 @@ export const PATCH = withApi(
 export const DELETE = withApi(
   buildRouteHandler(deleteWebhookContract, async ({ params, auth }) => {
     await deleteWebhookEndpoint({
+      caller: auth,
       workspaceId: auth.workspaceId,
       id: params.id,
     });

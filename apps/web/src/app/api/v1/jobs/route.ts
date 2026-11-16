@@ -4,6 +4,7 @@ import { NextResponse } from "next/server";
 import {
   createJobForApi,
   listJobsForApi,
+  serializeJobForKey,
   serializeJob,
 } from "@/features/jobs/service";
 import type { JobStatus } from "@/features/jobs/validation";
@@ -22,9 +23,12 @@ export const runtime = "nodejs";
 export const GET = withApi(
   buildRouteHandler(listJobsContract, async ({ query, auth }) => {
     const q = query as { limit?: number; cursor?: string; status?: JobStatus };
-    const status = q.status as JobStatus | undefined;
+    const publicOnly = auth.type === "publishable";
+    // A publishable key only sees public jobs, so a draft/closed filter is moot.
+    const status = publicOnly ? undefined : (q.status as JobStatus | undefined);
     const rows = await listJobsForApi({
       workspaceId: auth.workspaceId,
+      publicOnly,
       status,
       cursor: decodeCursor(q.cursor ?? null),
       limit: q.limit ?? parseLimit(null),
@@ -37,7 +41,7 @@ export const GET = withApi(
         id: job.id,
       }),
     );
-    return apiOk(items.map(serializeJob), { pagination: meta });
+    return apiOk(items.map((job) => serializeJobForKey(job, auth.type)), { pagination: meta });
   }),
 );
 
@@ -50,6 +54,7 @@ export const POST = withApi(
     if (idempotency.kind === "replay") {
       return NextResponse.json(idempotency.response.body, {
         status: idempotency.response.status,
+        headers: { "Idempotent-Replayed": "true" },
       });
     }
     const actorUserId = await resolveWorkspaceActorUserId(

@@ -32,7 +32,7 @@ export const CORS_HEADERS: Record<string, string> = {
   "Access-Control-Allow-Headers":
     "Content-Type, Authorization, X-Api-Key, Idempotency-Key",
   "Access-Control-Expose-Headers":
-    "X-RateLimit-Limit, X-RateLimit-Remaining, X-RateLimit-Reset, Retry-After, Harly-API-Version, Deprecation, Sunset",
+    "X-RateLimit-Limit, X-RateLimit-Remaining, X-RateLimit-Reset, Retry-After, Harly-API-Version, Deprecation, Sunset, Idempotent-Replayed",
   "Access-Control-Max-Age": "86400",
 };
 

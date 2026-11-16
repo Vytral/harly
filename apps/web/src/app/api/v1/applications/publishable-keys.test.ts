@@ -163,6 +163,22 @@ describe("publishable keys cannot change application state", () => {
     );
     expect(response.status).toBe(201);
     expect(mocks.createApplicationForApi).toHaveBeenCalledTimes(1);
+    expect(mocks.createApplicationForApi).toHaveBeenCalledWith(
+      expect.objectContaining({ requirePublicJob: true }),
+    );
+  });
+
+  it("does not require a public job for secret keys", async () => {
+    asKey("secret");
+    await createPost(
+      jsonRequest("https://example.test/api/v1/applications", {
+        jobId: JOB_ID,
+        candidateId: CANDIDATE_ID,
+      }),
+    );
+    expect(mocks.createApplicationForApi).toHaveBeenCalledWith(
+      expect.objectContaining({ requirePublicJob: false }),
+    );
   });
 
   it("keeps secret keys working for move, reject, hire and bulk", async () => {

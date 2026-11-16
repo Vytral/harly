@@ -29,8 +29,14 @@ Example secret key: `harly_sk_live_AbCdEf123...`
 Publishable keys (`pk`) are limited to `jobs:read` and `applications:write` —
 the subset safe to expose in a browser. Even with `applications:write`, a
 publishable key can only create applications; moving, rejecting, hiring, and
-bulk-creating require a secret key. Use secret keys for all server-side
+bulk-creating require a secret key. A publishable key only sees jobs that are
+public on the career page (open and published), with public fields only, and
+can only apply to such jobs. Use secret keys for all server-side
 integrations.
+
+An API key acts for the member who created it: it stops working when that
+member is removed or deactivated. Create keys from an account that stays in the
+workspace.
 
 ## Resources
 

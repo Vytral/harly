@@ -43,9 +43,11 @@ export const POST = withApi(
         path: createCandidateTagContract.path,
       });
       if (reservation.kind === "replay") {
-        return apiOk(reservation.response.body, {
+        const replayed = apiOk(reservation.response.body, {
           status: reservation.response.status,
         });
+        replayed.headers.set("Idempotent-Replayed", "true");
+        return replayed;
       }
 
       const values = candidateTagCreateSchema.parse(body);

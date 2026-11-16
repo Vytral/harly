@@ -13,6 +13,17 @@ const mocks = vi.hoisted(() => ({
 vi.mock("@/features/jobs/service", () => ({
   createJobForApi: mocks.create,
   listJobsForApi: mocks.list,
+  serializeJobForKey: (
+    job: Record<string, unknown>,
+    keyType: "publishable" | "secret",
+  ) => {
+    if (keyType === "secret") return job;
+    const rest = { ...job };
+    delete rest.keywords;
+    delete rest.createdAt;
+    delete rest.updatedAt;
+    return rest;
+  },
   serializeJob: (job: {
     id: string;
     title: string;
@@ -126,6 +137,51 @@ describe("Jobs Domain Contract & Route Tests", () => {
       expect(mocks.authenticate).toHaveBeenCalledWith(
         expect.anything(),
         listJobsContract.auth?.scopes?.[0],
+      );
+    });
+  });
+
+  describe("GET /api/v1/jobs with a publishable key", () => {
+    it("asks only for public jobs and omits internal fields", async () => {
+      mocks.authenticate.mockResolvedValue({
+        workspaceId: "ws-1",
+        keyId: "key-pk",
+        type: "publishable",
+        scopes: ["jobs:read"],
+      });
+      mocks.list.mockResolvedValue([
+        {
+          id: "123e4567-e89b-12d3-a456-426614174000",
+          title: "Designer",
+          keywords: ["internal"],
+          createdAt: new Date("2026-01-10T14:00:00.000Z"),
+          updatedAt: new Date("2026-01-10T14:00:00.000Z"),
+        },
+      ]);
+
+      const response = await GET(
+        new Request("https://example.test/api/v1/jobs?status=draft"),
+      );
+      const body = await response.json();
+
+      expect(mocks.list).toHaveBeenCalledWith(
+        expect.objectContaining({ publicOnly: true, status: undefined }),
+      );
+      expect(body.data[0]).not.toHaveProperty("keywords");
+      expect(body.data[0]).not.toHaveProperty("updatedAt");
+    });
+
+    it("does not restrict secret keys", async () => {
+      mocks.authenticate.mockResolvedValue({
+        workspaceId: "ws-1",
+        keyId: "key-sk",
+        type: "secret",
+        scopes: ["jobs:read"],
+      });
+      mocks.list.mockResolvedValue([]);
+      await GET(new Request("https://example.test/api/v1/jobs?status=draft"));
+      expect(mocks.list).toHaveBeenCalledWith(
+        expect.objectContaining({ publicOnly: false, status: "draft" }),
       );
     });
   });

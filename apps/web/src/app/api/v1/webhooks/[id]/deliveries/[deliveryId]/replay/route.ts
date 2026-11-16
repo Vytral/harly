@@ -33,6 +33,7 @@ export const POST = withApi(
       if (replay) return replay;
 
       const delivery = await replayWebhookDelivery({
+        caller: auth,
         workspaceId: auth.workspaceId,
         endpointId: params.id,
         deliveryId: params.deliveryId,

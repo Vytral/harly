@@ -12,7 +12,8 @@ export type Cursor = { createdAt: string; id: string };
 
 export function parseLimit(raw: string | null): number {
   if (!raw) return DEFAULT_LIMIT;
-  const n = Number.parseInt(raw, 10);
+  // Strict: "10abc", "1.5", "1e3" and " 7" are rejected rather than truncated.
+  const n = /^\d{1,15}$/.test(raw) ? Number(raw) : Number.NaN;
   if (Number.isNaN(n) || n < 1) {
     throw ApiError.badRequest("`limit` must be a positive integer.");
   }

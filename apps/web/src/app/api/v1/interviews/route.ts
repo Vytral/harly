@@ -70,6 +70,7 @@ export const POST = withApi(
       if (reservation.kind === "replay") {
         return NextResponse.json(reservation.response.body, {
           status: reservation.response.status,
+          headers: { "Idempotent-Replayed": "true" },
         });
       }
       const interview = await createInterviewForApi({
