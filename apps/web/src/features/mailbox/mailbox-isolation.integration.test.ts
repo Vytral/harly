@@ -56,7 +56,7 @@ import {
   getUnreadInboundReplyCount,
   listInboundReplies,
 } from "@/features/inbound-email/data";
-import { findOrCreateCanonicalThread } from "@/lib/mail/canonical";
+import { findOrCreateCanonicalThread, insertCanonicalMessage } from "@/lib/mail/canonical";
 
 integration("Inbox tenant and active-job isolation", () => {
   let activeJobId: string;
@@ -458,5 +458,31 @@ integration("Inbox tenant and active-job isolation", () => {
     await expect(
       updateMailboxThreadAction({ threadId: activeThreadId, status: "open" }),
     ).resolves.toMatchObject({ ok: true });
+  });
+
+  it("returns the stored row id, not the provider Message-ID, when concurrent deliveries collide", async () => {
+    const providerMessageId = `<race-${randomUUID()}@example.test>`;
+    const input = {
+      workspaceId: context.workspaceId,
+      source: "provider" as const,
+      subject: "Concurrent delivery",
+      participantEmail: "race@example.test",
+      messageId: providerMessageId,
+      direction: "inbound" as const,
+      fromEmail: "race@example.test",
+      toEmails: ["inbox@example.test"],
+      textBody: "Same message delivered twice",
+      receivedAt: new Date(),
+    };
+    const results = await Promise.all([
+      insertCanonicalMessage(input),
+      insertCanonicalMessage(input),
+      insertCanonicalMessage(input),
+    ]);
+    const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+    for (const result of results) expect(result.messageId).toMatch(uuid);
+    expect(new Set(results.map((result) => result.messageId)).size).toBe(1);
+    expect(new Set(results.map((result) => result.threadId)).size).toBe(1);
+    expect(results.filter((result) => !result.duplicate)).toHaveLength(1);
   });
 });
