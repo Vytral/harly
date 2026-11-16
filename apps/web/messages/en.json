@@ -11221,6 +11221,7 @@
         "unableToUpdateBoardBranding": "Unable to update board branding.",
         "inviteOwnerBlocked": "The Owner role can't be given through an invite. Invite this person with another role, then promote them from the members list.",
         "alreadyPendingInvitation": "This email already has a pending invitation.",
+        "alreadyMember": "This person is already a member of the workspace. Change their role from the members list.",
         "invalidInvitation": "This invitation isn't valid.",
         "unknownRole": "Unknown role.",
         "unableToInviteMember": "Unable to invite member.",
