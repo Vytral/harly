@@ -52,6 +52,7 @@ import {
   publishPersistedDomainEvents,
 } from "@/server/events/emit";
 import { serializeCandidate } from "./service";
+import { EMAIL_DRAFT_TYPES, type EmailDraftType } from "./email-draft-types";
 import { createScorecardForApi } from "@/features/scorecards/service";
 import { ApiError } from "@harly/api";
 import { scorecardCreateSchema } from "@harly/validators";
@@ -1654,13 +1655,7 @@ const draftEmailSchema = z.object({
   candidateId: z.string().min(1),
   threadId: z.string().uuid().nullable().optional(),
   applicationId: z.string().uuid().nullable().optional(),
-  type: z.enum([
-    "screening",
-    "interview_invite",
-    "rejection",
-    "offer",
-    "followup",
-  ]),
+  type: z.enum(EMAIL_DRAFT_TYPES),
   additionalInstructions: z.string().trim().max(2000).nullable().optional(),
 });
 
@@ -1672,7 +1667,7 @@ export async function generateEmailDraftAction(input: {
   candidateId: string;
   threadId?: string | null;
   applicationId?: string | null;
-  type: "screening" | "interview_invite" | "rejection" | "offer" | "followup";
+  type: EmailDraftType;
   additionalInstructions?: string | null;
 }): Promise<GenerateEmailDraftResult> {
   const t = await getTranslations("server.candidates.actions");
