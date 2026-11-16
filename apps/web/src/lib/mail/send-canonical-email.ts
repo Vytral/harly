@@ -13,6 +13,7 @@ import {
 } from "@harly/db";
 import { getWorkspaceEmailSender } from "@/lib/email";
 import { DeliveryOutcomeUnknownError } from "@harly/emails";
+import { sanitizeComposerHtml } from "@/features/email-templates/template-html.server";
 import { isSampleEmailAddress } from "@/features/sample-data/constants";
 import {
   insertCanonicalMessage,
@@ -416,6 +417,8 @@ export async function sendCanonicalEmail(
     };
   }
 
+  // The body is client-supplied HTML; sanitize it before it reaches a provider.
+  const safeHtmlBody = input.htmlBody?.trim() ? sanitizeComposerHtml(input.htmlBody).trim() : "";
   let providerMessageId: string | null;
   try {
     const sender = await getWorkspaceEmailSender(input.workspaceId, input.authorId);
@@ -423,9 +426,9 @@ export async function sendCanonicalEmail(
     const provider = await sender.send({
       to: input.toEmail,
       subject: input.subject,
-      react: input.htmlBody
+      react: safeHtmlBody
         ? createElement("div", {
-            dangerouslySetInnerHTML: { __html: input.htmlBody },
+            dangerouslySetInnerHTML: { __html: safeHtmlBody },
           })
         : createElement(
             "div",

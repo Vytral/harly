@@ -137,6 +137,19 @@ describe("sendCanonicalEmail", () => {
     expect(state.idem).toMatchObject({ status: "sent", providerMessageId: "prov-1", mailMessageId: "mail-1" });
   });
 
+  it("sanitizes composer HTML before it reaches the provider", async () => {
+    state.send.mockResolvedValue({ messageId: "prov-1" });
+    state.insertCanonical.mockResolvedValue(CANONICAL_OK);
+
+    await sendCanonicalEmail({
+      ...INPUT,
+      htmlBody: '<p onclick="x()">Hi</p><script>alert(1)</script><img src=x onerror=alert(2)>',
+    });
+
+    const react = state.send.mock.calls[0]![0].react as { props: { dangerouslySetInnerHTML: { __html: string } } };
+    expect(react.props.dangerouslySetInnerHTML.__html).toBe("<p>Hi</p>");
+  });
+
   it("never marks an accepted message failed when saving the conversation fails afterwards", async () => {
     state.send.mockResolvedValue({ messageId: "prov-1" });
     state.insertCanonical.mockRejectedValue(new Error("write failed"));

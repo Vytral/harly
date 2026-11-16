@@ -5,6 +5,8 @@ import { z } from "zod";
 
 import type { EmailAttachment } from "@harly/emails";
 
+import { sanitizeComposerHtml } from "@/features/email-templates/template-html.server";
+
 /** Per-file and total caps for outbound email attachments (base64-encoded). */
 const MAX_FILES = 10;
 const MAX_FILE_BYTES = 10 * 1024 * 1024; // 10 MB per file
@@ -63,10 +65,14 @@ export function decodeComposerAttachments(
  * plain-text block so newlines survive.
  */
 export function richBodyReact(text: string, html?: string | null) {
-  if (html && html.trim()) {
+  // Composer HTML is client-supplied: sanitize it here, at the point it is
+  // turned into markup. The reply/new-thread/candidate-email paths all go
+  // through this function.
+  const safeHtml = html?.trim() ? sanitizeComposerHtml(html) : "";
+  if (safeHtml.trim()) {
     return createElement("div", {
       style: { fontFamily: "sans-serif" },
-      dangerouslySetInnerHTML: { __html: html },
+      dangerouslySetInnerHTML: { __html: safeHtml },
     });
   }
   return createElement("div", { style: { whiteSpace: "pre-wrap", fontFamily: "sans-serif" } }, text);
