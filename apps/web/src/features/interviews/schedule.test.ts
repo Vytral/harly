@@ -298,7 +298,7 @@ describe("F1-10 single video provider", () => {
     );
     // Zone lookups before the transaction: the original invite\'s zone (rescheduling) and the profile zone.
 
-    mocks.selectQueue.unshift([]);
+    mocks.selectQueue.unshift([], []);
 
     const result = await scheduleInterview({
       workspaceId: "ws-1",
@@ -335,7 +335,7 @@ describe("F1-10 single video provider", () => {
     );
     // Zone lookups before the transaction: the original invite\'s zone (rescheduling) and the profile zone.
 
-    mocks.selectQueue.unshift([]);
+    mocks.selectQueue.unshift([], []);
 
     const result = await scheduleInterview({
       workspaceId: "ws-1",
@@ -374,7 +374,7 @@ describe("F1-10 single video provider", () => {
     );
     // Zone lookups before the transaction: the original invite\'s zone (rescheduling) and the profile zone.
 
-    mocks.selectQueue.unshift([]);
+    mocks.selectQueue.unshift([], []);
 
     const result = await scheduleInterview({
       workspaceId: "ws-1",
@@ -411,7 +411,7 @@ describe("F1-10 single video provider", () => {
     );
     // Zone lookups before the transaction: the original invite\'s zone (rescheduling) and the profile zone.
 
-    mocks.selectQueue.unshift([]);
+    mocks.selectQueue.unshift([], []);
 
     const result = await scheduleInterview({
       workspaceId: "ws-1",
@@ -448,7 +448,7 @@ describe("F1-10 single video provider", () => {
     );
     // Zone lookups before the transaction: the original invite\'s zone (rescheduling) and the profile zone.
 
-    mocks.selectQueue.unshift([]);
+    mocks.selectQueue.unshift([], []);
 
     const result = await scheduleInterview({
       workspaceId: "ws-1",
@@ -488,7 +488,7 @@ describe("interview invitation delivery", () => {
       [{ status: "failed" }],
     );
     // The profile zone is read before the transaction, ahead of the queued rows.
-    mocks.selectQueue.unshift([]);
+    mocks.selectQueue.unshift([], []);
 
     const result = await scheduleInterview({
       workspaceId: "ws-1",
@@ -521,7 +521,7 @@ describe("interview invitation delivery", () => {
     );
     // Zone lookups before the transaction: the original invite\'s zone (rescheduling) and the profile zone.
 
-    mocks.selectQueue.unshift([]);
+    mocks.selectQueue.unshift([], []);
 
     const result = await scheduleInterview({
       workspaceId: "ws-1",
@@ -573,7 +573,7 @@ describe("F1-11 reschedule recreates provider meeting", () => {
     );
     // Zone lookups before the transaction: the original invite\'s zone (rescheduling) and the profile zone.
 
-    mocks.selectQueue.unshift([], []);
+    mocks.selectQueue.unshift([], [], []);
 
     const result = await rescheduleInterview({
       interviewId: "iv-1",
@@ -716,7 +716,7 @@ describe("AI scheduling resilience", () => {
     );
     // Zone lookups before the transaction: the original invite\'s zone (rescheduling) and the profile zone.
 
-    mocks.selectQueue.unshift([]);
+    mocks.selectQueue.unshift([], []);
 
     const result = await scheduleInterview({
       workspaceId: "ws-1",
@@ -795,7 +795,7 @@ describe("F1-12c reschedule re-validates interviewer conflict", () => {
     );
     // Zone lookups before the transaction: the original invite\'s zone (rescheduling) and the profile zone.
 
-    mocks.selectQueue.unshift([], []);
+    mocks.selectQueue.unshift([], [], []);
 
     const result = await rescheduleInterview({
       interviewId: "iv-1",
@@ -885,7 +885,7 @@ describe("interview business state guards", () => {
     ]);
     // Zone lookups before the transaction: the original invite\'s zone (rescheduling) and the profile zone.
 
-    mocks.selectQueue.unshift([], []);
+    mocks.selectQueue.unshift([], [], []);
 
     const result = await rescheduleInterview({
       interviewId: "iv-canceled",
