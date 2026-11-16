@@ -5,6 +5,14 @@ import { eq } from "drizzle-orm";
 import { db, workspaceSettings } from "@harly/db";
 
 import { decryptSecret, isEncryptionConfigured } from "@/lib/crypto";
+import { createLogger } from "@/lib/logger";
+
+const log = createLogger("captcha");
+
+/** Upper bound for the vendor siteverify call so a slow provider cannot hang a submission. */
+const VERIFY_TIMEOUT_MS = 5_000;
+
+let warnedUnconfigured = false;
 
 export type CaptchaProvider = "turnstile" | "recaptcha" | "hcaptcha";
 
@@ -238,8 +246,12 @@ async function resolveActiveCaptchaSecret(
       if (ciphertext && iv && tag) {
         try {
           return { provider, secret: decryptSecret({ ciphertext, iv, tag }) };
-        } catch {
+        } catch (error) {
           // Fall through to env on a decryption failure.
+          log.warn(
+            { workspaceId, provider, err: error },
+            "Could not decrypt the workspace CAPTCHA secret; falling back to the environment",
+          );
         }
       }
     }
@@ -250,6 +262,14 @@ async function resolveActiveCaptchaSecret(
     if (envSecret) return { provider, secret: envSecret };
   }
   return null;
+}
+
+function warnUnconfiguredOnce() {
+  if (warnedUnconfigured) return;
+  warnedUnconfigured = true;
+  log.warn(
+    "No CAPTCHA secret is configured, so the public application form is not bot-protected. Enable a provider in the workspace settings or set a global secret.",
+  );
 }
 
 /**
@@ -272,7 +292,10 @@ export async function verifyCaptchaToken(
   enforced = true,
 ): Promise<boolean> {
   const resolved = await resolveActiveCaptchaSecret(workspaceId);
-  if (!resolved) return true; // Not configured -> skip
+  if (!resolved) {
+    warnUnconfiguredOnce();
+    return true; // Not configured -> skip
+  }
 
   if (enforced) {
     if (!token) return false;
@@ -288,21 +311,33 @@ export async function verifyCaptchaToken(
     ...(remoteIp ? { remoteip: remoteIp } : {}),
   };
 
-  const res =
-    spec.encoding === "json"
-      ? await fetch(spec.verifyUrl, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(params),
-        })
-      : await fetch(spec.verifyUrl, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/x-www-form-urlencoded",
-          },
-          body: new URLSearchParams(params).toString(),
-        });
+  // Fail closed: a provider outage, timeout or garbled reply must never let a
+  // submission through unverified, and must never throw into the caller.
+  try {
+    const res =
+      spec.encoding === "json"
+        ? await fetch(spec.verifyUrl, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(params),
+            signal: AbortSignal.timeout(VERIFY_TIMEOUT_MS),
+          })
+        : await fetch(spec.verifyUrl, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/x-www-form-urlencoded",
+            },
+            body: new URLSearchParams(params).toString(),
+            signal: AbortSignal.timeout(VERIFY_TIMEOUT_MS),
+          });
 
-  const data = (await res.json()) as { success: boolean };
-  return data.success === true;
+    const data = (await res.json()) as { success?: unknown } | null;
+    return data?.success === true;
+  } catch (error) {
+    log.warn(
+      { provider: resolved.provider, err: error },
+      "CAPTCHA verification request failed",
+    );
+    return false;
+  }
 }
