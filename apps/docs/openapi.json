@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "Harly API",
-    "version": "1.0.0"
+    "version": "0.1.0-dev"
   },
   "servers": [
     {
@@ -5070,6 +5070,7 @@
                             "anyOf": [
                               {
                                 "type": "string",
+                                "maxLength": 2048,
                                 "format": "uri"
                               },
                               {
@@ -5081,6 +5082,7 @@
                             "anyOf": [
                               {
                                 "type": "string",
+                                "maxLength": 2048,
                                 "format": "uri"
                               },
                               {
@@ -5092,6 +5094,7 @@
                             "anyOf": [
                               {
                                 "type": "string",
+                                "maxLength": 2048,
                                 "format": "uri"
                               },
                               {
@@ -5317,6 +5320,7 @@
                           "anyOf": [
                             {
                               "type": "string",
+                              "maxLength": 2048,
                               "format": "uri"
                             },
                             {
@@ -5328,6 +5332,7 @@
                           "anyOf": [
                             {
                               "type": "string",
+                              "maxLength": 2048,
                               "format": "uri"
                             },
                             {
@@ -5339,6 +5344,7 @@
                           "anyOf": [
                             {
                               "type": "string",
+                              "maxLength": 2048,
                               "format": "uri"
                             },
                             {
@@ -5634,6 +5640,7 @@
                     "anyOf": [
                       {
                         "type": "string",
+                        "maxLength": 2048,
                         "format": "uri"
                       },
                       {
@@ -5645,6 +5652,7 @@
                     "anyOf": [
                       {
                         "type": "string",
+                        "maxLength": 2048,
                         "format": "uri"
                       },
                       {
@@ -5656,6 +5664,7 @@
                     "anyOf": [
                       {
                         "type": "string",
+                        "maxLength": 2048,
                         "format": "uri"
                       },
                       {
@@ -5957,6 +5966,7 @@
                           "anyOf": [
                             {
                               "type": "string",
+                              "maxLength": 2048,
                               "format": "uri"
                             },
                             {
@@ -5968,6 +5978,7 @@
                           "anyOf": [
                             {
                               "type": "string",
+                              "maxLength": 2048,
                               "format": "uri"
                             },
                             {
@@ -5979,6 +5990,7 @@
                           "anyOf": [
                             {
                               "type": "string",
+                              "maxLength": 2048,
                               "format": "uri"
                             },
                             {
@@ -6247,6 +6259,7 @@
                           "anyOf": [
                             {
                               "type": "string",
+                              "maxLength": 2048,
                               "format": "uri"
                             },
                             {
@@ -6258,6 +6271,7 @@
                           "anyOf": [
                             {
                               "type": "string",
+                              "maxLength": 2048,
                               "format": "uri"
                             },
                             {
@@ -6269,6 +6283,7 @@
                           "anyOf": [
                             {
                               "type": "string",
+                              "maxLength": 2048,
                               "format": "uri"
                             },
                             {
@@ -6564,6 +6579,7 @@
                     "anyOf": [
                       {
                         "type": "string",
+                        "maxLength": 2048,
                         "format": "uri"
                       },
                       {
@@ -6575,6 +6591,7 @@
                     "anyOf": [
                       {
                         "type": "string",
+                        "maxLength": 2048,
                         "format": "uri"
                       },
                       {
@@ -6586,6 +6603,7 @@
                     "anyOf": [
                       {
                         "type": "string",
+                        "maxLength": 2048,
                         "format": "uri"
                       },
                       {
