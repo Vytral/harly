@@ -195,7 +195,7 @@ export function EditInterviewDialog({
               <Field label={t("mode")}>
                 <SegmentedControl
                   aria-label={t("mode")}
-                  options={MODES.map((item) => ({ value: item.key, label: t(item.dialogLabelKey) }))}
+                  options={MODES.map((item) => ({ value: item.key, label: t(item.labelKey) }))}
                   value={mode}
                   onValueChange={setMode}
                 />
