@@ -1,7 +1,7 @@
 import "server-only";
 
 import { eq, and, gt, isNull, lt } from "drizzle-orm";
-import { db, passkeys, passkeyChallenge } from "@harly/db";
+import { db, passkeyChallenge } from "@harly/db";
 import { getHarlyPublicOrigin } from "@/lib/public-origin";
 
 const publicUrl = new URL(getHarlyPublicOrigin());
@@ -55,14 +55,4 @@ export async function consumeChallenge(
     .returning({ challenge: passkeyChallenge.challenge });
 
   return row?.challenge ?? null;
-}
-
-export async function getUserPasskeys(userId: string) {
-  return db.select().from(passkeys).where(eq(passkeys.userId, userId));
-}
-
-export async function deletePasskey(id: string, userId: string) {
-  await db
-    .delete(passkeys)
-    .where(and(eq(passkeys.id, id), eq(passkeys.userId, userId)));
 }
