@@ -194,12 +194,17 @@ function wholePercent(part: number, whole: number): number | null {
  * Two calls in one request for the same window share a single computation.
  */
 function windowKey(window: ReportWindow): string {
-  return [window.from.getTime(), window.to.getTime(), window.timeZone].join("|");
+  return [window.from.getTime(), window.to.getTime(), window.timeZone, window.days ?? ""].join("|");
 }
 
 function windowFromKey(key: string): ReportWindow {
-  const [from, to, timeZone] = key.split("|");
-  return { from: new Date(Number(from)), to: new Date(Number(to)), timeZone, days: null };
+  const [from, to, timeZone, days] = key.split("|");
+  return {
+    from: new Date(Number(from)),
+    to: new Date(Number(to)),
+    timeZone,
+    days: days === "" ? null : Number(days),
+  };
 }
 
 function memoForWindow<T>(compute: (scope: ScopedWindow) => Promise<T>) {
@@ -646,12 +651,19 @@ async function computeDailyCounts(
  * One count per local day in the window, zero-filled, oldest first. The
  * window must be a day window (`days` set).
  */
-export async function getDailySeries(
+const dailySeriesCached = cache(
+  async (workspaceId: string, key: string, metric: SeriesMetric): Promise<{ key: string; count: number }[]> => {
+    const window = windowFromKey(key);
+    const counts = await computeDailyCounts({ workspaceId, window }, metric);
+    return dayKeysInWindow(window).map((day) => ({ key: day, count: counts.get(day) ?? 0 }));
+  },
+);
+
+export function getDailySeries(
   scope: ScopedWindow,
   metric: SeriesMetric,
 ): Promise<{ key: string; count: number }[]> {
-  const counts = await computeDailyCounts(scope, metric);
-  return dayKeysInWindow(scope.window).map((key) => ({ key, count: counts.get(key) ?? 0 }));
+  return dailySeriesCached(scope.workspaceId, windowKey(scope.window), metric);
 }
 
 async function computeMonthlyCounts(
@@ -678,5 +690,17 @@ async function computeMonthlyCounts(
   return new Map(rowsOf<{ bucket: string; n: number }>(result).map((r) => [r.bucket, r.n]));
 }
 
-/** Monthly counts keyed by zone-local `YYYY-MM`, for a window of whole months. */
-export const getMonthlyCounts = computeMonthlyCounts;
+const monthlyCountsCached = cache((workspaceId: string, key: string, metric: "applications" | "hires") =>
+  computeMonthlyCounts({ workspaceId, window: windowFromKey(key) }, metric),
+);
+
+/**
+ * Monthly counts keyed by zone-local `YYYY-MM`, for a window of whole months.
+ * Computed once per request for the same workspace, window and metric.
+ */
+export function getMonthlyCounts(
+  scope: ScopedWindow,
+  metric: "applications" | "hires",
+): Promise<Map<string, number>> {
+  return monthlyCountsCached(scope.workspaceId, windowKey(scope.window), metric);
+}
