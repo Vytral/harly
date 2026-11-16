@@ -435,6 +435,13 @@ async function recordAcceptance(
  * If that write keeps failing the error is logged and the caller continues:
  * `markSent` writes the same id again, and the next claim finds it either way.
  */
+/**
+ * Why the last send for a row returned `false` (no sender, or the provider's
+ * sanitized error). `markFailed` appends it so the stored error says what
+ * actually went wrong instead of a generic message.
+ */
+const sendFailureDetail = new Map<string, string>();
+
 async function sendRecorded(
   row: OutboxRow,
   database: typeof db,
@@ -443,8 +450,12 @@ async function sendRecorded(
 ): Promise<Awaited<ReturnType<typeof sendWorkspaceEmail>>> {
   let delivered: Awaited<ReturnType<typeof sendWorkspaceEmail>>;
   try {
+    sendFailureDetail.delete(row.id);
     delivered = await sendWorkspaceEmail(row.workspaceId, options, actorUserId, {
       rethrowUnknownOutcome: true,
+      onFailure: (failure) => {
+        sendFailureDetail.set(row.id, failure.detail);
+      },
     });
   } catch (error) {
     if (!(error instanceof DeliveryOutcomeUnknownError)) throw error;
@@ -634,7 +645,7 @@ async function deliverAutomationEmail(row: OutboxRow, database: typeof db = db):
     ...deliveryOptions(row),
   }, row.actorId ?? undefined);
   if (!delivered) {
-    await markFailed(row.id, "No configured workspace email sender.", database);
+    await markFailed(row.id, "Email was not sent.", database);
     return false;
   }
   await markSent(row.id, delivered, database);
@@ -670,7 +681,7 @@ async function deliverScheduledReport(row: OutboxRow, database: typeof db = db):
     ...deliveryOptions(row),
   });
   if (!delivered) {
-    await markFailed(row.id, "No configured workspace email sender.", database);
+    await markFailed(row.id, "Email was not sent.", database);
     return false;
   }
   await markSent(row.id, delivered, database);
@@ -1950,10 +1961,12 @@ async function markSent(
 async function markFailed(id: string, message: string, database: typeof db = db) {
   // A row the provider accepted, or whose outcome is unknown, is never made retryable here.
   if (acceptedInFlight.has(id) || unknownOutcomeInFlight.has(id)) return;
+  const detail = sendFailureDetail.get(id);
+  sendFailureDetail.delete(id);
   await database
     .update(emailOutbox)
     .set({
-      lastError: sanitizeDeliveryError(message),
+      lastError: sanitizeDeliveryError(detail ? `${message} ${detail}` : message),
       nextRetryAt: sql`CASE
         WHEN ${emailOutbox.attempts} >= ${MAX_ATTEMPTS} THEN NULL
         ELSE now() + (${emailOutbox.attempts} * interval '1 minute')
