@@ -101,6 +101,27 @@ describe("receiveWorkflowWebhook", () => {
     });
   });
 
+  it("fails instead of claiming a duplicate when the conflicting receipt is gone", async () => {
+    const body = JSON.stringify({ id: "provider-event-2" });
+    const timestamp = String(Math.floor(Date.now() / 1_000));
+    const tx = {
+      insert: vi.fn(() => query([])),
+      select: vi.fn(() => query([])),
+    };
+    mocks.transaction.mockImplementation(async (callback: (value: typeof tx) => unknown) => callback(tx));
+
+    const result = await receiveWorkflowWebhook({
+      endpointId: endpoint.id,
+      token,
+      rawBody: body,
+      signature: signature(timestamp, body, "provider-event-2"),
+      timestamp,
+      externalEventId: "provider-event-2",
+    });
+
+    expect(result).toMatchObject({ ok: false, status: 500 });
+  });
+
   it("blocks direct webhook receipt in public demo before reading or persisting", async () => {
     vi.stubEnv("DEMO_MODE", "true");
 

@@ -336,7 +336,10 @@ export async function receiveWorkflowWebhook(input: {
           eq(workflowWebhookReceipts.externalEventId, externalEventId),
         ))
         .limit(1);
-      if (!existing) return { duplicate: true, eventId };
+      // The conflicting receipt vanished (e.g. retention cleanup) between the
+      // insert and the read. We cannot say which event it was, so do not claim a
+      // duplicate with a made-up event id; ask the sender to retry.
+      if (!existing) return { missingReceipt: true as const };
       if (existing.payloadHash !== payloadHash) {
         return { conflict: true as const };
       }
@@ -360,6 +363,9 @@ export async function receiveWorkflowWebhook(input: {
     return { duplicate: false, eventId };
   });
 
+  if ("missingReceipt" in result && result.missingReceipt) {
+    return { ok: false, status: 500, error: "The webhook could not be recorded. Retry the request." };
+  }
   if ("conflict" in result && result.conflict) {
     return { ok: false, status: 409, error: "This external event id was already accepted with a different payload." };
   }
