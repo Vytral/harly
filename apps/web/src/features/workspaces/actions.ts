@@ -1476,7 +1476,8 @@ export async function joinViaInviteLinkAction(
     }
 
     const joinedMemberId = crypto.randomUUID();
-    await db
+    // Existing members keep their role: the link only ever adds new people.
+    const inserted = await db
       .insert(authMembers)
       .values({
         id: joinedMemberId,
@@ -1485,7 +1486,8 @@ export async function joinViaInviteLinkAction(
         role,
         createdAt: new Date(),
       })
-      .onConflictDoNothing();
+      .onConflictDoNothing()
+      .returning({ id: authMembers.id });
 
     const [joinedMember] = await db
       .select({ id: authMembers.id })
@@ -1505,14 +1507,18 @@ export async function joinViaInviteLinkAction(
       name: session.user.name,
     });
 
-    await logAuditEvent({
-      workspaceId: ws.organizationId,
-      actorId: session.user.id,
-      actorEmail: session.user.email,
-      action: "member.invited",
-      severity: "info",
-      metadata: { via: "invite_link", role },
-    });
+    if (inserted.length > 0) {
+      await logAuditEvent({
+        workspaceId: ws.organizationId,
+        actorId: session.user.id,
+        actorEmail: session.user.email,
+        action: "member.joined",
+        resourceType: "member",
+        resourceId: joinedMemberId,
+        severity: "info",
+        metadata: { via: "invite_link", role },
+      });
+    }
 
     return { success: true, organizationId: ws.organizationId };
   } catch (error) {
