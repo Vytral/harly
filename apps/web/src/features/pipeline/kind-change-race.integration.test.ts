@@ -217,11 +217,12 @@ describe.skipIf(!runPipelineIntegration)("stage kind change vs an in-flight move
       // Whichever side won, the application's status must match the stage it is in.
       expect(app.status).toBe(applicationStatusForStage(stage!));
       if (change.ok) {
-        // The kind change always lands. The move either recorded a hire after it,
-        // or failed cleanly (a deadlock with the kind change exhausted its retries)
-        // and the application stayed where it was.
+        // The kind change was allowed only if the move had not landed yet; then
+        // the move must still land, see the hired kind and record a hire.
+        expect(move.ok).toBe(true);
         expect(targetStage!.kind).toBe("hired");
-        if (move.ok) expect(app.status).toBe("hired");
+        expect(stage!.kind).toBe("hired");
+        expect(app.status).toBe("hired");
       } else {
         expect(move.ok).toBe(true);
         expect(targetStage!.kind).toBe("custom");
