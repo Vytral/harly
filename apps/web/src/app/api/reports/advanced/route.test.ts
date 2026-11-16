@@ -60,7 +60,7 @@ describe("GET /api/reports/advanced", () => {
     expect(mocks.getAdvancedHiringAnalytics).not.toHaveBeenCalled();
   });
 
-  it("computes the window in the workspace time zone and clamps the requested days", async () => {
+  const asOwner = () => {
     mocks.getWorkspaceContextOrNull.mockResolvedValue({ organization: { id: "ws-1" } });
     mocks.requirePermission.mockResolvedValue({ organization: { id: "ws-1" }, roleKey: "owner" });
     mocks.getRolePolicy.mockResolvedValue({
@@ -69,15 +69,36 @@ describe("GET /api/reports/advanced", () => {
     });
     mocks.getWorkspaceTimeZone.mockResolvedValue("America/Los_Angeles");
     mocks.getAdvancedHiringAnalytics.mockResolvedValue({ stageSla: [] });
+  };
 
-    const response = await GET(request("http://harly.test/api/reports/advanced?days=9999"));
+  it("computes the window in the workspace time zone for a supported range", async () => {
+    asOwner();
+
+    const response = await GET(request("http://harly.test/api/reports/advanced?days=365"));
 
     expect(response.status).toBe(200);
-    const [{ workspaceId, window }] = mocks.getAdvancedHiringAnalytics.mock.calls[0];
+    const [{ workspaceId, window }] = mocks.getAdvancedHiringAnalytics.mock.calls.at(-1)!;
     expect(workspaceId).toBe("ws-1");
     expect(window.timeZone).toBe("America/Los_Angeles");
-    // Clamped to 730 local days.
-    expect((window.to.getTime() - window.from.getTime()) / 86_400_000).toBeGreaterThan(729);
-    expect((window.to.getTime() - window.from.getTime()) / 86_400_000).toBeLessThan(731);
+    expect(window.days).toBe(365);
+  });
+
+  it("defaults to 90 days", async () => {
+    asOwner();
+
+    await GET(request("http://harly.test/api/reports/advanced"));
+
+    const [{ window }] = mocks.getAdvancedHiringAnalytics.mock.calls.at(-1)!;
+    expect(window.days).toBe(90);
+  });
+
+  it.each(["7", "9999", "abc", "0", ""])("rejects unsupported days=%s with 400", async (days) => {
+    asOwner();
+    mocks.getAdvancedHiringAnalytics.mockClear();
+
+    const response = await GET(request(`http://harly.test/api/reports/advanced?days=${days}`));
+
+    expect(response.status).toBe(400);
+    expect(mocks.getAdvancedHiringAnalytics).not.toHaveBeenCalled();
   });
 });

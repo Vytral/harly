@@ -5,6 +5,7 @@ import { getWorkspaceContextOrNull } from "@/features/workspaces/context";
 import { getRolePolicy, requirePermission } from "@/features/workspaces/permissions-server";
 import { getAdvancedHiringAnalytics } from "@/features/reports/advanced";
 import { getWorkspaceTimeZone } from "@/features/reports/canonical";
+import { REPORT_RANGE_DAYS, type ReportRangeDays } from "@/features/reports/ranges";
 import { resolveWindow } from "@/features/reports/window";
 
 export const runtime = "nodejs";
@@ -21,8 +22,15 @@ export async function GET(request: NextRequest) {
       { status: 403 },
     );
   }
-  const raw = Number(request.nextUrl.searchParams.get("days") ?? 90);
-  const days = Number.isFinite(raw) ? Math.min(Math.max(Math.floor(raw), 1), 730) : 90;
+  // The same ranges the Reports page offers (30, 90 or 365 days); 90 by default.
+  const rawDays = request.nextUrl.searchParams.get("days");
+  const days = rawDays === null ? 90 : Number(rawDays);
+  if (!REPORT_RANGE_DAYS.includes(days as ReportRangeDays)) {
+    return NextResponse.json(
+      { error: `days must be one of ${REPORT_RANGE_DAYS.join(", ")}.` },
+      { status: 400 },
+    );
+  }
   const workspaceId = context.organization.id;
   const timeZone = await getWorkspaceTimeZone(workspaceId);
   const window = resolveWindow(days, timeZone, new Date());

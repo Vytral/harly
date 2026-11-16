@@ -29,7 +29,7 @@ export async function GET() {
     return NextResponse.json({ error: RESTRICTED_SCOPE_MESSAGE }, { status: 403 });
   }
   const rows = await listScheduledReports(context.organization.id);
-  return NextResponse.json({ data: rows.map((row) => ({ ...row, recipients: row.recipients })) });
+  return NextResponse.json({ data: rows });
 }
 
 export async function POST(request: NextRequest) {
@@ -46,7 +46,13 @@ export async function POST(request: NextRequest) {
   if (!isUnrestrictedScope(policy.scope)) {
     return NextResponse.json({ error: RESTRICTED_SCOPE_MESSAGE }, { status: 403 });
   }
-  const parsed = createSchema.safeParse(await request.json());
+  let payload: unknown;
+  try {
+    payload = await request.json();
+  } catch {
+    return NextResponse.json({ error: "Request body must be valid JSON." }, { status: 400 });
+  }
+  const parsed = createSchema.safeParse(payload);
   if (!parsed.success) return NextResponse.json({ error: "Invalid scheduled report." }, { status: 422 });
   const row = await createScheduledReport({ ...parsed.data, workspaceId: context.organization.id, createdById: context.user.id });
   return NextResponse.json({ data: row }, { status: 201 });
