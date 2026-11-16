@@ -93,7 +93,9 @@ An application whose current status is **hired**. Its hire date is the most
 recent move into a stage whose **kind** is hired. Harly reads the stage kind,
 not the stage name, so a stage renamed "Welcome aboard" still counts. Hires
 recorded before stage kinds existed fall back to the earliest "hired" activity
-event, and then to the last update time. Each application counts once, in the
+event, and then to the application date. That last fallback is a stable date,
+so later edits to an old record never move the hire into a newer window; such a
+hire shows a time to hire of zero days. Each application counts once, in the
 window that contains its hire date.
 
 ### Time to hire
@@ -118,9 +120,11 @@ change the funnel.
 
 ### Source effectiveness
 
-For each application source, the number of applications and hires, and hires
-per application as a whole percentage. A source with no applications shows no
-conversion rather than zero.
+For each application source, the applications received in the window and how
+many of those same applications ended up hired (whenever the hire happened),
+and hires per application as a whole percentage. Because both numbers describe
+the same group of applications, conversion never exceeds 100%. A source with no
+applications shows no conversion rather than zero.
 
 ### Windows and time zone
 

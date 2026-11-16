@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 
 import {
   activityEvents,
@@ -53,6 +53,7 @@ import {
   getJobFunnel,
   getMonthlyCounts,
   getOfferAcceptance,
+  getPopulationCounts,
   getSourceEffectiveness,
   getWorkspaceFunnel,
 } from "./canonical";
@@ -61,7 +62,6 @@ import { loadReportsData, getReportsData } from "./data";
 import { buildScheduledReport } from "@/server/reports/scheduled";
 import { getHiringPerformance } from "@/features/dashboard/widgets";
 import { trailingMonths, type ReportWindow } from "./window";
-import { bucketTimeToHire } from "./metrics";
 
 /** Fixed window for every test: all of January 2026, UTC. */
 const WINDOW: ReportWindow = {
@@ -214,6 +214,22 @@ describe.skipIf(!runPipelineIntegration)("canonical hiring metrics (database)", 
     expect((await getHireStats({ workspaceId: fx.workspaceId, window: WINDOW })).hires).toBe(1);
   });
 
+  it("keeps tracked sample candidates and jobs out of the population counts", async () => {
+    const before = await getPopulationCounts(fx.workspaceId);
+    await loadSampleData({
+      workspaceId: fx.workspaceId,
+      actorUserId: fx.userId,
+      now: new Date(Date.UTC(2026, 0, 20, 12)),
+    });
+    const [sampleCandidates] = await db
+      .select({ n: sql<number>`count(*)::int` })
+      .from(sampleDataItems)
+      .where(and(eq(sampleDataItems.workspaceId, fx.workspaceId), eq(sampleDataItems.entityType, "candidate")));
+    expect(sampleCandidates.n).toBeGreaterThan(0);
+
+    expect(await getPopulationCounts(fx.workspaceId)).toEqual(before);
+  });
+
   it("keeps tracked sample interviews out of the interview series", async () => {
     await loadSampleData({
       workspaceId: fx.workspaceId,
@@ -286,7 +302,7 @@ describe.skipIf(!runPipelineIntegration)("canonical hiring metrics (database)", 
     expect((await getHireStats({ workspaceId: fx.workspaceId, window: WINDOW })).hires).toBe(1);
   });
 
-  it("falls back to activity events, then updated_at, for legacy hires with no stage history", async () => {
+  it("falls back to activity events, then applied_at, for legacy hires with no stage history", async () => {
     const withActivity = await application({
       stageId: stages.applied!.id,
       appliedAt: day(2),
@@ -308,18 +324,26 @@ describe.skipIf(!runPipelineIntegration)("canonical hiring metrics (database)", 
         createdAt: day(20),
       },
     ]);
-    // No history and no activity: the row's updated_at is the last resort.
+    // No history and no activity: the stable applied_at is the last resort,
+    // so a later edit (updated_at) must not move the hire.
     await application({
       stageId: stages.applied!.id,
       appliedAt: day(3),
       status: "hired",
       updatedAt: day(13),
     });
+    const lateEdit: ReportWindow = {
+      ...WINDOW,
+      from: new Date("2026-01-13T00:00:00.000Z"),
+      to: new Date("2026-02-01T00:00:00.000Z"),
+    };
 
     const stats = await getHireStats({ workspaceId: fx.workspaceId, window: WINDOW });
     expect(stats.hires).toBe(2);
-    // Earliest activity (Jan 12) minus Jan 2 is 10 days; updated_at (Jan 13) minus Jan 3 is 10 days.
-    expect(stats.averageDays).toBe(10);
+    // Earliest activity (Jan 12) minus Jan 2 is 10 days; the legacy hire is dated Jan 3, 0 days.
+    expect(stats.averageDays).toBe(5);
+    expect(stats.medianDays).toBe(5);
+    expect((await getHireStats({ workspaceId: fx.workspaceId, window: lateEdit })).hires).toBe(0);
   });
 
   it("does not count a candidate who was moved back out of Hired", async () => {
@@ -362,21 +386,18 @@ describe.skipIf(!runPipelineIntegration)("canonical hiring metrics (database)", 
     expect(byJob.get(archivedJob.jobId)).toBeUndefined();
   });
 
-  it("computes time to hire and buckets with the same rule as the JS metrics", async () => {
+  it("computes time to hire, buckets and one-decimal rounding", async () => {
     const days = [10, 14.5, 20.5, 45, 80, 120];
-    const events: { applicationId: string; appliedAt: Date; hiredAt: Date }[] = [];
     for (const [i, span] of days.entries()) {
       const appliedAt = new Date(Date.UTC(2025, 6, 1 + i));
       const hiredAt = new Date(appliedAt.getTime() + span * 86_400_000);
-      const { applicationId } = await hire({ appliedAt, hiredAt });
-      events.push({ applicationId, appliedAt, hiredAt });
+      await hire({ appliedAt, hiredAt });
     }
     const wide: ReportWindow = { ...WINDOW, from: new Date("2025-01-01T00:00:00.000Z"), to: new Date("2027-01-01T00:00:00.000Z") };
 
     const stats = await getHireStats({ workspaceId: fx.workspaceId, window: wide });
-    expect(stats.buckets.map((b) => b.count)).toEqual(
-      bucketTimeToHire(events).map((b) => b.count),
-    );
+    // Buckets use whole days: 10 and 14.5 fall in 0-14d, 20.5 in 15-30d, and so on.
+    expect(stats.measured).toBe(6);
     expect(stats.buckets.map((b) => b.count)).toEqual([2, 1, 1, 1, 1]);
     // Median of 10, 14.5, 20.5, 45, 80, 120 is (20.5 + 45) / 2.
     expect(stats.medianDays).toBe(32.8);
@@ -493,6 +514,23 @@ describe.skipIf(!runPipelineIntegration)("canonical hiring metrics (database)", 
     const referral = rows.find((r) => r.source === "referral");
     expect(referral).toEqual({ source: "referral", applications: 2, hires: 1, conversion: 50 });
     expect(rows.find((r) => r.source === "unknown")?.conversion).toBe(0);
+  });
+
+  it("measures source conversion on the applications cohort, never above 100%", async () => {
+    // Applied before the window, hired inside it: not part of the cohort.
+    await hire({ appliedAt: new Date("2025-12-10T00:00:00.000Z"), hiredAt: day(5), source: "referral" });
+    await hire({ appliedAt: new Date("2025-12-11T00:00:00.000Z"), hiredAt: day(6), source: "referral" });
+    // Applied inside the window, hired after it ends: still hired from this cohort.
+    await hire({ appliedAt: day(20), hiredAt: new Date("2026-02-10T00:00:00.000Z"), source: "referral" });
+
+    const rows = await getSourceEffectiveness({ workspaceId: fx.workspaceId, window: WINDOW });
+    expect(rows.find((r) => r.source === "referral")).toEqual({
+      source: "referral",
+      applications: 1,
+      hires: 1,
+      conversion: 100,
+    });
+    for (const row of rows) expect(row.conversion ?? 0).toBeLessThanOrEqual(100);
   });
 
   // ── diversity ──────────────────────────────────────────────────────────────
