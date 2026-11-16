@@ -104,41 +104,52 @@ const candidateExperienceEntrySchema = z.object({
   description: z.string().trim().max(20_000).nullable().default(null),
 });
 
-function refineJobSalary(
-  values: {
-    salaryMin?: number | null;
-    salaryMax?: number | null;
-    currency?: string | null;
-    salaryPeriod?: "annual" | "monthly" | null;
-  },
-  ctx: z.RefinementCtx,
-) {
+type JobSalaryValues = {
+  salaryMin?: number | null;
+  salaryMax?: number | null;
+  currency?: string | null;
+  salaryPeriod?: "annual" | "monthly" | string | null;
+};
+
+/**
+ * The salary rules for a job as plain issues, so they can run against a full
+ * record (for example an existing job merged with a partial update) and not
+ * only against the fields of one request body.
+ */
+export function jobSalaryIssues(
+  values: JobSalaryValues,
+): { path: "salaryMax" | "currency" | "salaryPeriod"; message: string }[] {
+  const issues: { path: "salaryMax" | "currency" | "salaryPeriod"; message: string }[] = [];
   if (
     values.salaryMin != null &&
     values.salaryMax != null &&
     values.salaryMin > values.salaryMax
   ) {
-    ctx.addIssue({
-      code: "custom",
-      path: ["salaryMax"],
+    issues.push({
+      path: "salaryMax",
       message:
         "Maximum salary must be greater than or equal to minimum salary.",
     });
   }
   const hasAmount = values.salaryMin != null || values.salaryMax != null;
   if (hasAmount && !values.currency) {
-    ctx.addIssue({
-      code: "custom",
-      path: ["currency"],
+    issues.push({
+      path: "currency",
       message: "Currency is required when a salary amount is specified.",
     });
   }
   if (hasAmount && !values.salaryPeriod) {
-    ctx.addIssue({
-      code: "custom",
-      path: ["salaryPeriod"],
+    issues.push({
+      path: "salaryPeriod",
       message: "Pay period is required when a salary amount is specified.",
     });
+  }
+  return issues;
+}
+
+function refineJobSalary(values: JobSalaryValues, ctx: z.RefinementCtx) {
+  for (const issue of jobSalaryIssues(values)) {
+    ctx.addIssue({ code: "custom", path: [issue.path], message: issue.message });
   }
 }
 
