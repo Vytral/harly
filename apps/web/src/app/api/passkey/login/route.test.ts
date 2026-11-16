@@ -13,7 +13,9 @@ const mocks = vi.hoisted(() => ({
   storeChallenge: vi.fn(),
   consumeChallenge: vi.fn(),
   eq: vi.fn((field, value) => ({ field, value })),
+  demoMode: { value: false },
 }));
+vi.mock("@harly/config", () => ({ isDemoMode: () => mocks.demoMode.value }));
 
 vi.mock("@simplewebauthn/server", () => ({
   generateAuthenticationOptions: mocks.generateAuthenticationOptions,
@@ -75,7 +77,10 @@ function selectChain(result: unknown[]) {
 }
 
 describe("passkey login", () => {
-  beforeEach(() => vi.clearAllMocks());
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.demoMode.value = false;
+  });
 
   it("sets the session cookie without returning the bearer token in JSON", async () => {
     mocks.enforceRateLimit.mockResolvedValue(undefined);
@@ -151,42 +156,89 @@ describe("passkey login", () => {
     expect(setCookie).not.toMatch(/(?:^|;\s*)token=/);
   });
 
-  it("offers a legacy credential fallback scoped to the supplied account", async () => {
-    mocks.enforceRateLimit.mockResolvedValue(undefined);
-    mocks.select.mockReturnValueOnce({
-      from: () => ({
-        innerJoin: () => ({
-          where: async () => [{ credentialId: "legacy-credential", transports: '["usb"]' }],
-        }),
-      }),
-    });
-    mocks.generateAuthenticationOptions.mockResolvedValue({
-      challenge: "legacy-challenge",
-      allowCredentials: [{ id: "legacy-credential", transports: ["usb"] }],
-    });
-    mocks.storeChallenge.mockResolvedValue({ id: "legacy-challenge-id" });
-
-    const response = await POST(new Request("https://harly.test/api/passkey/login", {
+  function legacyRequest(email: string) {
+    return new Request("https://harly.test/api/passkey/login", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ mode: "legacy-options", email: "  Person@Example.com " }),
-    }) as never);
+      body: JSON.stringify({ mode: "legacy-options", email }),
+    }) as never;
+  }
 
+  function mockLegacyRows(rows: { credentialId: string }[]) {
+    mocks.select.mockReturnValueOnce({
+      from: () => ({ innerJoin: () => ({ where: async () => rows }) }),
+    });
+  }
+
+  async function legacyAllowList(email: string, rows: { credentialId: string }[]) {
+    mocks.enforceRateLimit.mockResolvedValue(undefined);
+    mocks.storeChallenge.mockResolvedValue({ id: "legacy-challenge-id" });
+    mocks.generateAuthenticationOptions.mockImplementation(
+      async (input: { allowCredentials: unknown[] }) => ({
+        challenge: "legacy-challenge",
+        allowCredentials: input.allowCredentials,
+      }),
+    );
+    mockLegacyRows(rows);
+    const response = await POST(legacyRequest(email));
     expect(response.status).toBe(200);
-    expect(await response.json()).toMatchObject({
-      challengeId: "legacy-challenge-id",
-      allowCredentials: [{ id: "legacy-credential", transports: ["usb"] }],
-    });
-    expect(mocks.select).toHaveBeenCalledWith({
-      credentialId: "credentialId",
-      transports: "transports",
-    });
+    return (await response.json()) as {
+      challengeId: string;
+      allowCredentials: { id: string; transports?: string[] }[];
+    };
+  }
+
+  it("offers a legacy credential fallback for the supplied account", async () => {
+    const body = await legacyAllowList("  Person@Example.com ", [
+      { credentialId: "legacy-credential" },
+    ]);
+
+    expect(body.challengeId).toBe("legacy-challenge-id");
+    expect(body.allowCredentials.map((c) => c.id)).toContain("legacy-credential");
+    expect(mocks.select).toHaveBeenCalledWith({ credentialId: "credentialId" });
     expect(mocks.eq).toHaveBeenCalledWith("email", "person@example.com");
-    expect(mocks.generateAuthenticationOptions).toHaveBeenCalledWith({
-      rpID: "harly.test",
-      userVerification: "preferred",
-      allowCredentials: [{ id: "legacy-credential", transports: ["usb"] }],
-    });
     expect(mocks.storeChallenge).toHaveBeenCalledWith(null, "legacy-challenge", "login");
+  });
+
+  it("answers identically-shaped options for known and unknown accounts", async () => {
+    const known = await legacyAllowList("known@example.test", [
+      { credentialId: "real-credential-a" },
+      { credentialId: "real-credential-b" },
+    ]);
+    const unknown = await legacyAllowList("nobody@example.test", []);
+
+    expect(known.allowCredentials).toHaveLength(unknown.allowCredentials.length);
+    expect(unknown.allowCredentials.length).toBeGreaterThan(0);
+    for (const credential of [...known.allowCredentials, ...unknown.allowCredentials]) {
+      expect(credential.transports).toBeUndefined();
+      expect(credential.id).toMatch(/^[A-Za-z0-9_-]+$/);
+    }
+    // Sorted by id, so a real credential's position reveals nothing.
+    const ids = known.allowCredentials.map((c) => c.id);
+    expect(ids).toEqual([...ids].sort());
+  });
+
+  it("returns the same decoys for the same unknown email on every request", async () => {
+    const first = await legacyAllowList("nobody@example.test", []);
+    const second = await legacyAllowList("nobody@example.test", []);
+    expect(second.allowCredentials).toEqual(first.allowCredentials);
+    const other = await legacyAllowList("someone-else@example.test", []);
+    expect(other.allowCredentials).not.toEqual(first.allowCredentials);
+  });
+
+  it("refuses passkey sign-in on the public demo", async () => {
+    mocks.demoMode.value = true;
+    const get = await GET(new Request("https://harly.test/api/passkey/login") as never);
+    expect(get.status).toBe(403);
+    const post = await POST(
+      new Request("https://harly.test/api/passkey/login", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ challengeId: "c", id: "credential-1" }),
+      }) as never,
+    );
+    expect(post.status).toBe(403);
+    expect(mocks.createSession).not.toHaveBeenCalled();
+    expect(mocks.consumeChallenge).not.toHaveBeenCalled();
   });
 });
