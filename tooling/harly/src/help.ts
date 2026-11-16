@@ -36,7 +36,7 @@ type CommandDetail = {
 /** Per-command flags and examples, shown by `harly help <command>`. */
 export const commandDetails: Record<string, CommandDetail> = {
   menu: {
-    examples: ["harly", "npx @harly/cli"],
+    examples: ["harly"],
     note: "In a terminal, opens a menu of the common actions. In scripts and CI it checks the installation (or lists commands) instead of prompting.",
   },
   check: {
@@ -142,8 +142,8 @@ export const commandDetails: Record<string, CommandDetail> = {
       ["--yes", "Install without asking (for scripts)"],
       ["--dry-run", "Show the npm command; install nothing"],
     ],
-    examples: ["npx @harly/cli install-global", "harly install-global --yes"],
-    note: "Installs this CLI with npm so you can type harly instead of npx @harly/cli. If npm's global bin directory is not on PATH, prints the exact command for your shell.",
+    examples: ["harly install-global", "harly install-global --yes"],
+    note: "Installs or refreshes this CLI with npm so you can type harly from anywhere. If npm's global bin directory is not on PATH, prints the exact command for your shell.",
   },
 };
 
@@ -220,7 +220,7 @@ export function renderHelp(
   for (const [example, description] of examples) lines.push(`    ${accent(example.padEnd(exampleWidth))}  ${soft(description)}`);
   lines.push(
     "",
-    `  ${soft("Not installed globally? Prefix any command with npx @harly/cli. Docs: https://docs.harly.dev")}`,
+    `  ${soft("Install the CLI with npm install -g @harly/cli. Docs: https://docs.harly.dev")}`,
     "",
   );
   return lines.join("\n");
