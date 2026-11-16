@@ -14,9 +14,10 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     patch: { supported: true },
     bulk: { supported: false, maxOperations: 0, maxPayloadSize: 0 },
     filter: { supported: true, maxResults: 100 },
+    // Only `userName eq` and `externalId eq` filters; others return invalidFilter.
     changePassword: { supported: false },
-    sort: { supported: true },
+    sort: { supported: false },
     etag: { supported: false },
-    authenticationSchemes: [{ type: "oauth2", name: "HTTP Bearer", description: "Workspace-scoped SCIM bearer token", primary: true }],
+    authenticationSchemes: [{ type: "oauthbearertoken", name: "HTTP Bearer", description: "Workspace-scoped SCIM bearer token", primary: true }],
   });
 }
