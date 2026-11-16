@@ -40,6 +40,25 @@ async function backoff(attemptNumber: number): Promise<void> {
   await new Promise((resolve) => setTimeout(resolve, base + jitter));
 }
 
+/** SQLSTATE codes for a transaction Postgres aborted to break a lock cycle or lose a serialization race. */
+const TRANSACTION_ABORT_CODES = new Set(["40P01", "40001"]);
+
+/**
+ * True when Postgres aborted the whole transaction as a deadlock victim or a
+ * serialization failure. Nothing from the aborted attempt was committed, so a
+ * fresh attempt that re-reads its rows is safe. The driver error may be
+ * wrapped (Drizzle puts it in `cause`), so walk a few levels.
+ */
+export function isTransactionAbort(error: unknown): boolean {
+  let current: unknown = error;
+  for (let depth = 0; depth < 4 && typeof current === "object" && current !== null; depth += 1) {
+    const code = (current as { code?: unknown }).code;
+    if (typeof code === "string" && TRANSACTION_ABORT_CODES.has(code)) return true;
+    current = (current as { cause?: unknown }).cause;
+  }
+  return false;
+}
+
 export function isConcurrencyConflict(error: unknown): boolean {
   return (
     error instanceof ConcurrencyConflictError ||
@@ -67,7 +86,12 @@ export async function withConcurrencyRetry<T>(
   },
 ): Promise<T> {
   const maxAttempts = options?.maxAttempts ?? DEFAULT_MAX_ATTEMPTS;
-  const isConflict = options?.isConflict ?? isConcurrencyConflict;
+  // By default also retry a transaction Postgres aborted as a deadlock victim:
+  // a concurrent stage kind change can lock the same rows in a different
+  // order, and the user should not see "unable to move" for that.
+  const isConflict =
+    options?.isConflict ??
+    ((error: unknown) => isConcurrencyConflict(error) || isTransactionAbort(error));
 
   let lastError: unknown;
   for (let attemptNumber = 1; attemptNumber <= maxAttempts; attemptNumber++) {

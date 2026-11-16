@@ -91,6 +91,7 @@ list their extra proxy hops in `TRUSTED_PROXY_IPS`.
 - `POST /api/reports/schedules` returns 400 for a malformed JSON body instead of a server error.
 - Downloading an older version of a document serves it with the MIME type it was uploaded with. Versions created before this release fall back to the document's type.
 - Trashed jobs no longer reserve their URL slug, and restoring a trashed job whose slug was taken by a newer job brings it back under a fresh unique slug instead of failing.
+- Moving a candidate on the pipeline board no longer fails with "Unable to move" when someone changes a stage's type at the same moment: a move that Postgres aborts as a deadlock victim is now retried.
 
 ### Changed
 
