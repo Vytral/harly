@@ -188,7 +188,7 @@ setQuiet(quiet);
 const interactive = Boolean(
   !json && !flags.has("--non-interactive") && process.stdin.isTTY && process.stdout.isTTY && !process.env.CI,
 );
-const cliVersion = "0.7.0";
+const cliVersion = "0.7.1";
 let jsonResultWritten = false;
 
 function humanOut(message: string): void {
