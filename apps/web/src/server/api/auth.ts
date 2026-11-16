@@ -1,6 +1,6 @@
 import "server-only";
 
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 
 import { isDemoMode } from "@harly/config";
 import {
@@ -12,7 +12,7 @@ import {
   type ApiKeyType,
   type ApiScope,
 } from "@harly/api";
-import { db, apiKeys } from "@harly/db";
+import { db, apiKeys, member } from "@harly/db";
 import {
   enforceRateLimit,
   rateLimitResultFromError,
@@ -86,6 +86,25 @@ function extractKey(
   return null;
 }
 
+async function creatorIsActiveMember(row: {
+  workspaceId: string;
+  createdById: string | null;
+}): Promise<boolean> {
+  if (!row.createdById) return false;
+  const [membership] = await db
+    .select({ id: member.id })
+    .from(member)
+    .where(
+      and(
+        eq(member.organizationId, row.workspaceId),
+        eq(member.userId, row.createdById),
+        eq(member.status, "active"),
+      ),
+    )
+    .limit(1);
+  return Boolean(membership);
+}
+
 /**
  * Authenticate an API key and (optionally) assert a required scope.
  *
@@ -127,6 +146,16 @@ export async function authenticateApiKey(
   }
   if (row.expiresAt && row.expiresAt.getTime() <= Date.now()) {
     throw ApiError.unauthorized("This API key has expired.");
+  }
+
+  // A key acts for the member who created it. Once that person is removed or
+  // deactivated the key stops working, like a SCIM-deprovisioned account. A key
+  // whose creator account no longer exists (created_by_id set to null) is
+  // treated the same way.
+  if (!row.createdById || !(await creatorIsActiveMember(row))) {
+    throw ApiError.unauthorized(
+      "This API key's creator is no longer an active member of the workspace.",
+    );
   }
 
   const scopes = (Array.isArray(row.scopes) ? row.scopes : []).filter(
