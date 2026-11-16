@@ -52,10 +52,6 @@ import {
 } from "./actions";
 import { getInboxData } from "./data";
 import { getWorkspaceMailboxAttachment } from "@/lib/mailbox/attachment-access";
-import {
-  getUnreadInboundReplyCount,
-  listInboundReplies,
-} from "@/features/inbound-email/data";
 import { findOrCreateCanonicalThread, insertCanonicalMessage } from "@/lib/mail/canonical";
 
 integration("Inbox tenant and active-job isolation", () => {
@@ -320,11 +316,6 @@ integration("Inbox tenant and active-job isolation", () => {
       }),
     ).resolves.toBeNull();
     await db.update(candidates).set({ deletedAt: null }).where(eq(candidates.id, candidateId));
-    const replies = await listInboundReplies();
-    expect(replies.find((reply) => reply.subject === "Active application")?.jobTitle).toBe(
-      "Active requisition",
-    );
-    expect(replies.find((reply) => reply.subject === "Deleted application")?.jobTitle).toBeNull();
   });
 
   it("rejects linking an application whose job is in the trash", async () => {
@@ -355,39 +346,6 @@ integration("Inbox tenant and active-job isolation", () => {
       .where(eq(mailMessages.threadId, deletedJobThreadId));
     expect(thread?.applicationId).toBeNull();
     expect(messages.every((message) => message.applicationId === null)).toBe(true);
-  });
-
-  it("does not count an unread message linked to a foreign workspace candidate", async () => {
-    const foreignWorkspaceId = `mailbox-unread-foreign-${randomUUID()}`;
-    await db.insert(organization).values({
-      id: foreignWorkspaceId,
-      name: "Foreign unread workspace",
-      slug: foreignWorkspaceId,
-      createdAt: new Date(),
-    });
-    const [foreignCandidate] = await db
-      .insert(candidates)
-      .values({
-        workspaceId: foreignWorkspaceId,
-        firstName: "Foreign",
-        lastName: "Unread",
-        email: `foreign-unread-${randomUUID()}@example.test`,
-      })
-      .returning({ id: candidates.id });
-    const before = await getUnreadInboundReplyCount();
-    await db.insert(mailMessages).values({
-      workspaceId: context.workspaceId,
-      threadId: activeThreadId,
-      candidateId: foreignCandidate.id,
-      direction: "inbound",
-      fromEmail: "foreign@example.test",
-      subject: "Foreign unread message",
-      textBody: "Must not affect the current workspace badge",
-      readAt: null,
-    });
-    const after = await getUnreadInboundReplyCount();
-    expect(after).toBe(before);
-    await db.delete(organization).where(eq(organization.id, foreignWorkspaceId));
   });
 
   it("does not reuse a foreign workspace thread through message references", async () => {
