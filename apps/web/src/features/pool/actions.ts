@@ -12,7 +12,11 @@ import {
   jobs,
   poolEntries,
 } from "@harly/db";
-import { requirePermission } from "@/features/workspaces/permissions-server";
+import {
+  requireCandidatePermission,
+  requireJobPermission,
+  requirePermission,
+} from "@/features/workspaces/permissions-server";
 import { resolveEntryStage } from "@/features/pipeline/stage-resolver";
 import { isActivePoolEntryUniqueViolation } from "@/features/pool/errors";
 
@@ -185,6 +189,9 @@ export async function assignFromPoolToJobAction(input: {
   if (!parsed.success) return { success: false, error: t("invalidInput") };
 
   const { organization: workspace } = await requirePermission("candidates:edit");
+  // Role scope: the caller must be able to reach both the candidate and the job.
+  await requireCandidatePermission("candidates:edit", parsed.data.candidateId);
+  await requireJobPermission("candidates:edit", parsed.data.jobId);
 
   // Verify candidate exists
   const [candidate] = await db
@@ -325,16 +332,25 @@ export async function bulkAssignFromPoolToJobAction(input: {
   const parsed = bulkAssignFromPoolSchema.safeParse(input);
   if (!parsed.success) return { success: false, error: t("invalidInput") };
 
+  await requirePermission("candidates:edit");
+  // Fail the whole request when the job is out of scope; per-candidate scope
+  // failures below only count as failed assignments.
+  await requireJobPermission("candidates:edit", parsed.data.jobId);
+
   let assigned = 0;
   let failed = 0;
 
   for (const candidateId of parsed.data.candidateIds) {
-    const result = await assignFromPoolToJobAction({
-      candidateId,
-      jobId: parsed.data.jobId,
-    });
-    if (result.success) assigned++;
-    else failed++;
+    try {
+      const result = await assignFromPoolToJobAction({
+        candidateId,
+        jobId: parsed.data.jobId,
+      });
+      if (result.success) assigned++;
+      else failed++;
+    } catch {
+      failed++;
+    }
   }
 
   return {

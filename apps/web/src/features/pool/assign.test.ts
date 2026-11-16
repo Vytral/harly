@@ -11,6 +11,8 @@ const mocks = vi.hoisted(() => {
     selectQueue,
     transactionImpl,
     requirePermission: vi.fn(),
+    requireJobPermission: vi.fn(),
+    requireCandidatePermission: vi.fn(),
     insertResults: [] as unknown[][],
   };
 });
@@ -67,10 +69,12 @@ vi.mock("@harly/db", async () => {
 
 vi.mock("@/features/workspaces/permissions-server", () => ({
   requirePermission: mocks.requirePermission,
+  requireJobPermission: mocks.requireJobPermission,
+  requireCandidatePermission: mocks.requireCandidatePermission,
 }));
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 
-import { assignFromPoolToJobAction } from "./actions";
+import { assignFromPoolToJobAction, bulkAssignFromPoolToJobAction } from "./actions";
 
 vi.mock("next-intl/server", async () => (await import("@/test-support/intl-server-mock")).intlServerMock);
 
@@ -79,6 +83,8 @@ describe("F1-09 talent pool assignment", () => {
     mocks.selectQueue.length = 0;
     mocks.insertResults.length = 0;
     mocks.transactionImpl.mockReset();
+    mocks.requireJobPermission.mockReset().mockResolvedValue(undefined);
+    mocks.requireCandidatePermission.mockReset().mockResolvedValue(undefined);
     mocks.requirePermission.mockResolvedValue({
       user: { id: "user-1" },
       organization: { id: "ws-1" },
@@ -167,5 +173,53 @@ describe("F1-09 talent pool assignment", () => {
 
     expect(result.success).toBe(false);
     expect(result.error).toMatch(/already has an application/i);
+  });
+
+  it("refuses an out-of-scope job before touching the database", async () => {
+    mocks.requireJobPermission.mockRejectedValue(new Error("You are not assigned to this job."));
+
+    await expect(
+      assignFromPoolToJobAction({
+        candidateId: "11111111-1111-4111-8111-111111111111",
+        jobId: "22222222-2222-4222-8222-222222222222",
+      }),
+    ).rejects.toThrow(/not assigned/i);
+    expect(mocks.requireJobPermission).toHaveBeenCalledWith(
+      "candidates:edit",
+      "22222222-2222-4222-8222-222222222222",
+    );
+    expect(mocks.transactionImpl).not.toHaveBeenCalled();
+  });
+
+  it("refuses an out-of-scope candidate", async () => {
+    mocks.requireCandidatePermission.mockRejectedValue(
+      new Error("You do not have access to this candidate."),
+    );
+
+    await expect(
+      assignFromPoolToJobAction({
+        candidateId: "11111111-1111-4111-8111-111111111111",
+        jobId: "22222222-2222-4222-8222-222222222222",
+      }),
+    ).rejects.toThrow(/access to this candidate/i);
+    expect(mocks.transactionImpl).not.toHaveBeenCalled();
+  });
+
+  it("bulk assign rejects an out-of-scope job and counts out-of-scope candidates as failed", async () => {
+    mocks.requireJobPermission.mockRejectedValueOnce(new Error("You are not assigned to this job."));
+    await expect(
+      bulkAssignFromPoolToJobAction({
+        candidateIds: ["11111111-1111-4111-8111-111111111111"],
+        jobId: "22222222-2222-4222-8222-222222222222",
+      }),
+    ).rejects.toThrow(/not assigned/i);
+
+    mocks.requireCandidatePermission.mockRejectedValue(new Error("nope"));
+    const result = await bulkAssignFromPoolToJobAction({
+      candidateIds: ["11111111-1111-4111-8111-111111111111"],
+      jobId: "22222222-2222-4222-8222-222222222222",
+    });
+    expect(result).toMatchObject({ assigned: 0, failed: 1 });
+    expect(mocks.transactionImpl).not.toHaveBeenCalled();
   });
 });
