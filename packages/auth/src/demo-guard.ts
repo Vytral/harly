@@ -29,6 +29,10 @@ export const DEMO_BLOCKED_AUTH_PATHS: readonly string[] = [
   "/sign-in/email-otp",
   "/sign-in/username",
   "/sign-in/passkey",
+  // Magic link mints a session from an emailed link: another way around the
+  // Turnstile-gated /api/demo/enter entry.
+  "/sign-in/magic-link",
+  "/magic-link/verify",
   "/email-otp/send-verification-otp",
   "/forget-password",
   "/request-password-reset",
