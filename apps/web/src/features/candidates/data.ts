@@ -72,6 +72,7 @@ import {
   type WorkspaceSearchActor,
 } from "@/features/search/scope";
 import { resolveSearchActor } from "@/features/search/workspace-search";
+import { escapeLikePattern } from "@/features/search/patterns";
 import { rejectionReasonLabels } from "@/features/rejection-reasons/data";
 import { rejectionReasonLabel } from "@/features/rejection-reasons/shared";
 import { deleteConversationsForCandidate } from "@/features/ai-chat/data";
@@ -2692,6 +2693,16 @@ export async function findSuspectDuplicates(
 ): Promise<SuspectCandidate[]> {
   const { ilike, ne, sql: drizzleSql } = await import("drizzle-orm");
 
+  const nameConditions = [
+    firstName.trim() ? ilike(candidates.firstName, `%${escapeLikePattern(firstName.trim())}%`) : undefined,
+    lastName.trim() ? ilike(candidates.lastName, `%${escapeLikePattern(lastName.trim())}%`) : undefined,
+  ].filter((condition): condition is NonNullable<typeof condition> => Boolean(condition));
+  if (nameConditions.length === 0) return [];
+
+  // Names of candidates outside the caller's role scope must not surface here.
+  const actor = await resolveSearchActor();
+  if (actor.workspaceId !== workspaceId) return [];
+
   const rows = await db
     .select({
       candidateId: candidates.id,
@@ -2704,10 +2715,8 @@ export async function findSuspectDuplicates(
         eq(candidates.workspaceId, workspaceId),
         ne(candidates.id, candidateId),
         isNull(candidates.deletedAt),
-        or(
-          ilike(candidates.firstName, `%${firstName}%`),
-          ilike(candidates.lastName, `%${lastName}%`),
-        ),
+        candidateScopeSql(actor, candidates.id),
+        or(...nameConditions),
       ),
     )
     .limit(5);
