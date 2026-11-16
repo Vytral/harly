@@ -573,7 +573,7 @@ export async function createDocumentVersion(input: { documentId: string; origina
     const [current] = await tx.select({ versionNumber: documentVersions.versionNumber }).from(documentVersions).where(eq(documentVersions.documentId, input.documentId)).orderBy(desc(documentVersions.versionNumber)).limit(1);
     const versionNumber = (current?.versionNumber ?? 0) + 1;
     await tx.update(documentVersions).set({ isCurrent: false }).where(eq(documentVersions.documentId, input.documentId));
-    await tx.insert(documentVersions).values({ workspaceId: context.organization.id, documentId: input.documentId, versionNumber, storageKey: input.storageKey, sizeBytes: input.sizeBytes, checksum: checked.checksum, uploadedById: context.user.id });
+    await tx.insert(documentVersions).values({ workspaceId: context.organization.id, documentId: input.documentId, versionNumber, storageKey: input.storageKey, sizeBytes: input.sizeBytes, checksum: checked.checksum, mimeType: input.mimeType, uploadedById: context.user.id });
     await tx.update(documents).set({ storageKey: input.storageKey, sizeBytes: input.sizeBytes, checksum: checked.checksum, mimeType: input.mimeType, originalName: input.originalName.replace(/[\r\n]/g, "") }).where(and(eq(documents.id, input.documentId), eq(documents.workspaceId, context.organization.id)));
     await logDocumentActivity(tx, { workspaceId: context.organization.id, actorId: context.user.id, documentId: input.documentId, type: "document.version_created", metadata: { versionNumber } });
     return true;

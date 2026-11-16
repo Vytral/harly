@@ -1225,6 +1225,7 @@ export const mailThreads = pgTable(
       table.participantEmail,
     ),
     index("mail_threads_candidate_idx").on(table.candidateId),
+    index("mail_threads_application_idx").on(table.applicationId),
     index("mail_threads_workspace_conversation_idx").on(
       table.workspaceId,
       table.conversationId,
@@ -1283,6 +1284,8 @@ export const mailMessages = pgTable(
       table.threadId,
       table.receivedAt,
     ),
+    index("mail_messages_candidate_idx").on(table.candidateId),
+    index("mail_messages_application_idx").on(table.applicationId),
   ],
 );
 
@@ -1413,7 +1416,11 @@ export const jobs = pgTable(
     ...timestamps(),
   },
   (table) => [
-    uniqueIndex("jobs_workspace_slug_idx").on(table.workspaceId, table.slug),
+    // Trashed jobs do not hold their slug: a new job may reuse it, and a
+    // restore that would collide is given a fresh slug (see restoreJob).
+    uniqueIndex("jobs_workspace_slug_idx")
+      .on(table.workspaceId, table.slug)
+      .where(sql`${table.deletedAt} is null`),
     index("jobs_workspace_status_idx").on(table.workspaceId, table.status),
     index("jobs_workspace_created_at_idx").on(
       table.workspaceId,
@@ -2088,6 +2095,9 @@ export const documentVersions = pgTable(
     storageKey: text("storage_key").notNull(),
     sizeBytes: integer("size_bytes").notNull(),
     checksum: text("checksum").notNull(),
+    // MIME type of this version's bytes. Null on versions created before the
+    // column existed; readers fall back to the document's current mime type.
+    mimeType: text("mime_type"),
     uploadedById: text("uploaded_by_id").references(() => user.id, {
       onDelete: "set null",
     }),
@@ -3647,6 +3657,9 @@ export const evaluationJobs = pgTable(
       table.workspaceId,
       table.status,
     ),
+    index("evaluation_jobs_job_idx").on(table.jobId),
+    index("evaluation_jobs_candidate_idx").on(table.candidateId),
+    index("evaluation_jobs_application_idx").on(table.applicationId),
   ],
 );
 
@@ -3910,6 +3923,7 @@ export const candidateMessages = pgTable(
       table.createdAt,
     ),
     index("candidate_messages_author_idx").on(table.authorId),
+    index("candidate_messages_application_idx").on(table.applicationId),
     uniqueIndex("candidate_messages_workspace_provider_message_id_unique").on(
       table.workspaceId,
       table.providerMessageId,
@@ -5706,8 +5720,11 @@ export const workflowRuns = pgTable(
     status: workflowRunStatusEnum("status").default("running").notNull(),
     // v2 uses a graph cursor; legacy step indexes/status remain untouched.
     engineVersion: integer("engine_version").default(1).notNull(),
+    // Explicit NO ACTION: versions are only removed together with their
+    // definition, which cascades to the runs in the same statement.
     versionId: uuid("version_id").references(
       () => workflowDefinitionVersions.id,
+      { onDelete: "no action" },
     ),
     logicalStatus: text("logical_status"),
     cursorNodeId: text("cursor_node_id"),

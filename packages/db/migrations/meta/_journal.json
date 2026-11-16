@@ -1177,6 +1177,13 @@
       "when": 1794240698984,
       "tag": "0167_giant_ben_parker",
       "breakpoints": true
+    },
+    {
+      "idx": 168,
+      "version": "7",
+      "when": 1794811567365,
+      "tag": "0168_flashy_ted_forrester",
+      "breakpoints": true
     }
   ]
 }
