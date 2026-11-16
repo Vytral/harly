@@ -1,3 +1,4 @@
+import { createHmac } from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
 import {
   generateAuthenticationOptions,
@@ -5,6 +6,7 @@ import {
 } from "@simplewebauthn/server";
 import { eq } from "drizzle-orm";
 import { db, passkeys, user } from "@harly/db";
+import { isDemoMode } from "@harly/config";
 import { auth } from "@/lib/auth";
 import { createLogger } from "@/lib/logger";
 import { RP_ID, ORIGIN, storeChallenge, consumeChallenge } from "@/lib/passkey";
@@ -13,27 +15,63 @@ import { clientIp, enforceRateLimit } from "@/server/api/ratelimit";
 
 const log = createLogger("api-passkey-login");
 
-async function createAuthenticationOptions(email?: string) {
-  const legacyPasskeys = email
-    ? await db
-        .select({ credentialId: passkeys.credentialId, transports: passkeys.transports })
-        .from(passkeys)
-        .innerJoin(user, eq(passkeys.userId, user.id))
-        .where(eq(user.email, email))
-    : [];
+// Demo lockdown: the public demo mints sessions only through /api/demo/enter
+// (Turnstile + server-minted session). Better Auth's /sign-in/passkey is already
+// blocked by the demo guard; this hand-rolled route sits outside Better Auth
+// and must refuse sign-in itself, for options (GET/legacy POST) and verify.
+function demoBlockedResponse(): NextResponse {
+  return NextResponse.json(
+    { error: "This action is disabled in the demo." },
+    { status: 403 },
+  );
+}
 
+/**
+ * The email-scoped legacy mode must not reveal whether an account exists (or
+ * how many passkeys it has). Every answer therefore lists at least this many
+ * credential IDs: the account's real ones plus deterministic decoys derived
+ * from the email with a server secret, sorted by ID so position tells nothing,
+ * with transport hints dropped (they are optional hints). Decoys are stable
+ * across requests, so repeating the query does not unmask them.
+ */
+const LEGACY_MIN_ALLOWED_CREDENTIALS = 10;
+
+function decoyCredentialId(secret: string, email: string, index: number) {
+  return createHmac("sha256", secret)
+    .update(`passkey-legacy-decoy:${email}:${index}`)
+    .digest("base64url");
+}
+
+async function createLegacyAuthenticationOptions(email: string) {
+  const [rows, ctx] = await Promise.all([
+    db
+      .select({ credentialId: passkeys.credentialId })
+      .from(passkeys)
+      .innerJoin(user, eq(passkeys.userId, user.id))
+      .where(eq(user.email, email)),
+    auth.$context,
+  ]);
+
+  const ids = rows.map((row) => row.credentialId);
+  for (let i = 0; ids.length < LEGACY_MIN_ALLOWED_CREDENTIALS; i += 1) {
+    ids.push(decoyCredentialId(ctx.secret, email, i));
+  }
+  ids.sort();
+
+  return generateOptions(ids.map((id) => ({ id })));
+}
+
+async function generateOptions(
+  allowCredentials: { id: string; transports?: AuthenticatorTransport[] }[],
+) {
   const options = await generateAuthenticationOptions({
     rpID: RP_ID,
     userVerification: "preferred",
-    // No email means username-less/discoverable login. The email-scoped path
-    // exists only to let credentials created before residentKey was required
-    // authenticate; it never enumerates credentials belonging to other users.
-    allowCredentials: legacyPasskeys.map((passkey) => ({
-      id: passkey.credentialId,
-      transports: passkey.transports
-        ? (JSON.parse(passkey.transports) as AuthenticatorTransport[])
-        : undefined,
-    })),
+    // No email means username-less/discoverable login (empty list). The
+    // email-scoped legacy path exists only to let credentials created before
+    // residentKey was required authenticate; it never enumerates credentials
+    // belonging to other users.
+    allowCredentials,
   });
 
   const storedChallenge = await storeChallenge(null, options.challenge, "login");
@@ -42,6 +80,7 @@ async function createAuthenticationOptions(email?: string) {
 
 // GET , generate authentication options for passkey login (no session required).
 export async function GET(req: NextRequest) {
+  if (isDemoMode()) return demoBlockedResponse();
   try {
     await enforceRateLimit(`public:passkey-login:${clientIp(req)}`, {
       limit: 30,
@@ -51,11 +90,12 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "Too many attempts." }, { status: 429 });
   }
 
-  return NextResponse.json(await createAuthenticationOptions());
+  return NextResponse.json(await generateOptions([]));
 }
 
 // POST , verify authentication response and create session for passkey login.
 export async function POST(req: NextRequest) {
+  if (isDemoMode()) return demoBlockedResponse();
   try {
     await enforceRateLimit(`public:passkey-login:${clientIp(req)}`, {
       limit: 30,
@@ -68,10 +108,11 @@ export async function POST(req: NextRequest) {
   const body = await req.json();
 
   // Explicit compatibility path for pre-discoverable credentials. Keep the
-  // email in the POST body (not the URL) and return only this user's IDs.
+  // email in the POST body (not the URL); the answer is padded with decoys so
+  // it is indistinguishable for unknown accounts.
   if (body.mode === "legacy-options") {
     const email = typeof body.email === "string" ? body.email.trim().toLowerCase() : "";
-    return NextResponse.json(await createAuthenticationOptions(email));
+    return NextResponse.json(await createLegacyAuthenticationOptions(email));
   }
 
   // Atomically consume the anonymous login challenge by its unique ID.

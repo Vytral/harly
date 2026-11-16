@@ -5,6 +5,7 @@ import { useTranslations } from "next-intl";
 import { authErrorKey } from "@/features/auth/i18n/error-keys";
 
 import { authClient } from "@/lib/auth-client";
+import { joinViaInviteLinkAction } from "@/features/workspaces/actions";
 import {
   AuthMethodsRow,
   AuthSpinner,
@@ -13,7 +14,14 @@ import {
   GoogleIcon,
 } from "../../_components/auth-methods";
 
-export function SignupForm({ googleEnabled = false }: { googleEnabled?: boolean }) {
+export function SignupForm({
+  googleEnabled = false,
+  inviteToken,
+}: {
+  googleEnabled?: boolean;
+  /** Shareable invite-link token: lets a new person sign up and join. */
+  inviteToken?: string;
+}) {
   const errorText = useTranslations("accessAuthErrors");
   const t = useTranslations("accessSignup");
   const [name, setName] = useState("");
@@ -48,10 +56,23 @@ export function SignupForm({ googleEnabled = false }: { googleEnabled?: boolean 
         name: trimmedName,
         email: trimmedEmail,
         password,
+        ...(inviteToken
+          ? { fetchOptions: { headers: { "x-harly-invite-link": inviteToken } } }
+          : {}),
       });
       if (result.error) {
         setError(errorText(authErrorKey(result.error.code, "signupFailed")));
         return;
+      }
+      if (inviteToken) {
+        const joined = await joinViaInviteLinkAction(inviteToken);
+        if (!joined.success || !joined.organizationId) {
+          setError(joined.error ?? t("createFailed"));
+          return;
+        }
+        await authClient.organization.setActive({
+          organizationId: joined.organizationId,
+        });
       }
       // Play a brief exit before the hard navigation to onboarding so the
       // handoff feels continuous instead of snapping to a blank reload.

@@ -21,7 +21,7 @@ import { assertNotDemo } from "@/features/demo/assert-not-demo";
 import { createLogger } from "@/lib/logger";
 import { encryptSecret, isEncryptionConfigured } from "@/lib/crypto";
 import { normalizeSecurityPolicy } from "@/server/security/policy";
-import { requireRecentReauth } from "@/server/security/reauth";
+import { requireSensitiveReauth } from "@/server/security/reauth";
 import {
   LOGIN_METHODS,
   parseEnabledLoginMethods,
@@ -29,14 +29,6 @@ import {
 } from "@/features/auth/login-methods";
 
 const log = createLogger("security");
-
-async function requireSensitiveReauth(userId: string, workspaceId: string) {
-  const t = await getTranslations("server.security.actions");
-  const [settings] = await db.select({ minutes: workspaceSettings.securityReauthMinutes }).from(workspaceSettings).where(eq(workspaceSettings.organizationId, workspaceId)).limit(1);
-  if ((settings?.minutes ?? 15) > 0 && !(await requireRecentReauth({ userId, workspaceId, purpose: "sensitive_action" }))) {
-    throw new Error(t("reauthRequired"));
-  }
-}
 
 async function getSession() {
   const session = await auth.api.getSession({ headers: await headers() });
@@ -48,6 +40,7 @@ export async function deletePasskeyAction(passkeyId: string) {
   assertNotDemo();
   const session = await getSession();
   const { organization } = await getWorkspaceContext();
+  await requireSensitiveReauth(session.user.id, organization.id);
 
   await db
     .delete(passkeys)

@@ -5,6 +5,8 @@ import { sql } from "drizzle-orm";
 import { ApiError } from "@harly/api";
 import { db, rateLimitBuckets } from "@harly/db";
 
+import { getClientIp } from "@/server/security/client-ip";
+
 /**
  * Rate limiting. Fixed-window counters, pluggable store:
  *
@@ -177,37 +179,10 @@ export function enforcePersistentRateLimit(
 }
 
 /**
- * Best-effort client IP from proxy headers (works behind Vercel / nginx).
- *
- * The LEFTmost `x-forwarded-for` value is attacker-controllable, so by default
- * we use the RIGHTmost address , the hop closest to our edge, which a fronting
- * proxy controls. Self-hosters who terminate TLS at a trusted proxy may set
- * TRUSTED_PROXY_IPS (comma-separated) to opt into using the leftmost (original
- * client) address instead; requests not from a trusted proxy still fall back to
- * the rightmost hop.
+ * Best-effort client IP from proxy headers. Delegates to the shared resolver in
+ * `server/security/client-ip` (rightmost untrusted `x-forwarded-for` hop; see
+ * that file for the trust model and TRUSTED_PROXY_IPS).
  */
 export function clientIp(request: Request): string {
-  const forwarded = request.headers.get("x-forwarded-for");
-  const realIp = request.headers.get("x-real-ip");
-
-  if (forwarded) {
-    const hops = forwarded
-      .split(",")
-      .map((h) => h.trim())
-      .filter(Boolean);
-    if (hops.length > 0) {
-      const trusted = (process.env.TRUSTED_PROXY_IPS ?? "")
-        .split(",")
-        .map((h) => h.trim())
-        .filter(Boolean);
-      const peerIp = request.headers.get("x-forwarded-peer") ?? realIp ?? null;
-
-      if (trusted.length > 0 && peerIp && trusted.includes(peerIp)) {
-        return hops[0]; // trusted proxy -> original client is leftmost
-      }
-      return hops[hops.length - 1]; // otherwise use the edge hop
-    }
-  }
-
-  return realIp ?? "unknown";
+  return getClientIp(request);
 }

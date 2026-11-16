@@ -8,6 +8,7 @@ import { requirePermission } from "@/features/workspaces/permissions-server";
 import { assertNotDemo } from "@/features/demo/assert-not-demo";
 import { createLogger } from "@/lib/logger";
 import { logAuditEvent } from "@/lib/audit-log";
+import { requireSensitiveReauth } from "@/server/security/reauth";
 import { loadHarlyConfig } from "@harly/config";
 import { validateSamlRegistration } from "@harly/auth/saml-config";
 
@@ -85,6 +86,7 @@ export async function registerSSOProviderAction(
     if (roleKey !== "owner") {
       return { ok: false, error: t("ownerOnlyConfigure") };
     }
+    await requireSensitiveReauth(user.id, organization.id);
 
     const headerList = await headers();
     const config = loadHarlyConfig();

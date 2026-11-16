@@ -194,12 +194,21 @@ export async function getProfileByUsernameAction(
 ): Promise<ProfileByUsernameResult> {
   // Cross-user directory lookup: members without directory visibility
   // (custom roles without members:read) must not enumerate profiles.
-  await requirePermission("members:read");
+  const context = await requirePermission("members:read");
+
+  // Only active members of THIS workspace are visible: the user table is
+  // global, so without the membership join a username from another workspace
+  // (or a removed/suspended member) would leak name, email and phone.
+  const activeMember = and(
+    eq(schema.member.organizationId, context.organization.id),
+    eq(schema.member.status, "active"),
+  );
 
   const [row] = await db
     .select(PROFILE_COLUMNS)
     .from(schema.user)
-    .where(eq(schema.user.username, username))
+    .innerJoin(schema.member, eq(schema.member.userId, schema.user.id))
+    .where(and(eq(schema.user.username, username), activeMember))
     .limit(1);
 
   if (row) {
@@ -209,7 +218,11 @@ export async function getProfileByUsernameAction(
   const [historyRow] = await db
     .select({ userId: schema.usernameHistory.userId })
     .from(schema.usernameHistory)
-    .where(eq(schema.usernameHistory.oldUsername, username))
+    .innerJoin(
+      schema.member,
+      eq(schema.member.userId, schema.usernameHistory.userId),
+    )
+    .where(and(eq(schema.usernameHistory.oldUsername, username), activeMember))
     .limit(1);
 
   if (!historyRow) {

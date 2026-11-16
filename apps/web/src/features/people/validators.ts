@@ -114,6 +114,34 @@ export const updateEmailPreferenceSchema = z.object({
 
 export type UpdateEmailPreferenceInput = z.input<typeof updateEmailPreferenceSchema>;
 
+/**
+ * Public profile link: http(s) only. Anything else (`javascript:`, `data:`,
+ * `file:` ...) would be rendered as an href on the people pages. A value typed
+ * without a scheme (`linkedin.com/in/someone`) gets `https://`; blank clears it.
+ */
+export const profileUrlSchema = z
+  .string()
+  .trim()
+  .max(500)
+  .nullable()
+  .optional()
+  .transform((value, ctx) => {
+    if (value == null || value === "") return null;
+    const candidate = /^[a-z][a-z0-9+.-]*:/i.test(value) && !/^[a-z0-9.-]+:\d+(\/|$)/i.test(value)
+      ? value
+      : `https://${value}`;
+    try {
+      const url = new URL(candidate);
+      if ((url.protocol === "http:" || url.protocol === "https:") && url.hostname) {
+        return candidate;
+      }
+    } catch {
+      // fall through to the issue below
+    }
+    ctx.addIssue({ code: "custom", message: "Enter a valid http or https link." });
+    return z.NEVER;
+  });
+
 export const updateProfileSchema = z.object({
   name: z.string().trim().min(1).max(200),
   image: z.string().nullable().optional(),
@@ -121,9 +149,9 @@ export const updateProfileSchema = z.object({
   phone: z.string().trim().max(50).nullable().optional(),
   location: z.string().trim().max(200).nullable().optional(),
   bio: z.string().trim().max(2000).nullable().optional(),
-  linkedinUrl: z.string().trim().max(500).nullable().optional(),
-  githubUrl: z.string().trim().max(500).nullable().optional(),
-  websiteUrl: z.string().trim().max(500).nullable().optional(),
+  linkedinUrl: profileUrlSchema,
+  githubUrl: profileUrlSchema,
+  websiteUrl: profileUrlSchema,
   timezone: z.string().trim().max(100).nullable().optional(),
   specialties: specialtiesSchema.optional(),
   languages: languagesSchema.optional(),

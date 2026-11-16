@@ -826,6 +826,7 @@
     "signIn": "Sign in",
     "title": "Create your account",
     "subtitle": "Set up your ATS in minutes. No credit card required.",
+    "joinSubtitle": "Create your account to join {name}.",
     "already": "Already have an account? <link>Sign in</link>",
     "inviteOnly": "Signups are invite-only.",
     "inviteHelp": "This Harly workspace is already set up. Ask an admin to invite you; your invite link takes you straight to the right role.",
@@ -1062,6 +1063,7 @@
     "joinName": "Join {name}",
     "joinRole": "You'll join as <strong>{role}</strong>.",
     "signInJoin": "Sign in to join",
+    "createAccountJoin": "Create an account",
     "signInJoinHelp": "Sign in or create an account to join this workspace.",
     "invitedRole": "You were invited as <strong>{role}</strong> using {email}.",
     "invitedBy": "Invited by <strong>{name}</strong>",
@@ -7668,7 +7670,8 @@
         "errors": {
           "optionsFailed": "Could not get registration options.",
           "registrationFailed": "Registration failed.",
-          "registerFailed": "Could not register the passkey."
+          "registerFailed": "Could not register the passkey.",
+          "removeFailed": "Could not remove the passkey."
         }
       },
       "scimProvisioningCard": {
@@ -11235,6 +11238,7 @@
         "unableToUpdateBoardBranding": "Unable to update board branding.",
         "inviteOwnerBlocked": "The Owner role can't be given through an invite. Invite this person with another role, then promote them from the members list.",
         "alreadyPendingInvitation": "This email already has a pending invitation.",
+        "alreadyMember": "This person is already a member of the workspace. Change their role from the members list.",
         "invalidInvitation": "This invitation isn't valid.",
         "unknownRole": "Unknown role.",
         "unableToInviteMember": "Unable to invite member.",
