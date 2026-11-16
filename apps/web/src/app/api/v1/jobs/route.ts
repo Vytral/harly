@@ -54,6 +54,7 @@ export const POST = withApi(
     if (idempotency.kind === "replay") {
       return NextResponse.json(idempotency.response.body, {
         status: idempotency.response.status,
+        headers: { "Idempotent-Replayed": "true" },
       });
     }
     const actorUserId = await resolveWorkspaceActorUserId(

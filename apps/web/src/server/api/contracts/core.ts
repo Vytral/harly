@@ -146,6 +146,7 @@ export function buildRouteHandler<
       if (idempotency?.kind === "replay") {
         return NextResponse.json(idempotency.response.body, {
           status: idempotency.response.status,
+          headers: { "Idempotent-Replayed": "true" },
         });
       }
 
