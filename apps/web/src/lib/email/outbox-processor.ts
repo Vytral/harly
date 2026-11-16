@@ -28,6 +28,8 @@ import {
   candidateStageUpdateSubject,
   CustomTemplateEmail,
   InterviewCanceled,
+  buildIcsAttachment,
+  interviewIcsUid,
   interviewCanceledSubject,
   InterviewRescheduled,
   interviewRescheduledSubject,
@@ -1678,6 +1680,9 @@ type InterviewEmailPayload = {
   replyTo?: string | null;
   interviewerName?: string;
   recipientLocale?: string | null;
+  /** Stable calendar identity and revision; older rows lack them. */
+  interviewId?: string;
+  revision?: number;
 };
 
 async function deliverInterviewEmail(row: OutboxRow, database: typeof db = db): Promise<boolean> {
@@ -1726,6 +1731,29 @@ async function deliverInterviewEmail(row: OutboxRow, database: typeof db = db): 
     : undefined;
   let delivered: Awaited<ReturnType<typeof sendWorkspaceEmail>> = false;
   let interviewSubject = "";
+  // One calendar entry per interview: the invite, every reschedule and the
+  // cancellation share the UID and carry a non-decreasing SEQUENCE.
+  const calendarUid = payload.interviewId ?? row.id;
+  const calendarSequence =
+    typeof payload.revision === "number" ? Math.floor(payload.revision / 1000) : 0;
+  const calendarAttachments = (method: "REQUEST" | "CANCEL") => [
+    buildIcsAttachment({
+      uid: interviewIcsUid(calendarUid),
+      method,
+      sequence: calendarSequence,
+      summary: `${interviewTypeLabel} — ${payload.jobTitle}`,
+      start: when,
+      durationMins: payload.durationMins ?? 60,
+      description: method === "REQUEST" ? payload.notes : undefined,
+      location: payload.location,
+      organizer: payload.replyTo
+        ? { email: payload.replyTo, name: payload.companyName }
+        : undefined,
+      attendee: payload.candidateEmail
+        ? { email: payload.candidateEmail, name: payload.candidateName }
+        : undefined,
+    }),
+  ];
 
   try {
     if (row.kind === "interview.scheduled") {
@@ -1768,12 +1796,14 @@ async function deliverInterviewEmail(row: OutboxRow, database: typeof db = db): 
                 accentColor: branding.primaryColor ?? undefined,
                 socialLinks: branding.socialLinks,
               }),
+              attachments: calendarAttachments("REQUEST"),
               ...deliveryOptions(row),
             }
           : {
               to: payload.candidateEmail,
               subject: interviewSubject,
               replyTo: payload.replyTo ?? undefined,
+              attachments: calendarAttachments("REQUEST"),
               react: createElement(InterviewScheduled, {
                 ...common,
                 interviewType: interviewTypeLabel,
@@ -1783,6 +1813,8 @@ async function deliverInterviewEmail(row: OutboxRow, database: typeof db = db): 
                 duration,
                 startIso: when.toISOString(),
                 durationMins: payload.durationMins,
+                interviewId: calendarUid,
+                sequence: calendarSequence,
                 notes: payload.notes,
                 locale: recipientLocale,
               }),
@@ -1803,6 +1835,7 @@ async function deliverInterviewEmail(row: OutboxRow, database: typeof db = db): 
           to: payload.candidateEmail,
           subject: interviewSubject,
           replyTo: payload.replyTo ?? undefined,
+          attachments: calendarAttachments("REQUEST"),
           react: createElement(InterviewRescheduled, {
             ...common,
             interviewType: interviewTypeLabel,
@@ -1812,6 +1845,8 @@ async function deliverInterviewEmail(row: OutboxRow, database: typeof db = db): 
             duration,
             startIso: when.toISOString(),
             durationMins: payload.durationMins,
+            interviewId: calendarUid,
+            sequence: calendarSequence,
           }),
           ...deliveryOptions(row),
         },
@@ -1830,6 +1865,7 @@ async function deliverInterviewEmail(row: OutboxRow, database: typeof db = db): 
           to: payload.candidateEmail,
           subject: interviewSubject,
           replyTo: payload.replyTo ?? undefined,
+          attachments: calendarAttachments("CANCEL"),
           react: createElement(InterviewCanceled, {
             ...common,
             interviewType: interviewTypeLabel,
