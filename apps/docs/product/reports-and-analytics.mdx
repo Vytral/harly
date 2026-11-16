@@ -137,6 +137,16 @@ applications shows no conversion rather than zero.
   Harly uses UTC. Changing the zone changes which day a late-evening event
   falls on, and is reflected in every report immediately.
 
+### Scheduled reports
+
+A scheduled report is emailed daily, weekly or monthly, one step after it was
+created, at the same local time in the workspace's reporting time zone (so a
+09:00 report stays at 09:00 across a daylight-saving change). If a run fails,
+Harly retries with a growing delay (15 minutes, then 30, 60 and so on, up to
+12 hours, and never later than the next regular send). After 5 failed runs in
+a row the person who created the schedule gets an in-app notification; Harly
+keeps retrying, and a successful run resets the count.
+
 ### Small groups are hidden in diversity reports
 
 Diversity breakdowns count applicants received in the window. A group with
