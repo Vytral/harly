@@ -61,7 +61,7 @@ vi.mock("@/server/events/emit", () => ({}));
 vi.mock("@/server/webhooks/emit", () => ({}));
 vi.mock("@/features/offers/core", () => ({}));
 
-import { sendPortalMagicLinkAction } from "./actions";
+import { applyToJobAction, sendPortalMagicLinkAction } from "./actions";
 
 vi.mock("next-intl/server", async () => (await import("@/test-support/intl-server-mock")).intlServerMock);
 
@@ -115,5 +115,12 @@ describe("sendPortalMagicLinkAction server-side gating", () => {
     const r = await sendPortalMagicLinkAction("a@example.com");
     expect(r.ok).toBe(false);
     expect(m.send).not.toHaveBeenCalled();
+  });
+});
+
+describe("applyToJobAction honeypot", () => {
+  it("rejects a filled honeypot before touching the session", async () => {
+    const r = await applyToJobAction({ jobId: "j1", answers: {}, honeypot: "spam" });
+    expect(r.ok).toBe(false);
   });
 });

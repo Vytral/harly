@@ -40,6 +40,7 @@ import { getWorkspaceEmailSender } from "@/lib/email";
 import { getPortalAuthMethods } from "@/lib/portal-auth-methods";
 import { findActiveCandidateByEmail } from "@/lib/portal-credentials";
 import { createLogger } from "@/lib/logger";
+import { isHoneypotTripped } from "@/lib/honeypot";
 import { normalizeJobApplicationConfig } from "@/features/jobs/config";
 import {
   validatePortalApplication,
@@ -210,12 +211,17 @@ type ApplyInput = {
   resumeFileType?: string;
   resumeFileSize?: number;
   consentGiven?: boolean;
+  /** Hidden bot-trap field; real people never fill it. */
+  honeypot?: string;
 };
 
 export async function applyToJobAction(
   input: ApplyInput,
 ): Promise<{ ok: boolean; applicationId?: string; error?: string }> {
   const t = await getTranslations("server.portal.actions");
+  if (isHoneypotTripped(input.honeypot)) {
+    return { ok: false, error: t("unauthorized") };
+  }
   const tValidation = await getTranslations("server.portal.applicationValidation");
   try {
     const cookieStore = await cookies();

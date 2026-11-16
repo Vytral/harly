@@ -5,6 +5,8 @@ import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { toast } from "@/lib/notification-island/toast";
 
+import { HoneypotField } from "@/components/HoneypotField";
+import { HONEYPOT_FIELD } from "@/lib/honeypot";
 import { cn } from "@/lib/utils";
 import { applyToJobAction } from "@/features/portal/actions";
 
@@ -125,9 +127,11 @@ export function JobApplyForm({
 
   function submit(e: React.SyntheticEvent<HTMLFormElement>) {
     e.preventDefault();
+    const honeypot = new FormData(e.currentTarget).get(HONEYPOT_FIELD);
     start(async () => {
       const result = await applyToJobAction({
         jobId,
+        honeypot: typeof honeypot === "string" ? honeypot : undefined,
         answers,
         resumeKey: resumeKey ?? undefined,
         consentGiven,
@@ -143,6 +147,7 @@ export function JobApplyForm({
 
   return (
     <form onSubmit={submit} className="space-y-6">
+      <HoneypotField />
       {/* Resume upload */}
       <div className="rounded-xl border border-border bg-card p-5">
         <h2 className="mb-2 text-sm font-semibold text-foreground">{t("resumeHeading")}</h2>

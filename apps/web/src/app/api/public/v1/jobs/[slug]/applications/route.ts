@@ -16,6 +16,7 @@ import { resolvePublicWorkspace } from "@/server/api/public";
 import { readJsonBody } from "@/server/api/body";
 import { clientIp, enforceRateLimit } from "@/server/api/ratelimit";
 import { verifyCaptchaToken } from "@/lib/captcha";
+import { HONEYPOT_FIELD, isHoneypotTripped } from "@/lib/honeypot";
 import { apiOk, corsPreflight, withApi } from "@/server/api/respond";
 
 export const runtime = "nodejs";
@@ -72,7 +73,7 @@ export const POST = withApi(
     }
 
     // Honeypot: real users never fill this hidden field.
-    if (typeof body._hp === "string" && body._hp.trim().length > 0) {
+    if (isHoneypotTripped(body[HONEYPOT_FIELD])) {
       throw ApiError.badRequest("Rejected.");
     }
 

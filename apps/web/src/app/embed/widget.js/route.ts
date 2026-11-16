@@ -274,6 +274,15 @@ const WIDGET = String.raw`(function () {
     form.appendChild(field("Last name", last, true));
     form.appendChild(field("Email", email, true));
 
+    // Honeypot: hidden from people, filled by naive bots; the API rejects it.
+    var hpWrap = el("div");
+    hpWrap.setAttribute("aria-hidden", "true");
+    hpWrap.style.cssText = "position:absolute;left:-10000px;width:1px;height:1px;overflow:hidden";
+    var hp = el("input");
+    hp.type = "text"; hp.name = "_hp"; hp.tabIndex = -1; hp.autocomplete = "off";
+    hpWrap.appendChild(hp);
+    form.appendChild(hpWrap);
+
     // Config-driven optional fields. Populated once the job detail resolves.
     var extra = { phone: null, address: null, headline: null, coverLetter: null,
                   linkedinUrl: null, githubUrl: null, websiteUrl: null };
@@ -405,6 +414,7 @@ const WIDGET = String.raw`(function () {
         if (extra[k] && extra[k].value) payload[k] = extra[k].value;
       });
       if (captchaToken) payload.captchaToken = captchaToken;
+      if (hp.value) payload._hp = hp.value;
 
       uploadResume(resume && resume.files && resume.files[0]).then(function (resumeFields) {
         if (resumeFields) Object.assign(payload, resumeFields);
