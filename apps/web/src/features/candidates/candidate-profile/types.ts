@@ -78,6 +78,8 @@ export type CandidateMessage = {
   read: boolean;
   authorName: string | null;
   attachments: Array<{
+    /** Present for stored mailbox attachments; legacy rows have none. */
+    id?: string;
     filename: string;
     contentType: string;
     size: number;
