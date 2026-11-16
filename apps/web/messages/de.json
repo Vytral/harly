@@ -826,6 +826,7 @@
     "signIn": "Anmelden",
     "title": "Konto erstellen",
     "subtitle": "Richte dein Bewerbermanagement in wenigen Minuten ein. Eine Kreditkarte ist nicht erforderlich.",
+    "joinSubtitle": "Create your account to join {name}.",
     "already": "Du hast bereits ein Konto? <link>Anmelden</link>",
     "inviteOnly": "Eine Registrierung ist nur auf Einladung möglich.",
     "inviteHelp": "Dieser Harly-Arbeitsbereich ist bereits eingerichtet. Bitte eine Administration um eine Einladung; der Einladungslink weist dir die passende Rolle zu.",
@@ -1062,6 +1063,7 @@
     "joinName": "{name} beitreten",
     "joinRole": "Du trittst als <strong>{role}</strong> bei.",
     "signInJoin": "Zum Beitritt anmelden",
+    "createAccountJoin": "Create an account",
     "signInJoinHelp": "Melde dich an oder erstelle ein Konto, um diesem Arbeitsbereich beizutreten.",
     "invitedRole": "Du wurdest als <strong>{role}</strong> mit {email} eingeladen.",
     "invitedBy": "Eingeladen von <strong>{name}</strong>",
@@ -2625,6 +2627,16 @@
         "welcomeBack": "Willkommen zurück",
         "signInSubtitle": "Melde dich bei deinem Kandidatenportal an",
         "poweredBy": "Bereitgestellt von <b>Harly</b>"
+      }
+    },
+    "portalMagic": {
+      "page": {
+        "metadataTitle": "Confirm sign-in",
+        "title": "Confirm sign-in",
+        "description": "Select the button to sign in to the candidate portal. This link works once.",
+        "missingToken": "This sign-in link is incomplete. Request a new one.",
+        "confirm": "Sign in",
+        "backToLogin": "Back to sign in"
       }
     },
     "portalNotifications": {
@@ -7658,7 +7670,8 @@
         "errors": {
           "optionsFailed": "Die Registrierungsoptionen konnten nicht abgerufen werden.",
           "registrationFailed": "Die Registrierung ist fehlgeschlagen.",
-          "registerFailed": "Der Passkey konnte nicht registriert werden."
+          "registerFailed": "Der Passkey konnte nicht registriert werden.",
+          "removeFailed": "Could not remove the passkey."
         }
       },
       "scimProvisioningCard": {
@@ -10865,6 +10878,10 @@
         "title": "Mögliches doppeltes Profil",
         "body": "Harly AI hat eine mögliche Übereinstimmung mit {names} gefunden."
       },
+      "scheduledReportFailing": {
+        "title": "Scheduled report keeps failing: {name}",
+        "body": "The last {failures} runs failed. Harly keeps retrying; check the schedule in Reports."
+      },
       "jobApprovalRequested": {
         "title": "Freigabe angefordert: {jobTitle}",
         "body": "Prüfe diese Stelle, bevor die Besetzung beginnt."
@@ -11221,6 +11238,7 @@
         "unableToUpdateBoardBranding": "Das Board-Branding konnte nicht aktualisiert werden.",
         "inviteOwnerBlocked": "Die Rolle Inhaber kann nicht über eine Einladung vergeben werden. Lade diese Person mit einer anderen Rolle ein und befördere sie dann in der Mitgliederliste.",
         "alreadyPendingInvitation": "Für diese E-Mail-Adresse gibt es bereits eine offene Einladung.",
+        "alreadyMember": "This person is already a member of the workspace. Change their role from the members list.",
         "invalidInvitation": "Diese Einladung ist ungültig.",
         "unknownRole": "Unbekannte Rolle.",
         "unableToInviteMember": "Das Mitglied konnte nicht eingeladen werden.",
@@ -12207,6 +12225,7 @@
         "onlySentDecide": "Nur versendete Angebote können beantwortet werden.",
         "expiredDecide": "Dieses Angebot ist abgelaufen und kann nicht mehr beantwortet werden.",
         "applicationNoLongerActive": "Diese Bewerbung ist nicht mehr aktiv. Lade die Seite neu und versuche es erneut.",
+        "offerChanged": "This offer was changed by another recruiter. Refresh and try again.",
         "cannotWithdraw": "Dieses Angebot kann nicht mehr zurückgezogen werden.",
         "candidateFallback": "Kandidat:in",
         "hiringTeamTitle": "Angebot {decision}, {title}",
