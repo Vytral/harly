@@ -152,7 +152,7 @@ export async function sendPortalMagicLinkAction(
     const candidate = await findActiveCandidateByEmail(workspaceId, parsed.data);
     const token = await createMagicLinkToken(workspaceId, parsed.data);
     const appUrl = getHarlyPublicOrigin();
-    const url = `${appUrl}/api/portal/auth/magic?token=${token}`;
+    const url = `${appUrl}/portal/magic?token=${token}`;
 
     // Development only: print the link instead of mailing it when no sender
     // is configured or the address is on a reserved test domain (RFC 2606),
@@ -176,6 +176,14 @@ export async function sendPortalMagicLinkAction(
       });
     } else if (delivery === "log") {
       console.info(`[portal] Magic link for ${parsed.data}: ${url}`);
+    } else {
+      // Production without a working sender: nothing was delivered, so do not
+      // claim it was.
+      log.error(
+        { workspaceId },
+        "Portal magic link not delivered: no email sender is configured",
+      );
+      return { ok: false, error: t("sendLinkFailed") };
     }
 
     return { ok: true };
