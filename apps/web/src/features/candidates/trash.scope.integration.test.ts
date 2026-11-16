@@ -30,7 +30,14 @@ vi.mock("@/features/workspaces/context", () => ({
   getWorkspaceContextOrNull: vi.fn(async () => null),
 }));
 
-import { listTrashedCandidates } from "./data";
+import { eq } from "drizzle-orm";
+
+import {
+  listTrashedCandidates,
+  permanentlyDeleteCandidate,
+  restoreCandidate,
+  trashCandidate,
+} from "./data";
 
 describe.skipIf(!runPipelineIntegration)("trashed candidates respect candidate scope (database)", () => {
   let fx: AuthorizationFixture;
@@ -89,5 +96,45 @@ describe.skipIf(!runPipelineIntegration)("trashed candidates respect candidate s
     actAs("full");
     const ids = (await listTrashedCandidates()).map((row) => row.id);
     expect(ids).toEqual(expect.arrayContaining([trashedOnA, trashedOnB, trashedUnlinked]));
+  });
+
+  async function isTrashed(id: string) {
+    const [row] = await db
+      .select({ deletedAt: candidates.deletedAt })
+      .from(candidates)
+      .where(eq(candidates.id, id));
+    return row?.deletedAt != null;
+  }
+
+  it("restores only in-scope candidates for a scoped caller", async () => {
+    actAs("scoped");
+    expect(await restoreCandidate(trashedOnB)).toMatchObject({ ok: false });
+    expect(await isTrashed(trashedOnB)).toBe(true);
+    expect(await restoreCandidate(trashedOnA)).toEqual({ ok: true });
+    expect(await isTrashed(trashedOnA)).toBe(false);
+  });
+
+  it("trashes only in-scope candidates for a scoped caller", async () => {
+    actAs("scoped");
+    expect(await trashCandidate(fx.candidateB)).toMatchObject({ ok: false });
+    expect(await isTrashed(fx.candidateB)).toBe(false);
+    expect(await trashCandidate(fx.candidateA)).toEqual({ ok: true });
+    expect(await isTrashed(fx.candidateA)).toBe(true);
+  });
+
+  it("refuses to purge an out-of-scope trashed candidate, but system callers may", async () => {
+    actAs("scoped");
+    expect(await permanentlyDeleteCandidate(trashedOnB, "test")).toMatchObject({ ok: false });
+    expect(await isTrashed(trashedOnB)).toBe(true);
+
+    // The deletion worker passes the workspace id and has no person scope.
+    const system = await permanentlyDeleteCandidate(trashedOnB, "system", fx.workspaceId);
+    expect(system.ok).toBe(true);
+  });
+
+  it("lets an explicit bypass (DSAR erasure) act outside the caller's scope", async () => {
+    actAs("scoped");
+    expect(await trashCandidate(fx.candidateB, { bypassRoleScope: true })).toEqual({ ok: true });
+    expect(await isTrashed(fx.candidateB)).toBe(true);
   });
 });

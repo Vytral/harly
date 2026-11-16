@@ -1904,10 +1904,29 @@ export async function listTrashedCandidates(): Promise<TrashedCandidateItem[]> {
   }));
 }
 
+/**
+ * Options for the single-candidate lifecycle functions. By default the signed-in
+ * caller's role scope applies, like every other candidate read and write.
+ * `bypassRoleScope` is for system flows that act on a request rather than on a
+ * person's scope (DSAR erasure, the deletion worker).
+ */
+export type CandidateLifecycleOptions = { bypassRoleScope?: boolean };
+
+async function lifecycleScopeSql(
+  options: CandidateLifecycleOptions | undefined,
+) {
+  if (options?.bypassRoleScope) return undefined;
+  return candidateScopeSql(await resolveSearchActor(), candidates.id);
+}
+
 /** Move a candidate to the trash (soft delete) , reversible. */
-export async function trashCandidate(candidateId: string) {
+export async function trashCandidate(
+  candidateId: string,
+  options?: CandidateLifecycleOptions,
+) {
   const t = await getTranslations("server.candidates.data");
   const { organization: workspace } = await getWorkspaceContext();
+  const scope = await lifecycleScopeSql(options);
 
   const [candidate] = await db
     .update(candidates)
@@ -1917,6 +1936,7 @@ export async function trashCandidate(candidateId: string) {
         eq(candidates.id, candidateId),
         eq(candidates.workspaceId, workspace.id),
         isNull(candidates.deletedAt),
+        scope,
       ),
     )
     .returning({ id: candidates.id });
@@ -1950,9 +1970,13 @@ export async function trashCandidates(candidateIds: string[]) {
 }
 
 /** Restore a candidate out of the trash. */
-export async function restoreCandidate(candidateId: string) {
+export async function restoreCandidate(
+  candidateId: string,
+  options?: CandidateLifecycleOptions,
+) {
   const t = await getTranslations("server.candidates.data");
   const { organization: workspace } = await getWorkspaceContext();
+  const scope = await lifecycleScopeSql(options);
 
   const [candidate] = await db
     .update(candidates)
@@ -1961,6 +1985,7 @@ export async function restoreCandidate(candidateId: string) {
       and(
         eq(candidates.id, candidateId),
         eq(candidates.workspaceId, workspace.id),
+        scope,
       ),
     )
     .returning({ id: candidates.id });
@@ -1975,11 +2000,17 @@ export async function permanentlyDeleteCandidate(
   candidateId: string,
   processedBy: string,
   workspaceId?: string,
+  options?: CandidateLifecycleOptions,
 ) {
   const t = await getTranslations("server.candidates.data");
   const workspace = workspaceId
     ? { id: workspaceId }
     : (await getWorkspaceContext()).organization;
+  // An explicit workspace id means a system caller (the deletion worker) with no
+  // signed-in person, so there is no role scope to apply.
+  const scope = await lifecycleScopeSql(
+    workspaceId ? { bypassRoleScope: true } : options,
+  );
 
   const [candidate] = await db
     .select({ avatarUrl: candidates.avatarUrl, email: candidates.email })
@@ -1989,6 +2020,7 @@ export async function permanentlyDeleteCandidate(
         eq(candidates.id, candidateId),
         eq(candidates.workspaceId, workspace.id),
         isNotNull(candidates.deletedAt),
+        scope,
       ),
     )
     .limit(1);
