@@ -7658,7 +7658,8 @@
         "errors": {
           "optionsFailed": "Could not get registration options.",
           "registrationFailed": "Registration failed.",
-          "registerFailed": "Could not register the passkey."
+          "registerFailed": "Could not register the passkey.",
+          "removeFailed": "Could not remove the passkey."
         }
       },
       "scimProvisioningCard": {

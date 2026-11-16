@@ -15,6 +15,7 @@ import {
   type SSOProviderConfig,
   type SSORegisterInput,
 } from "@/features/security/sso-actions";
+import { ensureSensitiveActionReauth } from "@/features/security/reauth-client";
 import { DrawerLayout } from "@/features/candidates/DrawerLayout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -57,6 +58,7 @@ export function SsoProviderDrawer({
   const [verificationToken, setVerificationToken] = useState("");
 
   const t = useTranslations("features.security.ssoProviderDrawer");
+  const tReauth = useTranslations("labels.security.reauth");
   const isEditing = Boolean(existingProvider);
 
   function reset() {
@@ -134,9 +136,16 @@ export function SsoProviderDrawer({
         };
       }
 
-      const result = isEditing
-        ? await updateSSOProviderAction({ ...input, providerId: existingProvider!.providerId })
-        : await registerSSOProviderAction(input);
+      let result;
+      try {
+        if (!isEditing) await ensureSensitiveActionReauth(tReauth);
+        result = isEditing
+          ? await updateSSOProviderAction({ ...input, providerId: existingProvider!.providerId })
+          : await registerSSOProviderAction(input);
+      } catch (error) {
+        toast.error(error instanceof Error ? error.message : t("errors.registerFailed"));
+        return;
+      }
 
       if (!result.ok) {
         toast.error(result.error ?? t("errors.registerFailed"));

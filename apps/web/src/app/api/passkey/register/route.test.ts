@@ -8,6 +8,7 @@ const mocks = vi.hoisted(() => ({
   getSession: vi.fn(),
   storeChallenge: vi.fn(),
   consumeChallenge: vi.fn(),
+  requireRecentReauth: vi.fn(),
 }));
 
 vi.mock("@simplewebauthn/server", () => ({
@@ -16,9 +17,11 @@ vi.mock("@simplewebauthn/server", () => ({
 }));
 vi.mock("@harly/db", () => ({
   db: { select: mocks.select, insert: mocks.insert },
-  passkeys: { userId: "userId" },
+  passkeys: { userId: "userId", id: "id" },
+  member: { userId: "userId", organizationId: "organizationId" },
 }));
-vi.mock("drizzle-orm", () => ({ eq: () => ({}) }));
+vi.mock("drizzle-orm", () => ({ eq: () => ({}), and: () => ({}) }));
+vi.mock("@/server/security/reauth", () => ({ requireRecentReauth: mocks.requireRecentReauth }));
 vi.mock("@harly/config", () => ({ isDemoMode: () => false }));
 vi.mock("@/lib/auth", () => ({ auth: { api: { getSession: mocks.getSession } } }));
 vi.mock("@/lib/logger", () => ({ createLogger: () => ({ error: vi.fn() }) }));
@@ -77,5 +80,57 @@ describe("passkey registration", () => {
     expect(await response.json()).toEqual({ verified: true });
     expect(mocks.consumeChallenge).toHaveBeenCalledWith("registration-id", "user-1", "registration");
     expect(mocks.insert).toHaveBeenCalled();
+  });
+
+  describe("when the user already has a passkey", () => {
+    function withExistingPasskey() {
+      mocks.getSession.mockResolvedValue({
+        user: { id: "user-1" },
+        session: { activeOrganizationId: "org-1" },
+      });
+      mocks.select
+        .mockReset()
+        .mockReturnValueOnce({ from: () => ({ where: async () => [{ id: "pk-1" }] }) })
+        .mockReturnValueOnce({
+          from: () => ({ where: () => ({ limit: async () => [{ organizationId: "org-1" }] }) }),
+        });
+    }
+
+    function post() {
+      return POST(new Request("https://harly.test/api/passkey/register", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ challengeId: "registration-id", response: { id: "credential-2" } }),
+      }) as never);
+    }
+
+    it("rejects registration without a fresh passkey reauthentication", async () => {
+      vi.clearAllMocks();
+      withExistingPasskey();
+      mocks.requireRecentReauth.mockResolvedValue(false);
+
+      const response = await post();
+
+      expect(response.status).toBe(403);
+      expect(mocks.requireRecentReauth).toHaveBeenCalledWith({
+        userId: "user-1",
+        workspaceId: "org-1",
+        purpose: "sensitive_action",
+      });
+      expect(mocks.consumeChallenge).not.toHaveBeenCalled();
+      expect(mocks.insert).not.toHaveBeenCalled();
+    });
+
+    it("proceeds once reauthentication succeeds", async () => {
+      vi.clearAllMocks();
+      withExistingPasskey();
+      mocks.requireRecentReauth.mockResolvedValue(true);
+      mocks.consumeChallenge.mockResolvedValue(null);
+
+      const response = await post();
+
+      expect(response.status).toBe(400); // challenge missing, but reauth gate passed
+      expect(mocks.consumeChallenge).toHaveBeenCalled();
+    });
   });
 });
