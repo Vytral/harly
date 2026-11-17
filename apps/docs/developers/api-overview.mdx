@@ -1,6 +1,6 @@
 ---
 title: "API overview"
-description: "Build integrations against Harly's versioned REST API — authentication with scoped keys, pagination, idempotency keys, rate limits, and safe retries."
+description: "Authenticate to Harly's REST API, page through results, retry writes safely, and build a public application form."
 ---
 
 The Harly REST API is available at:
@@ -72,18 +72,18 @@ List endpoints use cursor-based pagination:
 # First page
 curl 'https://hiring.example.com/api/v1/candidates?limit=50'
 
-# Next page — use the cursor from meta.nextCursor
+# Fetch the next page with meta.nextCursor
 curl 'https://hiring.example.com/api/v1/candidates?limit=50&cursor=cursor_01j1abc'
 ```
 
 - Do not assume a stable sort order or page number.
 - `meta.nextCursor` is absent when you have reached the last page.
-- `limit` defaults to `25` and caps at `100`.
+- `limit` defaults to `25` and caps at `100`. Use a positive integer. Values such as `10abc` or `1.5` return HTTP `400`.
 
 ## Idempotency
 
 POST requests that support it accept an `Idempotency-Key` header. Use a
-unique value per logical operation — for example a UUID or a stable key
+unique value per logical operation, such as a UUID or a stable key
 derived from the operation's inputs:
 
 ```bash
@@ -95,10 +95,14 @@ curl -X POST \
   --data '{"toStageId":"stage_interview"}'
 ```
 
+On Harly 0.5.1 and later, a replayed response includes
+`Idempotent-Replayed: true`. Reuse the same key and request payload when
+retrying the same operation.
+
 <Warning>
   A `409` may mean a real concurrency conflict or an idempotency collision.
   Inspect the error envelope before retrying a mutation. Do not retry a `409`
-  blindly — the operation may have already succeeded.
+  with a new key. The operation may have already succeeded.
 </Warning>
 
 ## Rate limits

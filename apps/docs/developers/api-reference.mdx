@@ -20,14 +20,14 @@ API keys have the format `harly_{type}_{env}_{secret}`:
 
 | Part | Values | Meaning |
 | --- | --- | --- |
-| `type` | `sk` (secret), `pk` (publishable) | Key type — secret keys hold all scopes, publishable keys are browser-safe |
+| `type` | `sk` (secret), `pk` (publishable) | Only secret keys can hold privileged scopes. Publishable keys can be used in the browser. |
 | `env` | `live`, `test` | Environment |
 | `secret` | 43-char base64url | Cryptographically random, stored only as a SHA-256 hash |
 
 Example secret key: `harly_sk_live_AbCdEf123...`
 
-Publishable keys (`pk`) are limited to `jobs:read` and `applications:write` —
-the subset safe to expose in a browser. Even with `applications:write`, a
+Publishable keys (`pk`) are limited to `jobs:read` and `applications:write`.
+Even with `applications:write`, a
 publishable key can only create applications; moving, rejecting, hiring, and
 bulk-creating require a secret key. A publishable key only sees jobs that are
 public on the career page (open and published), with public fields only, and
@@ -144,7 +144,7 @@ curl --fail-with-body -X POST \
 ```
 
 A rotation issues a new raw key value and invalidates the previous one. The
-response includes `key` — the new raw value, shown once.
+response includes the new raw value in `key`. Harly shows it once.
 
 ## Pipeline stages
 
@@ -210,7 +210,6 @@ pool:read          pool:write
 files:read
 webhooks:read      webhooks:write
 api_keys:read      api_keys:write
-automations:read   automations:write
 ```
 
 ## Errors

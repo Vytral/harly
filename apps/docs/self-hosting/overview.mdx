@@ -3,13 +3,9 @@ title: "Self-hosting overview"
 description: "VPS requirements, CPU and memory profiles, supported operating systems, and DNS setup for a production-ready self-hosted Harly deployment."
 ---
 
-The supported v1 topology is one Harly app, PostgreSQL 16, one scheduler, and optional Caddy, all managed by Docker Compose. PostgreSQL has no published host port.
-
-## After reading this
-
-- You will know the CPU, RAM, and disk profile to provision for your team size
-- You will know which software versions the VPS needs
-- You will have DNS pointed at the VPS before running the installer
+The standard installation runs the Harly app, a scheduler, and PostgreSQL 16
+in Docker Compose. Caddy can handle HTTPS if you do not already run a proxy.
+PostgreSQL is reachable from the Compose network.
 
 ## VPS requirements
 

@@ -1,7 +1,7 @@
 ---
 title: "Health checks, scheduler, backups, and upgrades"
 sidebarTitle: "Operations"
-description: "Day-two operations for a self-hosted Harly installation — health checks, the background scheduler, encrypted backups, restore steps, and version upgrades."
+description: "Check the health of a self-hosted Harly installation, monitor the scheduler, and back up or upgrade your deployment."
 ---
 
 ## After reading this
@@ -33,7 +33,7 @@ HARLY_CACHE_MAX_AGE_DAYS=7
 ## Scheduler and queue runbook
 
 The scheduler is a single, restartable worker. It runs the following jobs on
-fixed intervals using PostgreSQL advisory locks — a second scheduler container
+fixed intervals using PostgreSQL advisory locks. A second scheduler container
 or restart receives `409 Already running` and skips rather than doing duplicate
 work:
 
@@ -169,7 +169,7 @@ The last command reports freshness per job plus email and webhook queue counts. 
   Do not manually invoke cron URLs or put `CRON_SECRET` in a URL. If a job is stale, first confirm app readiness, then restart only the scheduler with `docker compose restart scheduler`.
 </Warning>
 
-If queue counts grow while scheduler runs are fresh, fix the corresponding SMTP, webhook destination, or mailbox credentials; retries remain durable in PostgreSQL. Alert on an unhealthy scheduler, a stale job, and disk usage or backup failures — not merely on a non-zero queue count.
+If queue counts grow while scheduler runs are fresh, fix the corresponding SMTP, webhook destination, or mailbox credentials; retries remain durable in PostgreSQL. Alert when the scheduler is unhealthy, a job goes stale, a disk fills up, or a backup fails. Queue counts can be nonzero during normal operation.
 
 Uploads and PostgreSQL data are never pruned automatically. Monitor them with `docker system df -v` and keep encrypted backups outside the VPS.
 
@@ -188,7 +188,7 @@ AGE_RECIPIENT=age1... harly backup --encrypt
 AGE_IDENTITY=/secure/key.txt harly restore backup.tar.gz.age --force
 ```
 
-Backup stops app and scheduler, keeps PostgreSQL running, creates a `pg_dump -Fc`, includes local uploads and config, and checksums every included file before it can succeed. By default it creates a local rollback archive readable only by the deployment owner — this is convenient for a failed update, not a replacement for off-host disaster recovery.
+Backup stops app and scheduler, keeps PostgreSQL running, creates a `pg_dump -Fc`, includes local uploads and config, and checksums every included file before it can succeed. By default it creates a local rollback archive readable only by the deployment owner. Use it after a failed update and keep a separate copy off-host for disaster recovery.
 
 Restore verifies every archived file checksum, creates a safety backup before changing data, stops the app, scheduler, and migration services to avoid a database race, restores PostgreSQL and local uploads, then requires readiness to succeed. A failed restore keeps the safety archive under `backups/`.
 
@@ -196,7 +196,7 @@ Restore verifies every archived file checksum, creates a safety backup before ch
   S3 objects are not embedded in the archive. Use bucket versioning and an off-provider backup policy alongside `harly backup`.
 </Note>
 
-Upgrades take a backup first, run the single migrator, wait for readiness, and finish with `doctor`. Migrations are forward-only — restore the full backup when a release does not declare schema-compatible image rollback.
+Upgrades take a backup first, run the single migrator, wait for readiness, and finish with `doctor`. Migrations are forward-only. Restore the full backup when a release does not declare schema-compatible image rollback.
 
 For managed platforms, use their managed PostgreSQL backups and snapshots together with S3 bucket encryption and versioning; they do not require installing `age`.
 

@@ -61,10 +61,10 @@ Typical examples:
   <Step title="Add conditions">
     Narrow the trigger with conditions:
 
-    - **Job** — only fire for a specific job or department.
-    - **Stage** — only fire when entering a specific pipeline stage.
-    - **Status** — only fire when a field has a specific value.
-    - **AI score** — after an `ai_score` action, branch on `ai.score` such as
+    - **Job** limits the trigger to a specific job or department.
+    - **Stage** triggers when an application enters the selected stage.
+    - **Status** checks whether a field has the selected value.
+    - **AI score** branches on `ai.score` after an `ai_score` action, for example
       `ai.score < 50` or `ai.score >= 80`.
 
     Conditions prevent a notification workflow from firing on every job in the
@@ -95,7 +95,7 @@ Typical examples:
 
     HTTP actions support workspace secret references so credentials do not appear
     in workflow payloads. Outbound requests use the same SSRF protections as
-    webhooks — loopback, private, and metadata addresses are blocked.
+    webhooks. Harly blocks loopback, private, and metadata addresses.
   </Step>
   <Step title="Preview and enable">
     Use the Test tab to choose a candidate, set a reproducible virtual start, and
@@ -136,7 +136,7 @@ log.
 - The error message if it failed
 
 Open a workflow to see its run history. Retry transient failures from the run
-detail. Fix configuration failures before replaying — a misconfigured action
+detail. Fix configuration failures before replaying. A misconfigured action
 retries successfully once you correct it.
 
 <Warning>

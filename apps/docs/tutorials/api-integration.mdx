@@ -22,7 +22,7 @@ at a public URL.
 
 ---
 
-## Step 1 — Create a scoped API key
+## Create a scoped API key
 
 <Steps>
   <Step title="Open Developers settings">
@@ -41,18 +41,18 @@ at a public URL.
     | `webhooks:read` | Read webhook delivery history |
     | `webhooks:write` | Create and manage webhook endpoints |
 
-    Choose **Secret key** (`sk`) — publishable keys are limited to
+    Choose **Secret key** (`sk`). Publishable keys are limited to
     `jobs:read` and `applications:write`.
   </Step>
   <Step title="Copy the key">
-    Copy the raw value immediately — it starts with `harly_sk_live_` and is
+    Copy the key that starts with `harly_sk_live_`. It is
     shown only once. Store it in your secret manager, never in source control.
   </Step>
 </Steps>
 
 ---
 
-## Step 2 — Call the API
+## Call the API
 
 The base URL is `https://hiring.example.com/api/v1`. Every request requires a
 bearer token.
@@ -125,7 +125,7 @@ curl --fail-with-body -X POST \
 
 ---
 
-## Step 3 — Register a webhook
+## Register a webhook
 
 <Steps>
   <Step title="Create the endpoint">
@@ -135,7 +135,7 @@ curl --fail-with-body -X POST \
     - Events: choose the events your integration cares about
   </Step>
   <Step title="Store the signing secret">
-    Copy the signing secret — it starts with `whsec_` — and save it in your
+    Save the signing secret (it starts with `whsec_`) in your
     secret manager as `HARLY_WEBHOOK_SECRET`. It is shown once.
   </Step>
   <Step title="Send a test delivery">
@@ -221,13 +221,13 @@ app.post(
 
 Receiver rules:
 - Return `2xx` after durable acceptance, not after completing downstream work.
-- Deduplicate by `event.id` — delivery is at-least-once.
+- Deduplicate by `event.id`. Harly can deliver the same event more than once.
 - Return `4xx` for an invalid signature, `5xx` for a transient failure.
 - Treat unknown event types as accepted and observable.
 
 ---
 
-## Step 4 — Handle retries
+## Handle retries
 
 Design the receiver so reprocessing the same event is safe:
 

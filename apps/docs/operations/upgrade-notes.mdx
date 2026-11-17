@@ -1,11 +1,66 @@
 ---
 title: "Upgrade notes"
-description: "Per-release upgrade notes for self-hosters: migrations, behavior changes, new environment variables, known limitations, and post-upgrade checks for Harly 0.3.0 and 0.2.4."
+description: "Check migrations, configuration changes, and compatibility notes before updating a self-hosted Harly installation."
 ---
 
 Existing installations upgrade in place. Read the notes for every release you
 skip, and take a [backup](/operations/backups) first. `harly update`
 does this for you.
+
+## Upgrading to 0.5.1
+
+Before running `harly update`, check these settings on your instance:
+
+| If your installation uses | What to do |
+| --- | --- |
+| API keys issued by former or deactivated members | Reissue the keys from an active workspace account and replace them in your integrations. |
+| `NEXT_PUBLIC_APP_URL` or `BETTER_AUTH_URL` in Compose | Set [`HARLY_URL`](/deployment/configuration#harly_url-validation) to the public HTTPS origin. The 0.5.1 Compose template stops forwarding the old names. |
+| `X-Forwarded-Peer` for client IPs | List every trusted proxy hop in [`TRUSTED_PROXY_IPS`](/self-hosting/proxy-modes#trust-your-reverse-proxy-for-client-ips). Harly reads `X-Forwarded-For` from right to left. |
+| Manually chosen production secrets | Check that your auth, AI encryption, upload, cron, and setup secrets are each at least 32 characters and generated randomly. Refer to the [configuration reference](/deployment/configuration#required-runtime-values) before rotating a secret on a live install. |
+
+When 0.5.1 is available on your release channel, the container runs migration
+`0168`. It adds database indexes and a nullable
+content type for document versions. The job slug index now ignores trashed jobs.
+If a newer job has reused a slug, restoring the older job gives it a new slug.
+
+After the upgrade, run `harly doctor` and verify your active integrations.
+For the full list of changes, see the
+[0.5.1 changelog](https://github.com/Vytral/harly/blob/main/CHANGELOG.md#051---2026-11-16).
+
+## Upgrading to 0.5.0
+
+The container applies migration `0167`, which adds an optional email language
+to user and candidate records. Existing records have no saved preference and
+keep receiving system emails in English until a language is selected.
+
+The interface follows each person's browser by default. To pick a language
+for the interface or for system emails, see
+[Change your language](/getting-started/first-workspace#change-your-language).
+If Claude or VS Code could not register with MCP because of the client's OAuth
+metadata, retry the connection after the update.
+
+## Upgrading to 0.4.0
+
+The container applies migrations `0165` and `0166`. The first adds tables and
+settings for [candidate portal sign-in](/product/candidate-portal). The second
+adds the new permissions to saved roles.
+
+- Check **Settings → Candidate portal**. Existing workspaces keep their
+  email and OAuth methods. Workspaces without outgoing email or portal OAuth
+  gain password and access code sign-in. New installs start with those two
+  methods and can collect applications without external services.
+- Review [existing custom roles](/security/access-control#existing-custom-roles).
+  The migration grants `candidates:export` to saved roles that could already
+  view candidates. Remove it from roles that should have view-only access.
+  Built-in hiring managers lose candidate exports by default unless their role
+  was customized.
+- Existing broad API key scopes still work. Use the more specific scopes when
+  issuing new keys for [job or application actions](/developers/api-authorization).
+- Harly hides its AI controls until you [connect a provider](/product/ai-features).
+  If your install uses a custom Compose file, forward any new AI variables
+  you use from the [configuration reference](/deployment/configuration#automations-ai-and-api).
+
+Run `harly doctor` and test a candidate sign-in with the methods you kept enabled.
 
 ## Upgrading to 0.3.0
 

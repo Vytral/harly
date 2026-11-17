@@ -1,6 +1,6 @@
 ---
 title: "Career page"
-description: "Design and publish your public job board in Harly with the Career Page Builder. Choose a template, edit sections, preview on any device, and control which jobs candidates see."
+description: "Choose a career page template, edit your sections, preview the layout on different devices, and publish your job board."
 ---
 
 The career page is your public job board, served from your own Harly domain.
@@ -13,6 +13,21 @@ requires a separate service or third-party hosting.
     alt="Harly Career Page Builder showing templates and a live preview of a public career page."
   />
 </Frame>
+
+## Embed jobs on your website
+
+In **Settings → Developers & API → Embed widget**, choose **All open roles**
+or **One job**. For one job, enter the slug from its public URL. Check
+**Live preview**, then copy the snippet under **Add it to your site**.
+
+Use HTML for a standard page, an iframe if your site builder needs one, or
+the React snippet for a React app. Paste it where the list or job should
+appear, then open the published page and submit a test application.
+
+The widget shows public jobs. The optional publishable key identifies the
+embed without granting access to private records. If you want to render
+your own application form, use the
+[public jobs and applications API](/developers/api-overview#public-jobs-and-applications-api).
 
 ## What appears
 
@@ -158,7 +173,7 @@ pipeline stage, ready to work in the [pipeline](/product/candidates-and-pipeline
 <Tip>
   Keep application forms short. Ask only for what you need to make the first
   decision. Request additional documents later through
-  [document requests](/product/documents) — not through the application form.
+  [document requests](/product/documents) after the candidate applies.
 </Tip>
 
 ## Test the candidate experience

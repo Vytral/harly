@@ -13,7 +13,7 @@ through Harly Sign (built-in) or DocuSeal (self-hosted external service).
 | --- | --- |
 | Draft | Created, editable, not sent. |
 | Sent | Delivered to the candidate for review. |
-| Accepted | Candidate accepted — includes a signed document if signing was configured. |
+| Accepted | The candidate accepted. If signing was required, the record includes the signed document. |
 | Declined | Candidate declined. |
 | Withdrawn | Offer withdrawn by your team before a decision. |
 
@@ -89,7 +89,7 @@ Harly reconciles the signing status asynchronously.
 
 <Warning>
   A browser redirect after signing may show `pending` while the webhook
-  reconciliation is running. Wait for the offer record to update — do not
+  reconciliation is running. Wait for the offer record to update before you
   manually change the state.
 </Warning>
 

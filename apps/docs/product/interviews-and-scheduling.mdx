@@ -19,9 +19,9 @@ loses the interview.
 
 Connect the providers you use in **Settings → Integrations**:
 
-- A calendar — [Google Calendar](/integrations/google-calendar) or
+- A calendar such as [Google Calendar](/integrations/google-calendar) or
   [Microsoft Outlook](/integrations/microsoft).
-- A video provider — [Zoom, Teams, Meet, or Jitsi](/integrations/video).
+- A video provider such as [Zoom, Teams, Meet, or Jitsi](/integrations/video).
 
 Without a calendar connection, Harly still records the interview; it just
 cannot create the external event.
@@ -53,8 +53,13 @@ cannot create the external event.
 
 Editing or canceling an interview updates the calendar event and the video
 meeting. If the provider is unavailable, Harly keeps the local change and shows
-a sync warning you can retry — do not create a second event to work around a
-warning.
+a sync warning. Retry the sync from the existing interview to avoid a duplicate.
+
+Interview emails include an `.ics` attachment. Rescheduling updates the
+original calendar entry, and canceling sends a cancellation invite. For edits
+and API requests, Harly uses the time zone you supply, then the scheduler's
+profile time zone, then the workspace time zone, then UTC. Reschedules and
+cancellations keep the original invite's time zone.
 
 <Warning>
   If a calendar shows `invalid_grant`, the refresh token was revoked or expired.

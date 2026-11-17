@@ -8,10 +8,11 @@ is durable and at-least-once: your receiver must be idempotent.
 
 ## Create an endpoint
 
-1. Open **Settings → Developers → Webhooks**.
-2. Enter an HTTPS endpoint and select event types.
-3. Store the signing secret — it begins with `whsec_` — in your secret manager.
-4. Send a test delivery and confirm a `2xx` response.
+1. Open **Settings → Developers & API → Webhooks**.
+2. Enter your receiver's HTTPS URL and select the events it handles.
+3. Store the signing secret (it begins with `whsec_`) in your secret manager.
+4. Send a test event. Open the endpoint's delivery history and check for a
+   `2xx` response before depending on the webhook in production.
 
 Harly blocks loopback, private, link-local, and metadata destinations by default.
 For a controlled internal deployment, an owner may set
@@ -95,7 +96,7 @@ app.post(
 ## Receiver contract
 
 - Return `2xx` after durable acceptance, not after completing a slow workflow.
-- Deduplicate by `event.id` — delivery is at-least-once.
+- Deduplicate by `event.id`. Harly can deliver the same event more than once.
 - Persist the event before enqueueing downstream work.
 - Treat unknown event types as accepted and observable.
 - Return `4xx` for an invalid signature, `5xx` for a transient failure.

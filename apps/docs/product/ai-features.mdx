@@ -18,19 +18,45 @@ suggestion a human reviews and owns.
 
 <Steps>
   <Step title="Choose a provider">
-    Open **Settings → AI** and select a provider. Harly supports OpenAI,
-    Anthropic, Google Gemini, xAI, and OpenRouter (as well as custom OpenAI-compatible
-    endpoints). You bring your own API key — Harly does not proxy through a shared key.
+    Open **Settings → AI**, choose **Configure AI**, and select your provider. Hosted options include
+    OpenAI, Anthropic, Google Gemini, xAI, OpenRouter, Groq, DeepSeek, Mistral,
+    Together AI, Fireworks AI, Cerebras, and Azure OpenAI. You can also use
+    Ollama or an OpenAI-compatible server.
   </Step>
-  <Step title="Add the API key">
-    Paste the API key from your provider. It is stored encrypted and never
-    returned to the browser.
+  <Step title="Connect and choose a model">
+    Add the provider's API key if it requires one. Harly encrypts the key
+    and keeps it on the server. Ollama and OpenAI-compatible servers can leave
+    the key blank if the server accepts unauthenticated requests.
+
+    Choose a model from the searchable list or enter a model ID. For Azure
+    OpenAI, enter the **Deployment name**. For hosted providers, Harly uses
+    [models.dev](https://models.dev) and falls back to a bundled catalog.
+    Set `HARLY_MODELS_DEV=0` to use only the bundled catalog.
+
+    Select **Test connection** before saving.
   </Step>
   <Step title="Enable specific features">
     Turn on only the features you want. Nothing is sent to the provider until a
     feature is both enabled and actively used.
   </Step>
 </Steps>
+
+### Custom API endpoint
+
+In **Configure AI**, use **Custom API endpoint** to enter your server's address.
+Azure OpenAI and OpenAI-compatible providers require an **API endpoint**.
+
+- For hosted providers, use the provider's own domain. Azure OpenAI accepts
+  domains such as `*.openai.azure.com`.
+- For a public gateway or model server, choose **OpenAI-compatible** or
+  **Ollama (local)** and use an HTTPS URL.
+- For a local or LAN server, use one of those two providers and set
+  [`HARLY_ALLOW_LOCAL_LLM=1`](/deployment/configuration#automations-ai-and-api).
+  HTTP is allowed for those local addresses. Use an address reachable from the
+  Harly app, including from inside its container if you use Docker.
+
+For a custom Compose file, pass the variables you use into the app's
+environment and restart it.
 
 <Warning>
   AI output is advisory and the chat assistant never silently applies a
@@ -46,11 +72,8 @@ suggestion a human reviews and owns.
 ### Candidate matching
 
 Rank or summarize how an application fits a job's requirements, as a starting
-point for review. The output appears alongside the application — the recruiter
-reads it and decides.
-
-This is a triage signal, not a filter. Use it to prioritize which applications
-to open first, not to skip reading them.
+point for review. The score appears alongside the application. Use it to decide
+which applications to open first, then read each application before making a decision.
 
 Scoring is evidence-backed:
 
@@ -164,8 +187,9 @@ Examples:
 
 #### Open the assistant
 
-The assistant launcher is always visible at the bottom of the dashboard and
-shares that surface with notifications. Select it to open the chat panel.
+Once you have configured a usable AI provider, the assistant launcher appears
+at the bottom of the dashboard near notifications. Select it to open the chat.
+If the launcher is missing, check the provider settings first.
 
 In the panel:
 
@@ -259,7 +283,7 @@ data is personal data, so:
 <Info>
   Do not place provider credentials, private notes, or unnecessary candidate
   data into prompts. If you configure a custom system prompt, treat it as
-  infrastructure code — review it before enabling.
+  infrastructure code. Review it before enabling the workflow.
 </Info>
 
 ## Turn off AI

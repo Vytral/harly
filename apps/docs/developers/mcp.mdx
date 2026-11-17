@@ -86,6 +86,10 @@ the recruiter or hiring manager role. Roles saved afterwards take exactly the
 permissions the admin chose. Remove `mcp:use` from a role to stop its members
 connecting agents, and any existing connection stops working at the next call.
 
+A client that requests only OAuth sign-in scopes such as `openid` or
+`offline_access` gets `candidates:read` and `jobs:read`. Review the requested
+Harly permissions on the consent screen if a client needs more access.
+
 ## Workspace controls
 
 People with `mcp:manage` can open **Settings → AI agents (MCP)** to:

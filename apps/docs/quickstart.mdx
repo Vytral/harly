@@ -1,17 +1,15 @@
 ---
 title: "Quickstart"
-description: "Install Harly on a fresh VPS in under 15 minutes with the guided CLI — provision the database, storage, TLS, and first workspace with a single command."
+description: "Install Harly on a VPS with the CLI, claim the owner account, and verify that the app, database, and scheduler are ready."
 ---
 
-## What you will build
-
-A running Harly installation with PostgreSQL, the scheduler, HTTPS via Caddy,
-and an owner workspace. The installer keeps the application on port `3000`
-behind the proxy you select.
+Install Harly on a Linux VPS and create the first owner account. This guide
+uses the bundled Caddy proxy for HTTPS. If your VPS already runs a reverse
+proxy, follow the [external proxy setup](/self-hosting/proxy-modes).
 
 ## Requirements
 
-| Requirement | Version |
+| Requirement | Minimum and recommended values |
 | --- | --- |
 | Linux host | 64-bit, `amd64` or `arm64` |
 | RAM | 2 GB minimum + 1 GB swap, 4 GB recommended |
@@ -80,7 +78,7 @@ firewall setup before you install.
 
     <Tip>
       The installer saves `.env` and `harly.config.json` in the current
-      directory. Run it from a stable directory — for example `/opt/harly` —
+      directory. Run it from a stable directory such as `/opt/harly`
       so backups and updates always work from the same path.
     </Tip>
   </Step>

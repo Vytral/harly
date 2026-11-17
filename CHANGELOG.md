@@ -13,6 +13,11 @@ operators. How to cut a release is in [RELEASING.md](RELEASING.md). The
 
 ## [Unreleased]
 
+### Changed
+
+- Updated the Mintlify manual with clearer setup and hiring guides, plus
+  upgrade notes for 0.4.0, 0.5.0, and 0.5.1.
+
 ## [0.5.1] - 2026-11-16
 
 This release fixes the findings of a security and correctness audit. It adds
@@ -110,8 +115,8 @@ list their extra proxy hops in `TRUSTED_PROXY_IPS`.
 
 Harly now speaks six languages. The web app and the interview emails are
 translated into Spanish, French, German, Brazilian Portuguese and Dutch, with
-English as the source language. There are no database migrations and nothing
-to configure; run `harly update` as usual.
+English as the source language. Run `harly update` as usual. It applies
+migration `0167` to store optional email language preferences.
 
 ### Added
 

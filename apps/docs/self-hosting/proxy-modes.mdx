@@ -49,7 +49,6 @@ server {
         gzip off;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-Peer 127.0.0.1;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
     }
@@ -69,13 +68,15 @@ Point your existing certificate management (Certbot, an ACME client, or a load b
 
 ### Set `HARLY_URL` to the public hostname
 
-Harly builds upload presign URLs, authenticated file URLs, OAuth callbacks, redirects, page metadata, outbound webhooks, and integration callbacks from `HARLY_URL`, not from the incoming request. Set it to the public origin that candidates and integrations reach:
+Set `HARLY_URL` to the HTTPS origin candidates and integrations use to reach
+your proxy. Harly uses this origin in the links it generates.
 
 ```dotenv
 HARLY_URL=https://careers.example.com
 ```
 
-Never point `HARLY_URL` at the container's internal bind address. In production, Harly rejects `HARLY_URL` values that use `http://` or resolve to `localhost`, the IPv4 loopback range `127.0.0.0/8`, `::1`, `0.0.0.0`, or `::`, and refuses to start. See [`HARLY_URL` validation](/deployment/configuration#harly-url-validation) for the full list of rules.
+In production, a local or bind address stops the app from starting. See the
+[`HARLY_URL` validation rules](/deployment/configuration#harly_url-validation).
 
 ### Trust your reverse proxy for client IPs
 

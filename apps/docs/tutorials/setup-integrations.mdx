@@ -27,11 +27,11 @@ ones you do not need.
 | Google Calendar | A Google Cloud project with Calendar API enabled, OAuth client |
 | Email | A sending domain, Resend API key or SMTP credentials |
 | Slack | A Slack OAuth app, workspace admin approval |
-| Harly Sign | Nothing extra — it is built in |
+| Harly Sign | Built in |
 
 ---
 
-## Part 1 — Google Calendar
+## Google Calendar
 
 ### 1.1 Create the OAuth client
 
@@ -97,7 +97,7 @@ harly doctor
 
 ---
 
-## Part 2 — Email
+## Email
 
 ### 2.1 Outbound with Resend
 
@@ -130,7 +130,7 @@ record automatically.
 
 <Steps>
   <Step title="Configure the receiving domain">
-    In **Settings → Email → Inbound**, enter only the hostname — not a URL:
+    In **Settings → Email → Inbound**, enter only the hostname without a scheme or path.
 
     ```text
     replies.example.com
@@ -166,7 +166,7 @@ record automatically.
 
 ---
 
-## Part 3 — Slack notifications
+## Slack notifications
 
 <Steps>
   <Step title="Create a Slack app">
@@ -199,7 +199,7 @@ record automatically.
     Select **Send test notification**. Confirm the message appears in the channel.
   </Step>
   <Step title="Choose events">
-    Enable the events you want — for example application received, stage change,
+    Enable the events you want, such as application received, stage change,
     or offer accepted. Keep channel volume manageable; most teams enable only
     the highest-signal events.
 
@@ -213,7 +213,7 @@ record automatically.
 
 ---
 
-## Part 4 — Harly Sign
+## Harly Sign
 
 Harly Sign is built in and requires no external account. Choose the offer
 delivery channel in **Settings → Integrations → Harly Sign**.
