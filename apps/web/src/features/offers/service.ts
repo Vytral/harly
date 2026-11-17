@@ -8,7 +8,6 @@ import { ApiError, type Cursor } from "@harly/api";
 import {
   activityEvents,
   applications,
-  applicationStageHistory,
   candidates,
   db,
   emailOutbox,
@@ -26,12 +25,11 @@ import {
 } from "@/lib/email/outbox-processor";
 import { offerSendOutcomeMessage } from "@/lib/email/delivery-warning";
 import { offerEmailDedupeKey, offerExtendedEmailDedupeKey } from "@/lib/email/dedupe-keys";
-import { ensureStageOfKind } from "@/features/pipeline/stage-resolver";
 import { emitWebhookEvent } from "@/server/webhooks/emit";
 import {
-  persistDomainEvent,
   publishPersistedDomainEvents,
 } from "@/server/events/emit";
+import { applyOfferDecision, OfferDecisionError } from "./decision";
 import {
   assertOfferTerms,
   getOfferRecipient,
@@ -41,7 +39,7 @@ import {
   type OfferTerms,
 } from "./core";
 import {
-  archiveDocusealOffer,
+  revokeOfferSigning,
   createOfferEnvelope,
 } from "@/lib/esign/offer-signing";
 import {
@@ -52,8 +50,6 @@ import { isSignableNativeFieldsSnapshot } from "@/lib/esign/native/fields";
 import { getWorkspaceEsignStatus } from "@/lib/esign/config";
 import {
   publishSiblingWithdrawals,
-  withdrawSiblingApplicationsForHire,
-  type SiblingWithdrawal,
 } from "./withdraw-siblings";
 
 /** Workspace-scoped offer service for REST API. Never reads session state. */
@@ -525,150 +521,48 @@ export async function decideOfferForApi(input: {
     );
   }
 
-  let siblingWithdrawals: SiblingWithdrawal[] = [];
-  const decided = await db.transaction(async (tx) => {
-    const [updated] = await tx
-      .update(offers)
-      .set({
-        status: input.decision,
-        decidedAt: new Date(),
-        updatedAt: new Date(),
-      })
-      .where(
-        and(
-          eq(offers.workspaceId, input.workspaceId),
-          eq(offers.id, offer.id),
-          eq(offers.status, "sent"),
-        ),
-      )
-      .returning();
-    if (!updated) throw ApiError.conflict("Only sent offers can be decided.");
-
-    if (input.decision === "accepted") {
-      const [application] = await tx
-        .select({
-          id: applications.id,
-          status: applications.status,
-          currentStageId: applications.currentStageId,
-        })
-        .from(applications)
-        .where(
-          and(
-            eq(applications.workspaceId, input.workspaceId),
-            eq(applications.id, offer.applicationId),
-          ),
-        )
-        .for("update")
-        .limit(1);
-      if (!application) throw ApiError.notFound("Application not found.");
-      // Guard: accepting an offer moves the application to `hired`. Refuse if
-      // the application is no longer `active` (rejected/withdrawn/hired by
-      // another flow) — otherwise we'd silently revive a dead candidacy or
-      // overwrite a competing decision. Roll back the offer update too.
-      if (application.status !== "active") {
-        throw ApiError.conflict(
-          "This application is no longer active. Refresh and try again.",
-        );
-      }
-
-      // A hire is always recorded as a stage move. The hired stage is found by
-      // kind (not by name) and created when the job has none, so the
-      // application never ends up `hired` without a history row.
-      const hiredStage = await ensureStageOfKind(tx, {
+  // Shared with the dashboard action: see ./decision for the rules.
+  const decided = await db
+    .transaction((tx) =>
+      applyOfferDecision(tx, {
         workspaceId: input.workspaceId,
-        jobId: offer.jobId,
-        kind: "hired",
-      });
-
-      const [hired] = await tx
-        .update(applications)
-        .set({
-          status: "hired",
-          currentStageId: hiredStage.id,
-          updatedAt: new Date(),
-        })
-        .where(
-          and(
-            eq(applications.workspaceId, input.workspaceId),
-            eq(applications.id, application.id),
-            eq(applications.status, "active"),
-          ),
-        )
-        .returning({ id: applications.id });
-      if (!hired) {
-        throw ApiError.conflict(
-          "This application changed while the offer was being accepted. Refresh and try again.",
-        );
-      }
-
-      if (hiredStage.id !== application.currentStageId) {
-        await tx.insert(applicationStageHistory).values({
-          workspaceId: input.workspaceId,
-          applicationId: application.id,
-          fromStageId: application.currentStageId,
-          toStageId: hiredStage.id,
-          movedById: input.actorUserId,
-        });
-      }
-      siblingWithdrawals = await withdrawSiblingApplicationsForHire(tx, {
-        workspaceId: input.workspaceId,
-        candidateId: offer.candidateId,
-        hiredApplicationId: application.id,
         actorUserId: input.actorUserId,
-      });
-      await tx.insert(activityEvents).values({
-        workspaceId: input.workspaceId,
-        actorId: input.actorUserId,
-        entityType: "application",
-        entityId: application.id,
-        type: "application.hired",
-        metadata: { via: "offer", offerId: offer.id },
-      });
-    }
-
-    await tx.insert(activityEvents).values({
-      workspaceId: input.workspaceId,
-      actorId: input.actorUserId,
-      entityType: "application",
-      entityId: offer.applicationId,
-      type: input.decision === "accepted" ? "offer.accepted" : "offer.declined",
-      metadata: { title: offer.title },
+        offer,
+        decision: input.decision,
+      }),
+    )
+    .catch((error: unknown) => {
+      if (error instanceof OfferDecisionError) {
+        switch (error.code) {
+          case "offerChanged":
+            throw ApiError.conflict("Only sent offers can be decided.");
+          case "applicationNotFound":
+            throw ApiError.notFound("Application not found.");
+          default:
+            throw ApiError.conflict(
+              "This application is no longer active. Refresh and try again.",
+            );
+        }
+      }
+      throw error;
     });
-    return {
-      decided: updated,
-      event:
-        input.decision === "accepted"
-          ? await persistDomainEvent(tx, {
-              name: "application.hired",
-              workspaceId: input.workspaceId,
-              actorId: input.actorUserId,
-              aggregateType: "application",
-              aggregateId: offer.applicationId,
-              payload: {
-                application: { id: offer.applicationId, jobId: offer.jobId },
-                candidate: { id: offer.candidateId },
-                offer: { id: offer.id, title: offer.title },
-              },
-            })
-          : null,
-    };
-  });
+  const siblingWithdrawals = decided.siblingWithdrawals;
 
   await publishSiblingWithdrawals({
     workspaceId: input.workspaceId,
     actorUserId: input.actorUserId,
     withdrawals: siblingWithdrawals,
   });
-  if (decided.event) {
-    await publishPersistedDomainEvents([decided.event]);
+  if (decided.hiredEvent) {
+    await publishPersistedDomainEvents([decided.hiredEvent]);
     await emitWebhookEvent(input.workspaceId, "application.hired", {
       application: { id: offer.applicationId, jobId: offer.jobId },
       candidate: { id: offer.candidateId },
       offer: { id: offer.id, title: offer.title },
-      eventId: decided.event.eventId,
-    }, { actorId: input.actorUserId, skipDomainEvent: true, eventId: decided.event.eventId });
+      eventId: decided.hiredEvent.eventId,
+    }, { actorId: input.actorUserId, skipDomainEvent: true, eventId: decided.hiredEvent.eventId });
   }
-  return decided.decided;
+  return decided.offer;
 }
 
 export async function withdrawOfferForApi(input: {
@@ -706,7 +600,7 @@ export async function withdrawOfferForApi(input: {
     // conditional offer transition will wait for this transaction and then
     // observe `withdrawn`.
     if (lockedOffer.status === "sent") {
-      const archived = await archiveDocusealOffer({
+      const archived = await revokeOfferSigning({
         workspaceId: input.workspaceId,
         esignSubmissionId: lockedOffer.esignSubmissionId,
       });

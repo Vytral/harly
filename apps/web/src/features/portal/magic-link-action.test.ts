@@ -7,6 +7,7 @@ const m = vi.hoisted(() => ({
   send: vi.fn(),
   createElement: vi.fn(),
   portalMagicLinkSubject: vi.fn(() => "localized-subject"),
+  hasSender: true,
 }));
 vi.mock("next/headers", () => ({
   cookies: async () => ({}),
@@ -42,7 +43,7 @@ vi.mock("@/lib/portal-auth", () => ({
 vi.mock("@/lib/portal-auth-methods", () => ({
   getPortalAuthMethods: async () => ({ magicLink: m.magicLink }),
 }));
-vi.mock("@/lib/email", () => ({ getWorkspaceEmailSender: async () => ({ send: m.send }) }));
+vi.mock("@/lib/email", () => ({ getWorkspaceEmailSender: async () => (m.hasSender ? { send: m.send } : null) }));
 vi.mock("@/lib/portal-credentials", () => ({ findActiveCandidateByEmail: m.findActiveCandidateByEmail }));
 vi.mock("@/server/api/ratelimit", () => ({ clientIp: () => "1.1.1.1", enforceRateLimit: vi.fn(async () => undefined) }));
 vi.mock("@/lib/logger", () => ({ createLogger: () => ({ error: vi.fn(), info: vi.fn(), warn: vi.fn() }) }));
@@ -60,12 +61,14 @@ vi.mock("@/server/events/emit", () => ({}));
 vi.mock("@/server/webhooks/emit", () => ({}));
 vi.mock("@/features/offers/core", () => ({}));
 
-import { sendPortalMagicLinkAction } from "./actions";
+import { applyToJobAction, sendPortalMagicLinkAction } from "./actions";
 
 vi.mock("next-intl/server", async () => (await import("@/test-support/intl-server-mock")).intlServerMock);
 
 beforeEach(() => {
   vi.clearAllMocks();
+  vi.unstubAllEnvs();
+  m.hasSender = true;
   m.findActiveCandidateByEmail.mockReset();
   m.findActiveCandidateByEmail.mockResolvedValue(null);
 });
@@ -103,5 +106,21 @@ describe("sendPortalMagicLinkAction server-side gating", () => {
     expect(m.createElement).toHaveBeenCalledWith("PortalMagicLinkEmail", expect.objectContaining({
       locale: undefined,
     }));
+  });
+
+  it("does not claim delivery in production when no sender is configured", async () => {
+    m.magicLink = true;
+    m.hasSender = false;
+    vi.stubEnv("NODE_ENV", "production");
+    const r = await sendPortalMagicLinkAction("a@example.com");
+    expect(r.ok).toBe(false);
+    expect(m.send).not.toHaveBeenCalled();
+  });
+});
+
+describe("applyToJobAction honeypot", () => {
+  it("rejects a filled honeypot before touching the session", async () => {
+    const r = await applyToJobAction({ jobId: "j1", answers: {}, honeypot: "spam" });
+    expect(r.ok).toBe(false);
   });
 });

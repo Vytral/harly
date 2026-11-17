@@ -5,12 +5,9 @@ import {
   asc,
   desc,
   eq,
-  gte,
   isNotNull,
   isNull,
-  lte,
   ne,
-  or,
   sql,
 } from "drizzle-orm";
 import { cache } from "react";
@@ -43,6 +40,7 @@ import { jobScopeSql } from "@/features/search/scope";
 import { resolveSearchActor } from "@/features/search/workspace-search";
 import { normalizeCareerPageConfig } from "@/features/career-page/config";
 import type { JobFormValues, JobStatus } from "./validation";
+import { publicJobVisibilityConditions } from "./visibility";
 
 // Branding is sourced from the Better Auth `organization` (name/slug/logo) plus
 // the `workspace_settings` satellite (board theming). Left join so a workspace
@@ -108,19 +106,7 @@ export function toBoardBranding(
   };
 }
 
-/**
- * A public job must be open, not deleted, already published, and not past its
- * configured closing date. Null dates preserve legacy open jobs that predate
- * publication scheduling.
- */
-export function publicJobVisibilityConditions(now = new Date()) {
-  return and(
-    eq(jobs.status, "open"),
-    isNull(jobs.deletedAt),
-    or(isNull(jobs.publishedAt), lte(jobs.publishedAt, now)),
-    or(isNull(jobs.validThrough), gte(jobs.validThrough, now)),
-  );
-}
+export { publicJobVisibilityConditions };
 
 export {
   formatEmploymentType,
@@ -302,12 +288,25 @@ export async function trashJob(jobId: string) {
     : ({ ok: false, code: "jobNotFound" } as const);
 }
 
-/** Restore a job out of the trash. */
+function isUniqueViolation(error: unknown): boolean {
+  let current: unknown = error;
+  for (let depth = 0; depth < 4 && current; depth += 1) {
+    if ((current as { code?: string }).code === "23505") return true;
+    current = (current as { cause?: unknown }).cause;
+  }
+  return false;
+}
+
+/**
+ * Restore a job out of the trash. Slugs are unique among live jobs only, so a
+ * job trashed earlier may find its slug taken by a newer job; it then comes
+ * back under a fresh unique slug instead of failing.
+ */
 export async function restoreJob(jobId: string) {
   const { organization: workspace } = await getWorkspaceContext();
-  const [job] = await db
-    .update(jobs)
-    .set({ deletedAt: null })
+  const [trashed] = await db
+    .select({ id: jobs.id, slug: jobs.slug })
+    .from(jobs)
     .where(
       and(
         eq(jobs.id, jobId),
@@ -315,11 +314,57 @@ export async function restoreJob(jobId: string) {
         isNotNull(jobs.deletedAt),
       ),
     )
-    .returning({ id: jobs.id });
+    .limit(1);
+  if (!trashed) return { ok: false, code: "jobNotFound" } as const;
 
-  return job
-    ? ({ ok: true } as const)
-    : ({ ok: false, code: "jobNotFound" } as const);
+  let slug = trashed.slug;
+  for (let attempt = 0; attempt < 5; attempt += 1) {
+    const [taken] = await db
+      .select({ id: jobs.id })
+      .from(jobs)
+      .where(
+        and(
+          eq(jobs.workspaceId, workspace.id),
+          eq(jobs.slug, slug),
+          isNull(jobs.deletedAt),
+          ne(jobs.id, jobId),
+        ),
+      )
+      .limit(1);
+    if (taken) {
+      slug = await generateUniqueJobSlug(
+        workspace.id,
+        trashed.slug,
+        jobId,
+      );
+    }
+
+    try {
+      const [job] = await db
+        .update(jobs)
+        .set({ deletedAt: null, slug })
+        .where(
+          and(
+            eq(jobs.id, jobId),
+            eq(jobs.workspaceId, workspace.id),
+            isNotNull(jobs.deletedAt),
+          ),
+        )
+        .returning({ id: jobs.id, slug: jobs.slug });
+      return job
+        ? ({ ok: true, slug: job.slug, slugChanged: job.slug !== trashed.slug } as const)
+        : ({ ok: false, code: "jobNotFound" } as const);
+    } catch (error) {
+      // A concurrent create/restore took the slug between check and update.
+      if (!isUniqueViolation(error)) throw error;
+      slug = `${trashed.slug}-${randomSuffix()}`;
+    }
+  }
+  return { ok: false, code: "jobNotFound" } as const;
+}
+
+function randomSuffix() {
+  return Math.random().toString(36).slice(2, 8);
 }
 
 export async function listOpenJobs() {
@@ -396,11 +441,6 @@ export async function getDashboardJob(jobId: string) {
   return { job, stages, workspace };
 }
 
-export async function getPublicJob(slug: string) {
-  const detail = await getPublicJobDetail({ jobSlug: slug });
-  return detail?.job ?? null;
-}
-
 const getPublicJobDetailCached = cache(async function getPublicJobDetailCached(
   jobSlug: string,
   workspaceSlug?: string,
@@ -459,6 +499,8 @@ export async function generateUniqueJobSlug(
     const conditions = [
       eq(jobs.workspaceId, workspaceId),
       eq(jobs.slug, slug),
+      // Trashed jobs do not hold their slug (partial unique index).
+      isNull(jobs.deletedAt),
       currentJobId ? ne(jobs.id, currentJobId) : undefined,
     ].filter(Boolean);
 

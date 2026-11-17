@@ -3,11 +3,19 @@ import { MCP_SCOPES, type McpScope } from "../types";
 /** Scopes that carry no data access; accepted and ignored. */
 const PASSTHROUGH_SCOPES = new Set(["offline_access", "openid", "profile", "email"]);
 
+/**
+ * What a client gets when it only asked for pass-through scopes such as
+ * `offline_access`: it named no data access, so it gets a minimal read set
+ * rather than the whole catalog. Clients that need more must ask for it.
+ */
+export const PASSTHROUGH_ONLY_DEFAULT_SCOPES: readonly McpScope[] = ["candidates:read", "jobs:read"];
+
 export const MCP_SCOPES_SUPPORTED: readonly string[] = [...MCP_SCOPES, "offline_access"];
 
 /**
  * Parse the space-delimited `scope` parameter. No scope requested = every scope
- * the workspace allows. Unknown names are dropped; a request that names scopes
+ * the workspace allows; only pass-through scopes (`offline_access`, ...) = a
+ * minimal read set. Unknown names are dropped; a request that names scopes
  * but none we support is rejected (`null`).
  */
 export function parseRequestedScopes(raw: string | null | undefined): McpScope[] | null {
@@ -17,7 +25,9 @@ export function parseRequestedScopes(raw: string | null | undefined): McpScope[]
   for (const token of tokens) {
     if ((MCP_SCOPES as readonly string[]).includes(token)) known.add(token as McpScope);
   }
-  if (known.size === 0 && tokens.every((t) => PASSTHROUGH_SCOPES.has(t))) return [...MCP_SCOPES];
+  if (known.size === 0 && tokens.every((t) => PASSTHROUGH_SCOPES.has(t))) {
+    return [...PASSTHROUGH_ONLY_DEFAULT_SCOPES];
+  }
   return known.size === 0 ? null : MCP_SCOPES.filter((s) => known.has(s));
 }
 

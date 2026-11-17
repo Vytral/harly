@@ -102,7 +102,7 @@ test(
     assert.match(compose, /services:\n/);
     assert.match(compose, /postgres:/);
     assert.match(compose, /scheduler:/);
-    assert.match(compose, /profiles: \[proxy\]/);
+    assert.match(compose, /profiles: \["proxy"\]/);
 
     const composeConfig = spawnSync(
       "docker",

@@ -240,16 +240,6 @@ export async function getWorkspaceContext() {
   return context;
 }
 
-export async function assertWorkspaceAccess(organizationId: string) {
-  const { organization } = await getWorkspaceContext();
-
-  if (organization.id !== organizationId) {
-    throw new Error("Workspace access denied.");
-  }
-
-  return organization;
-}
-
 export async function requireWorkspaceRole(allowedRoles: WorkspaceRole[]) {
   const context = await getWorkspaceContext();
 

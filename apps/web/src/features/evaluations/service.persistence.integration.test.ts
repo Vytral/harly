@@ -7,29 +7,38 @@ const integration =
     ? describe
     : describe.skip;
 
-import { aiEvaluationRevisions, aiEvaluations, applications, db } from "@harly/db";
-import { desc, eq } from "drizzle-orm";
+import { aiEvaluationRevisions, aiEvaluations, db } from "@harly/db";
+import { eq } from "drizzle-orm";
 import { persistCandidateEvaluation } from "./service";
 import type { EvaluationMetadata, RulesRubric } from "@/lib/evaluation/rules";
+import {
+  createPipelineFixture,
+  type PipelineFixture,
+} from "@/test-support/pipeline-fixture";
 
 integration("evaluation persistence round trip", () => {
+  // The test owns its data: a CI database starts empty, so it must not depend
+  // on an application left behind by another suite.
+  let fixture: PipelineFixture | undefined;
+
   afterAll(async () => {
+    await fixture?.cleanup();
     await db.$client.end();
   });
 
   it("keeps snapshots, assigns the persisted id, and appends revisions", async () => {
-    const [application] = await db
-      .select({
-        id: applications.id,
-        workspaceId: applications.workspaceId,
-        candidateId: applications.candidateId,
-        jobId: applications.jobId,
-      })
-      .from(applications)
-      .orderBy(desc(applications.createdAt))
-      .limit(1);
-
-    expect(application).toBeDefined();
+    fixture = await createPipelineFixture();
+    const stage = Object.values(fixture.stages)[0];
+    expect(stage).toBeDefined();
+    const { applicationId, candidateId } = await fixture.addApplication({
+      stageId: stage!.id,
+    });
+    const application = {
+      id: applicationId,
+      workspaceId: fixture.workspaceId,
+      candidateId,
+      jobId: fixture.jobId,
+    };
 
     const rubric: RulesRubric = {
       version: "integration-rubric-v1",
@@ -86,10 +95,10 @@ integration("evaluation persistence round trip", () => {
       criteria: [{ label: "Python", score: 80, evidence: "Python" }],
     };
     const base = {
-      workspaceId: application!.workspaceId,
-      candidateId: application!.candidateId,
-      applicationId: application!.id,
-      jobId: application!.jobId,
+      workspaceId: application.workspaceId,
+      candidateId: application.candidateId,
+      applicationId: application.id,
+      jobId: application.jobId,
       source: "rules" as const,
       provider: "harly",
       modelId: "rules-v5",

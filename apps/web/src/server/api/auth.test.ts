@@ -3,6 +3,8 @@ import { ApiError, generateApiKey, hashApiKey } from "@harly/api";
 
 const mocks = vi.hoisted(() => ({
   selectRows: [] as Record<string, unknown>[],
+  memberRows: [{ id: "member-1" }] as Record<string, unknown>[],
+  memberTable: { __table: "member" },
   enforceRateLimit: vi.fn(),
   rateLimitResultFromError: vi.fn(() => null),
 }));
@@ -10,11 +12,17 @@ const mocks = vi.hoisted(() => ({
 vi.mock("@harly/db", () => ({
   db: {
     select: vi.fn(() => ({
-      from: () => ({ where: () => ({ limit: async () => mocks.selectRows }) }),
+      from: (table: unknown) => ({
+        where: () => ({
+          limit: async () =>
+            table === mocks.memberTable ? mocks.memberRows : mocks.selectRows,
+        }),
+      }),
     })),
     update: vi.fn(() => ({ set: () => ({ where: () => Promise.resolve() }) })),
   },
   apiKeys: {},
+  member: mocks.memberTable,
 }));
 vi.mock("@/server/api/ratelimit", () => ({
   enforceRateLimit: mocks.enforceRateLimit,
@@ -95,6 +103,34 @@ describe("authenticateApiKey , per-key rate limit (F2-07)", () => {
     await expect(
       authenticateApiKey(buildRequest(key.raw), "webhooks:read"),
     ).resolves.toMatchObject({ keyId: "key-webhooks" });
+  });
+});
+
+describe("authenticateApiKey creator membership", () => {
+  const okLimit = { limit: 1000, remaining: 999, resetAt: 0 };
+
+  it("rejects a key whose creator is no longer an active member", async () => {
+    const key = makeKey();
+    mocks.selectRows = [dbRow(key.raw, "key-left")];
+    mocks.memberRows = [];
+    mocks.enforceRateLimit.mockClear();
+    mocks.enforceRateLimit.mockResolvedValue(okLimit);
+
+    await expect(authenticateApiKey(buildRequest(key.raw))).rejects.toThrow(
+      "no longer an active member",
+    );
+    expect(mocks.enforceRateLimit).not.toHaveBeenCalled();
+    mocks.memberRows = [{ id: "member-1" }];
+  });
+
+  it("rejects a key whose creator account was deleted", async () => {
+    const key = makeKey();
+    mocks.selectRows = [{ ...dbRow(key.raw, "key-orphan"), createdById: null }];
+    mocks.enforceRateLimit.mockResolvedValue(okLimit);
+
+    await expect(authenticateApiKey(buildRequest(key.raw))).rejects.toThrow(
+      ApiError,
+    );
   });
 });
 

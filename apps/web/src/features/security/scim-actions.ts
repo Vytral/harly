@@ -7,6 +7,7 @@ import { requirePermission } from "@/features/workspaces/permissions-server";
 import { assertNotDemo } from "@/features/demo/assert-not-demo";
 import { createScimTokenValue } from "@/server/scim/service";
 import { logAuditEvent } from "@/lib/audit-log";
+import { requireSensitiveReauth } from "@/server/security/reauth";
 import { getTranslations } from "@/i18n/server";
 
 export type ScimTokenSummary = {
@@ -45,6 +46,7 @@ export async function createScimTokenAction(input: {
     assertNotDemo();
     const context = await requirePermission("security:manage");
     if (context.roleKey !== "owner") return { ok: false, error: t("ownersOnly") };
+    await requireSensitiveReauth(context.user.id, context.organization.id);
     const name = input.name.trim().slice(0, 100);
     if (!name) return { ok: false, error: t("nameRequired") };
     const expiresAt = input.expiresAt ? new Date(input.expiresAt) : null;

@@ -142,6 +142,26 @@ describe("POST /api/public/v1/jobs/[slug]/applications", () => {
     expect(mocks.resolvePublicWorkspace).not.toHaveBeenCalled();
   });
 
+  it("rejects submissions that fill the hidden honeypot field", async () => {
+    const response = await POST(
+      request({ ...APPLICATION_VALUES, consentGiven: true, _hp: "http://spam.example" }),
+      { params: Promise.resolve({ slug: "engineer" }) },
+    );
+
+    expect(response.status).toBe(400);
+    expect(mocks.createPublicApplication).not.toHaveBeenCalled();
+  });
+
+  it("accepts an empty honeypot field", async () => {
+    const response = await POST(
+      request({ ...APPLICATION_VALUES, consentGiven: true, _hp: "" }),
+      { params: Promise.resolve({ slug: "engineer" }) },
+    );
+
+    expect(response.status).toBeLessThan(300);
+    expect(mocks.createPublicApplication).toHaveBeenCalled();
+  });
+
   it("requires configured legal consent before creating an application", async () => {
     const response = await POST(
       request({ ...APPLICATION_VALUES, consentGiven: false }),

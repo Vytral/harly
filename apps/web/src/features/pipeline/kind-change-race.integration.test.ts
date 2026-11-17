@@ -38,7 +38,52 @@ vi.mock("@/features/workspaces/permissions-server", () => ({
 vi.mock("@/server/webhooks/emit", () => ({ emitWebhookEvent: vi.fn(async () => undefined) }));
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 
-const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+/**
+ * Waits until `predicate` holds, polling the database. Fails after the timeout
+ * instead of hanging, so a broken barrier shows up as a clear error.
+ */
+async function waitUntil(predicate: () => Promise<boolean>, label: string, timeoutMs = 10_000) {
+  const deadline = Date.now() + timeoutMs;
+  while (!(await predicate())) {
+    if (Date.now() > deadline) throw new Error(`timed out waiting for ${label}`);
+    await new Promise((resolve) => setTimeout(resolve, 5));
+  }
+}
+
+/** Backends in this database currently parked on a lock, not counting this one. */
+async function lockWaiterCount(): Promise<number> {
+  const rows = await db.execute(sql`
+    select count(*)::int as n
+    from pg_stat_activity
+    where datname = current_database()
+      and wait_event_type = 'Lock'
+      and pid <> pg_backend_pid()`);
+  return Number((rows[0] as { n: number }).n);
+}
+
+/** Backends blocked specifically by the given holder session. */
+async function waitersBlockedBy(holderPid: number): Promise<number> {
+  const rows = await db.execute(sql`
+    select count(*)::int as n
+    from pg_stat_activity
+    where ${holderPid} = any(pg_blocking_pids(pid))`);
+  return Number((rows[0] as { n: number }).n);
+}
+
+/**
+ * Resolves once the kind change has either finished (it did not need to wait)
+ * or parked on a lock behind the in-flight placement, which is the race under test.
+ */
+async function waitUntilSettledOrParked(changing: Promise<unknown>) {
+  let settled = false;
+  void changing.then(() => {
+    settled = true;
+  });
+  await waitUntil(
+    async () => settled || (await lockWaiterCount()) >= 2,
+    "the kind change to finish or wait on a lock",
+  );
+}
 
 function deferred() {
   let resolve!: () => void;
@@ -114,7 +159,10 @@ describe.skipIf(!runPipelineIntegration)("stage kind change vs an in-flight move
       // target stage, exactly where a kind change can slip in.
       const holderLocked = deferred();
       const releaseHolder = deferred();
+      let holderPid = 0;
       const holder = db.transaction(async (tx) => {
+        const [self] = await tx.execute<{ pid: number }>(sql`select pg_backend_pid() as pid`);
+        holderPid = Number(self!.pid);
         await tx
           .select({ id: applications.id })
           .from(applications)
@@ -134,7 +182,8 @@ describe.skipIf(!runPipelineIntegration)("stage kind change vs an in-flight move
           userId: fx.userId,
         }),
       );
-      await sleep(200);
+      // The move must be parked behind the holder before the kind change starts.
+      await waitUntil(async () => (await waitersBlockedBy(holderPid)) >= 1, "the move to wait on the holder");
 
       const changing = outcome(
         updateStage({
@@ -145,7 +194,7 @@ describe.skipIf(!runPipelineIntegration)("stage kind change vs an in-flight move
           patch: { kind: "hired" },
         }),
       );
-      await sleep(300);
+      await waitUntilSettledOrParked(changing);
 
       releaseHolder.resolve();
       await holder;
@@ -160,16 +209,23 @@ describe.skipIf(!runPipelineIntegration)("stage kind change vs an in-flight move
         .from(jobStages)
         .where(eq(jobStages.id, app.stageId!));
 
+      const [targetStage] = await db
+        .select({ kind: jobStages.kind })
+        .from(jobStages)
+        .where(eq(jobStages.id, target.id));
+
       // Whichever side won, the application's status must match the stage it is in.
       expect(app.status).toBe(applicationStatusForStage(stage!));
       if (change.ok) {
         // The kind change was allowed only if the move had not landed yet; then
-        // the move must have seen the hired kind and recorded a hire.
+        // the move must still land, see the hired kind and record a hire.
+        expect(move.ok).toBe(true);
+        expect(targetStage!.kind).toBe("hired");
         expect(stage!.kind).toBe("hired");
         expect(app.status).toBe("hired");
       } else {
         expect(move.ok).toBe(true);
-        expect(stage!.kind).toBe("custom");
+        expect(targetStage!.kind).toBe("custom");
       }
     },
   );
@@ -191,7 +247,10 @@ describe.skipIf(!runPipelineIntegration)("stage kind change vs an in-flight move
     // stalls after it has read the entry stage and before it inserts.
     const holderLocked = deferred();
     const releaseHolder = deferred();
+    let holderPid = 0;
     const holder = db.transaction(async (tx) => {
+      const [self] = await tx.execute<{ pid: number }>(sql`select pg_backend_pid() as pid`);
+      holderPid = Number(self!.pid);
       await tx.execute(
         sql`select pg_advisory_xact_lock(hashtext(${fx.workspaceId} || ':' || ${entry.id}))`,
       );
@@ -207,7 +266,7 @@ describe.skipIf(!runPipelineIntegration)("stage kind change vs an in-flight move
         candidateId: candidate.id,
       }),
     );
-    await sleep(200);
+    await waitUntil(async () => (await waitersBlockedBy(holderPid)) >= 1, "the creation to wait on the holder");
 
     const changing = outcome(
       updateStage({
@@ -218,7 +277,7 @@ describe.skipIf(!runPipelineIntegration)("stage kind change vs an in-flight move
         patch: { kind: "hired" },
       }),
     );
-    await sleep(300);
+    await waitUntilSettledOrParked(changing);
 
     releaseHolder.resolve();
     await holder;

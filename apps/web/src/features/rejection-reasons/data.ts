@@ -13,7 +13,7 @@ import {
 } from "@harly/db";
 import { candidateRejectedSubject, emailTranslator } from "@harly/emails";
 
-import { interpolateTemplate } from "@/features/email-templates/interpolate";
+import { interpolateTemplate, interpolateTemplateHtml } from "@/features/email-templates/interpolate";
 import { templateHtmlToPlainText } from "@/features/email-templates/plain-text";
 import { sanitizeTemplateHtml } from "@/features/email-templates/template-html.server";
 
@@ -192,7 +192,7 @@ function splitName(fullName: string) {
  * Mirrors CandidateRejected and reads the same catalog keys, so the preview
  * matches what is sent.
  */
-export function builtInRejectionBody(input: {
+function builtInRejectionBody(input: {
   candidateName: string;
   jobTitle: string;
   companyName: string;
@@ -276,7 +276,7 @@ export async function buildRejectionEmailPreview(
       candidateName,
       subject: interpolateTemplate(template.subject, values),
       body: templateHtmlToPlainText(
-        sanitizeTemplateHtml(interpolateTemplate(template.body, values)),
+        sanitizeTemplateHtml(interpolateTemplateHtml(template.body, values)),
       ),
     };
   }

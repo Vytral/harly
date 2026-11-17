@@ -4,12 +4,22 @@ import { getTranslations } from "next-intl/server";
 import { getAvailableLoginMethods } from "@/features/auth/login-methods.server";
 import { getAuthBranding } from "@/features/auth/branding.server";
 import { organizationExists } from "@/lib/self-host";
+import { getWorkspaceByInviteToken } from "@/features/workspaces/data";
 import { AuthShell, AuthCard } from "../_components/auth-shell";
 import { SignupForm } from "./_components/signup-form";
 
 export const dynamic = "force-dynamic";
 
-export default async function SignupPage() {
+export default async function SignupPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ invite?: string | string[] }>;
+}) {
+  const { invite } = await searchParams;
+  const inviteToken = typeof invite === "string" ? invite : undefined;
+  const inviteWorkspace = inviteToken
+    ? await getWorkspaceByInviteToken(inviteToken)
+    : null;
   // Self-host model: one workspace per deployment. The first account
   // bootstraps it; afterwards signups are invite-only (enforced in
   // enforceInviteOnly). Anyone landing here directly gets the message
@@ -36,14 +46,18 @@ export default async function SignupPage() {
     >
       <AuthCard
         title={t("title")}
-        subtitle={t("subtitle")}
+        subtitle={
+          inviteWorkspace
+            ? t("joinSubtitle", { name: inviteWorkspace.organizationName })
+            : t("subtitle")
+        }
         footer={
           t.rich("already", { link: (chunks) => (
             <Link href="/login" className="font-semibold text-foreground hover:underline">{chunks}</Link>
           ) })
         }
       >
-        {inviteOnly ? (
+        {inviteOnly && !inviteWorkspace ? (
           <div className="rounded-lg bg-muted px-4 py-3">
             <p className="text-sm font-medium text-foreground">
               {t("inviteOnly")}
@@ -53,7 +67,10 @@ export default async function SignupPage() {
             </p>
           </div>
         ) : (
-          <SignupForm googleEnabled={googleEnabled} />
+          <SignupForm
+            googleEnabled={googleEnabled && !inviteWorkspace}
+            inviteToken={inviteWorkspace ? inviteToken : undefined}
+          />
         )}
       </AuthCard>
     </AuthShell>

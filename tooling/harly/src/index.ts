@@ -42,6 +42,8 @@ import {
   releaseTagImage,
   type HarlyRelease,
 } from "./release.js";
+import composeSource from "../../../compose.yaml";
+import { AUTOMATIC_BACKUP_KEEP, AUTOMATIC_BACKUP_PREFIX, pruneBackups } from "./backups.js";
 import { pullWithProgress } from "./pull.js";
 import { updaterCommand, updaterHelp } from "./updater.js";
 import { installGlobalCli, offerGlobalCliInstallation } from "./global-cli.js";
@@ -186,7 +188,7 @@ setQuiet(quiet);
 const interactive = Boolean(
   !json && !flags.has("--non-interactive") && process.stdin.isTTY && process.stdout.isTTY && !process.env.CI,
 );
-const cliVersion = "0.7.0";
+const cliVersion = "0.7.1";
 let jsonResultWritten = false;
 
 function humanOut(message: string): void {
@@ -406,7 +408,7 @@ const commandHelp: HelpEntry[] = [
   ["harly status [directory] [--json]", "Health, version, disk, backup and certificate at a glance"],
   ["harly doctor [directory] [--json] [--fix]", "Check services and public readiness; --fix offers repairs"],
   ["harly setup-secret [directory]", "Print HARLY_SETUP_SECRET from .env"],
-  ["harly backup [directory] [--encrypt]", "Write a private rollback archive"],
+  ["harly backup [directory] [--encrypt]", "Write a private rollback archive (`backup prune --keep N` removes old ones)"],
   ["harly restore <archive> [directory] --force", "Restore from an archive"],
   ["harly update [directory] [--to version]", "Update the install here to the current stable release"],
   ...updaterHelp,
@@ -1345,120 +1347,138 @@ async function exists(file: string) {
   );
 }
 
-const composeTemplate = `name: harly
-x-image: &image \${HARLY_IMAGE:?Set HARLY_IMAGE}
-x-logging: &logging
-  driver: json-file
-  options: { max-size: "\${HARLY_LOG_MAX_SIZE:-10m}", max-file: "\${HARLY_LOG_MAX_FILES:-3}" }
-x-env: &env
-  NODE_ENV: production
-  HARLY_URL: \${HARLY_URL:?Set HARLY_URL}
-  NEXT_PUBLIC_APP_URL: \${HARLY_URL:?Set HARLY_URL}
-  BETTER_AUTH_URL: \${HARLY_URL:?Set HARLY_URL}
-  HARLY_VERSION: \${HARLY_VERSION:?Set HARLY_VERSION}
-  DATABASE_URL: postgresql://\${POSTGRES_USER}:\${POSTGRES_PASSWORD}@postgres:5432/\${POSTGRES_DB}
-  BETTER_AUTH_SECRET: \${BETTER_AUTH_SECRET}
-  AI_ENCRYPTION_KEY: \${AI_ENCRYPTION_KEY}
-  STORAGE_UPLOAD_SECRET: \${STORAGE_UPLOAD_SECRET}
-  CRON_SECRET: \${CRON_SECRET}
-  METRICS_TOKEN: \${METRICS_TOKEN:-}
-  HARLY_SETUP_SECRET: \${HARLY_SETUP_SECRET}
-  HARLY_INITIAL_ADMIN_EMAIL: \${HARLY_INITIAL_ADMIN_EMAIL}
-  HARLY_ORG_NAME: \${HARLY_ORG_NAME:-}
-  DOCUSEAL_URL: \${DOCUSEAL_URL:-}
-  DOCUSEAL_API_TOKEN: \${DOCUSEAL_API_TOKEN:-}
-  STORAGE_PROVIDER: \${STORAGE_PROVIDER:-local}
-  UPLOADS_DIR: /data/uploads
-  S3_BUCKET: \${S3_BUCKET:-}
-  S3_REGION: \${S3_REGION:-}
-  S3_ACCESS_KEY_ID: \${S3_ACCESS_KEY_ID:-}
-  S3_SECRET_ACCESS_KEY: \${S3_SECRET_ACCESS_KEY:-}
-  S3_ENDPOINT: \${S3_ENDPOINT:-}
-  S3_PUBLIC_URL: \${S3_PUBLIC_URL:-}
-  HARLY_ALLOW_PRIVATE_WEBHOOKS: \${HARLY_ALLOW_PRIVATE_WEBHOOKS:-false}
-  RESEND_API_KEY: \${RESEND_API_KEY:-}
-  EMAIL_FROM: \${EMAIL_FROM:-}
-  HARLY_CACHE_MAX_MB: \${HARLY_CACHE_MAX_MB:-512}
-  HARLY_CACHE_MAX_AGE_DAYS: \${HARLY_CACHE_MAX_AGE_DAYS:-7}
-  HARLY_RELEASE_MANIFEST_URL: \${HARLY_RELEASE_MANIFEST_URL:-}
-  HARLY_DISABLE_UPDATE_CHECK: \${HARLY_DISABLE_UPDATE_CHECK:-false}
-  MCP_ALLOWED_ORIGINS: \${MCP_ALLOWED_ORIGINS:-}
-  HARLY_DB_POOL_MAX: \${HARLY_DB_POOL_MAX:-}
-  HARLY_DB_LOCK_POOL_MAX: \${HARLY_DB_LOCK_POOL_MAX:-}
-  HARLY_DB_MAILBOX_LOCK_POOL_MAX: \${HARLY_DB_MAILBOX_LOCK_POOL_MAX:-}
-  DEMO_MODE: \${DEMO_MODE:-false}
-  DEMO_LOGIN_EMAIL: \${DEMO_LOGIN_EMAIL:-}
-  DEMO_WORKSPACE_ID: \${DEMO_WORKSPACE_ID:-}
-  DEMO_CDN_URL: \${DEMO_CDN_URL:-}
-  DEMO_SANDBOX_TTL_MINUTES: \${DEMO_SANDBOX_TTL_MINUTES:-}
-  DEMO_SANDBOX_MAX_ACTIVE: \${DEMO_SANDBOX_MAX_ACTIVE:-}
-  DEMO_AI_API_KEY: \${DEMO_AI_API_KEY:-}
-  DEMO_AI_MODEL: \${DEMO_AI_MODEL:-}
-  DEMO_AI_DAILY_REQUEST_LIMIT: \${DEMO_AI_DAILY_REQUEST_LIMIT:-}
-services:
-  postgres:
-    image: postgres:16-bookworm
-    restart: unless-stopped
-    mem_limit: \${HARLY_POSTGRES_MEMORY:-768m}
-    cpus: \${HARLY_POSTGRES_CPUS:-1.0}
-    shm_size: 128m
-    logging: *logging
-    environment: { POSTGRES_USER: "\${POSTGRES_USER}", POSTGRES_PASSWORD: "\${POSTGRES_PASSWORD}", POSTGRES_DB: "\${POSTGRES_DB}" }
-    healthcheck: { test: [CMD-SHELL, "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"], interval: 5s, timeout: 3s, retries: 20 }
-    volumes: [postgres-data:/var/lib/postgresql/data]
-  migrate:
-    image: *image
-    command: [migrate]
-    environment: *env
-    depends_on: { postgres: { condition: service_healthy } }
-    restart: "no"
-    mem_limit: \${HARLY_MIGRATE_MEMORY:-768m}
-    cpus: \${HARLY_MIGRATE_CPUS:-1.0}
-    logging: *logging
-  app:
-    image: *image
-    command: [serve]
-    restart: unless-stopped
-    stop_grace_period: 30s
-    mem_limit: \${HARLY_APP_MEMORY:-1536m}
-    cpus: \${HARLY_APP_CPUS:-2.0}
-    logging: *logging
-    read_only: true
-    tmpfs: ["/tmp:size=256m,mode=1777"]
-    environment: { <<: *env, NODE_OPTIONS: "\${HARLY_APP_NODE_OPTIONS:---max-old-space-size=1024}" }
-    depends_on: { migrate: { condition: service_completed_successfully } }
-    ports: ["127.0.0.1:\${HARLY_PORT:-3000}:3000"]
-    volumes: [uploads:/data/uploads, next-cache:/app/apps/web/.next/cache]
-    healthcheck: { test: [CMD, node, -e, "fetch('http://127.0.0.1:3000/api/health/ready').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"], interval: 10s, timeout: 4s, retries: 12 }
-  scheduler:
-    image: *image
-    command: [scheduler]
-    restart: unless-stopped
-    stop_grace_period: 30s
-    mem_limit: \${HARLY_SCHEDULER_MEMORY:-256m}
-    cpus: \${HARLY_SCHEDULER_CPUS:-0.5}
-    logging: *logging
-    read_only: true
-    tmpfs: ["/tmp:size=64m,mode=1777"]
-    environment: { <<: *env, HARLY_INTERNAL_URL: http://app:3000, NODE_OPTIONS: "\${HARLY_SCHEDULER_NODE_OPTIONS:---max-old-space-size=160}" }
-    depends_on: { app: { condition: service_healthy } }
-    healthcheck: { test: [CMD, node, /app/runtime.mjs, doctor], interval: 30s, timeout: 10s, start_period: 45s, retries: 3 }
-  caddy:
-    image: caddy:2.10-alpine
-    profiles: [proxy]
-    restart: unless-stopped
-    mem_limit: \${HARLY_CADDY_MEMORY:-256m}
-    cpus: \${HARLY_CADDY_CPUS:-0.5}
-    logging: *logging
-    environment: { HARLY_DOMAIN: "\${HARLY_DOMAIN:-example.invalid}" }
-    ports: ["80:80", "443:443", "443:443/udp"]
-    volumes: ["./Caddyfile:/etc/caddy/Caddyfile:ro", caddy-data:/data, caddy-config:/config]
-    depends_on: { app: { condition: service_healthy } }
-volumes: { postgres-data: {}, uploads: {}, next-cache: {}, caddy-data: {}, caddy-config: {} }
-`;
+// The installer writes the repository's own compose.yaml, embedded at build
+// time (see the `build` script), so a generated install can never drift from
+// the file the project tests and documents.
+const composeTemplate = composeSource;
 
-const envExample = `HARLY_IMAGE=ghcr.io/vytral/harly:<version-or-digest>\nHARLY_VERSION=<version>\nHARLY_URL=https://harly.example.com\nHARLY_PORT=3000\nHARLY_DOMAIN=harly.example.com\nCOMPOSE_PROFILES=proxy\nPOSTGRES_USER=harly\nPOSTGRES_PASSWORD=<secret>\nPOSTGRES_DB=harly\nBETTER_AUTH_SECRET=<secret>\nAI_ENCRYPTION_KEY=<secret>\nSTORAGE_UPLOAD_SECRET=<secret>\nCRON_SECRET=<secret>\nMETRICS_TOKEN=<independent-secret>\nHARLY_SETUP_SECRET=<secret>\nHARLY_INITIAL_ADMIN_EMAIL=owner@example.com\nHARLY_ORG_NAME=Acme Inc.\nSTORAGE_PROVIDER=local\nRESEND_API_KEY=\nEMAIL_FROM=\n# Optional resource tuning (defaults target a 4 GB VPS)\nHARLY_APP_MEMORY=1536m\nHARLY_POSTGRES_MEMORY=768m\nHARLY_SCHEDULER_MEMORY=256m\nHARLY_SCHEDULER_STALE_AFTER_SECONDS=300\nHARLY_CADDY_MEMORY=256m\nHARLY_CACHE_MAX_MB=512\nHARLY_CACHE_MAX_AGE_DAYS=7\nHARLY_LOG_MAX_SIZE=10m\nHARLY_LOG_MAX_FILES=3\n`;
-const envExampleWithEsign = `${envExample}# Optional DocuSeal global fallback (per-workspace config in Settings overrides)\nDOCUSEAL_URL=\nDOCUSEAL_API_TOKEN=\n# Set only when running the bundled DocuSeal service (--profile esign)\nDOCUSEAL_SECRET_KEY_BASE=\n`;
+// Written next to the generated .env as a reference for every setting the
+// compose file reads. tooling/harly/test/compose-drift.test.mjs checks that
+// each variable in compose.yaml is listed here.
+const envExampleWithEsign = `# Required. \`harly init\` fills these in .env with generated secrets.
+HARLY_IMAGE=ghcr.io/vytral/harly:<version-or-digest>
+HARLY_VERSION=<version>
+HARLY_URL=https://harly.example.com
+HARLY_PORT=3000
+HARLY_DOMAIN=harly.example.com
+COMPOSE_PROFILES=proxy
+POSTGRES_USER=harly
+POSTGRES_PASSWORD=<secret>
+POSTGRES_DB=harly
+BETTER_AUTH_SECRET=<secret>
+AI_ENCRYPTION_KEY=<secret>
+STORAGE_UPLOAD_SECRET=<secret>
+CRON_SECRET=<secret>
+HARLY_SETUP_SECRET=<secret>
+HARLY_INITIAL_ADMIN_EMAIL=owner@example.com
+
+# Optional. Leave empty to keep the default.
+METRICS_TOKEN=<independent-secret>
+HARLY_ORG_NAME=Acme Inc.
+STORAGE_PROVIDER=local
+S3_BUCKET=
+S3_REGION=
+S3_ACCESS_KEY_ID=
+S3_SECRET_ACCESS_KEY=
+S3_ENDPOINT=
+S3_PUBLIC_URL=
+HARLY_ALLOW_PRIVATE_WEBHOOKS=false
+
+# Email (Resend). Without a key, outgoing email is skipped.
+RESEND_API_KEY=
+EMAIL_FROM=Harly <noreply@mail.example.com>
+
+# Sign-in and integrations (leave empty to disable)
+GOOGLE_CLIENT_ID=
+GOOGLE_CLIENT_SECRET=
+MICROSOFT_CLIENT_ID=
+MICROSOFT_CLIENT_SECRET=
+GITHUB_CLIENT_ID=
+GITHUB_CLIENT_SECRET=
+LINKEDIN_CLIENT_ID=
+LINKEDIN_CLIENT_SECRET=
+SLACK_CLIENT_ID=
+SLACK_CLIENT_SECRET=
+ZOOM_CLIENT_ID=
+ZOOM_CLIENT_SECRET=
+ZOOM_WEBHOOK_URL=
+
+# E-signature (DocuSeal). Start the bundled service with
+# COMPOSE_PROFILES=proxy,esign. \`harly init\` generates DOCUSEAL_SECRET_KEY_BASE.
+DOCUSEAL_URL=
+DOCUSEAL_API_TOKEN=
+DOCUSEAL_SECRET_KEY_BASE=
+DOCUSEAL_DB=docuseal
+DOCUSEAL_PORT=3200
+HARLY_DOCUSEAL_VERSION=3.3.4
+HARLY_DOCUSEAL_MEMORY=1024m
+HARLY_DOCUSEAL_CPUS=1.0
+NATIVE_SIGN_SESSION_SECRET=
+SIGNATURE_EVIDENCE_RETENTION_DAYS=3650
+
+# Network, rate limiting and logging
+TRUSTED_PROXY_IPS=
+RATE_LIMIT_STORE=memory
+LOG_LEVEL=info
+MCP_ALLOWED_ORIGINS=
+
+# Database connection pools and migrations
+HARLY_DB_POOL_MAX=
+HARLY_DB_LOCK_POOL_MAX=
+HARLY_DB_MAILBOX_LOCK_POOL_MAX=
+HARLY_DB_IDLE_TIMEOUT=
+HARLY_DB_CONNECT_TIMEOUT=
+HARLY_DB_MAX_LIFETIME=
+HARLY_MIGRATION_LOCK_TIMEOUT_MS=
+
+# AI, automations, retention and API
+HARLY_ALLOW_LOCAL_LLM=
+HARLY_MODELS_DEV=
+HARLY_MODELS_DEV_TTL_HOURS=
+HARLY_MODELS_DEV_URL=
+AUTOMATION_PREVIEW_SECRET=
+AUTOMATIONS_DISABLE_V1_DISPATCH=
+SLACK_DELIVERY_RETENTION_DAYS=90
+API_V1_SUNSET=
+
+# Updates
+HARLY_RELEASE_MANIFEST_URL=
+HARLY_DISABLE_UPDATE_CHECK=false
+
+# Turnstile (anti-bot on the public apply form)
+NEXT_PUBLIC_TURNSTILE_SITE_KEY=
+TURNSTILE_SECRET_KEY=
+
+# Public demo instance (dedicated installs only; never with real data)
+DEMO_MODE=false
+DEMO_LOGIN_EMAIL=
+DEMO_WORKSPACE_ID=
+DEMO_CDN_URL=
+DEMO_SANDBOX_TTL_MINUTES=
+DEMO_SANDBOX_MAX_ACTIVE=
+DEMO_AI_API_KEY=
+DEMO_AI_MODEL=
+DEMO_AI_DAILY_REQUEST_LIMIT=
+
+# Resource tuning (defaults target a 4 GB VPS)
+HARLY_APP_MEMORY=1536m
+HARLY_APP_CPUS=2.0
+HARLY_APP_NODE_OPTIONS=--max-old-space-size=1024
+HARLY_POSTGRES_MEMORY=768m
+HARLY_POSTGRES_CPUS=1.0
+HARLY_MIGRATE_MEMORY=768m
+HARLY_MIGRATE_CPUS=1.0
+HARLY_SCHEDULER_MEMORY=256m
+HARLY_SCHEDULER_CPUS=0.5
+HARLY_SCHEDULER_NODE_OPTIONS=--max-old-space-size=160
+HARLY_SCHEDULER_STALE_AFTER_SECONDS=300
+HARLY_CADDY_MEMORY=256m
+HARLY_CADDY_CPUS=0.5
+HARLY_CACHE_MAX_MB=512
+HARLY_CACHE_MAX_AGE_DAYS=7
+HARLY_LOG_MAX_SIZE=10m
+HARLY_LOG_MAX_FILES=3
+`;
 
 async function init() {
   const positionalDirectory = positionals[0];
@@ -1543,6 +1563,8 @@ async function init() {
         `HARLY_ORG_NAME=${envLine(organization.replaceAll("$", "$$$$"))}`,
         "DOCUSEAL_URL=",
         "DOCUSEAL_API_TOKEN=",
+        // Only used by the optional bundled DocuSeal service (`esign` profile).
+        `DOCUSEAL_SECRET_KEY_BASE=${envLine(secret())}`,
         `STORAGE_PROVIDER=${envLine(storage)}`,
         ...(s3
           ? [
@@ -2593,6 +2615,9 @@ async function backup(
   // An update keeps app and scheduler stopped after the backup, so nothing is
   // written that a rollback to this archive would silently discard.
   restartWriters = true,
+  // Rollback points written by update and restore are named differently and
+  // capped, so they cannot fill the disk over years of updates.
+  automatic = false,
 ): Promise<string> {
   const directory = path.resolve(explicitDirectory ?? positionals[0] ?? ".");
   const config = await readConfig(directory);
@@ -2655,7 +2680,7 @@ async function backup(
     );
     const archive = path.join(
       outputDirectory,
-      `harly-${new Date().toISOString().replace(/[:.]/g, "-")}.tar.gz`,
+      `${automatic ? AUTOMATIC_BACKUP_PREFIX : "harly-"}${new Date().toISOString().replace(/[:.]/g, "-")}.tar.gz`,
     );
     run("tar", ["-czf", archive, "-C", temp, "."]);
     await chmod(archive, 0o600);
@@ -2664,6 +2689,7 @@ async function backup(
     // an off-host disaster-recovery backup.
     if (!encrypt) {
       written = true;
+      if (automatic) await pruneAutomaticBackups(directory);
       if (print) process.stdout.write(`${archive}\n`);
       return archive;
     }
@@ -2672,6 +2698,7 @@ async function backup(
     await chmod(encrypted, 0o600);
     await rm(archive, { force: true });
     written = true;
+    if (automatic) await pruneAutomaticBackups(directory);
     if (print) process.stdout.write(`${encrypted}\n`);
     return encrypted;
   } finally {
@@ -2682,6 +2709,87 @@ async function backup(
       });
     await rm(temp, { recursive: true, force: true });
   }
+}
+
+/** Trims old automatic rollback archives. Never fails the backup that called it. */
+async function pruneAutomaticBackups(directory: string): Promise<void> {
+  try {
+    await pruneBackups(directory, { keep: AUTOMATIC_BACKUP_KEEP, onlyAutomatic: true });
+  } catch {
+    // Keeping an extra archive is harmless; failing an update over it is not.
+  }
+}
+
+async function backupPrune() {
+  const keepRaw = option(parsed, "--keep");
+  if (keepRaw === undefined)
+    throw usageError("backup prune requires --keep N (the number of newest archives to keep).");
+  const keep = Number(keepRaw);
+  if (!/^\d+$/.test(keepRaw) || keep < 1)
+    throw usageError("--keep must be a whole number of at least 1.");
+  if (positionals.length > 2)
+    throw usageError("backup prune accepts one directory argument.");
+  const directory = path.resolve(positionals[1] ?? ".");
+  await readConfig(directory);
+  const dryRun = flags.has("--dry-run");
+  const { kept, removed } = await pruneBackups(directory, { keep, dryRun });
+  const freed = removed.reduce((sum, entry) => sum + entry.bytes, 0);
+  if (json) {
+    writeResult(
+      resultOk("backup", dryRun ? "dry-run" : "pruned", {
+        keep,
+        kept: kept.map((entry) => entry.name),
+        removed: removed.map((entry) => entry.name),
+        freedBytes: freed,
+        sideEffects: !dryRun && removed.length > 0,
+      }),
+    );
+    return;
+  }
+  for (const entry of removed) humanOut(`${dryRun ? "Would remove" : "Removed"} ${entry.name}\n`);
+  humanOut(
+    removed.length === 0
+      ? `Nothing to remove: ${kept.length} archive${kept.length === 1 ? "" : "s"} found, keeping up to ${keep}.\n`
+      : `${dryRun ? "Would free" : "Freed"} ${humanBytes(freed)} by removing ${removed.length} archive${removed.length === 1 ? "" : "s"}; kept the newest ${kept.length}.\n`,
+  );
+}
+
+/**
+ * Reads and validates manifest.json from an extracted archive. A restore
+ * replaces the live database, so an archive that cannot prove its dump is
+ * intact is rejected before anything is touched.
+ */
+async function readBackupManifest(extracted: string): Promise<{
+  files: Record<string, string>;
+  storage?: "local" | "s3";
+}> {
+  const invalid = (reason: string) =>
+    new CliError(
+      `This is not a usable Harly backup: ${reason} Nothing was changed.`,
+      2,
+      "INVALID_ARGUMENT",
+    );
+  let raw: string;
+  try {
+    raw = await readFile(path.join(extracted, "manifest.json"), "utf8");
+  } catch {
+    throw invalid("manifest.json is missing from the archive.");
+  }
+  let manifest: unknown;
+  try {
+    manifest = JSON.parse(raw);
+  } catch {
+    throw invalid("manifest.json is not valid JSON.");
+  }
+  const files = (manifest as { files?: unknown } | null)?.files;
+  if (!files || typeof files !== "object" || Array.isArray(files))
+    throw invalid("manifest.json does not list the archive files.");
+  if (!Object.hasOwn(files, "database.dump"))
+    throw invalid("manifest.json does not list database.dump.");
+  const entries = Object.entries(files as Record<string, unknown>);
+  if (entries.some(([, checksum]) => typeof checksum !== "string"))
+    throw invalid("manifest.json has an invalid checksum entry.");
+  return manifest as { files: Record<string, string>; storage?: "local" | "s3" };
 }
 
 async function restore() {
@@ -2706,9 +2814,7 @@ async function restore() {
     run("age", ["-d", "-i", identity, "-o", plaintext, archive]);
   }
   run("tar", ["-xzf", plaintext, "-C", temp]);
-  const manifest = JSON.parse(
-    await readFile(path.join(temp, "manifest.json"), "utf8"),
-  ) as { files: Record<string, string>; storage?: "local" | "s3" };
+  const manifest = await readBackupManifest(temp);
   const actual = await checksums(temp);
   for (const [file, checksum] of Object.entries(manifest.files)) {
     if (actual[file] !== checksum)
@@ -2724,7 +2830,7 @@ async function restore() {
   process.stdout.write("Creating a safety backup of the current deployment…\n");
   // Writers stay stopped from the safety backup until the restore finishes, so
   // nothing is accepted that neither snapshot holds.
-  await backup(directory, true, false);
+  await backup(directory, true, false, true);
   process.stdout.write("Safety backup saved. Preparing restore…\n");
   // Stop the one-shot migration service too: otherwise it can race pg_restore
   // and recreate tables while the database is being restored.
@@ -2911,7 +3017,7 @@ async function upgrade(explicitDirectory?: string) {
     const step = p.spinner(spinnerStyle);
     step.start(phase(1, "Writing a rollback point"));
     try {
-      archive = await backup(directory, false, false);
+      archive = await backup(directory, false, false, true);
     } catch (error) {
       step.stop(phase(1, "Rollback point failed"));
       throw error;
@@ -2926,7 +3032,7 @@ async function upgrade(explicitDirectory?: string) {
       )}`,
     );
   } else {
-    archive = await backup(directory, false, false);
+    archive = await backup(directory, false, false, true);
     process.stdout.write(`${archive}\n`);
   }
   // From here app and scheduler stay stopped until phase 4 starts the new
@@ -3923,6 +4029,7 @@ async function main() {
     case "setup-secret":
       return setupSecret();
     case "backup":
+      if (positionals[0] === "prune") return backupPrune();
       return backup();
     case "restore":
       return restore();

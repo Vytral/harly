@@ -6,7 +6,7 @@ import type { CareerPageConfig, CareerTemplate } from "../config";
 import { ThemeWrapper } from "../ThemeWrapper";
 import { careerTheme } from "../theme";
 import { JobShell, type JobShellVariant } from "./JobShell";
-import type { JobLike } from "./jobMeta";
+import { toPublicJobLike, type JobLike } from "./jobMeta";
 
 /** Map a career template to its job-page chrome variant. */
 function templateToVariant(t: CareerTemplate | ""): JobShellVariant {
@@ -56,7 +56,7 @@ export function JobChrome({
         <JobShell
           config={config}
           workspace={workspace}
-          job={job}
+          job={toPublicJobLike(job)}
           boardRoot={boardRoot}
           activeTab={activeTab}
           variant={templateToVariant(config.template)}

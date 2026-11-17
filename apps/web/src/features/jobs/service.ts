@@ -3,6 +3,7 @@ import "server-only";
 import { and, desc, eq, isNull, lt, or } from "drizzle-orm";
 
 import { ApiError, type Cursor } from "@harly/api";
+import { jobSalaryIssues } from "@harly/validators";
 import {
   db,
   defaultStageRows,
@@ -20,7 +21,7 @@ import {
   publishPersistedDomainEvents,
 } from "@/server/events/emit";
 
-import { generateUniqueJobSlug } from "./data";
+import { generateUniqueJobSlug, publicJobVisibilityConditions } from "./data";
 import { getPublishBlockers, publishBlockerMessage, type JobStatus } from "./validation";
 
 /**
@@ -72,6 +73,26 @@ export function serializeJob(job: Job) {
   };
 }
 
+/**
+ * Job shape for publishable (browser-exposed) keys: only fields that are
+ * already public on the career page. Internal sourcing keywords and audit
+ * timestamps stay out.
+ */
+export function serializeJobForPublishableKey(job: Job) {
+  const full: Record<string, unknown> = serializeJob(job);
+  delete full.keywords;
+  delete full.createdAt;
+  delete full.updatedAt;
+  return full as Omit<ReturnType<typeof serializeJob>, "keywords" | "createdAt" | "updatedAt">;
+}
+
+/** Serialize a job for the key type that asked for it. */
+export function serializeJobForKey(job: Job, keyType: "publishable" | "secret") {
+  return keyType === "publishable"
+    ? serializeJobForPublishableKey(job)
+    : serializeJob(job);
+}
+
 function appBaseUrl(): string {
   return getHarlyPublicOrigin();
 }
@@ -116,6 +137,8 @@ function cursorWhere(cursor: Cursor | null) {
 
 export async function listJobsForApi(input: {
   workspaceId: string;
+  /** Publishable keys only see jobs that are public on the career page. */
+  publicOnly?: boolean;
   status?: JobStatus;
   cursor: Cursor | null;
   limit: number;
@@ -127,6 +150,7 @@ export async function listJobsForApi(input: {
       and(
         eq(jobs.workspaceId, input.workspaceId),
         isNull(jobs.deletedAt),
+        input.publicOnly ? publicJobVisibilityConditions() : undefined,
         input.status ? eq(jobs.status, input.status) : undefined,
         cursorWhere(input.cursor),
       ),
@@ -138,6 +162,8 @@ export async function listJobsForApi(input: {
 export async function getJobForApi(input: {
   workspaceId: string;
   jobId: string;
+  /** Publishable keys only see jobs that are public on the career page. */
+  publicOnly?: boolean;
 }): Promise<Job> {
   const [job] = await db
     .select()
@@ -147,6 +173,7 @@ export async function getJobForApi(input: {
         eq(jobs.id, input.jobId),
         eq(jobs.workspaceId, input.workspaceId),
         isNull(jobs.deletedAt),
+        input.publicOnly ? publicJobVisibilityConditions() : undefined,
       ),
     )
     .limit(1);
@@ -242,6 +269,21 @@ export async function updateJobForApi(input: {
     workspaceId: input.workspaceId,
     jobId: input.jobId,
   });
+
+  // A partial update can only be judged against the row it produces: sending
+  // only `salaryMin` must still be checked against the stored maximum.
+  const touchesSalary = (["salaryMin", "salaryMax", "currency", "salaryPeriod"] as const).some(
+    (key) => input.values[key] !== undefined,
+  );
+  if (touchesSalary) {
+    const [salaryIssue] = jobSalaryIssues({
+      salaryMin: input.values.salaryMin === undefined ? existing.salaryMin : input.values.salaryMin,
+      salaryMax: input.values.salaryMax === undefined ? existing.salaryMax : input.values.salaryMax,
+      currency: input.values.currency === undefined ? existing.currency : input.values.currency,
+      salaryPeriod: input.values.salaryPeriod === undefined ? existing.salaryPeriod : input.values.salaryPeriod,
+    });
+    if (salaryIssue) throw ApiError.unprocessable(salaryIssue.message);
+  }
 
   const nextStatus = input.values.status ?? existing.status;
   const nextDescription = input.values.description ?? existing.description;

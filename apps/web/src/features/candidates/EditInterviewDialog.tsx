@@ -29,17 +29,12 @@ import { Textarea } from "@/components/ui/textarea";
 import type { CandidateInterviewItem } from "@/features/interviews/shared";
 import {
   getBrowserTimeZone,
+  INTERVIEW_TYPE_OPTIONS,
   NonexistentLocalTimeError,
   parseScheduledAt,
 } from "@/features/interviews/shared";
 
-const TYPES = [
-  { key: "screening", labelKey: "typeScreening" },
-  { key: "technical", labelKey: "typeTechnical" },
-  { key: "culture_fit", labelKey: "typeCultureFit" },
-  { key: "onsite", labelKey: "typeOnsite" },
-  { key: "final", labelKey: "typeFinal" },
-] as const;
+const TYPES = INTERVIEW_TYPE_OPTIONS;
 
 const MODES = [
   { key: "video", labelKey: "modeVideo" },
@@ -191,7 +186,7 @@ export function EditInterviewDialog({
               <Field label={t("type")}>
                 <SegmentedControl
                   aria-label={t("type")}
-                  options={TYPES.map((item) => ({ value: item.key, label: t(item.labelKey) }))}
+                  options={TYPES.map((item) => ({ value: item.key, label: t(item.dialogLabelKey) }))}
                   value={type}
                   onValueChange={setType}
                 />

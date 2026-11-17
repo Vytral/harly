@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.7.1 — 2026-11-16
+
+### Added
+
+- `harly backup prune [directory] --keep N` deletes all but the newest N archives in `backups/` (`--dry-run` previews). `harly update` and `harly restore` name their automatic rollback archives `harly-auto-<timestamp>` and keep only the newest 5. Archives you create with `harly backup` are never deleted automatically.
+- `harly init` generates `DOCUSEAL_SECRET_KEY_BASE`, so the bundled e-signature service starts with `COMPOSE_PROFILES=proxy,esign`.
+
+### Changed
+
+- `harly init` writes a copy of the repository's `compose.yaml` (embedded at build time) instead of a separate template. New installs forward OAuth credentials (Microsoft, GitHub, LinkedIn, Slack, Zoom), `TRUSTED_PROXY_IPS`, `RATE_LIMIT_STORE`, `LOG_LEVEL`, `NATIVE_SIGN_SESSION_SECRET`, retention settings, Turnstile, database pool timeouts and the bundled `docuseal` service, and the generated `.env.example` lists every setting. Existing installs keep their `compose.yaml`; `harly update` does not rewrite it.
+- Help text and the README use the global `harly` command instead of `npx`.
+- The CLI documentation has a command reference (`status`, `update`/`upgrade`, `updater`, `install-global`, `telemetry`) and a page on CLI telemetry and how to opt out. Resource-profile thresholds in the docs match the installer.
+
+### Fixed
+
+- `harly restore` rejects an archive whose `manifest.json` is missing, malformed or does not list `database.dump` with a clear error, before anything is changed, instead of crashing.
+
 ## 0.7.0 — 2026-11-07
 
 ### Telemetry (opt-in)

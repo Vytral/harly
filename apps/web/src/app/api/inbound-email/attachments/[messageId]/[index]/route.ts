@@ -5,6 +5,9 @@ import { storage } from "@/lib/storage";
 import { mailThreadScopeSql } from "@/features/mailbox/data";
 import { resolveSearchActor } from "@/features/search/workspace-search";
 import { listWorkspaceMailboxAttachments } from "@/lib/mailbox/attachment-access";
+import { logAuditEvent } from "@/lib/audit-log";
+
+export const runtime = "nodejs";
 
 export async function GET(
   _request: NextRequest,
@@ -21,7 +24,7 @@ export async function GET(
     return NextResponse.json({ error: "Invalid attachment." }, { status: 400 });
   }
 
-  const { organization: workspace } = await getWorkspaceContext();
+  const { organization: workspace, user } = await getWorkspaceContext();
   const attachments = await listWorkspaceMailboxAttachments({
     messageId,
     workspaceId: workspace.id,
@@ -38,6 +41,15 @@ export async function GET(
 
   try {
     const content = await storage.read(attachment.storageKey);
+    await logAuditEvent({
+      workspaceId: workspace.id,
+      actorId: user.id,
+      actorEmail: user.email,
+      action: "mailbox.attachment.downloaded",
+      resourceType: "mail_attachment",
+      resourceId: attachment.id,
+      metadata: { filename: attachment.filename, size: attachment.size },
+    });
     // Buffer is not part of the browser BodyInit type exposed by Next. Copy it
     // into a Uint8Array so both the runtime and TypeScript agree on the body.
     const body = new Uint8Array(content).slice();
@@ -47,6 +59,7 @@ export async function GET(
         "Content-Length": String(content.length),
         "Content-Disposition": `attachment; filename*=UTF-8''${encodeURIComponent(attachment.filename)}`,
         "Cache-Control": "private, no-store",
+        "X-Content-Type-Options": "nosniff",
       },
     });
   } catch {

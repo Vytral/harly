@@ -9,6 +9,7 @@ export type ApiErrorCode =
   | "forbidden"
   | "not_found"
   | "conflict"
+  | "gone"
   | "unprocessable"
   | "rate_limited"
   | "internal";
@@ -19,6 +20,7 @@ const STATUS_BY_CODE: Record<ApiErrorCode, number> = {
   forbidden: 403,
   not_found: 404,
   conflict: 409,
+  gone: 410,
   unprocessable: 422,
   rate_limited: 429,
   internal: 500,

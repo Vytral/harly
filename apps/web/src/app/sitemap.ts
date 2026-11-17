@@ -1,8 +1,9 @@
 import type { MetadataRoute } from "next";
-import { and, eq, isNull } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 
 import { db, jobs, organization, workspaceSettings } from "@harly/db";
 import { normalizeCareerPageConfig } from "@/features/career-page/config";
+import { publicJobVisibilityConditions } from "@/features/jobs/data";
 import { getHarlyPublicOrigin } from "@/lib/public-origin";
 
 const origin = getHarlyPublicOrigin();
@@ -18,7 +19,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     if (!normalizeCareerPageConfig(workspace.config).seo.indexable) continue;
     const base = `${origin}/board/${workspace.slug}`;
     entries.push({ url: base, lastModified: workspace.updatedAt ?? new Date(), changeFrequency: "weekly", priority: 0.8 });
-    const openJobs = await db.select({ slug: jobs.slug, updatedAt: jobs.updatedAt }).from(jobs).where(and(eq(jobs.workspaceId, workspace.id), eq(jobs.status, "open"), isNull(jobs.deletedAt)));
+    const openJobs = await db.select({ slug: jobs.slug, updatedAt: jobs.updatedAt }).from(jobs).where(and(eq(jobs.workspaceId, workspace.id), publicJobVisibilityConditions()));
     entries.push(...openJobs.map((job) => ({ url: `${base}/jobs/${job.slug}`, lastModified: job.updatedAt, changeFrequency: "weekly" as const, priority: 0.7 })));
   }
   return entries;

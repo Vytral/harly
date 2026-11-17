@@ -1,3 +1,5 @@
+import { resolveClientIp } from "./client-ip";
+
 export type SecurityPolicy = {
   ipAllowlist: string[];
   allowedDomains: string[];
@@ -41,30 +43,13 @@ export function isIpAllowed(ip: string | null | undefined, allowlist: string[]):
 }
 
 /**
- * Resolve the client address without trusting attacker-controlled leftmost
- * forwarding headers. The original address is used only when the immediate
- * peer is explicitly configured as a trusted proxy.
+ * Resolve the client address; see `./client-ip` for the trust model.
+ * Kept here for existing importers.
  */
 export function getTrustedClientIp(
   request: Pick<Request, "headers">,
 ): string | undefined {
-  const forwarded = request.headers.get("x-forwarded-for");
-  const realIp = request.headers.get("x-real-ip");
-  if (forwarded) {
-    const hops = forwarded.split(",").map((h) => h.trim()).filter(Boolean);
-    if (hops.length > 0) {
-      const trusted = (process.env.TRUSTED_PROXY_IPS ?? "")
-        .split(",")
-        .map((h) => h.trim())
-        .filter(Boolean);
-      const peerIp = request.headers.get("x-forwarded-peer") ?? realIp ?? null;
-      if (trusted.length > 0 && peerIp && trusted.includes(peerIp)) {
-        return hops[0];
-      }
-      return hops[hops.length - 1];
-    }
-  }
-  return realIp ?? undefined;
+  return resolveClientIp(request.headers);
 }
 
 export function isEmailDomainAllowed(email: string, domains: string[]): boolean {
@@ -73,6 +58,38 @@ export function isEmailDomainAllowed(email: string, domains: string[]): boolean 
   return domains.some((allowed) => domain === allowed || domain.endsWith(`.${allowed}`));
 }
 
+/**
+ * Coarse "browser/OS" family of a User-Agent, e.g. `chrome/windows`. Every
+ * mainstream browser starts its UA with `Mozilla/5.0`, so the first token says
+ * nothing; the order of the checks matters because Chromium derivatives also
+ * announce Chrome and Safari. Version numbers are ignored on purpose so an
+ * auto-update does not look like a different client. Returns null when the
+ * string is empty.
+ */
+export function userAgentFamily(userAgent: string | null | undefined): string | null {
+  const ua = userAgent?.trim();
+  if (!ua) return null;
+
+  let browser: string;
+  if (/\b(?:Edg|EdgA|EdgiOS|Edge)\//.test(ua)) browser = "edge";
+  else if (/\b(?:OPR|OPiOS|Opera)\//.test(ua)) browser = "opera";
+  else if (/\b(?:Firefox|FxiOS)\//.test(ua)) browser = "firefox";
+  else if (/\b(?:Chrome|CriOS|Chromium)\//.test(ua)) browser = "chrome";
+  else if (/\bSafari\//.test(ua) && /\bVersion\//.test(ua)) browser = "safari";
+  else browser = ua.split(/[\s/]/)[0]?.toLowerCase() || "unknown";
+
+  let os = "other";
+  if (/\b(?:iPhone|iPad|iPod)\b/.test(ua)) os = "ios";
+  else if (/\bAndroid\b/.test(ua)) os = "android";
+  else if (/\bWindows\b/.test(ua)) os = "windows";
+  else if (/\bCrOS\b/.test(ua)) os = "chromeos";
+  else if (/\bMac OS X\b|\bMacintosh\b/.test(ua)) os = "macos";
+  else if (/\bLinux\b|\bX11\b/.test(ua)) os = "linux";
+
+  return `${browser}/${os}`;
+}
+
+/** True when the IP changed and the browser or OS family changed with it. */
 export function detectSuspiciousSession(input: {
   previousIp?: string | null;
   currentIp?: string | null;
@@ -80,7 +97,7 @@ export function detectSuspiciousSession(input: {
   currentUserAgent?: string | null;
 }): boolean {
   const ipChanged = Boolean(input.previousIp && input.currentIp && input.previousIp !== input.currentIp);
-  const previousFamily = input.previousUserAgent?.split(" ")[0]?.split("/")[0];
-  const currentFamily = input.currentUserAgent?.split(" ")[0]?.split("/")[0];
+  const previousFamily = userAgentFamily(input.previousUserAgent);
+  const currentFamily = userAgentFamily(input.currentUserAgent);
   return ipChanged && Boolean(previousFamily && currentFamily && previousFamily !== currentFamily);
 }

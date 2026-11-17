@@ -29,6 +29,7 @@ import {
   type StageExecutor,
 } from "@/features/pipeline/stage-resolver";
 
+import { publicJobVisibilityConditions } from "@/features/jobs/visibility";
 import { emitWebhookEvent } from "@/server/webhooks/emit";
 import {
   persistDomainEvent,
@@ -254,6 +255,8 @@ export async function createApplicationForApi(input: {
   jobId: string;
   candidateId: string;
   source?: string;
+  /** Publishable keys may only apply to jobs that are public (open, published). */
+  requirePublicJob?: boolean;
 }): Promise<Application> {
   const { workspaceId, jobId, candidateId } = input;
 
@@ -268,6 +271,7 @@ export async function createApplicationForApi(input: {
           eq(jobs.id, jobId),
           eq(jobs.workspaceId, workspaceId),
           isNull(jobs.deletedAt),
+          input.requirePublicJob ? publicJobVisibilityConditions() : undefined,
         ),
       )
       .for("key share")

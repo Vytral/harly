@@ -8,6 +8,7 @@ const state = vi.hoisted(() => ({
   idem: null as Record<string, unknown> | null,
   send: vi.fn(),
   insertCanonical: vi.fn(),
+  from: undefined as string | undefined,
   flagEnabled: true,
   senderError: null as unknown,
   failAcceptanceWrites: false,
@@ -86,7 +87,7 @@ vi.mock("@harly/db", () => {
 vi.mock("@/lib/email", () => ({
   getWorkspaceEmailSender: async () => {
     if (state.senderError) throw state.senderError;
-    return { send: state.send };
+    return { send: state.send, from: state.from };
   },
 }));
 vi.mock("./canonical", () => ({
@@ -120,6 +121,7 @@ beforeEach(() => {
   state.idem = null;
   state.send.mockReset();
   state.insertCanonical.mockReset();
+  state.from = undefined;
   state.flagEnabled = true;
   state.senderError = null;
   state.failAcceptanceWrites = false;
@@ -135,6 +137,31 @@ describe("sendCanonicalEmail", () => {
     expect(result).toMatchObject({ delivered: true, persisted: true, threadId: "thread-1" });
     expect(state.send).toHaveBeenCalledTimes(1);
     expect(state.idem).toMatchObject({ status: "sent", providerMessageId: "prov-1", mailMessageId: "mail-1" });
+  });
+
+  it("records the per-recruiter sender it used, not the platform EMAIL_FROM", async () => {
+    state.send.mockResolvedValue({ messageId: "prov-1" });
+    state.insertCanonical.mockResolvedValue(CANONICAL_OK);
+    state.from = "Riley Recruiter <riley@hiring.example.test>";
+
+    await sendCanonicalEmail(INPUT);
+
+    expect(state.insertCanonical).toHaveBeenCalledWith(
+      expect.objectContaining({ fromEmail: "riley@hiring.example.test" }),
+    );
+  });
+
+  it("sanitizes composer HTML before it reaches the provider", async () => {
+    state.send.mockResolvedValue({ messageId: "prov-1" });
+    state.insertCanonical.mockResolvedValue(CANONICAL_OK);
+
+    await sendCanonicalEmail({
+      ...INPUT,
+      htmlBody: '<p onclick="x()">Hi</p><script>alert(1)</script><img src=x onerror=alert(2)>',
+    });
+
+    const react = state.send.mock.calls[0]![0].react as { props: { dangerouslySetInnerHTML: { __html: string } } };
+    expect(react.props.dangerouslySetInnerHTML.__html).toBe("<p>Hi</p>");
   });
 
   it("never marks an accepted message failed when saving the conversation fails afterwards", async () => {

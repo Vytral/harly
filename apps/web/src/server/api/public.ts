@@ -5,13 +5,14 @@ import { eq } from "drizzle-orm";
 import { ApiError, type ApiScope } from "@harly/api";
 import { db, organization } from "@harly/db";
 
+import { getPublicWorkspace } from "@/lib/public-workspace";
 import { authenticateApiKey, type ApiKeyContext } from "./auth";
 
 /**
  * Resolve the workspace a public request targets. Two modes:
  *  - an API key is present (publishable `pk_` in a header or `?pk=`) → use its
  *    workspace, and (optionally) assert a scope.
- *  - otherwise use the only organization in this single-tenant installation.
+ *  - otherwise use the public workspace (see `getPublicWorkspace`).
  */
 export type PublicWorkspace = {
   workspaceId: string;
@@ -43,10 +44,9 @@ export async function resolvePublicWorkspace(
     return { workspaceId: key.workspaceId, slug: org.slug, key };
   }
 
-  const [org] = await db
-    .select({ id: organization.id, slug: organization.slug })
-    .from(organization)
-    .limit(1);
+  // Same resolver as the public site, so the API and the pages always agree on
+  // which workspace a key-less request targets.
+  const org = await getPublicWorkspace();
   if (!org) throw ApiError.notFound("Workspace not found.");
 
   return { workspaceId: org.id, slug: org.slug, key: null };

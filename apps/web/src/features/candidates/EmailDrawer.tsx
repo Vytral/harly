@@ -8,6 +8,7 @@ import Link from "next/link";
 
 import { sendCandidateMessage, generateEmailDraftAction } from "@/features/candidates/actions";
 import { DrawerLayout } from "@/features/candidates/DrawerLayout";
+import { EMAIL_DRAFT_TYPES, type EmailDraftType } from "@/features/candidates/email-draft-types";
 import {
   interpolateTemplate,
   type TemplateValues,
@@ -23,9 +24,6 @@ export type EmailTemplateOption = {
   body: string;
 };
 
-type DraftType = "screening" | "interview_invite" | "rejection" | "offer" | "followup";
-
-const DRAFT_TYPES: DraftType[] = ["screening", "interview_invite", "rejection", "offer", "followup"];
 
 export function EmailDrawer({
   candidateId,
@@ -52,7 +50,7 @@ export function EmailDrawer({
   const router = useRouter();
   const firstName = name.trim().split(/\s+/)[0] || t("fallbackName");
   const [open, setOpen] = useState(false);
-  const [selectedDraftType, setSelectedDraftType] = useState<DraftType>("screening");
+  const [selectedDraftType, setSelectedDraftType] = useState<EmailDraftType>("screening");
 
   const composerTemplates: ComposerTemplate[] = templates.map((template) => ({
     id: template.id,
@@ -74,7 +72,7 @@ export function EmailDrawer({
               <p className="text-[12px] font-semibold uppercase tracking-wide text-muted-foreground">{t("draftWithAi")}</p>
               <p className="text-xs text-muted-foreground">{t("draftHint")}</p>
               <div className="flex flex-wrap gap-1.5">
-                {DRAFT_TYPES.map((id) => (
+                {EMAIL_DRAFT_TYPES.map((id) => (
                   <button
                     key={id}
                     type="button"

@@ -1,13 +1,9 @@
-import { NextResponse } from "next/server";
-
+import { apiError, withApi } from "@/server/api/respond";
 import { AUTOMATIONS_API_GONE_MESSAGE } from "@/features/automations/status";
 
 export const runtime = "nodejs";
 
-export const POST = (..._args: unknown[]) => {
-  void _args;
-  return NextResponse.json(
-    { ok: false, error: AUTOMATIONS_API_GONE_MESSAGE },
-    { status: 410 },
-  );
-};
+/** The public Automations HTTP API is withdrawn: answer 410 in the standard error envelope. */
+const gone = withApi(async () => apiError("gone", AUTOMATIONS_API_GONE_MESSAGE));
+
+export const POST = gone;

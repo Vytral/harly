@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { httpUrlSchema } from "@harly/validators";
 import {
   candidateCreateSchema,
   candidateNoteCreateSchema,
@@ -50,9 +51,9 @@ const candidateSchema = z.object({
   location: z.string().nullable(),
   headline: z.string().nullable(),
   summary: z.string().nullable(),
-  linkedinUrl: z.string().url().nullable(),
-  githubUrl: z.string().url().nullable(),
-  websiteUrl: z.string().url().nullable(),
+  linkedinUrl: httpUrlSchema.nullable(),
+  githubUrl: httpUrlSchema.nullable(),
+  websiteUrl: httpUrlSchema.nullable(),
   educationEntries: z.array(z.any()),
   experienceEntries: z.array(z.any()),
   createdAt: z.string(),

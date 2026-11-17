@@ -25,6 +25,9 @@ describe("isDemoBlockedAuthPath", () => {
   it("blocks credential sign-in so only /api/demo/enter can mint sessions", () => {
     expect(isDemoBlockedAuthPath("/sign-in/email")).toBe(true);
     expect(isDemoBlockedAuthPath("/sign-in/social")).toBe(true);
+    expect(isDemoBlockedAuthPath("/sign-in/passkey")).toBe(true);
+    expect(isDemoBlockedAuthPath("/sign-in/magic-link")).toBe(true);
+    expect(isDemoBlockedAuthPath("/magic-link/verify")).toBe(true);
     expect(isDemoBlockedAuthPath("/forget-password")).toBe(true);
     expect(isDemoBlockedAuthPath("/reset-password")).toBe(true);
   });

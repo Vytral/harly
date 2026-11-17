@@ -19,6 +19,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { ensureSensitiveActionReauth } from "@/features/security/reauth-client";
 import { deletePasskeyAction } from "@/features/security/actions";
 import { DemoLockedNotice } from "@/features/demo/DemoLockedNotice";
 
@@ -42,6 +43,7 @@ export function PasskeysCard({
   const [adding, setAdding] = useState(false);
   const [passkeyName, setPasskeyName] = useState("");
   const t = useTranslations("features.security.passkeysCard");
+  const tReauth = useTranslations("labels.security.reauth");
   const locale = useLocale();
   const [isPending, startTransition] = useTransition();
 
@@ -49,6 +51,10 @@ export function PasskeysCard({
     if (demoLocked) return;
     startTransition(async () => {
       try {
+        // Adding a credential needs a fresh passkey confirmation once the
+        // account already has one (the very first passkey cannot be gated).
+        if (passkeyList.length > 0) await ensureSensitiveActionReauth(tReauth);
+
         // 1. Get registration options from server
         const optRes = await fetch("/api/passkey/register");
         if (!optRes.ok) throw new Error(t("errors.optionsFailed"));
@@ -98,7 +104,14 @@ export function PasskeysCard({
   function handleDelete(id: string) {
     if (demoLocked) return;
     startTransition(async () => {
-      await deletePasskeyAction(id);
+      try {
+        await ensureSensitiveActionReauth(tReauth);
+        await deletePasskeyAction(id);
+      } catch (err: unknown) {
+        if (err instanceof Error && err.name === "NotAllowedError") return;
+        toast.error(err instanceof Error ? err.message : t("errors.removeFailed"));
+        return;
+      }
       setPasskeyList((prev) => prev.filter((p) => p.id !== id));
       toast.success(t("toasts.removed"));
     });

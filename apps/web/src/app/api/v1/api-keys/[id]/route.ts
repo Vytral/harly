@@ -17,7 +17,7 @@ function requireSecretKey(context: ApiKeyContext): void {
 export const DELETE = withApi(
   buildRouteHandler(deleteApiKeyContract, async ({ params, auth }) => {
     requireSecretKey(auth);
-    await revokeApiKey({ workspaceId: auth.workspaceId, keyId: params.id });
+    await revokeApiKey({ caller: auth, workspaceId: auth.workspaceId, keyId: params.id });
     return apiOk({ deleted: true });
   }),
 );

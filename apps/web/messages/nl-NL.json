@@ -826,6 +826,7 @@
     "signIn": "Inloggen",
     "title": "Account aanmaken",
     "subtitle": "Stel je ATS in enkele minuten in. Een creditcard is niet nodig.",
+    "joinSubtitle": "Create your account to join {name}.",
     "already": "Heb je al een account? <link>Log in</link>",
     "inviteOnly": "Aanmelden kan alleen op uitnodiging.",
     "inviteHelp": "Deze Harly-werkruimte is al ingesteld. Vraag een beheerder om een uitnodiging; via de link krijg je de juiste rol.",
@@ -1062,6 +1063,7 @@
     "joinName": "Deelnemen aan {name}",
     "joinRole": "Je neemt deel als <strong>{role}</strong>.",
     "signInJoin": "Log in om deel te nemen",
+    "createAccountJoin": "Create an account",
     "signInJoinHelp": "Log in of maak een account aan om deel te nemen aan deze werkruimte.",
     "invitedRole": "Je bent uitgenodigd als <strong>{role}</strong> met {email}.",
     "invitedBy": "Uitgenodigd door <strong>{name}</strong>",
@@ -2625,6 +2627,16 @@
         "welcomeBack": "Welkom terug",
         "signInSubtitle": "Log in op je kandidatenportaal",
         "poweredBy": "Mogelijk gemaakt door <b>Harly</b>"
+      }
+    },
+    "portalMagic": {
+      "page": {
+        "metadataTitle": "Confirm sign-in",
+        "title": "Confirm sign-in",
+        "description": "Select the button to sign in to the candidate portal. This link works once.",
+        "missingToken": "This sign-in link is incomplete. Request a new one.",
+        "confirm": "Sign in",
+        "backToLogin": "Back to sign in"
       }
     },
     "portalNotifications": {
@@ -7658,7 +7670,8 @@
         "errors": {
           "optionsFailed": "De registratieopties konden niet worden opgehaald.",
           "registrationFailed": "Registratie is mislukt.",
-          "registerFailed": "De toegangssleutel kon niet worden geregistreerd."
+          "registerFailed": "De toegangssleutel kon niet worden geregistreerd.",
+          "removeFailed": "Could not remove the passkey."
         }
       },
       "scimProvisioningCard": {
@@ -10865,6 +10878,10 @@
         "title": "Mogelijke dubbele kandidaat",
         "body": "Harly AI vond een mogelijke overeenkomst met {names}."
       },
+      "scheduledReportFailing": {
+        "title": "Scheduled report keeps failing: {name}",
+        "body": "The last {failures} runs failed. Harly keeps retrying; check the schedule in Reports."
+      },
       "jobApprovalRequested": {
         "title": "Goedkeuring gevraagd: {jobTitle}",
         "body": "Bekijk deze vacature voordat de werving begint."
@@ -11221,6 +11238,7 @@
         "unableToUpdateBoardBranding": "De huisstijl van de vacaturepagina kon niet worden bijgewerkt.",
         "inviteOwnerBlocked": "De rol Eigenaar kun je niet via een uitnodiging toekennen. Nodig deze persoon uit met een andere rol en maak die persoon daarna eigenaar via de ledenlijst.",
         "alreadyPendingInvitation": "Voor dit e-mailadres staat al een openstaande uitnodiging.",
+        "alreadyMember": "This person is already a member of the workspace. Change their role from the members list.",
         "invalidInvitation": "Deze uitnodiging is niet geldig.",
         "unknownRole": "Onbekende rol.",
         "unableToInviteMember": "Het lid kon niet worden uitgenodigd.",
@@ -12207,6 +12225,7 @@
         "onlySentDecide": "Alleen verstuurde aanbiedingen kunnen een besluit krijgen.",
         "expiredDecide": "Dit aanbod is verlopen en er kan geen besluit meer over worden genomen.",
         "applicationNoLongerActive": "Deze sollicitatie is niet meer actief. Ververs de pagina en probeer het opnieuw.",
+        "offerChanged": "This offer was changed by another recruiter. Refresh and try again.",
         "cannotWithdraw": "Dit aanbod kan niet meer worden ingetrokken.",
         "candidateFallback": "Kandidaat",
         "hiringTeamTitle": "Aanbod {decision}, {title}",

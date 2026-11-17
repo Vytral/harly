@@ -51,6 +51,7 @@ import {
 import { PhoneInput } from "@/components/ui/PhoneInput";
 import { Button } from "@/components/ui/button";
 import { CaptchaWidget } from "@/components/CaptchaWidget";
+import { HoneypotField } from "@/components/HoneypotField";
 import type { CaptchaProvider } from "@/lib/captcha";
 
 const initialState: ApplyJobActionState = {
@@ -1811,6 +1812,7 @@ export function ApplyForm({
       onSubmit={handleSubmit}
       className={flatVariant ? "space-y-8" : "space-y-6"}
     >
+      <HoneypotField />
       <input
         id="resumeFile"
         type="file"

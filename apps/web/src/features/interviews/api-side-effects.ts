@@ -45,7 +45,7 @@ import {
 import { getInboundReplyTo } from "@/lib/email/inbound-token";
 import {
   interviewEmailDedupeKey,
-  resolveInterviewEmailZoneFor,
+  resolveInterviewZone,
   type InterviewEmailKind,
 } from "@/features/interviews/email-queue";
 import { createLogger } from "@/lib/logger";
@@ -148,7 +148,7 @@ async function sendInterviewEmail(
   const kind = `interview.${action}` as InterviewEmailKind;
   // The API has no request zone. Reschedule and cancel keep the original
   // invite's zone; a new invite uses the acting user's profile zone, then UTC.
-  const timeZone = await resolveInterviewEmailZoneFor({
+  const timeZone = await resolveInterviewZone({
     workspaceId,
     kind,
     interviewId: interview.id,
@@ -192,6 +192,7 @@ async function syncCalendarForApi(
   interview: Interview,
   context: InterviewContext,
   action: ApiInterviewAction,
+  timeZone: string,
   strict = false,
   database: typeof db = db,
 ) {
@@ -233,7 +234,7 @@ async function syncCalendarForApi(
           durationMins: interview.durationMins,
           attendees: attendees.length > 0 ? attendees : undefined,
           location: interview.location ?? undefined,
-          timeZone: "UTC",
+          timeZone,
         }),
       isSuccess: Boolean,
       strict,
@@ -258,7 +259,7 @@ async function syncCalendarForApi(
         attendees: attendees.length > 0 ? attendees : undefined,
         location: interview.location ?? undefined,
         mode: interview.mode === "video" ? "video" : undefined,
-        timeZone: "UTC",
+        timeZone,
       }),
     isSuccess: (result) => result.ok,
     resourceId: (result) => (result.ok ? result.eventId : undefined),
@@ -274,6 +275,8 @@ async function syncVideoForApi(input: {
   context: InterviewContext;
   previous?: Interview;
   action: ApiInterviewAction;
+  /** From `resolveInterviewZone`, so calendar events match the invite email. */
+  timeZone: string;
   meetingProvider?: ApiMeetingProvider;
   strict?: boolean;
   database?: typeof db;
@@ -284,6 +287,7 @@ async function syncVideoForApi(input: {
     context,
     previous,
     action,
+    timeZone,
     strict = false,
     database = db,
   } = input;
@@ -413,6 +417,7 @@ async function syncVideoForApi(input: {
       interview,
       context,
       action,
+      timeZone,
       strict,
       database,
     );
@@ -442,6 +447,7 @@ async function syncVideoForApi(input: {
         interview,
         context,
         action,
+        timeZone,
         strict,
         database,
       );
@@ -455,6 +461,7 @@ async function syncVideoForApi(input: {
         interview,
         context,
         action,
+        timeZone,
         strict,
         database,
       );
@@ -618,6 +625,7 @@ async function syncVideoForApi(input: {
       interview,
       context,
       action,
+      timeZone,
       strict,
       database,
     );
@@ -668,11 +676,24 @@ export async function runApiInterviewSideEffects(input: {
   }
   if (!context) return;
 
+  // One zone for the invite email and every calendar / video event. The API
+  // has no request zone: a reschedule or cancel keeps the original invite's
+  // zone, otherwise the actor's profile zone, then the workspace zone, then UTC.
+  const timeZone = await resolveInterviewZone({
+    workspaceId: input.workspaceId,
+    kind: `interview.${input.action}` as InterviewEmailKind,
+    interviewId: input.interview.id,
+    requested: null,
+    actorId: input.actorUserId,
+    database,
+  });
+
   let videoSync: "calendar" | "video" | "none" = "none";
   try {
     videoSync = await syncVideoForApi({
       ...input,
       context,
+      timeZone,
       strict: input.strictSideEffects,
       database,
     });
@@ -693,6 +714,7 @@ export async function runApiInterviewSideEffects(input: {
         input.interview,
         context,
         input.action,
+        timeZone,
         input.strictSideEffects,
         database,
       );

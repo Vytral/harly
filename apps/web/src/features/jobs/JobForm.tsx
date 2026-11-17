@@ -70,7 +70,7 @@ type JobFormProps = {
   eyebrow?: string;
   statusBadge?: ReactNode;
   headerActions?: ReactNode;
-  /** View job / Share job / status actions , rendered in the editor rail
+  /** View job / Share job / status actions - rendered in the editor rail
    *  (desktop) and behind the title (mobile/tablet) instead of the top bar. */
   railActions?: ReactNode;
   previewWorkspace?: (WorkspaceBoardBranding & { id: string }) | null;
@@ -99,7 +99,7 @@ function initialSectionsFor(
       });
     return migrated;
   }
-  // New jobs start with just the main description , no pre-seeded empty
+  // New jobs start with just the main description - no pre-seeded empty
   // Responsibilities/Requirements/Benefits editors (three empty rich-text
   // boxes was ~700px of dead space on every new job). "Add section" below
   // the editor still lets the user add them when they actually want to.
@@ -254,7 +254,7 @@ export function JobForm({
   const reviewSectionRef = useRef<HTMLDivElement>(null);
 
   // Lazy-mount the hiring-team/AI-matching panel only once the Review
-  // section actually scrolls into view , avoids running the AI cost surface
+  // section actually scrolls into view - avoids running the AI cost surface
   // just because it's technically in the DOM below the fold.
   useEffect(() => {
     if (reviewInView) return;
@@ -273,7 +273,7 @@ export function JobForm({
   // Fields the live preview needs but that aren't already lifted controlled
   // state (title/description/sections/keywords/photos/workplace all are).
   // Read straight off the form via a single bubbling listener instead of
-  // lifting every remaining field to controlled state , keeps every section
+  // lifting every remaining field to controlled state - keeps every section
   // file's existing uncontrolled/FormData submission mechanics untouched.
   const [extraFields, setExtraFields] = useState<FormPreviewFields>({
     department: job?.department ?? "",
@@ -317,7 +317,7 @@ export function JobForm({
         // Same values -> same state object -> no re-render of the whole form.
         setExtraFields((prev) => (sameFormPreviewFields(prev, next) ? prev : next));
       });
-      // Skip the sync triggered by mounting/hydration , only real user edits
+      // Skip the sync triggered by mounting/hydration - only real user edits
       // should flip the "unsaved changes" guard on.
       if (!isInitialSync) setDirty(true);
       isInitialSync = false;
@@ -651,7 +651,7 @@ export function JobForm({
           className="relative flex w-full min-w-0 flex-1 flex-col overflow-y-auto overscroll-contain xl:w-[34rem] xl:flex-none 2xl:w-[40rem]"
         >
           {/*
-            No `min-h-full` here on purpose , percentage min-height on a flex
+            No `min-h-full` here on purpose - percentage min-height on a flex
             item inside this `overflow-y-auto` column freezes the item's own
             box at the column's viewport height instead of growing with real
             content (a Chromium flex sizing quirk), while content keeps

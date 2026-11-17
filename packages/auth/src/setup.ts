@@ -10,6 +10,7 @@ import {
   member,
   organization,
   user,
+  workspaceSettings,
 } from "@harly/db";
 
 export const SETUP_CLAIM_TTL_MS = 15 * 60 * 1000;
@@ -109,11 +110,34 @@ async function hasPendingInvitation(email: string): Promise<boolean> {
   return Boolean(row);
 }
 
+/** Request header carrying the shareable invite-link token on sign-up. */
+export const INVITE_LINK_HEADER = "x-harly-invite-link";
+
+/**
+ * True when `token` is the secret of a currently enabled shareable invite link.
+ * The token is a bearer secret exactly like the /join/<token> URL itself, so
+ * presenting it proves the person was handed the link.
+ */
+export async function isValidInviteLinkToken(
+  token: string | null | undefined,
+): Promise<boolean> {
+  const cleaned = token?.trim();
+  if (!cleaned) return false;
+  const [row] = await db
+    .select({ enabled: workspaceSettings.inviteLinkEnabled })
+    .from(workspaceSettings)
+    .where(eq(workspaceSettings.inviteLinkToken, cleaned))
+    .limit(1);
+  return Boolean(row?.enabled);
+}
+
 /** Gate used by Better Auth before every user insert. */
 export async function authorizeUserCreation(input: {
   email: string;
   claimId?: string | null;
   allowSsoProvisioning?: boolean;
+  /** Token of a shareable invite link, sent by the join/sign-up page. */
+  inviteLinkToken?: string | null;
 }): Promise<void> {
   const normalizedEmail = normalizeSetupEmail(input.email);
   const [bootstrap] = await db
@@ -135,6 +159,13 @@ export async function authorizeUserCreation(input: {
   }
 
   if (await hasPendingInvitation(normalizedEmail)) return;
+
+  // A valid shareable invite link lets a new person create their account; the
+  // link page then joins them with the link's role. An enabled link exists
+  // only for an existing workspace, so this never opens pre-setup signups.
+  if (await isValidInviteLinkToken(input.inviteLinkToken)) {
+    return;
+  }
 
   // SSO registration is owner-controlled and the SSO plugin assigns the new
   // account to the configured organization after this hook returns. Without

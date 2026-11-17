@@ -106,7 +106,10 @@ export async function getActorPermissions(
     sessionContext.organization.id === workspaceId &&
     sessionContext.user.id === actorId
   ) {
-    const roleKey = sessionContext.roleKey ?? sessionContext.role ?? "admin";
+    // Fail closed: a context without a resolvable role gets no permissions
+    // (never a default privileged role).
+    const roleKey = sessionContext.roleKey ?? sessionContext.role;
+    if (!roleKey) return [];
     return getRolePermissions(workspaceId, roleKey);
   }
 

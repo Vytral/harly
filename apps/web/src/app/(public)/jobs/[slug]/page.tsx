@@ -2,13 +2,8 @@ import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 
 import { getPublicJobDetail } from "@/features/jobs/data";
-import { JobChrome } from "@/features/career-page/job/JobChrome";
-import { JobOverviewBody } from "@/features/career-page/job/JobOverviewBody";
-import {
-  jobPostingJsonLd,
-  publicJobMetadata,
-  serializeJsonLd,
-} from "@/features/career-page/seo";
+import { PublicJobOverview } from "@/features/career-page/job/PublicJobOverview";
+import { publicJobMetadata } from "@/features/career-page/seo";
 import { isPortalEnabled } from "@/lib/portal-auth";
 import { getPublicWorkspaceSlug } from "@/lib/public-workspace";
 
@@ -45,32 +40,11 @@ export default async function JobDetailPage({ params }: JobDetailPageProps) {
 
   if (!detail) notFound();
 
-  const { job, workspace, config } = detail;
-  const jsonLd = config.seo.indexable ? jobPostingJsonLd(workspace, job) : null;
-
   return (
-    <>
-      {jsonLd ? (
-        <script
-          type="application/ld+json"
-          dangerouslySetInnerHTML={{ __html: serializeJsonLd(jsonLd) }}
-        />
-      ) : null}
-      <JobChrome
-        config={config}
-        workspace={workspace}
-        job={job}
-        boardRoot="/"
-        activeTab="overview"
-        portalEnabled={portalEnabled}
-      >
-        <JobOverviewBody
-          job={job}
-          process={config.process}
-          accent={config.theme.accent ?? workspace.primaryColor ?? undefined}
-          rounded={config.theme.rounded}
-        />
-      </JobChrome>
-    </>
+    <PublicJobOverview
+      detail={detail}
+      boardRoot="/"
+      portalEnabled={portalEnabled}
+    />
   );
 }

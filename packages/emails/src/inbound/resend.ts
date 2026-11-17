@@ -1,6 +1,11 @@
 import { Resend } from "resend";
 
-import type { CanonicalInboundEmail, InboundEmailAdapter } from "./types";
+import {
+  InboundPayloadError,
+  type CanonicalInboundEmail,
+  type InboundEmailAdapter,
+  type InboundParseContext,
+} from "./types";
 
 const MAX_INBOUND_ATTACHMENT_BYTES = 25 * 1024 * 1024;
 
@@ -75,19 +80,22 @@ function verifySignature(
 
 async function parse(
   rawBody: string,
-  ctx: { apiKey?: string },
+  ctx: InboundParseContext,
 ): Promise<CanonicalInboundEmail> {
+  const warn = ctx.warn ?? ((message, meta) => console.warn(message, meta));
   if (!ctx.apiKey) {
     throw new Error("Resend inbound requires an API key to fetch the email body.");
   }
 
-  const payload = JSON.parse(rawBody) as {
-    type: string;
-    data: { email_id: string };
-  };
+  let payload: { type: string; data: { email_id: string } };
+  try {
+    payload = JSON.parse(rawBody) as typeof payload;
+  } catch {
+    throw new InboundPayloadError("Resend webhook body is not valid JSON.");
+  }
 
-  if (payload.type !== "email.received") {
-    throw new Error(`Unexpected Resend webhook event: ${payload.type}`);
+  if (payload.type !== "email.received" || !payload.data?.email_id) {
+    throw new InboundPayloadError(`Unexpected Resend webhook event: ${payload.type}`);
   }
 
   const resend = new Resend(ctx.apiKey);
@@ -106,12 +114,36 @@ async function parse(
           emailId: email.id,
           id: attachment.id,
         });
-      if (attachmentError || !signed) return null;
+      const meta = {
+        emailId: email.id,
+        attachmentId: attachment.id,
+        filename: attachment.filename ?? null,
+      };
+      if (attachmentError || !signed) {
+        warn("Inbound attachment skipped: could not get a download URL", {
+          ...meta,
+          reason: attachmentError?.message ?? "no signed URL",
+        });
+        return null;
+      }
 
-      const content = await readAttachmentBody(
-        await fetch(signed.download_url),
-      );
-      if (!content) return null;
+      let content: Buffer | null;
+      try {
+        content = await readAttachmentBody(await fetch(signed.download_url));
+      } catch (error) {
+        warn("Inbound attachment skipped: download failed", {
+          ...meta,
+          reason: error instanceof Error ? error.message : String(error),
+        });
+        return null;
+      }
+      if (!content) {
+        warn(
+          `Inbound attachment skipped: download was refused or larger than ${MAX_INBOUND_ATTACHMENT_BYTES} bytes`,
+          meta,
+        );
+        return null;
+      }
 
       return {
         filename: attachment.filename ?? signed.filename ?? "attachment",

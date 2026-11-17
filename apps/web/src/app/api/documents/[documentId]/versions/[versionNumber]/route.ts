@@ -30,7 +30,7 @@ export async function GET(
       return NextResponse.json({ error: "Version not found." }, { status: 404 });
     }
     const [version] = await db
-      .select({ storageKey: documentVersions.storageKey })
+      .select({ storageKey: documentVersions.storageKey, mimeType: documentVersions.mimeType })
       .from(documentVersions)
       .where(
         and(
@@ -52,7 +52,7 @@ export async function GET(
     });
     return new Response(bytes as unknown as BodyInit, {
       headers: {
-        "Content-Type": access.document.mimeType,
+        "Content-Type": version.mimeType ?? access.document.mimeType,
         "Content-Length": String(bytes.byteLength),
         "Content-Disposition": `attachment; filename*=UTF-8''${encodeURIComponent(`v${number}-${access.document.name}`)}`,
         "Cache-Control": "private, no-store",

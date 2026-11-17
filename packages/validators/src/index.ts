@@ -23,6 +23,22 @@ export const optionalTrimmedString = z
   .transform((value) => (typeof value === "string" ? value.trim() : ""))
   .transform((value) => (value.length > 0 ? value : undefined));
 
+/**
+ * True for an absolute URL that uses http or https. Candidate profile links are
+ * rendered as clickable links, so schemes such as `javascript:`, `data:` or
+ * `ftp:` must never be stored.
+ */
+export function isHttpUrl(value: string): boolean {
+  if (!URL.canParse(value)) return false;
+  const protocol = new URL(value).protocol;
+  return protocol === "http:" || protocol === "https:";
+}
+
+/** The one schema for a required http(s) URL (candidate profile links). */
+export const httpUrlSchema = z
+  .url({ protocol: /^https?$/, message: "URL must use http or https." })
+  .max(2048);
+
 export const optionalHttpsUrlSchema = optionalTrimmedString.refine(
   (value) => !value || (URL.canParse(value) && value.startsWith("https://")),
   "URL must use HTTPS.",
@@ -88,41 +104,52 @@ const candidateExperienceEntrySchema = z.object({
   description: z.string().trim().max(20_000).nullable().default(null),
 });
 
-function refineJobSalary(
-  values: {
-    salaryMin?: number | null;
-    salaryMax?: number | null;
-    currency?: string | null;
-    salaryPeriod?: "annual" | "monthly" | null;
-  },
-  ctx: z.RefinementCtx,
-) {
+type JobSalaryValues = {
+  salaryMin?: number | null;
+  salaryMax?: number | null;
+  currency?: string | null;
+  salaryPeriod?: "annual" | "monthly" | string | null;
+};
+
+/**
+ * The salary rules for a job as plain issues, so they can run against a full
+ * record (for example an existing job merged with a partial update) and not
+ * only against the fields of one request body.
+ */
+export function jobSalaryIssues(
+  values: JobSalaryValues,
+): { path: "salaryMax" | "currency" | "salaryPeriod"; message: string }[] {
+  const issues: { path: "salaryMax" | "currency" | "salaryPeriod"; message: string }[] = [];
   if (
     values.salaryMin != null &&
     values.salaryMax != null &&
     values.salaryMin > values.salaryMax
   ) {
-    ctx.addIssue({
-      code: "custom",
-      path: ["salaryMax"],
+    issues.push({
+      path: "salaryMax",
       message:
         "Maximum salary must be greater than or equal to minimum salary.",
     });
   }
   const hasAmount = values.salaryMin != null || values.salaryMax != null;
   if (hasAmount && !values.currency) {
-    ctx.addIssue({
-      code: "custom",
-      path: ["currency"],
+    issues.push({
+      path: "currency",
       message: "Currency is required when a salary amount is specified.",
     });
   }
   if (hasAmount && !values.salaryPeriod) {
-    ctx.addIssue({
-      code: "custom",
-      path: ["salaryPeriod"],
+    issues.push({
+      path: "salaryPeriod",
       message: "Pay period is required when a salary amount is specified.",
     });
+  }
+  return issues;
+}
+
+function refineJobSalary(values: JobSalaryValues, ctx: z.RefinementCtx) {
+  for (const issue of jobSalaryIssues(values)) {
+    ctx.addIssue({ code: "custom", path: [issue.path], message: issue.message });
   }
 }
 
@@ -187,9 +214,9 @@ export const candidateCreateSchema = z.object({
   location: nullableString,
   headline: nullableString,
   summary: nullableString,
-  linkedinUrl: z.url().nullish(),
-  githubUrl: z.url().nullish(),
-  websiteUrl: z.url().nullish(),
+  linkedinUrl: httpUrlSchema.nullish(),
+  githubUrl: httpUrlSchema.nullish(),
+  websiteUrl: httpUrlSchema.nullish(),
   educationEntries: z.array(candidateEducationEntrySchema).max(100).nullish(),
   experienceEntries: z.array(candidateExperienceEntrySchema).max(100).nullish(),
 });

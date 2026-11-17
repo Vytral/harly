@@ -24,7 +24,7 @@ import {
 } from "@/lib/email/interview-time";
 import {
   queueInterviewEmail,
-  resolveInterviewEmailZoneFor,
+  resolveInterviewZone,
   type InterviewEmailQueueResult,
 } from "@/features/interviews/email-queue";
 import {
@@ -317,7 +317,7 @@ export async function scheduleInterview(
     }
 
     // The in-app confirmation and the candidate email show the same zone.
-    const displayZone = await resolveInterviewEmailZoneFor({
+    const displayZone = await resolveInterviewZone({
       workspaceId: workspace.id,
       kind: "interview.scheduled",
       requested: data.timeZone ?? null,
@@ -546,7 +546,7 @@ export async function scheduleInterview(
               attendees: attendees.length > 0 ? attendees : undefined,
               location: data.location ?? undefined,
               mode: conferenceData ? "video" : undefined,
-              timeZone: data.timeZone ?? "UTC",
+              timeZone: displayZone,
             }),
           isSuccess: (providerResult) => providerResult.ok,
           resourceId: (providerResult) =>
@@ -1178,7 +1178,7 @@ export async function rescheduleInterview(input: {
     }
 
     // The in-app text and the reschedule email both use the original invite's zone.
-    const displayZone = await resolveInterviewEmailZoneFor({
+    const displayZone = await resolveInterviewZone({
       workspaceId: workspace.id,
       kind: "interview.rescheduled",
       interviewId: data.interviewId,
@@ -1320,7 +1320,7 @@ export async function rescheduleInterview(input: {
                 durationMins: data.durationMins,
                 attendees: attendees.length > 0 ? attendees : undefined,
                 location: data.location ?? undefined,
-                timeZone: data.timeZone ?? "UTC",
+                timeZone: displayZone,
               }),
             isSuccess: Boolean,
           });
@@ -1356,7 +1356,7 @@ export async function rescheduleInterview(input: {
               attendees: attendees.length > 0 ? attendees : undefined,
               location: data.location ?? undefined,
               mode: info.mode,
-              timeZone: data.timeZone ?? "UTC",
+              timeZone: displayZone,
             }),
           isSuccess: (result) => result.ok,
           resourceId: (result) => (result.ok ? result.eventId : undefined),
@@ -1698,6 +1698,18 @@ export async function updateInterview(input: {
       parsed.data.interviewId,
     );
 
+    // Calendar and video events use the same zone as the invite email. Only
+    // resolved (once) when an event is actually written.
+    let calendarZone: Promise<string> | undefined;
+    const getCalendarZone = () =>
+      (calendarZone ??= resolveInterviewZone({
+        workspaceId: workspace.id,
+        kind: "interview.rescheduled",
+        interviewId: data.interviewId,
+        requested: data.timeZone ?? null,
+        actorId: user.id,
+      }));
+
     if (
       data.interviewerId &&
       !(await isWorkspaceMember(workspace.id, data.interviewerId))
@@ -1881,7 +1893,7 @@ export async function updateInterview(input: {
             interviewId: row.id,
             provider: "google_calendar",
             operation: "upsert",
-            run: () =>
+            run: async () =>
               updateInterviewGCalEvent({
                 workspaceId: workspace.id,
                 gcalEventId: row.gcalEventId!,
@@ -1889,7 +1901,7 @@ export async function updateInterview(input: {
                 durationMins: effectiveDurationMins,
                 attendees: attendees.length > 0 ? attendees : undefined,
                 location: data.location ?? undefined,
-                timeZone: data.timeZone ?? "UTC",
+                timeZone: await getCalendarZone(),
               }),
             isSuccess: Boolean,
           });
@@ -2075,7 +2087,7 @@ export async function updateInterview(input: {
             interviewId: row.id,
             provider: "google_calendar",
             operation: "upsert",
-            run: () =>
+            run: async () =>
               syncInterviewToGCal({
                 workspaceId: workspace.id,
                 interviewId: row.id,
@@ -2085,7 +2097,7 @@ export async function updateInterview(input: {
                 attendees: attendees.length > 0 ? attendees : undefined,
                 location: data.location ?? undefined,
                 mode: "video",
-                timeZone: data.timeZone ?? "UTC",
+                timeZone: await getCalendarZone(),
               }),
             isSuccess: (result) => result.ok,
             resourceId: (result) => (result.ok ? result.eventId : undefined),
