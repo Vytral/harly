@@ -54,7 +54,6 @@
           "self-hosting/overview",
           "self-hosting/proxy-modes",
           "deployment/cli",
-          "deployment/telemetry",
           "deployment/cloud",
           "deployment/configuration"
         ]

@@ -13,6 +13,10 @@ operators. How to cut a release is in [RELEASING.md](RELEASING.md). The
 
 ## [Unreleased]
 
+### Removed
+
+- The anonymous install telemetry collector (`apps/telemetry`) and its documentation page. Harly and its CLI no longer send any usage data.
+
 ## [0.5.1] - 2026-11-16
 
 This release fixes the findings of a security and correctness audit. It adds
