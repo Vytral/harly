@@ -27,7 +27,7 @@ import {
   getTodayInterviews,
 } from "@/features/dashboard/widgets";
 import { getSetupChecklist } from "@/features/dashboard/setup-checklist";
-import { setupReadsFor } from "@/features/onboarding/checklist-model";
+import { setupReadsFor, showFirstRunWelcome } from "@/features/onboarding/checklist-model";
 import { REVIEW_QUEUE_HREF } from "@/features/review/rules";
 import { SampleDataBanner } from "@/features/sample-data/SampleDataBanner";
 import { getSampleDataStatus } from "@/features/sample-data/service";
@@ -77,17 +77,15 @@ export default async function DashboardPage({
       setupReads.checklist ? getSetupChecklist() : null,
       setupReads.sampleStatus ? getSampleDataStatus(organization.id) : null,
     ]);
-  // A brand-new workspace: no real job and no real applicant yet. Sample rows do
-  // not count, so loading sample data keeps the welcome until real work starts.
-  const firstRun =
-    !!setup &&
-    setup.visible &&
-    !setup.items.some(
-      (item) =>
-        (item.key === "create_job" || item.key === "pipeline_candidates") && item.done,
-    );
-  const aiConfigured = !!setup?.items.find((item) => item.key === "connect_ai")?.done;
   const sampleDataActive = setup?.sampleDataActive ?? sampleStatus?.active ?? false;
+  const firstRun = !!setup && showFirstRunWelcome({
+    visible: setup.visible,
+    sampleDataActive,
+    hasJobOrApplication: setup.items.some(
+      (item) => (item.key === "create_job" || item.key === "pipeline_candidates") && item.done,
+    ),
+  });
+  const aiConfigured = !!setup?.items.find((item) => item.key === "connect_ai")?.done;
 
   const forYou: ForYouItem[] = [];
   if (access.reviewCandidates) {

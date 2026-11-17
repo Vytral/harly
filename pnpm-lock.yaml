@@ -317,9 +317,6 @@ importers:
       sanitize-html:
         specifier: 2.18.1
         version: 2.18.1
-      seedface:
-        specifier: ^0.1.2
-        version: 0.1.2(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
       sharp:
         specifier: ^0.35.5
         version: 0.35.5(@types/node@22.20.5)
@@ -476,6 +473,9 @@ importers:
       '@harly/config':
         specifier: workspace:*
         version: link:../config
+      '@harly/storage':
+        specifier: workspace:*
+        version: link:../storage
       '@opentelemetry/api':
         specifier: ^1.9.1
         version: 1.9.1
@@ -8415,19 +8415,6 @@ packages:
 
   secure-json-parse@4.1.0:
     resolution: {integrity: sha512-l4KnYfEyqYJxDwlNVyRfO2E4NTHfMKAWdUuA8J0yve2Dz/E/PdBepY03RvyJpssIpRFwJoCD55wA+mEDs6ByWA==}
-
-  seedface@0.1.2:
-    resolution: {integrity: sha512-f/0TudzMIkUHFQUAj8tIeOhjL7eGXvDmqtMeaOTVcfjZYFhBUvWigNOtJotXdvn2dnLaIpwPN4PK/E6AlmKVvg==}
-    engines: {node: '>=16'}
-    hasBin: true
-    peerDependencies:
-      react: '>=17'
-      react-dom: '>=17'
-    peerDependenciesMeta:
-      react:
-        optional: true
-      react-dom:
-        optional: true
 
   selderee@0.11.0:
     resolution: {integrity: sha512-5TF+l7p4+OsnP8BCCvSyZiSPc4x4//p5uPwK8TCnVPJYRmU2aYKMpOXvw8zM5a5JvuuCGN1jmsMwuU2W02ukfA==}
@@ -18985,12 +18972,6 @@ snapshots:
   scheduler@0.27.0: {}
 
   secure-json-parse@4.1.0: {}
-
-  seedface@0.1.2(react-dom@19.2.4(react@19.2.4))(react@19.2.4):
-    optionalDependencies:
-      '@resvg/resvg-js': 2.6.2
-      react: 19.2.4
-      react-dom: 19.2.4(react@19.2.4)
 
   selderee@0.11.0:
     dependencies:

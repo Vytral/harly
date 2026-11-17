@@ -5,9 +5,12 @@ import { randomUUID } from "node:crypto";
 import { and, eq, inArray, sql } from "drizzle-orm";
 
 import {
+  aiEvaluations,
   applicationStageHistory,
   applications,
   applicationStatusForStageKind,
+  buildResumeLines,
+  candidateFiles,
   candidateNotes,
   candidates,
   db,
@@ -15,18 +18,32 @@ import {
   interviews,
   jobStages,
   jobs,
+  linesToPdf,
   sampleDataItems,
   type StageKind,
 } from "@harly/db";
 
+import { createLogger } from "@/lib/logger";
+import { privateResumeFileUrl, resumeKeyFromUrl } from "@/lib/resume/storage-key";
+import { storage } from "@/lib/storage";
+
 import {
   SAMPLE_EMAIL_DOMAIN,
   SAMPLE_JOB_SLUG_BASE,
-  SAMPLE_TITLE_PREFIX,
+  isSampleJobTitle,
   isSampleEmailAddress,
   type SampleEntityType,
 } from "./constants";
 import { buildSampleDataset } from "./dataset";
+
+const log = createLogger("sample-data-service");
+
+async function deleteSampleBlobs(keys: string[]) {
+  const results = await Promise.allSettled(keys.map((key) => storage.delete(key)));
+  for (const result of results) {
+    if (result.status === "rejected") log.error(result.reason, "failed to delete sample resume");
+  }
+}
 
 type Transaction = Parameters<Parameters<typeof db.transaction>[0]>[0];
 
@@ -104,9 +121,11 @@ export async function loadSampleData(input: {
   actorUserId: string;
   now?: Date;
 }): Promise<LoadSampleDataResult> {
+  const uploadedKeys: string[] = [];
   try {
-    return await insertSampleBatch(input);
+    return await insertSampleBatch(input, uploadedKeys);
   } catch (error) {
+    await deleteSampleBlobs(uploadedKeys);
     throw toSampleLoadError(error);
   }
 }
@@ -130,7 +149,7 @@ async function insertSampleBatch(input: {
   workspaceId: string;
   actorUserId: string;
   now?: Date;
-}): Promise<LoadSampleDataResult> {
+}, uploadedKeys: string[]): Promise<LoadSampleDataResult> {
   const { workspaceId, actorUserId } = input;
   const now = input.now ?? new Date();
   const dataset = buildSampleDataset();
@@ -192,6 +211,8 @@ async function insertSampleBatch(input: {
     const applicationIdByKey = new Map<string, string>();
 
     for (const [index, plan] of dataset.candidates.entries()) {
+      const appliedAt = daysBefore(now, plan.appliedDaysAgo);
+      const phone = `+1 202 555 ${String(100 + index).padStart(4, "0")}`;
       const [candidate] = await tx
         .insert(candidates)
         .values({
@@ -199,19 +220,34 @@ async function insertSampleBatch(input: {
           firstName: plan.firstName,
           lastName: plan.lastName,
           email: plan.email,
+          phone,
+          location: "Remote, Europe",
+          createdAt: appliedAt,
           headline: plan.headline,
           summary: plan.summary,
           skills: plan.skills,
+          avatarUrl: `/demo/candidates/portrait-${String([1, 2, 18, 5, 6, 4, 11, 7][index]).padStart(2, "0")}.jpg`,
         })
         .returning({ id: candidates.id });
       track("candidate", candidate.id);
       candidateIdByKey.set(plan.key, candidate.id);
 
+      const resume = buildResumeLines({ ...plan, phone, location: "Remote, Europe" }, index);
+      const bytes = linesToPdf(resume.lines);
+      const key = `workspaces/${workspaceId}/resumes/sample-${batchId}-${candidate.id}.pdf`;
+      await storage.put(key, bytes, "application/pdf");
+      uploadedKeys.push(key);
+      const [file] = await tx.insert(candidateFiles).values({
+        workspaceId, candidateId: candidate.id, fileName: resume.fileName,
+        fileUrl: privateResumeFileUrl(key), fileType: "application/pdf", fileSize: bytes.length,
+        uploadedById: actorUserId, createdAt: appliedAt,
+      }).returning({ id: candidateFiles.id });
+      track("candidate_file", file.id);
+
       const stageId = stageIdByKind.get(plan.stage);
       if (!stageId) {
         throw new Error(`The default pipeline has no ${plan.stage} stage.`);
       }
-      const appliedAt = daysBefore(now, plan.appliedDaysAgo);
       const [application] = await tx
         .insert(applications)
         .values({
@@ -227,6 +263,28 @@ async function insertSampleBatch(input: {
         .returning({ id: applications.id });
       track("application", application.id);
       applicationIdByKey.set(plan.key, application.id);
+
+      if (index >= 2) {
+        const score = [84, 73, 91, 77, 94, 47][index - 2];
+        const [evaluation] = await tx.insert(aiEvaluations).values({
+          workspaceId, candidateId: candidate.id, applicationId: application.id, jobId: job.id,
+          source: "rules", engine: "harly", provider: "harly", modelId: "harly-seeded-v1",
+          score, recommendation: score >= 90 ? "strong_yes" : score >= 78 ? "yes" : score >= 60 ? "maybe" : "no",
+          summary: plan.summary,
+          strengths: plan.skills,
+          gaps: plan.stage === "rejected"
+            ? ["Two years of experience; the role requires senior architecture and mentoring experience."]
+            : plan.key === "mateo-rossi" || plan.key === "kofi-mensah"
+              ? ["Validate hands-on frontend delivery for this product engineering role."]
+              : plan.stage === "offer"
+                ? ["Complete the outstanding reference checks before finalizing the offer."]
+                : ["Confirm role-specific architecture experience in the interview."],
+          criteria: plan.skills.map((skill) => ({ label: skill, score, evidence: `Listed in the candidate profile: ${skill}.` })),
+          usedResume: true, generatedById: actorUserId,
+          createdAt: new Date(appliedAt.getTime() + 24 * 60 * 60 * 1000),
+        }).returning({ id: aiEvaluations.id });
+        track("candidate_evaluation", evaluation.id);
+      }
 
       const [history] = await tx
         .insert(applicationStageHistory)
@@ -303,6 +361,8 @@ const TABLE_BY_ENTITY_TYPE: Record<SampleEntityType, string> = {
   application: "applications",
   application_stage_history: "application_stage_history",
   candidate_note: "candidate_notes",
+  candidate_file: "candidate_files",
+  candidate_evaluation: "ai_evaluations",
   interview: "interviews",
 };
 
@@ -447,6 +507,14 @@ async function lockTrackedRows(
       .where(inArray(applications.id, applicationIds))
       .for("update");
   }
+  const fileIds = idsOfType(live, "candidate_file");
+  if (fileIds.length > 0) {
+    await tx.select({ id: candidateFiles.id }).from(candidateFiles).where(inArray(candidateFiles.id, fileIds)).for("update");
+  }
+  const evaluationIds = idsOfType(live, "candidate_evaluation");
+  if (evaluationIds.length > 0) {
+    await tx.select({ id: aiEvaluations.id }).from(aiEvaluations).where(inArray(aiEvaluations.id, evaluationIds)).for("update");
+  }
   const interviewIds = idsOfType(live, "interview");
   if (interviewIds.length > 0) {
     await tx
@@ -507,7 +575,8 @@ export async function removeSampleData(input: {
 }): Promise<RemoveSampleDataResult> {
   const { workspaceId } = input;
 
-  return db.transaction(async (tx) => {
+  const deletedKeys: string[] = [];
+  const result = await db.transaction(async (tx): Promise<RemoveSampleDataResult> => {
     await lockWorkspace(tx, workspaceId);
 
     const tracked = await tx
@@ -572,10 +641,38 @@ export async function removeSampleData(input: {
         const row = byId.get(id);
         if (!row) live.delete(id);
         else if (
-          !row.title.startsWith(SAMPLE_TITLE_PREFIX) ||
+          !isSampleJobTitle(row.title) ||
           row.status !== "draft"
         ) {
           keep("job", id, "it is no longer a draft sample job");
+        }
+      }
+    }
+
+    const fileIdsToCheck = idsOfType(live, "candidate_file");
+    if (fileIdsToCheck.length > 0) {
+      const files = await tx.select({ id: candidateFiles.id, candidateId: candidateFiles.candidateId, fileUrl: candidateFiles.fileUrl })
+        .from(candidateFiles).where(and(eq(candidateFiles.workspaceId, workspaceId), inArray(candidateFiles.id, fileIdsToCheck)));
+      const byId = new Map(files.map((file) => [file.id, file]));
+      for (const id of fileIdsToCheck) {
+        const file = byId.get(id);
+        if (!file) live.delete(id);
+        else if (resumeKeyFromUrl(file.fileUrl) !== `workspaces/${workspaceId}/resumes/sample-${batchId}-${file.candidateId}.pdf`) {
+          keep("candidate_file", id, "its resume file has changed");
+        }
+      }
+    }
+
+    const evaluationIdsToCheck = idsOfType(live, "candidate_evaluation");
+    if (evaluationIdsToCheck.length > 0) {
+      const evaluations = await tx.select({ id: aiEvaluations.id, modelId: aiEvaluations.modelId, source: aiEvaluations.source })
+        .from(aiEvaluations).where(and(eq(aiEvaluations.workspaceId, workspaceId), inArray(aiEvaluations.id, evaluationIdsToCheck)));
+      const byId = new Map(evaluations.map((evaluation) => [evaluation.id, evaluation]));
+      for (const id of evaluationIdsToCheck) {
+        const evaluation = byId.get(id);
+        if (!evaluation) live.delete(id);
+        else if (evaluation.modelId !== "harly-seeded-v1" || evaluation.source !== "rules") {
+          keep("candidate_evaluation", id, "its evaluation has been replaced");
         }
       }
     }
@@ -654,6 +751,19 @@ export async function removeSampleData(input: {
       notes: 0,
       interviews: 0,
     };
+
+    const evaluationIds = idsOfType(live, "candidate_evaluation");
+    if (evaluationIds.length > 0) {
+      await tx.delete(aiEvaluations).where(and(eq(aiEvaluations.workspaceId, workspaceId), inArray(aiEvaluations.id, evaluationIds)));
+    }
+    const fileIds = idsOfType(live, "candidate_file");
+    if (fileIds.length > 0) {
+      const files = await tx.delete(candidateFiles).where(and(eq(candidateFiles.workspaceId, workspaceId), inArray(candidateFiles.id, fileIds))).returning({ fileUrl: candidateFiles.fileUrl });
+      for (const file of files) {
+        const key = resumeKeyFromUrl(file.fileUrl);
+        if (key?.startsWith(`workspaces/${workspaceId}/resumes/sample-`)) deletedKeys.push(key);
+      }
+    }
 
     const interviewIds = idsOfType(live, "interview");
     if (interviewIds.length > 0) {
@@ -779,6 +889,8 @@ export async function removeSampleData(input: {
       keptRecords,
     };
   });
+  await deleteSampleBlobs(deletedKeys);
+  return result;
 }
 
 /** Whether a sample batch is currently tracked for the workspace. */

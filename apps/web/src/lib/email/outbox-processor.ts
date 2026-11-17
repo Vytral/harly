@@ -100,7 +100,7 @@ const UNKNOWN_OUTCOME_NOTE =
  * and it carries no failure noise in the delivery log or the recruiter toast.
  */
 export const SAMPLE_RECIPIENT_NOTE =
-  "Not sent: the recipient is sample data (sample.invalid). Sample data never receives email.";
+  "Not sent: the recipient is sample data. Sample data never receives email.";
 
 function formatOfferDate(value: Date | null, locale: string): string | undefined {
   return value

@@ -18,7 +18,8 @@
     "@harly/config": "workspace:*",
     "@opentelemetry/api": "^1.9.1",
     "drizzle-orm": "^0.45.2",
-    "postgres": "^3.4.9"
+    "postgres": "^3.4.9",
+    "@harly/storage": "workspace:*"
   },
   "devDependencies": {
     "dotenv": "^17.4.2",

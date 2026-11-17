@@ -215,6 +215,15 @@ export function setupReadsFor(input: { demo: boolean; canManage: boolean }): {
     : { checklist: false, sampleStatus: true };
 }
 
+/** The first-job welcome gives way to the populated dashboard during a sample batch. */
+export function showFirstRunWelcome(input: {
+  visible: boolean;
+  sampleDataActive: boolean;
+  hasJobOrApplication: boolean;
+}): boolean {
+  return input.visible && !input.sampleDataActive && !input.hasJobOrApplication;
+}
+
 /** Derive every row, the next step and the card visibility from facts. */
 export function buildSetupChecklist(input: {
   facts: ChecklistFacts;

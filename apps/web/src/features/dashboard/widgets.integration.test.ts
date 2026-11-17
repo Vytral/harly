@@ -3,7 +3,7 @@ import { randomUUID } from "node:crypto";
 
 import { and, eq } from "drizzle-orm";
 
-import { db, jobStages, tasks } from "@harly/db";
+import { db, jobStages, sampleDataItems, tasks } from "@harly/db";
 
 import {
   createAuthorizationFixture,
@@ -151,6 +151,22 @@ describe.skipIf(!runPipelineIntegration)("dashboard widgets: permission and scop
     const full = await getPipelineOverview(fx.jobB);
     expect(full.jobs.map((job) => job.id)).toEqual(expect.arrayContaining([fx.jobB, fx.jobUnassignedEmpty]));
     expect(full.selected?.id).toBe(fx.jobB);
+  });
+
+  it("includes only tracked sample drafts, while respecting job scope", async () => {
+    actAs("full");
+    expect((await getPipelineOverview(fx.jobDraft)).jobs.map((job) => job.id)).not.toContain(fx.jobDraft);
+    const [tracking] = await db.insert(sampleDataItems).values({
+      workspaceId: fx.workspaceId, entityType: "job", entityId: fx.jobDraft, batchId: randomUUID(),
+    }).returning({ id: sampleDataItems.id });
+    try {
+      const full = await getPipelineOverview(fx.jobDraft);
+      expect(full.selected?.id).toBe(fx.jobDraft);
+      actAs("scoped");
+      expect((await getPipelineOverview(fx.jobDraft)).jobs.map((job) => job.id)).not.toContain(fx.jobDraft);
+    } finally {
+      await db.delete(sampleDataItems).where(eq(sampleDataItems.id, tracking.id));
+    }
   });
 
   it("pipeline stages exclude archived stages", async () => {

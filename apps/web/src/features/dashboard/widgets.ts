@@ -12,6 +12,7 @@ import {
   interviews,
   jobs,
   jobStages,
+  sampleDataItems,
   tasks,
   user,
 } from "@harly/db";
@@ -119,7 +120,17 @@ export const getPipelineOverview = cache(async (jobId?: string) => {
     .where(
       and(
         eq(jobs.workspaceId, workspace.id),
-        eq(jobs.status, "open"),
+        or(
+          eq(jobs.status, "open"),
+          and(
+            eq(jobs.status, "draft"),
+            exists(db.select({ id: sampleDataItems.id }).from(sampleDataItems).where(and(
+              eq(sampleDataItems.workspaceId, workspace.id),
+              eq(sampleDataItems.entityType, "job"),
+              eq(sampleDataItems.entityId, jobs.id),
+            ))),
+          ),
+        ),
         isNull(jobs.deletedAt),
         jobScopeSql(actor),
       ),

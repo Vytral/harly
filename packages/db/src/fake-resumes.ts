@@ -11,9 +11,10 @@ type ResumeCandidate = {
   lastName: string;
   email: string;
   location: string;
+  phone?: string;
   headline: string;
-  github?: string;
-  website?: string;
+  summary?: string;
+  skills?: string[];
 };
 
 type Track =
@@ -55,7 +56,7 @@ const COMPANIES = [
 
 const SCHOOLS = [
   "State University of Technology",
-  "Metropolitan Institute of Design",
+  "Metropolitan University",
   "Riverside University",
   "National Polytechnic",
   "Westfield College",
@@ -273,25 +274,30 @@ export function buildResumeLines(
   const data = TRACK_DATA[track];
   const fullName = `${cand.firstName} ${cand.lastName}`;
   const company = (offset: number) => COMPANIES[(index + offset) % COMPANIES.length];
-  const school = SCHOOLS[index % SCHOOLS.length];
-  const seniorYears = 8 - (index % 4);
-  const year = (ago: number) => 2026 - ago;
+  const school = track === "design" ? "Metropolitan Institute of Design" : SCHOOLS[index % SCHOOLS.length];
+  const statedYears = Number(cand.headline.match(/(\d+)\s+years?/i)?.[1]);
+  const seniorYears = statedYears || 8 + (index % 4);
+  const year = (ago: number) => new Date().getUTCFullYear() - ago;
 
+  const currentYears = Math.max(1, Math.floor(seniorYears / 2));
   const jobs = [
-    { title: data.titles[0], company: company(0), from: year(3), to: "Present" as const },
-    { title: data.titles[1], company: company(3), from: year(6), to: year(3) },
-    { title: data.titles[2], company: company(6), from: year(seniorYears), to: year(6) },
+    { title: cand.headline.replace(/,?\s*\d+\s+years?.*$/i, ""), company: company(0), from: year(currentYears), to: "Present" as const },
+    { title: seniorYears <= 3 ? "Software Developer" : data.titles[1], company: company(3), from: year(seniorYears), to: year(currentYears) },
   ];
 
   const lines: Array<{ text: string; bold?: boolean; gap?: number }> = [
     { text: fullName, bold: true },
     { text: cand.headline },
     {
-      text: `${cand.location} · ${cand.email}${cand.github ? ` · ${cand.github}` : cand.website ? ` · ${cand.website}` : ""}`,
+      text: `${cand.location} · ${cand.email}${cand.phone ? ` · ${cand.phone}` : ""}`,
     },
     { text: "", gap: 8 },
-    { text: "EXPERIENCE", bold: true },
   ];
+
+  if (cand.summary) {
+    lines.push({ text: "SUMMARY", bold: true }, { text: cand.summary }, { text: "", gap: 8 });
+  }
+  lines.push({ text: "EXPERIENCE", bold: true });
 
   jobs.forEach((job, j) => {
     lines.push({ text: "", gap: 4 });
@@ -299,14 +305,26 @@ export function buildResumeLines(
       text: `${job.title} — ${job.company} (${job.from}–${job.to})`,
       bold: true,
     });
-    for (const bullet of data.bullets(job.company)[j] ?? []) {
+    const bullets = cand.skills?.length
+      ? j === 0
+        ? [
+            `Designed and shipped customer-facing improvements using ${cand.skills.join(", ")}, from discovery through release.`,
+            `Partnered with product and design to define requirements, review trade-offs, and improve the reliability of existing workflows.`,
+            `Reviewed changes with teammates and documented implementation decisions to make future work easier to maintain.`,
+          ]
+        : [
+            `Built and maintained application features using ${cand.skills.slice(0, 2).join(" and ")}, with automated checks before release.`,
+            "Investigated production issues, shared findings with the team, and followed fixes through to deployment.",
+          ]
+      : data.bullets(job.company)[j] ?? [];
+    for (const bullet of bullets) {
       lines.push({ text: `  •  ${bullet}` });
     }
   });
 
   lines.push({ text: "", gap: 8 });
   lines.push({ text: "SKILLS", bold: true });
-  for (const skill of data.skills) {
+  for (const skill of cand.skills?.length ? cand.skills : data.skills) {
     lines.push({ text: `  •  ${skill}` });
   }
 

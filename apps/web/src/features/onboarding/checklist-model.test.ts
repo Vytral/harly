@@ -9,6 +9,7 @@ import {
   type ChecklistPreferences,
   normalizeSkippedKeys,
   setupReadsFor,
+  showFirstRunWelcome,
 } from "./checklist-model";
 
 const EMPTY_FACTS: ChecklistFacts = {
@@ -258,5 +259,16 @@ describe("setupReadsFor", () => {
       checklist: false,
       sampleStatus: false,
     });
+  });
+});
+
+describe("first-run welcome", () => {
+  it("yields to the dashboard for sample data and returns after it is removed", () => {
+    const empty = { visible: true, hasJobOrApplication: false };
+    expect(showFirstRunWelcome({ ...empty, sampleDataActive: false })).toBe(true);
+    expect(showFirstRunWelcome({ ...empty, sampleDataActive: true })).toBe(false);
+    expect(showFirstRunWelcome({ ...empty, sampleDataActive: false })).toBe(true);
+    expect(showFirstRunWelcome({ ...empty, sampleDataActive: false, hasJobOrApplication: true })).toBe(false);
+    expect(showFirstRunWelcome({ ...empty, sampleDataActive: false, visible: false })).toBe(false);
   });
 });

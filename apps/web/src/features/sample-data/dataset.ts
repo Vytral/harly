@@ -75,27 +75,27 @@ export function buildSampleDataset(): SampleDataset {
       employmentType: "full_time",
       workplaceType: "remote",
       description:
-        "Sample job created to explore Harly. It is not a real opening and is never shown on your careers page while it stays a draft. Remove the sample data from the dashboard banner when you are done.",
+        "Join our product engineering team to build accessible, reliable tools for hiring teams. You will work across the stack with design and product partners, mentor engineers, and help shape technical direction.",
     },
     candidates,
     notes: [
       {
         candidateKey: "priya-raman",
-        body: "Sample note: strong ownership of an analytics migration. Ask about on-call load.",
+        body: "Strong ownership of an analytics migration. Ask about on-call load.",
       },
       {
         candidateKey: "hannah-muller",
-        body: "Sample note: asked for a system design round. Schedule with the design panel.",
+        body: "Asked for a system design round. Schedule with the design panel.",
       },
       {
         candidateKey: "sofia-lindqvist",
-        body: "Sample note: offer range agreed with the hiring manager. Waiting on references.",
+        body: "Offer range agreed with the hiring manager. Waiting on references.",
       },
     ],
     interviews: [
       {
         candidateKey: "hannah-muller",
-        title: "Sample technical interview",
+        title: "Technical interview",
         type: "technical",
         mode: "video",
         daysFromNow: 2,
@@ -113,6 +113,16 @@ function candidate(
   stage: StageKind,
   appliedDaysAgo: number,
 ): SampleCandidatePlan {
+  const summaries: Record<string, string> = {
+    "amara-okafor": "Frontend lead with seven years building React and TypeScript products. Led a shared component library across three product teams, documented accessible interaction patterns, and mentored frontend engineers. Looking for a role combining hands-on delivery and technical leadership.",
+    "liam-chen": "Full-stack engineer with five years delivering subscription products. Built Node.js APIs backed by PostgreSQL and React account-management flows. Owns features from schema design through testing, deployment, and production support.",
+    "priya-raman": "Product engineer with six years turning product questions into reliable features. Led an analytics migration with TypeScript event contracts and automated regression tests, preserving historical reporting while replacing the ingestion pipeline. Interested in end-to-end ownership and a sustainable on-call rotation.",
+    "mateo-rossi": "Backend engineer with eight years building Go services. Operated Kubernetes workloads, introduced service-level dashboards and tracing, and improved incident handovers. Strong in backend reliability; would need to deepen frontend experience for a product engineering role.",
+    "hannah-muller": "Senior engineer with nine years improving React applications. Reduced slow page interactions through profiling and incremental rendering, and worked with designers to resolve keyboard-navigation and screen-reader issues. Wants a system design discussion alongside the technical interview.",
+    "kofi-mensah": "Platform engineer with six years building distributed services in Rust and SQL. Delivered data-processing workers with retry and recovery controls, and documented operational procedures for the support team. Interested in applying systems experience closer to customer-facing product work.",
+    "sofia-lindqvist": "Staff engineer with eleven years delivering product platforms. Led architecture reviews for TypeScript services, helped teams plan incremental migrations, and mentored engineers into technical leadership. Offer range is aligned with the hiring manager; references remain outstanding.",
+    "jun-park": "Junior developer with two years building responsive JavaScript interfaces and CSS components. Delivered small features with code review and maintained browser compatibility checks. Promising early-career profile, but does not yet meet this senior role's architecture and mentoring requirements.",
+  };
   const local = `${firstName}.${lastName}`.toLowerCase();
   return {
     key,
@@ -120,7 +130,7 @@ function candidate(
     lastName,
     email: `${local}@${SAMPLE_EMAIL_DOMAIN}`,
     headline,
-    summary: `${headline}. Sample candidate for trying out Harly; no real person is behind this record.`,
+    summary: summaries[key],
     skills,
     stage,
     appliedDaysAgo,
