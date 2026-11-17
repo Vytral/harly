@@ -13,6 +13,10 @@ operators. How to cut a release is in [RELEASING.md](RELEASING.md). The
 
 ## [Unreleased]
 
+### Fixed
+
+- **Assign to job** from the talent pool failed with a database error (`42P10`) on every attempt. It works again.
+
 ## [0.5.1] - 2026-11-16
 
 This release fixes the findings of a security and correctness audit. It adds
