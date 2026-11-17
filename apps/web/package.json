@@ -25,7 +25,7 @@
     "inventory:i18n": "tsx scripts/i18n/inventory-literals.ts"
   },
   "dependencies": {
-    "@ai-sdk/anthropic": "^3.0.81",
+    "@ai-sdk/anthropic": "^3.0.143",
     "@ai-sdk/google": "^3.0.80",
     "@ai-sdk/openai": "^3.0.67",
     "@ai-sdk/react": "^4.0.8",

@@ -7,7 +7,7 @@
 import type { IntegrationHealthKey } from "./model";
 
 export const ATTENTION_TARGET: Readonly<
-  Record<IntegrationHealthKey, { name: string; slug: string }>
+  Record<IntegrationHealthKey, { name: string; slug: string; href?: string }>
 > = {
   zoom: { name: "Zoom", slug: "zoom" },
   gcal: { name: "Google Calendar", slug: "google-calendar" },
@@ -16,10 +16,13 @@ export const ATTENTION_TARGET: Readonly<
   telegram: { name: "Telegram", slug: "telegram" },
   jitsi: { name: "Jitsi Meet", slug: "jitsi" },
   docuseal: { name: "DocuSeal", slug: "docuseal" },
+  // AI is configured on its own settings page, not under integrations.
+  ai: { name: "AI", slug: "ai", href: "/settings/ai/configure" },
 };
 
 export function reconnectHref(integration: IntegrationHealthKey): string {
-  return `/settings/integrations/${ATTENTION_TARGET[integration].slug}`;
+  const target = ATTENTION_TARGET[integration];
+  return target.href ?? `/settings/integrations/${target.slug}`;
 }
 
 export function attentionMessage(

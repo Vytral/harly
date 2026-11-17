@@ -11331,7 +11331,8 @@
         "enterApiKeyToTest": "Enter your {label} API key to test.",
         "emptyResponse": "The model returned an empty response.",
         "connectionFailed": "Connection failed.",
-        "connectionFailedWithReason": "Connection failed: {reason}"
+        "connectionFailedWithReason": "Connection failed: {reason}",
+        "structuredOutputFailed": "Connected, but structured output failed, so features such as resume parsing and scoring will not work: {reason}"
       },
       "calSettingsActions": {
         "invalidUrl": "Enter a valid URL.",

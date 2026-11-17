@@ -2,12 +2,13 @@
 
 import { revalidatePath } from "next/cache";
 import { eq } from "drizzle-orm";
-import { generateText } from "ai";
+import { Output, generateText } from "ai";
 import { z } from "zod";
 import { getTranslations } from "@/i18n/server";
 
 import { db, organization, workspaceSettings } from "@harly/db";
 
+import { clearIntegrationHealth } from "@/features/integrations/health/repository";
 import { requirePermission } from "@/features/workspaces/permissions-server";
 import { encryptSecret, isEncryptionConfigured } from "@/lib/crypto";
 import { getWorkspaceAiConfig, getWorkspaceAiStatus } from "@/lib/ai/config";
@@ -137,6 +138,8 @@ export async function saveAiSettingsAction(input: {
         updatedAt: new Date(),
       },
     });
+  // Failures recorded against the previous model or key no longer apply.
+  await clearIntegrationHealth(context.organization.id, "ai");
 
   revalidatePath("/settings");
   return { ok: true };
@@ -209,20 +212,56 @@ export async function testAiConnectionAction(input: {
       prompt: "Reply with the single word: OK",
       maxOutputTokens: 16,
     });
-    return text.trim()
-      ? { ok: true }
-      : { ok: false, error: t("emptyResponse") };
+    if (!text.trim()) return { ok: false, error: t("emptyResponse") };
   } catch (error) {
-    const raw =
-      error instanceof Error ? error.message : t("connectionFailed");
-    // Redact any API-key material (e.g. "Incorrect API key provided: sk-***AB")
-    // before surfacing the provider's error to the client (IA-13).
-    const redacted = raw
-      .replace(/(sk-)[A-Za-z0-9_-]{4,}/g, "$1***REDACTED***")
-      .split(apiKey)
-      .join("***REDACTED***");
-    return { ok: false, error: t("connectionFailedWithReason", { reason: redacted }) };
+    return {
+      ok: false,
+      error: t("connectionFailedWithReason", { reason: redactTestError(error, apiKey, t("connectionFailed")) }),
+    };
   }
+
+  // Most AI features (resume parsing, scoring, job generation) request
+  // structured output, which a model can reject while plain text works.
+  // Check it here so a model that cannot serve them fails the test instead of
+  // the features silently falling back later.
+  try {
+    const model = getModel({
+      provider: input.provider,
+      modelId: input.modelId.trim(),
+      apiKey,
+      baseUrl: input.baseUrl?.trim() || undefined,
+    });
+    const { output } = await generateText({
+      model,
+      prompt: 'Return the word "OK" in the `reply` field.',
+      output: Output.object({
+        schema: connectionTestSchema,
+        name: "connection_test",
+      }),
+      maxOutputTokens: 256,
+    });
+    if (!output) throw new Error(t("emptyResponse"));
+    return { ok: true };
+  } catch (error) {
+    return {
+      ok: false,
+      error: t("structuredOutputFailed", { reason: redactTestError(error, apiKey, t("connectionFailed")) }),
+    };
+  }
+}
+
+const connectionTestSchema = z.object({ reply: z.string() });
+
+/**
+ * Redact any API-key material (e.g. "Incorrect API key provided: sk-***AB")
+ * before surfacing the provider's error to the client (IA-13).
+ */
+function redactTestError(error: unknown, apiKey: string, fallback: string): string {
+  const raw = error instanceof Error ? error.message : fallback;
+  return raw
+    .replace(/(sk-)[A-Za-z0-9_-]{4,}/g, "$1***REDACTED***")
+    .split(apiKey)
+    .join("***REDACTED***");
 }
 
 export async function saveAiAutoScoreAction(

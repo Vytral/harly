@@ -81,9 +81,18 @@ with Harly's built-in rules: the AI provider didn't return a usable answer."
 
 <Accordion title="Troubleshooting: scores fall back to Harly's built-in rules">
   Harly uses its built-in rules when the provider does not return a usable
-  answer. Check the following:
+  answer. Harly records each failed provider call: **Settings → AI** then shows
+  the last error, and the dashboard lists AI under the integrations that need
+  attention. Check the following:
 
   - The API key in **Settings → AI** is valid and has quota.
+  - **Test connection** in **Settings → AI** passes. The test also asks the
+    model for structured output, which resume parsing, scoring and job
+    generation need; a model that only answers plain text fails here.
+  - You run a Harly release newer than 0.5.1 if you use Claude Sonnet 5.5,
+    Opus 5.5, Haiku 5.5 or Fable 5.1 and newer. Harly 0.5.1 and earlier sent a
+    request format these models reject, so every structured AI feature fell
+    back.
   - The selected model is available to your provider account.
   - You run Harly 0.3.3 or later if you use an OpenAI reasoning model (the
     o-series, or `gpt-5` and newer). Earlier versions sent a `temperature`

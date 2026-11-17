@@ -13,9 +13,16 @@ operators. How to cut a release is in [RELEASING.md](RELEASING.md). The
 
 ## [Unreleased]
 
+### Added
+
+- Claude Sonnet 5.5, Opus 5.5, Haiku 5.5, Fable 5.1 and Fable 5.2 are in the Anthropic model list in **Settings → AI**.
+- Failed AI provider calls are now recorded. **Settings → AI** shows the last error, and the dashboard lists AI under the integrations that need attention, instead of features silently falling back to their non-AI path. Saving new AI settings clears the recorded error.
+- **Test connection** in **Settings → AI** also checks structured output, which resume parsing, scoring, job generation and other AI features need. A model that answers plain text but rejects structured output now fails the test with the provider's reason.
+
 ### Fixed
 
 - **Assign to job** from the talent pool failed with a database error (`42P10`) on every attempt. It works again.
+- AI features that return structured data (resume parsing, job generation, candidate scoring and others) failed with Claude Sonnet 5.5, Opus 5.5 and Fable 5.1 and newer and fell back to their non-AI path. Harly now uses the provider's native structured output for these models (`@ai-sdk/anthropic` 3.0.143).
 
 ## [0.5.1] - 2026-11-16
 

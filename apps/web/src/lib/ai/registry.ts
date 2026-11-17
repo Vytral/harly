@@ -14,6 +14,7 @@ import {
   type OpenRouterModel,
 } from "./providers";
 import { assertSafeAiBaseUrl } from "./base-url";
+import { withAiHealth } from "./health";
 import { xaiCompatibleFetch } from "./provider-tools";
 
 type BuildArgs = { modelId: string; apiKey: string; baseUrl: string | undefined };
@@ -102,11 +103,12 @@ export function getModel(config: AiModelConfig): LanguageModel {
   // Defense in depth: validated at save time, re-checked on every build.
   assertSafeAiBaseUrl(config.provider, baseUrl);
 
-  return FACTORIES[info.kind]({
+  const model = FACTORIES[info.kind]({
     modelId: config.modelId,
     apiKey: config.apiKey,
     baseUrl,
   });
+  return withAiHealth(model, config.healthWorkspaceId);
 }
 
 /** Live OpenRouter catalog for the searchable model picker. Public endpoint. */

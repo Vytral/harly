@@ -11,6 +11,7 @@ import {
   withSlackDeliveryHealth,
 } from "@/features/integrations/health/registry-mapping";
 import { getIntegrationHealth } from "@/features/integrations/health/repository";
+import { getWorkspaceAiStatus } from "@/lib/ai/config";
 import { getWorkspaceCalStatus } from "@/lib/cal/config";
 import { getWorkspaceEsignStatus } from "@/lib/esign/config";
 import { getWorkspaceGCalStatus } from "@/lib/gcal/config";
@@ -341,7 +342,7 @@ export type IntegrationStatuses = {
 export async function getIntegrationStatuses(
   workspaceId: string,
 ): Promise<IntegrationStatuses> {
-  const [email, cal, gcal, slack, outlook, zoom, chat, telegram, jitsi, docuseal, captcha, storedHealth] =
+  const [email, cal, gcal, slack, outlook, zoom, chat, telegram, jitsi, docuseal, captcha, storedHealth, ai] =
     await Promise.all([
       getWorkspaceEmailStatus(workspaceId),
       getWorkspaceCalStatus(workspaceId),
@@ -355,6 +356,7 @@ export async function getIntegrationStatuses(
       getWorkspaceEsignStatus(workspaceId),
       getWorkspaceCaptchaStatus(workspaceId),
       getIntegrationHealth(workspaceId),
+      getWorkspaceAiStatus(workspaceId),
     ]);
 
   const health = buildHealthByKey(
@@ -366,6 +368,7 @@ export async function getIntegrationStatuses(
       telegram: telegram.hasToken,
       jitsi: jitsi.enabled && Boolean(jitsi.baseUrl),
       docuseal: docuseal.enabled && docuseal.hasToken,
+      ai: ai.enabled && ai.hasApiKey && ai.encryptionReady,
     },
     withSlackDeliveryHealth(
       storedHealth,

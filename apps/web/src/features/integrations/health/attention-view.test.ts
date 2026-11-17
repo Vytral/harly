@@ -7,7 +7,10 @@ describe("integration attention view", () => {
   it("names every health key and points its Reconnect link at a settings page", () => {
     for (const key of INTEGRATION_HEALTH_KEYS) {
       expect(ATTENTION_TARGET[key].name.length).toBeGreaterThan(0);
-      expect(reconnectHref(key)).toBe(`/settings/integrations/${ATTENTION_TARGET[key].slug}`);
+      expect(reconnectHref(key)).toBe(
+        ATTENTION_TARGET[key].href ?? `/settings/integrations/${ATTENTION_TARGET[key].slug}`,
+      );
+      expect(reconnectHref(key)).toMatch(/^\/settings\//);
     }
   });
 

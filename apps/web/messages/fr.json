@@ -11331,7 +11331,8 @@
         "enterApiKeyToTest": "Saisissez votre clé API {label} pour la tester.",
         "emptyResponse": "Le modèle a renvoyé une réponse vide.",
         "connectionFailed": "Échec de la connexion.",
-        "connectionFailedWithReason": "Échec de la connexion : {reason}"
+        "connectionFailedWithReason": "Échec de la connexion : {reason}",
+        "structuredOutputFailed": "Connecté, mais la sortie structurée a échoué : des fonctions comme l’analyse de CV et la notation ne fonctionneront pas : {reason}"
       },
       "calSettingsActions": {
         "invalidUrl": "Saisissez une URL valide.",
