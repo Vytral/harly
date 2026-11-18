@@ -4,6 +4,8 @@ import { getTranslations } from "next-intl/server";
 import { and, eq, sql } from "drizzle-orm";
 
 import { db, jobs, organization, workspaceSettings } from "@harly/db";
+import { isDemoMode } from "@harly/config";
+import { DemoPortalEntry } from "@/features/demo/DemoPortalEntry";
 import { PortalLoginForm } from "@/features/portal/PortalLoginForm";
 import { getSinglePortalWorkspace } from "@/lib/portal-auth";
 import { getPortalAuthMethods } from "@/lib/portal-auth-methods";
@@ -77,6 +79,7 @@ export default async function PortalLoginPage() {
           <p className="text-sm text-muted-foreground">
             {t("unavailableBody")}
           </p>
+          {isDemoMode() ? <div className="pt-4"><DemoPortalEntry /></div> : null}
         </div>
       </main>
     );
@@ -182,6 +185,8 @@ export default async function PortalLoginPage() {
               {t("signInSubtitle")}
             </p>
           </div>
+
+          {isDemoMode() ? <div className="mb-6"><DemoPortalEntry /></div> : null}
 
           <Suspense>
             <PortalLoginForm

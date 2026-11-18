@@ -5245,7 +5245,8 @@
       "sandboxBoardRibbon": {
         "preview": "Vorschau der Harly-Demo-Sandbox",
         "expires": "läuft um {time} UTC ab",
-        "backToBuilder": "Zurück zum Builder"
+        "backToBuilder": "Zurück zum Builder",
+        "candidatePortal": "Kandidatenportal"
       },
       "demoLockedNotice": {
         "default": "In der Demo deaktiviert: Diese Aktion würde die Kontosicherheit ändern oder Daten außerhalb deiner Sandbox senden."
@@ -5254,6 +5255,13 @@
         "title": "Sehen, was diese Person sieht",
         "description": "Öffnet das Kandidatenportal als diese Beispielperson: Bewerbungen, Phasen, Interviews und Dokumentanfragen. Ohne E-Mail oder Anmeldung.",
         "open": "Als Kandidat ansehen",
+        "error": "Das Kandidatenportal konnte nicht geöffnet werden. Versuche es erneut."
+      },
+      "demoPortalEntry": {
+        "title": "Du erkundest die Demo?",
+        "description": "Überspringe die Anmeldung und sieh das Portal als einer der Beispielkandidaten: Bewerbungen, Interviews und Dokumentanfragen.",
+        "open": "Als Beispielkandidat erkunden",
+        "opening": "Wird geöffnet…",
         "error": "Das Kandidatenportal konnte nicht geöffnet werden. Versuche es erneut."
       }
     },

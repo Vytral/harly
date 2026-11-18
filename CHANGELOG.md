@@ -13,6 +13,11 @@ operators. How to cut a release is in [RELEASING.md](RELEASING.md). The
 
 ## [Unreleased]
 
+### Fixed
+
+- Public demo: the candidate portal sign-in page has an "Explore as a sample candidate" button that opens the portal as a seeded candidate of your demo workspace (or sends you to the demo entry first), and the sandbox careers preview links to the portal. Previously the only way in was a card on a candidate's profile.
+- Public demo: the careers page introduction is back to its short original text, and the hero subheading is empty again.
+
 ## [0.5.1] - 2026-11-18
 
 This release fixes the findings of a security and correctness audit. It adds
