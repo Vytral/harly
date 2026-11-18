@@ -21,6 +21,8 @@ type Prefs = {
 // `dark` class) on its own root, and globals.css redefines the same tokens
 // under those classes, so a light career page keeps light tokens even inside
 // the admin shell's `.dark` tree.
+const EXIT_MS = 200;
+
 const primaryButtonClass =
   "inline-flex items-center justify-center rounded-xl bg-primary px-3.5 py-2.5 text-[13px] font-semibold text-primary-foreground shadow-sm transition-all hover:opacity-90 active:scale-[0.98]";
 
@@ -134,13 +136,33 @@ const CookiePanel = (props: CookiePanelProps) => {
   const [prefsHeight, setPrefsHeight] = useState<number>(0);
   const [careerMode, setCareerMode] = useState<"light" | "dark" | null>(null);
 
-  const show = useCallback((options?: { preferences?: boolean }) => {
-    const stored = readCookiePreferences();
-    setPrefs(stored ?? { necessary: true, embeds: false });
-    setShowPrefs(options?.preferences ?? false);
-    setRender(true);
-    requestAnimationFrame(() => setVisible(true));
+  // One pending timer/frame at a time, so a quick close cannot be undone by
+  // a show frame that was still queued, and a reopen cancels a pending unmount.
+  const hideTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const showFrame = useRef<number | null>(null);
+  const clearPending = useCallback(() => {
+    if (hideTimer.current !== null) clearTimeout(hideTimer.current);
+    if (showFrame.current !== null) cancelAnimationFrame(showFrame.current);
+    hideTimer.current = null;
+    showFrame.current = null;
   }, []);
+
+  const show = useCallback(
+    (options?: { preferences?: boolean }) => {
+      clearPending();
+      const stored = readCookiePreferences();
+      setPrefs(stored ?? { necessary: true, embeds: false });
+      setShowPrefs(options?.preferences ?? false);
+      setRender(true);
+      showFrame.current = requestAnimationFrame(() => {
+        showFrame.current = null;
+        setVisible(true);
+      });
+    },
+    [clearPending],
+  );
+
+  useEffect(() => clearPending, [clearPending]);
 
   useEffect(() => {
     const read = () => {
@@ -178,8 +200,18 @@ const CookiePanel = (props: CookiePanelProps) => {
   }, [showPrefs, prefs]);
 
   const hide = () => {
+    clearPending();
     setVisible(false);
-    setTimeout(() => setRender(false), 300);
+    const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    if (reduceMotion) {
+      setRender(false);
+      return;
+    }
+    // Unmount once the exit transition (EXIT_MS) has finished.
+    hideTimer.current = setTimeout(() => {
+      hideTimer.current = null;
+      setRender(false);
+    }, EXIT_MS);
   };
 
   const save = (embeds: boolean) => {
@@ -187,6 +219,11 @@ const CookiePanel = (props: CookiePanelProps) => {
     setPrefs({ necessary: true, embeds });
     hide();
   };
+
+  // Closing with the X records a choice too; otherwise the banner returns on
+  // the next page. It keeps a choice already stored (reopened from the
+  // footer) and falls back to necessary only.
+  const dismiss = () => save(readCookiePreferences()?.embeds ?? false);
 
   if (!render) return null;
 
@@ -197,9 +234,11 @@ const CookiePanel = (props: CookiePanelProps) => {
       role="dialog"
       aria-live="polite"
       aria-label={t("dialogLabel")}
+      aria-hidden={visible ? undefined : true}
       className={cn(
         "fixed inset-x-4 bottom-4 sm:inset-x-auto sm:right-6 sm:bottom-6",
         "z-50 sm:w-[380px]",
+        !visible && "pointer-events-none",
         careerMode,
       )}
     >
@@ -207,15 +246,16 @@ const CookiePanel = (props: CookiePanelProps) => {
         className={cn(
           "relative overflow-hidden rounded-[20px] border border-border bg-card p-6 shadow-[0_24px_70px_-20px_rgba(15,23,20,0.25)] dark:shadow-[0_24px_70px_-20px_rgba(0,0,0,0.6)]",
           "flex flex-col",
-          visible
-            ? "animate-in fade-in slide-in-from-bottom-3 duration-300 ease-out"
-            : "animate-out fade-out slide-out-to-bottom-3 duration-200 ease-in",
+          // A transition (not a keyframe animation) so the closed state holds
+          // until unmount instead of snapping back to full opacity.
+          "transition-[opacity,transform] duration-200 ease-out motion-reduce:transition-none",
+          visible ? "translate-y-0 opacity-100" : "translate-y-3 opacity-0",
           className,
         )}
       >
         <button
           type="button"
-          onClick={hide}
+          onClick={dismiss}
           className="absolute right-4 top-4 inline-flex size-7 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           aria-label={t("close")}
         >
@@ -318,7 +358,7 @@ const CookiePanel = (props: CookiePanelProps) => {
             onClick={() => save(prefs.embeds)}
             className={cn(
               primaryButtonClass,
-              "mt-2 w-full animate-in fade-in slide-in-from-top-1 duration-200",
+              "mt-2 w-full animate-in fade-in slide-in-from-top-1 duration-200 motion-reduce:animate-none",
             )}
           >
             {t("savePreferences")}

@@ -50,7 +50,9 @@ export default async function ApplyPage({ params }: ApplyPageProps) {
             ? "ashby"
             : config.template === "join"
               ? "join"
-              : "default"
+              : config.template === "playful"
+                ? "playful"
+                : "default"
         }
         captchaProvider={captcha?.provider ?? null}
         captchaSiteKey={captcha?.siteKey ?? null}

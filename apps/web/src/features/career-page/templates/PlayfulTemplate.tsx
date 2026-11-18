@@ -101,9 +101,12 @@ export function PlayfulTemplate({
       <section className="mx-auto max-w-5xl px-6 pt-8">
         <div className="grid gap-10 lg:grid-cols-[1.5fr_1fr]">
           <div className={reveal}>
-            <span className="inline-flex items-center gap-1.5 rounded-full bg-zinc-100 px-3 py-1 text-xs font-medium text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400">
-              {t("eyebrow")}
-              <span className="rounded-full bg-white px-2 py-0.5 text-zinc-900 dark:bg-zinc-700 dark:text-zinc-100">
+            {/* Nested pill: the outer 4px padding is the inner pill's inset on
+                top, right and bottom; segments truncate rather than wrap so a
+                long translation keeps the pill shape. */}
+            <span className="inline-flex max-w-full items-center gap-2 rounded-full bg-zinc-100 p-1 pl-3 text-xs font-medium leading-4 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400">
+              <span className="min-w-0 truncate">{t("eyebrow")}</span>
+              <span className="min-w-0 truncate rounded-full bg-white px-2.5 py-0.5 text-zinc-900 dark:bg-zinc-700 dark:text-zinc-100">
                 {t("eyebrowAccent")}
               </span>
             </span>

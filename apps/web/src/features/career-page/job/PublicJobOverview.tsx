@@ -3,6 +3,7 @@ import type { getPublicJobDetail } from "@/features/jobs/data";
 import { jobPostingJsonLd, serializeJsonLd } from "../seo";
 import { JobChrome } from "./JobChrome";
 import { JobOverviewBody } from "./JobOverviewBody";
+import { effectiveRounded } from "../theme";
 
 type PublicJobDetail = NonNullable<Awaited<ReturnType<typeof getPublicJobDetail>>>;
 
@@ -43,7 +44,7 @@ export function PublicJobOverview({
           job={job}
           process={config.process}
           accent={config.theme.accent ?? workspace.primaryColor ?? undefined}
-          rounded={config.theme.rounded}
+          rounded={effectiveRounded(config)}
         />
       </JobChrome>
     </>

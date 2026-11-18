@@ -16,6 +16,7 @@ import { Button } from "@/components/ui/button";
 import { JobChrome } from "@/features/career-page/job/JobChrome";
 import { JobOverviewBody } from "@/features/career-page/job/JobOverviewBody";
 import type { CareerPageConfig } from "@/features/career-page/config";
+import { effectiveRounded } from "@/features/career-page/theme";
 import type { WorkspaceBoardBranding } from "@/features/workspaces/board";
 import { cn } from "@/lib/utils";
 
@@ -141,7 +142,7 @@ const PreviewBody = memo(function PreviewBody({
             job={job}
             process={config.process}
             accent={config.theme.accent ?? workspace.primaryColor ?? undefined}
-            rounded={config.theme.rounded}
+            rounded={effectiveRounded(config)}
           />
         </JobChrome>
       </div>
