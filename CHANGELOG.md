@@ -13,47 +13,7 @@ operators. How to cut a release is in [RELEASING.md](RELEASING.md). The
 
 ## [Unreleased]
 
-### Added
-
-- Claude Sonnet 5.5, Opus 5.5, Haiku 5.5, Fable 5.1 and Fable 5.2 are in the Anthropic model list in **Settings → AI**.
-- Failed AI provider calls are now recorded. **Settings → AI** shows the last error, and the dashboard lists AI under the integrations that need attention, instead of features silently falling back to their non-AI path. Saving new AI settings clears the recorded error.
-- **Test connection** in **Settings → AI** also checks structured output, which resume parsing, scoring, job generation and other AI features need. A model that answers plain text but rejects structured output now fails the test with the provider's reason.
-
-- Public demo: a "View as candidate" card on sample candidates opens the candidate portal signed in as that candidate, with no email or login. It only works when `DEMO_MODE=true`, inside the visitor's own sandbox and for its seeded candidates. Demo data now enables the candidate portal and includes pending document requests.
-
-### Changed
-
-- The candidate portal sign-in page now matches the staff sign-in page and only shows the methods enabled under portal settings. Candidates see one email field at most: a password field, a sign-in link button, or a switch between the two when both are enabled. Social providers appear as round buttons, and passkey and social buttons sit above the email form. The access code entry is a small link. After a sign-in link is sent, the form shows a "Check your inbox" confirmation.
-
-### Fixed
-
-- **Assign to job** from the talent pool failed with a database error (`42P10`) on every attempt. It works again.
-- AI features that return structured data (resume parsing, job generation, candidate scoring and others) failed with Claude Sonnet 5.5, Opus 5.5 and Fable 5.1 and newer and fell back to their non-AI path. Harly now uses the provider's native structured output for these models (`@ai-sdk/anthropic` 3.0.143).
-
-
-- Candidate headers show email addresses and phone numbers directly, and avatar initials scale proportionally to their frames.
-
-- Profile photos stay centered in their avatar frames. Replaced the Seedface dependency with lightweight initials when a photo is unavailable.
-
-- Demo and first-run example data use coherent candidate profiles, fictional contact details, local portraits and downloadable PDF resumes. First-run data includes evaluations for candidates who have advanced past application review; demo timelines include candidates who need follow-up. Example content no longer repeats “Sample” throughout the recruiter experience, while the workspace disclosure and safe removal remain available.
-- Demo resumes use the configured storage provider, including S3.
-- The public demo (`DEMO_MODE=true`) starts in English for every visitor, whatever the browser language, until the visitor picks another language. Email language settings in the demo now read in English too.
-- The interface language on the account page sits in a titled card with a description and a Save button, matching the email language card below it.
-
-- Demo and first-run example jobs have complete descriptions (role and team, responsibilities, requirements, nice-to-haves, benefits, work model and hiring process). The demo career page, terms of service, privacy policy, cookie policy and candidate notice use fuller fictional copy with `.example` contact addresses.
-- The cookie banner on public pages now closes cleanly when you accept, choose necessary only, save preferences or press the close button, and stays closed on later pages and reloads. Closing it with the X now records a necessary-only choice. The exit animation is skipped when reduced motion is requested.
-- The Playful career page template now uses its rounded corners on job detail and application pages too, including when the page was saved with sharp corners from another template.
-- The two-part badge in the Playful template hero now has an even inset around the inner pill and keeps its shape with long translated text.
-
-### Removed
-
-- The anonymous install telemetry collector (`apps/telemetry`) and its documentation page. Harly and its CLI no longer send any usage data.
-
-### Security
-
-- The dependency audit ignores [GHSA-fc5q-39xc-vjpf](https://github.com/advisories/GHSA-fc5q-39xc-vjpf) (ReDoS in `picomatch` 4.0.7) until a patched version exists. `picomatch` only reaches the install through test tooling (`vitest`, an optional peer of `better-auth`), never runs in a Harly server, and is only given glob patterns written by developers.
-
-## [0.5.1] - 2026-11-16
+## [0.5.1] - 2026-11-18
 
 This release fixes the findings of a security and correctness audit. It adds
 one database migration (new indexes, a nullable document version column and a
@@ -63,6 +23,8 @@ since left the workspace stop working and must be re-issued; production
 secrets made of repeated or low-variety characters are now rejected at
 startup; and deployments that relied on the `X-Forwarded-Peer` header must
 list their extra proxy hops in `TRUSTED_PROXY_IPS`.
+
+It also removes the anonymous install telemetry, fixes talent pool assignment, adds the Claude 5.5 and Fable 5.x models, and polishes the public demo, the career page templates and the candidate portal sign-in.
 
 ### Security
 
@@ -95,6 +57,27 @@ list their extra proxy hops in `TRUSTED_PROXY_IPS`.
 - The portal's presigned-upload routes are rate limited per candidate and return 400 instead of 500 on malformed JSON.
 - CAPTCHA verification times out after 5 seconds and fails closed when the provider is unreachable or returns an unreadable reply.
 - Portal rate-limit keys no longer fall back to a fixed built-in secret in production.
+- The dependency audit ignores [GHSA-fc5q-39xc-vjpf](https://github.com/advisories/GHSA-fc5q-39xc-vjpf) (ReDoS in `picomatch` 4.0.7) until a patched version exists. `picomatch` only reaches the install through test tooling (`vitest`, an optional peer of `better-auth`), never runs in a Harly server, and is only given glob patterns written by developers.
+
+### Added
+
+- Claude Sonnet 5.5, Opus 5.5, Haiku 5.5, Fable 5.1 and Fable 5.2 are in the Anthropic model list in **Settings → AI**.
+- Failed AI provider calls are now recorded. **Settings → AI** shows the last error, and the dashboard lists AI under the integrations that need attention, instead of features silently falling back to their non-AI path. Saving new AI settings clears the recorded error.
+- **Test connection** in **Settings → AI** also checks structured output, which resume parsing, scoring, job generation and other AI features need. A model that answers plain text but rejects structured output now fails the test with the provider's reason.
+
+- Public demo: a "View as candidate" card on sample candidates opens the candidate portal signed in as that candidate, with no email or login. It only works when `DEMO_MODE=true`, inside the visitor's own sandbox and for its seeded candidates. Demo data now enables the candidate portal and includes pending document requests.
+
+### Changed
+
+- Production secrets (`BETTER_AUTH_SECRET`, `AI_ENCRYPTION_KEY`, `STORAGE_UPLOAD_SECRET`, `CRON_SECRET`, `HARLY_SETUP_SECRET`) must be at least 32 random-looking characters. Repeated or low-variety values such as `aaaa...` are rejected at startup. Values from the `harly` CLI and `openssl rand -base64 32` or `-hex 32` are accepted.
+- Duplicate SCIM `POST /Users` now returns `409 Conflict`, as does a POST whose email belongs to an account outside the workspace. Identity providers that re-POST existing users will see the conflict.
+- `GET /api/reports/advanced` accepts only `days=30`, `90` or `365` (default 90), the ranges the Reports page offers, and returns 400 otherwise.
+- The withdrawn Automations HTTP API (`/api/v1/automations`) answers `410 Gone` in the standard error envelope and is no longer listed in the OpenAPI document.
+- `compose.yaml` forwards OAuth credentials, `TRUSTED_PROXY_IPS`, `RATE_LIMIT_STORE`, `LOG_LEVEL`, `NATIVE_SIGN_SESSION_SECRET`, retention, Turnstile, database pool and email settings to the app, scheduler and migrate services, and includes the `docuseal` service under the `esign` profile. It no longer sets the deprecated `NEXT_PUBLIC_APP_URL` and `BETTER_AUTH_URL` aliases; if you set only those in `.env`, set `HARLY_URL` instead.
+- `.env.example` and the configuration reference cover every environment variable Harly reads. The `EMAIL_FROM` example uses a reserved domain and the `LOG_LEVEL` default is documented as `info`.
+- Added indexes on foreign keys of evaluation jobs, mail threads, mail messages and candidate messages to speed up deletes and lookups.
+- Turborepo passes runtime secrets and optional integration settings through to tasks started via `turbo`.
+- The candidate portal sign-in page now matches the staff sign-in page and only shows the methods enabled under portal settings. Candidates see one email field at most: a password field, a sign-in link button, or a switch between the two when both are enabled. Social providers appear as round buttons, and passkey and social buttons sit above the email form. The access code entry is a small link. After a sign-in link is sent, the form shows a "Check your inbox" confirmation.
 
 ### Fixed
 
@@ -134,17 +117,27 @@ list their extra proxy hops in `TRUSTED_PROXY_IPS`.
 - Downloading an older version of a document serves it with the MIME type it was uploaded with. Versions created before this release fall back to the document's type.
 - Trashed jobs no longer reserve their URL slug, and restoring a trashed job whose slug was taken by a newer job brings it back under a fresh unique slug instead of failing.
 - Moving a candidate on the pipeline board no longer fails with "Unable to move" when someone changes a stage's type at the same moment: a move that Postgres aborts as a deadlock victim is now retried.
+- **Assign to job** from the talent pool failed with a database error (`42P10`) on every attempt. It works again.
+- AI features that return structured data (resume parsing, job generation, candidate scoring and others) failed with Claude Sonnet 5.5, Opus 5.5 and Fable 5.1 and newer and fell back to their non-AI path. Harly now uses the provider's native structured output for these models (`@ai-sdk/anthropic` 3.0.143).
 
-### Changed
 
-- Production secrets (`BETTER_AUTH_SECRET`, `AI_ENCRYPTION_KEY`, `STORAGE_UPLOAD_SECRET`, `CRON_SECRET`, `HARLY_SETUP_SECRET`) must be at least 32 random-looking characters. Repeated or low-variety values such as `aaaa...` are rejected at startup. Values from the `harly` CLI and `openssl rand -base64 32` or `-hex 32` are accepted.
-- Duplicate SCIM `POST /Users` now returns `409 Conflict`, as does a POST whose email belongs to an account outside the workspace. Identity providers that re-POST existing users will see the conflict.
-- `GET /api/reports/advanced` accepts only `days=30`, `90` or `365` (default 90), the ranges the Reports page offers, and returns 400 otherwise.
-- The withdrawn Automations HTTP API (`/api/v1/automations`) answers `410 Gone` in the standard error envelope and is no longer listed in the OpenAPI document.
-- `compose.yaml` forwards OAuth credentials, `TRUSTED_PROXY_IPS`, `RATE_LIMIT_STORE`, `LOG_LEVEL`, `NATIVE_SIGN_SESSION_SECRET`, retention, Turnstile, database pool and email settings to the app, scheduler and migrate services, and includes the `docuseal` service under the `esign` profile. It no longer sets the deprecated `NEXT_PUBLIC_APP_URL` and `BETTER_AUTH_URL` aliases; if you set only those in `.env`, set `HARLY_URL` instead.
-- `.env.example` and the configuration reference cover every environment variable Harly reads. The `EMAIL_FROM` example uses a reserved domain and the `LOG_LEVEL` default is documented as `info`.
-- Added indexes on foreign keys of evaluation jobs, mail threads, mail messages and candidate messages to speed up deletes and lookups.
-- Turborepo passes runtime secrets and optional integration settings through to tasks started via `turbo`.
+- Candidate headers show email addresses and phone numbers directly, and avatar initials scale proportionally to their frames.
+
+- Profile photos stay centered in their avatar frames. Replaced the Seedface dependency with lightweight initials when a photo is unavailable.
+
+- Demo and first-run example data use coherent candidate profiles, fictional contact details, local portraits and downloadable PDF resumes. First-run data includes evaluations for candidates who have advanced past application review; demo timelines include candidates who need follow-up. Example content no longer repeats “Sample” throughout the recruiter experience, while the workspace disclosure and safe removal remain available.
+- Demo resumes use the configured storage provider, including S3.
+- The public demo (`DEMO_MODE=true`) starts in English for every visitor, whatever the browser language, until the visitor picks another language. Email language settings in the demo now read in English too.
+- The interface language on the account page sits in a titled card with a description and a Save button, matching the email language card below it.
+
+- Demo and first-run example jobs have complete descriptions (role and team, responsibilities, requirements, nice-to-haves, benefits, work model and hiring process). The demo career page, terms of service, privacy policy, cookie policy and candidate notice use fuller fictional copy with `.example` contact addresses.
+- The cookie banner on public pages now closes cleanly when you accept, choose necessary only, save preferences or press the close button, and stays closed on later pages and reloads. Closing it with the X now records a necessary-only choice. The exit animation is skipped when reduced motion is requested.
+- The Playful career page template now uses its rounded corners on job detail and application pages too, including when the page was saved with sharp corners from another template.
+- The two-part badge in the Playful template hero now has an even inset around the inner pill and keeps its shape with long translated text.
+
+### Removed
+
+- The anonymous install telemetry collector (`apps/telemetry`) and its documentation page. Harly and its CLI no longer send any usage data.
 
 ## [0.5.0] - 2026-11-10
 
