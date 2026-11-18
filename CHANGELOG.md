@@ -44,6 +44,10 @@ operators. How to cut a release is in [RELEASING.md](RELEASING.md). The
 - The Playful career page template now uses its rounded corners on job detail and application pages too, including when the page was saved with sharp corners from another template.
 - The two-part badge in the Playful template hero now has an even inset around the inner pill and keeps its shape with long translated text.
 
+### Changed
+
+- The candidate portal sign-in page now matches the staff sign-in page and only shows the methods enabled under portal settings. Candidates see one email field at most: a password field, a sign-in link button, or a switch between the two when both are enabled. Social providers appear as round buttons, and passkey and social buttons sit above the email form. The access code entry is a small link. After a sign-in link is sent, the form shows a "Check your inbox" confirmation.
+
 ### Removed
 
 - The anonymous install telemetry collector (`apps/telemetry`) and its documentation page. Harly and its CLI no longer send any usage data.
