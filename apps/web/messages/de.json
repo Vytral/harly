@@ -15,7 +15,11 @@
     "emailPlaceholder": "you@company.com"
   },
   "language": {
+    "title": "Interface language",
+    "description": "Choose the language Harly uses for menus, pages and messages in this browser.",
     "label": "Sprache",
+    "save": "Save language",
+    "saving": "Saving…",
     "error": "Die Sprache konnte nicht gespeichert werden. Versuche es erneut."
   },
   "shell": {
@@ -5245,6 +5249,12 @@
       },
       "demoLockedNotice": {
         "default": "In der Demo deaktiviert: Diese Aktion würde die Kontosicherheit ändern oder Daten außerhalb deiner Sandbox senden."
+      },
+      "demoCandidatePortalCard": {
+        "title": "See what this candidate sees",
+        "description": "Open the candidate portal signed in as this sample candidate: their applications, stages, interviews and document requests. No email or login needed.",
+        "open": "View as candidate",
+        "error": "Couldn't open the candidate portal. Try again."
       }
     },
     "developers": {
@@ -7221,7 +7231,16 @@
         "accessBody": "Füge den Code oder Link ein, den dir das Unternehmen geschickt hat.",
         "accessCode": "Zugangscode",
         "continue": "Weiter",
-        "checking": "Wird geprüft…"
+        "checking": "Wird geprüft…",
+        "noMethods": "Sign-in isn't available right now. Contact the company for access.",
+        "signInMethod": "Sign-in method",
+        "tabPassword": "Password",
+        "tabMagicLink": "Email link",
+        "emailPlaceholder": "you@example.com",
+        "passwordPlaceholder": "Your password",
+        "showPassword": "Show password",
+        "hidePassword": "Hide password",
+        "magicHelp": "We'll email you a link that signs you in. No password needed."
       },
       "portalPrivacyControls": {
         "title": "Deine Daten",
@@ -12539,6 +12558,13 @@
         "nameRequired": "Gib deinem Assistenten einen Namen.",
         "nameTooLong": "Verwende höchstens {max} Zeichen.",
         "avatarUrlInvalid": "Der Avatar muss eine gültige URL sein."
+      }
+    },
+    "demo": {
+      "candidatePortal": {
+        "unavailable": "Viewing the portal as a candidate is only available in your demo workspace.",
+        "seededOnly": "Only the sample candidates that came with the demo can be viewed in the portal.",
+        "portalOff": "Turn on the candidate portal in Settings to view it as a candidate."
       }
     }
   }
