@@ -16,6 +16,7 @@ describe("locale request configuration", () => {
   beforeEach(() => {
     getCookie.mockReset();
     getHeader.mockReset();
+    vi.stubEnv("DEMO_MODE", "");
   });
   it("uses English for missing or invalid preferences", async () => {
     expect((await configure()).locale).toBe("en");

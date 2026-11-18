@@ -151,6 +151,9 @@ export function PortalLoginForm({ methods }: { methods: PortalLoginMethods }) {
     startTransition(async () => {
       try {
         await task();
+      } catch {
+        // A rejected server action must not take the form down; show an inline error.
+        setError(t("errorGeneric"));
       } finally {
         setPending(null);
       }

@@ -5253,7 +5253,8 @@
       "demoCandidatePortalCard": {
         "title": "Mira lo que ve esta persona",
         "description": "Abre el portal de candidatos con la sesión de esta persona de ejemplo: candidaturas, etapas, entrevistas y solicitudes de documentos. Sin correo ni inicio de sesión.",
-        "open": "Ver como candidato"
+        "open": "Ver como candidato",
+        "error": "No se pudo abrir el portal de candidatos. Inténtalo de nuevo."
       }
     },
     "developers": {
