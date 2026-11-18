@@ -11331,7 +11331,8 @@
         "enterApiKeyToTest": "Gib deinen API-Schlüssel für {label} ein, um ihn zu testen.",
         "emptyResponse": "Das Modell hat eine leere Antwort zurückgegeben.",
         "connectionFailed": "Verbindung fehlgeschlagen.",
-        "connectionFailedWithReason": "Verbindung fehlgeschlagen: {reason}"
+        "connectionFailedWithReason": "Verbindung fehlgeschlagen: {reason}",
+        "structuredOutputFailed": "Verbunden, aber die strukturierte Ausgabe ist fehlgeschlagen, daher funktionieren Funktionen wie Lebenslauf-Analyse und Bewertung nicht: {reason}"
       },
       "calSettingsActions": {
         "invalidUrl": "Gib eine gültige URL ein.",

@@ -11331,7 +11331,8 @@
         "enterApiKeyToTest": "Voer je {label}-API-sleutel in om te testen.",
         "emptyResponse": "Het model gaf een leeg antwoord.",
         "connectionFailed": "Verbinding mislukt.",
-        "connectionFailedWithReason": "Verbinding mislukt: {reason}"
+        "connectionFailedWithReason": "Verbinding mislukt: {reason}",
+        "structuredOutputFailed": "Verbonden, maar gestructureerde uitvoer is mislukt, dus functies zoals cv-analyse en scoren werken niet: {reason}"
       },
       "calSettingsActions": {
         "invalidUrl": "Voer een geldige URL in.",

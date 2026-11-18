@@ -285,12 +285,17 @@ export async function assignFromPoolToJobAction(input: {
         status: "active",
         appliedAt: new Date(),
       })
+      // The unique index is partial (`WHERE status = 'active'`, migration
+      // 0144). Postgres only infers a partial index as the arbiter when the
+      // ON CONFLICT clause repeats its predicate; without it every insert
+      // fails with 42P10.
       .onConflictDoNothing({
         target: [
           applications.workspaceId,
           applications.candidateId,
           applications.jobId,
         ],
+        where: sql`${applications.status} = 'active'`,
       })
       .returning();
 

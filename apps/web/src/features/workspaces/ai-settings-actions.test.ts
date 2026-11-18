@@ -7,6 +7,10 @@ const mocks = vi.hoisted(() => ({
   generateText: vi.fn(),
   insertValues: vi.fn(),
   getProviderModels: vi.fn(),
+  clearIntegrationHealth: vi.fn(),
+}));
+vi.mock("@/features/integrations/health/repository", () => ({
+  clearIntegrationHealth: mocks.clearIntegrationHealth,
 }));
 vi.mock("server-only", () => ({}));
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
@@ -54,7 +58,7 @@ beforeEach(() => {
   mocks.requirePermission.mockResolvedValue({ organization: { id: "org-1" } });
   mocks.getWorkspaceAiStatus.mockResolvedValue({ hasApiKey: false, provider: null });
   mocks.getWorkspaceAiConfig.mockResolvedValue(null);
-  mocks.generateText.mockResolvedValue({ text: "OK" });
+  mocks.generateText.mockResolvedValue({ text: "OK", output: { reply: "OK" } });
 });
 
 describe("saveAiSettingsAction", () => {
@@ -70,6 +74,8 @@ describe("saveAiSettingsAction", () => {
     expect(mocks.insertValues).toHaveBeenCalledWith(
       expect.objectContaining({ aiBaseUrl: "https://gateway.example.com/v1", aiProvider: "openai-compatible" }),
     );
+    // Failures recorded against the previous configuration are dropped.
+    expect(mocks.clearIntegrationHealth).toHaveBeenCalledWith("org-1", "ai");
   });
 
   it("returns the host error to the UI for a foreign host on a hosted provider", async () => {
@@ -146,7 +152,7 @@ describe("testAiConnectionAction", () => {
     let seenModel: unknown;
     mocks.generateText.mockImplementation(async ({ model }: { model: unknown }) => {
       seenModel = model;
-      return { text: "OK" };
+      return { text: "OK", output: { reply: "OK" } };
     });
     const result = await testAiConnectionAction({
       provider: "openai-compatible",
@@ -174,6 +180,22 @@ describe("testAiConnectionAction", () => {
     mocks.getWorkspaceAiConfig.mockResolvedValue({ provider: "openai", apiKey: "stored" });
     const result = await testAiConnectionAction({ provider: "groq", modelId: "m" });
     expect(result).toMatchObject({ ok: false, error: expect.stringMatching(/Groq API key/) });
+  });
+
+  it("fails when the model answers text but rejects structured output", async () => {
+    mocks.generateText
+      .mockResolvedValueOnce({ text: "OK" })
+      .mockRejectedValueOnce(new Error("tool_choice any is not supported with this model"));
+    const result = await testAiConnectionAction({
+      provider: "anthropic",
+      modelId: "claude-sonnet-5-5",
+      apiKey: "k",
+    });
+    expect(result.ok).toBe(false);
+    expect(result.error).toMatch(/structured output failed/);
+    expect(result.error).toMatch(/tool_choice/);
+    expect(mocks.generateText).toHaveBeenCalledTimes(2);
+    expect(mocks.generateText.mock.calls[1]![0]).toHaveProperty("output");
   });
 
   it("redacts the key from provider errors", async () => {

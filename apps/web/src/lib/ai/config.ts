@@ -120,10 +120,18 @@ export async function getWorkspaceAiConfig(
   const demoConfig = await resolveDemoAiModelConfig(workspaceId);
   if (demoConfig) {
     if (options.consumeDemoBudget === false) {
-      return { ...demoConfig, resumeAnonymization: await loadResumeAnonymization(workspaceId) };
+      return {
+        ...demoConfig,
+        healthWorkspaceId: workspaceId,
+        resumeAnonymization: await loadResumeAnonymization(workspaceId),
+      };
     }
     if (!(await consumeDemoAiDailyBudget())) return null;
-    return { ...demoConfig, resumeAnonymization: await loadResumeAnonymization(workspaceId) };
+    return {
+      ...demoConfig,
+      healthWorkspaceId: workspaceId,
+      resumeAnonymization: await loadResumeAnonymization(workspaceId),
+    };
   }
 
   if (!isEncryptionConfigured()) {
@@ -170,6 +178,7 @@ export async function getWorkspaceAiConfig(
       modelId: row.aiModelId,
       apiKey,
       baseUrl: row.aiBaseUrl ?? undefined,
+      healthWorkspaceId: workspaceId,
       resumeAnonymization: Boolean(row.aiResumeAnonymization),
     };
   } catch {

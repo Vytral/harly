@@ -17,6 +17,7 @@ export const INTEGRATION_HEALTH_KEYS = [
   "telegram",
   "jitsi",
   "docuseal",
+  "ai",
 ] as const;
 
 export type IntegrationHealthKey = (typeof INTEGRATION_HEALTH_KEYS)[number];

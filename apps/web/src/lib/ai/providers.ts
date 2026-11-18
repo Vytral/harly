@@ -78,6 +78,11 @@ export type AiModelConfig = {
   apiKey: string;
   /** Optional custom API base URL. */
   baseUrl?: string;
+  /**
+   * Workspace whose AI integration health records the outcome of each call.
+   * Set by `getWorkspaceAiConfig`; absent for one-off calls such as tests.
+   */
+  healthWorkspaceId?: string;
 };
 
 export type OpenRouterModel = { id: string; name: string; free: boolean };
@@ -156,7 +161,7 @@ export const AI_PROVIDERS: AiProviderInfo[] = [
     id: "anthropic",
     kind: "anthropic",
     catalogId: "anthropic",
-    modelExample: "claude-sonnet-5",
+    modelExample: "claude-sonnet-5-5",
     requiresKey: true,
     requiresBaseUrl: false,
     allowedHosts: ["api.anthropic.com"],
@@ -167,6 +172,11 @@ export const AI_PROVIDERS: AiProviderInfo[] = [
     baseUrl: "https://api.anthropic.com/v1",
     supportsModelSearch: false,
     models: [
+      { id: "claude-fable-5-2", label: "Claude Fable 5.2" },
+      { id: "claude-fable-5-1", label: "Claude Fable 5.1" },
+      { id: "claude-opus-5-5", label: "Claude Opus 5.5" },
+      { id: "claude-sonnet-5-5", label: "Claude Sonnet 5.5" },
+      { id: "claude-haiku-5-5", label: "Claude Haiku 5.5" },
       { id: "claude-fable-5", label: "Claude Fable 5" },
       { id: "claude-opus-5", label: "Claude Opus 5" },
       { id: "claude-sonnet-5", label: "Claude Sonnet 5" },

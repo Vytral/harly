@@ -11331,7 +11331,8 @@
         "enterApiKeyToTest": "Escribe tu clave API de {label} para probarla.",
         "emptyResponse": "El modelo devolvió una respuesta vacía.",
         "connectionFailed": "La conexión falló.",
-        "connectionFailedWithReason": "La conexión falló: {reason}"
+        "connectionFailedWithReason": "La conexión falló: {reason}",
+        "structuredOutputFailed": "Conectado, pero la salida estructurada falló, así que funciones como el análisis de CV y la puntuación no funcionarán: {reason}"
       },
       "calSettingsActions": {
         "invalidUrl": "Escribe una URL válida.",
