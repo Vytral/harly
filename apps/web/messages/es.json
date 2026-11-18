@@ -5245,7 +5245,8 @@
       "sandboxBoardRibbon": {
         "preview": "Vista previa del entorno de demo de Harly",
         "expires": "caduca {time} UTC",
-        "backToBuilder": "Volver al constructor"
+        "backToBuilder": "Volver al constructor",
+        "candidatePortal": "Candidate portal"
       },
       "demoLockedNotice": {
         "default": "Desactivado en la demo: esta acción cambiaría la seguridad de la cuenta o enviaría datos fuera de tu sandbox."
@@ -5254,6 +5255,13 @@
         "title": "See what this candidate sees",
         "description": "Open the candidate portal signed in as this sample candidate: their applications, stages, interviews and document requests. No email or login needed.",
         "open": "View as candidate",
+        "error": "Couldn't open the candidate portal. Try again."
+      },
+      "demoPortalEntry": {
+        "title": "Exploring the demo?",
+        "description": "Skip sign-in and see the portal as one of the sample candidates: their applications, interviews and document requests.",
+        "open": "Explore as a sample candidate",
+        "opening": "Opening…",
         "error": "Couldn't open the candidate portal. Try again."
       }
     },
