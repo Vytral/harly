@@ -5,7 +5,7 @@ and the [documentation](https://docs.harly.dev); this page is only about what
 comes next. Localization (Spanish, Brazilian Portuguese, German, French and
 Dutch) and MCP client metadata compatibility shipped in 0.5.0.
 
-_Last reviewed: 2026-11-16. Current release: 0.5.0._
+_Last reviewed: 2026-11-18. Current release: 0.5.2._
 
 Plans change as we learn. Work in progress is tracked in
 [issues](https://github.com/Vytral/harly/issues) and
@@ -35,6 +35,17 @@ end to end, through the interface and the API.
 - **Reusable templates.** Versioned job, interview-kit, scorecard, pipeline and
   automation templates that a team applies to new jobs.
 - **Saved views.** Per-user saved filters, report views and task queues.
+- **Language defaults for emails.** A default language for candidate emails
+  and messages at the workspace, job and offer level, so a French-speaking
+  team doesn't have to set each candidate's language by hand.
+- **Email and message settings.** One place to manage email defaults, default
+  messages and templates, instead of spreading them across several settings
+  screens.
+- **Profile photo from the resume.** Extract the candidate's photo from the
+  CV when it has one, and let the recruiter keep or remove it.
+- **Wider API for automations.** More REST endpoints for tools like n8n and
+  Zapier, starting with the job hiring team, so integrations can route and
+  preprocess data themselves.
 - **Proactive AI briefs.** Stalled candidates, missing feedback and follow-ups,
   every suggestion grounded in workspace data and confirmed before it writes
   anything.
