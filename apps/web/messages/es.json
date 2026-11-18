@@ -7508,7 +7508,7 @@
     "sampleData": {
       "sampleDataBanner": {
         "viewingTitle": "Estás viendo datos de ejemplo.",
-        "viewingDescription": "Los registros de ejemplo se marcan como «Ejemplo» y no aparecen en tu página de empleo, a menos que los publiques.",
+        "viewingDescription": "Sample jobs stay off your careers page unless you publish them.",
         "removing": "Eliminando…",
         "remove": "Eliminar datos de ejemplo"
       }
@@ -11331,7 +11331,8 @@
         "enterApiKeyToTest": "Escribe tu clave API de {label} para probarla.",
         "emptyResponse": "El modelo devolvió una respuesta vacía.",
         "connectionFailed": "La conexión falló.",
-        "connectionFailedWithReason": "La conexión falló: {reason}"
+        "connectionFailedWithReason": "La conexión falló: {reason}",
+        "structuredOutputFailed": "Connected, but structured output failed, so features such as resume parsing and scoring will not work: {reason}"
       },
       "calSettingsActions": {
         "invalidUrl": "Escribe una URL válida.",
@@ -11944,7 +11945,7 @@
       "actions": {
         "loadFailed": "No se pudieron cargar los datos de ejemplo. Inténtalo de nuevo.",
         "removeFailed": "No se pudieron eliminar los datos de ejemplo. Inténtalo de nuevo.",
-        "emailConflict": "No se cargaron los datos de muestra: un candidato ya usa una de las direcciones de muestra, como amara.okafor@sample.invalid. Renombra o elimina ese candidato y vuelve a cargar."
+        "emailConflict": "Sample data was not loaded: a candidate already uses one of the sample email addresses, such as amara.okafor@careers.example. Rename or remove that candidate, then load again."
       }
     },
     "portal": {
