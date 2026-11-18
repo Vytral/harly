@@ -21,6 +21,10 @@ operators. How to cut a release is in [RELEASING.md](RELEASING.md). The
 
 - Public demo: a "View as candidate" card on sample candidates opens the candidate portal signed in as that candidate, with no email or login. It only works when `DEMO_MODE=true`, inside the visitor's own sandbox and for its seeded candidates. Demo data now enables the candidate portal and includes pending document requests.
 
+### Changed
+
+- The candidate portal sign-in page now matches the staff sign-in page and only shows the methods enabled under portal settings. Candidates see one email field at most: a password field, a sign-in link button, or a switch between the two when both are enabled. Social providers appear as round buttons, and passkey and social buttons sit above the email form. The access code entry is a small link. After a sign-in link is sent, the form shows a "Check your inbox" confirmation.
+
 ### Fixed
 
 - **Assign to job** from the talent pool failed with a database error (`42P10`) on every attempt. It works again.
@@ -37,16 +41,9 @@ operators. How to cut a release is in [RELEASING.md](RELEASING.md). The
 - The interface language on the account page sits in a titled card with a description and a Save button, matching the email language card below it.
 
 - Demo and first-run example jobs have complete descriptions (role and team, responsibilities, requirements, nice-to-haves, benefits, work model and hiring process). The demo career page, terms of service, privacy policy, cookie policy and candidate notice use fuller fictional copy with `.example` contact addresses.
-
-### Fixed
-
 - The cookie banner on public pages now closes cleanly when you accept, choose necessary only, save preferences or press the close button, and stays closed on later pages and reloads. Closing it with the X now records a necessary-only choice. The exit animation is skipped when reduced motion is requested.
 - The Playful career page template now uses its rounded corners on job detail and application pages too, including when the page was saved with sharp corners from another template.
 - The two-part badge in the Playful template hero now has an even inset around the inner pill and keeps its shape with long translated text.
-
-### Changed
-
-- The candidate portal sign-in page now matches the staff sign-in page and only shows the methods enabled under portal settings. Candidates see one email field at most: a password field, a sign-in link button, or a switch between the two when both are enabled. Social providers appear as round buttons, and passkey and social buttons sit above the email form. The access code entry is a small link. After a sign-in link is sent, the form shows a "Check your inbox" confirmation.
 
 ### Removed
 
