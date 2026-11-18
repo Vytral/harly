@@ -91,7 +91,6 @@ It also removes the anonymous install telemetry, fixes talent pool assignment, a
 
 ### Fixed
 
-
 - Concurrent inbound deliveries of the same email no longer break attachment saving.
 - Failed emails in the delivery log show the real, sanitized provider error instead of "No configured workspace email sender".
 - Inbound attachment links in a candidate conversation open the right file. The legacy download route writes an audit event and sends `X-Content-Type-Options: nosniff`.
@@ -184,7 +183,6 @@ to configure; run `harly update` as usual.
 
 ### Fixed
 
-
 - The job editor form now uses the full width on narrow windows, scrolls from
   anywhere on the page, and no longer loads the live preview unless there is
   room to show it.
@@ -259,7 +257,6 @@ more ways to sign in. Contains two database migrations (`0165`, `0166`); run
 
 ### Fixed
 
-
 - Published jobs keep the same readable-content requirements when edited in
   the dashboard or through the API. The API can publish jobs whose content is
   in sections, and empty HTML or nonbreaking spaces do not count as content.
@@ -313,7 +310,6 @@ No database migrations.
 
 ### Fixed
 
-
 - Chat follow-ups failed on OpenAI reasoning models (such as `gpt-6-*`) with
   "function_call was provided without its required 'reasoning' item": earlier
   turns now replay tool calls inline instead of as stored item references.
@@ -336,7 +332,6 @@ A patch release for the public demo and scheduler reliability. No database
 migrations.
 
 ### Fixed
-
 
 - Harly AI was off in every demo visitor sandbox: sandboxes have their own
   workspace id, so the `DEMO_WORKSPACE_ID` pin rejected them. Live sandboxes now
@@ -375,7 +370,6 @@ A patch release with fixes for the public demo, career page polish and a
 mobile layout pass. No database migrations.
 
 ### Fixed
-
 
 - Signing failed on the server with `DOMMatrix is not defined`; pdfjs now loads
   without it.
@@ -488,7 +482,6 @@ existing installation. All migrations are additive.
 - The Harly AI launcher and notifications share one bottom surface.
 
 ### Fixed
-
 
 - PDF resumes lose no line breaks, so the rules parser finds roles, education
   and skills again. Cyrillic, CJK and Arabic resumes are legible, file types are
@@ -633,7 +626,6 @@ existing installation.
 
 ### Fixed
 
-
 - The integration health API no longer returns the DocuSeal webhook secret.
 - Hires created through offer acceptance now carry stage history, so they are
   counted in reports.
@@ -693,7 +685,6 @@ are unaffected.
 
 ### Fixed
 
-
 - Demo sandbox cleanup deletes exactly the account minted for the sandbox and
   its sessions, never a shared seeded teammate, and removes uploaded files from
   S3-compatible storage as well as local disk.
@@ -729,7 +720,6 @@ workflows. No database migration or new runtime configuration is required.
   Sharp are installed for musl in the build stage.
 
 ### Fixed
-
 
 - Include the PDF.js browser module and worker in standalone images so the
   native signature-field editor can load PDFs in production.
@@ -802,7 +792,6 @@ Automations tour. No migrations.
   root `package.json`, inlined at build time, instead of a hardcoded `v0.1.0`.
 
 ### Fixed
-
 
 - The Postgres rate limiter (`RATE_LIMIT_STORE=database` and the demo AI
   budgets) now counts with a single atomic upsert. Concurrent first hits of a
@@ -921,7 +910,6 @@ before you start.
   audit no longer reports the high and critical findings it did before.
 
 ### Fixed
-
 
 - Migrations take a Postgres advisory lock. Two instances migrating at once —
   a rolling deploy, an init container per replica, or an overlapping redeploy —
