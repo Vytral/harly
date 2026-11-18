@@ -12,8 +12,13 @@ import type { AiProviderId } from "./providers";
  * xAI rejects two things that the AI SDK emits: `additionalProperties: false`
  * (it already defaults to closed objects) and a `$ref` that points at a
  * definition still being written (the automation condition tree). Those are
- * removed from the request body. Anthropic's non-strict tool API accepts
- * both, and strict mode is not enabled on these tools.
+ * removed from the request body. Anthropic's tool API accepts both.
+ *
+ * Anthropic strict tools reject numeric and length bounds ("For 'integer'
+ * type, properties maximum, minimum are not supported") and allow at most 20
+ * strict tools per request; Harly sends more. Tools are therefore sent to
+ * Anthropic without `strict`. Harly validates every call against the Zod
+ * schema itself, so nothing is accepted that strict mode would have refused.
  */
 type JsonSchema = {
   type?: string | string[];
@@ -34,12 +39,13 @@ type JsonSchema = {
 const SCHEMA_MAP_KEYS = ["properties", "patternProperties", "$defs", "definitions"] as const;
 const SCHEMA_ARRAY_KEYS = ["anyOf", "oneOf", "allOf", "prefixItems"] as const;
 
-type HarlyTool = { inputSchema: FlexibleSchema<unknown> };
+type HarlyTool = { inputSchema: FlexibleSchema<unknown>; strict?: boolean };
 
 export function toolsForProvider<Tools extends Record<string, HarlyTool>>(
   tools: Tools,
   provider: AiProviderId,
 ): Tools {
+  if (provider === "anthropic") return adaptStrictAnthropicTools(tools);
   if (provider !== "google") return tools;
 
   const adapted = {} as Tools;
@@ -236,4 +242,13 @@ function matchBranch(value: unknown, branches: JsonSchema[]): JsonSchema | undef
     }
   }
   return undefined;
+}
+
+function adaptStrictAnthropicTools<Tools extends Record<string, HarlyTool>>(tools: Tools): Tools {
+  if (!Object.values(tools).some((t) => t.strict)) return tools;
+  const adapted = {} as Tools;
+  for (const [name, harlyTool] of Object.entries(tools) as Array<[keyof Tools, Tools[keyof Tools]]>) {
+    adapted[name] = harlyTool.strict ? { ...harlyTool, strict: false } : harlyTool;
+  }
+  return adapted;
 }

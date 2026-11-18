@@ -13,8 +13,13 @@ operators. How to cut a release is in [RELEASING.md](RELEASING.md). The
 
 ## [Unreleased]
 
+## [0.5.2] - 2026-11-18
+
+This patch release fixes Harly AI with Anthropic models and makes the candidate portal reachable in the public demo. No migrations.
+
 ### Fixed
 
+- Harly AI with Anthropic models failed with "tools.N.custom: For 'integer' type, properties maximum, minimum are not supported". Tools are now sent to Anthropic without strict mode, which also rejected more than 20 strict tools per request; Harly still validates every tool call against its own schema.
 - Public demo: the candidate portal sign-in page has an "Explore as a sample candidate" button that opens the portal as a seeded candidate of your demo workspace (or sends you to the demo entry first), and the sandbox careers preview links to the portal. Previously the only way in was a card on a candidate's profile.
 - Public demo: the careers page introduction is back to its short original text, and the hero subheading is empty again.
 
@@ -973,7 +978,8 @@ upgrade holds locks until it commits. On managed Postgres, check that
 `statement_timeout` and `idle_in_transaction_session_timeout` are high enough to
 let it finish.
 
-[Unreleased]: https://github.com/Vytral/harly/compare/v0.5.1...HEAD
+[Unreleased]: https://github.com/Vytral/harly/compare/v0.5.2...HEAD
+[0.5.2]: https://github.com/Vytral/harly/releases/tag/v0.5.2
 [0.5.1]: https://github.com/Vytral/harly/releases/tag/v0.5.1
 [0.5.0]: https://github.com/Vytral/harly/releases/tag/v0.5.0
 [0.4.0]: https://github.com/Vytral/harly/releases/tag/v0.4.0

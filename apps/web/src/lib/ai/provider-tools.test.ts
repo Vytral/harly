@@ -144,3 +144,28 @@ describe("toolsForProvider", () => {
     if (parsed?.success) expect(parsed.value).toEqual({ version: "1", count: 2 });
   });
 });
+
+describe("Anthropic strict tools", () => {
+  it("sends tools to Anthropic without strict, keeping schema and validation", async () => {
+    const tools = {
+      pick: tool({
+        strict: true,
+        description: "Pick a count.",
+        inputSchema: z.object({ count: z.number().int().min(1).max(5) }),
+      }),
+      loose: tool({ description: "Not strict.", inputSchema: z.object({ n: z.number().int().min(1) }) }),
+    };
+    const adapted = toolsForProvider(tools, "anthropic");
+    expect(adapted.pick.strict).toBe(false);
+    expect(adapted.pick.inputSchema).toBe(tools.pick.inputSchema);
+    expect(adapted.loose).toBe(tools.loose);
+    expect(tools.pick.strict).toBe(true);
+    const invalid = await asSchema(adapted.pick.inputSchema).validate?.({ count: 9 });
+    expect(invalid?.success).toBe(false);
+  });
+
+  it("keeps strict for OpenAI", () => {
+    const tools = { pick: tool({ strict: true, description: "x", inputSchema: z.object({ a: z.string() }) }) };
+    expect(toolsForProvider(tools, "openai").pick.strict).toBe(true);
+  });
+});
