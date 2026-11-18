@@ -27,6 +27,7 @@ vi.mock("@harly/db", async () => ({
   applications: {},
   candidates: {},
   jobs: {},
+  jobHiringTeam: {},
   jobStages: {
     id: "jobStages.id",
     name: "jobStages.name",
@@ -261,6 +262,8 @@ describe("F1-07 re-application duplicate detection order", () => {
       [],
       [],
       [],
+      // No hiring team on this job, so the owners get the email.
+      [],
       [{ email: "owner@example.com", preferredEmailLocale: "de" }],
     ];
     const calls = { update: 0, insert: 0 };
@@ -286,6 +289,7 @@ describe("F1-07 re-application duplicate detection order", () => {
     );
     const tx = {
       select: () => runnable,
+      selectDistinct: () => runnable,
       update: () => {
         calls.update += 1;
         return runnable;

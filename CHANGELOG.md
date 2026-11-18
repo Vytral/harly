@@ -13,6 +13,11 @@ operators. How to cut a release is in [RELEASING.md](RELEASING.md). The
 
 ## [Unreleased]
 
+### Fixed
+
+- The "new application" email now goes to the job's hiring team, the same people who get the in-app notification. Jobs without a hiring team keep the previous behavior and email the workspace owners.
+- Resumes sent with an application through the career page or `POST /api/public/v1/jobs/{slug}/applications` are now parsed like a dashboard upload: the AI structured parse when AI is configured, the heuristic parse otherwise. Previously their summary, skills, experience and education stayed empty.
+
 ## [0.5.2] - 2026-11-18
 
 This patch release fixes Harly AI with Anthropic models and makes the candidate portal reachable in the public demo. No migrations.

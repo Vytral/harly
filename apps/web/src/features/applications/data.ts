@@ -12,6 +12,7 @@ import {
   candidates,
   candidateFiles,
   consentRecords,
+  jobHiringTeam,
   jobs,
   member as authMembers,
   organization,
@@ -600,19 +601,43 @@ export async function createPublicApplication(
         });
       }
 
-      const owners = await tx
-        .select({
-          email: authUsers.email,
-          preferredEmailLocale: authUsers.preferredEmailLocale,
-        })
-        .from(authMembers)
-        .innerJoin(authUsers, eq(authUsers.id, authMembers.userId))
+      // The "new application" email goes to the job's hiring team, like the
+      // in-app notification. Workspaces that don't use hiring teams keep the
+      // previous behavior: the owners get it.
+      const recipientColumns = {
+        email: authUsers.email,
+        preferredEmailLocale: authUsers.preferredEmailLocale,
+      };
+      const hiringTeam = await tx
+        .selectDistinct(recipientColumns)
+        .from(jobHiringTeam)
+        .innerJoin(
+          authMembers,
+          and(
+            eq(authMembers.userId, jobHiringTeam.userId),
+            eq(authMembers.organizationId, workspaceId),
+          ),
+        )
+        .innerJoin(authUsers, eq(authUsers.id, jobHiringTeam.userId))
         .where(
           and(
-            eq(authMembers.organizationId, workspaceId),
-            eq(authMembers.role, "owner"),
+            eq(jobHiringTeam.workspaceId, workspaceId),
+            eq(jobHiringTeam.jobId, job.id),
           ),
         );
+      const owners =
+        hiringTeam.length > 0
+          ? hiringTeam
+          : await tx
+              .select(recipientColumns)
+              .from(authMembers)
+              .innerJoin(authUsers, eq(authUsers.id, authMembers.userId))
+              .where(
+                and(
+                  eq(authMembers.organizationId, workspaceId),
+                  eq(authMembers.role, "owner"),
+                ),
+              );
 
       createdEvent.current = {
         workspaceId,

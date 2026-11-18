@@ -12,6 +12,7 @@ const mocks = vi.hoisted(() => ({
   sendApplicationReceivedEmails: vi.fn(),
   scheduleAutoScore: vi.fn(),
   scheduleAutoDuplicateCheck: vi.fn(),
+  scheduleApplicationResumeParse: vi.fn(),
 }));
 
 vi.mock("next/server", async (importOriginal) => ({
@@ -43,6 +44,9 @@ vi.mock("@/features/applications/auto-score", () => ({
 }));
 vi.mock("@/features/applications/auto-duplicates", () => ({
   scheduleAutoDuplicateCheck: mocks.scheduleAutoDuplicateCheck,
+}));
+vi.mock("@/features/applications/auto-resume-parse", () => ({
+  scheduleApplicationResumeParse: mocks.scheduleApplicationResumeParse,
 }));
 vi.mock("@/lib/validations/applications", () => ({
   createApplicationFormSchema: mocks.createApplicationFormSchema,
@@ -160,6 +164,21 @@ describe("POST /api/public/v1/jobs/[slug]/applications", () => {
 
     expect(response.status).toBeLessThan(300);
     expect(mocks.createPublicApplication).toHaveBeenCalled();
+  });
+
+  it("parses the stored resume after the response, like a dashboard upload", async () => {
+    const response = await POST(
+      request({ ...APPLICATION_VALUES, consentGiven: true }),
+      { params: Promise.resolve({ slug: "engineer" }) },
+    );
+
+    expect(response.status).toBe(201);
+    const scheduled = mocks.after.mock.calls.at(-1)?.[0] as () => Promise<void>;
+    await scheduled();
+    expect(mocks.scheduleApplicationResumeParse).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.any(String),
+    );
   });
 
   it("requires configured legal consent before creating an application", async () => {
