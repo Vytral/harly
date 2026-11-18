@@ -7508,7 +7508,7 @@
     "sampleData": {
       "sampleDataBanner": {
         "viewingTitle": "You're viewing sample data.",
-        "viewingDescription": "Sample records are labelled “Sample” and stay off your careers page unless you publish them.",
+        "viewingDescription": "Sample jobs stay off your careers page unless you publish them.",
         "removing": "Removing…",
         "remove": "Remove sample data"
       }
@@ -11944,7 +11944,7 @@
       "actions": {
         "loadFailed": "Sample data could not be loaded. Try again.",
         "removeFailed": "Sample data could not be removed. Try again.",
-        "emailConflict": "Sample data was not loaded: a candidate already uses one of the sample email addresses, such as amara.okafor@sample.invalid. Rename or remove that candidate, then load again."
+        "emailConflict": "Sample data was not loaded: a candidate already uses one of the sample email addresses, such as amara.okafor@careers.example. Rename or remove that candidate, then load again."
       }
     },
     "portal": {

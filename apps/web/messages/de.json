@@ -7508,7 +7508,7 @@
     "sampleData": {
       "sampleDataBanner": {
         "viewingTitle": "Du siehst Beispieldaten.",
-        "viewingDescription": "Beispieldatensätze sind mit „Beispiel“ gekennzeichnet und erscheinen nicht auf deiner Karriereseite, sofern du sie nicht veröffentlichst.",
+        "viewingDescription": "Beispielstellen erscheinen nicht auf deiner Karriereseite, sofern du sie nicht veröffentlichst.",
         "removing": "Wird entfernt…",
         "remove": "Beispieldaten entfernen"
       }
@@ -11944,7 +11944,7 @@
       "actions": {
         "loadFailed": "Beispieldaten konnten nicht geladen werden. Versuche es erneut.",
         "removeFailed": "Beispieldaten konnten nicht entfernt werden. Versuche es erneut.",
-        "emailConflict": "Die Beispieldaten wurden nicht geladen: Ein Kandidat verwendet bereits eine der Beispiel-E-Mail-Adressen, etwa amara.okafor@sample.invalid. Benenne diesen Kandidaten um oder entferne ihn und lade dann erneut."
+        "emailConflict": "Die Beispieldaten wurden nicht geladen: Ein Kandidat verwendet bereits eine der Beispiel-E-Mail-Adressen, etwa amara.okafor@careers.example. Benenne diesen Kandidaten um oder entferne ihn und lade dann erneut."
       }
     },
     "portal": {

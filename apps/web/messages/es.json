@@ -7508,7 +7508,7 @@
     "sampleData": {
       "sampleDataBanner": {
         "viewingTitle": "Estás viendo datos de ejemplo.",
-        "viewingDescription": "Los registros de ejemplo se marcan como «Ejemplo» y no aparecen en tu página de empleo, a menos que los publiques.",
+        "viewingDescription": "Las ofertas de ejemplo no aparecen en tu página de empleo a menos que las publiques.",
         "removing": "Eliminando…",
         "remove": "Eliminar datos de ejemplo"
       }
@@ -11944,7 +11944,7 @@
       "actions": {
         "loadFailed": "No se pudieron cargar los datos de ejemplo. Inténtalo de nuevo.",
         "removeFailed": "No se pudieron eliminar los datos de ejemplo. Inténtalo de nuevo.",
-        "emailConflict": "No se cargaron los datos de muestra: un candidato ya usa una de las direcciones de muestra, como amara.okafor@sample.invalid. Renombra o elimina ese candidato y vuelve a cargar."
+        "emailConflict": "No se cargaron los datos de muestra: un candidato ya usa una de las direcciones de muestra, como amara.okafor@careers.example. Renombra o elimina ese candidato y vuelve a cargar."
       }
     },
     "portal": {

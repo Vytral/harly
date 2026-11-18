@@ -185,7 +185,7 @@ export async function createDemoSandbox(input: { style: DemoStyle }): Promise<De
       });
     });
 
-    await seedDemoWorkspace({ db, sql, workspaceId, ownerUserId: userId, sandbox: true });
+    await seedDemoWorkspace({ db, sql, workspaceId, ownerUserId: userId, sandbox: true, storage });
 
     const [seeded] = await db
       .select({ config: workspaceSettings.careerPageConfig })

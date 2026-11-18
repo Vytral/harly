@@ -3,6 +3,7 @@ import "dotenv/config";
 import path from "node:path";
 
 import { eq, sql as dsql } from "drizzle-orm";
+import { createStorage } from "@harly/storage";
 
 import { createDatabaseClient, schema, seedDemoWorkspace } from "../src";
 import {
@@ -35,6 +36,12 @@ function readConfirmation(argv: string[], env: NodeJS.ProcessEnv): string | null
   const flag = argv.find((arg) => arg.startsWith("--confirm-wipe="));
   if (flag) return flag.slice("--confirm-wipe=".length);
   return env.SEED_CONFIRM_WIPE ?? null;
+}
+
+function requiredEnv(name: string): string {
+  const value = process.env[name];
+  if (!value) throw new Error(`${name} is required when STORAGE_PROVIDER=s3.`);
+  return value;
 }
 
 async function main() {
@@ -102,11 +109,24 @@ async function main() {
       console.log(`  ${entry.table}: ${entry.rows}`);
     }
 
+    const storage = process.env.STORAGE_PROVIDER === "s3"
+      ? createStorage({
+          provider: "s3",
+          bucket: requiredEnv("S3_BUCKET"),
+          region: process.env.S3_REGION ?? "auto",
+          accessKeyId: requiredEnv("S3_ACCESS_KEY_ID"),
+          secretAccessKey: requiredEnv("S3_SECRET_ACCESS_KEY"),
+          endpoint: process.env.S3_ENDPOINT || undefined,
+          publicUrl: process.env.S3_PUBLIC_URL || undefined,
+        })
+      : undefined;
+
     await seedDemoWorkspace({
       db,
       sql,
       workspaceId: membership.organizationId,
       ownerUserId: user.id,
+      storage,
       // CLI runs from packages/db; the web app serves uploads from apps/web.
       uploadsRoot: path.resolve(process.cwd(), "../../apps/web/uploads"),
     });

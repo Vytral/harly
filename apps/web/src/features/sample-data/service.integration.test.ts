@@ -2,8 +2,10 @@ import { and, eq, like } from "drizzle-orm";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import {
+  aiEvaluations,
   applicationStageHistory,
   applications,
+  candidateFiles,
   candidateTags,
   candidates,
   db,
@@ -19,6 +21,9 @@ import {
   runPipelineIntegration,
   type PipelineFixture,
 } from "@/test-support/pipeline-fixture";
+
+import { resumeKeyFromUrl } from "@/lib/resume/storage-key";
+import { storage } from "@/lib/storage";
 
 import { SAMPLE_EMAIL_DOMAIN, SAMPLE_JOB_TITLE } from "./constants";
 import {
@@ -65,6 +70,9 @@ describe.skipIf(!runPipelineIntegration)("sample data (database)", () => {
   });
 
   afterEach(async () => {
+    if (!fixture) return;
+    const keys = await storage.list(`workspaces/${fixture.workspaceId}/resumes`);
+    await Promise.all(keys.map((key) => storage.delete(key)));
     await fixture.cleanup();
   });
 
@@ -91,6 +99,8 @@ describe.skipIf(!runPipelineIntegration)("sample data (database)", () => {
       application: 8,
       application_stage_history: 8,
       candidate_note: 3,
+      candidate_file: 8,
+      candidate_evaluation: 6,
       interview: 1,
     });
 
@@ -102,6 +112,21 @@ describe.skipIf(!runPipelineIntegration)("sample data (database)", () => {
     expect(sampleJob.publishedAt).toBeNull();
 
     expect(await sampleCandidateCount(fixture.workspaceId)).toBe(8);
+    const profiles = await db.select({ phone: candidates.phone, location: candidates.location, avatarUrl: candidates.avatarUrl })
+      .from(candidates).where(and(eq(candidates.workspaceId, fixture.workspaceId), like(candidates.email, `%@${SAMPLE_EMAIL_DOMAIN}`)));
+    expect(profiles).toHaveLength(8);
+    for (const profile of profiles) {
+      expect(profile.phone).toMatch(/^\+1 202 555 010[0-7]$/);
+      expect(profile.location).toBe("Remote, Europe");
+      expect(profile.avatarUrl).toMatch(/^\/demo\/candidates\/portrait-\d{2}\.jpg$/);
+    }
+    const files = await db.select({ fileUrl: candidateFiles.fileUrl }).from(candidateFiles).where(eq(candidateFiles.workspaceId, fixture.workspaceId));
+    expect(files).toHaveLength(8);
+    for (const file of files) {
+      const key = resumeKeyFromUrl(file.fileUrl);
+      expect(key).toBeTruthy();
+      expect((await storage.read(key!)).subarray(0, 5).toString()).toBe("%PDF-");
+    }
     expect((await getSampleDataStatus(fixture.workspaceId)).active).toBe(true);
   });
 
@@ -137,7 +162,10 @@ describe.skipIf(!runPipelineIntegration)("sample data (database)", () => {
     });
 
     await loadSampleData({ workspaceId: fixture.workspaceId, actorUserId: fixture.userId });
+    const resumeKeys = await storage.list(`workspaces/${fixture.workspaceId}/resumes`);
+    expect(resumeKeys).toHaveLength(8);
     const removed = await removeSampleData({ workspaceId: fixture.workspaceId });
+    expect(await storage.list(`workspaces/${fixture.workspaceId}/resumes`)).toEqual([]);
 
     expect(removed.status).toBe("removed");
     if (removed.status !== "removed") return;
@@ -179,6 +207,44 @@ describe.skipIf(!runPipelineIntegration)("sample data (database)", () => {
       .where(eq(applications.id, real.applicationId));
     expect(remaining).toHaveLength(1);
     expect(await jobExists(fixture.jobId)).toBe(true);
+  });
+
+  it("keeps a replaced evaluation and its parents when removing the batch", async () => {
+    await loadSampleData({ workspaceId: fixture.workspaceId, actorUserId: fixture.userId });
+    const [evaluation] = await db.select({ id: aiEvaluations.id, applicationId: aiEvaluations.applicationId, candidateId: aiEvaluations.candidateId, jobId: aiEvaluations.jobId })
+      .from(aiEvaluations).where(eq(aiEvaluations.workspaceId, fixture.workspaceId)).limit(1);
+    await db.update(aiEvaluations).set({ modelId: "updated-evaluation" }).where(eq(aiEvaluations.id, evaluation.id));
+    await removeSampleData({ workspaceId: fixture.workspaceId });
+    expect(await db.select({ id: aiEvaluations.id }).from(aiEvaluations).where(eq(aiEvaluations.id, evaluation.id))).toHaveLength(1);
+    expect(await db.select({ id: applications.id }).from(applications).where(eq(applications.id, evaluation.applicationId))).toHaveLength(1);
+    expect(await db.select({ id: candidates.id }).from(candidates).where(eq(candidates.id, evaluation.candidateId))).toHaveLength(1);
+    expect(await jobExists(evaluation.jobId)).toBe(true);
+  });
+
+  it("keeps a sample application and candidate with user-added evaluation and resume", async () => {
+    await loadSampleData({ workspaceId: fixture.workspaceId, actorUserId: fixture.userId });
+    const [application] = await db
+      .select({ id: applications.id, candidateId: applications.candidateId, jobId: applications.jobId })
+      .from(applications)
+      .innerJoin(candidates, eq(applications.candidateId, candidates.id))
+      .where(and(eq(applications.workspaceId, fixture.workspaceId), eq(candidates.email, `amara.okafor@${SAMPLE_EMAIL_DOMAIN}`)));
+    const [file] = await db.insert(candidateFiles).values({
+      workspaceId: fixture.workspaceId, candidateId: application.candidateId,
+      fileName: "resume.pdf", fileUrl: "fixture/resume.pdf",
+    }).returning({ id: candidateFiles.id });
+    const [evaluation] = await db.insert(aiEvaluations).values({
+      workspaceId: fixture.workspaceId, candidateId: application.candidateId,
+      applicationId: application.id, jobId: application.jobId,
+      provider: "fixture", modelId: "fixture", score: 75,
+      recommendation: "yes", summary: "Strong experience.",
+    }).returning({ id: aiEvaluations.id });
+
+    await removeSampleData({ workspaceId: fixture.workspaceId });
+
+    expect(await db.select({ id: candidateFiles.id }).from(candidateFiles).where(eq(candidateFiles.id, file.id))).toHaveLength(1);
+    expect(await db.select({ id: aiEvaluations.id }).from(aiEvaluations).where(eq(aiEvaluations.id, evaluation.id))).toHaveLength(1);
+    expect(await db.select({ id: applications.id }).from(applications).where(eq(applications.id, application.id))).toHaveLength(1);
+    expect(await jobExists(application.jobId)).toBe(true);
   });
 
   it("keeps a sample candidate that a real application still references", async () => {
@@ -282,6 +348,9 @@ describe.skipIf(!runPipelineIntegration)("removal never destroys real child rows
   });
 
   afterEach(async () => {
+    if (!fixture) return;
+    const keys = await storage.list(`workspaces/${fixture.workspaceId}/resumes`);
+    await Promise.all(keys.map((key) => storage.delete(key)));
     await fixture.cleanup();
   });
 
@@ -336,7 +405,7 @@ describe.skipIf(!runPipelineIntegration)("removal never destroys real child rows
       .select({ email: candidates.email })
       .from(candidates)
       .where(eq(candidates.id, candidateId));
-    expect(retained.email).toMatch(/^retained-[0-9a-f]{8}\.amara\.okafor@sample\.invalid$/);
+    expect(retained.email).toMatch(/^retained-[0-9a-f]{8}\.amara\.okafor@careers\.example$/);
   });
 
   it("keeps a sample application that a user moved (real stage history row)", async () => {
@@ -430,6 +499,9 @@ describe.skipIf(!runPipelineIntegration)("removal keeps records that stopped bei
   });
 
   afterEach(async () => {
+    if (!fixture) return;
+    const keys = await storage.list(`workspaces/${fixture.workspaceId}/resumes`);
+    await Promise.all(keys.map((key) => storage.delete(key)));
     await fixture.cleanup();
   });
 

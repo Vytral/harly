@@ -7,6 +7,7 @@ import { db, sql, member, organization, user as userTable, seedDemoWorkspace } f
 import { authorizeCron } from "@/server/cron-auth";
 import { startCronRun } from "@/server/cron-runs";
 import { createLogger } from "@/lib/logger";
+import { storage } from "@/lib/storage";
 import { purgeExpiredSandboxes } from "@/features/demo/sandbox";
 import { resolveDemoResetTarget } from "@/features/demo/reset-target";
 
@@ -89,6 +90,7 @@ export async function POST(request: NextRequest) {
       sql,
       workspaceId: target.workspaceId,
       ownerUserId: owner.id,
+      storage,
     });
 
     // Visitor sandboxes are disposable: sweep the ones whose time is up.
