@@ -33,7 +33,9 @@ export default async function BoardApplyPage({
           ? "ashby"
           : config.template === "join"
             ? "join"
-            : "default"
+            : config.template === "playful"
+              ? "playful"
+              : "default"
       }
       captchaProvider={captcha?.provider ?? null}
       captchaSiteKey={captcha?.siteKey ?? null}

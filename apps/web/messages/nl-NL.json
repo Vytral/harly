@@ -15,7 +15,11 @@
     "emailPlaceholder": "you@company.com"
   },
   "language": {
+    "title": "Interface language",
+    "description": "Choose the language Harly uses for menus, pages and messages in this browser.",
     "label": "Taal",
+    "save": "Save language",
+    "saving": "Saving…",
     "error": "De taal kon niet worden opgeslagen. Probeer het opnieuw."
   },
   "shell": {
@@ -5245,6 +5249,12 @@
       },
       "demoLockedNotice": {
         "default": "Uitgeschakeld in de demo: deze actie zou de accountbeveiliging wijzigen of gegevens buiten je sandbox versturen."
+      },
+      "demoCandidatePortalCard": {
+        "title": "Zie wat deze kandidaat ziet",
+        "description": "Open het kandidatenportaal als deze voorbeeldkandidaat: sollicitaties, fasen, gesprekken en documentverzoeken. Geen e-mail of inlog nodig.",
+        "open": "Bekijken als kandidaat",
+        "error": "Het kandidatenportaal kon niet worden geopend. Probeer het opnieuw."
       }
     },
     "developers": {
@@ -7221,7 +7231,16 @@
         "accessBody": "Plak de code of link die het bedrijf je heeft gegeven.",
         "accessCode": "Toegangscode",
         "continue": "Doorgaan",
-        "checking": "Controleren…"
+        "checking": "Controleren…",
+        "noMethods": "Inloggen is op dit moment niet beschikbaar. Neem contact op met het bedrijf voor toegang.",
+        "signInMethod": "Inlogmethode",
+        "tabPassword": "Wachtwoord",
+        "tabMagicLink": "Link per e-mail",
+        "emailPlaceholder": "jij@voorbeeld.nl",
+        "passwordPlaceholder": "Je wachtwoord",
+        "showPassword": "Wachtwoord tonen",
+        "hidePassword": "Wachtwoord verbergen",
+        "magicHelp": "We sturen je een link per e-mail waarmee je inlogt. Geen wachtwoord nodig."
       },
       "portalPrivacyControls": {
         "title": "Je gegevens",
@@ -12539,6 +12558,13 @@
         "nameRequired": "Geef je assistent een naam.",
         "nameTooLong": "Gebruik {max} tekens of minder.",
         "avatarUrlInvalid": "De avatar moet een geldige URL zijn."
+      }
+    },
+    "demo": {
+      "candidatePortal": {
+        "unavailable": "Het portaal bekijken als kandidaat kan alleen in je demowerkruimte.",
+        "seededOnly": "Alleen de voorbeeldkandidaten van de demo kunnen in het portaal worden bekeken.",
+        "portalOff": "Zet het kandidatenportaal aan in Instellingen om het als kandidaat te bekijken."
       }
     }
   }

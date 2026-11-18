@@ -62,7 +62,7 @@ const initialState: ApplyJobActionState = {
  * "ashby" and "join" templates share the flat, sectioned layout (join swaps in
  * its own minimal resume uploader), while every other template keeps its
  * existing card-based form unchanged. */
-type ApplyFormVariant = "ashby" | "join" | "default";
+type ApplyFormVariant = "ashby" | "join" | "playful" | "default";
 
 type ApplyFormProps = {
   jobSlug: string;
@@ -701,8 +701,24 @@ export function ApplyForm({
   const isAshby = variant === "ashby";
   const isJoin = variant === "join";
   const flatVariant = isAshby || isJoin;
-  const input = flatVariant ? inputClassAshby : inputClass;
-  const textarea = flatVariant ? textareaClassAshby : textareaClass;
+  // Playful keeps the default layout but takes the career page's radius
+  // tokens, so the form matches the rounded list and job pages around it.
+  const isPlayful = variant === "playful";
+  const input = flatVariant
+    ? inputClassAshby
+    : isPlayful
+      ? cn(inputClass, "rounded-[var(--career-r-inner,12px)]")
+      : inputClass;
+  const textarea = flatVariant
+    ? textareaClassAshby
+    : isPlayful
+      ? cn(textareaClass, "rounded-[var(--career-r-inner,12px)]")
+      : textareaClass;
+  const card = isPlayful ? cn(cardClass, "rounded-[var(--career-r-card,16px)]") : cardClass;
+  const rInner = isPlayful ? "rounded-[var(--career-r-inner,12px)]" : "rounded-md";
+  const rInnerLg = isPlayful ? "rounded-[var(--career-r-inner,12px)]" : "rounded-lg";
+  const rBtn = isPlayful ? "rounded-[var(--career-r-btn,10px)]" : "rounded-md";
+  const rBtnLg = isPlayful ? "rounded-[var(--career-r-btn,10px)]" : "rounded-lg";
 
   const action = submitApplicationAction.bind(null, { jobSlug, workspaceSlug });
   const [state, formAction, isPending] = useActionState(action, initialState);
@@ -1429,9 +1445,10 @@ export function ApplyForm({
     : "space-y-4 rounded-lg border border-zinc-200 bg-zinc-50/50 p-4 dark:border-zinc-800 dark:bg-zinc-900/40";
   const subLabelClass =
     "text-xs font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400";
-  const secondaryButtonClass = flatVariant
+  const secondaryButtonBase = flatVariant
     ? "inline-flex items-center gap-1.5 rounded-lg border border-zinc-200 px-3.5 py-2 text-sm font-medium text-zinc-700 transition hover:border-zinc-300 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:border-zinc-600 dark:hover:bg-zinc-800/50"
-    : "inline-flex items-center gap-1.5 rounded-lg border border-zinc-200 bg-white px-3.5 py-2 text-sm font-medium text-zinc-700 transition hover:border-zinc-300 hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:border-zinc-600 dark:hover:bg-zinc-800/50";
+    : "inline-flex items-center gap-1.5 rounded-lg border border-zinc-200 bg-white px-3.5 py-2 text-sm font-medium text-zinc-700 transition hover:border-zinc-300 hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:border-zinc-600 dark:hover:bg-zinc-800/50";;
+  const secondaryButtonClass = isPlayful ? secondaryButtonBase.replace("rounded-lg", "rounded-xl") : secondaryButtonBase;
   const removeButtonClass =
     "inline-flex items-center gap-1.5 text-xs font-medium text-zinc-500 transition hover:text-zinc-900 dark:hover:text-zinc-100";
   const educationFieldErrors = mergeErrors(
@@ -2651,7 +2668,7 @@ export function ApplyForm({
         /* ────────────────────────── Default variant ────────────────────────── */
         <>
           {showResume ? (
-            <div className={cardClass}>
+            <div className={card}>
               <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                 <div>
                   <p className="text-xs font-semibold uppercase tracking-[0.08em] text-zinc-900 dark:text-zinc-100">
@@ -2664,14 +2681,14 @@ export function ApplyForm({
                 {resumeFile ? (
                   <label
                     htmlFor="resumeFile"
-                    className="inline-flex h-10 shrink-0 cursor-pointer items-center justify-center rounded-md border border-zinc-200 bg-white px-5 text-sm font-medium text-zinc-700 transition hover:border-zinc-400 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:border-zinc-500"
+                    className={`inline-flex h-10 shrink-0 cursor-pointer items-center justify-center ${rBtn} border border-zinc-200 bg-white px-5 text-sm font-medium text-zinc-700 transition hover:border-zinc-400 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:border-zinc-500`}
                   >
                     {t("resume.replaceFile")}
                   </label>
                 ) : (
                   <label
                     htmlFor="resumeFile"
-                    className="inline-flex h-10 shrink-0 cursor-pointer items-center justify-center rounded-md px-5 text-sm font-medium text-[var(--board-primary-contrast)] transition hover:brightness-110"
+                    className={`inline-flex h-10 shrink-0 cursor-pointer items-center justify-center ${rBtn} px-5 text-sm font-medium text-[var(--board-primary-contrast)] transition hover:brightness-110`}
                     style={{ backgroundColor: "var(--board-primary)" }}
                   >
                     {t("resume.uploadResume")}
@@ -2699,7 +2716,7 @@ export function ApplyForm({
                   onDragLeave={handleDragLeave}
                   onDrop={handleDrop}
                   className={cn(
-                    "group mt-4 flex cursor-pointer flex-col items-center rounded-md border border-dashed bg-zinc-50/50 px-6 py-8 text-center transition hover:bg-zinc-50 dark:bg-zinc-800/30 dark:hover:bg-zinc-800/50",
+                    "group mt-4 flex cursor-pointer flex-col items-center border border-dashed bg-zinc-50/50 px-6 py-8 text-center transition hover:bg-zinc-50 dark:bg-zinc-800/30 dark:hover:bg-zinc-800/50", rInner,
                     isDragging
                       ? "border-[color:var(--board-primary)] bg-[color:var(--board-primary)]/5"
                       : "border-zinc-300 hover:border-zinc-400 dark:border-zinc-700 dark:hover:border-zinc-500",
@@ -2738,7 +2755,7 @@ export function ApplyForm({
             <span className={requiredMarkClass}>*</span> {t("common.requiredFields")}
           </p>
 
-          <section className={cardClass}>
+          <section className={card}>
             <div className="flex items-center justify-between border-b border-zinc-100 pb-4 dark:border-zinc-800">
               <h2 className="text-base font-semibold text-zinc-900 dark:text-zinc-100">
                 {t("sections.personalInfo")}
@@ -2809,7 +2826,7 @@ export function ApplyForm({
                 </FieldLabel>
                 <label
                   htmlFor="photoFile"
-                  className="mt-1.5 flex cursor-pointer items-center justify-between rounded-lg border border-dashed border-input px-4 py-3 text-sm text-foreground transition hover:border-ring hover:bg-muted"
+                  className={`mt-1.5 flex cursor-pointer items-center justify-between ${rInnerLg} border border-dashed border-input px-4 py-3 text-sm text-foreground transition hover:border-ring hover:bg-muted`}
                 >
                   <span>
                     {photoFile ? photoFile.name : t("photo.uploadPlaceholder")}
@@ -2894,7 +2911,7 @@ export function ApplyForm({
                   <button
                     type="button"
                     onClick={() => setShowLinks(true)}
-                    className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-200 px-3.5 py-2 text-sm font-medium text-zinc-700 transition hover:border-zinc-300 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:border-zinc-600 dark:hover:bg-zinc-800/50"
+                    className={`inline-flex items-center gap-1.5 ${rBtnLg} border border-zinc-200 px-3.5 py-2 text-sm font-medium text-zinc-700 transition hover:border-zinc-300 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:border-zinc-600 dark:hover:bg-zinc-800/50`}
                   >
                     <Plus className="size-4" strokeWidth={2} />
                     {t("links.add")}
@@ -3007,7 +3024,7 @@ export function ApplyForm({
           </section>
 
           {profileSectionEnabled ? (
-            <section className={cardClass}>
+            <section className={card}>
               <div className="border-b border-zinc-100 pb-4 dark:border-zinc-800">
                 <h2 className="text-base font-semibold text-zinc-900 dark:text-zinc-100">
                   {t("sections.profile")}
@@ -3090,7 +3107,7 @@ export function ApplyForm({
           ) : null}
 
           {showCoverLetter || applicationConfig.questions.length > 0 ? (
-            <section className={cardClass}>
+            <section className={card}>
               <div className="border-b border-zinc-100 pb-4 dark:border-zinc-800">
                 <h2 className="text-base font-semibold text-zinc-900 dark:text-zinc-100">
                   {t("sections.details")}
@@ -3120,7 +3137,7 @@ export function ApplyForm({
                   </label>
                 ) : null}
                 {applicationConfig.questions.map((question) => question.type === "info" ? (
-                  <aside key={question.id} className="rounded-lg border border-zinc-200 bg-zinc-50 p-4 dark:border-zinc-800 dark:bg-zinc-900/60">
+                  <aside key={question.id} className={`${rInnerLg} border border-zinc-200 bg-zinc-50 p-4 dark:border-zinc-800 dark:bg-zinc-900/60`}>
                     <h3 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">{question.label}</h3>
                     <p className="mt-2 whitespace-pre-wrap text-sm leading-relaxed text-zinc-600 dark:text-zinc-300">{question.description}</p>
                   </aside>
@@ -3172,7 +3189,7 @@ export function ApplyForm({
                         <fieldset className="mt-2 space-y-2">
                           <legend className="sr-only">{question.label}</legend>
                           {question.options?.map((option, optionIndex) => (
-                            <label key={option} className="flex cursor-pointer items-start gap-3 rounded-md border border-zinc-200 p-3 dark:border-zinc-700">
+                            <label key={option} className={`flex cursor-pointer items-start gap-3 ${rInner} border border-zinc-200 p-3 dark:border-zinc-700`}>
                               <input
                                 type="radio"
                                 name={question.id}
@@ -3210,7 +3227,7 @@ export function ApplyForm({
                       <fieldset className="mt-3 space-y-2">
                         <legend className="sr-only">{question.label}</legend>
                         {(["agree", "disagree"] as const).map((value) => (
-                          <label key={value} className="flex cursor-pointer items-center gap-3 rounded-md border border-zinc-200 px-3 py-2.5 text-sm dark:border-zinc-700">
+                          <label key={value} className={`flex cursor-pointer items-center gap-3 ${rInner} border border-zinc-200 px-3 py-2.5 text-sm dark:border-zinc-700`}>
                             <input
                               type="radio"
                               name={question.id}
@@ -3260,7 +3277,7 @@ export function ApplyForm({
           <Button
             type="submit"
             disabled={isPending || isSubmittingForm}
-            className="w-full"
+            className={cn("w-full", isPlayful && rBtn)}
             size="lg"
             style={{
               backgroundColor: "var(--board-primary)",

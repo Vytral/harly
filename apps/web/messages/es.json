@@ -15,7 +15,11 @@
     "emailPlaceholder": "you@company.com"
   },
   "language": {
+    "title": "Interface language",
+    "description": "Choose the language Harly uses for menus, pages and messages in this browser.",
     "label": "Idioma",
+    "save": "Save language",
+    "saving": "Saving…",
     "error": "No se pudo guardar el idioma. Inténtalo de nuevo."
   },
   "shell": {
@@ -5245,6 +5249,12 @@
       },
       "demoLockedNotice": {
         "default": "Desactivado en la demo: esta acción cambiaría la seguridad de la cuenta o enviaría datos fuera de tu sandbox."
+      },
+      "demoCandidatePortalCard": {
+        "title": "Mira lo que ve esta persona",
+        "description": "Abre el portal de candidatos con la sesión de esta persona de ejemplo: candidaturas, etapas, entrevistas y solicitudes de documentos. Sin correo ni inicio de sesión.",
+        "open": "Ver como candidato",
+        "error": "No se pudo abrir el portal de candidatos. Inténtalo de nuevo."
       }
     },
     "developers": {
@@ -7221,7 +7231,16 @@
         "accessBody": "Pega el código o el enlace que te dio la empresa.",
         "accessCode": "Código de acceso",
         "continue": "Continuar",
-        "checking": "Verificando…"
+        "checking": "Verificando…",
+        "noMethods": "El inicio de sesión no está disponible por ahora. Contacta a la empresa para obtener acceso.",
+        "signInMethod": "Método de inicio de sesión",
+        "tabPassword": "Contraseña",
+        "tabMagicLink": "Enlace por correo",
+        "emailPlaceholder": "tu@ejemplo.com",
+        "passwordPlaceholder": "Tu contraseña",
+        "showPassword": "Mostrar contraseña",
+        "hidePassword": "Ocultar contraseña",
+        "magicHelp": "Te enviaremos un enlace por correo para iniciar sesión. Sin contraseña."
       },
       "portalPrivacyControls": {
         "title": "Tus datos",
@@ -12539,6 +12558,13 @@
         "nameRequired": "Dale un nombre a tu asistente.",
         "nameTooLong": "Usa {max} caracteres o menos.",
         "avatarUrlInvalid": "El avatar debe ser una URL válida."
+      }
+    },
+    "demo": {
+      "candidatePortal": {
+        "unavailable": "Ver el portal como candidato solo está disponible en tu espacio de demostración.",
+        "seededOnly": "Solo se pueden ver en el portal los candidatos de ejemplo incluidos en la demo.",
+        "portalOff": "Activa el portal de candidatos en Ajustes para verlo como candidato."
       }
     }
   }

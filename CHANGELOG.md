@@ -19,6 +19,12 @@ operators. How to cut a release is in [RELEASING.md](RELEASING.md). The
 - Failed AI provider calls are now recorded. **Settings → AI** shows the last error, and the dashboard lists AI under the integrations that need attention, instead of features silently falling back to their non-AI path. Saving new AI settings clears the recorded error.
 - **Test connection** in **Settings → AI** also checks structured output, which resume parsing, scoring, job generation and other AI features need. A model that answers plain text but rejects structured output now fails the test with the provider's reason.
 
+- Public demo: a "View as candidate" card on sample candidates opens the candidate portal signed in as that candidate, with no email or login. It only works when `DEMO_MODE=true`, inside the visitor's own sandbox and for its seeded candidates. Demo data now enables the candidate portal and includes pending document requests.
+
+### Changed
+
+- The candidate portal sign-in page now matches the staff sign-in page and only shows the methods enabled under portal settings. Candidates see one email field at most: a password field, a sign-in link button, or a switch between the two when both are enabled. Social providers appear as round buttons, and passkey and social buttons sit above the email form. The access code entry is a small link. After a sign-in link is sent, the form shows a "Check your inbox" confirmation.
+
 ### Fixed
 
 - **Assign to job** from the talent pool failed with a database error (`42P10`) on every attempt. It works again.
@@ -31,6 +37,13 @@ operators. How to cut a release is in [RELEASING.md](RELEASING.md). The
 
 - Demo and first-run example data use coherent candidate profiles, fictional contact details, local portraits and downloadable PDF resumes. First-run data includes evaluations for candidates who have advanced past application review; demo timelines include candidates who need follow-up. Example content no longer repeats “Sample” throughout the recruiter experience, while the workspace disclosure and safe removal remain available.
 - Demo resumes use the configured storage provider, including S3.
+- The public demo (`DEMO_MODE=true`) starts in English for every visitor, whatever the browser language, until the visitor picks another language. Email language settings in the demo now read in English too.
+- The interface language on the account page sits in a titled card with a description and a Save button, matching the email language card below it.
+
+- Demo and first-run example jobs have complete descriptions (role and team, responsibilities, requirements, nice-to-haves, benefits, work model and hiring process). The demo career page, terms of service, privacy policy, cookie policy and candidate notice use fuller fictional copy with `.example` contact addresses.
+- The cookie banner on public pages now closes cleanly when you accept, choose necessary only, save preferences or press the close button, and stays closed on later pages and reloads. Closing it with the X now records a necessary-only choice. The exit animation is skipped when reduced motion is requested.
+- The Playful career page template now uses its rounded corners on job detail and application pages too, including when the page was saved with sharp corners from another template.
+- The two-part badge in the Playful template hero now has an even inset around the inner pill and keeps its shape with long translated text.
 
 ### Removed
 

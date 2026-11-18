@@ -15,7 +15,11 @@
     "emailPlaceholder": "you@company.com"
   },
   "language": {
+    "title": "Interface language",
+    "description": "Choose the language Harly uses for menus, pages and messages in this browser.",
     "label": "Sprache",
+    "save": "Save language",
+    "saving": "Saving…",
     "error": "Die Sprache konnte nicht gespeichert werden. Versuche es erneut."
   },
   "shell": {
@@ -5245,6 +5249,12 @@
       },
       "demoLockedNotice": {
         "default": "In der Demo deaktiviert: Diese Aktion würde die Kontosicherheit ändern oder Daten außerhalb deiner Sandbox senden."
+      },
+      "demoCandidatePortalCard": {
+        "title": "Sehen, was diese Person sieht",
+        "description": "Öffnet das Kandidatenportal als diese Beispielperson: Bewerbungen, Phasen, Interviews und Dokumentanfragen. Ohne E-Mail oder Anmeldung.",
+        "open": "Als Kandidat ansehen",
+        "error": "Das Kandidatenportal konnte nicht geöffnet werden. Versuche es erneut."
       }
     },
     "developers": {
@@ -7221,7 +7231,16 @@
         "accessBody": "Füge den Code oder Link ein, den dir das Unternehmen geschickt hat.",
         "accessCode": "Zugangscode",
         "continue": "Weiter",
-        "checking": "Wird geprüft…"
+        "checking": "Wird geprüft…",
+        "noMethods": "Die Anmeldung ist derzeit nicht verfügbar. Wende dich für den Zugang an das Unternehmen.",
+        "signInMethod": "Anmeldemethode",
+        "tabPassword": "Passwort",
+        "tabMagicLink": "E-Mail-Link",
+        "emailPlaceholder": "du@beispiel.de",
+        "passwordPlaceholder": "Dein Passwort",
+        "showPassword": "Passwort anzeigen",
+        "hidePassword": "Passwort verbergen",
+        "magicHelp": "Wir senden dir einen Link per E-Mail, mit dem du dich anmeldest. Kein Passwort nötig."
       },
       "portalPrivacyControls": {
         "title": "Deine Daten",
@@ -12539,6 +12558,13 @@
         "nameRequired": "Gib deinem Assistenten einen Namen.",
         "nameTooLong": "Verwende höchstens {max} Zeichen.",
         "avatarUrlInvalid": "Der Avatar muss eine gültige URL sein."
+      }
+    },
+    "demo": {
+      "candidatePortal": {
+        "unavailable": "Das Portal als Kandidat anzusehen ist nur in deinem Demo-Arbeitsbereich verfügbar.",
+        "seededOnly": "Nur die Beispielkandidaten der Demo können im Portal angesehen werden.",
+        "portalOff": "Aktiviere das Kandidatenportal in den Einstellungen, um es als Kandidat anzusehen."
       }
     }
   }

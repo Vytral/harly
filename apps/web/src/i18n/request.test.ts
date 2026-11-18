@@ -16,6 +16,7 @@ describe("locale request configuration", () => {
   beforeEach(() => {
     getCookie.mockReset();
     getHeader.mockReset();
+    vi.stubEnv("DEMO_MODE", "");
   });
   it("uses English for missing or invalid preferences", async () => {
     expect((await configure()).locale).toBe("en");
@@ -27,6 +28,17 @@ describe("locale request configuration", () => {
     expect((await configure()).locale).toBe("de");
     getCookie.mockReturnValue({ value: "fr" });
     expect((await configure()).locale).toBe("fr");
+  });
+  it("ignores Accept-Language in demo mode unless a language was picked", async () => {
+    vi.stubEnv("DEMO_MODE", "true");
+    try {
+      getHeader.mockReturnValue("es-ES,es;q=0.9");
+      expect((await configure()).locale).toBe("en");
+      getCookie.mockReturnValue({ value: "es" });
+      expect((await configure()).locale).toBe("es");
+    } finally {
+      vi.unstubAllEnvs();
+    }
   });
   it.each(["en", "es", "pt-BR", "de", "fr", "nl-NL"])("loads %s", async (locale) => {
     getCookie.mockReturnValue({ value: locale });

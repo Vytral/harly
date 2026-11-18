@@ -15,7 +15,11 @@
     "emailPlaceholder": "you@company.com"
   },
   "language": {
+    "title": "Interface language",
+    "description": "Choose the language Harly uses for menus, pages and messages in this browser.",
     "label": "Langue",
+    "save": "Save language",
+    "saving": "Saving…",
     "error": "Impossible d’enregistrer la langue. Réessayez."
   },
   "shell": {
@@ -5245,6 +5249,12 @@
       },
       "demoLockedNotice": {
         "default": "Désactivé dans la démo : cette action modifierait la sécurité du compte ou enverrait des données hors de votre bac à sable."
+      },
+      "demoCandidatePortalCard": {
+        "title": "Voir ce que voit cette personne",
+        "description": "Ouvre le portail candidat connecté en tant que cette personne d’exemple : candidatures, étapes, entretiens et demandes de documents. Sans e-mail ni connexion.",
+        "open": "Voir en tant que candidat",
+        "error": "Impossible d’ouvrir le portail candidat. Réessayez."
       }
     },
     "developers": {
@@ -7221,7 +7231,16 @@
         "accessBody": "Collez le code ou le lien que l’entreprise vous a transmis.",
         "accessCode": "Code d’accès",
         "continue": "Continuer",
-        "checking": "Vérification…"
+        "checking": "Vérification…",
+        "noMethods": "La connexion n’est pas disponible pour le moment. Contactez l’entreprise pour obtenir un accès.",
+        "signInMethod": "Méthode de connexion",
+        "tabPassword": "Mot de passe",
+        "tabMagicLink": "Lien par e-mail",
+        "emailPlaceholder": "vous@exemple.com",
+        "passwordPlaceholder": "Votre mot de passe",
+        "showPassword": "Afficher le mot de passe",
+        "hidePassword": "Masquer le mot de passe",
+        "magicHelp": "Nous vous enverrons un lien par e-mail pour vous connecter. Aucun mot de passe nécessaire."
       },
       "portalPrivacyControls": {
         "title": "Vos données",
@@ -12539,6 +12558,13 @@
         "nameRequired": "Donnez un nom à votre assistant.",
         "nameTooLong": "Utilisez {max} caractères maximum.",
         "avatarUrlInvalid": "L'avatar doit être une URL valide."
+      }
+    },
+    "demo": {
+      "candidatePortal": {
+        "unavailable": "La vue du portail en tant que candidat n’est disponible que dans votre espace de démo.",
+        "seededOnly": "Seuls les candidats d’exemple fournis avec la démo peuvent être affichés dans le portail.",
+        "portalOff": "Activez le portail candidat dans les paramètres pour le voir en tant que candidat."
       }
     }
   }

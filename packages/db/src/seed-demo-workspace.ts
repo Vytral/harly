@@ -7,6 +7,7 @@ import type postgres from "postgres";
 
 import { createDatabaseClient, schema } from "./index";
 import { SYNTRIX_NDA_PDF_BASE64, SYNTRIX_OFFER_LETTER_PDF_BASE64 } from "./seed-demo-documents";
+import { DEMO_JOB_DESCRIPTIONS } from "./demo-job-descriptions";
 import { buildResumeLines, linesToPdf } from "./fake-resumes";
 import { DEFAULT_PIPELINE_STAGES, defaultStageRows } from "./stage-kind";
 
@@ -39,7 +40,7 @@ const DEMO_CDN = (process.env.DEMO_CDN_URL?.trim() || "https://cdn.harly.dev").r
  */
 const DEMO_CAREER_PAGE_CONFIG = {
   cta: {
-    body: "We are always opening new opportunities for great people. Reach out.",
+    body: "We hire throughout the year. Send us a short note about yourself and the kind of work you are looking for, and we will reach out when a matching role opens.",
     color: "#d97656",
     title: "Don't see a role that fits?",
     enabled: true,
@@ -51,15 +52,15 @@ const DEMO_CAREER_PAGE_CONFIG = {
     enabled: false
   },
   seo: {
-    title: "",
+    title: "Careers at Syntrix",
     indexable: true,
     faviconUrl: null,
-    description: "",
+    description: "Open roles at Syntrix, the fictional open-source infrastructure company used in the Harly demo.",
     socialImageUrl: null
   },
   hero: {
     overlay: "none",
-    subhead: "",
+    subhead: "Help us build open-source infrastructure that teams everywhere rely on.",
     headline: "Syntrix",
     imageUrl: null,
     logoType: "logo",
@@ -76,7 +77,7 @@ const DEMO_CAREER_PAGE_CONFIG = {
     bannerLogoVariant: "dark"
   },
   intro: {
-    body: "<p style=\"text-align: left;\">Syntrix is an Open-Source company dedicated to create and distribute Open Source Software to democrate access to all technologies possible.</p>",
+    body: "<p>Syntrix builds open-source infrastructure software that helps engineering teams host, monitor and scale their applications without lock-in. Founded in 2017, we now serve thousands of teams, from solo developers to global companies, from hubs in Berlin, New York, London and Manila and a remote team across 30 countries.</p><p>Everything we build starts in the open: our core platform is open source, our roadmap is public, and we pay our engineers to contribute upstream. We hire curious, kind people who care about craft and want their work to be used.</p>",
     chips: [
       {
         icon: "users",
@@ -114,19 +115,19 @@ const DEMO_CAREER_PAGE_CONFIG = {
   values: {
     items: [
       {
-        body: "We adapt our roadmap to what users actually need.",
+        body: "We ship in small steps, listen to users and change course when the evidence says so.",
         title: "Agile"
       },
       {
-        body: "Our methods are transparent and co-constructed.",
+        body: "Our code, roadmap and salary bands are open, and decisions are written down.",
         title: "Open"
       },
       {
-        body: "We invest heavily in figuring things out.",
+        body: "We give teams time to experiment, and we treat failed experiments as learning.",
         title: "Inventive"
       },
       {
-        body: "We are proactive and we listen.",
+        body: "We take ownership, show up for each other and listen before we act.",
         title: "Present"
       }
     ],
@@ -175,7 +176,7 @@ const DEMO_CAREER_PAGE_CONFIG = {
       {
         name: "Isabella Ashfield",
         role: "Product Manager - Lead",
-        quote: "Syntrix is the best place that i ever worked, great team and also delisious food, really like it.",
+        quote: "I have never worked anywhere that trusts people this much. I get to talk to customers every week and see my work in their hands days later.",
         avatar: `${DEMO_CDN}/demo/careers/team/isabella.webp`
       }
     ],
@@ -245,8 +246,7 @@ const JOBS = [
     currency: "USD",
     salaryPeriod: "annual",
     status: "open",
-    description:
-      "<p>We're hiring a Senior Frontend Engineer to own our customer-facing dashboard end to end. You'll work closely with design and product to ship polished, fast interfaces.</p>",
+    description: DEMO_JOB_DESCRIPTIONS.seniorFrontend,
   },
   {
     title: "Backend Engineer (Go)",
@@ -263,8 +263,7 @@ const JOBS = [
     currency: "EUR",
     salaryPeriod: "annual",
     status: "open",
-    description:
-      "<p>Join our platform team building the APIs that power Syntrix. Strong Go and distributed-systems experience required.</p>",
+    description: DEMO_JOB_DESCRIPTIONS.backendGo,
   },
   {
     title: "Product Designer",
@@ -281,8 +280,7 @@ const JOBS = [
     currency: "USD",
     salaryPeriod: "annual",
     status: "open",
-    description:
-      "<p>Shape the product experience across web and mobile. You'll own flows from research to high-fidelity design and partner with engineering on delivery.</p>",
+    description: DEMO_JOB_DESCRIPTIONS.productDesigner,
   },
   {
     title: "Customer Support Specialist",
@@ -299,8 +297,7 @@ const JOBS = [
     currency: "USD",
     salaryPeriod: "annual",
     status: "open",
-    description:
-      "<p>Be the first line of help for our hosting customers. Empathy, clear writing, and basic technical troubleshooting are key.</p>",
+    description: DEMO_JOB_DESCRIPTIONS.supportSpecialist,
   },
   {
     title: "Growth Marketing Manager",
@@ -317,8 +314,7 @@ const JOBS = [
     currency: "USD",
     salaryPeriod: "annual",
     status: "open",
-    description:
-      "<p>Own the growth funnel from acquisition to activation. Data-driven, experiment-minded, and comfortable across paid and organic channels.</p>",
+    description: DEMO_JOB_DESCRIPTIONS.growthMarketing,
   },
   {
     title: "DevOps Engineer",
@@ -335,8 +331,7 @@ const JOBS = [
     currency: "USD",
     salaryPeriod: "monthly",
     status: "open",
-    description:
-      "<p>6-month contract to harden our infrastructure and CI/CD. Terraform and AWS expertise required; possibility to convert to full-time.</p>",
+    description: DEMO_JOB_DESCRIPTIONS.devops,
   },
   {
     title: "Sales Development Representative",
@@ -353,8 +348,7 @@ const JOBS = [
     currency: "GBP",
     salaryPeriod: "annual",
     status: "draft",
-    description:
-      "<p>Generate and qualify pipeline for our account executives. Hungry, coachable, and resilient — prior SaaS outbound a plus.</p>",
+    description: DEMO_JOB_DESCRIPTIONS.salesDevelopment,
   },
   {
     title: "Junior Software Engineer (PHP)",
@@ -371,8 +365,7 @@ const JOBS = [
     currency: "EUR",
     salaryPeriod: "annual",
     status: "open",
-    description:
-      "<p>Kick off your engineering career on our web platform team. You'll ship features in PHP/Laravel with mentorship from senior engineers.</p>",
+    description: DEMO_JOB_DESCRIPTIONS.juniorPhp,
   },
 ];
 
@@ -578,6 +571,20 @@ const INTERVIEWS: {
   { c: 14, j: 3, type: "technical", mode: "video", when: daysAgoAt(6, 11), interviewer: "diego", status: "completed", title: "Technical interview" },
   { c: 16, j: 4, type: "screening", mode: "phone", when: daysAgoAt(9, 16), interviewer: "sofia", status: "completed", title: "Recruiter screen" },
   { c: 6, j: 0, type: "technical", mode: "video", when: daysAgoAt(1, 10), interviewer: "diego", status: "completed", title: "Technical interview" },
+];
+
+// Pending document requests by `${c}-${j}`, so the candidate portal has work
+// waiting for Ava (Offer) and Priya (Interview today).
+const DOCUMENT_REQUESTS: {
+  c: number;
+  j: number;
+  title: string;
+  instructions: string;
+  dueDaysFromNow: number;
+}[] = [
+  { c: 0, j: 0, title: "Proof of right to work", instructions: "Upload a scan of a document that shows you can work in the country of the role. Sample data: any PDF works.", dueDaysFromNow: 3 },
+  { c: 0, j: 0, title: "Emergency contact form", instructions: "Tell us who to contact in an emergency before your start date. Sample data only.", dueDaysFromNow: 5 },
+  { c: 6, j: 0, title: "Two professional references", instructions: "Share names and contact details for two people you have worked with. Fictional entries are fine.", dueDaysFromNow: 4 },
 ];
 
 export type SeedDemoResult = {
@@ -956,6 +963,8 @@ export async function seedDemoWorkspace(options: SeedDemoOptions): Promise<SeedD
         emailInboundEnabled: false,
         calEnabled: false,
         turnstileEnabled: false,
+        // Candidate portal on, so visitors can open it as a seeded candidate.
+        candidatePortalEnabled: true,
         // Legal identity — fully fictional, all @syntrix.example.
         legalEntityName: "Syntrix Inc.",
         legalEntityEmail: "legal@syntrix.example",
@@ -1074,6 +1083,7 @@ export async function seedDemoWorkspace(options: SeedDemoOptions): Promise<SeedD
           legalEntityEmail: "legal@syntrix.example",
           legalEntityWebsite: "https://syntrix.example",
           dpoEmail: "privacy@syntrix.example",
+          candidatePortalEnabled: true,
           // Policy/rollout flags that visitor actions could flip; reset them so
           // nothing a visitor changed survives the reseed.
           require2fa: false,
@@ -1507,6 +1517,23 @@ export async function seedDemoWorkspace(options: SeedDemoOptions): Promise<SeedD
         createdAt: iv.status === "completed" ? iv.when : daysAgo(1 + (iv.c % 3)),
       });
       interviewCount++;
+    }
+
+    // ── Document requests (pending, shown in the candidate portal) ──
+    for (const req of DOCUMENT_REQUESTS) {
+      const applicationId = appIds.get(`${req.c}-${req.j}`);
+      if (!applicationId) continue;
+      await db.insert(schema.documentRequests).values({
+        workspaceId,
+        applicationId,
+        candidateId: candidateIds[req.c],
+        title: req.title,
+        instructions: req.instructions,
+        status: "pending",
+        dueAt: daysFromNowAt(req.dueDaysFromNow, 17),
+        requestedById: user.id,
+        createdAt: daysAgo(1),
+      });
     }
 
     // ── Documents ready to sign (Offer-stage candidate) ──
