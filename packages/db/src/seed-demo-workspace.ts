@@ -108,20 +108,7 @@ const DEMO_CAREER_PAGE_CONFIG = {
     background: "#ffffff"
   },
   footer: {
-    socials: [
-      {
-        url: "https://linkedin.com/company/syntrixllc",
-        platform: "linkedin"
-      },
-      {
-        url: "https://instagram.com/syntrixco",
-        platform: "instagram"
-      },
-      {
-        url: "https://syntrix.com",
-        platform: "website"
-      }
-    ],
+    socials: [],
     legalLinks: [ "privacy-policy", "terms-of-service", "cookie-policy", "candidate-notice" ]
   },
   values: {
@@ -212,11 +199,11 @@ type StageName = (typeof DEFAULT_PIPELINE_STAGES)[number]["name"];
 // Demo teammates — real `user` + `member` rows (no auth) so the dashboard can
 // show ownership, interviewers and a live team-activity feed.
 const TEAMMATES = [
-  { key: "sarah", id: "seed-teammate-sarah", name: "Sarah Chen", email: "sarah.chen@syntrix.com", avatar: "sarah" },
-  { key: "james", id: "seed-teammate-james", name: "James Park", email: "james.park@syntrix.com", avatar: "james" },
-  { key: "emma", id: "seed-teammate-emma", name: "Emma Wilson", email: "emma.wilson@syntrix.com", avatar: "emma" },
-  { key: "diego", id: "seed-teammate-diego", name: "Diego Martinez", email: "diego.martinez@syntrix.com", avatar: "diego" },
-  { key: "sofia", id: "seed-teammate-sofia", name: "Sofia Romero", email: "sofia.romero@syntrix.com", avatar: "sofia" },
+  { key: "sarah", id: "seed-teammate-sarah", name: "Sarah Chen", email: "sarah.chen@syntrix.example", avatar: "sarah" },
+  { key: "james", id: "seed-teammate-james", name: "James Park", email: "james.park@syntrix.example", avatar: "james" },
+  { key: "emma", id: "seed-teammate-emma", name: "Emma Wilson", email: "emma.wilson@syntrix.example", avatar: "emma" },
+  { key: "diego", id: "seed-teammate-diego", name: "Diego Martinez", email: "diego.martinez@syntrix.example", avatar: "diego" },
+  { key: "sofia", id: "seed-teammate-sofia", name: "Sofia Romero", email: "sofia.romero@syntrix.example", avatar: "sofia" },
 ];
 const teammateId = (key: string) => TEAMMATES.find((t) => t.key === key)?.id;
 
@@ -404,26 +391,26 @@ const JOB_INTERVIEWERS = [
 ];
 
 const CANDIDATES = [
-  { firstName: "Ava", lastName: "Thompson", email: "ava.thompson@gmail.com", location: "San Francisco, CA", headline: "Senior Frontend Engineer · ex-Vercel", github: "https://github.com/avathompson" },
-  { firstName: "Liam", lastName: "Chen", email: "liam.chen@outlook.com", location: "Toronto, Canada", headline: "Full-stack engineer, React + Node", github: "https://github.com/liamchen" },
-  { firstName: "Sofía", lastName: "Martínez", email: "sofia.martinez@gmail.com", location: "Madrid, Spain", headline: "Product Designer · design systems", website: "https://sofiamartinez.design" },
-  { firstName: "Noah", lastName: "Williams", email: "noah.williams@outlook.com", location: "Austin, TX", headline: "Backend engineer, Go & Postgres", github: "https://github.com/noahw" },
-  { firstName: "Emma", lastName: "Müller", email: "emma.mueller@gmail.com", location: "Berlin, Germany", headline: "Platform engineer, distributed systems", github: "https://github.com/emmamueller" },
-  { firstName: "Kwame", lastName: "Mensah", email: "kwame.mensah@gmail.com", location: "Accra, Ghana", headline: "Growth marketer, B2B SaaS" },
-  { firstName: "Priya", lastName: "Nair", email: "priya.nair@gmail.com", location: "Bangalore, India", headline: "Frontend engineer, TypeScript + React", github: "https://github.com/priyanair" },
-  { firstName: "Lucas", lastName: "Oliveira", email: "lucas.oliveira@gmail.com", location: "São Paulo, Brazil", headline: "DevOps / SRE, AWS + Terraform", github: "https://github.com/lucasoliveira" },
-  { firstName: "Mei", lastName: "Tanaka", email: "mei.tanaka@gmail.com", location: "Tokyo, Japan", headline: "Product designer, mobile-first", website: "https://meitanaka.com" },
-  { firstName: "Daniel", lastName: "Kim", email: "daniel.kim@gmail.com", location: "Seoul, South Korea", headline: "Customer support lead, hosting" },
-  { firstName: "Isabella", lastName: "Rossi", email: "isabella.rossi@gmail.com", location: "Milan, Italy", headline: "Lifecycle & content marketing" },
-  { firstName: "Omar", lastName: "Haddad", email: "omar.haddad@gmail.com", location: "Dubai, UAE", headline: "Senior backend engineer, Go", github: "https://github.com/omarhaddad" },
-  { firstName: "Charlotte", lastName: "Dubois", email: "charlotte.dubois@gmail.com", location: "Paris, France", headline: "Frontend engineer, design-minded", github: "https://github.com/cdubois" },
-  { firstName: "Ethan", lastName: "Brown", email: "ethan.brown@gmail.com", location: "London, UK", headline: "SDR, SaaS outbound" },
-  { firstName: "Aisha", lastName: "Khan", email: "aisha.khan@gmail.com", location: "Karachi, Pakistan", headline: "Support specialist, technical" },
-  { firstName: "Mateo", lastName: "González", email: "mateo.gonzalez@gmail.com", location: "Buenos Aires, Argentina", headline: "DevOps engineer, Kubernetes", github: "https://github.com/mateog" },
-  { firstName: "Hannah", lastName: "Schmidt", email: "hannah.schmidt@gmail.com", location: "Vienna, Austria", headline: "Growth marketing manager" },
-  { firstName: "Yuki", lastName: "Sato", email: "yuki.sato@gmail.com", location: "Osaka, Japan", headline: "Frontend engineer, Next.js", github: "https://github.com/yukisato" },
-  { firstName: "Olivia", lastName: "Nguyen", email: "olivia.nguyen@gmail.com", location: "Sydney, Australia", headline: "Product designer, B2B SaaS", website: "https://olivian.design" },
-  { firstName: "Carlos", lastName: "Rivera", email: "carlos.rivera@gmail.com", location: "Mexico City, Mexico", headline: "Backend engineer, Go + gRPC", github: "https://github.com/carlosr" },
+  { firstName: "Ava", lastName: "Thompson", email: "ava.thompson@careers.example", location: "San Francisco, CA", headline: "Senior Frontend Engineer · design systems" },
+  { firstName: "Liam", lastName: "Chen", email: "liam.chen@careers.example", location: "Toronto, Canada", headline: "Full-stack engineer, React + Node" },
+  { firstName: "Sofía", lastName: "Martínez", email: "sofia.martinez@careers.example", location: "Madrid, Spain", headline: "Product Designer · design systems" },
+  { firstName: "Noah", lastName: "Williams", email: "noah.williams@careers.example", location: "Austin, TX", headline: "Backend engineer, Go & Postgres" },
+  { firstName: "Emma", lastName: "Müller", email: "emma.mueller@careers.example", location: "Berlin, Germany", headline: "Platform engineer, distributed systems" },
+  { firstName: "Kwame", lastName: "Mensah", email: "kwame.mensah@careers.example", location: "Accra, Ghana", headline: "Growth marketer, B2B SaaS" },
+  { firstName: "Priya", lastName: "Nair", email: "priya.nair@careers.example", location: "Bangalore, India", headline: "Frontend engineer, 4 years", summary: "Frontend engineer with four and a half years of React and TypeScript experience, including accessible interfaces and automated testing.", skills: ["React", "TypeScript", "Playwright", "Accessibility", "Next.js Pages Router"] },
+  { firstName: "Lucas", lastName: "Oliveira", email: "lucas.oliveira@careers.example", location: "São Paulo, Brazil", headline: "DevOps / SRE, AWS + Terraform" },
+  { firstName: "Mei", lastName: "Tanaka", email: "mei.tanaka@careers.example", location: "Tokyo, Japan", headline: "Product designer, mobile-first" },
+  { firstName: "Daniel", lastName: "Kim", email: "daniel.kim@careers.example", location: "Seoul, South Korea", headline: "Customer support lead, hosting" },
+  { firstName: "Isabella", lastName: "Rossi", email: "isabella.rossi@careers.example", location: "Milan, Italy", headline: "Lifecycle & content marketing" },
+  { firstName: "Omar", lastName: "Haddad", email: "omar.haddad@careers.example", location: "Dubai, UAE", headline: "Senior backend engineer, Go" },
+  { firstName: "Charlotte", lastName: "Dubois", email: "charlotte.dubois@careers.example", location: "Paris, France", headline: "Frontend engineer, design-minded" },
+  { firstName: "Ethan", lastName: "Brown", email: "ethan.brown@careers.example", location: "London, UK", headline: "SDR, SaaS outbound" },
+  { firstName: "Aisha", lastName: "Khan", email: "aisha.khan@careers.example", location: "Karachi, Pakistan", headline: "Support specialist, technical" },
+  { firstName: "Mateo", lastName: "González", email: "mateo.gonzalez@careers.example", location: "Buenos Aires, Argentina", headline: "DevOps engineer, Kubernetes", summary: "DevOps engineer focused on Kubernetes, GitOps, and platform automation, primarily using Pulumi for infrastructure as code.", skills: ["Kubernetes", "Helm", "Argo CD", "Pulumi", "AWS"] },
+  { firstName: "Hannah", lastName: "Schmidt", email: "hannah.schmidt@careers.example", location: "Vienna, Austria", headline: "Growth marketing manager" },
+  { firstName: "Yuki", lastName: "Sato", email: "yuki.sato@careers.example", location: "Osaka, Japan", headline: "Frontend engineer, Next.js" },
+  { firstName: "Olivia", lastName: "Nguyen", email: "olivia.nguyen@careers.example", location: "Sydney, Australia", headline: "Product designer, B2B SaaS" },
+  { firstName: "Carlos", lastName: "Rivera", email: "carlos.rivera@careers.example", location: "Mexico City, Mexico", headline: "Backend engineer, 3 years", summary: "Backend engineer with three years of Go and gRPC experience, primarily using MySQL and working with service meshes.", skills: ["Go", "gRPC", "MySQL", "Service mesh", "Testing"] },
 ];
 
 // candidate index → job index → stage → source. Index in this array = pipeline
@@ -456,7 +443,7 @@ const APPLICATIONS: { c: number; j: number; stage: StageName; source: string }[]
   { c: 13, j: 6, stage: "Applied", source: "LinkedIn" },
   { c: 1, j: 0, stage: "Screening", source: "Referral" },
 ];
-const STAGE_AGE = [3, 1, 0, 1, 2, 3, 1, 2, 0, 4, 2, 1, 0, 1, 0, 2, 2, 3, 1, 2, 0, 1, 2, 1];
+const STAGE_AGE = [3, 1, 8, 1, 2, 3, 1, 15, 0, 4, 2, 1, 0, 1, 18, 2, 2, 3, 1, 2, 0, 1, 2, 1];
 // Precomputed evaluations so scores, recommendations and strengths/gaps show
 // up the moment a visitor opens the pipeline. Keyed by `${c}-${j}`. Two fresh
 // "Applied" candidates (17-0, 13-6) are left unscored on purpose so visitors
@@ -471,7 +458,7 @@ type SeedEvaluation = {
 };
 const EVALUATIONS: Record<string, SeedEvaluation> = {
   "0-0": { score: 94, rec: "strong_yes", summary: "Seven years shipping React at scale, including Next.js performance work at Vercel. Matches every must-have and most nice-to-haves.", strengths: ["Deep Next.js and React Server Components experience", "Led a design-system migration across 4 product teams", "Strong performance track record (LCP −40%)"], gaps: ["Limited GraphQL beyond client usage"], criteria: [["React & TypeScript", 97, "7 yrs React, TS-first codebases at Vercel"], ["Next.js", 96, "Core contributor to internal Next.js tooling"], ["GraphQL", 72, "Consumer side only (Apollo client)"], ["Leadership", 90, "Mentored 5 engineers, owned design-system roadmap"]] },
-  "6-0": { score: 86, rec: "yes", summary: "Solid TypeScript/React engineer with a strong testing culture. Slightly less senior than the role asks, but ramps fast.", strengths: ["Testing discipline (Playwright, RTL)", "Accessibility work cited on resume", "Referral from a current engineer"], gaps: ["4.5 years vs 5+ requested", "No Next.js App Router in production yet"], criteria: [["React & TypeScript", 90, "Daily React + TS for 4 years"], ["Next.js", 70, "Pages Router only"], ["GraphQL", 78, "Built a schema-first BFF"], ["Leadership", 74, "Tech lead on one squad project"]] },
+  "6-0": { score: 86, rec: "yes", summary: "Solid TypeScript/React engineer with a strong testing culture. Slightly less senior than the role asks, but ramps fast.", strengths: ["Testing discipline (Playwright, RTL)", "Accessibility work cited on resume", "Referral from a current engineer"], gaps: ["4.5 years vs 5+ requested", "Limited GraphQL production experience"], criteria: [["React & TypeScript", 90, "Daily React + TS for 4 years"], ["Next.js", 85, "Production Next.js experience"], ["GraphQL", 78, "Built a schema-first BFF"], ["Leadership", 74, "Tech lead on one squad project"]] },
   "12-0": { score: 81, rec: "yes", summary: "Design-minded frontend engineer; great UI craft and CSS depth. Fewer large-scale data-heavy apps.", strengths: ["Excellent UI polish and animation work", "Tailwind and design tokens experience"], gaps: ["Smaller codebases so far", "Little GraphQL"], criteria: [["React & TypeScript", 84, "3 React products shipped"], ["Next.js", 80, "Next.js marketing + app sites"], ["GraphQL", 55, "Not mentioned beyond tutorials"], ["Leadership", 70, "Ran internal UI guild"]] },
   "2-0": { score: 58, rec: "maybe", summary: "Strong product designer, but this application targets an engineering role. Better fit for the open Product Designer position.", strengths: ["Design systems expertise", "Prototyping in code (React)"], gaps: ["No production engineering experience", "No TypeScript on resume"], criteria: [["React & TypeScript", 45, "Prototype-level React only"], ["Next.js", 40, "Not mentioned"], ["GraphQL", 20, "Not mentioned"], ["Leadership", 75, "Led a 3-person design pod"]] },
   "1-0": { score: 77, rec: "yes", summary: "Full-stack generalist, comfortable on both React and Node. Would grow into the senior bar within a year.", strengths: ["End-to-end ownership of features", "Node + React in one codebase"], gaps: ["Frontend depth below senior bar", "No design-system work"], criteria: [["React & TypeScript", 80, "React + TS across 2 startups"], ["Next.js", 74, "One Next.js app in production"], ["GraphQL", 68, "Apollo server and client"], ["Leadership", 62, "IC, no formal mentoring"]] },
@@ -609,6 +596,12 @@ export type SeedDemoOptions = {
   workspaceId: string;
   /** Absolute path to the uploads root for resume PDFs (defaults to cwd/uploads). */
   uploadsRoot?: string;
+  /** Optional configured storage adapter, required for non-local storage. */
+  storage?: {
+    put(key: string, content: Buffer, contentType: string): Promise<void>;
+    list(prefix: string): Promise<string[]>;
+    delete(key: string): Promise<void>;
+  };
   /**
    * User id that owns attribution (jobs createdBy, etc.). Prefer the shared
    * demo login user. When omitted, the member with role `owner` is used —
@@ -841,6 +834,12 @@ export async function deleteDemoSandbox(options: {
   workspaceId: string;
   ownerUserId?: string | null;
   uploadsRoot?: string;
+  /** Optional configured storage adapter, required for non-local storage. */
+  storage?: {
+    put(key: string, content: Buffer, contentType: string): Promise<void>;
+    list(prefix: string): Promise<string[]>;
+    delete(key: string): Promise<void>;
+  };
 }): Promise<void> {
   const { sql, workspaceId, ownerUserId } = options;
   const scopedTables = await sql<{ table_name: string }[]>`
@@ -942,7 +941,7 @@ export async function seedDemoWorkspace(options: SeedDemoOptions): Promise<SeedD
         organizationId: workspaceId,
         tagline: null,
         description: null,
-        websiteUrl: "https://syntrix.cl",
+        websiteUrl: "https://syntrix.example",
         primaryColor: "#e76a17",
         heroImageUrl: `${DEMO_CDN}/demo/company/hero.jpg`,
         sidebarLogoUrl: `${DEMO_CDN}/demo/company/logo.svg`,
@@ -957,18 +956,18 @@ export async function seedDemoWorkspace(options: SeedDemoOptions): Promise<SeedD
         emailInboundEnabled: false,
         calEnabled: false,
         turnstileEnabled: false,
-        // Legal identity — fully fictional, all @syntrix.com.
+        // Legal identity — fully fictional, all @syntrix.example.
         legalEntityName: "Syntrix Inc.",
-        legalEntityEmail: "legal@syntrix.com",
-        legalEntityWebsite: "https://syntrix.com",
-        dpoEmail: "privacy@syntrix.com",
+        legalEntityEmail: "legal@syntrix.example",
+        legalEntityWebsite: "https://syntrix.example",
+        dpoEmail: "privacy@syntrix.example",
       })
       .onConflictDoUpdate({
         target: schema.workspaceSettings.organizationId,
         set: {
           tagline: null,
           description: null,
-          websiteUrl: "https://syntrix.cl",
+          websiteUrl: "https://syntrix.example",
           primaryColor: "#e76a17",
           heroImageUrl: `${DEMO_CDN}/demo/company/hero.jpg`,
           sidebarLogoUrl: `${DEMO_CDN}/demo/company/logo.svg`,
@@ -1072,9 +1071,9 @@ export async function seedDemoWorkspace(options: SeedDemoOptions): Promise<SeedD
           docusealApiTokenTag: null,
           docusealWebhookSecret: null,
           legalEntityName: "Syntrix Inc.",
-          legalEntityEmail: "legal@syntrix.com",
-          legalEntityWebsite: "https://syntrix.com",
-          dpoEmail: "privacy@syntrix.com",
+          legalEntityEmail: "legal@syntrix.example",
+          legalEntityWebsite: "https://syntrix.example",
+          dpoEmail: "privacy@syntrix.example",
           // Policy/rollout flags that visitor actions could flip; reset them so
           // nothing a visitor changed survives the reseed.
           require2fa: false,
@@ -1143,7 +1142,12 @@ export async function seedDemoWorkspace(options: SeedDemoOptions): Promise<SeedD
 
     // Purge on-disk uploads for this workspace (DB rows are gone; blobs must go too).
     const workspaceUploadDir = path.join(webUploadsRoot, "workspaces", workspaceId);
-    await rm(workspaceUploadDir, { recursive: true, force: true });
+    if (options.storage) {
+      const keys = await options.storage.list(`workspaces/${workspaceId}/`);
+      await Promise.all(keys.map((key) => options.storage!.delete(key)));
+    } else {
+      await rm(workspaceUploadDir, { recursive: true, force: true });
+    }
     await mkdir(path.join(webUploadsRoot, "workspaces", workspaceId, "resumes"), {
       recursive: true,
     });
@@ -1226,15 +1230,9 @@ export async function seedDemoWorkspace(options: SeedDemoOptions): Promise<SeedD
 
     // ── Candidates ──
     const candidateIds: string[] = [];
+    const portraits = [1, 2, 11, 12, 6, 4, 18, 17, 3, 7, 14, 15, 20, 10, 8, 5, 9, 16, 3, 19];
     for (let c = 0; c < CANDIDATES.length; c++) {
       const cand = CANDIDATES[c];
-      // Deterministic slug (accent-stripped) → CDN avatar under /demo/candidates.
-      const slug = `${cand.firstName}-${cand.lastName}`
-        .toLowerCase()
-        .normalize("NFD")
-        .replace(/[̀-ͯ]/g, "")
-        .replace(/[^a-z0-9]+/g, "-")
-        .replace(/^-|-$/g, "");
       const [created] = await db
         .insert(schema.candidates)
         .values({
@@ -1242,36 +1240,40 @@ export async function seedDemoWorkspace(options: SeedDemoOptions): Promise<SeedD
           firstName: cand.firstName,
           lastName: cand.lastName,
           email: cand.email,
-          phone: `+1 555 0${100 + c}`,
+          phone: `+1 202 555 ${String(100 + c).padStart(4, "0")}`,
           location: cand.location,
-          linkedinUrl: `https://linkedin.com/in/${cand.firstName.toLowerCase()}-${cand.lastName.toLowerCase().replace(/[^a-z]/g, "")}`,
-          githubUrl: cand.github ?? null,
-          websiteUrl: cand.website ?? null,
-          avatarUrl: `${DEMO_CDN}/demo/candidates/${slug}.jpg`,
+          linkedinUrl: null,
+          githubUrl: null,
+          websiteUrl: null,
+          avatarUrl: `/demo/candidates/portrait-${String(portraits[c]).padStart(2, "0")}.jpg`,
           headline: cand.headline,
-          createdAt: daysAgo(28 - c),
+          createdAt: daysAgo(60 - c),
         })
         .returning({ id: schema.candidates.id });
       candidateIds.push(created.id);
 
       // Fictional resume PDF → web app's local uploads dir + candidate_files row.
-      const { lines, fileName } = buildResumeLines(cand, c);
+      const { lines, fileName } = buildResumeLines({ ...cand, phone: `+1 202 555 ${String(100 + c).padStart(4, "0")}` }, c);
       const pdf = linesToPdf(lines);
-      const key = `resumes/seed-${cand.firstName.toLowerCase()}-${c}.pdf`
+      const key = `workspaces/${workspaceId}/resumes/seed-${cand.firstName.toLowerCase()}-${c}.pdf`
         .normalize("NFD")
         .replace(/[̀-ͯ]/g, "");
       const absolute = path.join(webUploadsRoot, key);
-      await mkdir(path.dirname(absolute), { recursive: true });
-      await writeFile(absolute, pdf);
+      if (options.storage) {
+        await options.storage.put(key, pdf, "application/pdf");
+      } else {
+        await mkdir(path.dirname(absolute), { recursive: true });
+        await writeFile(absolute, pdf);
+      }
       await db.insert(schema.candidateFiles).values({
         workspaceId,
         candidateId: created.id,
         fileName,
-        fileUrl: `/uploads/${key}`,
+        fileUrl: `/api/storage/file?key=${encodeURIComponent(key)}`,
         fileType: "application/pdf",
         fileSize: pdf.byteLength,
         uploadedById: user.id,
-        createdAt: daysAgo(28 - c),
+        createdAt: daysAgo(60 - c),
       });
     }
 
@@ -1520,8 +1522,12 @@ export async function seedDemoWorkspace(options: SeedDemoOptions): Promise<SeedD
       const checksum = createHash("sha256").update(bytes).digest("hex");
       const storageKey = `workspaces/${workspaceId}/documents/seed-${doc.slug}/${doc.originalName}`;
       const absolute = path.join(webUploadsRoot, storageKey);
-      await mkdir(path.dirname(absolute), { recursive: true });
-      await writeFile(absolute, bytes);
+      if (options.storage) {
+        await options.storage.put(storageKey, bytes, "application/pdf");
+      } else {
+        await mkdir(path.dirname(absolute), { recursive: true });
+        await writeFile(absolute, bytes);
+      }
       const [document] = await db
         .insert(schema.documents)
         .values({

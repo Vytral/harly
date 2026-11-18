@@ -3,9 +3,8 @@
 import { useState } from "react";
 
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { getInitials } from "@/lib/avatar";
+import { getAvatarColor, getInitials } from "@/lib/avatar";
 import { cn } from "@/lib/utils";
-import { Avatar as Seedface } from "seedface/react";
 
 type UserAvatarProps = {
   name: string;
@@ -17,17 +16,10 @@ type UserAvatarProps = {
 };
 
 const sizeStyles: Record<NonNullable<UserAvatarProps["size"]>, string> = {
-  sm: "size-7 text-xs",
-  md: "size-9 text-sm",
-  lg: "size-12 text-base",
-  xl: "size-16 text-xl",
-};
-
-const seedfacePixels: Record<NonNullable<UserAvatarProps["size"]>, number> = {
-  sm: 28,
-  md: 36,
-  lg: 48,
-  xl: 64,
+  sm: "size-7 text-[10px]",
+  md: "size-9 text-xs",
+  lg: "size-12 text-sm",
+  xl: "size-16 text-lg",
 };
 
 export function UserAvatar({
@@ -58,6 +50,7 @@ export function UserAvatar({
           key={currentSrc}
           src={currentSrc}
           alt={name}
+          className="absolute inset-0 size-full object-cover object-center"
           loading={priority ? "eager" : "lazy"}
           onError={() =>
             setFailedSources((failed) =>
@@ -66,18 +59,14 @@ export function UserAvatar({
           }
         />
       ) : null}
-      <AvatarFallback className="overflow-hidden rounded-full">
-        <span className="flex size-full items-center justify-center">
-          <Seedface
-            value={name}
-            size={seedfacePixels[size]}
-            radius="full"
-            style="character"
-            variant="light"
-            displayValue={getInitials(name)}
-            className="size-full"
-          />
-        </span>
+      <AvatarFallback
+        className={cn(
+          "absolute inset-0 flex size-full items-center justify-center rounded-full text-[length:inherit] font-medium leading-none text-white",
+          getAvatarColor(name),
+        )}
+        aria-label={name}
+      >
+        {getInitials(name)}
       </AvatarFallback>
     </Avatar>
   );

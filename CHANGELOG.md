@@ -24,6 +24,14 @@ operators. How to cut a release is in [RELEASING.md](RELEASING.md). The
 - **Assign to job** from the talent pool failed with a database error (`42P10`) on every attempt. It works again.
 - AI features that return structured data (resume parsing, job generation, candidate scoring and others) failed with Claude Sonnet 5.5, Opus 5.5 and Fable 5.1 and newer and fell back to their non-AI path. Harly now uses the provider's native structured output for these models (`@ai-sdk/anthropic` 3.0.143).
 
+
+- Candidate headers show email addresses and phone numbers directly, and avatar initials scale proportionally to their frames.
+
+- Profile photos stay centered in their avatar frames. Replaced the Seedface dependency with lightweight initials when a photo is unavailable.
+
+- Demo and first-run example data use coherent candidate profiles, fictional contact details, local portraits and downloadable PDF resumes. First-run data includes evaluations for candidates who have advanced past application review; demo timelines include candidates who need follow-up. Example content no longer repeats “Sample” throughout the recruiter experience, while the workspace disclosure and safe removal remain available.
+- Demo resumes use the configured storage provider, including S3.
+
 ### Removed
 
 - The anonymous install telemetry collector (`apps/telemetry`) and its documentation page. Harly and its CLI no longer send any usage data.

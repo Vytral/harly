@@ -41,8 +41,8 @@ describe("sendCanonicalEmail sample recipients", () => {
     mocks.dbInsert.mockReset();
   });
 
-  it("rejects a sample address before reserving a key or calling the provider", async () => {
-    const error = await sendCanonicalEmail({ ...base, toEmail: "Ada@Sample.invalid" }).catch(
+  it.each(["Ada@Sample.invalid", "Ada@Careers.example"])("rejects %s before reserving a key or calling the provider", async (toEmail) => {
+    const error = await sendCanonicalEmail({ ...base, toEmail }).catch(
       (caught: unknown) => caught,
     );
 

@@ -7508,7 +7508,7 @@
     "sampleData": {
       "sampleDataBanner": {
         "viewingTitle": "Je bekijkt voorbeeldgegevens.",
-        "viewingDescription": "Voorbeeldrecords zijn gelabeld als ‘Voorbeeld’ en blijven van je carrièrepagina af, tenzij je ze publiceert.",
+        "viewingDescription": "Voorbeeldvacatures blijven van je carrièrepagina af, tenzij je ze publiceert.",
         "removing": "Verwijderen…",
         "remove": "Voorbeeldgegevens verwijderen"
       }
@@ -11945,7 +11945,7 @@
       "actions": {
         "loadFailed": "Voorbeeldgegevens konden niet worden geladen. Probeer het opnieuw.",
         "removeFailed": "Voorbeeldgegevens konden niet worden verwijderd. Probeer het opnieuw.",
-        "emailConflict": "Voorbeeldgegevens zijn niet geladen: een kandidaat gebruikt al een van de voorbeeld-e-mailadressen, zoals amara.okafor@sample.invalid. Hernoem of verwijder die kandidaat en laad daarna opnieuw."
+        "emailConflict": "Voorbeeldgegevens zijn niet geladen: een kandidaat gebruikt al een van de voorbeeld-e-mailadressen, zoals amara.okafor@careers.example. Hernoem of verwijder die kandidaat en laad daarna opnieuw."
       }
     },
     "portal": {
