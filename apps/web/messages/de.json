@@ -7230,7 +7230,16 @@
         "accessBody": "Füge den Code oder Link ein, den dir das Unternehmen geschickt hat.",
         "accessCode": "Zugangscode",
         "continue": "Weiter",
-        "checking": "Wird geprüft…"
+        "checking": "Wird geprüft…",
+        "noMethods": "Die Anmeldung ist derzeit nicht verfügbar. Wende dich für den Zugang an das Unternehmen.",
+        "signInMethod": "Anmeldemethode",
+        "tabPassword": "Passwort",
+        "tabMagicLink": "E-Mail-Link",
+        "emailPlaceholder": "du@beispiel.de",
+        "passwordPlaceholder": "Dein Passwort",
+        "showPassword": "Passwort anzeigen",
+        "hidePassword": "Passwort verbergen",
+        "magicHelp": "Wir senden dir einen Link per E-Mail, mit dem du dich anmeldest. Kein Passwort nötig."
       },
       "portalPrivacyControls": {
         "title": "Deine Daten",

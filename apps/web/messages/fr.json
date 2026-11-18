@@ -7230,7 +7230,16 @@
         "accessBody": "Collez le code ou le lien que l’entreprise vous a transmis.",
         "accessCode": "Code d’accès",
         "continue": "Continuer",
-        "checking": "Vérification…"
+        "checking": "Vérification…",
+        "noMethods": "La connexion n’est pas disponible pour le moment. Contactez l’entreprise pour obtenir un accès.",
+        "signInMethod": "Méthode de connexion",
+        "tabPassword": "Mot de passe",
+        "tabMagicLink": "Lien par e-mail",
+        "emailPlaceholder": "vous@exemple.com",
+        "passwordPlaceholder": "Votre mot de passe",
+        "showPassword": "Afficher le mot de passe",
+        "hidePassword": "Masquer le mot de passe",
+        "magicHelp": "Nous vous enverrons un lien par e-mail pour vous connecter. Aucun mot de passe nécessaire."
       },
       "portalPrivacyControls": {
         "title": "Vos données",

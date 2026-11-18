@@ -7230,7 +7230,16 @@
         "accessBody": "Pega el código o el enlace que te dio la empresa.",
         "accessCode": "Código de acceso",
         "continue": "Continuar",
-        "checking": "Verificando…"
+        "checking": "Verificando…",
+        "noMethods": "El inicio de sesión no está disponible por ahora. Contacta a la empresa para obtener acceso.",
+        "signInMethod": "Método de inicio de sesión",
+        "tabPassword": "Contraseña",
+        "tabMagicLink": "Enlace por correo",
+        "emailPlaceholder": "tu@ejemplo.com",
+        "passwordPlaceholder": "Tu contraseña",
+        "showPassword": "Mostrar contraseña",
+        "hidePassword": "Ocultar contraseña",
+        "magicHelp": "Te enviaremos un enlace por correo para iniciar sesión. Sin contraseña."
       },
       "portalPrivacyControls": {
         "title": "Tus datos",

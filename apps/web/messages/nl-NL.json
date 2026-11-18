@@ -7230,7 +7230,16 @@
         "accessBody": "Plak de code of link die het bedrijf je heeft gegeven.",
         "accessCode": "Toegangscode",
         "continue": "Doorgaan",
-        "checking": "Controleren…"
+        "checking": "Controleren…",
+        "noMethods": "Inloggen is op dit moment niet beschikbaar. Neem contact op met het bedrijf voor toegang.",
+        "signInMethod": "Inlogmethode",
+        "tabPassword": "Wachtwoord",
+        "tabMagicLink": "Link per e-mail",
+        "emailPlaceholder": "jij@voorbeeld.nl",
+        "passwordPlaceholder": "Je wachtwoord",
+        "showPassword": "Wachtwoord tonen",
+        "hidePassword": "Wachtwoord verbergen",
+        "magicHelp": "We sturen je een link per e-mail waarmee je inlogt. Geen wachtwoord nodig."
       },
       "portalPrivacyControls": {
         "title": "Je gegevens",
