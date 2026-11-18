@@ -21,6 +21,7 @@ operators. How to cut a release is in [RELEASING.md](RELEASING.md). The
 
 - Demo and first-run example data use coherent candidate profiles, fictional contact details, local portraits and downloadable PDF resumes. First-run data includes evaluations for candidates who have advanced past application review; demo timelines include candidates who need follow-up. Example content no longer repeats “Sample” throughout the recruiter experience, while the workspace disclosure and safe removal remain available.
 - Demo resumes use the configured storage provider, including S3.
+- Demo and first-run example jobs have complete descriptions (role and team, responsibilities, requirements, nice-to-haves, benefits, work model and hiring process). The demo career page, terms of service, privacy policy, cookie policy and candidate notice use fuller fictional copy with `.example` contact addresses.
 
 ### Removed
 

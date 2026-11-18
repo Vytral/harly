@@ -55,6 +55,23 @@ export type SampleDataset = {
 
 export const SAMPLE_CANDIDATE_TOTAL = 8;
 
+/** Rich-text (HTML) description, the same format the job editor stores. */
+const SAMPLE_JOB_DESCRIPTION = [
+  "<p>Our product engineering team builds accessible, reliable tools that hiring teams use every day. As a Senior Product Engineer you will work across the stack with design and product partners, take features from idea to production, and help shape our technical direction.</p>",
+  "<h3>What you will do</h3>",
+  "<ul><li>Lead the delivery of product features end to end, from discovery to release and iteration</li><li>Build accessible interfaces in React and TypeScript, backed by well-tested APIs</li><li>Review code and designs, and mentor engineers on the team</li><li>Improve reliability and performance with good observability and testing</li></ul>",
+  "<h3>What we are looking for</h3>",
+  "<ul><li>6+ years of professional software engineering experience</li><li>Strong TypeScript skills on both frontend and backend</li><li>Experience with relational databases such as PostgreSQL</li><li>A habit of clear, written communication with product and design</li></ul>",
+  "<h3>Nice to have</h3>",
+  "<ul><li>Accessibility expertise (WCAG 2.2)</li><li>Experience with system design for multi-tenant products</li></ul>",
+  "<h3>What we offer</h3>",
+  "<ul><li>Competitive salary and equity</li><li>Private health cover and 25 days of paid holiday</li><li>A yearly learning budget and a home-office stipend</li></ul>",
+  "<h3>Location and work model</h3>",
+  "<p>Fully remote within Europe, with team meetups twice a year.</p>",
+  "<h3>Our hiring process</h3>",
+  "<ol><li>Recruiter call (30 minutes)</li><li>Hiring manager conversation (45 minutes)</li><li>Technical interview: a pairing session, no take-home (90 minutes)</li><li>System design and team interview (60 minutes)</li><li>References and offer</li></ol>",
+].join("");
+
 export function buildSampleDataset(): SampleDataset {
   const candidates: SampleCandidatePlan[] = [
     candidate("amara-okafor", "Amara", "Okafor", "Frontend lead, 7 years", ["React", "TypeScript", "Design systems"], "applied", 2),
@@ -74,8 +91,7 @@ export function buildSampleDataset(): SampleDataset {
       location: "Remote, Europe",
       employmentType: "full_time",
       workplaceType: "remote",
-      description:
-        "Join our product engineering team to build accessible, reliable tools for hiring teams. You will work across the stack with design and product partners, mentor engineers, and help shape technical direction.",
+      description: SAMPLE_JOB_DESCRIPTION,
     },
     candidates,
     notes: [
