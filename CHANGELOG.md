@@ -34,6 +34,8 @@ operators. How to cut a release is in [RELEASING.md](RELEASING.md). The
 - The public demo (`DEMO_MODE=true`) starts in English for every visitor, whatever the browser language, until the visitor picks another language. Email language settings in the demo now read in English too.
 - The interface language on the account page sits in a titled card with a description and a Save button, matching the email language card below it.
 
+- Demo and first-run example jobs have complete descriptions (role and team, responsibilities, requirements, nice-to-haves, benefits, work model and hiring process). The demo career page, terms of service, privacy policy, cookie policy and candidate notice use fuller fictional copy with `.example` contact addresses.
+
 ### Removed
 
 - The anonymous install telemetry collector (`apps/telemetry`) and its documentation page. Harly and its CLI no longer send any usage data.
