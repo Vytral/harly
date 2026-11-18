@@ -7508,7 +7508,7 @@
     "sampleData": {
       "sampleDataBanner": {
         "viewingTitle": "Je bekijkt voorbeeldgegevens.",
-        "viewingDescription": "Voorbeeldrecords zijn gelabeld als ‘Voorbeeld’ en blijven van je carrièrepagina af, tenzij je ze publiceert.",
+        "viewingDescription": "Sample jobs stay off your careers page unless you publish them.",
         "removing": "Verwijderen…",
         "remove": "Voorbeeldgegevens verwijderen"
       }
@@ -11331,7 +11331,8 @@
         "enterApiKeyToTest": "Voer je {label}-API-sleutel in om te testen.",
         "emptyResponse": "Het model gaf een leeg antwoord.",
         "connectionFailed": "Verbinding mislukt.",
-        "connectionFailedWithReason": "Verbinding mislukt: {reason}"
+        "connectionFailedWithReason": "Verbinding mislukt: {reason}",
+        "structuredOutputFailed": "Connected, but structured output failed, so features such as resume parsing and scoring will not work: {reason}"
       },
       "calSettingsActions": {
         "invalidUrl": "Voer een geldige URL in.",
@@ -11944,7 +11945,7 @@
       "actions": {
         "loadFailed": "Voorbeeldgegevens konden niet worden geladen. Probeer het opnieuw.",
         "removeFailed": "Voorbeeldgegevens konden niet worden verwijderd. Probeer het opnieuw.",
-        "emailConflict": "Voorbeeldgegevens zijn niet geladen: een kandidaat gebruikt al een van de voorbeeld-e-mailadressen, zoals amara.okafor@sample.invalid. Hernoem of verwijder die kandidaat en laad daarna opnieuw."
+        "emailConflict": "Sample data was not loaded: a candidate already uses one of the sample email addresses, such as amara.okafor@careers.example. Rename or remove that candidate, then load again."
       }
     },
     "portal": {
