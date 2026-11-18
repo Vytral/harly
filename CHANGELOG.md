@@ -38,6 +38,12 @@ operators. How to cut a release is in [RELEASING.md](RELEASING.md). The
 
 - Demo and first-run example jobs have complete descriptions (role and team, responsibilities, requirements, nice-to-haves, benefits, work model and hiring process). The demo career page, terms of service, privacy policy, cookie policy and candidate notice use fuller fictional copy with `.example` contact addresses.
 
+### Fixed
+
+- The cookie banner on public pages now closes cleanly when you accept, choose necessary only, save preferences or press the close button, and stays closed on later pages and reloads. Closing it with the X now records a necessary-only choice. The exit animation is skipped when reduced motion is requested.
+- The Playful career page template now uses its rounded corners on job detail and application pages too, including when the page was saved with sharp corners from another template.
+- The two-part badge in the Playful template hero now has an even inset around the inner pill and keeps its shape with long translated text.
+
 ### Removed
 
 - The anonymous install telemetry collector (`apps/telemetry`) and its documentation page. Harly and its CLI no longer send any usage data.

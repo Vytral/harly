@@ -41,6 +41,23 @@ export type CareerTheme = {
 };
 
 /**
+ * Corner style a template actually draws. Playful is a rounded template: its
+ * list page hardcodes soft corners, so its job and apply pages ignore a stored
+ * `sharp` value (often left over from switching templates) to stay consistent.
+ */
+export function effectiveRounded(config: CareerPageConfig): "soft" | "sharp" {
+  return config.template === "playful" ? "soft" : config.theme.rounded;
+}
+
+/** Radius tokens per corner style. Playful uses its own, rounder scale that
+ *  matches its list page (cards rounded-3xl, inner tiles and buttons rounded-xl). */
+function radiusVars(config: CareerPageConfig): { card: string; inner: string; btn: string } {
+  if (config.template === "playful") return { card: "24px", inner: "12px", btn: "12px" };
+  if (effectiveRounded(config) === "sharp") return { card: "0px", inner: "0px", btn: "0px" };
+  return { card: "16px", inner: "12px", btn: "10px" };
+}
+
+/**
  * Single place where a career page turns "brand colour + theme settings" into
  * the handful of values every template and block needs, with contrast checked.
  */
@@ -48,7 +65,8 @@ export function careerTheme(config: CareerPageConfig, brandColor: string): Caree
   const accent = normalizeHex(config.theme.accent ?? brandColor, "#18181b");
   const canvas = resolveCanvas(config);
   const isDark = config.theme.mode === "dark";
-  const sharp = config.theme.rounded === "sharp";
+  const sharp = effectiveRounded(config) === "sharp";
+  const radius = radiusVars(config);
   const onAccent = readableInk(accent);
   const accentText = accentOnSurface(accent, canvas);
   const pal = accentPalette(accent, { dark: isDark });
@@ -61,9 +79,9 @@ export function careerTheme(config: CareerPageConfig, brandColor: string): Caree
     "--career-tint-ink": pal.ink,
     "--career-accent-wash": withAlpha(accent, isDark ? 0.18 : 0.1),
     "--career-canvas": canvas,
-    "--career-r-card": sharp ? "0px" : "16px",
-    "--career-r-inner": sharp ? "0px" : "12px",
-    "--career-r-btn": sharp ? "0px" : "10px",
+    "--career-r-card": radius.card,
+    "--career-r-inner": radius.inner,
+    "--career-r-btn": radius.btn,
   } as CSSProperties;
 
   return {
