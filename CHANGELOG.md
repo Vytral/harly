@@ -13,10 +13,13 @@ operators. How to cut a release is in [RELEASING.md](RELEASING.md). The
 
 ## [Unreleased]
 
+## [0.5.2] - 2026-11-18
+
+This patch release fixes Harly AI with Anthropic models and makes the candidate portal reachable in the public demo. No migrations.
+
 ### Fixed
 
 - Harly AI with Anthropic models failed with "tools.N.custom: For 'integer' type, properties maximum, minimum are not supported". Tools are now sent to Anthropic without strict mode, which also rejected more than 20 strict tools per request; Harly still validates every tool call against its own schema.
-
 - Public demo: the candidate portal sign-in page has an "Explore as a sample candidate" button that opens the portal as a seeded candidate of your demo workspace (or sends you to the demo entry first), and the sandbox careers preview links to the portal. Previously the only way in was a card on a candidate's profile.
 - Public demo: the careers page introduction is back to its short original text, and the hero subheading is empty again.
 
@@ -87,6 +90,7 @@ It also removes the anonymous install telemetry, fixes talent pool assignment, a
 - The candidate portal sign-in page now matches the staff sign-in page and only shows the methods enabled under portal settings. Candidates see one email field at most: a password field, a sign-in link button, or a switch between the two when both are enabled. Social providers appear as round buttons, and passkey and social buttons sit above the email form. The access code entry is a small link. After a sign-in link is sent, the form shows a "Check your inbox" confirmation.
 
 ### Fixed
+
 
 - Concurrent inbound deliveries of the same email no longer break attachment saving.
 - Failed emails in the delivery log show the real, sanitized provider error instead of "No configured workspace email sender".
@@ -180,6 +184,7 @@ to configure; run `harly update` as usual.
 
 ### Fixed
 
+
 - The job editor form now uses the full width on narrow windows, scrolls from
   anywhere on the page, and no longer loads the live preview unless there is
   room to show it.
@@ -254,6 +259,7 @@ more ways to sign in. Contains two database migrations (`0165`, `0166`); run
 
 ### Fixed
 
+
 - Published jobs keep the same readable-content requirements when edited in
   the dashboard or through the API. The API can publish jobs whose content is
   in sections, and empty HTML or nonbreaking spaces do not count as content.
@@ -307,6 +313,7 @@ No database migrations.
 
 ### Fixed
 
+
 - Chat follow-ups failed on OpenAI reasoning models (such as `gpt-6-*`) with
   "function_call was provided without its required 'reasoning' item": earlier
   turns now replay tool calls inline instead of as stored item references.
@@ -329,6 +336,7 @@ A patch release for the public demo and scheduler reliability. No database
 migrations.
 
 ### Fixed
+
 
 - Harly AI was off in every demo visitor sandbox: sandboxes have their own
   workspace id, so the `DEMO_WORKSPACE_ID` pin rejected them. Live sandboxes now
@@ -367,6 +375,7 @@ A patch release with fixes for the public demo, career page polish and a
 mobile layout pass. No database migrations.
 
 ### Fixed
+
 
 - Signing failed on the server with `DOMMatrix is not defined`; pdfjs now loads
   without it.
@@ -479,6 +488,7 @@ existing installation. All migrations are additive.
 - The Harly AI launcher and notifications share one bottom surface.
 
 ### Fixed
+
 
 - PDF resumes lose no line breaks, so the rules parser finds roles, education
   and skills again. Cyrillic, CJK and Arabic resumes are legible, file types are
@@ -623,6 +633,7 @@ existing installation.
 
 ### Fixed
 
+
 - The integration health API no longer returns the DocuSeal webhook secret.
 - Hires created through offer acceptance now carry stage history, so they are
   counted in reports.
@@ -682,6 +693,7 @@ are unaffected.
 
 ### Fixed
 
+
 - Demo sandbox cleanup deletes exactly the account minted for the sandbox and
   its sessions, never a shared seeded teammate, and removes uploaded files from
   S3-compatible storage as well as local disk.
@@ -717,6 +729,7 @@ workflows. No database migration or new runtime configuration is required.
   Sharp are installed for musl in the build stage.
 
 ### Fixed
+
 
 - Include the PDF.js browser module and worker in standalone images so the
   native signature-field editor can load PDFs in production.
@@ -789,6 +802,7 @@ Automations tour. No migrations.
   root `package.json`, inlined at build time, instead of a hardcoded `v0.1.0`.
 
 ### Fixed
+
 
 - The Postgres rate limiter (`RATE_LIMIT_STORE=database` and the demo AI
   budgets) now counts with a single atomic upsert. Concurrent first hits of a
@@ -908,6 +922,7 @@ before you start.
 
 ### Fixed
 
+
 - Migrations take a Postgres advisory lock. Two instances migrating at once —
   a rolling deploy, an init container per replica, or an overlapping redeploy —
   previously ran the same DDL concurrently with no coordination. The second
@@ -975,7 +990,8 @@ upgrade holds locks until it commits. On managed Postgres, check that
 `statement_timeout` and `idle_in_transaction_session_timeout` are high enough to
 let it finish.
 
-[Unreleased]: https://github.com/Vytral/harly/compare/v0.5.1...HEAD
+[Unreleased]: https://github.com/Vytral/harly/compare/v0.5.2...HEAD
+[0.5.2]: https://github.com/Vytral/harly/releases/tag/v0.5.2
 [0.5.1]: https://github.com/Vytral/harly/releases/tag/v0.5.1
 [0.5.0]: https://github.com/Vytral/harly/releases/tag/v0.5.0
 [0.4.0]: https://github.com/Vytral/harly/releases/tag/v0.4.0
