@@ -13,6 +13,10 @@ operators. How to cut a release is in [RELEASING.md](RELEASING.md). The
 
 ## [Unreleased]
 
+### Added
+
+- Public demo: a "View as candidate" card on sample candidates opens the candidate portal signed in as that candidate, with no email or login. It only works when `DEMO_MODE=true`, inside the visitor's own sandbox and for its seeded candidates. Demo data now enables the candidate portal and includes pending document requests.
+
 ### Fixed
 
 - Candidate headers show email addresses and phone numbers directly, and avatar initials scale proportionally to their frames.

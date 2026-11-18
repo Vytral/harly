@@ -5245,6 +5245,11 @@
       },
       "demoLockedNotice": {
         "default": "Uitgeschakeld in de demo: deze actie zou de accountbeveiliging wijzigen of gegevens buiten je sandbox versturen."
+      },
+      "demoCandidatePortalCard": {
+        "title": "Zie wat deze kandidaat ziet",
+        "description": "Open het kandidatenportaal als deze voorbeeldkandidaat: sollicitaties, fasen, gesprekken en documentverzoeken. Geen e-mail of inlog nodig.",
+        "open": "Bekijken als kandidaat"
       }
     },
     "developers": {
@@ -12538,6 +12543,13 @@
         "nameRequired": "Geef je assistent een naam.",
         "nameTooLong": "Gebruik {max} tekens of minder.",
         "avatarUrlInvalid": "De avatar moet een geldige URL zijn."
+      }
+    },
+    "demo": {
+      "candidatePortal": {
+        "unavailable": "Het portaal bekijken als kandidaat kan alleen in je demowerkruimte.",
+        "seededOnly": "Alleen de voorbeeldkandidaten van de demo kunnen in het portaal worden bekeken.",
+        "portalOff": "Zet het kandidatenportaal aan in Instellingen om het als kandidaat te bekijken."
       }
     }
   }

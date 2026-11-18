@@ -5245,6 +5245,11 @@
       },
       "demoLockedNotice": {
         "default": "Desativado na demo: esta ação alteraria a segurança da conta ou enviaria dados para fora do seu sandbox."
+      },
+      "demoCandidatePortalCard": {
+        "title": "Veja o que esta pessoa vê",
+        "description": "Abre o portal do candidato conectado como esta pessoa de exemplo: candidaturas, etapas, entrevistas e solicitações de documentos. Sem e-mail ou login.",
+        "open": "Ver como candidato"
       }
     },
     "developers": {
@@ -12538,6 +12543,13 @@
         "nameRequired": "Dê um nome ao seu assistente.",
         "nameTooLong": "Use no máximo {max} caracteres.",
         "avatarUrlInvalid": "O avatar deve ser uma URL válida."
+      }
+    },
+    "demo": {
+      "candidatePortal": {
+        "unavailable": "Ver o portal como candidato só está disponível no seu espaço de demonstração.",
+        "seededOnly": "Somente os candidatos de exemplo da demo podem ser vistos no portal.",
+        "portalOff": "Ative o portal do candidato nas Configurações para vê-lo como candidato."
       }
     }
   }
