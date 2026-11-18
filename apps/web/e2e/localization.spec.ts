@@ -21,6 +21,9 @@ test("account language selection persists across reloads", async ({ page, contex
     const selector = page.locator("#harly-language");
     await selector.selectOption(locale);
     await expect(selector).toHaveValue(locale);
+    const save = page.locator("#harly-language ~ button");
+    if (await save.isEnabled()) await save.click();
+    await expect(save).toBeDisabled();
     await expect(page.locator('label[for="harly-language"]')).toHaveText(label);
     await page.reload();
     await expect(selector).toHaveValue(locale);
