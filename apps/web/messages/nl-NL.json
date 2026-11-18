@@ -5253,7 +5253,8 @@
       "demoCandidatePortalCard": {
         "title": "Zie wat deze kandidaat ziet",
         "description": "Open het kandidatenportaal als deze voorbeeldkandidaat: sollicitaties, fasen, gesprekken en documentverzoeken. Geen e-mail of inlog nodig.",
-        "open": "Bekijken als kandidaat"
+        "open": "Bekijken als kandidaat",
+        "error": "Het kandidatenportaal kon niet worden geopend. Probeer het opnieuw."
       }
     },
     "developers": {

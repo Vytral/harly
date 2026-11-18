@@ -5253,7 +5253,8 @@
       "demoCandidatePortalCard": {
         "title": "Sehen, was diese Person sieht",
         "description": "Öffnet das Kandidatenportal als diese Beispielperson: Bewerbungen, Phasen, Interviews und Dokumentanfragen. Ohne E-Mail oder Anmeldung.",
-        "open": "Als Kandidat ansehen"
+        "open": "Als Kandidat ansehen",
+        "error": "Das Kandidatenportal konnte nicht geöffnet werden. Versuche es erneut."
       }
     },
     "developers": {

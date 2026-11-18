@@ -18,7 +18,13 @@ export function DemoCandidatePortalCard({ candidateId }: { candidateId: string }
 
   function open() {
     start(async () => {
-      const result = await openDemoCandidatePortalAction({ candidateId });
+      let result: Awaited<ReturnType<typeof openDemoCandidatePortalAction>>;
+      try {
+        result = await openDemoCandidatePortalAction({ candidateId });
+      } catch {
+        toast.error(t("error"));
+        return;
+      }
       if (!result.ok) {
         toast.error(result.error);
         return;

@@ -5253,7 +5253,8 @@
       "demoCandidatePortalCard": {
         "title": "Voir ce que voit cette personne",
         "description": "Ouvre le portail candidat connecté en tant que cette personne d’exemple : candidatures, étapes, entretiens et demandes de documents. Sans e-mail ni connexion.",
-        "open": "Voir en tant que candidat"
+        "open": "Voir en tant que candidat",
+        "error": "Impossible d’ouvrir le portail candidat. Réessayez."
       }
     },
     "developers": {
