@@ -13,6 +13,10 @@ operators. How to cut a release is in [RELEASING.md](RELEASING.md). The
 
 ## [Unreleased]
 
+### Changed
+
+- The candidate portal sign-in page now matches the staff sign-in page and only shows the methods enabled under portal settings. Candidates see one email field at most: a password field, a sign-in link button, or a switch between the two when both are enabled. Social providers appear as round buttons, and passkey and social buttons sit above the email form. The access code entry is a small link. After a sign-in link is sent, the form shows a "Check your inbox" confirmation.
+
 ### Removed
 
 - The anonymous install telemetry collector (`apps/telemetry`) and its documentation page. Harly and its CLI no longer send any usage data.

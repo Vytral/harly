@@ -7221,7 +7221,16 @@
         "accessBody": "Paste the code or link the company gave you.",
         "accessCode": "Access code",
         "continue": "Continue",
-        "checking": "Checking…"
+        "checking": "Checking…",
+        "noMethods": "Sign-in isn't available right now. Contact the company for access.",
+        "signInMethod": "Sign-in method",
+        "tabPassword": "Password",
+        "tabMagicLink": "Email link",
+        "emailPlaceholder": "you@example.com",
+        "passwordPlaceholder": "Your password",
+        "showPassword": "Show password",
+        "hidePassword": "Hide password",
+        "magicHelp": "We'll email you a link that signs you in. No password needed."
       },
       "portalPrivacyControls": {
         "title": "Your data",
