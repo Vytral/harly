@@ -1,14 +1,14 @@
 "use server";
 
-import { and, eq, isNull, lt } from "drizzle-orm";
+import { and, asc, desc, eq, isNull, lt, sql } from "drizzle-orm";
 import { headers } from "next/headers";
 import { z } from "zod";
 
 import { isDemoMode } from "@harly/config";
-import { candidates, db, organization, workspaceSettings } from "@harly/db";
+import { candidates, db, documentRequests, organization, workspaceSettings } from "@harly/db";
 
 import { getTranslations } from "@/i18n/server";
-import { requireCandidatePermission } from "@/features/workspaces/permissions-server";
+import { requireCandidatePermission, requirePermission } from "@/features/workspaces/permissions-server";
 import { auditPortalEvent } from "@/lib/portal-credentials";
 import { establishPortalSession } from "@/lib/portal-session";
 
@@ -16,7 +16,7 @@ import { isLiveSandboxWorkspace } from "./sandbox-state";
 
 export type OpenDemoCandidatePortalResult =
   | { ok: true; url: string }
-  | { ok: false; error: string };
+  | { ok: false; error: string; enterDemo?: boolean };
 
 /**
  * Public demo only: sign the visitor into the candidate portal as one of the
@@ -82,4 +82,45 @@ export async function openDemoCandidatePortalAction(input: {
   });
 
   return { ok: true, url: "/portal/dashboard" };
+}
+
+/**
+ * Public demo only, from the portal sign-in page: open the portal as the
+ * sample candidate with the most to show (pending document requests first).
+ * A visitor without a demo workspace yet is sent to the demo entry screen.
+ * The candidate-level action re-checks every condition.
+ */
+export async function openDemoPortalAsSampleCandidateAction(): Promise<OpenDemoCandidatePortalResult> {
+  const t = await getTranslations("server.demo.candidatePortal");
+  if (!isDemoMode()) return { ok: false, error: t("unavailable") };
+
+  let workspaceId: string;
+  try {
+    workspaceId = (await requirePermission("candidates:view")).organization.id;
+  } catch {
+    return { ok: false, error: t("unavailable"), enterDemo: true };
+  }
+  if (!(await isLiveSandboxWorkspace(workspaceId))) {
+    return { ok: false, error: t("unavailable"), enterDemo: true };
+  }
+
+  const pending = sql<number>`count(${documentRequests.id}) filter (where ${documentRequests.status} = 'pending')`;
+  const [pick] = await db
+    .select({ id: candidates.id })
+    .from(candidates)
+    .innerJoin(organization, eq(organization.id, candidates.workspaceId))
+    .leftJoin(documentRequests, eq(documentRequests.candidateId, candidates.id))
+    .where(
+      and(
+        eq(candidates.workspaceId, workspaceId),
+        isNull(candidates.deletedAt),
+        lt(candidates.createdAt, organization.createdAt),
+      ),
+    )
+    .groupBy(candidates.id, candidates.createdAt)
+    .orderBy(desc(pending), asc(candidates.createdAt))
+    .limit(1);
+  if (!pick) return { ok: false, error: t("seededOnly") };
+
+  return openDemoCandidatePortalAction({ candidateId: pick.id });
 }

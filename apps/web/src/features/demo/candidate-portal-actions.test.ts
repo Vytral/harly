@@ -10,6 +10,7 @@ const mocks = vi.hoisted(() => ({
   establishPortalSession: vi.fn(async () => {}),
   auditPortalEvent: vi.fn(async () => {}),
   isLiveSandboxWorkspace: vi.fn(async () => mocks.liveSandbox),
+  requirePermission: vi.fn(async () => ({ organization: { id: "sandbox-1" } })),
 }));
 
 vi.mock("@harly/db", () => {
@@ -30,12 +31,16 @@ vi.mock("next/headers", () => ({ headers: async () => new Headers() }));
 vi.mock("@/i18n/server", () => ({ getTranslations: async () => (key: string) => key }));
 vi.mock("@/features/workspaces/permissions-server", () => ({
   requireCandidatePermission: mocks.requireCandidatePermission,
+  requirePermission: mocks.requirePermission,
 }));
 vi.mock("@/lib/portal-session", () => ({ establishPortalSession: mocks.establishPortalSession }));
 vi.mock("@/lib/portal-credentials", () => ({ auditPortalEvent: mocks.auditPortalEvent }));
 vi.mock("./sandbox-state", () => ({ isLiveSandboxWorkspace: mocks.isLiveSandboxWorkspace }));
 
-import { openDemoCandidatePortalAction } from "./candidate-portal-actions";
+import {
+  openDemoCandidatePortalAction,
+  openDemoPortalAsSampleCandidateAction,
+} from "./candidate-portal-actions";
 
 const candidateId = "6f1c2c1e-6d7a-4e3b-9a52-6c1d2a0b9e11";
 
@@ -104,5 +109,37 @@ describe("openDemoCandidatePortalAction", () => {
     expect(mocks.auditPortalEvent).toHaveBeenCalledWith(
       expect.objectContaining({ workspaceId: "sandbox-1", action: "portal.demo_preview_opened" }),
     );
+  });
+});
+
+describe("openDemoPortalAsSampleCandidateAction", () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    mocks.liveSandbox = true;
+    vi.clearAllMocks();
+  });
+
+  it("is rejected when demo mode is off, before any lookup", async () => {
+    vi.stubEnv("DEMO_MODE", "false");
+    const result = await openDemoPortalAsSampleCandidateAction();
+    expect(result).toEqual({ ok: false, error: "unavailable" });
+    expect(mocks.requirePermission).not.toHaveBeenCalled();
+    expect(mocks.establishPortalSession).not.toHaveBeenCalled();
+  });
+
+  it("sends a visitor without a demo workspace to the demo entry", async () => {
+    vi.stubEnv("DEMO_MODE", "true");
+    mocks.requirePermission.mockRejectedValueOnce(new Error("no session"));
+    const result = await openDemoPortalAsSampleCandidateAction();
+    expect(result).toEqual({ ok: false, error: "unavailable", enterDemo: true });
+    expect(mocks.establishPortalSession).not.toHaveBeenCalled();
+  });
+
+  it("refuses the shared template or an expired sandbox", async () => {
+    vi.stubEnv("DEMO_MODE", "true");
+    mocks.liveSandbox = false;
+    const result = await openDemoPortalAsSampleCandidateAction();
+    expect(result).toEqual({ ok: false, error: "unavailable", enterDemo: true });
+    expect(mocks.establishPortalSession).not.toHaveBeenCalled();
   });
 });

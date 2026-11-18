@@ -60,7 +60,7 @@ const DEMO_CAREER_PAGE_CONFIG = {
   },
   hero: {
     overlay: "none",
-    subhead: "Help us build open-source infrastructure that teams everywhere rely on.",
+    subhead: "",
     headline: "Syntrix",
     imageUrl: null,
     logoType: "logo",
@@ -77,7 +77,7 @@ const DEMO_CAREER_PAGE_CONFIG = {
     bannerLogoVariant: "dark"
   },
   intro: {
-    body: "<p>Syntrix builds open-source infrastructure software that helps engineering teams host, monitor and scale their applications without lock-in. Founded in 2017, we now serve thousands of teams, from solo developers to global companies, from hubs in Berlin, New York, London and Manila and a remote team across 30 countries.</p><p>Everything we build starts in the open: our core platform is open source, our roadmap is public, and we pay our engineers to contribute upstream. We hire curious, kind people who care about craft and want their work to be used.</p>",
+    body: "<p style=\"text-align: left;\">Syntrix is an open-source company dedicated to creating and distributing open-source software that democratizes access to technology.</p>",
     chips: [
       {
         icon: "users",

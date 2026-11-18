@@ -26,6 +26,10 @@ export async function SandboxBoardRibbon({ expiresAt }: { expiresAt: Date | null
         <a href="/dashboard/career-page" className="underline underline-offset-2">
           {t("backToBuilder")}
         </a>
+        {" · "}
+        <a href="/portal/login" className="underline underline-offset-2">
+          {t("candidatePortal")}
+        </a>
       </p>
     </div>
   );
