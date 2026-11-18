@@ -43,6 +43,9 @@ import { getWorkspaceCalStatus } from "@/lib/cal/config";
 import { getWorkspaceEsignStatus } from "@/lib/esign/config";
 import { candidateAvatarFallbackSrcs } from "@/lib/candidate-avatar";
 import { getWorkspaceGravatarEnabled } from "@/lib/gravatar";
+import { isDemoMode } from "@harly/config";
+import { DemoCandidatePortalCard } from "@/features/demo/DemoCandidatePortalCard";
+import { isLiveSandboxWorkspace } from "@/features/demo/sandbox-state";
 
 export const dynamic = "force-dynamic";
 
@@ -164,6 +167,8 @@ export default async function CandidateDetailPage({
     can("offers:manage"),
     can("offers:decide"),
   ]);
+  // Demo sandboxes only; the action re-checks every condition server-side.
+  const demoPortalPreview = isDemoMode() && (await isLiveSandboxWorkspace(workspaceId));
   const workspaceName = workspaceContext.organization.name;
   const currentUserName = workspaceContext.user.name;
   const fullName = `${candidate.firstName} ${candidate.lastName}`;
@@ -384,6 +389,8 @@ export default async function CandidateDetailPage({
 
         <div className="grid items-start gap-5 lg:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]">
           <div className="min-w-0 space-y-5">
+            {demoPortalPreview ? <DemoCandidatePortalCard candidateId={candidate.id} /> : null}
+
             <DuplicateDetectionCard
               candidateId={candidate.id}
               suspects={suspectCandidates}

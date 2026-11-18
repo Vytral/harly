@@ -19,6 +19,8 @@ operators. How to cut a release is in [RELEASING.md](RELEASING.md). The
 - Failed AI provider calls are now recorded. **Settings → AI** shows the last error, and the dashboard lists AI under the integrations that need attention, instead of features silently falling back to their non-AI path. Saving new AI settings clears the recorded error.
 - **Test connection** in **Settings → AI** also checks structured output, which resume parsing, scoring, job generation and other AI features need. A model that answers plain text but rejects structured output now fails the test with the provider's reason.
 
+- Public demo: a "View as candidate" card on sample candidates opens the candidate portal signed in as that candidate, with no email or login. It only works when `DEMO_MODE=true`, inside the visitor's own sandbox and for its seeded candidates. Demo data now enables the candidate portal and includes pending document requests.
+
 ### Fixed
 
 - **Assign to job** from the talent pool failed with a database error (`42P10`) on every attempt. It works again.

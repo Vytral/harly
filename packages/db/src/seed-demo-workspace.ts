@@ -573,6 +573,20 @@ const INTERVIEWS: {
   { c: 6, j: 0, type: "technical", mode: "video", when: daysAgoAt(1, 10), interviewer: "diego", status: "completed", title: "Technical interview" },
 ];
 
+// Pending document requests by `${c}-${j}`, so the candidate portal has work
+// waiting for Ava (Offer) and Priya (Interview today).
+const DOCUMENT_REQUESTS: {
+  c: number;
+  j: number;
+  title: string;
+  instructions: string;
+  dueDaysFromNow: number;
+}[] = [
+  { c: 0, j: 0, title: "Proof of right to work", instructions: "Upload a scan of a document that shows you can work in the country of the role. Sample data: any PDF works.", dueDaysFromNow: 3 },
+  { c: 0, j: 0, title: "Emergency contact form", instructions: "Tell us who to contact in an emergency before your start date. Sample data only.", dueDaysFromNow: 5 },
+  { c: 6, j: 0, title: "Two professional references", instructions: "Share names and contact details for two people you have worked with. Fictional entries are fine.", dueDaysFromNow: 4 },
+];
+
 export type SeedDemoResult = {
   workspaceId: string;
   wipedTables: number;
@@ -949,6 +963,8 @@ export async function seedDemoWorkspace(options: SeedDemoOptions): Promise<SeedD
         emailInboundEnabled: false,
         calEnabled: false,
         turnstileEnabled: false,
+        // Candidate portal on, so visitors can open it as a seeded candidate.
+        candidatePortalEnabled: true,
         // Legal identity — fully fictional, all @syntrix.example.
         legalEntityName: "Syntrix Inc.",
         legalEntityEmail: "legal@syntrix.example",
@@ -1067,6 +1083,7 @@ export async function seedDemoWorkspace(options: SeedDemoOptions): Promise<SeedD
           legalEntityEmail: "legal@syntrix.example",
           legalEntityWebsite: "https://syntrix.example",
           dpoEmail: "privacy@syntrix.example",
+          candidatePortalEnabled: true,
           // Policy/rollout flags that visitor actions could flip; reset them so
           // nothing a visitor changed survives the reseed.
           require2fa: false,
@@ -1500,6 +1517,23 @@ export async function seedDemoWorkspace(options: SeedDemoOptions): Promise<SeedD
         createdAt: iv.status === "completed" ? iv.when : daysAgo(1 + (iv.c % 3)),
       });
       interviewCount++;
+    }
+
+    // ── Document requests (pending, shown in the candidate portal) ──
+    for (const req of DOCUMENT_REQUESTS) {
+      const applicationId = appIds.get(`${req.c}-${req.j}`);
+      if (!applicationId) continue;
+      await db.insert(schema.documentRequests).values({
+        workspaceId,
+        applicationId,
+        candidateId: candidateIds[req.c],
+        title: req.title,
+        instructions: req.instructions,
+        status: "pending",
+        dueAt: daysFromNowAt(req.dueDaysFromNow, 17),
+        requestedById: user.id,
+        createdAt: daysAgo(1),
+      });
     }
 
     // ── Documents ready to sign (Offer-stage candidate) ──

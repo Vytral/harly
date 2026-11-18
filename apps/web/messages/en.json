@@ -5249,6 +5249,11 @@
       },
       "demoLockedNotice": {
         "default": "Disabled in the demo — this action would change account security or send data outside your sandbox."
+      },
+      "demoCandidatePortalCard": {
+        "title": "See what this candidate sees",
+        "description": "Open the candidate portal signed in as this sample candidate: their applications, stages, interviews and document requests. No email or login needed.",
+        "open": "View as candidate"
       }
     },
     "developers": {
@@ -12543,6 +12548,13 @@
         "nameRequired": "Give your assistant a name.",
         "nameTooLong": "Use {max} characters or fewer.",
         "avatarUrlInvalid": "Avatar must be a valid URL."
+      }
+    },
+    "demo": {
+      "candidatePortal": {
+        "unavailable": "Viewing the portal as a candidate is only available in your demo workspace.",
+        "seededOnly": "Only the sample candidates that came with the demo can be viewed in the portal.",
+        "portalOff": "Turn on the candidate portal in Settings to view it as a candidate."
       }
     }
   }
