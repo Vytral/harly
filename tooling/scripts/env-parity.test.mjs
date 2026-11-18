@@ -22,7 +22,7 @@ const root = path.resolve(fileURLToPath(new URL("../..", import.meta.url)));
 const ALLOWLIST = new Map([
   // Set by the OS, shell, package manager or hosting platform.
   ...[
-    "APPDATA", "CI", "COLORTERM", "DO_NOT_TRACK", "NEXT_PHASE", "NEXT_RUNTIME",
+    "APPDATA", "CI", "COLORTERM", "NEXT_PHASE", "NEXT_RUNTIME",
     "NO_UPDATE_NOTIFIER", "PATH", "PORT", "SHELL", "SUDO_USER", "TERM",
     "XDG_CONFIG_HOME",
   ].map((name) => [name, "platform or tool variable"]),
@@ -32,7 +32,7 @@ const ALLOWLIST = new Map([
     "AGE_IDENTITY", "AGE_RECIPIENT", "HARLY_ASCII", "HARLY_CLI_TIMEOUT",
     "HARLY_CONFIG_DIR", "HARLY_IMAGE_REF", "HARLY_NO_UPDATE_CHECK",
     "HARLY_ORGANIZATION", "HARLY_PROXY_MODE", "HARLY_REQUIRED_DISK_GB",
-    "HARLY_RESOURCE_PROFILE", "HARLY_TELEMETRY", "HARLY_TELEMETRY_URL",
+    "HARLY_RESOURCE_PROFILE",
   ].map((name) => [name, "CLI-only setting (apps/docs/deployment/cli.mdx)"]),
   // Set by the Docker image or by compose.yaml itself.
   ...["HARLY_CACHE_DIR", "HARLY_INTERNAL_URL", "HARLY_MIGRATIONS_DIR", "HARLY_SERVER_PATH"]
@@ -56,8 +56,7 @@ const SKIPPED_DIRECTORIES = new Set([
   "node_modules", ".next", ".turbo", ".git", "dist", "build", "coverage",
   "test", "tests", "__tests__", "e2e", "test-support",
 ]);
-// apps/telemetry is a separate deployable with its own settings (see its README).
-const SKIPPED_PATHS = new Set(["apps/telemetry", "apps/docs", "docs"]);
+const SKIPPED_PATHS = new Set(["apps/docs", "docs"]);
 const SOURCE_FILE = /\.(?:[cm]?[jt]s|tsx)$/;
 const TEST_FILE = /\.(?:test|spec)\.|\.d\.ts$|\.integration\./;
 

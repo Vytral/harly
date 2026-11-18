@@ -16,6 +16,8 @@ const booleanFlags = new Set([
   "--json",
   "--launch",
   "--no-launch",
+  // Telemetry was removed in 0.7.1. Both flags are still accepted and ignored
+  // so existing install scripts keep working.
   "--no-telemetry",
   "--telemetry",
   "--non-interactive",

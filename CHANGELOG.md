@@ -22,6 +22,14 @@ operators. How to cut a release is in [RELEASING.md](RELEASING.md). The
 - Demo and first-run example data use coherent candidate profiles, fictional contact details, local portraits and downloadable PDF resumes. First-run data includes evaluations for candidates who have advanced past application review; demo timelines include candidates who need follow-up. Example content no longer repeats “Sample” throughout the recruiter experience, while the workspace disclosure and safe removal remain available.
 - Demo resumes use the configured storage provider, including S3.
 
+### Removed
+
+- The anonymous install telemetry collector (`apps/telemetry`) and its documentation page. Harly and its CLI no longer send any usage data.
+
+### Security
+
+- The dependency audit ignores [GHSA-fc5q-39xc-vjpf](https://github.com/advisories/GHSA-fc5q-39xc-vjpf) (ReDoS in `picomatch` 4.0.7) until a patched version exists. `picomatch` only reaches the install through test tooling (`vitest`, an optional peer of `better-auth`), never runs in a Harly server, and is only given glob patterns written by developers.
+
 ## [0.5.1] - 2026-11-16
 
 This release fixes the findings of a security and correctness audit. It adds
