@@ -13,7 +13,6 @@ pnpm + Turborepo monorepo on Node.js 22:
 | --- | --- |
 | `apps/web` | The product: Next.js app, REST API, MCP server (`/mcp`), candidate portal, career pages |
 | `apps/docs` | Public documentation site (Mintlify), served at https://docs.harly.dev |
-| `apps/telemetry` | Opt-in anonymous install telemetry collector |
 | `packages/db` | Drizzle schema and migrations. **Read [packages/db/AGENTS.md](packages/db/AGENTS.md) before touching it.** |
 | `packages/*` | Shared auth, api, emails, storage, ui, validators, config |
 | `tooling/harly` | `@harly/cli`, the installer and operations CLI (published to npm) |
