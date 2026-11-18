@@ -8,7 +8,7 @@ import { buildWriteTools } from "./write-tools";
 // tools per request, so no tool may reach it marked strict.
 describe("write tools sent to Anthropic", () => {
   it("are not marked strict", () => {
-    const tools = toolsForProvider(buildWriteTools() as Record<string, never>, "anthropic") as Record<
+    const tools = toolsForProvider(buildWriteTools() as unknown as Record<string, never>, "anthropic") as Record<
       string,
       { strict?: boolean }
     >;
