@@ -2,12 +2,12 @@ import { expect, test } from "./test-fixtures";
 import { FIXTURE } from "./constants";
 
 const languages = [
-  { locale: "en", label: "Language" },
   { locale: "es", label: "Idioma" },
   { locale: "pt-BR", label: "Idioma" },
   { locale: "de", label: "Sprache" },
   { locale: "fr", label: "Langue" },
   { locale: "nl-NL", label: "Taal" },
+  { locale: "en", label: "Language" },
 ];
 
 test("account language selection persists across reloads", async ({ page, context }) => {
@@ -22,7 +22,7 @@ test("account language selection persists across reloads", async ({ page, contex
     await selector.selectOption(locale);
     await expect(selector).toHaveValue(locale);
     const save = page.locator("#harly-language ~ button");
-    if (await save.isEnabled()) await save.click();
+    await save.click();
     await expect(save).toBeDisabled();
     await expect(page.locator('label[for="harly-language"]')).toHaveText(label);
     await page.reload();
