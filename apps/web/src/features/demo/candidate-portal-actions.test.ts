@@ -11,6 +11,7 @@ const mocks = vi.hoisted(() => ({
   auditPortalEvent: vi.fn(async () => {}),
   isLiveSandboxWorkspace: vi.fn(async () => mocks.liveSandbox),
   requirePermission: vi.fn(async () => ({ organization: { id: "sandbox-1" } })),
+  workspaceContext: { organization: { id: "sandbox-1" } } as { organization: { id: string } } | null,
 }));
 
 vi.mock("@harly/db", () => {
@@ -35,6 +36,9 @@ vi.mock("@/features/workspaces/permissions-server", () => ({
 }));
 vi.mock("@/lib/portal-session", () => ({ establishPortalSession: mocks.establishPortalSession }));
 vi.mock("@/lib/portal-credentials", () => ({ auditPortalEvent: mocks.auditPortalEvent }));
+vi.mock("@/features/workspaces/context", () => ({
+  getWorkspaceContextOrNull: async () => mocks.workspaceContext,
+}));
 vi.mock("./sandbox-state", () => ({ isLiveSandboxWorkspace: mocks.isLiveSandboxWorkspace }));
 
 import {
@@ -116,6 +120,7 @@ describe("openDemoPortalAsSampleCandidateAction", () => {
   afterEach(() => {
     vi.unstubAllEnvs();
     mocks.liveSandbox = true;
+    mocks.workspaceContext = { organization: { id: "sandbox-1" } };
     vi.clearAllMocks();
   });
 
@@ -129,9 +134,18 @@ describe("openDemoPortalAsSampleCandidateAction", () => {
 
   it("sends a visitor without a demo workspace to the demo entry", async () => {
     vi.stubEnv("DEMO_MODE", "true");
-    mocks.requirePermission.mockRejectedValueOnce(new Error("no session"));
+    mocks.workspaceContext = null;
     const result = await openDemoPortalAsSampleCandidateAction();
     expect(result).toEqual({ ok: false, error: "unavailable", enterDemo: true });
+    expect(mocks.requirePermission).not.toHaveBeenCalled();
+    expect(mocks.establishPortalSession).not.toHaveBeenCalled();
+  });
+
+  it("shows an error, not the demo entry, when the permission lookup fails", async () => {
+    vi.stubEnv("DEMO_MODE", "true");
+    mocks.requirePermission.mockRejectedValueOnce(new Error("lookup failed"));
+    const result = await openDemoPortalAsSampleCandidateAction();
+    expect(result).toEqual({ ok: false, error: "unavailable" });
     expect(mocks.establishPortalSession).not.toHaveBeenCalled();
   });
 

@@ -12,6 +12,8 @@ import { requireCandidatePermission, requirePermission } from "@/features/worksp
 import { auditPortalEvent } from "@/lib/portal-credentials";
 import { establishPortalSession } from "@/lib/portal-session";
 
+import { getWorkspaceContextOrNull } from "@/features/workspaces/context";
+
 import { isLiveSandboxWorkspace } from "./sandbox-state";
 
 export type OpenDemoCandidatePortalResult =
@@ -94,11 +96,16 @@ export async function openDemoPortalAsSampleCandidateAction(): Promise<OpenDemoC
   const t = await getTranslations("server.demo.candidatePortal");
   if (!isDemoMode()) return { ok: false, error: t("unavailable") };
 
+  // No signed-in demo workspace yet: send the visitor to the demo entry.
+  if (!(await getWorkspaceContextOrNull())) {
+    return { ok: false, error: t("unavailable"), enterDemo: true };
+  }
   let workspaceId: string;
   try {
     workspaceId = (await requirePermission("candidates:view")).organization.id;
   } catch {
-    return { ok: false, error: t("unavailable"), enterDemo: true };
+    // Signed in but the lookup failed or is denied: show the error, keep the sandbox.
+    return { ok: false, error: t("unavailable") };
   }
   if (!(await isLiveSandboxWorkspace(workspaceId))) {
     return { ok: false, error: t("unavailable"), enterDemo: true };
@@ -109,7 +116,13 @@ export async function openDemoPortalAsSampleCandidateAction(): Promise<OpenDemoC
     .select({ id: candidates.id })
     .from(candidates)
     .innerJoin(organization, eq(organization.id, candidates.workspaceId))
-    .leftJoin(documentRequests, eq(documentRequests.candidateId, candidates.id))
+    .leftJoin(
+      documentRequests,
+      and(
+        eq(documentRequests.workspaceId, workspaceId),
+        eq(documentRequests.candidateId, candidates.id),
+      ),
+    )
     .where(
       and(
         eq(candidates.workspaceId, workspaceId),
