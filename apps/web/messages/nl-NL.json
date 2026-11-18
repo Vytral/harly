@@ -5245,7 +5245,8 @@
       "sandboxBoardRibbon": {
         "preview": "Voorbeeld van de Harly-demosandbox",
         "expires": "verloopt {time} UTC",
-        "backToBuilder": "Terug naar de builder"
+        "backToBuilder": "Terug naar de builder",
+        "candidatePortal": "Kandidatenportaal"
       },
       "demoLockedNotice": {
         "default": "Uitgeschakeld in de demo: deze actie zou de accountbeveiliging wijzigen of gegevens buiten je sandbox versturen."
@@ -5254,6 +5255,13 @@
         "title": "Zie wat deze kandidaat ziet",
         "description": "Open het kandidatenportaal als deze voorbeeldkandidaat: sollicitaties, fasen, gesprekken en documentverzoeken. Geen e-mail of inlog nodig.",
         "open": "Bekijken als kandidaat",
+        "error": "Het kandidatenportaal kon niet worden geopend. Probeer het opnieuw."
+      },
+      "demoPortalEntry": {
+        "title": "Verken je de demo?",
+        "description": "Sla het inloggen over en bekijk het portaal als een van de voorbeeldkandidaten: sollicitaties, gesprekken en documentverzoeken.",
+        "open": "Verkennen als voorbeeldkandidaat",
+        "opening": "Openen…",
         "error": "Het kandidatenportaal kon niet worden geopend. Probeer het opnieuw."
       }
     },

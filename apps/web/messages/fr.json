@@ -5245,7 +5245,8 @@
       "sandboxBoardRibbon": {
         "preview": "Aperçu de la démo Harly",
         "expires": "expire à {time} UTC",
-        "backToBuilder": "Retour au constructeur"
+        "backToBuilder": "Retour au constructeur",
+        "candidatePortal": "Portail candidat"
       },
       "demoLockedNotice": {
         "default": "Désactivé dans la démo : cette action modifierait la sécurité du compte ou enverrait des données hors de votre bac à sable."
@@ -5254,6 +5255,13 @@
         "title": "Voir ce que voit cette personne",
         "description": "Ouvre le portail candidat connecté en tant que cette personne d’exemple : candidatures, étapes, entretiens et demandes de documents. Sans e-mail ni connexion.",
         "open": "Voir en tant que candidat",
+        "error": "Impossible d’ouvrir le portail candidat. Réessayez."
+      },
+      "demoPortalEntry": {
+        "title": "Vous explorez la démo ?",
+        "description": "Passez la connexion et découvrez le portail comme l’un des candidats d’exemple : candidatures, entretiens et demandes de documents.",
+        "open": "Explorer comme candidat d’exemple",
+        "opening": "Ouverture…",
         "error": "Impossible d’ouvrir le portail candidat. Réessayez."
       }
     },

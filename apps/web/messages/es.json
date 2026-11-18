@@ -5245,7 +5245,8 @@
       "sandboxBoardRibbon": {
         "preview": "Vista previa del entorno de demo de Harly",
         "expires": "caduca {time} UTC",
-        "backToBuilder": "Volver al constructor"
+        "backToBuilder": "Volver al constructor",
+        "candidatePortal": "Portal de candidatos"
       },
       "demoLockedNotice": {
         "default": "Desactivado en la demo: esta acción cambiaría la seguridad de la cuenta o enviaría datos fuera de tu sandbox."
@@ -5254,6 +5255,13 @@
         "title": "Mira lo que ve esta persona",
         "description": "Abre el portal de candidatos con la sesión de esta persona de ejemplo: candidaturas, etapas, entrevistas y solicitudes de documentos. Sin correo ni inicio de sesión.",
         "open": "Ver como candidato",
+        "error": "No se pudo abrir el portal de candidatos. Inténtalo de nuevo."
+      },
+      "demoPortalEntry": {
+        "title": "¿Estás explorando la demo?",
+        "description": "Omite el inicio de sesión y ve el portal como uno de los candidatos de ejemplo: sus postulaciones, entrevistas y solicitudes de documentos.",
+        "open": "Explorar como candidato de ejemplo",
+        "opening": "Abriendo…",
         "error": "No se pudo abrir el portal de candidatos. Inténtalo de nuevo."
       }
     },
