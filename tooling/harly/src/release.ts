@@ -7,9 +7,9 @@ export type HarlyRelease = {
 };
 
 export const embeddedRelease: HarlyRelease = {
-  version: "0.5.1",
+  version: "0.5.2",
   image: "ghcr.io/vytral/harly",
-  digest: "sha256:43421fb2bb146e5984fb2bce3d01210b21ac3e153c874e08970a6505995e8d8f",
+  digest: "sha256:cf7399246a950c0863a49fd3a145ca14a06aa6932c1ccd3d372729436d6a4eda",
 };
 
 export const releaseTagImage = (release: HarlyRelease) => `${release.image}:${release.version}`;
