@@ -15,7 +15,11 @@
     "emailPlaceholder": "you@company.com"
   },
   "language": {
+    "title": "Interface language",
+    "description": "Choose the language Harly uses for menus, pages and messages in this browser.",
     "label": "Langue",
+    "save": "Save language",
+    "saving": "Saving…",
     "error": "Impossible d’enregistrer la langue. Réessayez."
   },
   "shell": {

@@ -21,6 +21,8 @@ operators. How to cut a release is in [RELEASING.md](RELEASING.md). The
 
 - Demo and first-run example data use coherent candidate profiles, fictional contact details, local portraits and downloadable PDF resumes. First-run data includes evaluations for candidates who have advanced past application review; demo timelines include candidates who need follow-up. Example content no longer repeats “Sample” throughout the recruiter experience, while the workspace disclosure and safe removal remain available.
 - Demo resumes use the configured storage provider, including S3.
+- The public demo (`DEMO_MODE=true`) starts in English for every visitor, whatever the browser language, until the visitor picks another language. Email language settings in the demo now read in English too.
+- The interface language on the account page sits in a titled card with a description and a Save button, matching the email language card below it.
 
 ### Removed
 
