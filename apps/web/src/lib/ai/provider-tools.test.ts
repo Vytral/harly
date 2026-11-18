@@ -4,7 +4,7 @@ import { z } from "zod";
 
 import { automationPatchV1Schema, automationPlanV1Schema } from "@/features/automations/definition/plan-compiler";
 
-import { anthropicStrictJsonSchema, prepareXaiPayload, toolsForProvider } from "./provider-tools";
+import { prepareXaiPayload, toolsForProvider } from "./provider-tools";
 
 type JsonSchema = {
   const?: unknown;
@@ -146,30 +146,26 @@ describe("toolsForProvider", () => {
 });
 
 describe("Anthropic strict tools", () => {
-  it("drops integer bounds from strict tool schemas but keeps validating them", async () => {
+  it("sends tools to Anthropic without strict, keeping schema and validation", async () => {
     const tools = {
       pick: tool({
         strict: true,
         description: "Pick a count.",
-        inputSchema: z.object({ count: z.number().int().min(1).max(5), note: z.string().max(10) }),
+        inputSchema: z.object({ count: z.number().int().min(1).max(5) }),
       }),
       loose: tool({ description: "Not strict.", inputSchema: z.object({ n: z.number().int().min(1) }) }),
     };
     const adapted = toolsForProvider(tools, "anthropic");
-    const sent = JSON.stringify(await asSchema(adapted.pick.inputSchema).jsonSchema);
-    expect(sent).not.toMatch(/minimum|maximum|maxLength/);
+    expect(adapted.pick.strict).toBe(false);
+    expect(adapted.pick.inputSchema).toBe(tools.pick.inputSchema);
     expect(adapted.loose).toBe(tools.loose);
-    const invalid = await asSchema(adapted.pick.inputSchema).validate?.({ count: 9, note: "ok" });
+    expect(tools.pick.strict).toBe(true);
+    const invalid = await asSchema(adapted.pick.inputSchema).validate?.({ count: 9 });
     expect(invalid?.success).toBe(false);
-    const valid = await asSchema(adapted.pick.inputSchema).validate?.({ count: 2, note: "ok" });
-    expect(valid?.success).toBe(true);
   });
 
-  it("strips nested bounds", () => {
-    const out = anthropicStrictJsonSchema({
-      type: "object",
-      properties: { list: { type: "array", items: { type: "integer", minimum: 0, maximum: 9 } as never } },
-    });
-    expect(JSON.stringify(out)).not.toMatch(/minimum|maximum/);
+  it("keeps strict for OpenAI", () => {
+    const tools = { pick: tool({ strict: true, description: "x", inputSchema: z.object({ a: z.string() }) }) };
+    expect(toolsForProvider(tools, "openai").pick.strict).toBe(true);
   });
 });
