@@ -48,7 +48,6 @@ import { pullWithProgress } from "./pull.js";
 import { updaterCommand, updaterHelp } from "./updater.js";
 import { installGlobalCli, offerGlobalCliInstallation } from "./global-cli.js";
 import { NPX_COMMAND, cliCommand, isNpxInvocation } from "./invocation.js";
-import { REFERRAL_OPTIONS, TELEMETRY_DISCLOSURE, reportInstall, resolveConsent, setTelemetryConsent, telemetryStatus, type Referral } from "./telemetry.js";
 import { readPrefs } from "./prefs.js";
 import { latestCliVersion, newerCliVersion, updateCheckEnabled } from "./cli-update-check.js";
 import { commandNameOf, groupEntries, renderCommandHelp, renderHelp, unknownCommandMessage, type HelpEntry } from "./help.js";
@@ -415,7 +414,6 @@ const commandHelp: HelpEntry[] = [
   ["harly uninstall [directory] [--remove-data]", "Stop and remove Harly"],
   ["harly deploy <railway|fly|digitalocean>", "Generate a cloud-platform config"],
   ["harly install-global [--yes]", "Install the CLI globally so you can just type harly"],
-  ["harly telemetry <status|enable|disable>", "Anonymous, opt-in install statistics"],
 ];
 
 /** One line when a newer CLI is published, from a once-a-day cache. Never
@@ -1668,8 +1666,6 @@ async function init() {
   }
   generationSpinner?.stop("Configuration ready");
 
-  let referral: Referral | undefined;
-  if (interactive) referral = await askTelemetryConsent();
   if (interactive) {
     const launchNow = flags.has("--launch")
       ? true
@@ -1689,7 +1685,6 @@ async function init() {
         envWritten,
         directory,
       });
-      await reportTelemetry(mode, referral);
     } else {
       p.outro(
         `Next: ${accent(`cd ${shellQuote(directory)} && ${cliCommand()}`)}`,
@@ -1704,7 +1699,6 @@ async function init() {
     if (flags.has("--launch")) {
       await launch(directory, true, false);
       if (jsonResultWritten) return;
-      await reportTelemetry(mode);
     }
     const result = resultOk("init", flags.has("--launch") ? "ready" : "generated", {
       directory,
@@ -1732,75 +1726,6 @@ async function init() {
   }
 }
 
-
-/**
- * Asks once, in a terminal, whether to share anonymous install statistics.
- * Defaults to no. Returns the optional "how did you hear" answer, which is only
- * asked after a yes. Never blocks the install: a cancelled prompt means "ask
- * again next time" and nothing is saved.
- */
-async function askTelemetryConsent(): Promise<Referral | undefined> {
-  try {
-    const prefs = await readPrefs();
-    const decision = resolveConsent({
-      prefs, noTelemetryFlag: flags.has("--no-telemetry"), telemetryFlag: flags.has("--telemetry"), interactive,
-    });
-    if (decision !== "ask") return prefs.telemetry?.referral;
-    p.note(TELEMETRY_DISCLOSURE, "Anonymous telemetry (optional)");
-    const answer = await p.confirm({ message: "Share anonymous install statistics?", initialValue: false });
-    if (typeof answer !== "boolean") return undefined;
-    if (!answer) {
-      await setTelemetryConsent(false);
-      return undefined;
-    }
-    const choice = await p.select<Referral>({
-      message: "How did you hear about Harly? (optional)",
-      initialValue: "skip",
-      options: REFERRAL_OPTIONS.map((entry) => ({ value: entry.value, label: entry.label })),
-    });
-    const referral = typeof choice === "string" ? choice : "skip";
-    await setTelemetryConsent(true, process.env, referral);
-    return referral;
-  } catch {
-    return undefined;
-  }
-}
-
-/** Sends the single anonymous install event when consent allows. Never throws. */
-async function reportTelemetry(mode: string, referral?: Referral): Promise<void> {
-  try {
-    await reportInstall({
-      prefs: await readPrefs(),
-      noTelemetryFlag: flags.has("--no-telemetry"),
-      telemetryFlag: flags.has("--telemetry"),
-      cliVersion,
-      deployMode: mode,
-      referral,
-    });
-  } catch {
-    // Telemetry must never affect the install.
-  }
-}
-
-async function telemetryCommand() {
-  const action = positionals[0] ?? "status";
-  if (positionals.length > 1 || !["status", "enable", "disable"].includes(action)) {
-    throw usageError("Usage: telemetry <status|enable|disable>.");
-  }
-  if (action !== "status") {
-    const saved = await setTelemetryConsent(action === "enable");
-    if (!saved.saved) throw new CliError("Could not save the telemetry choice to your config directory.", 1, "INTERNAL_ERROR");
-  }
-  const status = await telemetryStatus({ noTelemetryFlag: flags.has("--no-telemetry"), telemetryFlag: flags.has("--telemetry") });
-  if (json) {
-    writeResult(resultOk("telemetry", action === "status" ? "completed" : action === "enable" ? "enabled" : "disabled", {
-      enabled: status.enabled, reason: status.reason, endpoint: status.url, sideEffects: action !== "status",
-    }));
-    return;
-  }
-  humanOut(`Telemetry is ${status.enabled ? "ON" : "OFF"} (${status.reason}).\n`);
-  if (action === "status") humanOut(`\n${TELEMETRY_DISCLOSURE}\nEndpoint: ${status.url}\n`);
-}
 
 async function offerCliInstallation(directory: string, quietIfInstalled = false) {
   if (!interactive || !isNpxInvocation()) return;
@@ -4022,8 +3947,6 @@ async function main() {
       return statusCommand();
     case "install-global":
       return installGlobal();
-    case "telemetry":
-      return telemetryCommand();
     case "doctor":
       return doctor();
     case "setup-secret":

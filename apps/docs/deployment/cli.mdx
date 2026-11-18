@@ -149,13 +149,6 @@ checks the npm registry at most once a day, with a short timeout. Set
 `HARLY_NO_UPDATE_CHECK=1` to turn the check off. It never runs in CI, with
 `--json`, or with `--quiet`.
 
-### Anonymous telemetry
-
-`harly init` asks once, in an interactive terminal, whether to share anonymous
-install statistics. The default is no. See
-[CLI telemetry](/deployment/telemetry) for exactly what is sent and every way
-to opt out, including `harly telemetry disable` and `HARLY_TELEMETRY=0`.
-
 `init` also writes `HARLY_ORG_NAME` to `.env`, so the setup wizard does not ask
 for the company name again.
 
@@ -183,7 +176,6 @@ directory above it).
 | `harly uninstall [directory]` | Stops and removes Harly. |
 | `harly deploy <railway\|fly\|digitalocean>` | Provisions or prepares a cloud deployment. |
 | `harly install-global` | Installs this CLI globally with npm. |
-| `harly telemetry <status\|enable\|disable>` | Shows or changes anonymous install statistics. |
 
 ### `status`
 
@@ -236,16 +228,6 @@ Installs this CLI version globally with `npm install --global @harly/cli`, or
 refreshes an older global copy. It asks first in a terminal. Without a
 terminal, `--yes` is required. `--dry-run` shows the npm command and installs
 nothing.
-
-### `telemetry`
-
-```bash
-harly telemetry status      # default
-harly telemetry enable
-harly telemetry disable
-```
-
-Shows or saves your telemetry choice. See [CLI telemetry](/deployment/telemetry).
 
 ## Configure installer inputs
 

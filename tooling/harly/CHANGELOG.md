@@ -7,11 +7,15 @@
 - `harly backup prune [directory] --keep N` deletes all but the newest N archives in `backups/` (`--dry-run` previews). `harly update` and `harly restore` name their automatic rollback archives `harly-auto-<timestamp>` and keep only the newest 5. Archives you create with `harly backup` are never deleted automatically.
 - `harly init` generates `DOCUSEAL_SECRET_KEY_BASE`, so the bundled e-signature service starts with `COMPOSE_PROFILES=proxy,esign`.
 
+### Removed
+
+- Anonymous install telemetry is gone. `harly init` no longer asks about it and sends nothing, and the `harly telemetry` command and the `HARLY_TELEMETRY` and `HARLY_TELEMETRY_URL` settings no longer exist. `--telemetry` and `--no-telemetry` are still accepted and ignored, so existing install scripts keep working. A saved telemetry choice in the CLI preferences file is ignored.
+
 ### Changed
 
 - `harly init` writes a copy of the repository's `compose.yaml` (embedded at build time) instead of a separate template. New installs forward OAuth credentials (Microsoft, GitHub, LinkedIn, Slack, Zoom), `TRUSTED_PROXY_IPS`, `RATE_LIMIT_STORE`, `LOG_LEVEL`, `NATIVE_SIGN_SESSION_SECRET`, retention settings, Turnstile, database pool timeouts and the bundled `docuseal` service, and the generated `.env.example` lists every setting. Existing installs keep their `compose.yaml`; `harly update` does not rewrite it.
 - Help text and the README use the global `harly` command instead of `npx`.
-- The CLI documentation has a command reference (`status`, `update`/`upgrade`, `updater`, `install-global`, `telemetry`) and a page on CLI telemetry and how to opt out. Resource-profile thresholds in the docs match the installer.
+- The CLI documentation has a command reference (`status`, `update`/`upgrade`, `updater`, `install-global`). Resource-profile thresholds in the docs match the installer.
 
 ### Fixed
 
