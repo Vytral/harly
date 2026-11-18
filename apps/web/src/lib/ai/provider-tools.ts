@@ -12,8 +12,13 @@ import type { AiProviderId } from "./providers";
  * xAI rejects two things that the AI SDK emits: `additionalProperties: false`
  * (it already defaults to closed objects) and a `$ref` that points at a
  * definition still being written (the automation condition tree). Those are
- * removed from the request body. Anthropic's non-strict tool API accepts
- * both, and strict mode is not enabled on these tools.
+ * removed from the request body. Anthropic's tool API accepts both.
+ *
+ * Anthropic strict tools (`strict: true`, the write tools) reject numeric and
+ * length bounds such as `minimum`/`maximum` on an integer ("For 'integer'
+ * type, properties maximum, minimum are not supported"). Those keywords are
+ * removed from strict tool schemas sent to Anthropic; Harly still validates
+ * every call against the original Zod schema, so the bounds keep applying.
  */
 type JsonSchema = {
   type?: string | string[];
@@ -34,12 +39,25 @@ type JsonSchema = {
 const SCHEMA_MAP_KEYS = ["properties", "patternProperties", "$defs", "definitions"] as const;
 const SCHEMA_ARRAY_KEYS = ["anyOf", "oneOf", "allOf", "prefixItems"] as const;
 
-type HarlyTool = { inputSchema: FlexibleSchema<unknown> };
+type HarlyTool = { inputSchema: FlexibleSchema<unknown>; strict?: boolean };
+
+/** Keywords Anthropic strict tool schemas do not accept. */
+const ANTHROPIC_STRICT_UNSUPPORTED = [
+  "minimum",
+  "maximum",
+  "exclusiveMinimum",
+  "exclusiveMaximum",
+  "multipleOf",
+  "minLength",
+  "maxLength",
+  "maxItems",
+] as const;
 
 export function toolsForProvider<Tools extends Record<string, HarlyTool>>(
   tools: Tools,
   provider: AiProviderId,
 ): Tools {
+  if (provider === "anthropic") return adaptStrictAnthropicTools(tools);
   if (provider !== "google") return tools;
 
   const adapted = {} as Tools;
@@ -236,4 +254,56 @@ function matchBranch(value: unknown, branches: JsonSchema[]): JsonSchema | undef
     }
   }
   return undefined;
+}
+
+function adaptStrictAnthropicTools<Tools extends Record<string, HarlyTool>>(tools: Tools): Tools {
+  if (!Object.values(tools).some((t) => t.strict)) return tools;
+  const adapted = {} as Tools;
+  for (const [name, harlyTool] of Object.entries(tools) as Array<[keyof Tools, Tools[keyof Tools]]>) {
+    adapted[name] = harlyTool.strict ? adaptAnthropicStrictTool(harlyTool) : harlyTool;
+  }
+  return adapted;
+}
+
+function adaptAnthropicStrictTool<T extends HarlyTool>(harlyTool: T): T {
+  const original = asSchema(harlyTool.inputSchema);
+  return {
+    ...harlyTool,
+    inputSchema: jsonSchema(
+      async () => anthropicStrictJsonSchema((await original.jsonSchema) as JsonSchema) as JSONSchema7,
+      {
+        validate: async (value) =>
+          original.validate ? original.validate(value) : { success: true as const, value },
+      },
+    ),
+  };
+}
+
+export function anthropicStrictJsonSchema(schema: JsonSchema): JsonSchema {
+  const copy = { ...schema } as JsonSchema & Record<string, unknown>;
+  for (const key of ANTHROPIC_STRICT_UNSUPPORTED) delete copy[key];
+  // Only 0 and 1 are accepted for minItems.
+  if (typeof copy.minItems === "number" && copy.minItems > 1) delete copy.minItems;
+
+  for (const key of SCHEMA_MAP_KEYS) {
+    const nested = copy[key];
+    if (!nested) continue;
+    copy[key] = Object.fromEntries(
+      Object.entries(nested).map(([name, child]) => [name, anthropicStrictJsonSchema(child)]),
+    );
+  }
+  for (const key of SCHEMA_ARRAY_KEYS) {
+    const nested = copy[key];
+    if (!nested) continue;
+    copy[key] = nested.map((child) => anthropicStrictJsonSchema(child));
+  }
+  if (copy.items) {
+    copy.items = Array.isArray(copy.items)
+      ? copy.items.map((child) => anthropicStrictJsonSchema(child))
+      : anthropicStrictJsonSchema(copy.items);
+  }
+  if (copy.additionalProperties && typeof copy.additionalProperties === "object") {
+    copy.additionalProperties = anthropicStrictJsonSchema(copy.additionalProperties);
+  }
+  return copy;
 }

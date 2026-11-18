@@ -13,6 +13,10 @@ operators. How to cut a release is in [RELEASING.md](RELEASING.md). The
 
 ## [Unreleased]
 
+### Fixed
+
+- Harly AI with Anthropic models failed with "tools.N.custom: For 'integer' type, properties maximum, minimum are not supported". Number and length limits are no longer sent in the schemas of strict tools (the write tools); Harly still enforces them when it validates each call.
+
 ## [0.5.1] - 2026-11-18
 
 This release fixes the findings of a security and correctness audit. It adds

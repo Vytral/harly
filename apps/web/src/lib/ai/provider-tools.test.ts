@@ -4,7 +4,7 @@ import { z } from "zod";
 
 import { automationPatchV1Schema, automationPlanV1Schema } from "@/features/automations/definition/plan-compiler";
 
-import { prepareXaiPayload, toolsForProvider } from "./provider-tools";
+import { anthropicStrictJsonSchema, prepareXaiPayload, toolsForProvider } from "./provider-tools";
 
 type JsonSchema = {
   const?: unknown;
@@ -142,5 +142,34 @@ describe("toolsForProvider", () => {
     });
     expect(parsed?.success).toBe(true);
     if (parsed?.success) expect(parsed.value).toEqual({ version: "1", count: 2 });
+  });
+});
+
+describe("Anthropic strict tools", () => {
+  it("drops integer bounds from strict tool schemas but keeps validating them", async () => {
+    const tools = {
+      pick: tool({
+        strict: true,
+        description: "Pick a count.",
+        inputSchema: z.object({ count: z.number().int().min(1).max(5), note: z.string().max(10) }),
+      }),
+      loose: tool({ description: "Not strict.", inputSchema: z.object({ n: z.number().int().min(1) }) }),
+    };
+    const adapted = toolsForProvider(tools, "anthropic");
+    const sent = JSON.stringify(await asSchema(adapted.pick.inputSchema).jsonSchema);
+    expect(sent).not.toMatch(/minimum|maximum|maxLength/);
+    expect(adapted.loose).toBe(tools.loose);
+    const invalid = await asSchema(adapted.pick.inputSchema).validate?.({ count: 9, note: "ok" });
+    expect(invalid?.success).toBe(false);
+    const valid = await asSchema(adapted.pick.inputSchema).validate?.({ count: 2, note: "ok" });
+    expect(valid?.success).toBe(true);
+  });
+
+  it("strips nested bounds", () => {
+    const out = anthropicStrictJsonSchema({
+      type: "object",
+      properties: { list: { type: "array", items: { type: "integer", minimum: 0, maximum: 9 } as never } },
+    });
+    expect(JSON.stringify(out)).not.toMatch(/minimum|maximum/);
   });
 });
