@@ -27,7 +27,9 @@ export default async function NoWorkspacePage() {
     session.user.email,
   );
   if (pendingInvitation) {
-    redirect(`/invite/${pendingInvitation.id}`);
+    // Accept straight away: the recipient may never have opened the
+    // invitation email and simply signed in (with Google, for example).
+    redirect(`/invite/${pendingInvitation.id}?accept=1`);
   }
 
   return (
