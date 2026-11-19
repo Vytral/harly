@@ -11324,7 +11324,7 @@
         "ownerOrAdminOnly": "Nur Inhaber und Administratoren des Arbeitsbereichs können das tun.",
         "ownerOnly": "Nur der Inhaber des Arbeitsbereichs kann das tun.",
         "onlyOwnerGrantsOwner": "Nur ein Inhaber kann die Rolle Inhaber vergeben.",
-        "lowerRoleAssignOnly": "Du kannst nur eine Rolle mit weniger Rechten als deiner eigenen zuweisen.",
+        "lowerRoleAssignOnly": "Du kannst nur eine Rolle mit gleichen oder weniger Rechten als deiner eigenen zuweisen.",
         "ownersLocked": "Inhaber können das Konto oder die Rolle eines anderen Inhabers nicht ändern.",
         "lowerRoleManageOnly": "Du kannst nur Mitglieder mit einer Rolle verwalten, die weniger Rechte hat.",
         "cannotGrantPermissions": "Du kannst keine Berechtigungen vergeben, die du selbst nicht hast.",

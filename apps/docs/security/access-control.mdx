@@ -27,10 +27,13 @@ does not grant or revoke access by itself.
 | **Interviewer** | See candidates on the jobs they are assigned to and submit interview feedback. Limited to **Assigned jobs only** by default. |
 | **Viewer** | Read-only access to jobs, candidates, tasks, documents and reports. Holds no write permission. |
 
-Admins can assign any role below their own. A role can only assign roles with
-strictly fewer permissions and an equal or narrower job scope, so a Recruiter
-can hand out Coordinator, Sourcer, Interviewer or Viewer, but not Hiring
-manager. Built-in roles other than Owner can be tuned in **Settings → Members &
+A member can assign their own role or any role below it, never Owner. A role
+can only assign roles whose permissions are all included in its own and whose
+job scope is equal or narrower: an Admin can invite or promote another Admin,
+and a Recruiter can hand out Recruiter, Coordinator, Sourcer, Interviewer or
+Viewer, but not Hiring manager. Changing the role of an existing member, or
+removing them, still requires a strictly higher role, so two Admins cannot
+demote each other; only the Owner can. Built-in roles other than Owner can be tuned in **Settings → Members &
 roles**; a workspace that already had a custom role with one of the new keys
 (`coordinator`, `sourcer`, `interviewer`, `viewer`) keeps that role's saved
 permissions and scope.

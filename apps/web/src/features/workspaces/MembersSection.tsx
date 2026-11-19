@@ -114,6 +114,7 @@ export function MembersAndRoles({
   members,
   invitations,
   assignableRoles,
+  invitableRoles,
   inviteLink,
   roles,
   canInviteMembers,
@@ -128,6 +129,8 @@ export function MembersAndRoles({
   members: WorkspaceMemberItem[];
   invitations: WorkspaceInvitationItem[];
   assignableRoles: AssignableRole[];
+  /** Roles the current member may hand out through invitations. */
+  invitableRoles: AssignableRole[];
   inviteLink: InviteLinkState;
   roles: RoleSummary[];
   canInviteMembers: boolean;
@@ -185,6 +188,7 @@ export function MembersAndRoles({
           members={members}
           invitations={invitations}
           assignableRoles={assignableRoles}
+          invitableRoles={invitableRoles}
           inviteLink={inviteLink}
           canInviteMembers={canInviteMembers}
           canEditMembers={canEditMembers}
@@ -267,6 +271,7 @@ function MembersPanel({
   members,
   invitations,
   assignableRoles,
+  invitableRoles,
   inviteLink,
   canInviteMembers,
   canEditMembers,
@@ -279,6 +284,8 @@ function MembersPanel({
   members: WorkspaceMemberItem[];
   invitations: WorkspaceInvitationItem[];
   assignableRoles: AssignableRole[];
+  /** Roles the current member may hand out through invitations. */
+  invitableRoles: AssignableRole[];
   inviteLink: InviteLinkState;
   canInviteMembers: boolean;
   canEditMembers: boolean;
@@ -380,15 +387,15 @@ function MembersPanel({
               {canManageInviteLinks ? (
                 <InviteLinkButton
                   inviteLink={inviteLink}
-                  assignableRoles={assignableRoles}
+                  assignableRoles={invitableRoles}
                 />
               ) : null}
               {canManageMemberAccounts ? (
-                <CreateMemberButton assignableRoles={assignableRoles} />
+                <CreateMemberButton assignableRoles={invitableRoles} />
               ) : null}
               {canInviteMembers ? (
                 <InviteTeammatesSheet
-                  assignableRoles={assignableRoles}
+                  assignableRoles={invitableRoles}
                   pendingInvitations={invitations}
                   trigger={
                     <Button>

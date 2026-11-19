@@ -27,7 +27,10 @@ import {
   getSidebarBranding,
   listUserWorkspaceOptions,
 } from "@/features/workspaces/data";
-import { listWorkspaceRoles } from "@/features/workspaces/permissions-server";
+import {
+  filterAssignableRoles,
+  listWorkspaceRoles,
+} from "@/features/workspaces/permissions-server";
 import { getMyTasksDueCount } from "@/features/tasks/data";
 import { getOwnProfileAction } from "@/features/people/actions";
 import { RealtimeProvider } from "@/components/dashboard/RealtimeProvider";
@@ -86,7 +89,10 @@ export default async function DashboardLayout({
     getMyTasksDueCount(),
     getOwnProfileAction(),
   ]);
-  const assignableRoles = roles.map((r) => ({ key: r.key, name: r.name }));
+  const assignableRoles = (await filterAssignableRoles(roles)).map((r) => ({
+    key: r.key,
+    name: r.name,
+  }));
 
   const workspace = {
     id: organization.id,

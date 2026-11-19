@@ -146,6 +146,21 @@ export function scopeExceedsPrivilege(actor: RoleScope, target: RoleScope) {
   );
 }
 
+/**
+ * True when the target role grants nothing the actor lacks: no permission the
+ * actor does not hold and no wider job scope. A peer role (same policy) is
+ * allowed. Used to decide which roles a member may assign.
+ */
+export function rolePolicyIsAtOrBelow(
+  actor: { permissions: readonly string[]; scope: RoleScope },
+  target: { permissions: readonly string[]; scope: RoleScope },
+): boolean {
+  return (
+    !exceedsPrivilege(actor.permissions, target.permissions) &&
+    !scopeExceedsPrivilege(actor.scope, target.scope)
+  );
+}
+
 /** True when the target role has strictly less effective access than the actor. */
 export function rolePolicyIsStrictlyBelow(
   actor: { permissions: readonly string[]; scope: RoleScope },

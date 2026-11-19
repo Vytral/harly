@@ -13,6 +13,7 @@ import {
   SETTINGS_SECTION_PERMISSION,
   builtinRoleDefaultScope,
   builtinRoleScope,
+  rolePolicyIsAtOrBelow,
   rolePolicyIsStrictlyBelow,
   unrestrictedRoleScope,
   type BuiltinRole,
@@ -340,6 +341,29 @@ describe("privilege ceiling with the built-in roles", () => {
     expect(below("viewer", "recruiter")).toBe(false);
     expect(below("sourcer", "recruiter")).toBe(false);
     expect(below("coordinator", "admin")).toBe(false);
+  });
+
+  it("lets an admin assign a peer admin role but never a broader one", () => {
+    const atOrBelow = (actor: BuiltinRole, target: BuiltinRole) =>
+      rolePolicyIsAtOrBelow(policy(actor), policy(target));
+    expect(atOrBelow("admin", "admin")).toBe(true);
+    for (const role of BUILTIN_ROLES) {
+      expect(atOrBelow(role, role), role).toBe(true);
+    }
+    expect(atOrBelow("recruiter", "admin")).toBe(false);
+    expect(atOrBelow("recruiter", "hiring_manager")).toBe(false);
+    expect(atOrBelow("viewer", "interviewer")).toBe(false);
+    expect(
+      rolePolicyIsAtOrBelow(policy("admin"), {
+        permissions: BUILTIN_ROLE_PERMISSIONS.admin,
+        scope: { jobAccess: "all", departments: [], regions: [] },
+      }),
+    ).toBe(true);
+    const assignedAdmin = {
+      permissions: BUILTIN_ROLE_PERMISSIONS.admin,
+      scope: { jobAccess: "assigned", departments: [], regions: [] } satisfies RoleScope,
+    };
+    expect(rolePolicyIsAtOrBelow(assignedAdmin, policy("admin"))).toBe(false);
   });
 
   it("does not let an assigned-only actor hand out a role with all-job access", () => {

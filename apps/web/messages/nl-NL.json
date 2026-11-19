@@ -11324,7 +11324,7 @@
         "ownerOrAdminOnly": "Alleen eigenaren en beheerders van de werkruimte kunnen dit doen.",
         "ownerOnly": "Alleen de eigenaar van de werkruimte kan dit doen.",
         "onlyOwnerGrantsOwner": "Alleen een eigenaar kan de rol Eigenaar toekennen.",
-        "lowerRoleAssignOnly": "Je kunt alleen een rol met minder rechten dan je eigen rol toewijzen.",
+        "lowerRoleAssignOnly": "Je kunt alleen een rol met dezelfde of minder rechten dan je eigen rol toewijzen.",
         "ownersLocked": "Eigenaars kunnen het account of de rol van een andere eigenaar niet wijzigen.",
         "lowerRoleManageOnly": "Je kunt alleen leden beheren met een rol die minder rechten heeft.",
         "cannotGrantPermissions": "Je kunt geen rechten toekennen die je zelf niet hebt.",
