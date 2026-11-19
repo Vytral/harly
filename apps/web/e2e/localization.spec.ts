@@ -25,6 +25,11 @@ test("account language selection persists across reloads", async ({ page, contex
     await save.click();
     await expect(save).toBeDisabled();
     await expect(page.locator('label[for="harly-language"]')).toHaveText(label);
+    // es and pt-BR share the label "Idioma", so the label alone does not prove
+    // the new locale was saved. Wait for the locale cookie before reloading.
+    await expect
+      .poll(async () => (await context.cookies()).find((cookie) => cookie.name === "harly_locale")?.value)
+      .toBe(locale);
     await page.reload();
     await expect(selector).toHaveValue(locale);
     expect((await context.cookies()).find((cookie) => cookie.name === "harly_locale")?.value).toBe(locale);
