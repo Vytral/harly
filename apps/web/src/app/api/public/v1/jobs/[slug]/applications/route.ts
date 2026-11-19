@@ -6,9 +6,7 @@ import {
   getPublicJobApplicationContext,
 } from "@/features/applications/data";
 import { sendApplicationReceivedEmails } from "@/features/applications/notifications";
-import { scheduleAutoScore } from "@/features/applications/auto-score";
-import { scheduleAutoDuplicateCheck } from "@/features/applications/auto-duplicates";
-import { scheduleApplicationResumeParse } from "@/features/applications/auto-resume-parse";
+import { runApplicationIntakeJobs } from "@/features/applications/intake-jobs";
 import {
   createApplicationFormSchema,
   validateApplicationQuestionAnswers,
@@ -131,12 +129,11 @@ export const POST = withApi(
     // application. Delivery itself remains retryable by the outbox worker.
     await sendApplicationReceivedEmails(result.email);
     after(async () => {
-      // Parse first so the auto-score sees the structured resume profile.
-      await scheduleApplicationResumeParse(result.candidateId, jobContext.workspaceId);
-      await Promise.allSettled([
-        scheduleAutoScore(result.applicationId, jobContext.workspaceId),
-        scheduleAutoDuplicateCheck(result.candidateId, jobContext.workspaceId),
-      ]);
+      await runApplicationIntakeJobs({
+        applicationId: result.applicationId,
+        candidateId: result.candidateId,
+        workspaceId: jobContext.workspaceId,
+      });
     });
 
     return apiOk(

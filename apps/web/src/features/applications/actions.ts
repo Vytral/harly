@@ -42,9 +42,7 @@ import {
   extractResumeAutofillFields,
   type ResumeAutofillFields,
 } from "@/features/applications/resume-autofill";
-import { scheduleAutoScore } from "@/features/applications/auto-score";
-import { scheduleAutoDuplicateCheck } from "@/features/applications/auto-duplicates";
-import { scheduleApplicationResumeParse } from "@/features/applications/auto-resume-parse";
+import { runApplicationIntakeJobs } from "@/features/applications/intake-jobs";
 
 const PARSE_LIMIT = 5;
 const PARSE_WINDOW_MS = 60_000;
@@ -434,12 +432,11 @@ export async function submitApplicationAction(
     // Run opted-in AI automations after the response without risking a dropped
     // fire-and-forget promise in serverless runtimes.
     after(async () => {
-      // Parse first so the auto-score sees the structured resume profile.
-      await scheduleApplicationResumeParse(result.candidateId, jobContext.workspaceId);
-      await Promise.allSettled([
-        scheduleAutoScore(result.applicationId, jobContext.workspaceId),
-        scheduleAutoDuplicateCheck(result.candidateId, jobContext.workspaceId),
-      ]);
+      await runApplicationIntakeJobs({
+        applicationId: result.applicationId,
+        candidateId: result.candidateId,
+        workspaceId: jobContext.workspaceId,
+      });
     });
 
     revalidatePath("/dashboard/candidates");

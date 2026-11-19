@@ -616,6 +616,7 @@ export async function createPublicApplication(
           and(
             eq(authMembers.userId, jobHiringTeam.userId),
             eq(authMembers.organizationId, workspaceId),
+            eq(authMembers.status, "active"),
           ),
         )
         .innerJoin(authUsers, eq(authUsers.id, jobHiringTeam.userId))

@@ -176,8 +176,12 @@ describe("POST /api/public/v1/jobs/[slug]/applications", () => {
     const scheduled = mocks.after.mock.calls.at(-1)?.[0] as () => Promise<void>;
     await scheduled();
     expect(mocks.scheduleApplicationResumeParse).toHaveBeenCalledWith(
-      expect.any(String),
-      expect.any(String),
+      "candidate-1",
+      "ws-1",
+    );
+    expect(mocks.scheduleAutoScore).toHaveBeenCalledWith("application-1", "ws-1");
+    expect(mocks.scheduleApplicationResumeParse.mock.invocationCallOrder[0]).toBeLessThan(
+      mocks.scheduleAutoScore.mock.invocationCallOrder[0],
     );
   });
 
