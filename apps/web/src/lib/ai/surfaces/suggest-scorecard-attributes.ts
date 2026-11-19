@@ -4,7 +4,7 @@ import { Output, generateText } from "ai";
 
 import { getModel } from "@/lib/ai/registry";
 import { recordAiUsage } from "@/lib/ai/usage";
-import { UNTRUSTED_DATA_GUARDRAIL } from "@/lib/ai/prompts/guardrails";
+import { UNTRUSTED_DATA_GUARDRAIL, withOutputLanguage } from "@/lib/ai/prompts/guardrails";
 import {
   scorecardAttributeSuggestionsSchema,
   type ScorecardAttributeSuggestions,
@@ -56,7 +56,7 @@ export async function suggestScorecardAttributesWithAI(
 
   const result = await generateText({
     model: getModel(config),
-    system: SYSTEM_PROMPT,
+    system: withOutputLanguage(SYSTEM_PROMPT, "the job posting"),
     prompt: `Suggest scorecard attributes for this role:\n\n${facts}`,
     output: Output.object({
       schema: scorecardAttributeSuggestionsSchema,

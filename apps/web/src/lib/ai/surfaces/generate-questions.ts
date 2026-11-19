@@ -2,6 +2,7 @@ import "server-only";
 
 import { Output, generateText } from "ai";
 import { z } from "zod";
+import { withOutputLanguage } from "@/lib/ai/prompts/guardrails";
 
 import { getModel } from "@/lib/ai/registry";
 import type { AiModelConfig } from "@/lib/ai/providers";
@@ -66,7 +67,7 @@ export async function generateScreeningQuestionsWithAI(
 
   const { output } = await generateText({
     model: getModel(config),
-    system: SYSTEM_PROMPT,
+    system: withOutputLanguage(SYSTEM_PROMPT, "the job posting"),
     prompt: `Generate screening questions for this role:\n\n${facts}`,
     output: Output.object({
       schema: suggestedQuestionsSchema,

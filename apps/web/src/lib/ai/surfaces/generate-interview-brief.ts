@@ -3,7 +3,7 @@ import "server-only";
 import { Output, generateText } from "ai";
 
 import { getModel } from "@/lib/ai/registry";
-import { UNTRUSTED_DATA_GUARDRAIL } from "@/lib/ai/prompts/guardrails";
+import { UNTRUSTED_DATA_GUARDRAIL, withOutputLanguage } from "@/lib/ai/prompts/guardrails";
 import { interviewBriefSchema, type InterviewBrief } from "@/lib/ai/schemas";
 import type { AiModelConfig } from "@/lib/ai/providers";
 import {
@@ -129,7 +129,7 @@ export async function generateInterviewBriefWithAI(
 
   const { output } = await generateText({
     model: getModel(config),
-    system: SYSTEM_PROMPT,
+    system: withOutputLanguage(SYSTEM_PROMPT, "the job posting"),
     prompt:
       `Generate an interview brief.\n\n## Candidate\n${candidateBlock}\n\n## Job\n${jobBlock}\n\n## Interview\n${interviewBlock}` +
       (scoreBlock ? `\n\n## Existing AI Score\n${scoreBlock}` : ""),
