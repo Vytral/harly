@@ -4,7 +4,7 @@ import { Output, generateText } from "ai";
 
 import { getModel } from "@/lib/ai/registry";
 import { recordAiUsage } from "@/lib/ai/usage";
-import { UNTRUSTED_DATA_GUARDRAIL } from "@/lib/ai/prompts/guardrails";
+import { UNTRUSTED_DATA_GUARDRAIL, withOutputLanguage } from "@/lib/ai/prompts/guardrails";
 import {
   scorecardRefinementSchema,
   type ScorecardRefinement,
@@ -57,7 +57,7 @@ export async function refineScorecardTextWithAI(
 
   const result = await generateText({
     model: getModel(config),
-    system: SYSTEM_PROMPT,
+    system: withOutputLanguage(SYSTEM_PROMPT, "the job posting or scorecard"),
     prompt:
       (input.jobTitle ? `Role: ${input.jobTitle}\n\n` : "") +
       `Refine this interviewer comment:\n"""\n${comment.slice(0, 6000)}\n"""`,

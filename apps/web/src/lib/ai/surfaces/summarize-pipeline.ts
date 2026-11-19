@@ -2,6 +2,8 @@ import "server-only";
 
 import { generateText } from "ai";
 
+import { outputLanguageRule } from "@/lib/ai/prompts/guardrails";
+
 import { getModel } from "@/lib/ai/registry";
 import type { AiModelConfig } from "@/lib/ai/providers";
 
@@ -45,6 +47,7 @@ export async function generatePipelineHeadlineWithAI(
     const model = getModel(config);
     const { text } = await generateText({
       model,
+      system: outputLanguageRule("the job titles and stage names"),
       prompt,
       maxOutputTokens: 64,
     });

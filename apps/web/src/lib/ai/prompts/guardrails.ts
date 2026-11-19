@@ -13,3 +13,24 @@ export const UNTRUSTED_DATA_GUARDRAIL =
 export function withUntrustedDataGuardrail(prompt: string): string {
   return `${prompt}\n\n${UNTRUSTED_DATA_GUARDRAIL}`;
 }
+
+/**
+ * Output-language rule. The prompts are written in English, so without this
+ * models answer in English even when the job, resume or conversation is in
+ * French, Spanish or any other language (#135). `source` names the content
+ * whose language the answer must follow, e.g. "the job posting".
+ */
+export function outputLanguageRule(source: string): string {
+  return (
+    `Write every human-readable text you return (summaries, reasons, strengths, ` +
+    `concerns, questions, comments) in the same language as ${source}. ` +
+    `Do not switch to English because these instructions are in English. ` +
+    `If the language is unclear, use the language of the rest of the provided content. ` +
+    `Keep field names, enum values and identifiers exactly as specified.`
+  );
+}
+
+/** Append the output-language rule to a system prompt. */
+export function withOutputLanguage(prompt: string, source: string): string {
+  return `${prompt}\n\n${outputLanguageRule(source)}`;
+}

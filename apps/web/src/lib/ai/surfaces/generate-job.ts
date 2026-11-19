@@ -1,6 +1,7 @@
 import "server-only";
 
 import { Output, generateText } from "ai";
+import { withOutputLanguage } from "@/lib/ai/prompts/guardrails";
 
 import { getModel } from "@/lib/ai/registry";
 import { jobDraftSchema, type JobDraft } from "@/lib/ai/schemas";
@@ -72,7 +73,7 @@ export async function generateJobDraftWithAI(
 
   const { output } = await generateText({
     model: getModel(config),
-    system: SYSTEM_PROMPT,
+    system: withOutputLanguage(SYSTEM_PROMPT, "the recruiter's input"),
     prompt: `Write a job description for the role below.\n\n## Role\n${facts}\n\n## Company identity and voice\n${companyContext}\n\nReturn a short summary paragraph and 3-5 sections (for example: Responsibilities, Requirements, Nice to have, Benefits), each with 3-6 concise bullet points. Only include Benefits when supported by the company context or role facts.`,
     output: Output.object({
       schema: jobDraftSchema,

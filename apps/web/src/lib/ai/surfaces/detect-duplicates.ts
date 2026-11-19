@@ -4,7 +4,7 @@ import { Output, generateText } from "ai";
 
 import { getModel } from "@/lib/ai/registry";
 import { recordAiUsage } from "@/lib/ai/usage";
-import { UNTRUSTED_DATA_GUARDRAIL } from "@/lib/ai/prompts/guardrails";
+import { UNTRUSTED_DATA_GUARDRAIL, withOutputLanguage } from "@/lib/ai/prompts/guardrails";
 import {
   duplicateCandidateSchema,
   type DuplicateCandidateResult,
@@ -72,7 +72,7 @@ export async function detectDuplicatesWithAI(
 
   const result = await generateText({
     model: getModel(config),
-    system: SYSTEM_PROMPT,
+    system: withOutputLanguage(SYSTEM_PROMPT, "the candidate records"),
     prompt: `Check if any suspect is a duplicate of the target candidate.\n\n## Target\n${targetBlock}\n\n## Suspects\n${suspectsBlock}`,
     output: Output.object({
       schema: duplicateCandidateSchema,

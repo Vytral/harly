@@ -3,7 +3,7 @@ import "server-only";
 import { Output, generateText } from "ai";
 
 import { getModel } from "@/lib/ai/registry";
-import { UNTRUSTED_DATA_GUARDRAIL } from "@/lib/ai/prompts/guardrails";
+import { UNTRUSTED_DATA_GUARDRAIL, withOutputLanguage } from "@/lib/ai/prompts/guardrails";
 import {
   resumeExtractionSchema,
   resumeStructuredSchema,
@@ -85,7 +85,7 @@ export async function parseResumeWithAI(
 
   const result = await generateText({
     model: getModel(config),
-    system: SYSTEM_PROMPT,
+    system: withOutputLanguage(SYSTEM_PROMPT, "the resume"),
     prompt: `${keywordHint}Extract the candidate's details from this resume.\n\nResume:\n"""\n${input}\n"""`,
     output: Output.object({
       schema: resumeExtractionSchema,
@@ -176,7 +176,7 @@ export async function parseResumeStructured(
 
   const result = await generateText({
     model: getModel(config),
-    system: STRUCTURED_SYSTEM_PROMPT,
+    system: withOutputLanguage(STRUCTURED_SYSTEM_PROMPT, "the resume"),
     prompt: `Extract the candidate's structured profile from this résumé.\n\nRésumé:\n"""\n${input}\n"""`,
     output: Output.object({
       schema: resumeStructuredSchema,

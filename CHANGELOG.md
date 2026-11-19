@@ -13,6 +13,10 @@ operators. How to cut a release is in [RELEASING.md](RELEASING.md). The
 
 ## [Unreleased]
 
+### Fixed
+
+- AI features answer in the language of the content they work on instead of defaulting to English: candidate scoring, interview questions, briefs and scorecards follow the job posting; resume summaries follow the resume; email drafts and replies follow the conversation; job drafts follow what the recruiter wrote (#135).
+
 ## [0.5.2] - 2026-11-18
 
 This patch release fixes Harly AI with Anthropic models and makes the candidate portal reachable in the public demo. No migrations.

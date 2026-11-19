@@ -6,7 +6,7 @@ import { NoObjectGeneratedError, Output, generateText } from "ai";
 
 import { getModel } from "@/lib/ai/registry";
 import { recordAiUsage } from "@/lib/ai/usage";
-import { UNTRUSTED_DATA_GUARDRAIL } from "@/lib/ai/prompts/guardrails";
+import { UNTRUSTED_DATA_GUARDRAIL, withOutputLanguage } from "@/lib/ai/prompts/guardrails";
 import { candidateScoreSchema, type CandidateScore } from "@/lib/ai/schemas";
 import type { AiModelConfig } from "@/lib/ai/providers";
 import {
@@ -258,7 +258,7 @@ export async function scoreCandidateWithAI(
     try {
       const result = await generateText({
         model: getModel(config),
-        system: SYSTEM_PROMPT,
+        system: withOutputLanguage(SYSTEM_PROMPT, "the job posting"),
         prompt,
         // Scoring should be repeatable, so temperature 0 where the model takes
         // it. Claude 5 and OpenAI reasoning models reject `temperature`, which
