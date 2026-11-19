@@ -44,15 +44,27 @@ variable before clicking **Deploy**; generate each secret with
 `openssl rand -base64 32`.
 
 **Production.** Deploy the full topology (web service, scheduler worker,
-pre-deploy `migrate` job, managed PostgreSQL) with `doctl`. Either run
-`harly deploy digitalocean prepare`, which writes a ready `app.yaml`, or copy
-`deploy/digitalocean/app.template.yaml`, replace every `REPLACE_ME` value and
-run:
+pre-deploy `migrate` job, managed PostgreSQL) with `doctl`, from a spec that
+holds the real secret values. Either:
+
+- Run `harly deploy digitalocean prepare --save-env`. It writes
+  `harly-digitalocean/app.yaml` (and `harly-digitalocean/.env`), both mode
+  `0600` and both containing secrets. Without `--save-env`, every secret in the
+  spec, including `DATABASE_URL`, is the placeholder
+  `<set-in-provider-dashboard>`; replace each one before deploying.
+- Or copy `deploy/digitalocean/app.template.yaml` to `app.yaml` and replace
+  every `REPLACE_ME` value.
+
+Then create the app from that file (for the CLI path,
+`--spec harly-digitalocean/app.yaml`):
 
 ```bash
 doctl apps create --spec app.yaml
 doctl apps update APP_ID --spec app.yaml
 ```
+
+Keep the spec out of Git and delete it once the app exists, or store it
+somewhere secret.
 
 Keep the runtime on `linux/amd64` and configure S3 before the first upload.
 The `migrate` job must finish before the web and scheduler services receive

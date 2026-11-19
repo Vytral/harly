@@ -34,7 +34,7 @@ test("self-host deployment assets retain required lifecycle settings", () => {
   assert.match(digitalOceanButton, /node \/app\/runtime\.mjs migrate;/);
   assert.match(
     digitalOceanButton,
-    /while true; do node \/app\/runtime\.mjs scheduler; sleep 5; done\) &/,
+    /\(set \+e; while true; do node \/app\/runtime\.mjs scheduler; sleep 5; done\) &/,
   );
   assert.match(digitalOceanButton, /exec node \/app\/runtime\.mjs serve/);
   assert.match(digitalOceanButton, /value: http:\/\/127\.0\.0\.1:3000/);

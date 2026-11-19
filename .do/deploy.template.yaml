@@ -83,11 +83,12 @@ spec:
         repository: harly
         tag: 0.5.2
       # Migrate (a failure stops the container), keep the scheduler running in
-      # the background, then hand the process over to the web server.
+      # the background (`set +e` so a scheduler crash restarts it instead of
+      # ending the loop), then hand the process over to the web server.
       run_command: >-
         sh -c 'set -e;
         node /app/runtime.mjs migrate;
-        (while true; do node /app/runtime.mjs scheduler; sleep 5; done) &
+        (set +e; while true; do node /app/runtime.mjs scheduler; sleep 5; done) &
         exec node /app/runtime.mjs serve'
       http_port: 3000
       instance_count: 1
