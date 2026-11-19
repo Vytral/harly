@@ -1,0 +1,107 @@
+# "Deploy to DigitalOcean" button template. The button
+# (cloud.digitalocean.com/apps/new?repo=...) reads only this file, and only the
+# app spec nested under `spec:`. Editing it changes what the button provisions.
+#
+# The button supports a single service plus an optional dev database: no
+# workers and no pre-deploy jobs. This template therefore runs all three Harly
+# roles in the one `web` container: migrations first, then the scheduler in a
+# restart loop in the background, then the web server. It is meant for trying
+# Harly. For production, deploy the full topology (separate scheduler worker,
+# PRE_DEPLOY migration job, managed PostgreSQL) from
+# deploy/digitalocean/app.template.yaml with doctl, or with
+# `harly deploy digitalocean`.
+#
+# The dev database is not for production data. Uploads need an S3-compatible
+# bucket: App Platform filesystems are ephemeral.
+#
+# IMPORTANT: HARLY_SETUP_SECRET is the token that claims the first owner
+# account at https://<your-app>/setup after deploy. You type its value into
+# the deploy form — write it down before clicking Deploy. App Platform
+# SECRET-type variables are write-only: once saved, the dashboard will never
+# show it to you again, and there is no recovery except editing the app's
+# env vars to set a new value and redeploying. Generate each secret with
+# `openssl rand -base64 32`.
+spec:
+  name: harly
+  region: nyc
+
+  databases:
+    - name: harly-db
+      engine: PG
+      version: "16"
+
+  envs:
+    - key: DATABASE_URL
+      scope: RUN_TIME
+      type: SECRET
+      value: ${harly-db.DATABASE_URL}
+    - key: HARLY_URL
+      scope: RUN_TIME
+      type: GENERAL
+      value: ${APP_URL}
+    - key: HARLY_INITIAL_ADMIN_EMAIL
+      scope: RUN_TIME
+      type: GENERAL
+    - key: STORAGE_PROVIDER
+      scope: RUN_TIME
+      type: GENERAL
+      value: s3
+    - key: S3_BUCKET
+      scope: RUN_TIME
+      type: GENERAL
+    - key: S3_REGION
+      scope: RUN_TIME
+      type: GENERAL
+      value: auto
+    - key: S3_ACCESS_KEY_ID
+      scope: RUN_TIME
+      type: SECRET
+    - key: S3_SECRET_ACCESS_KEY
+      scope: RUN_TIME
+      type: SECRET
+    - key: BETTER_AUTH_SECRET
+      scope: RUN_TIME
+      type: SECRET
+    - key: AI_ENCRYPTION_KEY
+      scope: RUN_TIME
+      type: SECRET
+    - key: STORAGE_UPLOAD_SECRET
+      scope: RUN_TIME
+      type: SECRET
+    - key: CRON_SECRET
+      scope: RUN_TIME
+      type: SECRET
+    - key: HARLY_SETUP_SECRET
+      scope: RUN_TIME
+      type: SECRET
+
+  services:
+    - name: web
+      image:
+        registry_type: GHCR
+        registry: vytral
+        repository: harly
+        tag: 0.5.2
+      # Migrate (a failure stops the container), keep the scheduler running in
+      # the background, then hand the process over to the web server.
+      run_command: >-
+        sh -c 'set -e;
+        node /app/runtime.mjs migrate;
+        (while true; do node /app/runtime.mjs scheduler; sleep 5; done) &
+        exec node /app/runtime.mjs serve'
+      http_port: 3000
+      instance_count: 1
+      instance_size_slug: apps-s-1vcpu-1gb
+      envs:
+        # The scheduler calls the web server inside the same container.
+        - key: HARLY_INTERNAL_URL
+          scope: RUN_TIME
+          type: GENERAL
+          value: http://127.0.0.1:3000
+      health_check:
+        http_path: /api/health/ready
+        port: 3000
+        initial_delay_seconds: 60
+        period_seconds: 30
+        timeout_seconds: 5
+        failure_threshold: 5

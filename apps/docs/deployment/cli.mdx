@@ -463,11 +463,13 @@ harly deploy digitalocean prepare \
 
 The CLI writes `fly.toml` or `app.yaml`, validates the resolved configuration,
 and prints the exact provider commands still required. It does not create
-provider resources. The repository's [`.do/app.yaml`](https://github.com/vytral/harly/blob/main/.do/app.yaml) is the
-canonical DigitalOcean App Platform spec and can also be used directly with
-`doctl apps create --spec .do/app.yaml` or
-`doctl apps update APP_ID --spec .do/app.yaml`; it provisions the multi-service
-App Platform topology. Use `--save-env` if you explicitly need a local `0600`
+provider resources. For DigitalOcean, the generated `app.yaml` provisions the
+full App Platform topology (web, scheduler worker, pre-deploy migration job);
+apply it with `doctl apps create --spec app.yaml`. The repository's
+[`deploy/digitalocean/app.template.yaml`](https://github.com/vytral/harly/blob/main/deploy/digitalocean/app.template.yaml)
+is the same spec with placeholders. The **Deploy to DigitalOcean** button uses
+[`.do/deploy.template.yaml`](https://github.com/vytral/harly/blob/main/.do/deploy.template.yaml),
+a single-container trial install. Use `--save-env` if you explicitly need a local `0600`
 secrets file.
 
 ## Operate an installation

@@ -12,7 +12,7 @@ serverless functions cannot provide the scheduler lifecycle Harly requires.
 | Platform | Best for | Database | Upload storage | Deployment path |
 | --- | --- | --- | --- | --- |
 | Render | Blueprint-based setup | Managed PostgreSQL | S3-compatible bucket | Deploy from `render.yaml` |
-| DigitalOcean | App Platform and managed infrastructure | Managed PostgreSQL | S3-compatible bucket | Deploy from `.do/app.yaml` |
+| DigitalOcean | App Platform and managed infrastructure | Managed PostgreSQL | S3-compatible bucket | Deploy button (trial) or `doctl` |
 | Railway | Config-as-code for one service; CLI for the full stack | Railway PostgreSQL | S3-compatible bucket | `railway.toml` or `harly` |
 | Fly.io | Teams comfortable with Fly processes | Managed PostgreSQL | S3-compatible bucket | `harly`, then `fly deploy` |
 
@@ -33,21 +33,32 @@ serverless functions cannot provide the scheduler lifecycle Harly requires.
 
 ## DigitalOcean App Platform
 
-Use `.do/app.yaml` as the canonical App Platform spec. It describes the web
-service, scheduler worker, pre-deploy migration job, managed PostgreSQL, health
-check, and runtime variables in one file. The repository's **Deploy to
-DigitalOcean** button reads this file automatically. With `doctl`, the same
-spec can be created or updated explicitly:
+There are two ways to run Harly on App Platform.
+
+**Deploy to DigitalOcean button (trial).** The button reads
+`.do/deploy.template.yaml`. DigitalOcean's button only supports one service
+plus a development database, so this template runs migrations, the scheduler
+and the web server in a single `web` container, with a dev PostgreSQL
+database. Use it to try Harly, not for production data. Fill in every prompted
+variable before clicking **Deploy**; generate each secret with
+`openssl rand -base64 32`.
+
+**Production.** Deploy the full topology (web service, scheduler worker,
+pre-deploy `migrate` job, managed PostgreSQL) with `doctl`. Either run
+`harly deploy digitalocean prepare`, which writes a ready `app.yaml`, or copy
+`deploy/digitalocean/app.template.yaml`, replace every `REPLACE_ME` value and
+run:
 
 ```bash
-doctl apps create --spec .do/app.yaml
-doctl apps update APP_ID --spec .do/app.yaml
+doctl apps create --spec app.yaml
+doctl apps update APP_ID --spec app.yaml
 ```
 
-For production, replace the development database entry with a managed
-PostgreSQL cluster and keep the runtime on `linux/amd64`. Configure S3 before
-the first upload. The `migrate` job must finish before the web and scheduler
-services receive traffic.
+Keep the runtime on `linux/amd64` and configure S3 before the first upload.
+The `migrate` job must finish before the web and scheduler services receive
+traffic. The scheduler reaches the web service through
+`HARLY_INTERNAL_URL=${web.PRIVATE_URL}`; keep that variable if you rename the
+`web` component.
 
 ## Railway
 
