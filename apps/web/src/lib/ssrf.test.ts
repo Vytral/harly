@@ -123,4 +123,22 @@ describe("pinned outbound requests", () => {
       await new Promise<void>((resolve) => server.close(() => resolve()));
     }
   });
+
+  it("returns bodyless responses (204) instead of throwing", async () => {
+    const server = createServer((_request, response) => {
+      response.writeHead(204);
+      response.end();
+    });
+    await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+    const { port } = server.address() as AddressInfo;
+    mocks.lookup.mockResolvedValue([{ address: "127.0.0.1", family: 4 }]);
+
+    try {
+      const response = await safeFetchHttp(`http://dev-hook.example:${port}/hook`, {}, true);
+      expect(response.status).toBe(204);
+      expect(response.body).toBeNull();
+    } finally {
+      await new Promise<void>((resolve) => server.close(() => resolve()));
+    }
+  });
 });

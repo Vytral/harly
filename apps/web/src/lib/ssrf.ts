@@ -203,11 +203,21 @@ async function fetchPinned(
       signal: init.signal ?? undefined,
       lookup: pinnedLookup(resolved),
     }, (incoming) => {
-      resolve(new Response(Readable.toWeb(incoming) as ReadableStream, {
-        status: incoming.statusCode ?? 502,
-        statusText: incoming.statusMessage ?? "",
-        headers: incoming.headers as HeadersInit,
-      }));
+      // The Response constructor rejects a body for 204, 205 and 304. Any
+      // conversion error must reject this promise, not escape the callback.
+      try {
+        const status = incoming.statusCode ?? 502;
+        const bodyless = status === 204 || status === 205 || status === 304;
+        if (bodyless) incoming.resume();
+        resolve(new Response(bodyless ? null : (Readable.toWeb(incoming) as ReadableStream), {
+          status,
+          statusText: incoming.statusMessage ?? "",
+          headers: incoming.headers as HeadersInit,
+        }));
+      } catch (error) {
+        incoming.destroy();
+        reject(error);
+      }
     });
     outgoing.once("error", reject);
     outgoing.end(body);
