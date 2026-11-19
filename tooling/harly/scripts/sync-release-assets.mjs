@@ -11,7 +11,7 @@ const digitalOceanPath = path.join(
   root,
   "deploy/digitalocean/app.template.yaml",
 );
-const digitalOceanButtonPath = path.join(root, ".do/app.yaml");
+const digitalOceanButtonPath = path.join(root, ".do/deploy.template.yaml");
 const renderPath = path.join(root, "render.yaml");
 const releaseModulePath = path.join(root, "tooling/harly/src/release.ts");
 const args = process.argv.slice(2);

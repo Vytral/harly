@@ -309,7 +309,7 @@ jobs:
             release-manifest.json \
             fly.toml \
             render.yaml \
-            .do/app.yaml \
+            .do/deploy.template.yaml \
             deploy/digitalocean/app.template.yaml \
             tooling/harly/src/release.ts
           git commit -m "chore(release): publish $RELEASE_VERSION [skip ci]"
