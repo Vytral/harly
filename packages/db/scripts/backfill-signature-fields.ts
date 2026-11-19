@@ -1,4 +1,4 @@
-import "dotenv/config";
+import "./load-env";
 
 import { and, eq, isNull, isNotNull, like } from "drizzle-orm";
 
