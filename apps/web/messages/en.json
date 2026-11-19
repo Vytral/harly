@@ -11324,7 +11324,7 @@
         "ownerOrAdminOnly": "Only workspace owners and admins can do this.",
         "ownerOnly": "Only the workspace owner can do this.",
         "onlyOwnerGrantsOwner": "Only an owner can grant the Owner role.",
-        "lowerRoleAssignOnly": "You can only assign a role with lower privileges than your own.",
+        "lowerRoleAssignOnly": "You can only assign a role with the same or fewer privileges than your own.",
         "ownersLocked": "Owners cannot modify another owner's account or role.",
         "lowerRoleManageOnly": "You can only manage members with a lower-privilege role.",
         "cannotGrantPermissions": "You can't grant permissions you don't have yourself.",

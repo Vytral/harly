@@ -2,6 +2,7 @@ import { MembersAndRoles } from "@/features/workspaces/MembersSection";
 import { getWorkspaceSettingsData } from "@/features/workspaces/data";
 import {
   can,
+  filterAssignableRoles,
   listWorkspaceRoles,
   requirePagePermission,
 } from "@/features/workspaces/permissions-server";
@@ -26,6 +27,11 @@ export default async function MembersSettingsPage() {
     name: role.name,
   }));
 
+  const invitableRoles = (await filterAssignableRoles(roles)).map((role) => ({
+    key: role.key,
+    name: role.name,
+  }));
+
   // Managing another member's account (reset password / edit profile) is
   // owner-only; never a grantable permission.
   const canManageMemberAccounts = context.roleKey === "owner";
@@ -35,6 +41,7 @@ export default async function MembersSettingsPage() {
       members={members}
       invitations={invitations}
       assignableRoles={assignableRoles}
+      invitableRoles={invitableRoles}
       inviteLink={inviteLink}
       roles={roles}
       canInviteMembers={canInvite}

@@ -11324,7 +11324,7 @@
         "ownerOrAdminOnly": "Solo los propietarios y administradores del espacio de trabajo pueden hacer esto.",
         "ownerOnly": "Solo el propietario del espacio de trabajo puede hacer esto.",
         "onlyOwnerGrantsOwner": "Solo un propietario puede otorgar el rol de propietario.",
-        "lowerRoleAssignOnly": "Solo puedes asignar roles con menos privilegios que el tuyo.",
+        "lowerRoleAssignOnly": "Solo puedes asignar roles con los mismos o menos privilegios que el tuyo.",
         "ownersLocked": "Los propietarios no pueden modificar la cuenta ni el rol de otro propietario.",
         "lowerRoleManageOnly": "Solo puedes gestionar miembros con un rol de menor privilegio.",
         "cannotGrantPermissions": "No puedes otorgar permisos que tú mismo no tienes.",

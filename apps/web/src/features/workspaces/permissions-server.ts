@@ -37,6 +37,7 @@ import {
   normalizeRoleScope,
   builtinRoleDefaultScope,
   builtinRoleScope,
+  rolePolicyIsAtOrBelow,
   rolePolicyIsStrictlyBelow,
   unrestrictedRoleScope,
   type BuiltinRole,
@@ -546,8 +547,10 @@ export async function requireOwner(message?: string) {
  * link, role change). Returns a user-facing error string, or `null` when the
  * assignment is allowed. Rules for anyone who is not the owner:
  *   - may never grant the all-powerful `owner` role, and
- *   - may only assign a role with strictly less effective access, so they
- *     cannot create a peer role or mint one more powerful than themselves.
+ *   - may only assign a role with the same or less effective access, so an
+ *     admin can add another admin but nobody can mint a role more powerful
+ *     than their own. Managing an existing peer still needs a strictly
+ *     higher role (see {@link manageMemberRolePrivilegeError}).
  */
 export async function assignRolePrivilegeError(
   context: WorkspaceContext,
@@ -561,7 +564,7 @@ export async function assignRolePrivilegeError(
     getRolePolicy(context.organization.id, context.roleKey),
     getRolePolicy(context.organization.id, targetRoleKey),
   ]);
-  if (!rolePolicyIsStrictlyBelow(actorPolicy, targetPolicy)) {
+  if (!rolePolicyIsAtOrBelow(actorPolicy, targetPolicy)) {
     return (await getTranslations("server.workspaces.permissions"))("lowerRoleAssignOnly");
   }
   return null;
@@ -729,4 +732,20 @@ export async function listWorkspaceRoles(): Promise<WorkspaceRoleSummary[]> {
     }));
 
   return [...builtin, ...customSummaries];
+}
+
+/**
+ * The roles the current member may hand out (invite, invite link, role
+ * change), so pickers never offer a role the server would refuse. Mirrors
+ * {@link assignRolePrivilegeError}, which stays the authority.
+ */
+export async function filterAssignableRoles<
+  T extends Pick<WorkspaceRoleSummary, "key" | "permissions" | "scope">,
+>(roles: T[]): Promise<T[]> {
+  const context = await getWorkspaceContext();
+  if (roleIsAllPowerful(context.roleKey)) return roles;
+  const actor = await getRolePolicy(context.organization.id, context.roleKey);
+  return roles.filter(
+    (role) => !roleIsAllPowerful(role.key) && rolePolicyIsAtOrBelow(actor, role),
+  );
 }

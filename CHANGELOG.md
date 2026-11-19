@@ -13,6 +13,10 @@ operators. How to cut a release is in [RELEASING.md](RELEASING.md). The
 
 ## [Unreleased]
 
+### Changed
+
+- Members can now assign a role with the same access as their own, not only a lower one. An Admin can invite or promote another Admin without the Owner; Owner still cannot be granted this way, and changing or removing an existing peer still requires a higher role. Invitation role pickers only list the roles you are allowed to assign (#138).
+
 ## [0.5.2] - 2026-11-18
 
 This patch release fixes Harly AI with Anthropic models and makes the candidate portal reachable in the public demo. No migrations.
