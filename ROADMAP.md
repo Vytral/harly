@@ -46,6 +46,12 @@ end to end, through the interface and the API.
 - **Wider API for automations.** More REST endpoints for tools like n8n and
   Zapier, starting with the job hiring team, so integrations can route and
   preprocess data themselves.
+- **Volunteer programs.** Recruit and manage volunteers next to paid roles:
+  volunteer openings, sign-ups, availability and onboarding, for associations
+  and nonprofits that run on both.
+- **More integrations.** Ready-made connections for the tools small teams and
+  associations already use, such as more calendar, storage, messaging and
+  automation providers.
 - **Proactive AI briefs.** Stalled candidates, missing feedback and follow-ups,
   every suggestion grounded in workspace data and confirmed before it writes
   anything.
