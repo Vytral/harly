@@ -5,27 +5,17 @@
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { config } from "dotenv";
+import { applyEnvFiles } from "./env-files";
 
 const packageDirectory = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
   "..",
 );
 
-const loaded: Record<string, string> = {};
-config({
-  path: [
+applyEnvFiles(
+  [
     path.resolve(packageDirectory, "../../.env.local"),
     path.resolve(packageDirectory, ".env"),
   ],
-  processEnv: loaded,
-  quiet: true,
-});
-
-// `.env.example` lists optional settings as empty strings. Skip them so the
-// scripts' own defaults (`process.env.X ?? default`) still apply.
-for (const [name, value] of Object.entries(loaded)) {
-  if (value !== "" && process.env[name] === undefined) {
-    process.env[name] = value;
-  }
-}
+  process.env,
+);
