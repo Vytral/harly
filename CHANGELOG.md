@@ -13,6 +13,10 @@ operators. How to cut a release is in [RELEASING.md](RELEASING.md). The
 
 ## [Unreleased]
 
+### Fixed
+
+- Outgoing requests that Harly checks against private networks failed on Node.js 20 and later with "Invalid IP address: undefined". This broke connecting Claude and other MCP apps that publish a client metadata document (the consent page showed `client_metadata_unverifiable`), and requests to Cal.com, DocuSeal, outgoing webhooks and logo downloads. Requests now go to the validated address again (#136).
+
 ## [0.5.2] - 2026-11-18
 
 This patch release fixes Harly AI with Anthropic models and makes the candidate portal reachable in the public demo. No migrations.

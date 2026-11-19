@@ -152,6 +152,32 @@ export async function resolveSafeAddress(
   return { address: address.address, family: address.family as 4 | 6 };
 }
 
+type LookupCallback = (
+  error: NodeJS.ErrnoException | null,
+  address: string | { address: string; family: number }[],
+  family?: number,
+) => void;
+
+/**
+ * A `lookup` for http(s).request that always answers with the validated
+ * address. Node 20+ connects with `autoSelectFamily` (Happy Eyeballs) and then
+ * asks for every address (`{ all: true }`), expecting an array back; answering
+ * with a single address there fails every request with ERR_INVALID_IP_ADDRESS.
+ */
+export function pinnedLookup(resolved: ResolvedAddress) {
+  return (
+    _hostname: string,
+    options: { all?: boolean } | number | undefined,
+    callback: LookupCallback,
+  ): void => {
+    if (typeof options === "object" && options?.all) {
+      callback(null, [{ address: resolved.address, family: resolved.family }]);
+      return;
+    }
+    callback(null, resolved.address, resolved.family);
+  };
+}
+
 /**
  * Make one request using a lookup callback pinned to the already validated
  * address. Native fetch performs its own DNS lookup after validation, which
@@ -175,7 +201,7 @@ async function fetchPinned(
       method: init.method ?? "GET",
       headers,
       signal: init.signal ?? undefined,
-      lookup: (_hostname, _options, callback) => callback(null, resolved.address, resolved.family),
+      lookup: pinnedLookup(resolved),
     }, (incoming) => {
       resolve(new Response(Readable.toWeb(incoming) as ReadableStream, {
         status: incoming.statusCode ?? 502,

@@ -1,10 +1,13 @@
+import { createServer } from "node:http";
+import type { AddressInfo } from "node:net";
+
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({ lookup: vi.fn() }));
 
 vi.mock("node:dns/promises", () => ({ lookup: mocks.lookup }));
 
-import { isBlockedHost, resolveSafeAddress, safeFetchHttp } from "./ssrf";
+import { isBlockedHost, pinnedLookup, resolveSafeAddress, safeFetchHttp } from "./ssrf";
 
 describe("SSRF host filtering", () => {
   beforeEach(() => {
@@ -83,5 +86,41 @@ describe("SSRF host filtering", () => {
       address: "127.0.0.1",
       family: 4,
     });
+  });
+});
+
+describe("pinned outbound requests", () => {
+  beforeEach(() => {
+    mocks.lookup.mockReset();
+  });
+
+  it("answers both single and all-address lookups with the validated address", () => {
+    const lookup = pinnedLookup({ address: "93.184.216.34", family: 4 });
+    const single = vi.fn();
+    const all = vi.fn();
+
+    lookup("public.example", { all: false }, single);
+    lookup("public.example", { all: true }, all);
+
+    expect(single).toHaveBeenCalledWith(null, "93.184.216.34", 4);
+    expect(all).toHaveBeenCalledWith(null, [{ address: "93.184.216.34", family: 4 }]);
+  });
+
+  it("reaches a hostname through the pinned address (Happy Eyeballs lookup)", async () => {
+    const server = createServer((_request, response) => {
+      response.writeHead(200, { "content-type": "application/json" });
+      response.end('{"ok":true}');
+    });
+    await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+    const { port } = server.address() as AddressInfo;
+    mocks.lookup.mockResolvedValue([{ address: "127.0.0.1", family: 4 }]);
+
+    try {
+      const response = await safeFetchHttp(`http://dev-metadata.example:${port}/doc`, {}, true);
+      expect(response.status).toBe(200);
+      await expect(response.json()).resolves.toEqual({ ok: true });
+    } finally {
+      await new Promise<void>((resolve) => server.close(() => resolve()));
+    }
   });
 });
