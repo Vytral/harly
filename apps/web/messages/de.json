@@ -1087,7 +1087,11 @@
     "statusAccepted": "angenommen",
     "statusRejected": "abgelehnt",
     "statusCanceled": "storniert",
-    "namePlaceholder": "Ada Lovelace"
+    "namePlaceholder": "Ada Lovelace",
+    "socialFailed": "Fortfahren mit {provider} nicht möglich. Verwende das Konto {email}.",
+    "useInvitedEmail": "Verwende das Konto {email}.",
+    "orPassword": "oder Passwort erstellen",
+    "signInFailed": "Die Anmeldung wurde nicht abgeschlossen. Verwende das Konto {email} und versuche es erneut."
   },
   "accessOnboarding": {
     "back": "Zurück",

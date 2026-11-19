@@ -13,6 +13,10 @@ operators. How to cut a release is in [RELEASING.md](RELEASING.md). The
 
 ## [Unreleased]
 
+### Fixed
+
+- Invited teammates can join with Google (or any other sign-in provider the workspace has enabled) straight from the invitation page, instead of having to create a password first. The password form only shows when password sign-in is enabled. An invited person who signs in from the login page without opening the invitation email now joins the workspace directly, and after signing in from an invitation the invitation is accepted without a second click (#137).
+
 ## [0.5.2] - 2026-11-18
 
 This patch release fixes Harly AI with Anthropic models and makes the candidate portal reachable in the public demo. No migrations.
