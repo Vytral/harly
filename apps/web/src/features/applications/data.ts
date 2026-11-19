@@ -601,9 +601,10 @@ export async function createPublicApplication(
         });
       }
 
-      // The "new application" email goes to the job's hiring team, like the
-      // in-app notification. Workspaces that don't use hiring teams keep the
-      // previous behavior: the owners get it.
+      // The "new application" email goes to the job's active hiring-team
+      // members, like the in-app notification. When the job has none, the
+      // active owners get it (the previous behavior). Inactive or suspended
+      // members never receive candidate details.
       const recipientColumns = {
         email: authUsers.email,
         preferredEmailLocale: authUsers.preferredEmailLocale,
@@ -637,6 +638,7 @@ export async function createPublicApplication(
                 and(
                   eq(authMembers.organizationId, workspaceId),
                   eq(authMembers.role, "owner"),
+                  eq(authMembers.status, "active"),
                 ),
               );
 
