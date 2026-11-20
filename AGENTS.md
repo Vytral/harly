@@ -24,6 +24,7 @@ pnpm + Turborepo monorepo on Node.js 22:
 ```bash
 pnpm install --frozen-lockfile
 pnpm dev                     # starts Postgres, Mailpit and DbGate in Docker, migrates, runs the web app
+pnpm dev:container           # same, but runs the web app and the job scheduler in containers
 pnpm lint && pnpm typecheck && pnpm test
 pnpm --filter web <script>   # one package
 pnpm --filter @harly/cli test

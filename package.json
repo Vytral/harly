@@ -9,6 +9,7 @@
   },
   "scripts": {
     "dev": "pnpm db:up && pnpm db:migrate && DOTENV_CONFIG_PATH=.env.local node -r dotenv/config ./node_modules/turbo/bin/turbo dev --filter=web",
+    "dev:container": "docker compose $([ -f .env.local ] && echo --env-file .env.local) -f tooling/docker/compose.dev.yml --profile app up -d && docker compose $([ -f .env.local ] && echo --env-file .env.local) -f tooling/docker/compose.dev.yml --profile app logs -f app scheduler",
     "dev:web": "DOTENV_CONFIG_PATH=.env.local node -r dotenv/config ./node_modules/turbo/bin/turbo dev --filter=web",
     "build": "DOTENV_CONFIG_PATH=.env.local node -r dotenv/config ./node_modules/turbo/bin/turbo build",
     "lint": "turbo lint",
@@ -21,7 +22,7 @@
     "generate:openapi": "pnpm --filter web generate:openapi",
     "clean": "rm -rf .next .turbo apps/*/.next apps/*/dist packages/*/dist tooling/*/dist",
     "db:up": "docker compose $([ -f .env.local ] && echo --env-file .env.local) -f tooling/docker/compose.dev.yml up -d",
-    "db:down": "docker compose $([ -f .env.local ] && echo --env-file .env.local) -f tooling/docker/compose.dev.yml down",
+    "db:down": "docker compose $([ -f .env.local ] && echo --env-file .env.local) -f tooling/docker/compose.dev.yml --profile app down",
     "db:generate": "pnpm --filter @harly/db db:generate",
     "db:migrate": "pnpm --filter @harly/db db:migrate",
     "db:verify-migrations": "pnpm --filter @harly/db db:verify-migrations",

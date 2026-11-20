@@ -290,6 +290,8 @@ The same file starts Mailpit to catch outgoing email. In **Settings → Email**,
 
 It also starts DbGate, a web database browser already connected to the development database, at `http://localhost:3100` (change the port with `HARLY_DEV_DBGATE_PORT`).
 
+To run the web app in a container instead of on the host, use `pnpm dev:container`. It starts the same services plus an `app` container that mounts the repository, applies migrations and runs the dev server on `http://localhost:3000` (`HARLY_DEV_APP_PORT`), and a `scheduler` container that runs the production scheduler's jobs (email outbox, automations, webhooks) against it. `pnpm db:down` stops them with the rest of the stack.
+
 ### Seeding the demo workspace
 
 `pnpm db:seed:demo` replaces every workspace-scoped row of the target workspace

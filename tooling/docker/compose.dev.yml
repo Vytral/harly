@@ -69,8 +69,85 @@ services:
     ports:
       - "127.0.0.1:${HARLY_DEV_DBGATE_PORT:-3100}:3000"
 
+  # Optional: runs the web app in a container instead of on the host. Not
+  # started by `pnpm db:up`; start it with `pnpm dev:container`. The repository
+  # is mounted at /workspace, so edits on the host reload the app.
+  #
+  # Compared with the production image (Dockerfile, compose.yaml): same Node
+  # major, `node` user, port and DATABASE_URL host. It differs on purpose: it
+  # runs `next dev` from source instead of the standalone build, and uses
+  # Debian (glibc) instead of Alpine (musl) so a Linux host and the container
+  # can share node_modules. No read-only root filesystem: `next dev` writes
+  # into the repository.
+  app:
+    profiles: ["app"]
+    image: node:22.23.5-bookworm-slim
+    container_name: harly-app
+    # The image's `node` user (uid/gid 1000), so files the app writes into the
+    # repository (.next, .turbo, node_modules) belong to a typical host user.
+    user: node
+    working_dir: /workspace
+    command: ["sh", "tooling/docker/dev-app.sh", "app"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    # Same probe as production. The first start compiles the app, hence the
+    # long start period.
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/api/health/ready').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
+      interval: 10s
+      timeout: 10s
+      start_period: 5m
+      retries: 6
+    logging:
+      driver: json-file
+      options:
+        max-size: ${HARLY_DEV_LOG_MAX_SIZE:-10m}
+        max-file: ${HARLY_DEV_LOG_MAX_FILES:-2}
+    environment:
+      PORT: "3000"
+      COREPACK_ENABLE_DOWNLOAD_PROMPT: "0"
+      NEXT_TELEMETRY_DISABLED: "1"
+      TURBO_TELEMETRY_DISABLED: "1"
+      # Keep pnpm's store out of the mounted repository.
+      npm_config_store_dir: /home/node/.pnpm-store
+    ports:
+      - "127.0.0.1:${HARLY_DEV_APP_PORT:-3000}:3000"
+    volumes:
+      - ../..:/workspace
+      # pnpm, the corepack cache and the pnpm store survive container restarts.
+      - harly_app_home:/home/node
+
+  # Optional, with the app container: runs the cron jobs (email outbox,
+  # automations, webhooks, ...) against it, like the scheduler service of
+  # compose.yaml. Without it, queued work never runs in development.
+  scheduler:
+    profiles: ["app"]
+    image: node:22.23.5-bookworm-slim
+    container_name: harly-scheduler
+    user: node
+    working_dir: /workspace
+    command: ["sh", "tooling/docker/dev-app.sh", "scheduler"]
+    # The scheduler waits for the app to answer itself (dev-app.sh), so
+    # `docker compose up` returns while the app is still compiling.
+    depends_on:
+      app:
+        condition: service_started
+    logging:
+      driver: json-file
+      options:
+        max-size: ${HARLY_DEV_LOG_MAX_SIZE:-10m}
+        max-file: ${HARLY_DEV_LOG_MAX_FILES:-2}
+    environment:
+      HARLY_INTERNAL_URL: http://app:3000
+      # tooling/runtime has no package.json of its own; resolve its imports
+      # (postgres, drizzle-orm) from pnpm's flat dependency directory.
+      NODE_PATH: /workspace/node_modules/.pnpm/node_modules
+    volumes:
+      - ../..:/workspace
+
 volumes:
+  harly_app_home:
+  # Before the stack was named harly-dev, this volume was
+  # curious-monkey_harly_postgres. CONTRIBUTING.md explains how to copy it.
   harly_postgres:
-    # Kept from the stack's former name (curious-monkey) so renaming the stack
-    # does not start existing development databases from an empty volume.
-    name: curious-monkey_harly_postgres

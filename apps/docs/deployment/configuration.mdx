@@ -288,6 +288,7 @@ Turnstile key pair) to show a challenge on the public application form.
 | `HARLY_DEV_ORIGINS` | empty | Development only. Extra origins allowed to open the dev server from another device. Ignored in production. |
 | `HARLY_DEV_MAILPIT_SMTP_PORT`, `HARLY_DEV_MAILPIT_UI_PORT` | `1025`, `8025` | Development only. Host ports of the Mailpit container that `pnpm dev` starts to catch outgoing email. |
 | `HARLY_DEV_DBGATE_PORT` | `3100` | Development only. Host port of the DbGate database browser that `pnpm dev` starts. |
+| `HARLY_DEV_APP_PORT` | `3000` | Development only. Host port of the optional app container started by `pnpm dev:container`. Keep `HARLY_URL` on the same port. |
 | `HARLY_CACHE_MAX_MB`, `HARLY_CACHE_MAX_AGE_DAYS` | `512`, `7` | Size and age limit of the Next.js cache volume. |
 
 ## Pinning third-party images
