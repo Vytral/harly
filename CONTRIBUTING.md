@@ -22,7 +22,8 @@ reviewable, tested, and safe to operate.
 
 The supported development toolchain is Node.js 22+, pnpm 9.15.0, Docker Engine
 24+, Docker Compose 2.20+, and PostgreSQL 16. Docker Compose provides
-PostgreSQL for the standard local workflow.
+PostgreSQL, a mail catcher and a database browser for the standard local
+workflow.
 
 ```bash
 corepack enable
@@ -37,7 +38,28 @@ The web app runs at `http://localhost:3000`. The default environment uses local
 storage and development-only values. If you need representative data, use
 `pnpm db:seed:demo`; do not import real candidate data.
 
-To stop the local database without removing its volume:
+`pnpm db:up` (also run by `pnpm dev`) starts the `harly-dev` Compose stack from
+`tooling/docker/compose.dev.yml`:
+
+| Service | Address | Purpose |
+| --- | --- | --- |
+| PostgreSQL | `localhost:5432` | Development database. |
+| Mailpit | SMTP `localhost:1025`, inbox `http://localhost:8025` | Catches every email the app sends. Nothing leaves your machine. |
+| DbGate | `http://localhost:3100` | Browse and edit the development database, already connected. |
+
+Mailpit and DbGate listen on `127.0.0.1` only. If another project already uses
+one of these ports, set `POSTGRES_PORT`, `HARLY_DEV_MAILPIT_SMTP_PORT`,
+`HARLY_DEV_MAILPIT_UI_PORT` or `HARLY_DEV_DBGATE_PORT` in `.env.local`, then run
+`pnpm db:up` again.
+
+To send email through Mailpit, finish `/setup`, then open **Settings → Email**,
+choose SMTP and enter host `localhost`, port `1025` (or your
+`HARLY_DEV_MAILPIT_SMTP_PORT`), TLS off and no credentials. For SMTP, **Test
+connection** only checks that the server answers; it does not send a message.
+To see an email in the inbox, trigger a real one, for example a magic-link
+sign-in or a team invitation.
+
+To stop the local stack without removing its volume:
 
 ```bash
 pnpm db:down

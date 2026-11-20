@@ -1,4 +1,4 @@
-name: curious-monkey
+name: harly-dev
 
 services:
   postgres:
@@ -27,5 +27,50 @@ services:
     volumes:
       - harly_postgres:/var/lib/postgresql/data
 
+  # Catches every email the dev server sends. In Settings → Email, choose SMTP
+  # with host localhost, the SMTP port below, no TLS and no credentials, then
+  # read the messages at http://localhost:<UI port>.
+  mailpit:
+    image: axllent/mailpit:v1.34.0
+    container_name: harly-mailpit
+    restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: ${HARLY_DEV_LOG_MAX_SIZE:-10m}
+        max-file: ${HARLY_DEV_LOG_MAX_FILES:-2}
+    ports:
+      - "127.0.0.1:${HARLY_DEV_MAILPIT_SMTP_PORT:-1025}:1025"
+      - "127.0.0.1:${HARLY_DEV_MAILPIT_UI_PORT:-8025}:8025"
+
+  # Web UI to browse the development database at http://localhost:<port>,
+  # already connected to the postgres service above.
+  dbgate:
+    image: dbgate/dbgate:7.3.6-alpine
+    container_name: harly-dbgate
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    logging:
+      driver: json-file
+      options:
+        max-size: ${HARLY_DEV_LOG_MAX_SIZE:-10m}
+        max-file: ${HARLY_DEV_LOG_MAX_FILES:-2}
+    environment:
+      CONNECTIONS: harly
+      LABEL_harly: Harly (dev)
+      ENGINE_harly: postgres@dbgate-plugin-postgres
+      SERVER_harly: postgres
+      PORT_harly: 5432
+      USER_harly: ${POSTGRES_USER:?Set POSTGRES_USER}
+      PASSWORD_harly: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD}
+      DATABASE_harly: ${POSTGRES_DB:?Set POSTGRES_DB}
+    ports:
+      - "127.0.0.1:${HARLY_DEV_DBGATE_PORT:-3100}:3000"
+
 volumes:
   harly_postgres:
+    # Kept from the stack's former name (curious-monkey) so renaming the stack
+    # does not start existing development databases from an empty volume.
+    name: curious-monkey_harly_postgres

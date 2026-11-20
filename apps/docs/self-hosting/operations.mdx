@@ -286,6 +286,10 @@ pnpm dev:web
 
 It lives at `tooling/docker/compose.dev.yml`. Development needs Node 22+, pnpm, Docker, about 4 GB of available RAM, and 10 GB of free disk for a comfortable full-monorepo workflow. Turbopack's persistent filesystem cache is disabled to prevent multi-gigabyte `.next` growth. `pnpm clean` removes generated workspace caches without touching PostgreSQL volumes.
 
+The same file starts Mailpit to catch outgoing email. In **Settings → Email**, choose SMTP with host `localhost`, port `1025`, no TLS and no credentials, then read the messages at `http://localhost:8025`. Set `HARLY_DEV_MAILPIT_SMTP_PORT` and `HARLY_DEV_MAILPIT_UI_PORT` in `.env.local` if those ports are taken.
+
+It also starts DbGate, a web database browser already connected to the development database, at `http://localhost:3100` (change the port with `HARLY_DEV_DBGATE_PORT`).
+
 ### Seeding the demo workspace
 
 `pnpm db:seed:demo` replaces every workspace-scoped row of the target workspace
