@@ -1088,10 +1088,10 @@
     "statusRejected": "afgewezen",
     "statusCanceled": "geannuleerd",
     "namePlaceholder": "Ada Lovelace",
-    "socialFailed": "Doorgaan met {provider} is niet gelukt. Gebruik het account {email}.",
-    "useInvitedEmail": "Gebruik het account {email}.",
-    "orPassword": "of maak een wachtwoord aan",
-    "signInFailed": "Aanmelden is niet voltooid. Gebruik het account {email} en probeer het opnieuw."
+    "socialFailed": "Unable to continue with {provider}. Use the account for {email}.",
+    "useInvitedEmail": "Use the account for {email}.",
+    "orPassword": "or create a password",
+    "signInFailed": "Sign-in did not complete. Use the account for {email} and try again."
   },
   "accessOnboarding": {
     "back": "Terug",
@@ -4627,7 +4627,7 @@
         "noneImported": "Er zijn geen kandidaten geïmporteerd.",
         "importedSummary": "<strong>{count}</strong> {count, plural, one {kandidaat} other {kandidaten}} geïmporteerd.",
         "alreadyInPipeline": "{count} al in de pipeline van deze vacature.",
-        "skippedSummary": "{count} {count, plural, one {onvolledig {source}-profiel overgeslagen} other {onvolledige {source}-profielen overgeslagen}}.",
+        "skippedSummary": "{count} incomplete {source} {count, plural, one {profile was} other {profiles were}} skipped.",
         "skippedRows": "{count, plural, one {# rij} other {# rijen}} overgeslagen:",
         "rowError": "Rij {row}: {reason}",
         "rowErrorWithEmail": "Rij {row} ({email}): {reason}",
@@ -5250,23 +5250,23 @@
         "preview": "Voorbeeld van de Harly-demosandbox",
         "expires": "verloopt {time} UTC",
         "backToBuilder": "Terug naar de builder",
-        "candidatePortal": "Kandidatenportaal"
+        "candidatePortal": "Candidate portal"
       },
       "demoLockedNotice": {
         "default": "Uitgeschakeld in de demo: deze actie zou de accountbeveiliging wijzigen of gegevens buiten je sandbox versturen."
       },
       "demoCandidatePortalCard": {
-        "title": "Zie wat deze kandidaat ziet",
-        "description": "Open het kandidatenportaal als deze voorbeeldkandidaat: sollicitaties, fasen, gesprekken en documentverzoeken. Geen e-mail of inlog nodig.",
-        "open": "Bekijken als kandidaat",
-        "error": "Het kandidatenportaal kon niet worden geopend. Probeer het opnieuw."
+        "title": "See what this candidate sees",
+        "description": "Open the candidate portal signed in as this sample candidate: their applications, stages, interviews and document requests. No email or login needed.",
+        "open": "View as candidate",
+        "error": "Couldn't open the candidate portal. Try again."
       },
       "demoPortalEntry": {
-        "title": "Verken je de demo?",
-        "description": "Sla het inloggen over en bekijk het portaal als een van de voorbeeldkandidaten: sollicitaties, gesprekken en documentverzoeken.",
-        "open": "Verkennen als voorbeeldkandidaat",
-        "opening": "Openen…",
-        "error": "Het kandidatenportaal kon niet worden geopend. Probeer het opnieuw."
+        "title": "Exploring the demo?",
+        "description": "Skip sign-in and see the portal as one of the sample candidates: their applications, interviews and document requests.",
+        "open": "Explore as a sample candidate",
+        "opening": "Opening…",
+        "error": "Couldn't open the candidate portal. Try again."
       }
     },
     "developers": {
@@ -7244,15 +7244,15 @@
         "accessCode": "Toegangscode",
         "continue": "Doorgaan",
         "checking": "Controleren…",
-        "noMethods": "Inloggen is op dit moment niet beschikbaar. Neem contact op met het bedrijf voor toegang.",
-        "signInMethod": "Inlogmethode",
-        "tabPassword": "Wachtwoord",
-        "tabMagicLink": "Link per e-mail",
-        "emailPlaceholder": "jij@voorbeeld.nl",
-        "passwordPlaceholder": "Je wachtwoord",
-        "showPassword": "Wachtwoord tonen",
-        "hidePassword": "Wachtwoord verbergen",
-        "magicHelp": "We sturen je een link per e-mail waarmee je inlogt. Geen wachtwoord nodig."
+        "noMethods": "Sign-in isn't available right now. Contact the company for access.",
+        "signInMethod": "Sign-in method",
+        "tabPassword": "Password",
+        "tabMagicLink": "Email link",
+        "emailPlaceholder": "you@example.com",
+        "passwordPlaceholder": "Your password",
+        "showPassword": "Show password",
+        "hidePassword": "Hide password",
+        "magicHelp": "We'll email you a link that signs you in. No password needed."
       },
       "portalPrivacyControls": {
         "title": "Je gegevens",
@@ -7539,7 +7539,7 @@
     "sampleData": {
       "sampleDataBanner": {
         "viewingTitle": "Je bekijkt voorbeeldgegevens.",
-        "viewingDescription": "Voorbeeldvacatures blijven van je carrièrepagina af, tenzij je ze publiceert.",
+        "viewingDescription": "Sample jobs stay off your careers page unless you publish them.",
         "removing": "Verwijderen…",
         "remove": "Voorbeeldgegevens verwijderen"
       }
@@ -8687,7 +8687,7 @@
         "added": "{count} toegevoegd",
         "done": "Klaar",
         "skipped": "{count} overgeslagen ({reason})",
-        "noneSent": "Geen uitnodiging verzonden",
+        "noneSent": "No invitation sent",
         "invitationCanceled": "Uitnodiging geannuleerd.",
         "cancelFailed": "Annuleren mislukt.",
         "canceling": "Annuleren…",
@@ -11364,7 +11364,7 @@
         "emptyResponse": "Het model gaf een leeg antwoord.",
         "connectionFailed": "Verbinding mislukt.",
         "connectionFailedWithReason": "Verbinding mislukt: {reason}",
-        "structuredOutputFailed": "Verbonden, maar gestructureerde uitvoer is mislukt, dus functies zoals cv-analyse en scoren werken niet: {reason}"
+        "structuredOutputFailed": "Connected, but structured output failed, so features such as resume parsing and scoring will not work: {reason}"
       },
       "calSettingsActions": {
         "invalidUrl": "Voer een geldige URL in.",
@@ -11977,7 +11977,7 @@
       "actions": {
         "loadFailed": "Voorbeeldgegevens konden niet worden geladen. Probeer het opnieuw.",
         "removeFailed": "Voorbeeldgegevens konden niet worden verwijderd. Probeer het opnieuw.",
-        "emailConflict": "Voorbeeldgegevens zijn niet geladen: een kandidaat gebruikt al een van de voorbeeld-e-mailadressen, zoals amara.okafor@careers.example. Hernoem of verwijder die kandidaat en laad daarna opnieuw."
+        "emailConflict": "Sample data was not loaded: a candidate already uses one of the sample email addresses, such as amara.okafor@careers.example. Rename or remove that candidate, then load again."
       }
     },
     "portal": {
@@ -12575,9 +12575,9 @@
     },
     "demo": {
       "candidatePortal": {
-        "unavailable": "Het portaal bekijken als kandidaat kan alleen in je demowerkruimte.",
-        "seededOnly": "Alleen de voorbeeldkandidaten van de demo kunnen in het portaal worden bekeken.",
-        "portalOff": "Zet het kandidatenportaal aan in Instellingen om het als kandidaat te bekijken."
+        "unavailable": "Viewing the portal as a candidate is only available in your demo workspace.",
+        "seededOnly": "Only the sample candidates that came with the demo can be viewed in the portal.",
+        "portalOff": "Turn on the candidate portal in Settings to view it as a candidate."
       }
     }
   }
