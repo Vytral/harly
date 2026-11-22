@@ -1088,10 +1088,10 @@
     "statusRejected": "refusée",
     "statusCanceled": "annulée",
     "namePlaceholder": "Ada Lovelace",
-    "socialFailed": "Impossible de continuer avec {provider}. Utilisez le compte {email}.",
-    "useInvitedEmail": "Utilisez le compte {email}.",
-    "orPassword": "ou créez un mot de passe",
-    "signInFailed": "La connexion n’a pas abouti. Utilisez le compte {email} et réessayez."
+    "socialFailed": "Unable to continue with {provider}. Use the account for {email}.",
+    "useInvitedEmail": "Use the account for {email}.",
+    "orPassword": "or create a password",
+    "signInFailed": "Sign-in did not complete. Use the account for {email} and try again."
   },
   "accessOnboarding": {
     "back": "Retour",
@@ -2496,7 +2496,7 @@
         "greeting": "Bonjour, {firstName}",
         "welcomeBack": "Bon retour",
         "subtitleEmpty": "Votre espace pour postuler chez {orgName}.",
-        "subtitleOpen": "Vous avez {count, plural, one {# candidature en cours} other {# candidatures en cours}} chez {orgName}.",
+        "subtitleOpen": "{count, plural, one {You have # open application with {orgName}.} other {You have # open applications with {orgName}.}}",
         "subtitleClosed": "Voici où en sont vos candidatures chez {orgName}.",
         "companyFallback": "cette entreprise",
         "waitingTitle": "Rien à faire pour le moment",
@@ -4627,7 +4627,7 @@
         "noneImported": "Aucun candidat n’a été importé.",
         "importedSummary": "<strong>{count}</strong> {count, plural, one {candidat importé} other {candidats importés}}.",
         "alreadyInPipeline": "{count} déjà dans le pipeline de ce poste.",
-        "skippedSummary": "{count} {count, plural, one {profil {source} incomplet ignoré} other {profils {source} incomplets ignorés}}.",
+        "skippedSummary": "{count} incomplete {source} {count, plural, one {profile was} other {profiles were}} skipped.",
         "skippedRows": "{count, plural, one {# ligne ignorée :} other {# lignes ignorées :}}",
         "rowError": "Ligne {row} : {reason}",
         "rowErrorWithEmail": "Ligne {row} ({email}) : {reason}",
@@ -5250,23 +5250,23 @@
         "preview": "Aperçu de la démo Harly",
         "expires": "expire à {time} UTC",
         "backToBuilder": "Retour au constructeur",
-        "candidatePortal": "Portail candidat"
+        "candidatePortal": "Candidate portal"
       },
       "demoLockedNotice": {
         "default": "Désactivé dans la démo : cette action modifierait la sécurité du compte ou enverrait des données hors de votre bac à sable."
       },
       "demoCandidatePortalCard": {
-        "title": "Voir ce que voit cette personne",
-        "description": "Ouvre le portail candidat connecté en tant que cette personne d’exemple : candidatures, étapes, entretiens et demandes de documents. Sans e-mail ni connexion.",
-        "open": "Voir en tant que candidat",
-        "error": "Impossible d’ouvrir le portail candidat. Réessayez."
+        "title": "See what this candidate sees",
+        "description": "Open the candidate portal signed in as this sample candidate: their applications, stages, interviews and document requests. No email or login needed.",
+        "open": "View as candidate",
+        "error": "Couldn't open the candidate portal. Try again."
       },
       "demoPortalEntry": {
-        "title": "Vous explorez la démo ?",
-        "description": "Passez la connexion et découvrez le portail comme l’un des candidats d’exemple : candidatures, entretiens et demandes de documents.",
-        "open": "Explorer comme candidat d’exemple",
-        "opening": "Ouverture…",
-        "error": "Impossible d’ouvrir le portail candidat. Réessayez."
+        "title": "Exploring the demo?",
+        "description": "Skip sign-in and see the portal as one of the sample candidates: their applications, interviews and document requests.",
+        "open": "Explore as a sample candidate",
+        "opening": "Opening…",
+        "error": "Couldn't open the candidate portal. Try again."
       }
     },
     "developers": {
@@ -7244,15 +7244,15 @@
         "accessCode": "Code d’accès",
         "continue": "Continuer",
         "checking": "Vérification…",
-        "noMethods": "La connexion n’est pas disponible pour le moment. Contactez l’entreprise pour obtenir un accès.",
-        "signInMethod": "Méthode de connexion",
-        "tabPassword": "Mot de passe",
-        "tabMagicLink": "Lien par e-mail",
-        "emailPlaceholder": "vous@exemple.com",
-        "passwordPlaceholder": "Votre mot de passe",
-        "showPassword": "Afficher le mot de passe",
-        "hidePassword": "Masquer le mot de passe",
-        "magicHelp": "Nous vous enverrons un lien par e-mail pour vous connecter. Aucun mot de passe nécessaire."
+        "noMethods": "Sign-in isn't available right now. Contact the company for access.",
+        "signInMethod": "Sign-in method",
+        "tabPassword": "Password",
+        "tabMagicLink": "Email link",
+        "emailPlaceholder": "you@example.com",
+        "passwordPlaceholder": "Your password",
+        "showPassword": "Show password",
+        "hidePassword": "Hide password",
+        "magicHelp": "We'll email you a link that signs you in. No password needed."
       },
       "portalPrivacyControls": {
         "title": "Vos données",
@@ -7539,7 +7539,7 @@
     "sampleData": {
       "sampleDataBanner": {
         "viewingTitle": "Vous consultez des données de démonstration.",
-        "viewingDescription": "Les offres de démonstration n’apparaissent pas sur votre page carrière, sauf si vous les publiez.",
+        "viewingDescription": "Sample jobs stay off your careers page unless you publish them.",
         "removing": "Suppression…",
         "remove": "Supprimer les données de démonstration"
       }
@@ -8687,7 +8687,7 @@
         "added": "{count} ajouté(s)",
         "done": "Terminé",
         "skipped": "{count} ignoré(s) ({reason})",
-        "noneSent": "Aucune invitation envoyée",
+        "noneSent": "No invitation sent",
         "invitationCanceled": "Invitation annulée.",
         "cancelFailed": "Impossible d’annuler.",
         "canceling": "Annulation…",
@@ -11364,7 +11364,7 @@
         "emptyResponse": "Le modèle a renvoyé une réponse vide.",
         "connectionFailed": "Échec de la connexion.",
         "connectionFailedWithReason": "Échec de la connexion : {reason}",
-        "structuredOutputFailed": "Connecté, mais la sortie structurée a échoué : des fonctions comme l’analyse de CV et la notation ne fonctionneront pas : {reason}"
+        "structuredOutputFailed": "Connected, but structured output failed, so features such as resume parsing and scoring will not work: {reason}"
       },
       "calSettingsActions": {
         "invalidUrl": "Saisissez une URL valide.",
@@ -11977,7 +11977,7 @@
       "actions": {
         "loadFailed": "Impossible de charger les données d’exemple. Réessayez.",
         "removeFailed": "Impossible de supprimer les données d’exemple. Réessayez.",
-        "emailConflict": "Les données d'exemple n'ont pas été chargées : un candidat utilise déjà l'une des adresses d'exemple, comme amara.okafor@careers.example. Renommez ou supprimez ce candidat, puis chargez à nouveau."
+        "emailConflict": "Sample data was not loaded: a candidate already uses one of the sample email addresses, such as amara.okafor@careers.example. Rename or remove that candidate, then load again."
       }
     },
     "portal": {
@@ -12575,9 +12575,9 @@
     },
     "demo": {
       "candidatePortal": {
-        "unavailable": "La vue du portail en tant que candidat n’est disponible que dans votre espace de démo.",
-        "seededOnly": "Seuls les candidats d’exemple fournis avec la démo peuvent être affichés dans le portail.",
-        "portalOff": "Activez le portail candidat dans les paramètres pour le voir en tant que candidat."
+        "unavailable": "Viewing the portal as a candidate is only available in your demo workspace.",
+        "seededOnly": "Only the sample candidates that came with the demo can be viewed in the portal.",
+        "portalOff": "Turn on the candidate portal in Settings to view it as a candidate."
       }
     }
   }
