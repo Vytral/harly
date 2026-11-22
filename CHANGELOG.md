@@ -19,6 +19,7 @@ operators. How to cut a release is in [RELEASING.md](RELEASING.md). The
 - Invited teammates can join with Google (or any other sign-in provider the workspace has enabled) straight from the invitation page, instead of having to create a password first. The password form only shows when password sign-in is enabled. An invited person who signs in from the login page without opening the invitation email now joins the workspace directly, and after signing in from an invitation the invitation is accepted without a second click (#137).
 - The "new application" email now goes to the job's hiring team, the same people who get the in-app notification. Jobs without a hiring team keep the previous behavior and email the workspace owners.
 - Resumes sent with an application through the career page or `POST /api/public/v1/jobs/{slug}/applications` are now parsed like a dashboard upload: the AI structured parse when AI is configured, the heuristic parse otherwise. Previously their summary, skills, experience and education stayed empty.
+- Outgoing requests that Harly checks against private networks failed on Node.js 20 and later with "Invalid IP address: undefined". This broke connecting Claude and other MCP apps that publish a client metadata document (the consent page showed `client_metadata_unverifiable`), and requests to Cal.com, DocuSeal, outgoing webhooks and logo downloads. Requests now go to the validated address again (#136).
 
 ## [0.5.2] - 2026-11-18
 
