@@ -117,7 +117,7 @@ runs the same commands.
 | Platform | Entry point | Notes |
 | --- | --- | --- |
 | Render | [Deploy to Render](https://render.com/deploy?repo=https://github.com/Vytral/harly) | Provisions web, scheduler, and managed PostgreSQL from `render.yaml`; S3-compatible storage is required for uploads. |
-| DigitalOcean App Platform | [Deploy on DigitalOcean](https://cloud.digitalocean.com/apps/new?repo=https://github.com/Vytral/harly/tree/main) | Uses `.do/app.yaml`; S3-compatible storage is required for uploads. |
+| DigitalOcean App Platform | [Deploy on DigitalOcean](https://cloud.digitalocean.com/apps/new?repo=https://github.com/Vytral/harly/tree/main) | Trial install from `.do/deploy.template.yaml` (single container, dev database); use `doctl` with `deploy/digitalocean/app.template.yaml` for production. S3-compatible storage is required for uploads. |
 | Railway | `harly deploy railway` | The CLI provisions the full multi-service topology through Railway's API. |
 | Fly.io | `harly deploy fly prepare` | Generates the deployment configuration; attach Managed Postgres and deploy. |
 

@@ -3530,6 +3530,8 @@ primary_region = "iad"
       "    run_command: node /app/runtime.mjs scheduler",
       "    instance_count: 1",
       "    instance_size_slug: apps-s-1vcpu-0.5gb",
+      "    envs:",
+      "      - { key: HARLY_INTERNAL_URL, scope: RUN_TIME, type: GENERAL, value: \"${web.PRIVATE_URL}\" }",
       "jobs:",
       "  - name: migrate",
       "    kind: PRE_DEPLOY",

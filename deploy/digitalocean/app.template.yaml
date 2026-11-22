@@ -1,5 +1,6 @@
-# Copy to .do/app.yaml, replace every REPLACE_ME value, then deploy with:
-# doctl apps create --spec .do/app.yaml
+# Copy to app.yaml (keep it out of Git once it holds secrets), replace every
+# REPLACE_ME value, then deploy with:
+# doctl apps create --spec app.yaml
 #
 # Attach a DigitalOcean Managed PostgreSQL database after creation and expose
 # its connection string as DATABASE_URL to every component. S3 is mandatory:
@@ -86,6 +87,12 @@ workers:
     run_command: node /app/runtime.mjs scheduler
     instance_count: 1
     instance_size_slug: apps-s-1vcpu-0.5gb
+    envs:
+      # The scheduler triggers jobs over HTTP on the web service's private URL.
+      - key: HARLY_INTERNAL_URL
+        scope: RUN_TIME
+        type: GENERAL
+        value: ${web.PRIVATE_URL}
 
 jobs:
   - name: migrate
