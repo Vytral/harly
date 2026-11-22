@@ -13,16 +13,24 @@ operators. How to cut a release is in [RELEASING.md](RELEASING.md). The
 
 ## [Unreleased]
 
+## [0.5.3] - 2026-11-22
+
+This patch release fixes connecting Claude and other MCP apps, makes the AI answer in the language of your jobs and candidates, and fixes invitations, application emails, resume parsing from public applications and the Deploy to DigitalOcean button. No migrations.
+
 ### Fixed
 
 - The "Invite teammates" sheet no longer reports "Done" when no invitation was sent. It now shows an error (or a warning when only some invitations went out) with the reason, and keeps the rejected rows in the form so you can fix them. Toast details are also readable again on the dark toast background (#139).
 - Invited teammates can join with Google (or any other sign-in provider the workspace has enabled) straight from the invitation page, instead of having to create a password first. The password form only shows when password sign-in is enabled. An invited person who signs in from the login page without opening the invitation email now joins the workspace directly, and after signing in from an invitation the invitation is accepted without a second click (#137).
-- The "new application" email now goes to the job's hiring team, the same people who get the in-app notification. Jobs without a hiring team keep the previous behavior and email the workspace owners.
-- Resumes sent with an application through the career page or `POST /api/public/v1/jobs/{slug}/applications` are now parsed like a dashboard upload: the AI structured parse when AI is configured, the heuristic parse otherwise. Previously their summary, skills, experience and education stayed empty.
+- The "new application" email now goes to the job's hiring team, the same people who get the in-app notification. Jobs without a hiring team keep the previous behavior and email the workspace owners. Only active members receive it (#126).
+- Resumes sent with an application through the career page or `POST /api/public/v1/jobs/{slug}/applications` are now parsed like a dashboard upload: the AI structured parse when AI is configured, the heuristic parse otherwise. Previously their summary, skills, experience and education stayed empty (#123).
 - Outgoing requests that Harly checks against private networks failed on Node.js 20 and later with "Invalid IP address: undefined". This broke connecting Claude and other MCP apps that publish a client metadata document (the consent page showed `client_metadata_unverifiable`), and requests to Cal.com, DocuSeal, outgoing webhooks and logo downloads. Requests now go to the validated address again (#136).
 - AI features answer in the language of the content they work on instead of defaulting to English: candidate scoring, interview questions, briefs and scorecards follow the job posting; resume summaries follow the resume; email drafts and replies follow the conversation; job drafts follow what the recruiter wrote (#135).
 - The "Deploy to DigitalOcean" button works. DigitalOcean reads the button spec only from `.do/deploy.template.yaml` (nested under `spec:`) and accepts one service plus a dev database, so the button now deploys a trial install that runs migrations, the scheduler and the web server in one container. For production, deploy the full topology from `deploy/digitalocean/app.template.yaml` or `harly deploy digitalocean prepare`.
 - DigitalOcean App Platform: the scheduler worker in `deploy/digitalocean/app.template.yaml` could not reach the web service, so scheduled jobs (email delivery, webhooks, evaluations) never ran. It now uses `HARLY_INTERNAL_URL=${web.PRIVATE_URL}`. If you deployed from this template, add that variable to your scheduler component.
+
+### Changed
+
+- Dutch (nl-NL) interface translations updated.
 
 ## [0.5.2] - 2026-11-18
 
@@ -989,7 +997,8 @@ upgrade holds locks until it commits. On managed Postgres, check that
 `statement_timeout` and `idle_in_transaction_session_timeout` are high enough to
 let it finish.
 
-[Unreleased]: https://github.com/Vytral/harly/compare/v0.5.2...HEAD
+[Unreleased]: https://github.com/Vytral/harly/compare/v0.5.3...HEAD
+[0.5.3]: https://github.com/Vytral/harly/releases/tag/v0.5.3
 [0.5.2]: https://github.com/Vytral/harly/releases/tag/v0.5.2
 [0.5.1]: https://github.com/Vytral/harly/releases/tag/v0.5.1
 [0.5.0]: https://github.com/Vytral/harly/releases/tag/v0.5.0
