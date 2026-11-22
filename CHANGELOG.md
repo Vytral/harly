@@ -20,6 +20,7 @@ operators. How to cut a release is in [RELEASING.md](RELEASING.md). The
 - The "new application" email now goes to the job's hiring team, the same people who get the in-app notification. Jobs without a hiring team keep the previous behavior and email the workspace owners.
 - Resumes sent with an application through the career page or `POST /api/public/v1/jobs/{slug}/applications` are now parsed like a dashboard upload: the AI structured parse when AI is configured, the heuristic parse otherwise. Previously their summary, skills, experience and education stayed empty.
 - Outgoing requests that Harly checks against private networks failed on Node.js 20 and later with "Invalid IP address: undefined". This broke connecting Claude and other MCP apps that publish a client metadata document (the consent page showed `client_metadata_unverifiable`), and requests to Cal.com, DocuSeal, outgoing webhooks and logo downloads. Requests now go to the validated address again (#136).
+- AI features answer in the language of the content they work on instead of defaulting to English: candidate scoring, interview questions, briefs and scorecards follow the job posting; resume summaries follow the resume; email drafts and replies follow the conversation; job drafts follow what the recruiter wrote (#135).
 
 ## [0.5.2] - 2026-11-18
 

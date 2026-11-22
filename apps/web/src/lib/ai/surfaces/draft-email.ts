@@ -5,7 +5,7 @@ import { z } from "zod";
 
 import { getModel } from "@/lib/ai/registry";
 import { recordAiUsage } from "@/lib/ai/usage";
-import { UNTRUSTED_DATA_GUARDRAIL } from "@/lib/ai/prompts/guardrails";
+import { UNTRUSTED_DATA_GUARDRAIL, withOutputLanguage } from "@/lib/ai/prompts/guardrails";
 import type { AiModelConfig } from "@/lib/ai/providers";
 import {
   ANONYMIZATION_BLOCKED_MESSAGES,
@@ -115,7 +115,7 @@ export async function draftEmailWithAI(
 
   const result = await generateText({
     model: getModel(config),
-    system: SYSTEM_PROMPT,
+    system: withOutputLanguage(SYSTEM_PROMPT, "the candidate's previous messages, or the job posting when there are none"),
     prompt,
     output: Output.object({
       schema: emailDraftSchema,
