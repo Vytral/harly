@@ -16,6 +16,7 @@ operators. How to cut a release is in [RELEASING.md](RELEASING.md). The
 ### Fixed
 
 - The "Invite teammates" sheet no longer reports "Done" when no invitation was sent. It now shows an error (or a warning when only some invitations went out) with the reason, and keeps the rejected rows in the form so you can fix them. Toast details are also readable again on the dark toast background (#139).
+- Invited teammates can join with Google (or any other sign-in provider the workspace has enabled) straight from the invitation page, instead of having to create a password first. The password form only shows when password sign-in is enabled. An invited person who signs in from the login page without opening the invitation email now joins the workspace directly, and after signing in from an invitation the invitation is accepted without a second click (#137).
 
 ## [0.5.2] - 2026-11-18
 

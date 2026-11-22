@@ -1087,7 +1087,11 @@
     "statusAccepted": "geaccepteerd",
     "statusRejected": "afgewezen",
     "statusCanceled": "geannuleerd",
-    "namePlaceholder": "Ada Lovelace"
+    "namePlaceholder": "Ada Lovelace",
+    "socialFailed": "Doorgaan met {provider} is niet gelukt. Gebruik het account {email}.",
+    "useInvitedEmail": "Gebruik het account {email}.",
+    "orPassword": "of maak een wachtwoord aan",
+    "signInFailed": "Aanmelden is niet voltooid. Gebruik het account {email} en probeer het opnieuw."
   },
   "accessOnboarding": {
     "back": "Terug",
