@@ -13,6 +13,10 @@ operators. How to cut a release is in [RELEASING.md](RELEASING.md). The
 
 ## [Unreleased]
 
+### Fixed
+
+- The "Invite teammates" sheet no longer reports "Done" when no invitation was sent. It now shows an error (or a warning when only some invitations went out) with the reason, and keeps the rejected rows in the form so you can fix them. Toast details are also readable again on the dark toast background (#139).
+
 ## [0.5.2] - 2026-11-18
 
 This patch release fixes Harly AI with Anthropic models and makes the candidate portal reachable in the public demo. No migrations.

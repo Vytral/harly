@@ -8683,6 +8683,7 @@
         "added": "{count} ajouté(s)",
         "done": "Terminé",
         "skipped": "{count} ignoré(s) ({reason})",
+        "noneSent": "Aucune invitation envoyée",
         "invitationCanceled": "Invitation annulée.",
         "cancelFailed": "Impossible d’annuler.",
         "canceling": "Annulation…",

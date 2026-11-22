@@ -8683,6 +8683,7 @@
         "added": "{count} hinzugefügt",
         "done": "Fertig",
         "skipped": "{count} übersprungen ({reason})",
+        "noneSent": "Keine Einladung gesendet",
         "invitationCanceled": "Einladung zurückgezogen.",
         "cancelFailed": "Zurückziehen nicht möglich.",
         "canceling": "Wird zurückgezogen…",

@@ -8683,6 +8683,7 @@
         "added": "{count} añadidos",
         "done": "Listo",
         "skipped": "{count} omitidos ({reason})",
+        "noneSent": "No se envió ninguna invitación",
         "invitationCanceled": "Invitación cancelada.",
         "cancelFailed": "No se pudo cancelar.",
         "canceling": "Cancelando…",

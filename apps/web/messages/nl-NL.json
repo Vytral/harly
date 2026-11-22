@@ -8683,6 +8683,7 @@
         "added": "{count} toegevoegd",
         "done": "Klaar",
         "skipped": "{count} overgeslagen ({reason})",
+        "noneSent": "Geen uitnodiging verzonden",
         "invitationCanceled": "Uitnodiging geannuleerd.",
         "cancelFailed": "Annuleren mislukt.",
         "canceling": "Annuleren…",
