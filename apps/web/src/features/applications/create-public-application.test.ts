@@ -27,6 +27,7 @@ vi.mock("@harly/db", async () => ({
   applications: {},
   candidates: {},
   jobs: {},
+  jobHiringTeam: {},
   jobStages: {
     id: "jobStages.id",
     name: "jobStages.name",
@@ -261,6 +262,8 @@ describe("F1-07 re-application duplicate detection order", () => {
       [],
       [],
       [],
+      // No hiring team on this job, so the owners get the email.
+      [],
       [{ email: "owner@example.com", preferredEmailLocale: "de" }],
     ];
     const calls = { update: 0, insert: 0 };
@@ -286,6 +289,7 @@ describe("F1-07 re-application duplicate detection order", () => {
     );
     const tx = {
       select: () => runnable,
+      selectDistinct: () => runnable,
       update: () => {
         calls.update += 1;
         return runnable;
@@ -344,6 +348,120 @@ describe("F1-07 re-application duplicate detection order", () => {
         }),
       ]),
     );
+  });
+
+  it("emails the job hiring team instead of the owners when the job has one", async () => {
+    const canonicalCandidate = {
+      id: "cand-1",
+      firstName: "Canonical",
+      lastName: "Profile",
+      email: "retry@example.com",
+      phone: "+56 9 1111 1111",
+      workspaceId: "ws-1",
+    };
+    const insertValues: unknown[] = [];
+    const queue = [
+      [JOB],
+      [{ ...ORG, legalConfigured: true, consentText: "Canonical privacy terms" }],
+      [canonicalCandidate],
+      [],
+      // Active stages of the job; the entry stage is the first non-terminal one.
+      [{ id: "stage-1", name: "Applied", kind: "applied", order: 0, archivedAt: null }],
+      [{ value: 1 }],
+      [{ id: "application-2" }],
+      [],
+      [],
+      [],
+      [],
+      // The job's hiring team; the owner lookup must not run.
+      [{ email: "recruiter@example.com", preferredEmailLocale: "fr" }],
+      [{ email: "owner@example.com", preferredEmailLocale: "de" }],
+    ];
+    const calls = { update: 0, insert: 0 };
+    const runnable = new Proxy(
+      function () {},
+      {
+        get(_target, prop) {
+          if (prop === "then") {
+            return (resolve: (value: unknown) => void) => resolve(queue.shift());
+          }
+          if (prop === "values") {
+            return (values: unknown) => {
+              insertValues.push(values);
+              return runnable;
+            };
+          }
+          return () => runnable;
+        },
+        apply() {
+          return runnable;
+        },
+      },
+    );
+    const tx = {
+      select: () => runnable,
+      selectDistinct: () => runnable,
+      update: () => {
+        calls.update += 1;
+        return runnable;
+      },
+      insert: () => {
+        calls.insert += 1;
+        return runnable;
+      },
+    };
+    mocks.transactionImpl.mockImplementation(async (fn: (tx: unknown) => Promise<unknown>) =>
+      fn(tx),
+    );
+
+    const result = await createPublicApplication(
+      { jobSlug: "another-job", workspaceSlug: "acme" },
+      VALUES,
+      {
+        consent: {
+          consentText: "untrusted browser text",
+          ipAddress: "203.0.113.20",
+          userAgent: "candidate-browser/1.0",
+        },
+      },
+    );
+
+    expect(result).toMatchObject({
+      ok: true,
+      candidateId: "cand-1",
+      email: {
+        candidateName: "Canonical Profile",
+        candidateEmail: "retry@example.com",
+        ownerEmails: ["recruiter@example.com"],
+        ownerRecipients: [
+          { email: "recruiter@example.com", preferredEmailLocale: "fr" },
+        ],
+      },
+    });
+    expect(calls.update).toBe(0);
+    expect(calls.insert).toBeGreaterThan(0);
+    expect(insertValues).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          candidateId: "cand-1",
+          jobId: "job-1",
+          source: "public_form",
+          pipelineOrder: 1,
+          snapshot: expect.objectContaining({
+            firstName: "Retry",
+            lastName: "User",
+          }),
+        }),
+        expect.objectContaining({
+          consentText: "Canonical privacy terms",
+          ipAddress: "203.0.113.20",
+          userAgent: "candidate-browser/1.0",
+          granted: true,
+        }),
+      ]),
+    );
+    // The unused owner row proves the owner lookup was skipped.
+    expect(queue).toEqual([[{ email: "owner@example.com", preferredEmailLocale: "de" }]]);
   });
 
   it("enforces legal consent inside the domain transaction", async () => {
