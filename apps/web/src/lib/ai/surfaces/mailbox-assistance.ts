@@ -5,7 +5,7 @@ import { z } from "zod";
 
 import { getModel } from "@/lib/ai/registry";
 import { recordAiUsage } from "@/lib/ai/usage";
-import { UNTRUSTED_DATA_GUARDRAIL } from "@/lib/ai/prompts/guardrails";
+import { UNTRUSTED_DATA_GUARDRAIL, withOutputLanguage } from "@/lib/ai/prompts/guardrails";
 import type { AiModelConfig } from "@/lib/ai/providers";
 import {
   ANONYMIZATION_BLOCKED_MESSAGES,
@@ -62,7 +62,7 @@ export async function generateMailboxSummaryWithAI(
   assertAnonymizationAllows(config, ANONYMIZATION_BLOCKED_MESSAGES.mailboxAssistance);
   const result = await generateText({
     model: getModel(config),
-    system: SYSTEM_PROMPT,
+    system: withOutputLanguage(SYSTEM_PROMPT, "the email thread"),
     prompt: `Summarize this recruiting email thread for a human recruiter. Return a short summary, the candidate's latest intent, one recommended next step, and unanswered questions.\n\n${transcript(input)}`,
     output: Output.object({ schema: summarySchema, name: "mailbox_thread_summary" }),
   });
@@ -78,7 +78,7 @@ export async function generateMailboxReplyWithAI(
   assertAnonymizationAllows(config, ANONYMIZATION_BLOCKED_MESSAGES.mailboxAssistance);
   const result = await generateText({
     model: getModel(config),
-    system: `${SYSTEM_PROMPT} Draft a plain-text reply for a recruiter to review. Do not send it. Do not claim a meeting is booked or make promises not present in the thread. Do not include a subject or greeting if it would be speculative; write a useful, editable body.`,
+    system: `${withOutputLanguage(SYSTEM_PROMPT, "the email thread")} Draft a plain-text reply for a recruiter to review. Do not send it. Do not claim a meeting is booked or make promises not present in the thread. Do not include a subject or greeting if it would be speculative; write a useful, editable body.`,
     prompt: `Draft a concise, professional reply to this email thread. Preserve the candidate's latest intent and ask only necessary follow-up questions.\n\n${transcript(input)}`,
     output: Output.object({ schema: replySchema, name: "mailbox_reply_draft" }),
   });

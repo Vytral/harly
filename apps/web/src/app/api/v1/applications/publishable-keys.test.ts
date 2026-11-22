@@ -10,6 +10,7 @@ const mocks = vi.hoisted(() => ({
   after: vi.fn(),
   scheduleAutoScore: vi.fn(),
   scheduleAutoDuplicateCheck: vi.fn(),
+  scheduleApplicationResumeParse: vi.fn(),
 }));
 
 vi.mock("next/server", async (importOriginal) => ({
@@ -46,6 +47,9 @@ vi.mock("@/features/applications/auto-score", () => ({
 }));
 vi.mock("@/features/applications/auto-duplicates", () => ({
   scheduleAutoDuplicateCheck: mocks.scheduleAutoDuplicateCheck,
+}));
+vi.mock("@/features/applications/auto-resume-parse", () => ({
+  scheduleApplicationResumeParse: mocks.scheduleApplicationResumeParse,
 }));
 
 import { POST as createPost } from "./route";

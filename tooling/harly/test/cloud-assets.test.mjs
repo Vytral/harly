@@ -49,7 +49,7 @@ test("release manifest is the single source of truth for deployment assets", asy
       readFile(path.join(repositoryRoot, "fly.toml"), "utf8"),
       readFile(path.join(repositoryRoot, "render.yaml"), "utf8"),
       readFile(path.join(repositoryRoot, "railway.toml"), "utf8"),
-      readFile(path.join(repositoryRoot, ".do/app.yaml"), "utf8"),
+      readFile(path.join(repositoryRoot, ".do/deploy.template.yaml"), "utf8"),
       readFile(path.join(packageRoot, "src/release.ts"), "utf8"),
       readFile(path.join(repositoryRoot, ".github/workflows/ci.yml"), "utf8"),
     ]);
@@ -170,7 +170,7 @@ test("version tags are the only published images", async () => {
     "release-manifest.json",
     "fly.toml",
     "render.yaml",
-    ".do/app.yaml",
+    ".do/deploy.template.yaml",
     "deploy/digitalocean/app.template.yaml",
     "tooling/harly/src/release.ts",
   ]) {
@@ -213,7 +213,7 @@ test("cloud documentation links and provider instructions resolve", async () => 
 
   for (const provider of ["Railway", "Fly.io", "DigitalOcean", "Render"])
     assert.match(guide, new RegExp(provider.replace(".", "\\.")));
-  assert.match(guide, /\.do\/app\.yaml/);
+  assert.match(guide, /\.do\/deploy\.template\.yaml/);
   assert.match(guide, /render\.yaml/);
   assert.doesNotMatch(guide, /Railway template editor/);
   assert.match(readme, /Deploy on DigitalOcean/);
@@ -227,7 +227,7 @@ test("cloud documentation links and provider instructions resolve", async () => 
 
   for (const relativePath of [
     "deploy/digitalocean/app.template.yaml",
-    ".do/app.yaml",
+    ".do/deploy.template.yaml",
     "render.yaml",
     "fly.toml",
     "railway.toml",

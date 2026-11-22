@@ -39,7 +39,9 @@ const Toaster = ({ ...props }: ToasterProps) => {
           toast:
             "!w-fit !max-w-[min(32rem,calc(100vw-2rem))] !mx-auto !items-center !gap-2.5 !rounded-full !border-0 !px-4 !py-2.5 !text-[13.5px] !font-medium !leading-5 !shadow-[var(--shadow-float)]",
           title: "!font-medium",
-          description: "!text-[12.5px] !opacity-70",
+          // Sonner paints descriptions in its own grey, which disappears on the
+          // dark pill; inherit the pill's label colour instead.
+          description: "!text-[12.5px] !text-inherit !opacity-70",
           // Sonner shows the close button only on toasts that ask for it;
           // keep it for errors and hide it everywhere else.
           closeButton:

@@ -12,6 +12,7 @@ import {
   candidates,
   candidateFiles,
   consentRecords,
+  jobHiringTeam,
   jobs,
   member as authMembers,
   organization,
@@ -600,19 +601,46 @@ export async function createPublicApplication(
         });
       }
 
-      const owners = await tx
-        .select({
-          email: authUsers.email,
-          preferredEmailLocale: authUsers.preferredEmailLocale,
-        })
-        .from(authMembers)
-        .innerJoin(authUsers, eq(authUsers.id, authMembers.userId))
+      // The "new application" email goes to the job's active hiring-team
+      // members, like the in-app notification. When the job has none, the
+      // active owners get it (the previous behavior). Inactive or suspended
+      // members never receive candidate details.
+      const recipientColumns = {
+        email: authUsers.email,
+        preferredEmailLocale: authUsers.preferredEmailLocale,
+      };
+      const hiringTeam = await tx
+        .selectDistinct(recipientColumns)
+        .from(jobHiringTeam)
+        .innerJoin(
+          authMembers,
+          and(
+            eq(authMembers.userId, jobHiringTeam.userId),
+            eq(authMembers.organizationId, workspaceId),
+            eq(authMembers.status, "active"),
+          ),
+        )
+        .innerJoin(authUsers, eq(authUsers.id, jobHiringTeam.userId))
         .where(
           and(
-            eq(authMembers.organizationId, workspaceId),
-            eq(authMembers.role, "owner"),
+            eq(jobHiringTeam.workspaceId, workspaceId),
+            eq(jobHiringTeam.jobId, job.id),
           ),
         );
+      const owners =
+        hiringTeam.length > 0
+          ? hiringTeam
+          : await tx
+              .select(recipientColumns)
+              .from(authMembers)
+              .innerJoin(authUsers, eq(authUsers.id, authMembers.userId))
+              .where(
+                and(
+                  eq(authMembers.organizationId, workspaceId),
+                  eq(authMembers.role, "owner"),
+                  eq(authMembers.status, "active"),
+                ),
+              );
 
       createdEvent.current = {
         workspaceId,

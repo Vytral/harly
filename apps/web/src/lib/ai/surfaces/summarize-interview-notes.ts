@@ -4,7 +4,7 @@ import { Output, generateText } from "ai";
 
 import { getModel } from "@/lib/ai/registry";
 import { recordAiUsage } from "@/lib/ai/usage";
-import { UNTRUSTED_DATA_GUARDRAIL } from "@/lib/ai/prompts/guardrails";
+import { UNTRUSTED_DATA_GUARDRAIL, withOutputLanguage } from "@/lib/ai/prompts/guardrails";
 import {
   interviewNotesSummarySchema,
   type InterviewNotesSummary,
@@ -45,7 +45,7 @@ export async function summarizeInterviewNotesWithAI(
   const notes = redactForAi(input.rawNotes, candidate.identity, anonymize);
   const result = await generateText({
     model: getModel(config),
-    system: SYSTEM_PROMPT,
+    system: withOutputLanguage(SYSTEM_PROMPT, "the interview notes"),
     prompt:
       `Structure these interview notes.\n\n` +
       `Candidate: ${candidate.label}\n` +

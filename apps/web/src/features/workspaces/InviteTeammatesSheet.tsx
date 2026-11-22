@@ -113,28 +113,47 @@ export function InviteTeammatesSheet({
     if (state === lastState.current) return;
     lastState.current = state;
     if (state.success) {
+      const sent = state.sent ?? 0;
+      const added = state.added ?? 0;
+      const skippedList = state.skipped ?? [];
       const summary =
-        state.sent && state.added
-          ? t("invitedAndAdded", { sent: state.sent, added: state.added })
-          : state.sent
-            ? t("invited", { count: state.sent })
-            : state.added
-              ? t("added", { count: state.added })
+        sent && added
+          ? t("invitedAndAdded", { sent, added })
+          : sent
+            ? t("invited", { count: sent })
+            : added
+              ? t("added", { count: added })
               : t("done");
-      const skipped = state.skipped?.length ?? 0;
-      toast.success(
-        summary,
-        skipped
-          ? {
-              description: t("skipped", {
-                count: skipped,
-                reason: state.skipped?.[0]?.reason ?? "",
-              }),
-            }
-          : undefined,
-      );
+      const skippedDescription = skippedList.length
+        ? t("skipped", {
+            count: skippedList.length,
+            reason: skippedList[0]?.reason ?? "",
+          })
+        : undefined;
+      if (skippedList.length && sent + added === 0) {
+        // Nothing went out: this is a failure, not a "Done".
+        toast.error(t("noneSent"), {
+          description: skippedDescription,
+          duration: 10_000,
+        });
+      } else if (skippedList.length) {
+        toast.warning(summary, {
+          description: skippedDescription,
+          duration: 10_000,
+        });
+      } else {
+        toast.success(summary);
+      }
+      // Keep the rejected rows so they can be fixed and sent again; clear
+      // everything that went through.
+      const skippedEmails = new Set(skippedList.map((s) => s.email));
       queueMicrotask(() => {
-        setRows([newRow(defaultRole)]);
+        setRows((prev) => {
+          const kept = prev.filter((r) =>
+            skippedEmails.has(r.email.trim().toLowerCase()),
+          );
+          return kept.length ? kept : [newRow(defaultRole)];
+        });
         if (shouldRefresh) router.refresh();
       });
     } else if (state.error) {

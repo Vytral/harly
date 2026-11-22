@@ -12,7 +12,7 @@ function read(relativePath) {
 
 test("self-host deployment assets retain required lifecycle settings", () => {
   const digitalOcean = read("deploy/digitalocean/app.template.yaml");
-  const digitalOceanButton = read(".do/app.yaml");
+  const digitalOceanButton = read(".do/deploy.template.yaml");
   const render = read("render.yaml");
   const compose = read("compose.yaml");
 
@@ -23,17 +23,22 @@ test("self-host deployment assets retain required lifecycle settings", () => {
   assert.match(digitalOcean, /run_command: node \/app\/runtime\.mjs scheduler/);
   assert.match(digitalOcean, /http_path: \/api\/health\/ready/);
 
+  assert.match(digitalOcean, /HARLY_INTERNAL_URL[\s\S]*?value: \$\{web\.PRIVATE_URL\}/);
+
+  // The button reads only the spec nested under `spec:` and accepts one service
+  // plus a dev database, so all three roles run in the web container.
+  assert.match(digitalOceanButton, /^spec:$/m);
   assert.match(digitalOceanButton, /^\s*- key: DATABASE_URL$/m);
+  assert.match(digitalOceanButton, /^ {2}databases:$/m);
+  assert.doesNotMatch(digitalOceanButton, /^ {2}(workers|jobs):$/m);
+  assert.match(digitalOceanButton, /node \/app\/runtime\.mjs migrate;/);
   assert.match(
     digitalOceanButton,
-    /run_command: node \/app\/runtime\.mjs migrate/,
+    /\(set \+e; while true; do node \/app\/runtime\.mjs scheduler; sleep 5; done\) &/,
   );
-  assert.match(
-    digitalOceanButton,
-    /run_command: node \/app\/runtime\.mjs scheduler/,
-  );
+  assert.match(digitalOceanButton, /exec node \/app\/runtime\.mjs serve/);
+  assert.match(digitalOceanButton, /value: http:\/\/127\.0\.0\.1:3000/);
   assert.match(digitalOceanButton, /http_path: \/api\/health\/ready/);
-  assert.match(digitalOceanButton, /^databases:$/m);
 
   assert.match(render, /preDeployCommand: node \/app\/runtime\.mjs migrate/);
   assert.match(render, /healthCheckPath: \/api\/health\/ready/);

@@ -1087,7 +1087,11 @@
     "statusAccepted": "aceptada",
     "statusRejected": "rechazada",
     "statusCanceled": "cancelada",
-    "namePlaceholder": "Ada Lovelace"
+    "namePlaceholder": "Ada Lovelace",
+    "socialFailed": "No se pudo continuar con {provider}. Usa la cuenta {email}.",
+    "useInvitedEmail": "Usa la cuenta {email}.",
+    "orPassword": "o crea una contraseña",
+    "signInFailed": "No se completó el inicio de sesión. Usa la cuenta {email} e inténtalo de nuevo."
   },
   "accessOnboarding": {
     "back": "Atrás",
@@ -8683,6 +8687,7 @@
         "added": "{count} añadidos",
         "done": "Listo",
         "skipped": "{count} omitidos ({reason})",
+        "noneSent": "No se envió ninguna invitación",
         "invitationCanceled": "Invitación cancelada.",
         "cancelFailed": "No se pudo cancelar.",
         "canceling": "Cancelando…",

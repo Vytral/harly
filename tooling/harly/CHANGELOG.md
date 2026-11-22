@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+## 0.7.2 — 2026-11-22
+
+### Fixed
+
+- `harly deploy digitalocean` sets `HARLY_INTERNAL_URL=${web.PRIVATE_URL}` on the scheduler worker. Without it the scheduler could not reach the web service and scheduled jobs never ran; add the variable to the scheduler component of apps created with an earlier version.
+
 ## 0.7.1 — 2026-11-18
 
 ### Added

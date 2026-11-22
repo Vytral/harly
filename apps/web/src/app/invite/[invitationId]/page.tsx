@@ -8,14 +8,19 @@ import { auth } from "@/lib/auth";
 import { AcceptInvitationButton } from "@/features/workspaces/AcceptInvitationButton";
 import { InviteOnboard } from "@/features/workspaces/InviteOnboard";
 import { getInvitationById } from "@/features/workspaces/data";
+import { getAvailableLoginMethods } from "@/features/auth/login-methods.server";
 
 type InvitePageProps = {
   params: Promise<{
     invitationId: string;
   }>;
+  searchParams: Promise<{ accept?: string; error?: string }>;
 };
 
-export default async function InvitePage({ params }: InvitePageProps) {
+export default async function InvitePage({
+  params,
+  searchParams,
+}: InvitePageProps) {
   const t = await getTranslations("accessInvitation");
   const roles: Record<string, string> = {
     owner: t("roleOwner"), admin: t("roleAdmin"), recruiter: t("roleRecruiter"),
@@ -23,6 +28,7 @@ export default async function InvitePage({ params }: InvitePageProps) {
     sourcer: t("roleSourcer"), interviewer: t("roleInterviewer"), viewer: t("roleViewer"),
   };
   const { invitationId } = await params;
+  const { accept, error: signInError } = await searchParams;
   const invitation = await getInvitationById(invitationId);
 
   if (!invitation) {
@@ -37,6 +43,9 @@ export default async function InvitePage({ params }: InvitePageProps) {
     session?.user.email.trim().toLowerCase() ===
     invitation.email.trim().toLowerCase();
   const hasAccount = !!invitation.existingAuthUserId;
+  const methods = await getAvailableLoginMethods();
+  // After signing in for this invitation, come back and accept it directly.
+  const acceptPath = `/invite/${invitationId}?accept=1`;
 
   return (
     <div className="flex min-h-screen flex-col">
@@ -117,7 +126,7 @@ export default async function InvitePage({ params }: InvitePageProps) {
               hasAccount ? (
                 <div className="space-y-3">
                   <Link
-                    href={`/login?redirect=${encodeURIComponent(`/invite/${invitationId}`)}`}
+                    href={`/login?redirect=${encodeURIComponent(acceptPath)}`}
                     className="block w-full rounded-lg bg-primary py-3.5 text-center text-sm font-semibold text-primary-foreground transition hover:bg-pine-strong"
                   >
                     {t("signInAccept")}
@@ -127,17 +136,28 @@ export default async function InvitePage({ params }: InvitePageProps) {
                   </p>
                 </div>
               ) : (
-                <InviteOnboard
-                  invitationId={invitation.id}
-                  email={invitation.email}
-                />
+                <div className="space-y-4">
+                  {signInError ? (
+                    <p className="rounded-lg border border-destructive/25 bg-destructive/5 px-3 py-2 text-sm text-destructive">
+                      {t("signInFailed", { email: invitation.email })}
+                    </p>
+                  ) : null}
+                  <InviteOnboard
+                    invitationId={invitation.id}
+                    email={invitation.email}
+                    methods={methods}
+                  />
+                </div>
               )
             ) : !isRecipient ? (
               <div className="rounded-lg bg-destructive/10 px-4 py-3 text-center text-sm font-medium text-destructive">
                 {t("wrongAccount", {current: session.user.email, invited: invitation.email})}
               </div>
             ) : (
-              <AcceptInvitationButton invitationId={invitation.id} />
+              <AcceptInvitationButton
+                invitationId={invitation.id}
+                autoAccept={accept === "1"}
+              />
             )}
           </div>
         </div>

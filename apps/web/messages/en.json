@@ -1087,7 +1087,11 @@
     "statusAccepted": "accepted",
     "statusRejected": "rejected",
     "statusCanceled": "canceled",
-    "namePlaceholder": "Ada Lovelace"
+    "namePlaceholder": "Ada Lovelace",
+    "socialFailed": "Unable to continue with {provider}. Use the account for {email}.",
+    "useInvitedEmail": "Use the account for {email}.",
+    "orPassword": "or create a password",
+    "signInFailed": "Sign-in did not complete. Use the account for {email} and try again."
   },
   "accessOnboarding": {
     "back": "Back",
@@ -8683,6 +8687,7 @@
         "added": "{count} added",
         "done": "Done",
         "skipped": "{count} skipped ({reason})",
+        "noneSent": "No invitation sent",
         "invitationCanceled": "Invitation canceled.",
         "cancelFailed": "Unable to cancel.",
         "canceling": "Canceling…",

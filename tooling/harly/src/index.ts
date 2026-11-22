@@ -187,7 +187,7 @@ setQuiet(quiet);
 const interactive = Boolean(
   !json && !flags.has("--non-interactive") && process.stdin.isTTY && process.stdout.isTTY && !process.env.CI,
 );
-const cliVersion = "0.7.1";
+const cliVersion = "0.7.2";
 let jsonResultWritten = false;
 
 function humanOut(message: string): void {
@@ -3530,6 +3530,8 @@ primary_region = "iad"
       "    run_command: node /app/runtime.mjs scheduler",
       "    instance_count: 1",
       "    instance_size_slug: apps-s-1vcpu-0.5gb",
+      "    envs:",
+      "      - { key: HARLY_INTERNAL_URL, scope: RUN_TIME, type: GENERAL, value: \"${web.PRIVATE_URL}\" }",
       "jobs:",
       "  - name: migrate",
       "    kind: PRE_DEPLOY",
