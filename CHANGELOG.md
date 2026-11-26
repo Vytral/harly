@@ -13,6 +13,10 @@ operators. How to cut a release is in [RELEASING.md](RELEASING.md). The
 
 ## [Unreleased]
 
+### Added
+
+- Recruiters can now add, edit and remove a candidate's work experience from the candidate edit panel. Previously work experience could only be set through the API, the application form or an import, and the dashboard only displayed it (#149).
+
 ## [0.5.3] - 2026-11-22
 
 This patch release fixes connecting Claude and other MCP apps, makes the AI answer in the language of your jobs and candidates, and fixes invitations, application emails, resume parsing from public applications and the Deploy to DigitalOcean button. No migrations.

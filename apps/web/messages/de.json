@@ -1950,7 +1950,19 @@
       "phone": "Telefon",
       "address": "Adresse",
       "profileSummary": "Profilzusammenfassung",
-      "website": "Website"
+      "website": "Website",
+      "workExperience": "Berufserfahrung",
+      "addExperience": "Erfahrung hinzufügen",
+      "removeExperience": "Entfernen",
+      "noExperience": "Noch keine Berufserfahrung.",
+      "experienceTitle": "Position",
+      "experienceCompany": "Unternehmen",
+      "experienceStart": "Beginn",
+      "experienceEnd": "Ende",
+      "experienceCurrent": "Ich arbeite aktuell hier",
+      "experienceLocation": "Standort",
+      "experienceDescription": "Beschreibung",
+      "experienceRequired": "Jede Berufserfahrung benötigt eine Position und ein Unternehmen."
     },
     "referCandidate": {
       "referError": "Empfehlung konnte nicht hinzugefügt werden.",

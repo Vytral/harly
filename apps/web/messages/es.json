@@ -1950,7 +1950,19 @@
       "phone": "Teléfono",
       "address": "Dirección",
       "profileSummary": "Resumen del perfil",
-      "website": "Sitio web"
+      "website": "Sitio web",
+      "workExperience": "Experiencia laboral",
+      "addExperience": "Añadir experiencia",
+      "removeExperience": "Eliminar",
+      "noExperience": "Aún no hay experiencia laboral.",
+      "experienceTitle": "Puesto",
+      "experienceCompany": "Empresa",
+      "experienceStart": "Inicio",
+      "experienceEnd": "Fin",
+      "experienceCurrent": "Trabajo aquí actualmente",
+      "experienceLocation": "Ubicación",
+      "experienceDescription": "Descripción",
+      "experienceRequired": "Cada experiencia laboral necesita un puesto y una empresa."
     },
     "referCandidate": {
       "referError": "No se pudo recomendar al candidato.",
