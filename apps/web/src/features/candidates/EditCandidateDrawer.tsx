@@ -12,6 +12,7 @@ import { LinkedinLogo } from "@/components/ui/icons/brands";
 import { updateCandidateProfile } from "@/features/candidates/actions";
 import { withKeyLock } from "@/lib/client-mutex";
 import { randomId } from "@/lib/utils";
+import { dateFieldProps } from "@/features/candidates/experience-dates";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { FileDropzone } from "@/components/ui/FileDropzone";
@@ -327,16 +328,4 @@ function ExperienceInput({
       />
     </div>
   );
-}
-
-/**
- * Month inputs only take `YYYY-MM`, while the API and importers also store
- * `YYYY-MM-DD` and year-only values. Dates a month input cannot show fall back
- * to a plain text input so the stored value is never displayed as blank.
- */
-function dateFieldProps(value: string | null): { type: "month" | "text"; value: string } {
-  const raw = value ?? "";
-  const match = raw.match(/^(\d{4})-(0[1-9]|1[0-2])(?:-(?:0[1-9]|[12]\d|3[01]))?$/);
-  if (match) return { type: "month", value: `${match[1]}-${match[2]}` };
-  return { type: raw === "" ? "month" : "text", value: raw };
 }
