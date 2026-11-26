@@ -336,7 +336,7 @@ function ExperienceInput({
  */
 function dateFieldProps(value: string | null): { type: "month" | "text"; value: string } {
   const raw = value ?? "";
-  const match = raw.match(/^(\d{4})-(\d{2})(?:-\d{2})?$/);
+  const match = raw.match(/^(\d{4})-(0[1-9]|1[0-2])(?:-(?:0[1-9]|[12]\d|3[01]))?$/);
   if (match) return { type: "month", value: `${match[1]}-${match[2]}` };
   return { type: raw === "" ? "month" : "text", value: raw };
 }
