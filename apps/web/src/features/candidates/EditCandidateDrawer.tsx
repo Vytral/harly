@@ -217,15 +217,13 @@ export function EditCandidateDrawer({
                   <ExperienceInput
                     id={`${entry.id}-start`}
                     label={t("experienceStart")}
-                    type="month"
-                    value={toMonthValue(entry.startDate)}
+                    {...dateFieldProps(entry.startDate)}
                     onChange={(startDate) => updateEntry(entry.id, { startDate })}
                   />
                   <ExperienceInput
                     id={`${entry.id}-end`}
                     label={t("experienceEnd")}
-                    type="month"
-                    value={entry.current ? "" : toMonthValue(entry.endDate)}
+                    {...dateFieldProps(entry.current ? null : entry.endDate)}
                     disabled={Boolean(entry.current)}
                     onChange={(endDate) => updateEntry(entry.id, { endDate })}
                   />
@@ -331,8 +329,14 @@ function ExperienceInput({
   );
 }
 
-/** Month inputs only take `YYYY-MM`; the API and importers also store `YYYY-MM-DD`. */
-function toMonthValue(value: string | null): string {
-  const match = value?.match(/^(\d{4})-(\d{2})(?:-\d{2})?$/);
-  return match ? `${match[1]}-${match[2]}` : "";
+/**
+ * Month inputs only take `YYYY-MM`, while the API and importers also store
+ * `YYYY-MM-DD` and year-only values. Dates a month input cannot show fall back
+ * to a plain text input so the stored value is never displayed as blank.
+ */
+function dateFieldProps(value: string | null): { type: "month" | "text"; value: string } {
+  const raw = value ?? "";
+  const match = raw.match(/^(\d{4})-(\d{2})(?:-\d{2})?$/);
+  if (match) return { type: "month", value: `${match[1]}-${match[2]}` };
+  return { type: raw === "" ? "month" : "text", value: raw };
 }
