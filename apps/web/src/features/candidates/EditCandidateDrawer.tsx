@@ -11,6 +11,7 @@ import { GithubIcon } from "@/components/ui/icons/GithubIcon";
 import { LinkedinLogo } from "@/components/ui/icons/brands";
 import { updateCandidateProfile } from "@/features/candidates/actions";
 import { withKeyLock } from "@/lib/client-mutex";
+import { randomId } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { FileDropzone } from "@/components/ui/FileDropzone";
@@ -53,6 +54,9 @@ export function EditCandidateDrawer({
     candidate.experienceEntries,
   );
 
+  const experienceChanged =
+    JSON.stringify(experience) !== JSON.stringify(candidate.experienceEntries);
+
   const updateEntry = (id: string, patch: Partial<CandidateExperienceEntry>) =>
     setExperience((entries) =>
       entries.map((entry) => (entry.id === id ? { ...entry, ...patch } : entry)),
@@ -61,7 +65,10 @@ export function EditCandidateDrawer({
   return (
     <SidePanel
       open={open}
-      onOpenChange={setOpen}
+      onOpenChange={(next) => {
+        if (next) setExperience(candidate.experienceEntries);
+        setOpen(next);
+      }}
       trigger={trigger}
       title={t("title")}
       description={t("description")}
@@ -80,7 +87,10 @@ export function EditCandidateDrawer({
           id="edit-candidate-form"
           className="space-y-4"
           action={(formData) => {
-            if (experience.some((entry) => !entry.company.trim() || !entry.title.trim())) {
+            if (
+              experienceChanged &&
+              experience.some((entry) => !entry.company.trim() || !entry.title.trim())
+            ) {
               toast.error(t("experienceRequired"));
               return;
             }
@@ -100,15 +110,19 @@ export function EditCandidateDrawer({
                   avatarUrl: String(formData.get("avatarUrl") ?? ""),
                   headline: String(formData.get("headline") ?? ""),
                   summary: String(formData.get("summary") ?? ""),
-                  experienceEntries: experience.map((entry) => ({
-                    ...entry,
-                    company: entry.company.trim(),
-                    title: entry.title.trim(),
-                    endDate: entry.current ? null : entry.endDate || null,
-                    startDate: entry.startDate || null,
-                    location: entry.location?.trim() || null,
-                    description: entry.description?.trim() || null,
-                  })),
+                  // Only sent when the recruiter changed it, so imported entries
+                  // are never rewritten by an unrelated profile edit.
+                  experienceEntries: experienceChanged
+                    ? experience.map((entry) => ({
+                        ...entry,
+                        company: entry.company.trim(),
+                        title: entry.title.trim(),
+                        endDate: entry.current ? null : entry.endDate || null,
+                        startDate: entry.startDate || null,
+                        location: entry.location?.trim() || null,
+                        description: entry.description?.trim() || null,
+                      }))
+                    : undefined,
                 }),
               );
               if (!result.success) {
@@ -164,7 +178,7 @@ export function EditCandidateDrawer({
                   setExperience((entries) => [
                     ...entries,
                     {
-                      id: crypto.randomUUID(),
+                      id: randomId(),
                       company: "",
                       title: "",
                       startDate: null,
@@ -204,14 +218,14 @@ export function EditCandidateDrawer({
                     id={`${entry.id}-start`}
                     label={t("experienceStart")}
                     type="month"
-                    value={entry.startDate ?? ""}
+                    value={toMonthValue(entry.startDate)}
                     onChange={(startDate) => updateEntry(entry.id, { startDate })}
                   />
                   <ExperienceInput
                     id={`${entry.id}-end`}
                     label={t("experienceEnd")}
                     type="month"
-                    value={entry.current ? "" : (entry.endDate ?? "")}
+                    value={entry.current ? "" : toMonthValue(entry.endDate)}
                     disabled={Boolean(entry.current)}
                     onChange={(endDate) => updateEntry(entry.id, { endDate })}
                   />
@@ -315,4 +329,10 @@ function ExperienceInput({
       />
     </div>
   );
+}
+
+/** Month inputs only take `YYYY-MM`; the API and importers also store `YYYY-MM-DD`. */
+function toMonthValue(value: string | null): string {
+  const match = value?.match(/^(\d{4})-(\d{2})(?:-\d{2})?$/);
+  return match ? `${match[1]}-${match[2]}` : "";
 }
