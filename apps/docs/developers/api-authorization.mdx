@@ -89,7 +89,7 @@ either.
 | `scorecards:read` / `scorecards:write` | List and create scorecards |
 | `tasks:read` / `tasks:write` | List, read, create, update, and delete tasks |
 | `pool:read` / `pool:write` | List, add, remove, and assign talent-pool entries |
-| `activity:read` | `GET /activity-events` |
+| `activity:read` | `GET /activity-events` (the key must be created by a member whose role is not limited to specific jobs; otherwise `403`) |
 | `automations:read` / `automations:write` | List and read automations and runs; create, update, delete, retry, and cancel |
 | `webhooks:read` / `webhooks:write` | List and read endpoints and deliveries; create, update, delete, test, and replay |
 | `api_keys:read` / `api_keys:write` | List keys; create, delete, and rotate keys |

@@ -78,7 +78,8 @@ curl 'https://hiring.example.com/api/v1/candidates?limit=50&cursor=cursor_01j1ab
 
 - Do not assume a stable sort order or page number.
 - `meta.nextCursor` is absent when you have reached the last page.
-- `limit` defaults to `25` and caps at `100`.
+- `limit` defaults to `25` and caps at `100`. It must be a positive whole
+  number. Values such as `10abc` or `1.5` return `400`.
 
 ## Idempotency
 
@@ -371,3 +372,4 @@ Public routes use the same error envelope as the authenticated API:
 Common statuses are `400` for a missing or malformed workspace selector, `403`
 for a failed CAPTCHA or missing publishable-key scope, `404` for a job that is
 not public, `422` for invalid application fields, and `429` for rate limiting.
+ublic, `422` for invalid application fields, and `429` for rate limiting.
