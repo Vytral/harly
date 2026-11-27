@@ -1950,7 +1950,19 @@
       "phone": "Telefoon",
       "address": "Adres",
       "profileSummary": "Profielsamenvatting",
-      "website": "Website"
+      "website": "Website",
+      "workExperience": "Werkervaring",
+      "addExperience": "Ervaring toevoegen",
+      "removeExperience": "Verwijderen",
+      "noExperience": "Nog geen werkervaring.",
+      "experienceTitle": "Functietitel",
+      "experienceCompany": "Bedrijf",
+      "experienceStart": "Start",
+      "experienceEnd": "Einde",
+      "experienceCurrent": "Ik werk hier momenteel",
+      "experienceLocation": "Locatie",
+      "experienceDescription": "Beschrijving",
+      "experienceRequired": "Elke werkervaring heeft een functietitel en een bedrijf nodig."
     },
     "referCandidate": {
       "referError": "Aanbeveling kon niet worden toegevoegd.",

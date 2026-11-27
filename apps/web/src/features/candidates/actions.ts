@@ -22,6 +22,7 @@ import {
   notifications,
   mailMessages,
   mailThreads,
+  type CandidateExperienceEntry,
 } from "@harly/db";
 import { getWorkspaceAiConfig } from "@/lib/ai/config";
 import { isAiAnonymizationBlockedError } from "@/lib/ai/candidate-context";
@@ -53,7 +54,11 @@ import { serializeCandidate } from "./service";
 import { EMAIL_DRAFT_TYPES, type EmailDraftType } from "./email-draft-types";
 import { createScorecardForApi } from "@/features/scorecards/service";
 import { ApiError } from "@harly/api";
-import { isHttpUrl, scorecardCreateSchema } from "@harly/validators";
+import {
+  candidateExperienceEntrySchema,
+  isHttpUrl,
+  scorecardCreateSchema,
+} from "@harly/validators";
 import {
   createReferralRecord,
   serializeReferral as serializeCandidateReferral,
@@ -299,6 +304,7 @@ const candidateUpdateSchema = z.object({
   avatarUrl: optionalText,
   headline: optionalText,
   summary: optionalText,
+  experienceEntries: z.array(candidateExperienceEntrySchema).max(100).optional(),
 });
 
 const candidateFileSchema = z.object({
@@ -716,6 +722,7 @@ export async function updateCandidateProfile(input: {
   avatarUrl: string;
   headline: string;
   summary: string;
+  experienceEntries?: CandidateExperienceEntry[];
 }): Promise<{ success: boolean; error?: string }> {
   const t = await getTranslations("server.candidates.actions");
   try {
@@ -770,6 +777,7 @@ export async function updateCandidateProfile(input: {
           avatarUrl: parsed.data.avatarUrl,
           headline: parsed.data.headline,
           summary: parsed.data.summary,
+          experienceEntries: parsed.data.experienceEntries,
           updatedAt: new Date(),
         })
         .where(

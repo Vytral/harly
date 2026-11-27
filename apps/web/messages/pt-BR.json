@@ -1950,7 +1950,19 @@
       "phone": "Telefone",
       "address": "Endereço",
       "profileSummary": "Resumo do perfil",
-      "website": "Site"
+      "website": "Site",
+      "workExperience": "Experiência profissional",
+      "addExperience": "Adicionar experiência",
+      "removeExperience": "Remover",
+      "noExperience": "Ainda não há experiência profissional.",
+      "experienceTitle": "Cargo",
+      "experienceCompany": "Empresa",
+      "experienceStart": "Início",
+      "experienceEnd": "Fim",
+      "experienceCurrent": "Trabalho aqui atualmente",
+      "experienceLocation": "Local",
+      "experienceDescription": "Descrição",
+      "experienceRequired": "Cada experiência profissional precisa de um cargo e de uma empresa."
     },
     "referCandidate": {
       "referError": "Não foi possível adicionar a indicação.",

@@ -123,6 +123,7 @@ describe("candidate decision application scope", () => {
           avatarUrl: null,
           headline: null,
           summary: null,
+          experienceEntries: [],
         },
         name: "Ada Lovelace",
         resumeUrl: null,

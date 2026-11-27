@@ -221,6 +221,7 @@ export default async function CandidateDetailPage({
     avatarUrl: candidate.avatarUrl,
     headline: candidate.headline,
     summary: candidate.summary,
+    experienceEntries: candidate.experienceEntries ?? [],
   };
   const actionCal = {
     enabled: calStatus.enabled,

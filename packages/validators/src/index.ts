@@ -93,7 +93,7 @@ const candidateEducationEntrySchema = z.object({
   description: z.string().trim().max(20_000).nullable().default(null),
 });
 
-const candidateExperienceEntrySchema = z.object({
+export const candidateExperienceEntrySchema = z.object({
   id: z.string().trim().min(1).max(120),
   company: z.string().trim().min(1).max(500),
   title: z.string().trim().min(1).max(500),

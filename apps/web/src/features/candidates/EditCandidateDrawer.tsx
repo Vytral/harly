@@ -3,14 +3,18 @@
 import { useState, useTransition, type ReactNode } from "react";
 import { useTranslations } from "next-intl";
 import { useRouter } from "next/navigation";
-import { Globe } from "lucide-react";
+import { Globe, Plus, Trash2 } from "lucide-react";
+import type { CandidateExperienceEntry } from "@harly/db";
 import { toast } from "@/lib/notification-island/toast";
 
 import { GithubIcon } from "@/components/ui/icons/GithubIcon";
 import { LinkedinLogo } from "@/components/ui/icons/brands";
 import { updateCandidateProfile } from "@/features/candidates/actions";
 import { withKeyLock } from "@/lib/client-mutex";
+import { randomId } from "@/lib/utils";
+import { dateFieldProps } from "@/features/candidates/experience-dates";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { FileDropzone } from "@/components/ui/FileDropzone";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -32,6 +36,7 @@ export type EditableCandidate = {
   avatarUrl: string | null;
   headline: string | null;
   summary: string | null;
+  experienceEntries: CandidateExperienceEntry[];
 };
 
 export function EditCandidateDrawer({
@@ -46,11 +51,25 @@ export function EditCandidateDrawer({
   const [open, setOpen] = useState(false);
   const [isPending, startTransition] = useTransition();
   const [avatarUrl, setAvatarUrl] = useState(candidate.avatarUrl ?? "");
+  const [experience, setExperience] = useState<CandidateExperienceEntry[]>(
+    candidate.experienceEntries,
+  );
+
+  const experienceChanged =
+    JSON.stringify(experience) !== JSON.stringify(candidate.experienceEntries);
+
+  const updateEntry = (id: string, patch: Partial<CandidateExperienceEntry>) =>
+    setExperience((entries) =>
+      entries.map((entry) => (entry.id === id ? { ...entry, ...patch } : entry)),
+    );
 
   return (
     <SidePanel
       open={open}
-      onOpenChange={setOpen}
+      onOpenChange={(next) => {
+        if (next) setExperience(candidate.experienceEntries);
+        setOpen(next);
+      }}
       trigger={trigger}
       title={t("title")}
       description={t("description")}
@@ -69,6 +88,13 @@ export function EditCandidateDrawer({
           id="edit-candidate-form"
           className="space-y-4"
           action={(formData) => {
+            if (
+              experienceChanged &&
+              experience.some((entry) => !entry.company.trim() || !entry.title.trim())
+            ) {
+              toast.error(t("experienceRequired"));
+              return;
+            }
             startTransition(async () => {
               const result = await withKeyLock(`candidate:${candidate.id}`, () =>
                 updateCandidateProfile({
@@ -85,6 +111,19 @@ export function EditCandidateDrawer({
                   avatarUrl: String(formData.get("avatarUrl") ?? ""),
                   headline: String(formData.get("headline") ?? ""),
                   summary: String(formData.get("summary") ?? ""),
+                  // Only sent when the recruiter changed it, so imported entries
+                  // are never rewritten by an unrelated profile edit.
+                  experienceEntries: experienceChanged
+                    ? experience.map((entry) => ({
+                        ...entry,
+                        company: entry.company.trim(),
+                        title: entry.title.trim(),
+                        endDate: entry.current ? null : entry.endDate || null,
+                        startDate: entry.startDate || null,
+                        location: entry.location?.trim() || null,
+                        description: entry.description?.trim() || null,
+                      }))
+                    : undefined,
                 }),
               );
               if (!result.success) {
@@ -128,6 +167,109 @@ export function EditCandidateDrawer({
           <Field name="linkedinUrl" label="LinkedIn" type="url" defaultValue={candidate.linkedinUrl ?? ""} placeholder="https://linkedin.com/in/…" icon={<LinkedinLogo className="size-3.5" />} />
           <Field name="githubUrl" label="GitHub" type="url" defaultValue={candidate.githubUrl ?? ""} placeholder="https://github.com/…" icon={<GithubIcon className="size-3.5" />} />
           <Field name="websiteUrl" label={t("website")} type="url" defaultValue={candidate.websiteUrl ?? ""} placeholder="https://yoursite.com" icon={<Globe className="size-3.5" />} />
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <Label>{t("workExperience")}</Label>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                disabled={experience.length >= 100}
+                onClick={() =>
+                  setExperience((entries) => [
+                    ...entries,
+                    {
+                      id: randomId(),
+                      company: "",
+                      title: "",
+                      startDate: null,
+                      endDate: null,
+                      current: false,
+                      location: null,
+                      description: null,
+                    },
+                  ])
+                }
+              >
+                <Plus className="size-3.5" />
+                {t("addExperience")}
+              </Button>
+            </div>
+            {experience.length === 0 ? (
+              <p className="text-muted-foreground text-sm">{t("noExperience")}</p>
+            ) : null}
+            {experience.map((entry) => (
+              <fieldset key={entry.id} className="space-y-3 rounded-md border p-3">
+                <div className="grid grid-cols-2 gap-3">
+                  <ExperienceInput
+                    id={`${entry.id}-title`}
+                    label={t("experienceTitle")}
+                    value={entry.title}
+                    onChange={(title) => updateEntry(entry.id, { title })}
+                  />
+                  <ExperienceInput
+                    id={`${entry.id}-company`}
+                    label={t("experienceCompany")}
+                    value={entry.company}
+                    onChange={(company) => updateEntry(entry.id, { company })}
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <ExperienceInput
+                    id={`${entry.id}-start`}
+                    label={t("experienceStart")}
+                    {...dateFieldProps(entry.startDate)}
+                    onChange={(startDate) => updateEntry(entry.id, { startDate })}
+                  />
+                  <ExperienceInput
+                    id={`${entry.id}-end`}
+                    label={t("experienceEnd")}
+                    {...dateFieldProps(entry.current ? null : entry.endDate)}
+                    disabled={Boolean(entry.current)}
+                    onChange={(endDate) => updateEntry(entry.id, { endDate })}
+                  />
+                </div>
+                <div className="flex items-center gap-2">
+                  <Checkbox
+                    id={`${entry.id}-current`}
+                    checked={Boolean(entry.current)}
+                    onCheckedChange={(checked) =>
+                      updateEntry(entry.id, { current: checked === true })
+                    }
+                  />
+                  <Label htmlFor={`${entry.id}-current`}>{t("experienceCurrent")}</Label>
+                </div>
+                <ExperienceInput
+                  id={`${entry.id}-location`}
+                  label={t("experienceLocation")}
+                  value={entry.location ?? ""}
+                  onChange={(location) => updateEntry(entry.id, { location })}
+                />
+                <div className="space-y-1.5">
+                  <Label htmlFor={`${entry.id}-description`}>{t("experienceDescription")}</Label>
+                  <Textarea
+                    id={`${entry.id}-description`}
+                    rows={3}
+                    value={entry.description ?? ""}
+                    onChange={(event) =>
+                      updateEntry(entry.id, { description: event.target.value })
+                    }
+                  />
+                </div>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="ghost"
+                  onClick={() =>
+                    setExperience((entries) => entries.filter((item) => item.id !== entry.id))
+                  }
+                >
+                  <Trash2 className="size-3.5" />
+                  {t("removeExperience")}
+                </Button>
+              </fieldset>
+            ))}
+          </div>
       </form>
     </SidePanel>
   );
@@ -155,6 +297,35 @@ function Field({
         {label}
       </Label>
       <Input id={`edit-${name}`} name={name} type={type} defaultValue={defaultValue} placeholder={placeholder} />
+    </div>
+  );
+}
+
+function ExperienceInput({
+  id,
+  label,
+  value,
+  onChange,
+  type,
+  disabled,
+}: {
+  id: string;
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  type?: string;
+  disabled?: boolean;
+}) {
+  return (
+    <div className="space-y-1.5">
+      <Label htmlFor={id}>{label}</Label>
+      <Input
+        id={id}
+        type={type}
+        value={value}
+        disabled={disabled}
+        onChange={(event) => onChange(event.target.value)}
+      />
     </div>
   );
 }
