@@ -1950,7 +1950,19 @@
       "phone": "Phone",
       "address": "Address",
       "profileSummary": "Profile summary",
-      "website": "Website"
+      "website": "Website",
+      "workExperience": "Work experience",
+      "addExperience": "Add experience",
+      "removeExperience": "Remove",
+      "noExperience": "No work experience yet.",
+      "experienceTitle": "Job title",
+      "experienceCompany": "Company",
+      "experienceStart": "Start",
+      "experienceEnd": "End",
+      "experienceCurrent": "I currently work here",
+      "experienceLocation": "Location",
+      "experienceDescription": "Description",
+      "experienceRequired": "Each work experience needs a job title and a company."
     },
     "referCandidate": {
       "referError": "Unable to refer candidate.",
