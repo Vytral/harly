@@ -18,19 +18,56 @@ suggestion a human reviews and owns.
 
 <Steps>
   <Step title="Choose a provider">
-    Open **Settings → AI** and select a provider. Harly supports OpenAI,
-    Anthropic, Google Gemini, xAI, and OpenRouter (as well as custom OpenAI-compatible
-    endpoints). You bring your own API key — Harly does not proxy through a shared key.
+    Open **Settings → AI**, choose **Configure AI**, and select a provider.
+    Harly supports OpenAI, Anthropic, Google Gemini, xAI, OpenRouter, Groq,
+    DeepSeek, Mistral, Together AI, Fireworks AI, Cerebras, Azure OpenAI,
+    Ollama (local), and any OpenAI-compatible endpoint. You bring your own API
+    key. Harly does not proxy through a shared key.
+  </Step>
+  <Step title="Pick a model">
+    Search the **Model** list or type any model ID, even one that isn't
+    listed. For Azure OpenAI, enter your **Deployment name**. Except for
+    Ollama and OpenAI-compatible endpoints, the list comes from
+    [models.dev](https://models.dev), with a built-in copy that works offline.
   </Step>
   <Step title="Add the API key">
     Paste the API key from your provider. It is stored encrypted and never
-    returned to the browser.
+    returned to the browser. Ollama and OpenAI-compatible endpoints accept a
+    blank key when the server doesn't need one.
+  </Step>
+  <Step title="Test and save">
+    Choose **Test connection** to confirm the key and model work, then
+    **Save changes**.
   </Step>
   <Step title="Enable specific features">
     Turn on only the features you want. Nothing is sent to the provider until a
     feature is both enabled and actively used.
   </Step>
 </Steps>
+
+Until a provider is configured and usable, Harly hides the Harly AI buttons,
+the chat launcher and its shortcut, the AI entries in the command palette, and
+the AI panels.
+
+### Custom API endpoint
+
+Choose **Custom API endpoint** in the configure form to send requests through
+your own gateway, proxy, or model server instead of the provider's default URL.
+Azure OpenAI and OpenAI-compatible always need an **API endpoint**. Harly checks
+the endpoint before saving:
+
+- Hosted providers accept only their own domain. For example, Azure OpenAI
+  accepts hosts under `.openai.azure.com`, `.cognitiveservices.azure.com`, or
+  `.services.ai.azure.com`. To use a gateway on another host, choose
+  **OpenAI-compatible**.
+- **OpenAI-compatible** and **Ollama (local)** accept any public `https://`
+  host, such as a LiteLLM gateway or a vLLM server.
+- Localhost and private network addresses are blocked unless the server sets
+  [`HARLY_ALLOW_LOCAL_LLM=1`](/deployment/configuration#updates-and-ai-agents).
+  Plain `http://` works only for those local addresses. Private network
+  addresses work only with **Ollama (local)** or **OpenAI-compatible**.
+
+When Harly rejects an endpoint, the error says which rule applied.
 
 <Warning>
   AI output is advisory and the chat assistant never silently applies a
