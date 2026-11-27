@@ -22,7 +22,8 @@ reviewable, tested, and safe to operate.
 
 The supported development toolchain is Node.js 22+, pnpm 9.15.0, Docker Engine
 24+, Docker Compose 2.20+, and PostgreSQL 16. Docker Compose provides
-PostgreSQL for the standard local workflow.
+PostgreSQL, a mail catcher and a database browser for the standard local
+workflow.
 
 ```bash
 corepack enable
@@ -37,10 +38,84 @@ The web app runs at `http://localhost:3000`. The default environment uses local
 storage and development-only values. If you need representative data, use
 `pnpm db:seed:demo`; do not import real candidate data.
 
-To stop the local database without removing its volume:
+`pnpm db:up` (also run by `pnpm dev`) starts the `harly-dev` Compose stack from
+`tooling/docker/compose.dev.yml`:
+
+| Service | Address | Purpose |
+| --- | --- | --- |
+| PostgreSQL | `localhost:5432` | Development database. |
+| Mailpit | SMTP `localhost:1025`, inbox `http://localhost:8025` | Catches every email the app sends. Nothing leaves your machine. |
+| DbGate | `http://localhost:3100` | Browse and edit the development database, already connected. |
+
+Mailpit and DbGate listen on `127.0.0.1` only. If another project already uses
+one of these ports, set `POSTGRES_PORT`, `HARLY_DEV_MAILPIT_SMTP_PORT`,
+`HARLY_DEV_MAILPIT_UI_PORT` or `HARLY_DEV_DBGATE_PORT` in `.env.local`, then run
+`pnpm db:up` again.
+
+To send email through Mailpit, finish `/setup`, then open **Settings → Email**,
+choose SMTP and enter host `localhost`, port `1025` (or your
+`HARLY_DEV_MAILPIT_SMTP_PORT`), TLS off and no credentials. For SMTP, **Test
+connection** only checks that the server answers; it does not send a message.
+To see an email in the inbox, trigger a real one, for example a magic-link
+sign-in or a team invitation.
+
+### Running the app in a container
+
+To keep the web app off the host, run `pnpm dev:container` instead of
+`pnpm dev`. It starts the same services plus two optional containers (Compose
+profile `app`, `node:22` image) that mount the repository at `/workspace`:
+
+- `app` applies migrations and runs the dev server. Edits on the host reload
+  the app as usual.
+- `scheduler` runs the same scheduler as the production image against the
+  app: email outbox, automations, webhooks and the other `/api/cron/*` jobs.
+  Without it (for example with plain `pnpm dev`), queued emails and
+  automations never run locally.
+
+Without pnpm on the host, the equivalent is:
+
+```bash
+docker compose --env-file .env.local -f tooling/docker/compose.dev.yml --profile app up -d
+docker compose --env-file .env.local -f tooling/docker/compose.dev.yml --profile app logs -f app scheduler
+```
+
+- The app is at `http://localhost:3000`. Change the host port with
+  `HARLY_DEV_APP_PORT`, and keep `HARLY_URL` in `.env.local` on the same port.
+  Open it on `localhost`, not `127.0.0.1`: the dev server blocks hot reload
+  from other origins.
+- If that host port is already taken, Docker refuses to create the container
+  (`port is already allocated`), or, when it restarts an existing one, may
+  start it without a network: the app then stops with `cannot resolve the
+  postgres service`. Either way, set `HARLY_DEV_APP_PORT` to a free port.
+- The container reads `.env.local` and rewrites a `localhost` host in
+  `DATABASE_URL` to the `postgres` service.
+- Inside the container, `localhost` is the container itself. Point the
+  workspace SMTP settings at host `mailpit`, port `1025` (the container port,
+  whatever `HARLY_DEV_MAILPIT_SMTP_PORT` is).
+- The container runs as uid/gid 1000 and shares the repository's
+  `node_modules`, installing them only when they are missing. On a Linux host
+  this works with a host install too. On macOS or Windows, native packages
+  differ between the host and the container: delete `node_modules` before
+  switching to the container (it reinstalls them), and run `pnpm install`
+  again when you switch back to the host.
+
+To stop the local stack without removing its volume:
 
 ```bash
 pnpm db:down
+```
+
+The stack used to be named `curious-monkey`. If you had a database there, copy
+it once into the `harly-dev` volume before starting the renamed stack (the old
+volume is left untouched; remove it with `docker volume rm` when you no longer
+need it):
+
+```bash
+pnpm db:down
+docker compose --env-file .env.local -f tooling/docker/compose.dev.yml create postgres
+docker run --rm -v curious-monkey_harly_postgres:/from:ro -v harly-dev_harly_postgres:/to \
+  postgres:16-alpine sh -c 'cp -a /from/. /to/'
+pnpm db:up
 ```
 
 ## Development workflow
